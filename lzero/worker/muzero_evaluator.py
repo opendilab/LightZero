@@ -55,6 +55,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             exp_name: Optional[str] = 'default_experiment',
             instance_name: Optional[str] = 'evaluator',
             policy_config: 'policy_config' = None,  # noqa
+            task_id: int = 0,
     ) -> None:
         """
         Overview:
@@ -70,6 +71,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             - instance_name (:obj:`Optional[str]`): Name of this instance.
             - policy_config: Config of game.
         """
+        self.task_id = task_id
         self._eval_freq = eval_freq
         self._exp_name = exp_name
         self._instance_name = instance_name
@@ -286,7 +288,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     # policy forward
                     # ==============================================================
-                    policy_output = self._policy.forward(stack_obs, action_mask, to_play)
+                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, self.task_id)
 
                     actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                     distributions_dict_no_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}

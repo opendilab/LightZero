@@ -38,6 +38,7 @@ class MuZeroCollector(ISerialCollector):
             exp_name: Optional[str] = 'default_experiment',
             instance_name: Optional[str] = 'collector',
             policy_config: 'policy_config' = None,  # noqa
+            task_id: int = 0,
     ) -> None:
         """
         Overview:
@@ -51,6 +52,7 @@ class MuZeroCollector(ISerialCollector):
             - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
             - policy_config: Config of game.
         """
+        self.task_id = task_id
         self._exp_name = exp_name
         self._instance_name = instance_name
         self._collect_print_freq = collect_print_freq
@@ -408,7 +410,7 @@ class MuZeroCollector(ISerialCollector):
                 # ==============================================================
                 # policy forward
                 # ==============================================================
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon)
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, self.task_id)
 
                 actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                 distributions_dict_no_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
