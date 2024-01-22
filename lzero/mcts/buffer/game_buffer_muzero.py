@@ -47,6 +47,7 @@ class MuZeroGameBuffer(GameBuffer):
         self.game_segment_buffer = []
         self.game_pos_priorities = []
         self.game_segment_game_pos_look_up = []
+        self.task_id = self._cfg.task_id
 
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
@@ -380,7 +381,7 @@ class MuZeroGameBuffer(GameBuffer):
                 m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
 
                 # calculate the target value
-                m_output = model.initial_inference(m_obs)
+                m_output = model.initial_inference(m_obs, self.task_id)
 
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
@@ -527,7 +528,7 @@ class MuZeroGameBuffer(GameBuffer):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
                 m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device).float()
-                m_output = model.initial_inference(m_obs)
+                m_output = model.initial_inference(m_obs, self.task_id)
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
                     [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(

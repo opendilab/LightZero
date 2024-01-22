@@ -44,33 +44,38 @@ def train_muzero_multi_task(
     evaluators = []
     tb_loggers = []
 
-    cfg, create_cfg = input_cfg_list[0][1]
+    task_id, [cfg, create_cfg] = input_cfg_list[0]
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
     else:
         cfg.policy.device = 'cpu'
-    # Replicate the setup process for each task, creating individual components.
-    # ... (same initialization code as before)
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
     # Shared policy for all tasks
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
-    tb_loggers.append(tb_logger)
+    # tb_loggers.append(tb_logger)
 
     if model_path is not None:
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
-    learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfgs[0].exp_name)
+
+    learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
     policy_config = cfg.policy
 
-    for task_id, input_cfg in enumerate(input_cfg_list):
-        cfg, create_cfg = input_cfg
-        # Replicate the setup process for each task, creating individual components.
-        # ... (same initialization code as before)
-        if cfg.policy.cuda and torch.cuda.is_available():
-            cfg.policy.device = 'cuda'
-        else:
-            cfg.policy.device = 'cpu'
-        cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
+    if cfg.policy.update_per_collect is not None:
+        update_per_collect = cfg.policy.update_per_collect
+    batch_size = policy_config.batch_size
+
+    # for task_id, input_cfg in enumerate(input_cfg_list):
+    for task_id, input_cfg in input_cfg_list:
+        if task_id > 0:
+            cfg, create_cfg = input_cfg
+            # Replicate the setup process for each task, creating individual components.
+            # ... (same initialization code as before)
+            if cfg.policy.cuda and torch.cuda.is_available():
+                cfg.policy.device = 'cuda'
+            else:
+                cfg.policy.device = 'cpu'
+            cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
 
         env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
         collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
@@ -110,15 +115,15 @@ def train_muzero_multi_task(
         evaluator_envs.append(evaluator_env)
         collectors.append(collector)
         evaluators.append(evaluator)
-        if task_id>0:
-            tb_loggers.append(tb_logger)
-
+        # if task_id>0:
+        #     tb_loggers.append(tb_logger)
 
     # Main loop
     learner.call_hook('before_run')
 
+
     while True:
-        for task_id, (cfg, collector, replay_buffer, tb_logger) in enumerate(zip(cfgs, collectors, game_buffers, tb_loggers)):
+        for task_id, (cfg, collector, replay_buffer) in enumerate(zip(cfgs, collectors, game_buffers)):
             # Perform task-specific collection, evaluation, and training as needed
             # ... (same collection code as before, but with task-specific components)
             # When sampling for training, sample from each task's replay buffer and combine into train_data
@@ -162,27 +167,26 @@ def train_muzero_multi_task(
             # remove the oldest data if the replay buffer is full.
             replay_buffer.remove_oldest_data_to_fit()
 
-            if replay_buffer.get_num_of_transitions() > 2000:
-                # Learn policy from collected data.
-                for i in range(update_per_collect):
-                    # Learner will train ``update_per_collect`` times in one iteration.
-                    if replay_buffer.get_num_of_transitions() > batch_size:
-                        train_data = replay_buffer.sample(batch_size, policy)
-                    else:
-                        logging.warning(
-                            f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                            f'batch_size: {batch_size}, '
-                            f'{replay_buffer} '
-                            f'continue to collect now ....'
-                        )
-                        break
-                    # 非常重要 ====================
-                    train_data.append(task_id)
-                    # The core train steps for MCTS+RL algorithms.
-                    log_vars = learner.train(train_data, collector.envstep)
+            # Learn policy from collected data.
+            for i in range(update_per_collect):
+                # Learner will train ``update_per_collect`` times in one iteration.
+                if replay_buffer.get_num_of_transitions() > batch_size:
+                    train_data = replay_buffer.sample(batch_size, policy)
+                else:
+                    logging.warning(
+                        f'The data in replay_buffer is not sufficient to sample a mini-batch: '
+                        f'batch_size: {batch_size}, '
+                        f'{replay_buffer} '
+                        f'continue to collect now ....'
+                    )
+                    break
+                # 非常重要 ====================
+                train_data.append(task_id)
+                # The core train steps for MCTS+RL algorithms.
+                log_vars = learner.train(train_data, collector.envstep)
 
-                    if cfg.policy.use_priority:
-                        replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+                if cfg.policy.use_priority:
+                    replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
 
         # Break condition

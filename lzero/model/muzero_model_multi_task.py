@@ -99,12 +99,15 @@ class MuZeroMTModel(nn.Module):
             self.reward_support_size = 1
             self.value_support_size = 1
 
-        self.action_space_size = action_space_size
+        # self.action_space_size = action_space_size
+        self.action_space_size = 18 # for multi-task learning
+
 
         assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
         self.discrete_action_encoding_type = discrete_action_encoding_type
         if self.discrete_action_encoding_type == 'one_hot':
-            self.action_encoding_dim = action_space_size
+            # self.action_encoding_dim = action_space_size
+            self.action_encoding_dim = 18 # for multi-task learning
         elif self.discrete_action_encoding_type == 'not_one_hot':
             self.action_encoding_dim = 1
         self.proj_hid = proj_hid
@@ -154,13 +157,13 @@ class MuZeroMTModel(nn.Module):
             activation=activation,
             norm_type=norm_type
         )
-        self.prediction_network_multi_task = []
+        self.prediction_network_multi_task = nn.ModuleList()
         # for task in task_name_list:
         for task_id in range(3):
-            if task_id==2:
+            if task_id == 2:
                 action_space_size=18 # Seaquest
             else:
-                action_space_size=6 # pong qbert
+                action_space_size=6 # Pong Qbert
             self.prediction_network = PredictionNetwork(
                 observation_shape,
                 action_space_size,
@@ -206,7 +209,7 @@ class MuZeroMTModel(nn.Module):
                 nn.Linear(self.pred_hid, self.pred_out),
             )
 
-    def initial_inference(self, obs: torch.Tensor) -> MZNetworkOutput:
+    def initial_inference(self, obs: torch.Tensor, task_id) -> MZNetworkOutput:
         """
         Overview:
             Initial inference of MuZero model, which is the first step of the MuZero model.
@@ -230,7 +233,7 @@ class MuZeroMTModel(nn.Module):
          """
         batch_size = obs.size(0)
         latent_state = self._representation(obs)
-        policy_logits, value = self._prediction(latent_state)
+        policy_logits, value = self._prediction(latent_state, task_id)
         return MZNetworkOutput(
             value,
             [0. for _ in range(batch_size)],

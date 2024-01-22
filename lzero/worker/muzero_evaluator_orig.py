@@ -435,8 +435,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                     continue
                 if not np.isscalar(v):
                     continue
-                self._tb_logger.add_scalar('{}_iter_task{}/'.format(self._instance_name, self.task_id) + k, v, train_iter)
-                self._tb_logger.add_scalar('{}_step_task{}/'.format(self._instance_name, self.task_id) + k, v, envstep)
+                self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
+                self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, envstep)
             episode_return = np.mean(episode_return)
             if episode_return > self._max_episode_return:
                 if save_ckpt_fn:

@@ -11,7 +11,7 @@ from ding.utils import POLICY_REGISTRY
 from torch.distributions import Categorical
 from torch.nn import L1Loss
 
-from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
+from lzero.mcts import MuZeroMTMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
@@ -342,7 +342,7 @@ class MuZeroMTPolicy(Policy):
         # ==============================================================
         # the core initial_inference in MuZero policy.
         # ==============================================================
-        network_output = self._learn_model.initial_inference(obs_batch)
+        network_output = self._learn_model.initial_inference(obs_batch, task_id)
 
         # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
         latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
@@ -398,7 +398,7 @@ class MuZeroMTPolicy(Policy):
                 if self._cfg.ssl_loss_weight > 0:
                     # obtain the oracle latent states from representation function.
                     beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
-                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
+                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index], task_id)
 
                     latent_state = to_tensor(latent_state)
                     representation_state = to_tensor(network_output.latent_state)
@@ -551,7 +551,7 @@ class MuZeroMTPolicy(Policy):
         active_collect_env_num = data.shape[0]
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
-            network_output = self._collect_model.initial_inference(data)
+            network_output = self._collect_model.initial_inference(data, task_id)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
@@ -572,6 +572,8 @@ class MuZeroMTPolicy(Policy):
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
+            # if task_id==2:
+            #     print('task_id:', task_id)
             self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, task_id)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
@@ -675,7 +677,7 @@ class MuZeroMTPolicy(Policy):
         active_eval_env_num = data.shape[0]
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
-            network_output = self._collect_model.initial_inference(data)
+            network_output = self._collect_model.initial_inference(data, task_id)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             if not self._eval_model.training:
