@@ -11,13 +11,13 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
-from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork
+from .common import MZNetworkOutput, RepresentationNetworkGPT, PredictionNetwork, LatentDecoder
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
-@MODEL_REGISTRY.register('MuZeroMTModel')
-class MuZeroMTModel(nn.Module):
+@MODEL_REGISTRY.register('MuZeroModelGPTMT')
+class MuZeroModelGPTMT(nn.Module):
 
     def __init__(
         self,
@@ -85,7 +85,7 @@ class MuZeroMTModel(nn.Module):
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
         """
-        super(MuZeroMTModel, self).__init__()
+        super(MuZeroModelGPTMT, self).__init__()
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
             # for vector obs input, e.g. classical control and box2d environments
             # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
@@ -100,14 +100,13 @@ class MuZeroMTModel(nn.Module):
             self.value_support_size = 1
 
         # self.action_space_size = action_space_size
-        self.action_space_size = 18 # for multi-task learning
+        self.action_space_size = 18 # for multi-task
 
 
         assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
         self.discrete_action_encoding_type = discrete_action_encoding_type
         if self.discrete_action_encoding_type == 'one_hot':
-            # self.action_encoding_dim = action_space_size
-            self.action_encoding_dim = 18 # for multi-task learning
+            self.action_encoding_dim = action_space_size
         elif self.discrete_action_encoding_type == 'not_one_hot':
             self.action_encoding_dim = 1
         self.proj_hid = proj_hid
@@ -135,82 +134,54 @@ class MuZeroMTModel(nn.Module):
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
 
-        self.representation_network = RepresentationNetwork(
+        # self.dynamics_network = DynamicsNetwork(
+        #     observation_shape,
+        #     self.action_encoding_dim,
+        #     num_res_blocks,
+        #     num_channels + self.action_encoding_dim,
+        #     reward_head_channels,
+        #     fc_reward_layers,
+        #     self.reward_support_size,
+        #     flatten_output_size_for_reward_head,
+        #     downsample,
+        #     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+        #     activation=activation,
+        #     norm_type=norm_type
+        # )
+
+        from .gpt_models.world_model_multi_task import WorldModelMT
+        from .gpt_models.tokenizer.tokenizer import Tokenizer
+        from .gpt_models.tokenizer.nets import Encoder, Decoder
+        # from .gpt_models.cfg_cartpole import cfg
+        from .gpt_models.cfg_atari import cfg
+
+        self.representation_network = RepresentationNetworkGPT(
             observation_shape,
             num_res_blocks,
             num_channels,
             downsample,
             activation=activation,
-            norm_type=norm_type
+            norm_type=norm_type,
+            # embedding_dim=cfg.embedding_dim,
+            embedding_dim=cfg.world_model.embed_dim,
         )
-        self.dynamics_network = DynamicsNetwork(
-            observation_shape,
-            self.action_encoding_dim,
-            num_res_blocks,
-            num_channels + self.action_encoding_dim,
-            reward_head_channels,
-            fc_reward_layers,
-            self.reward_support_size,
-            flatten_output_size_for_reward_head,
-            downsample,
-            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            activation=activation,
-            norm_type=norm_type
-        )
-        self.prediction_network_multi_task = nn.ModuleList()
-        # for task in task_name_list:
-        for task_id in range(3):
-            # if task_id == 2:
-            #     action_space_size=18 # Seaquest
-            # else:
-            #     action_space_size=6 # Pong Qbert
-            action_space_size=18 # full action space
-            self.prediction_network = PredictionNetwork(
-                observation_shape,
-                action_space_size,
-                num_res_blocks,
-                num_channels,
-                value_head_channels,
-                policy_head_channels,
-                fc_value_layers,
-                fc_policy_layers,
-                self.value_support_size,
-                flatten_output_size_for_value_head,
-                flatten_output_size_for_policy_head,
-                downsample,
-                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-                activation=activation,
-                norm_type=norm_type
-            )
-            self.prediction_network_multi_task.append(self.prediction_network)
+        # Instantiate the decoder
+        # decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(4, 64, 64)) # TODO: For K=4
+        decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(3, 64, 64)) # TODO: For K=1
 
-        if self.self_supervised_learning_loss:
-            # projection used in EfficientZero
-            if self.downsample:
-                # In Atari, if the observation_shape is set to (12, 96, 96), which indicates the original shape of
-                # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
-                # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
-                # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
-                ceil_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
-                # self.projection_input_dim = num_channels * ceil_size
-                self.projection_input_dim = 4096 # TODO
 
-            else:
-                self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
-            self.projection = nn.Sequential(
-                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-                nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
-            )
-            self.prediction_head = nn.Sequential(
-                nn.Linear(self.proj_out, self.pred_hid),
-                nn.BatchNorm1d(self.pred_hid),
-                activation,
-                nn.Linear(self.pred_hid, self.pred_out),
-            )
+        Encoder = Encoder(cfg.tokenizer.encoder)
+        Decoder = Decoder(cfg.tokenizer.decoder)
+        self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network,
+                            decoder_network=decoder_network)
+        self.world_model = WorldModelMT(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
+                                      config=cfg.world_model, tokenizer=self.tokenizer)
+        print(f'{sum(p.numel() for p in self.tokenizer.parameters())} parameters in agent.tokenizer')
+        print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
 
-    def initial_inference(self, obs: torch.Tensor, task_id) -> MZNetworkOutput:
+
+    def initial_inference(self, obs: torch.Tensor, action_batch=None, task_id=0) -> MZNetworkOutput:
         """
         Overview:
             Initial inference of MuZero model, which is the first step of the MuZero model.
@@ -233,8 +204,32 @@ class MuZeroMTModel(nn.Module):
                 latent state, W_ is the width of latent state.
          """
         batch_size = obs.size(0)
-        latent_state = self._representation(obs)
-        policy_logits, value = self._prediction(latent_state, task_id)
+        # latent_state = self._representation(obs)
+        # policy_logits, value = self._prediction(latent_state)
+        # return MZNetworkOutput(
+        #     value,
+        #     [0. for _ in range(batch_size)],
+        #     policy_logits,
+        #     latent_state,
+        # )
+
+        obs_act_dict = {'obs':obs, 'action':action_batch}
+        x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
+            obs_act_dict, task_id=task_id)
+        # x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
+        #     obs, action_batch)
+        reward, policy_logits, value = logits_rewards, logits_policy, logits_value
+
+        # obs discrete distribution to one_hot latent state?
+        # torch.Size([8, 16, 512]) -> torch.Size([8, 16])
+        # latent_state = torch.argmax(logits_observations, dim=2, keepdim=False)
+        latent_state = obs_token
+
+        # torch.Size([8, 1, 2]) - > torch.Size([8, 2])
+        policy_logits = policy_logits.squeeze(1)
+        # torch.Size([8, 1, 601]) - > torch.Size([8, 601])
+        value = value.squeeze(1)
+
         return MZNetworkOutput(
             value,
             [0. for _ in range(batch_size)],
@@ -242,7 +237,8 @@ class MuZeroMTModel(nn.Module):
             latent_state,
         )
 
-    def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor, task_id) -> MZNetworkOutput:
+    # def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
+    def recurrent_inference(self, state_action_history: torch.Tensor, task_id) -> MZNetworkOutput:
         """
         Overview:
             Recurrent inference of MuZero model, which is the rollout step of the MuZero model.
@@ -270,8 +266,28 @@ class MuZeroMTModel(nn.Module):
             - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
                 latent state, W_ is the width of latent state.
          """
-        next_latent_state, reward = self._dynamics(latent_state, action)
-        policy_logits, value = self._prediction(next_latent_state, task_id)
+        # next_latent_state, reward = self._dynamics(latent_state, action)
+        #
+        # policy_logits, value = self._prediction(next_latent_state)
+        # return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
+
+        x, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
+            state_action_history, task_id=task_id)
+        logits_observations, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
+
+        # obs discrete distribution to one_hot latent state?
+        # torch.Size([8, 16])
+        next_latent_state = logits_observations
+
+        # torch.Size([8, 1, 2]) - > torch.Size([8, 2])
+        policy_logits = policy_logits.squeeze(1)
+        # torch.Size([8, 1, 601]) - > torch.Size([8, 601])
+        value = value.squeeze(1)
+
+        # torch.Size([8,]) - > torch.Size([8, 1])
+        # reward = torch.tensor(reward).unsqueeze(-1) # TODO(pu)
+        reward = reward.squeeze(1)
+
         return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
 
     def _representation(self, observation: torch.Tensor) -> torch.Tensor:
@@ -292,7 +308,7 @@ class MuZeroMTModel(nn.Module):
             latent_state = renormalize(latent_state)
         return latent_state
 
-    def _prediction(self, latent_state: torch.Tensor, task_id) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _prediction(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
             Use the prediction network to predict ``policy_logits`` and ``value``.
@@ -307,8 +323,7 @@ class MuZeroMTModel(nn.Module):
             - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
             - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.
         """
-        # return self.prediction_network(latent_state)
-        return self.prediction_network_multi_task[task_id](latent_state)
+        return self.prediction_network(latent_state)
 
     def _dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -464,9 +479,6 @@ class DynamicsNetwork(nn.Module):
 
         self.num_channels = num_channels
         self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
-        self.flatten_output_size_for_reward_head = 16*8*8 # TODO: only for obs (4,64,64)
-
-
         self.action_encoding_dim = action_encoding_dim
 
         self.conv = nn.Conv2d(num_channels, num_channels - self.action_encoding_dim, kernel_size=3, stride=1, padding=1, bias=False)

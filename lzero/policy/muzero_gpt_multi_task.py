@@ -1,4 +1,5 @@
 import copy
+from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
@@ -16,11 +17,53 @@ from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
-    prepare_obs, configure_optimizers
+    prepare_obs, prepare_obs_for_gpt, configure_optimizers
 
 
-@POLICY_REGISTRY.register('muzero_multi_task')
-class MuZeroMTPolicy(Policy):
+def configure_optimizer(model, learning_rate, weight_decay, exclude_submodules, *blacklist_module_names):
+    """Credits to https://github.com/karpathy/minGPT"""
+    # separate out all parameters to those that will and won't experience regularizing weight decay
+    decay = set()
+    no_decay = set()
+    whitelist_weight_modules = [torch.nn.Linear, torch.nn.Conv1d]
+    blacklist_weight_modules = [torch.nn.LayerNorm, torch.nn.Embedding]
+    
+    # Here, we make sure to exclude parameters from specified submodules when creating param_dict
+    param_dict = {}
+    for mn, m in model.named_modules():
+        # if any(mn.startswith(module_name) for module_name in exclude_submodules):
+        #     continue  # skip parameters from excluded submodules
+        for pn, p in m.named_parameters(recurse=False):
+            fpn = f'{mn}.{pn}' if mn else pn  # full param name
+            if not any(fpn.startswith(bl_module_name) for bl_module_name in blacklist_module_names):
+                param_dict[fpn] = p
+                if 'bias' in pn:
+                    no_decay.add(fpn)
+                elif pn.endswith('weight') and isinstance(m, tuple(whitelist_weight_modules)):
+                    decay.add(fpn)
+                elif pn.endswith('weight') and isinstance(m, tuple(blacklist_weight_modules)):
+                    no_decay.add(fpn)
+                else:
+                    decay.add(fpn)  # Default behavior is to add to decay
+
+    # Validate that we considered every parameter
+    inter_params = decay & no_decay
+    union_params = decay | no_decay
+    assert len(inter_params) == 0, f"parameters {str(inter_params)} made it into both decay/no_decay sets!"
+    assert len(param_dict.keys() - union_params) == 0, f"parameters {str(param_dict.keys() - union_params)} were not separated into either decay/no_decay set!"
+
+    # Create the PyTorch optimizer object
+    optim_groups = [
+        {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": weight_decay},
+        {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
+    ]
+    optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate)
+    return optimizer
+
+
+
+@POLICY_REGISTRY.register('muzero_gpt_multi_task')
+class MuZeroGPTMTPolicy(Policy):
     """
     Overview:
         The policy class for MuZero.
@@ -207,12 +250,13 @@ class MuZeroMTPolicy(Policy):
                 - import_names (:obj:`List[str]`): The model class path list used in this algorithm.
         .. note::
             The user can define and use customized network model but must obey the same interface definition indicated \
-            by import_names path. For MuZero, ``lzero.model.muzero_model.MuZeroModel``
+            by import_names path. For MuZero, ``lzero.model.muzero_gpt_model.MuZeroModel``
         """
         if self._cfg.model.model_type == "conv":
-            return 'MuZeroMTModel', ['lzero.model.muzero_model_multi_task']
+            # return 'MuZeroModel', ['lzero.model.muzero_gpt_model']
+            return 'MuZeroModelGPTMT', ['lzero.model.muzero_gpt_model_multi_task']
         elif self._cfg.model.model_type == "mlp":
-            return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
+            return 'MuZeroModelGPT', ['lzero.model.muzero_gpt_model_vector_obs']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
@@ -221,39 +265,55 @@ class MuZeroMTPolicy(Policy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
-        assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
-        # NOTE: in board_games, for fixed lr 0.003, 'Adam' is better than 'SGD'.
-        if self._cfg.optim_type == 'SGD':
-            self._optimizer = optim.SGD(
-                self._model.parameters(),
-                lr=self._cfg.learning_rate,
-                momentum=self._cfg.momentum,
-                weight_decay=self._cfg.weight_decay,
-            )
-        elif self._cfg.optim_type == 'Adam':
-            self._optimizer = optim.Adam(
-                self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
-            )
-        elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay, learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
+        self._optimizer_tokenizer = optim.Adam(
+            self._model.tokenizer.parameters(), lr=1e-4 # weight_decay=0
+        )
 
+        # TODO: nanoGPT optimizer
+        # self._optimizer_world_model = configure_optimizer(
+        #     model=self._model.world_model,
+        #     learning_rate=3e-3,
+        #     # learning_rate=1e-4,
+        #     weight_decay=self._cfg.weight_decay,
+        #     # weight_decay=0.01,
+        #     exclude_submodules=['tokenizer']
+        # )
+        self._optimizer_world_model = configure_optimizer(
+            model=self._model.world_model,
+            # learning_rate=3e-3,
+            learning_rate=1e-4, # NOTE: TODO
+            weight_decay=self._cfg.weight_decay,
+            # weight_decay=0.01,
+            exclude_submodules=['none'] # NOTE
+        )
 
-        if self._cfg.lr_piecewise_constant_decay:
-            from torch.optim.lr_scheduler import LambdaLR
-            max_step = self._cfg.threshold_training_steps_for_final_lr
-            # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
-            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
-            self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
+
+        # TODO: torch 2.0
+        self._model = torch.compile(self._model)
+        self._target_model = torch.compile(self._target_model)
+
+
         self._target_model = model_wrap(
             self._target_model,
             wrapper_name='target',
             update_type='assign',
             update_kwargs={'freq': self._cfg.target_update_freq}
         )
+        # TODO: soft target
+        # self._target_model = model_wrap(
+        #     self._target_model,
+        #     wrapper_name='target',
+        #     update_type='momentum',
+        #     update_kwargs={'theta': 0.005}
+        # )
         self._learn_model = self._model
+
+        # TODO: only for debug
+        # for param in self._learn_model.tokenizer.parameters():
+        #     param.requires_grad = False
 
         if self._cfg.use_augmentation:
             self.image_transforms = ImageTransforms(
@@ -295,17 +355,61 @@ class MuZeroMTPolicy(Policy):
             - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
                 current learning loss and learning statistics.
         """
+        # current_batch, target_batch, train_which_component_dict = data
+        # if data[-1]['train_which_component'] == 'transformer':
+        #     return_loss_dict = self._forward_learn_transformer(data)
+        # elif data[-1]['train_which_component'] == 'tokenizer':
+        #     return_loss_dict = self._forward_learn_tokenizer(data)
+        # else:
+        #     ValueError('Unknown component type')
+        return_loss_dict = self._forward_learn_transformer(data)
+
+        return return_loss_dict
+
+    def monitor_weights_and_grads(self, model):
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                print(f"Layer: {name} | "
+                    f"Weight mean: {param.data.mean():.4f} | "
+                    f"Weight std: {param.data.std():.4f} | "
+                    f"Grad mean: {param.grad.mean():.4f} | "
+                    f"Grad std: {param.grad.std():.4f}")
+                    
+
+    def _forward_learn_transformer(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
+        """
+        Overview:
+            The forward function for learning policy in learn mode, which is the core of the learning process.
+            The data is sampled from replay buffer.
+            The loss is calculated by the loss function and the loss is backpropagated to update the model.
+        Arguments:
+            - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
+                The first tensor is the current_batch, the second tensor is the target_batch.
+        Returns:
+            - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
+                current learning loss and learning statistics.
+        """
+
         self._learn_model.train()
         self._target_model.train()
+        # self._learn_model.tokenizer.eval() # bug
+        self._learn_model.tokenizer.train()
+
         if self._cfg.use_rnd_model:
             self._target_model_for_intrinsic_reward.train()
 
         # current_batch, target_batch = data
         current_batch, target_batch, task_id = data
+
+
         obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
-        obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+        if self._cfg.model.frame_stack_num == 4:
+            obs_batch, obs_target_batch = prepare_obs_for_gpt(obs_batch_ori, self._cfg)
+        else:
+            obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+
 
         # do augmentations
         if self._cfg.use_augmentation:
@@ -339,128 +443,95 @@ class MuZeroMTPolicy(Policy):
         target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
         target_value_categorical = phi_transform(self.value_support, transformed_target_value)
 
+        # compute_loss(self, batch: Batch, tokenizer: Tokenizer, ** kwargs: Any)
+
+        batch_for_gpt = {}
+        # TODO: for cartpole self._cfg.model.observation_shape
+        if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape)==1:
+            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
+        elif len(self._cfg.model.observation_shape)==3:
+            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  *self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
+
+
+        batch_for_gpt['actions'] = action_batch.squeeze(-1)  # (B, T-1, A) -> (B, T-1)
+
+        batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]  # (B, T, R) -> (B, T-1, R)
+
+        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # (B, T) NOTE: 0 means invalid padding data
+        batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]  # (B, T-1) TODO
+
+
+        batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]  # (B, T-1, O) or (B, T-1, C, H, W)
+        batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long, device=self._cfg.device) # (B, T-1)
+
+        batch_for_gpt['target_value'] = target_value_categorical[:, :-1]  # (B, T-1, V)
+        batch_for_gpt['target_policy'] = target_policy[:, :-1]  # (B, T-1, A)
+        # NOTE: TODO: next latent state's policy value
+        # batch_for_gpt['target_value'] = target_value_categorical[:, 1:]  # (B, T-1, V)
+        # batch_for_gpt['target_policy'] = target_policy[:, 1:]  # (B, T-1, A)
+
+        # self._learn_model.world_model.train()
+
+        # get valid target_policy data
+        valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
+        # compute entropy of each policy
+        target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
+        # compute average entropy
+        average_target_policy_entropy = target_policy_entropy.mean().item()
+        # print(f'Average entropy: {average_entropy}')
+
+
+        # if train_which_component_dict['train_which_component'] == 'transformer':
         # ==============================================================
-        # the core initial_inference in MuZero policy.
+        # update world model
         # ==============================================================
-        network_output = self._learn_model.initial_inference(obs_batch, task_id)
+        intermediate_losses = defaultdict(float)
+        # losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._learn_model.tokenizer)
+        losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer, task_id)
 
-        # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
-        latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
+        weighted_total_loss = losses.loss_total
+        for loss_name, loss_value in losses.intermediate_losses.items():
+            intermediate_losses[f"{loss_name}"] = loss_value
+        # print(intermediate_losses)
+        obs_loss = intermediate_losses['loss_obs']
+        reward_loss = intermediate_losses['loss_rewards']
+        policy_loss = intermediate_losses['loss_policy']
+        value_loss = intermediate_losses['loss_value']
+        latent_kl_loss = intermediate_losses['latent_kl_loss']
+        latent_recon_loss = intermediate_losses['latent_recon_loss']
+        perceptual_loss = intermediate_losses['perceptual_loss']
 
-        # transform the scaled value or its categorical representation to its original value,
-        # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
-        original_value = self.inverse_scalar_transform_handle(value)
-
-        # Note: The following lines are just for debugging.
-        predicted_rewards = []
-        if self._cfg.monitor_extra_statistics:
-            latent_state_list = latent_state.detach().cpu().numpy()
-            predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
-                policy_logits, dim=1
-            ).detach().cpu()
-
-        # calculate the new priorities for each transition.
-        value_priority = L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0])
-        value_priority = value_priority.data.cpu().numpy() + 1e-6
-
-        # ==============================================================
-        # calculate policy and value loss for the first step.
-        # ==============================================================
-        policy_loss = cross_entropy_loss(policy_logits, target_policy[:, 0])
-        value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
-
-        prob = torch.softmax(policy_logits, dim=-1)
-        dist = Categorical(prob)
-        policy_entropy_loss = -dist.entropy()
-
-
-        reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
-        consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
-
-        # ==============================================================
-        # the core recurrent_inference in MuZero policy.
-        # ==============================================================
-        for step_k in range(self._cfg.num_unroll_steps):
-            # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
-            # given current ``latent_state`` and ``action``.
-            # And then predict policy_logits and value with the prediction function.
-            network_output = self._learn_model.recurrent_inference(latent_state, action_batch[:, step_k], task_id)
-            latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
-
-            # transform the scaled value or its categorical representation to its original value,
-            # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
-            original_value = self.inverse_scalar_transform_handle(value)
-
-            if self._cfg.model.self_supervised_learning_loss:
-                # ==============================================================
-                # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
-                # ==============================================================
-                if self._cfg.ssl_loss_weight > 0:
-                    # obtain the oracle latent states from representation function.
-                    beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
-                    network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index], task_id)
-
-                    latent_state = to_tensor(latent_state)
-                    representation_state = to_tensor(network_output.latent_state)
-
-                    # NOTE: no grad for the representation_state branch
-                    dynamic_proj = self._learn_model.project(latent_state, with_grad=True)
-                    observation_proj = self._learn_model.project(representation_state, with_grad=False)
-                    temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_k]
-                    consistency_loss += temp_loss
-
-            # NOTE: the target policy, target_value_categorical, target_reward_categorical is calculated in
-            # game buffer now.
-            # ==============================================================
-            # calculate policy loss for the next ``num_unroll_steps`` unroll steps.
-            # NOTE: the +=.
-            # ==============================================================
-            policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_k + 1])
-
-            prob = torch.softmax(policy_logits, dim=-1)
-            dist = Categorical(prob)
-            policy_entropy_loss += -dist.entropy()
-
-            value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
-            reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
-
-            # Follow MuZero, set half gradient
-            # latent_state.register_hook(lambda grad: grad * 0.5)
-
-            if self._cfg.monitor_extra_statistics:
-                original_rewards = self.inverse_scalar_transform_handle(reward)
-                original_rewards_cpu = original_rewards.detach().cpu()
-
-                predicted_values = torch.cat(
-                    (predicted_values, self.inverse_scalar_transform_handle(value).detach().cpu())
-                )
-                predicted_rewards.append(original_rewards_cpu)
-                predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
-                latent_state_list = np.concatenate((latent_state_list, latent_state.detach().cpu().numpy()))
 
         # ==============================================================
         # the core learn model update step.
         # ==============================================================
-        # weighted loss with masks (some invalid states which are out of trajectory.)
-        loss = (
-                self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss +
-                self._cfg.policy_entropy_loss_weight * policy_entropy_loss
-        )
-        weighted_total_loss = (weights * loss).mean()
-
+        """
+        for name, parameter in self._learn_model.tokenizer.named_parameters():
+            print(name)
+        """
         gradient_scale = 1 / self._cfg.num_unroll_steps
+        # TODO(pu): test the effect of gradient scale.
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
-        self._optimizer.zero_grad()
+        self._optimizer_world_model.zero_grad()
         weighted_total_loss.backward()
+
+        # 在训练循环中使用
+        # self.monitor_weights_and_grads(self._learn_model.tokenizer.representation_network)
+        # print('torch.cuda.memory_summary():', torch.cuda.memory_summary())
+
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
-        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
-            self._learn_model.parameters(), self._cfg.grad_clip_value
+        total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
+            self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
         )
-        self._optimizer.step()
+        total_grad_norm_before_clip_rep_net = torch.nn.utils.clip_grad_norm_(self._learn_model.tokenizer.representation_network.parameters(), max_norm=1.0)
+        # print('total_grad_norm_before_clip_rep_net:', total_grad_norm_before_clip_rep_net)
+
+
+        self._optimizer_world_model.step()
         if self._cfg.lr_piecewise_constant_decay:
-            self.lr_scheduler.step()
+                self.lr_scheduler.step()
+
 
         # ==============================================================
         # the core target model update step.
@@ -469,35 +540,197 @@ class MuZeroMTPolicy(Policy):
         if self._cfg.use_rnd_model:
             self._target_model_for_intrinsic_reward.update(self._learn_model.state_dict())
 
-        if self._cfg.monitor_extra_statistics:
-            predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
-            predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
 
-        return {
+        # 确保所有的CUDA核心完成工作，以便准确统计显存使用情况
+        torch.cuda.synchronize()
+        # 获取当前分配的显存总量（字节）
+        current_memory_allocated = torch.cuda.memory_allocated()
+        # 获取程序运行到目前为止分配过的最大显存量（字节）
+        max_memory_allocated = torch.cuda.max_memory_allocated()
+
+        # 将显存使用量从字节转换为GB
+        current_memory_allocated_gb = current_memory_allocated / (1024**3)
+        max_memory_allocated_gb = max_memory_allocated / (1024**3)
+        # 使用SummaryWriter记录当前和最大显存使用量
+
+
+        return_loss_dict = {
+            'Current_GPU': current_memory_allocated_gb,
+            'Max_GPU': max_memory_allocated_gb,
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
-            'cur_lr': self._optimizer.param_groups[0]['lr'],
+            'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
+            'cur_lr_tokenizer': self._optimizer_tokenizer.param_groups[0]['lr'],
+
             'weighted_total_loss': weighted_total_loss.item(),
-            'total_loss': loss.mean().item(),
-            'policy_loss': policy_loss.mean().item(),
-            'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),
-            'reward_loss': reward_loss.mean().item(),
-            'value_loss': value_loss.mean().item(),
-            'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
+            'obs_loss': obs_loss,
+            'latent_kl_loss': latent_kl_loss,
+            'latent_recon_loss':latent_recon_loss,
+            'perceptual_loss':perceptual_loss,
+            'policy_loss': policy_loss,
+            'target_policy_entropy': average_target_policy_entropy,
+            # 'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),
+            'reward_loss': reward_loss,
+            'value_loss': value_loss,
+            # 'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
 
             # ==============================================================
             # priority related
             # ==============================================================
-            'value_priority_orig': value_priority,
-            'value_priority': value_priority.mean().item(),
+            # 'value_priority_orig': value_priority,
+            'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
+            # 'value_priority': value_priority.mean().item(),
             'target_reward': target_reward.detach().cpu().numpy().mean().item(),
             'target_value': target_value.detach().cpu().numpy().mean().item(),
             'transformed_target_reward': transformed_target_reward.detach().cpu().numpy().mean().item(),
             'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
-            'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
-            'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
-            'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
+            # 'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
+            # 'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
+            'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
+            'total_grad_norm_before_clip_rep_net': total_grad_norm_before_clip_rep_net.item(),  
         }
+
+        return return_loss_dict
+
+
+    def _forward_learn_tokenizer(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
+        """
+        Overview:
+            The forward function for learning policy in learn mode, which is the core of the learning process.
+            The data is sampled from replay buffer.
+            The loss is calculated by the loss function and the loss is backpropagated to update the model.
+        Arguments:
+            - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
+                The first tensor is the current_batch, the second tensor is the target_batch.
+        Returns:
+            - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
+                current learning loss and learning statistics.
+        """
+        self._learn_model.train()
+        self._target_model.train()
+        if self._cfg.use_rnd_model:
+            self._target_model_for_intrinsic_reward.train()
+
+        # current_batch, target_batch = data
+        current_batch, target_batch, train_which_component_dict = data
+
+
+        obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
+        target_reward, target_value, target_policy = target_batch
+
+        obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+
+        # do augmentations
+        if self._cfg.use_augmentation:
+            obs_batch = self.image_transforms.transform(obs_batch)
+            if self._cfg.model.self_supervised_learning_loss:
+                obs_target_batch = self.image_transforms.transform(obs_target_batch)
+
+        # shape: (batch_size, num_unroll_steps, action_dim)
+        # NOTE: .long(), in discrete action space.
+        # action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
+        # data_list = [
+        #     mask_batch,
+        #     target_reward.astype('float32'),
+        #     target_value.astype('float32'), target_policy, weights
+        # ]
+
+        # [mask_batch, target_reward, target_value, target_policy,
+        #  weights] = to_torch_float_tensor(data_list, self._cfg.device)
+
+        # target_reward = target_reward.view(self._cfg.batch_size, -1)
+        # target_value = target_value.view(self._cfg.batch_size, -1)
+
+        # assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
+
+
+        batch_for_gpt = {}
+        # TODO: for cartpole self._cfg.model.observation_shape
+        if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape)==1:
+            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
+        elif len(self._cfg.model.observation_shape)==3:
+            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  *self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
+
+        batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]  # (B, T-1, O) or (B, T-1, C, H, W)
+
+        # if train_which_component_dict['train_which_component'] == 'tokenizer':
+
+        # ==============================================================
+        # update tokenizer
+        # ==============================================================
+        # TODO: train tokenlizer
+        self._learn_model.tokenizer.train()
+        
+        # for name, param in self._learn_model.tokenizer.named_parameters():
+        #     if param.requires_grad:
+        #         print(name, param.shape)
+
+        losses_tokenizer = self._learn_model.tokenizer.compute_loss(batch_for_gpt)
+        
+        self._optimizer_tokenizer.zero_grad()
+
+        weighted_total_loss_tokenizer = losses_tokenizer.loss_total
+        weighted_total_loss_tokenizer.backward()
+        # losses_tokenizer.loss_total.backward()
+
+        total_grad_norm_before_clip_tokenizer = torch.nn.utils.clip_grad_norm_(
+            self._learn_model.tokenizer.parameters(), self._cfg.grad_clip_value
+        )
+
+
+        self._optimizer_tokenizer.step()
+
+        intermediate_losses_tokenizer= defaultdict(float)
+        for loss_name, loss_value in losses_tokenizer.intermediate_losses.items():
+            intermediate_losses_tokenizer[f"{loss_name}"] = loss_value
+        # print(intermediate_losses)
+        commitment_loss= intermediate_losses_tokenizer['commitment_loss']
+        reconstruction_loss = intermediate_losses_tokenizer['reconstruction_loss']
+        perceptual_loss = intermediate_losses_tokenizer['perceptual_loss']
+
+
+        # # ==============================================================
+        # # the core target model update step.
+        # # ==============================================================
+        # self._target_model.update(self._learn_model.state_dict())
+        # if self._cfg.use_rnd_model:
+        #     self._target_model_for_intrinsic_reward.update(self._learn_model.state_dict())
+
+
+        return_loss_dict = {
+            'collect_mcts_temperature': self._collect_mcts_temperature,
+            'collect_epsilon': self.collect_epsilon,
+            'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
+            'cur_lr_tokenizer': self._optimizer_tokenizer.param_groups[0]['lr'],
+
+            # 'weighted_total_loss': weighted_total_loss.item(),
+            # 'obs_loss': obs_loss,
+            # 'policy_loss': policy_loss,
+            # 'target_policy_entropy': average_target_policy_entropy,
+            # 'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),
+            # 'reward_loss': reward_loss,
+            # 'value_loss': value_loss,
+            # 'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
+
+            # ==============================================================
+            # priority related
+            # ==============================================================
+            # 'value_priority_orig': value_priority,
+            # 'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
+            # 'value_priority': value_priority.mean().item(),
+            # 'target_reward': target_reward.detach().cpu().numpy().mean().item(),
+            # 'target_value': target_value.detach().cpu().numpy().mean().item(),
+            # 'transformed_target_reward': transformed_target_reward.detach().cpu().numpy().mean().item(),
+            # 'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
+            # 'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
+            # 'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
+            'total_grad_norm_before_clip_tokenizer': total_grad_norm_before_clip_tokenizer.item(),
+            'commitment_loss':commitment_loss,
+            'reconstruction_loss':reconstruction_loss,
+            'perceptual_loss': perceptual_loss,
+        }
+
+        return return_loss_dict
 
     def _init_collect(self) -> None:
         """
@@ -505,6 +738,7 @@ class MuZeroMTPolicy(Policy):
             Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
         self._collect_model = self._model
+
         if self._cfg.mcts_ctree:
             self._mcts_collect = MCTSCtree(self._cfg)
         else:
@@ -520,7 +754,7 @@ class MuZeroMTPolicy(Policy):
             to_play: List = [-1],
             epsilon: float = 0.25,
             ready_env_id: np.array = None,
-            task_id: int = 0,
+            task_id=0
     ) -> Dict:
         """
         Overview:
@@ -549,9 +783,11 @@ class MuZeroMTPolicy(Policy):
         self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
+        # if active_collect_env_num == 1:
+        #     print('debug')
         with torch.no_grad():
+            network_output = self._collect_model.initial_inference(data, action_batch=None, task_id=task_id)
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
-            network_output = self._collect_model.initial_inference(data, task_id)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
@@ -559,6 +795,12 @@ class MuZeroMTPolicy(Policy):
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
+            # if task_id == 2:
+            #     # action_space_size=18 # Seaquest
+            #     pass
+            # else:
+            #     action_space_size=6 # Pong Qbert
+
             # the only difference between collect and eval is the dirichlet noise
             noises = [
                 np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
@@ -572,8 +814,6 @@ class MuZeroMTPolicy(Policy):
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-            # if task_id==2:
-            #     print('task_id:', task_id)
             self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, task_id)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
@@ -616,12 +856,15 @@ class MuZeroMTPolicy(Policy):
 
         return output
 
+
     def _init_eval(self) -> None:
         """
         Overview:
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._eval_model = self._model
+
+
         if self._cfg.mcts_ctree:
             self._mcts_eval = MCTSCtree(self._cfg)
         else:
@@ -651,7 +894,7 @@ class MuZeroMTPolicy(Policy):
             end_index = self._cfg.model.observation_shape * (step + self._cfg.model.frame_stack_num)
         return beg_index, end_index
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1, ready_env_id: np.array = None, task_id: int = 0) -> Dict:
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1, ready_env_id: np.array = None, task_id=0) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -677,7 +920,7 @@ class MuZeroMTPolicy(Policy):
         active_eval_env_num = data.shape[0]
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
-            network_output = self._collect_model.initial_inference(data, task_id)
+            network_output = self._collect_model.initial_inference(data, action_batch=None, task_id=task_id)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             if not self._eval_model.training:
@@ -712,9 +955,14 @@ class MuZeroMTPolicy(Policy):
                 # the index within the legal action set, rather than the index in the entire action set.
                 #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than
                 # sampling during the evaluation phase.
+                
                 action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                     distributions, temperature=1, deterministic=True
                 )
+                # TODO: eval
+                # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                #         distributions, temperature=self._collect_mcts_temperature, deterministic=False
+                # )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
@@ -737,23 +985,39 @@ class MuZeroMTPolicy(Policy):
             tensorboard according to the return value ``_forward_learn``.
         """
         return [
+            'Current_GPU',
+            'Max_GPU',
+            'collect_epsilon',
             'collect_mcts_temperature',
-            'cur_lr',
+            # 'cur_lr',
+              'cur_lr_world_model',
+            'cur_lr_tokenizer',
+
             'weighted_total_loss',
-            'total_loss',
+            # 'total_loss',
+            'obs_loss',
             'policy_loss',
-            'policy_entropy',
+            'latent_kl_loss',
+            'latent_recon_loss',
+            # 'policy_entropy',
+            'target_policy_entropy',
             'reward_loss',
             'value_loss',
             'consistency_loss',
             'value_priority',
             'target_reward',
             'target_value',
-            'predicted_rewards',
-            'predicted_values',
-            'transformed_target_reward',
-            'transformed_target_value',
-            'total_grad_norm_before_clip',
+            # 'predicted_rewards',
+            # 'predicted_values',
+            # 'transformed_target_reward',
+            # 'transformed_target_value',
+            'total_grad_norm_before_clip_tokenizer',
+            'total_grad_norm_before_clip_wm',
+            'total_grad_norm_before_clip_rep_net',
+            # tokenizer
+            'commitment_loss',
+            'reconstruction_loss',
+            'perceptual_loss',
         ]
 
     def _state_dict_learn(self) -> Dict[str, Any]:
@@ -766,19 +1030,75 @@ class MuZeroMTPolicy(Policy):
         return {
             'model': self._learn_model.state_dict(),
             'target_model': self._target_model.state_dict(),
-            'optimizer': self._optimizer.state_dict(),
+            'optimizer_world_model': self._optimizer_world_model.state_dict(),
+            'optimizer_tokenizer': self._optimizer_tokenizer.state_dict(),
+
         }
+    # TODO:
+    # def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
+    #     """
+    #     Overview:
+    #         Load the state_dict variable into policy learn mode.
+    #     Arguments:
+    #         - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
+    #     """
+    #     self._learn_model.load_state_dict(state_dict['model'])
+    #     self._target_model.load_state_dict(state_dict['target_model'])
+    #     self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
+    #     self._optimizer_tokenizer.load_state_dict(state_dict['optimizer_tokenizer'])
 
     def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
         """
         Overview:
-            Load the state_dict variable into policy learn mode.
+            Load the state_dict variable into policy learn mode, specifically loading only the 
+            representation network of the tokenizer within model and target_model.
         Arguments:
             - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
         """
-        self._learn_model.load_state_dict(state_dict['model'])
-        self._target_model.load_state_dict(state_dict['target_model'])
-        self._optimizer.load_state_dict(state_dict['optimizer'])
+        # Extract the relevant sub-state-dicts for representation_network from the state_dict
+        # model_rep_network_state = state_dict['model']['tokenizer']['representation_network']
+        # target_model_rep_network_state = state_dict['target_model']['tokenizer']['representation_network']
+
+        # # Load the state into the model's representation network
+        # self._learn_model.tokenizer.representation_network.load_state_dict(model_rep_network_state)
+        # self._target_model.tokenizer.representation_network.load_state_dict(target_model_rep_network_state)
+
+        # Assuming self._learn_model and self._target_model have a 'representation_network' submodule
+        self._load_representation_network_state(state_dict['model'], self._learn_model.tokenizer.representation_network)
+        self._load_representation_network_state(state_dict['target_model'], self._target_model.tokenizer.representation_network)
+
+
+    def _load_representation_network_state(self, state_dict, model_submodule):
+        """
+        This function filters the state_dict to only include the state of the representation_network
+        and loads it into the given model submodule.
+        """
+        from collections import OrderedDict
+
+        # Filter the state_dict to only include keys that start with 'representation_network'
+        representation_network_keys = {k: v for k, v in state_dict.items() if k.startswith('representation_network')}
+        
+        # Load the state into the model's representation_network submodule
+        # model_submodule.load_state_dict(OrderedDict(representation_network_keys))
+
+        # 去掉键名前缀
+        new_state_dict = OrderedDict()
+        for key, value in representation_network_keys.items():
+            new_key = key.replace('representation_network.', '')  # 去掉前缀
+            new_state_dict[new_key] = value
+
+        # # 如果模型在特定的设备上，确保状态字典也在那个设备上
+        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # new_state_dict = {key: value.to(device) for key, value in new_state_dict.items()}
+
+        # 尝试加载状态字典
+        try:
+            # model_submodule.load_state_dict(new_state_dict)
+            # 使用 strict=False 参数忽略缺少的键
+            model_submodule.load_state_dict(new_state_dict, strict=False)
+        except RuntimeError as e:
+            print("加载失败: ", e)
+
 
     def _process_transition(self, obs, policy_output, timestep):
         # be compatible with DI-engine Policy class

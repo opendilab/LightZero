@@ -24,6 +24,7 @@ elif env_name == 'SeaquestNoFrameskip-v4':
 elif env_name == 'BoxingNoFrameskip-v4':
     action_space_size = 18
 
+
 # share action space
 action_space_size = 18
 # ==============================================================
@@ -42,20 +43,21 @@ model_update_ratio = 0.25
 
 num_simulations = 50 
 batch_size = 256
-max_env_step = int(10e6)
+max_env_step = int(5e6)
 reanalyze_ratio = 0.
 # reanalyze_ratio = 0.5
-
 eps_greedy_exploration_in_collect = False
 
-exp_name_prefix = 'data_mz_ctree_mt_pong-qbert-seaquest/'
+exp_name_prefix = 'data_mz_ctree_mt_stack1_pong-qbert-seaquest/'
 
+# num_simulations = 8 # debug
+# update_per_collect = 1 # debug
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
-    # TODO NOTE: mcts_ctree, muzero_collector: empty_cache
+    # mcts_ctree, muzero_collector: empty_cache
     exp_name=exp_name_prefix+f'{env_name[:-14]}_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl400_noprio_target100_sgd02_seed0',
 
     # exp_name=exp_name_prefix+f'{env_name[:-14]}_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl400_noprio_target100_sgd02_seed0',
@@ -66,9 +68,15 @@ atari_muzero_config = dict(
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
-        observation_shape=(4, 64, 64),
-        frame_stack_num=4,
-        gray_scale=True,
+
+        # observation_shape=(4, 64, 64),
+        # frame_stack_num=4,
+        # gray_scale=True,
+        
+        observation_shape=(3, 64, 64),
+        frame_stack_num=1,
+        gray_scale=False,
+
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -83,11 +91,18 @@ atari_muzero_config = dict(
     policy=dict(
         task_id=0,
         model=dict(
-            # observation_shape=(4, 96, 96),
-            observation_shape=(4, 64, 64),
-            image_channel=1,
-            frame_stack_num=4,
-            gray_scale=True,
+            # stack4
+            # observation_shape=(4, 64, 64),
+            # image_channel=1,
+            # frame_stack_num=4,
+            # gray_scale=True,
+
+            # stack1
+            observation_shape=(3, 64, 64),
+            image_channel=3,
+            frame_stack_num=1,
+            gray_scale=False,
+
             action_space_size=action_space_size,
             downsample=True,
             self_supervised_learning_loss=True,  # default is False
@@ -97,7 +112,6 @@ atari_muzero_config = dict(
         cuda=True,
         env_type='not_board_games',
         game_segment_length=400,
-        # game_segment_length=50,
         random_collect_episode_num=0,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,

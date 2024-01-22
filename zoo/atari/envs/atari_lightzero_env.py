@@ -91,6 +91,8 @@ class AtariLightZeroEnv(BaseEnv):
             observation = np.transpose(observation, (2, 0, 1))
 
         action_mask = np.ones(self._action_space.n, 'int8')
+        # action_mask = np.ones(18, 'int8')  # TODO: full action space
+
         return {'observation': observation, 'action_mask': action_mask, 'to_play': -1}
 
     def step(self, action):

@@ -89,10 +89,12 @@ def wrap_lightzero(config, episode_life, clip_rewards):
     Return:
         - the wrapped atari environment.
     """
+    # TODO: full_action_space=True
+    full_action_space=True
     if config.render_mode_human:
-        env = gym.make(config.env_name, render_mode='human')
+        env = gym.make(config.env_name, render_mode='human', full_action_space=full_action_space)
     else:
-        env = gym.make(config.env_name)
+        env = gym.make(config.env_name, full_action_space=full_action_space)
     assert 'NoFrameskip' in env.spec.id
     env = NoopResetWrapper(env, noop_max=30)
     env = MaxAndSkipWrapper(env, skip=config.frame_skip)

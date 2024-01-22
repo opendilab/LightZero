@@ -4,6 +4,7 @@ from .train_muzero import train_muzero
 from .train_muzero_multi_task import train_muzero_multi_task 
 
 from .train_muzero_gpt import train_muzero_gpt
+from .train_muzero_gpt_multi_task import train_muzero_gpt_multi_task 
 
 from .train_muzero_with_reward_model import train_muzero_with_reward_model
 from .eval_muzero import eval_muzero

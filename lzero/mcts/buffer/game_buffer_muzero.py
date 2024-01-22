@@ -575,7 +575,7 @@ class MuZeroGameBuffer(GameBuffer):
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
                         target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
                     else:
-                        # very important: use latest MCTS visit count distribution
+                        # NOTE: very important: use latest MCTS visit count distribution
                         # if current_index < len(child_visit):
                         child_visit[current_index] = distributions
 
