@@ -158,6 +158,10 @@ class MAPolicy(Policy):
         # ****** Bigbatch ******
         K_batch = 5,
 
+        # ****** Reanalyze ******
+        buffer_reanalyze_interval = None,
+        buffer_reanalyze_freq = 0.3,
+
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
         use_priority=False,

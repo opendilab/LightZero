@@ -1,7 +1,7 @@
 from easydict import EasyDict
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_name = 'PongNoFrameskip-v4'
+env_name = 'BreakoutNoFrameskip-v4'
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -21,10 +21,14 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 1000
+update_per_collect = None
 batch_size = 256
+model_update_ratio = 0.25
 max_env_step = int(8e5)
-reanalyze_ratio = 0.99
+reanalyze_ratio = 0.0
+buffer_reanalyze_interval = None
+buffer_reanalyze_freq = 0.3
+
 eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -32,15 +36,16 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/final_mzssl',
+    f'data_mz_ctree/{env_name[:-14]}/final_ma_r03',
     env=dict(
-        stop_value=int(1e6),
         env_name=env_name,
         obs_shape=(4, 96, 96),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        collect_max_episode_steps=5000.0,
+        eval_max_episode_steps=20000.0,
     ),
     policy=dict(
         model=dict(
@@ -67,6 +72,9 @@ atari_muzero_config = dict(
         ),
         use_augmentation=True,
         update_per_collect=update_per_collect,
+        model_update_ratio=model_update_ratio,
+        buffer_reanalyze_interval = buffer_reanalyze_interval,
+        buffer_reanalyze_freq = buffer_reanalyze_freq,
         batch_size=batch_size,
         optim_type='SGD',
         lr_piecewise_constant_decay=True,
@@ -91,21 +99,17 @@ atari_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero',
-        import_names=['lzero.policy.muzero'],
+        type='ma',
+        import_names=['lzero.policy.ma'],
     ),
     collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
+        type='episode_ma',
+        import_names=['lzero.worker.ma_collector'],
     )
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero
-    # def run(max_env_step: int):
-    #     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
-    # import cProfile
-    # cProfile.run(f"run({30000})", filename="pong_mzssl", sort="cumulative")
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import train_ma
+    train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)

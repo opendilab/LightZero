@@ -213,14 +213,20 @@ def train_ma(
 
         # print("hhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
         # print(replay_buffer.get_num_of_transitions())
-        if replay_buffer.get_num_of_transitions()>2000:
-            replay_buffer.reanalyze_buffer(2000, policy)
+        if cfg.policy.buffer_reanalyze_interval is None:
+            buffer_reanalyze_interval = int(cfg.policy.buffer_reanalyze_freq * update_per_collect)
+        else : buffer_reanalyze_interval = cfg.policy.buffer_reanalyze_interval 
+        print(f"buffer reanalyze interval is {buffer_reanalyze_interval}")
 
         # K = cfg.policy.K_batch
         # sample_batch_size = (K+1) * batch_size
         # Learn policy from collected data.
         for i in range(update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
+            if i%buffer_reanalyze_interval == 0 and i != 0:
+                if replay_buffer.get_num_of_transitions()>2000:
+                    replay_buffer.reanalyze_buffer(2000, policy)
+
             if replay_buffer.get_num_of_transitions() > batch_size:
 
 
@@ -228,7 +234,6 @@ def train_ma(
                 # policy对sample的影响是什么？？？？？？？？？？？？？？？？？？？？？？？？？
                 #!!!!!!!!!!!!!!!!!!!!!!!!!value是sample时就计算好的所以如果一次sample多次训练的话会增强value的off-policy性？？？？？？？？？？？
                 # 在非reannalyze的情况一采多训会影响value,reanalyze的情况则会额外影响policy！！！！！！！！！！！！！！！
-
 
 
                 # 修改_make_batch函数，将batch_size扩K+1倍，但是prepare出来的context分成K+1份
