@@ -1,12 +1,12 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(5)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-# env_name = 'PongNoFrameskip-v4'
+env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
 # env_name = 'BreakoutNoFrameskip-v4'
 # env_name = 'QbertNoFrameskip-v4'
-env_name = 'SeaquestNoFrameskip-v4'
+# env_name = 'SeaquestNoFrameskip-v4'
 # env_name = 'BoxingNoFrameskip-v4'
 
 if env_name == 'PongNoFrameskip-v4':
@@ -34,8 +34,8 @@ num_simulations = 50
 
 # update_per_collect = 1000
 
-# update_per_collect = None
-update_per_collect = 1000
+update_per_collect = None
+# update_per_collect = 1000
 
 model_update_ratio = 0.25
 # model_update_ratio = 1
@@ -56,8 +56,10 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 atari_muzero_config = dict(
-    # mcts_ctree, muzero_collector: empty_cache
-    exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl400_noprio_target100_start2000_sgd02_seed0',
+    # mcts_ctree, muzero_collector: empty_cache, task_id
+    # atari env
+    exp_name=f'data_mz_ctree_0124/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-segment_gsl50_start2000_adamw1e-4-wd01_tep025_noprio_target100_seed0',
+    # exp_name=f'data_mz_ctree_0124/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl400_noprio_target100_sgd02_seed0',
 
     # exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl50_noprio_target100_start2000_adamw1e-4_wd1e-4_seed0',
 
@@ -96,8 +98,8 @@ atari_muzero_config = dict(
         ),
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=400,
-        # game_segment_length=50,
+        # game_segment_length=400,
+        game_segment_length=50,
         random_collect_episode_num=0,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
@@ -113,21 +115,14 @@ atari_muzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
 
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,
-
         # optim_type='SGD',
-        # lr_piecewise_constant_decay=False,
-        # learning_rate=1e-4,
-        # weight_decay=1e-4,
+        # lr_piecewise_constant_decay=True,
+        # learning_rate=0.2,
 
-
-        # optim_type='AdamW',
-        # lr_piecewise_constant_decay=False,
-        # learning_rate=1e-4,
-        # weight_decay=1e-4,
-        # weight_decay=0.1,
+        optim_type='AdamW',
+        lr_piecewise_constant_decay=False,
+        learning_rate=1e-4,
+        weight_decay=0.1,
 
 
         # manual_temperature_decay=True,

@@ -38,6 +38,7 @@ class MuZeroCollector(ISerialCollector):
             exp_name: Optional[str] = 'default_experiment',
             instance_name: Optional[str] = 'collector',
             policy_config: 'policy_config' = None,  # noqa
+            task_id: int = 0,
     ) -> None:
         """
         Overview:
@@ -51,6 +52,7 @@ class MuZeroCollector(ISerialCollector):
             - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
             - policy_config: Config of game.
         """
+        self.task_id = task_id
         self._exp_name = exp_name
         self._instance_name = instance_name
         self._collect_print_freq = collect_print_freq
@@ -408,6 +410,7 @@ class MuZeroCollector(ISerialCollector):
                 # ==============================================================
                 # policy forward
                 # ==============================================================
+                # policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, task_id=self.task_id)
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon)
 
                 actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
@@ -517,8 +520,7 @@ class MuZeroCollector(ISerialCollector):
                     #     # del self._policy.get_attribute('collect_model').world_model.keys_values_wm
                     #     torch.cuda.empty_cache() # TODO: NOTE
                     #     print('collect collect_model past_keys_values_cache.clear()')
-
-                    # print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
+                    #     print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
 
                     total_transitions += 1
 
@@ -740,7 +742,7 @@ class MuZeroCollector(ISerialCollector):
             for k, v in info.items():
                 if k in ['each_reward']:
                     continue
-                self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
+                self._tb_logger.add_scalar('{}_iter_task{}/'.format(self._instance_name, self.task_id) + k, v, train_iter)
                 if k in ['total_envstep_count']:
                     continue
-                self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
+                self._tb_logger.add_scalar('{}_step_task{}/'.format(self._instance_name, self.task_id) + k, v, self._total_envstep_count)

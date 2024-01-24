@@ -47,7 +47,7 @@ class MuZeroGameBuffer(GameBuffer):
         self.game_segment_buffer = []
         self.game_pos_priorities = []
         self.game_segment_game_pos_look_up = []
-        self.task_id = self._cfg.task_id
+        # self.task_id = self._cfg.task_id
 
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
@@ -381,7 +381,9 @@ class MuZeroGameBuffer(GameBuffer):
                 m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
 
                 # calculate the target value
-                m_output = model.initial_inference(m_obs, self.task_id)
+                # m_output = model.initial_inference(m_obs, self.task_id)
+                m_output = model.initial_inference(m_obs)
+
 
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
@@ -528,7 +530,9 @@ class MuZeroGameBuffer(GameBuffer):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
                 m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device).float()
-                m_output = model.initial_inference(m_obs, self.task_id)
+                # m_output = model.initial_inference(m_obs, self.task_id)
+                m_output = model.initial_inference(m_obs)
+
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
                     [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
@@ -564,7 +568,7 @@ class MuZeroGameBuffer(GameBuffer):
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
             policy_index = 0
-            # very important: use latest MCTS visit count distribution
+            # TODO very important: use latest MCTS visit count distribution
             for state_index, child_visit, game_index in zip(pos_in_game_segment_list, child_visits, batch_index_list):
                 target_policies = []
 
@@ -575,9 +579,10 @@ class MuZeroGameBuffer(GameBuffer):
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
                         target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
                     else:
-                        # NOTE: very important: use latest MCTS visit count distribution
+                        # TODO: very important: use latest MCTS visit count distribution
                         # if current_index < len(child_visit):
-                        child_visit[current_index] = distributions
+                        sum_visits = sum(distributions)
+                        child_visit[current_index] = [visit_count / sum_visits for visit_count in distributions]
 
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy

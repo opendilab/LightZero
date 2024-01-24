@@ -601,7 +601,7 @@ class MuZeroGameBufferGPT(GameBuffer):
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
             policy_index = 0
-            # very important: use latest MCTS visit count distribution
+            # TODO very important: use latest MCTS visit count distribution
             for state_index, child_visit, game_index in zip(pos_in_game_segment_list, child_visits, batch_index_list):
                 target_policies = []
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
@@ -610,9 +610,11 @@ class MuZeroGameBufferGPT(GameBuffer):
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
                         target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
                     else:
-                        # very important: use latest MCTS visit count distribution
+                        # TODO very important: use latest MCTS visit count distribution
                         # if current_index < len(child_visit):
-                        child_visit[current_index] = distributions
+                        sum_visits = sum(distributions)
+                        child_visit[current_index] = [visit_count / sum_visits for visit_count in distributions]
+
 
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
