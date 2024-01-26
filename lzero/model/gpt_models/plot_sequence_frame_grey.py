@@ -36,7 +36,7 @@ for i in range(B):
     plt.show()
 
     # 保存图像到文件
-    concat_image.save(f'sample_{i+1}_recs_0110.png')
+    concat_image.save(f'sample_{i+1}_recs_0125.png')
 
 
 

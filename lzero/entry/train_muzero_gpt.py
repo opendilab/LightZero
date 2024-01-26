@@ -221,9 +221,10 @@ def train_muzero_gpt(
                 if replay_buffer.get_num_of_transitions() > batch_size:
                     train_data = replay_buffer.sample(batch_size, policy)
                     # if i % 2 == 0: # for reanalyze_ratio>0
-                    policy._target_model.world_model.past_keys_values_cache.clear()
-                    torch.cuda.empty_cache() # TODO: NOTE
-                    print('sample target_model past_keys_values_cache.clear()')
+                    if cfg.policy.reanalyze_ratio>0:
+                        policy._target_model.world_model.past_keys_values_cache.clear()
+                        torch.cuda.empty_cache() # TODO: NOTE
+                        print('sample target_model past_keys_values_cache.clear()')
 
                     train_data.append({'train_which_component':'transformer'})
                 else:

@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(3)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
@@ -43,12 +43,12 @@ model_update_ratio = 0.25
 
 num_simulations = 50 
 batch_size = 256
-max_env_step = int(5e6)
+max_env_step = int(10e6)
 reanalyze_ratio = 0.
 # reanalyze_ratio = 0.5
 eps_greedy_exploration_in_collect = False
 
-exp_name_prefix = 'data_mz_ctree_mt_stack1_pong-qbert-seaquest/'
+exp_name_prefix = 'data_mz_ctree_mt_stack1_pong-qbert-seaquest_0124/'
 
 # num_simulations = 8 # debug
 # update_per_collect = 1 # debug

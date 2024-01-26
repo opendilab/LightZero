@@ -47,7 +47,7 @@ class MuZeroGameBufferGPT(GameBuffer):
         self.game_segment_buffer = []
         self.game_pos_priorities = []
         self.game_segment_game_pos_look_up = []
-        self.task_id = self._cfg.task_id
+        # self.task_id = self._cfg.task_id
 
 
     def sample(
@@ -409,7 +409,9 @@ class MuZeroGameBufferGPT(GameBuffer):
             # m_obs.shape torch.Size([352, 3, 64, 64])
             # m_obs.shape torch.Size([352, 4])  32*11
 
-            m_output = model.initial_inference(m_obs, action_batch, self.task_id)
+            m_output = model.initial_inference(m_obs, action_batch)
+            # m_output = model.initial_inference(m_obs, action_batch, self.task_id)
+
 
             if not model.training:
                 # if not in training, obtain the scalars of the value/reward
@@ -564,7 +566,9 @@ class MuZeroGameBufferGPT(GameBuffer):
             # action_batch.shape (32, 10)
             # m_obs.shape torch.Size([352, 3, 64, 64])
             # m_obs.shape torch.Size([352, 4])  32*11
-            m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num], self.task_id)  # NOTE: :self.reanalyze_num
+            # m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num], self.task_id)  # NOTE: :self.reanalyze_num
+            m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
+
 
             if not model.training:
                 # if not in training, obtain the scalars of the value/reward

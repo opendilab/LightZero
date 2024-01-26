@@ -227,6 +227,9 @@ class WorldModel(nn.Module):
             activation,
             nn.Linear(self.pred_hid, self.pred_out),
         )
+        self.hit_count = 0
+        self.total_query_count = 0
+
 
 
     def __repr__(self) -> str:
@@ -349,6 +352,87 @@ class WorldModel(nn.Module):
             0)  # (1, C, H, W) in [0., 1.]
         return self.reset_from_initial_observations(obs)
 
+
+    @torch.no_grad()
+    # @profile
+    def reset_from_initial_observations_v2(self, obs_act_dict: torch.FloatTensor) -> torch.FloatTensor:
+        if isinstance(obs_act_dict, dict):
+            observations = obs_act_dict['obs']
+            buffer_action = obs_act_dict['action']
+        else:
+            observations = obs_act_dict
+            buffer_action = None
+        obs_embeddings = self.tokenizer.encode_to_obs_embeddings(observations, should_preprocess=True) # (B, C, H, W) -> (B, K, E)
+
+        outputs_wm = self.refresh_keys_values_with_initial_obs_tokens_for_init_infer(obs_embeddings, buffer_action)
+        self.obs_tokens = obs_embeddings
+
+        return outputs_wm, self.obs_tokens
+
+    @torch.no_grad()
+    # @profile
+    def refresh_keys_values_with_initial_obs_tokens_for_init_infer_v2(self, obs_tokens: torch.LongTensor, buffer_action=None) -> torch.FloatTensor:
+        n, num_observations_tokens, _ = obs_tokens.shape
+
+        if n <= self.env_num:
+            # MCTS root节点: 需要准确的估计 value, policy_logits 或许需要结合context的kv_cache进行更准确的估计，而不是当前的从0开始推理
+            # self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
+
+            # Compute the hash of latest_state
+            hash_latest_state = hash(obs_tokens)
+            matched_value = self.past_keys_values_cache.get(hash_latest_state)
+            if matched_value is not None:
+                self.keys_values_wm = copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda') )
+                self.hit_count += 1
+                self.total_query_count  += 1
+                # print('recurrent_inference:find matched_value!')
+            else:
+                # NOTE: very important
+                self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
+                # print('recurrent_inference:not find matched_value!')
+                self.total_query_count  += 1
+                
+
+            outputs_wm = self.forward({'obs_embeddings': obs_tokens}, past_keys_values=self.keys_values_wm, is_root=False)  # Note: is_root=False
+        elif n == int(256): 
+            # TODO: n=256 means train tokenizer, 不需要计算target value
+            self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
+            # print('init inference: not find matched_value! reset!')
+            outputs_wm = self.forward({'obs_embeddings': obs_tokens}, past_keys_values=self.keys_values_wm, is_root=False)  # Note: is_root=False
+        elif n > self.env_num and n != int(256) and buffer_action is not None: 
+            # TODO: n=256 means train tokenizer
+            # [192, 16, 64] -> [32, 6, 16, 64]
+            obs_tokens = obs_tokens.contiguous().view(buffer_action.shape[0], -1, num_observations_tokens, self.obs_per_embdding_dim) # (BL, K) for unroll_step=1
+
+            # obs_tokens = obs_tokens.view(-1, self.config.max_blocks+1, num_observations_tokens) # (BL, K)
+            obs_tokens = obs_tokens[:, :-1, :]
+            # obs_tokens = obs_tokens.reshape(32*6, num_observations_tokens) # (BL, K)
+            buffer_action = torch.from_numpy(buffer_action).to(obs_tokens.device)
+            act_tokens = rearrange(buffer_action, 'b l -> b l 1')
+
+            # # 选择每个样本的最后一步
+            last_steps = act_tokens[:, -1:, :]  # 这将选择最后一列并保持维度不变, 最后一步的target policy/value本身就没有用到
+            # 使用torch.cat在第二个维度上连接原始act_tokens和last_steps
+            act_tokens = torch.cat((act_tokens, last_steps), dim=1)
+
+            # print('init inference: unroll 5 steps!')  17*6=102  17*5=85
+            obs_embeddings = obs_tokens
+            outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, is_root=False)
+
+            # 选择每个样本的最后一步
+            last_steps_value = outputs_wm.logits_value[:, -1:, :]  # 这将选择最后一列并保持维度不变
+            # 使用torch.cat在第二个维度上连接原始act_tokens和last_steps
+            outputs_wm.logits_value = torch.cat((outputs_wm.logits_value, last_steps_value), dim=1)
+
+            last_steps_policy = outputs_wm.logits_policy[:, -1:, :]  # 这将选择最后一列并保持维度不变
+            outputs_wm.logits_policy = torch.cat((outputs_wm.logits_policy, last_steps_policy), dim=1)
+
+            # Reshape your tensors
+            #  outputs_wm.logits_value.shape (30,21) = (B*6, 21)
+            outputs_wm.logits_value = rearrange(outputs_wm.logits_value, 'b t e -> (b t) e')
+            outputs_wm.logits_policy = rearrange(outputs_wm.logits_policy, 'b t e -> (b t) e')
+
+        return outputs_wm
 
     @torch.no_grad()
     # @profile
@@ -514,7 +598,9 @@ class WorldModel(nn.Module):
             # obs = repeated_observations.view(*desired_shape)  # 重新调整形状到3,64,64
             
 
+        # outputs_wm, obs_tokens = self.reset_from_initial_observations_v2(obs_act_dict)
         outputs_wm, obs_tokens = self.reset_from_initial_observations(obs_act_dict)
+
 
         if self.keys_values_wm.size > 0:
             # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
@@ -565,7 +651,8 @@ class WorldModel(nn.Module):
             
             # self.keys_values_wm = copy.deepcopy(matched_value)
             self.keys_values_wm = copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda') )
-
+            self.hit_count += 1
+            self.total_query_count  += 1
             # print('recurrent_inference:find matched_value!')
         else:
             # If no matching value is found, handle the case accordingly
@@ -574,9 +661,9 @@ class WorldModel(nn.Module):
             # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
             # This branch will be executed only when env_num=1
             # cache_key = hash(latest_state.squeeze(0))
-            cache_key = hash(latest_state)
-            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
+            self.past_keys_values_cache[hash_latest_state] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
             # print('recurrent_inference:not find matched_value!')
+            self.total_query_count  += 1
 
 
         assert self.keys_values_wm is not None and self.num_observations_tokens is not None
@@ -585,15 +672,17 @@ class WorldModel(nn.Module):
 
         output_sequence, obs_tokens = [], []
 
-        if self.keys_values_wm.size + num_passes > self.config.max_tokens:
-            del self.keys_values_wm # TODO
-            # TODO: the impact
-            # _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
-            _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.float32).to(self.device))
-            # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
-            cache_key = hash(latest_state)
-            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
+        # if self.keys_values_wm.size + num_passes > self.config.max_tokens:
+        #     del self.keys_values_wm # TODO
+        #     # TODO: the impact
+        #     # _ = self.refresh_keys_values_with_initial_obs_tokens(self.obs_tokens)
+        #     _ = self.refresh_keys_values_with_initial_obs_tokens(torch.tensor(latest_state, dtype=torch.float32).to(self.device))
+        #     # Depending on the shape of obs_tokens, create a cache key and store a deep copy of keys_values_wm
+        #     cache_key = hash(latest_state)
+        #     self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
 
+        if self.keys_values_wm.size>5:
+            print('debug')
 
         # TODO
         action = state_action_history[-1][-1]

@@ -296,19 +296,20 @@ class MuZeroGPTPolicy(Policy):
         self._target_model = torch.compile(self._target_model)
 
 
-        self._target_model = model_wrap(
-            self._target_model,
-            wrapper_name='target',
-            update_type='assign',
-            update_kwargs={'freq': self._cfg.target_update_freq}
-        )
-        # TODO: soft target
         # self._target_model = model_wrap(
         #     self._target_model,
         #     wrapper_name='target',
-        #     update_type='momentum',
-        #     update_kwargs={'theta': 0.005}
+        #     update_type='assign',
+        #     update_kwargs={'freq': self._cfg.target_update_freq}
         # )
+        # TODO: soft target
+        self._target_model = model_wrap(
+            self._target_model,
+            wrapper_name='target',
+            update_type='momentum',
+            # update_kwargs={'theta': 0.005}
+            update_kwargs={'theta': 0.01} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
+        )
         self._learn_model = self._model
 
         # TODO: only for debug
@@ -1023,40 +1024,40 @@ class MuZeroGPTPolicy(Policy):
             'target_model': self._target_model.state_dict(),
             'optimizer_world_model': self._optimizer_world_model.state_dict(),
             'optimizer_tokenizer': self._optimizer_tokenizer.state_dict(),
-
         }
-    # TODO:
-    # def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
-    #     """
-    #     Overview:
-    #         Load the state_dict variable into policy learn mode.
-    #     Arguments:
-    #         - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
-    #     """
-    #     self._learn_model.load_state_dict(state_dict['model'])
-    #     self._target_model.load_state_dict(state_dict['target_model'])
-    #     self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
-    #     self._optimizer_tokenizer.load_state_dict(state_dict['optimizer_tokenizer'])
 
+    # TODO:
     def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
         """
         Overview:
-            Load the state_dict variable into policy learn mode, specifically loading only the 
-            representation network of the tokenizer within model and target_model.
+            Load the state_dict variable into policy learn mode.
         Arguments:
             - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
         """
-        # Extract the relevant sub-state-dicts for representation_network from the state_dict
-        # model_rep_network_state = state_dict['model']['tokenizer']['representation_network']
-        # target_model_rep_network_state = state_dict['target_model']['tokenizer']['representation_network']
+        self._learn_model.load_state_dict(state_dict['model'])
+        self._target_model.load_state_dict(state_dict['target_model'])
+        self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
+        self._optimizer_tokenizer.load_state_dict(state_dict['optimizer_tokenizer'])
 
-        # # Load the state into the model's representation network
-        # self._learn_model.tokenizer.representation_network.load_state_dict(model_rep_network_state)
-        # self._target_model.tokenizer.representation_network.load_state_dict(target_model_rep_network_state)
+    # def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
+    #     """
+    #     Overview:
+    #         Load the state_dict variable into policy learn mode, specifically loading only the 
+    #         representation network of the tokenizer within model and target_model.
+    #     Arguments:
+    #         - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
+    #     """
+    #     # Extract the relevant sub-state-dicts for representation_network from the state_dict
+    #     # model_rep_network_state = state_dict['model']['tokenizer']['representation_network']
+    #     # target_model_rep_network_state = state_dict['target_model']['tokenizer']['representation_network']
 
-        # Assuming self._learn_model and self._target_model have a 'representation_network' submodule
-        self._load_representation_network_state(state_dict['model'], self._learn_model.tokenizer.representation_network)
-        self._load_representation_network_state(state_dict['target_model'], self._target_model.tokenizer.representation_network)
+    #     # # Load the state into the model's representation network
+    #     # self._learn_model.tokenizer.representation_network.load_state_dict(model_rep_network_state)
+    #     # self._target_model.tokenizer.representation_network.load_state_dict(target_model_rep_network_state)
+
+    #     # Assuming self._learn_model and self._target_model have a 'representation_network' submodule
+    #     self._load_representation_network_state(state_dict['model'], self._learn_model.tokenizer.representation_network)
+    #     self._load_representation_network_state(state_dict['target_model'], self._target_model.tokenizer.representation_network)
 
 
     def _load_representation_network_state(self, state_dict, model_submodule):

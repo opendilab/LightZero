@@ -177,6 +177,8 @@ class MuZeroModelGPT(nn.Module):
         self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
                                       config=cfg.world_model, tokenizer=self.tokenizer)
         print(f'{sum(p.numel() for p in self.tokenizer.parameters())} parameters in agent.tokenizer')
+        print(f'{sum(p.numel() for p in self.tokenizer.parameters())} parameters in agent.tokenizer')
+
         print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
 
 

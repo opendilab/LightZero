@@ -56,9 +56,38 @@ class Transformer(nn.Module):
         return x
 
 
+# class Block(nn.Module):
+#     def __init__(self, config: TransformerConfig) -> None:
+#         super().__init__()
+#         self.ln1 = nn.LayerNorm(config.embed_dim)
+#         self.ln2 = nn.LayerNorm(config.embed_dim)
+#         self.attn = SelfAttention(config)
+#         self.mlp = nn.Sequential(
+#             nn.Linear(config.embed_dim, 4 * config.embed_dim),
+#             nn.GELU(),
+#             nn.Linear(4 * config.embed_dim, config.embed_dim),
+#             nn.Dropout(config.resid_pdrop),
+#         )
+
+#     def forward(self, x: torch.Tensor, past_keys_values: Optional[KeysValues] = None) -> torch.Tensor:
+#         x_attn = self.attn(self.ln1(x), past_keys_values)
+#         x = x + x_attn
+#         x = x + self.mlp(self.ln2(x))
+#         return x
+
+from ding.torch_utils.network import GRUGatingUnit
+
 class Block(nn.Module):
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__()
+        # TODO
+        self.gru_gating = False
+        # self.gru_gating = True
+        self.gru_bias  = 2.
+        if self.gru_gating is True:
+            self.gate1 = GRUGatingUnit(config.embed_dim, self.gru_bias )
+            self.gate2 = GRUGatingUnit(config.embed_dim, self.gru_bias )
+
         self.ln1 = nn.LayerNorm(config.embed_dim)
         self.ln2 = nn.LayerNorm(config.embed_dim)
         self.attn = SelfAttention(config)
@@ -71,8 +100,11 @@ class Block(nn.Module):
 
     def forward(self, x: torch.Tensor, past_keys_values: Optional[KeysValues] = None) -> torch.Tensor:
         x_attn = self.attn(self.ln1(x), past_keys_values)
-        x = x + x_attn
-        x = x + self.mlp(self.ln2(x))
+        # x = x + x_attn
+        x = self.gate1(x, x_attn) if self.gru_gating else x + x_attn
+        # x = x + self.mlp(self.ln2(x))
+        x = self.gate2(x, self.mlp(self.ln2(x))) if self.gru_gating else x + self.mlp(self.ln2(x))
+
         return x
 
 
@@ -117,7 +149,10 @@ class SelfAttention(nn.Module):
 
         # method1: efficient attention using Flash Attention CUDA kernels
         # attn_mask = self.mask[L:L + T, :L + T].bool()  # assuming your mask is a ByteTensor
+        # eval性能很不好，与collect不一致
         # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_pdrop if self.training else 0, is_causal=True)
+        # 测试
+        # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_pdrop, is_causal=True)
 
         # method2: manual implementation of attention
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
