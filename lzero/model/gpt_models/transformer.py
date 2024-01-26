@@ -45,6 +45,7 @@ class Transformer(nn.Module):
     def generate_empty_keys_values(self, n: int, max_tokens: int) -> KeysValues:
         device = self.ln_f.weight.device  # Assumption that all submodules are on the same device
         return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
+        # return KeysValues(n, self.config.num_heads, 50, self.config.embed_dim, self.config.num_layers, device)
 
     def forward(self, sequences: torch.Tensor, past_keys_values: Optional[KeysValues] = None) -> torch.Tensor:
         assert past_keys_values is None or len(past_keys_values) == len(self.blocks)

@@ -296,20 +296,20 @@ class MuZeroGPTPolicy(Policy):
         self._target_model = torch.compile(self._target_model)
 
 
-        # self._target_model = model_wrap(
-        #     self._target_model,
-        #     wrapper_name='target',
-        #     update_type='assign',
-        #     update_kwargs={'freq': self._cfg.target_update_freq}
-        # )
-        # TODO: soft target
         self._target_model = model_wrap(
             self._target_model,
             wrapper_name='target',
-            update_type='momentum',
-            # update_kwargs={'theta': 0.005}
-            update_kwargs={'theta': 0.01} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
+            update_type='assign',
+            update_kwargs={'freq': self._cfg.target_update_freq}
         )
+        # TODO: soft target
+        # self._target_model = model_wrap(
+        #     self._target_model,
+        #     wrapper_name='target',
+        #     update_type='momentum',
+        #     # update_kwargs={'theta': 0.005}
+        #     update_kwargs={'theta': 0.01} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
+        # )
         self._learn_model = self._model
 
         # TODO: only for debug

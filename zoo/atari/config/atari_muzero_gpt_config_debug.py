@@ -32,6 +32,10 @@ elif env_name == 'BoxingNoFrameskip-v4':
 # ==============================================================
 collector_env_num = 8
 n_episode = 8
+
+# collector_env_num = 1
+# n_episode = 1
+
 # evaluator_env_num = 2
 evaluator_env_num = 1
 
@@ -50,7 +54,9 @@ update_per_collect = 2  # DEBUG
 model_update_ratio = 0.25 # for pong boxing
 
 # num_simulations = 50
-num_simulations = 2  # DEBUG
+# num_simulations = 2  # DEBUG
+num_simulations = 5  # DEBUG
+
 
 # TODO: debug
 # num_simulations = 1
@@ -123,6 +129,8 @@ atari_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
+        # collect_max_episode_steps=int(200),
+        # eval_max_episode_steps=int(200),
         collect_max_episode_steps=int(50),
         eval_max_episode_steps=int(50),
         # TODO: run
@@ -134,8 +142,8 @@ atari_muzero_config = dict(
         clip_rewards=True,
     ),
     policy=dict(
-        # model_path=None,
-        model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree_dont_delete/Pong_muzero_gpt_envnum8_ns50_upcNone-mur1_rr0_H5_bs64_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_scale300_latent-softarget_mantran_seed0_240121_001149/ckpt/iteration_1350000.pth.tar',
+        model_path=None,
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree_dont_delete/Pong_muzero_gpt_envnum8_ns50_upcNone-mur1_rr0_H5_bs64_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_scale300_latent-softarget_mantran_seed0_240121_001149/ckpt/iteration_1350000.pth.tar',
 
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree_dont_delete/Pong_muzero_gpt_envnum8_ns50_upcNone-mur1_rr0_H5_bs64_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_scale300_latent-softarget_mantran_seed0_240121_001149/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_ctree/Pong_muzero_ns50_upc1000_rr0.0_46464_seed0_240110_140819/ckpt/iteration_60000.pth.tar',
@@ -242,7 +250,8 @@ atari_muzero_create_config = dict(
         type='atari_lightzero',
         import_names=['zoo.atari.envs.atari_lightzero_env'],
     ),
-    env_manager=dict(type='subprocess'),
+    # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
     policy=dict(
         type='muzero_gpt',
         import_names=['lzero.policy.muzero_gpt'],

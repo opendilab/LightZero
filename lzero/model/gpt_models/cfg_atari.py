@@ -46,8 +46,8 @@ cfg['world_model'] = {
                       # 'embed_dim': 128, # TODO：for atari
 
                       # 'tokens_per_block': 2,
-                      # 'max_blocks': 20,
-                      # "max_tokens": 2 * 20,  # TODO： horizon
+                      # 'max_blocks': 50,
+                      # "max_tokens": 2 * 50,  # TODO： horizon
 
                       'tokens_per_block': 2,
                       'max_blocks': 5,
@@ -74,7 +74,7 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:0',
+                      "device": 'cuda:6',
                     #   "device": 'cpu',
                       # 'support_size': 21,
                       'support_size': 601,
@@ -87,9 +87,11 @@ cfg['world_model'] = {
                       'action_shape': 6,# TODO：for pong qbert 
 
 
-                      'max_cache_size':500,
-                      # 'max_cache_size':5000,
+                      'max_cache_size':5000,
+                      # 'max_cache_size':50000,
+                      # 'max_cache_size':500,
                       "env_num":8,
+                      # "env_num":1, # TODO
                       'latent_recon_loss_weight':0.05,
                       'perceptual_loss_weight':0.05,
 

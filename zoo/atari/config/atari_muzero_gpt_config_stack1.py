@@ -3,13 +3,13 @@ import torch
 torch.cuda.set_device(6)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-# env_name = 'PongNoFrameskip-v4'
+env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
 # env_name = 'BreakoutNoFrameskip-v4'
 # env_name = 'QbertNoFrameskip-v4'
 # env_name = 'SeaquestNoFrameskip-v4'
 # env_name = 'BoxingNoFrameskip-v4'
-env_name = 'FrostbiteNoFrameskip-v4'
+# env_name = 'FrostbiteNoFrameskip-v4'
 
 
 
@@ -38,14 +38,14 @@ collector_env_num = 8
 n_episode = 8
 # evaluator_env_num = 2
 evaluator_env_num = 1
+update_per_collect = 1000
 
-# collector_env_num = 2
-# n_episode = 2
+# collector_env_num = 1
+# n_episode = 1
 # evaluator_env_num = 1
-# update_per_collect = 250
+# update_per_collect = 125
 
 # update_per_collect = None
-update_per_collect = 1000
 # model_update_ratio = 1 # for qbet squest
 model_update_ratio = 0.25 # for pong boxing
 
@@ -56,8 +56,8 @@ num_simulations = 50
 # num_simulations = 1
 max_env_step = int(5e6)
 # reanalyze_ratio = 0.5
-reanalyze_ratio = 0.25 # batch_size*reanalyze_ratio should b
-# reanalyze_ratio = 0. # batch_size*reanalyze_ratio should b
+# reanalyze_ratio = 0.25 # batch_size*reanalyze_ratio should b
+reanalyze_ratio = 0. # batch_size*reanalyze_ratio should b
 
 # reanalyze_ratio = 1
 
@@ -93,8 +93,8 @@ atari_muzero_config = dict(
     # atari env action space
     # game_buffer_muzero_gpt task_id
     # TODO: muzero_gpt_model.py world_model.py (3,64,64)
-    # exp_name=f'data_mz_gpt_ctree_0125_k1/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_scale300_latent-hard-target-100_mantran_seed0',
-    exp_name=f'data_mz_gpt_ctree_0125_k1/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_scale300_latent-soft-target-001_mantran_seed0',
+    exp_name=f'data_mz_gpt_ctree_0125_k1/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e3_collectper200-clear_mcts-rest-kv-5_kv-latent-oneenv_evalmax_scale300_latent-hard-target-100_mantran_seed0',
+    # exp_name=f'data_mz_gpt_ctree_0125_k1/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_scale300_latent-soft-target-001_mantran_seed0',
 
 
     # exp_name=f'data_mz_gpt_ctree_0121_k1/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_scale300_latent-softarget_mantran_seed0',
