@@ -1007,8 +1007,13 @@ class MAGameBuffer(GameBuffer):
                     # print(f"the data type of roots is {roots}")
                     # breakpoint()
 
-                    roots.prepare(self._cfg.root_noise_weight, 
-                                noises_by_iter[iter], 
+                    # roots.prepare(self._cfg.root_noise_weight, 
+                    #             noises_by_iter[iter], 
+                    #             reward_pool_by_iter[iter],
+                    #             policy_logits_pool_by_iter[iter], 
+                    #             to_play_by_iter[iter])
+
+                    roots.prepare_no_noise(
                                 reward_pool_by_iter[iter],
                                 policy_logits_pool_by_iter[iter], 
                                 to_play_by_iter[iter])

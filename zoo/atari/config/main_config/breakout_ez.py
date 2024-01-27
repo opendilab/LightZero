@@ -36,7 +36,7 @@ eps_greedy_exploration_in_collect = True
 
 atari_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/{env_name[:-14]}/final_ez_seed1_eps',
+    f'data_ez_ctree/{env_name[:-14]}/final_ez_seed0_eps',
     env=dict(
         env_name=env_name,
         obs_shape=(4, 96, 96),
@@ -107,4 +107,4 @@ create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=1, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

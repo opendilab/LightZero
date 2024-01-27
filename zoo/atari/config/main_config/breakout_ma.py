@@ -27,7 +27,7 @@ model_update_ratio = 0.25
 max_env_step = int(8e5)
 reanalyze_ratio = 0.0
 buffer_reanalyze_interval = None
-buffer_reanalyze_freq = 0.3
+buffer_reanalyze_freq = 3
 
 eps_greedy_exploration_in_collect = False
 # ==============================================================
@@ -36,7 +36,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/final_ma_r03',
+    f'data_mz_ctree/{env_name[:-14]}/final_ma_rf3',
     env=dict(
         env_name=env_name,
         obs_shape=(4, 96, 96),
@@ -44,7 +44,7 @@ atari_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        collect_max_episode_steps=5000.0,
+        collect_max_episode_steps=3000.0,
         eval_max_episode_steps=20000.0,
     ),
     policy=dict(

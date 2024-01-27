@@ -801,8 +801,16 @@ namespace tree
             value_score = 0;
         if (value_score > 1)
             value_score = 1;
-
-        float ucb_value = prior_score + value_score;
+        // 最好的方法是提前把已知的arm推断一下获得reward然后从一开始就直接按value_score算分
+        float ucb_value = 0.0;
+        if (child->visit_count == 0)
+        {
+            ucb_value = prior_score + value_score;
+        }
+        else
+        {
+            ucb_value = value_score;
+        }
         return ucb_value;
     }
 
