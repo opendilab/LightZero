@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import pytest
-import gym
+import gymnasium as gym
 import numpy as np
 
 from ding.envs import DingEnvWrapper
@@ -26,6 +26,6 @@ class TestDingEnvWrapper:
 
         obs = ding_env.reset()
 
-        assert isinstance(obs, np.ndarray)
+        assert isinstance(obs[0], np.ndarray)
         action = ding_env.random_action()
         print('random_action: {}, action_space: {}'.format(action.shape, ding_env.action_space))

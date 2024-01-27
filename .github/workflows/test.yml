@@ -49,7 +49,13 @@ jobs:
         shell: bash
         run: |
           brew install tree cloc wget curl make zip graphviz
+          brew install llvm  # Install llvm (which includes clang)
+          echo 'export PATH="/usr/local/opt/llvm/bin:$PATH"' >> $GITHUB_ENV  # update PATH
           dot -V
+      - name: Set CC and CXX variables
+        run: |
+          echo "CC=$(which clang)" >> $GITHUB_ENV
+          echo "CXX=$(which clang++)" >> $GITHUB_ENV
       - name: Set up python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:

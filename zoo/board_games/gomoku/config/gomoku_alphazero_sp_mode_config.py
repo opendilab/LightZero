@@ -12,24 +12,42 @@ update_per_collect = 50
 batch_size = 256
 max_env_step = int(5e5)
 prob_random_action_in_bot = 0.5
+mcts_ctree = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 gomoku_alphazero_config = dict(
     exp_name=
-    f'data_az_ptree/gomoku_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
+    f'data_az_ctree/gomoku_alphazero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         board_size=board_size,
         battle_mode='self_play_mode',
-        bot_action_type='v0',
+        bot_action_type='v1',
         prob_random_action_in_bot=prob_random_action_in_bot,
-        channel_last=False,  # NOTE
+        channel_last=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        # ==============================================================
+        # for the creation of simulation env
+        agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        scale=True,
+        screen_scaling=9,
+        render_mode=None,
+        replay_path=None,
+        alphazero_mcts_ctree=mcts_ctree,
+        # ==============================================================
     ),
     policy=dict(
+        mcts_ctree=mcts_ctree,
+        # ==============================================================
+        # for the creation of simulation env
+        simulation_env_name='gomoku',
+        simulation_env_config_type='self_play',
+        # ==============================================================
         torch_compile=False,
         tensor_float_32=False,
         model=dict(

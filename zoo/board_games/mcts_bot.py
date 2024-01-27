@@ -17,7 +17,7 @@ from graphviz import Digraph
 import os
 
 import numpy as np
-
+import copy
 
 class MCTSNode(ABC):
     """
@@ -199,7 +199,6 @@ class TwoPlayersMCTSNode(MCTSNode):
         Returns:
             - node(:obj:`TwoPlayersMCTSNode`): The child node object that has been created.
         """
-
         # Choose an untried action from the list of legal actions and pop it out. Only untried actions are left in the list.
         action = self.legal_actions.pop()
 

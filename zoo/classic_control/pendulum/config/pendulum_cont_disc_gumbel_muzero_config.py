@@ -1,6 +1,6 @@
 """
 NOTE: the pendulum_cont_disc in file name means we use the Pendulum-v1 continuous env
-with manually discretitze action space. That is to say, the final action space is discrete.
+with manually discretized action space. That is to say, the final action space is discrete.
 """
 from easydict import EasyDict
 
@@ -73,10 +73,6 @@ pendulum_disc_gumbel_muzero_create_config = dict(
         type='gumbel_muzero',
         import_names=['lzero.policy.gumbel_muzero'],
     ),
-    collector=dict(
-        type='gumbel_muzero',
-        import_names=['lzero.worker.gumbel_muzero_collector'],
-    )
 )
 pendulum_disc_gumbel_muzero_create_config = EasyDict(pendulum_disc_gumbel_muzero_create_config)
 create_config = pendulum_disc_gumbel_muzero_create_config

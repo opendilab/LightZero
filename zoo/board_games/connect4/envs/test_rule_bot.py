@@ -21,7 +21,7 @@ class TestConnect4RuleBot():
         """
         cfg = EasyDict(
             battle_mode='self_play_mode',
-            mcts_mode='self_play_mode',
+            battle_mode_in_simulation_env='self_play_mode',
             render_mode='state_realtime_mode',
             channel_last=False,
             scale=True,

@@ -12,7 +12,7 @@ Overview:
 
 import copy
 import math
-from typing import List, Tuple, Union, Callable, Type
+from typing import List, Tuple, Union, Callable, Type, Dict, Any
 
 import numpy as np
 import torch
@@ -75,7 +75,7 @@ class Node(object):
         # Updates the sum of the values of all child nodes of this node.
         self._value_sum += value
 
-    def update_recursive(self, leaf_value: float, mcts_mode: str) -> None:
+    def update_recursive(self, leaf_value: float, battle_mode_in_simulation_env: str) -> None:
         """
         Overview:
             Update node information recursively.
@@ -86,10 +86,10 @@ class Node(object):
 
         Arguments:
             - leaf_value (:obj:`Float`): The value of the node.
-            - mcts_mode (:obj:`str`): The mode of MCTS, can be 'self_play_mode' or 'play_with_bot_mode'.
+            - battle_mode_in_simulation_env (:obj:`str`): The mode of MCTS, can be 'self_play_mode' or 'play_with_bot_mode'.
         """
         # Update the node information recursively based on the MCTS mode.
-        if mcts_mode == 'self_play_mode':
+        if battle_mode_in_simulation_env == 'self_play_mode':
             # Update the current node's information.
             self.update(leaf_value)
             # If the current node is the root node, return.
@@ -97,8 +97,8 @@ class Node(object):
                 return
             # Update the parent node's information recursively. When propagating the value back to the parent node,
             # the value needs to be negated once because the perspective of evaluation has changed.
-            self._parent.update_recursive(-leaf_value, mcts_mode)
-        if mcts_mode == 'play_with_bot_mode':
+            self._parent.update_recursive(-leaf_value, battle_mode_in_simulation_env)
+        if battle_mode_in_simulation_env == 'play_with_bot_mode':
             # Update the current node's information.
             self.update(leaf_value)
             # If the current node is the root node, return.
@@ -107,7 +107,7 @@ class Node(object):
             # Update the parent node's information recursively. In ``play_with_bot_mode``, since the nodes' values
             # are always evaluated from the perspective of the agent player, there is no need to negate the value
             # during value propagation.
-            self._parent.update_recursive(leaf_value, mcts_mode)
+            self._parent.update_recursive(leaf_value, battle_mode_in_simulation_env)
 
     def is_leaf(self) -> bool:
         """
@@ -169,7 +169,7 @@ class MCTS(object):
         Finally, by repeatedly calling ``_simulate`` through ``get_next_action``, the optimal action is obtained.
     """
 
-    def __init__(self, cfg: EasyDict) -> None:
+    def __init__(self, cfg: EasyDict, simulate_env: Type[BaseEnv]) -> None:
         """
         Overview:
             Initializes the MCTS process.
@@ -193,11 +193,12 @@ class MCTS(object):
             'root_dirichlet_alpha', 0.3
         )  # 0.3  # for chess, 0.03 for Go and 0.15 for shogi.
         self._root_noise_weight = self._cfg.get('root_noise_weight', 0.25)
-        self.simulate_cnt = 0
+
+        self.simulate_env = simulate_env
 
     def get_next_action(
             self,
-            simulate_env: Type[BaseEnv],
+            state_config_for_simulate_env_reset: Dict[str, Any],
             policy_forward_fn: Callable,
             temperature: int = 1.0,
             sample: bool = True
@@ -206,7 +207,7 @@ class MCTS(object):
         Overview:
             Get the next action to take based on the current state of the game.
         Arguments:
-            - simulate_env (:obj:`Class BaseGameEnv`): The class of simulate env.
+            - state_config_for_simulate_env_reset (:obj:`Dict`): The config of state when reset the env.
             - policy_forward_fn (:obj:`Function`): The Callable to compute the action probs and state value.
             - temperature (:obj:`Float`): The exploration temperature.
             - sample (:obj:`Bool`): Whether to sample an action from the probabilities or choose the most probable action.
@@ -217,41 +218,38 @@ class MCTS(object):
 
         # Create a new root node for the MCTS search.
         root = Node()
+
+        self.simulate_env.reset(
+                start_player_index=state_config_for_simulate_env_reset.start_player_index,
+                init_state=state_config_for_simulate_env_reset.init_state,
+            )
         # Expand the root node by adding children to it.
-        self._expand_leaf_node(root, simulate_env, policy_forward_fn)
+        self._expand_leaf_node(root, self.simulate_env, policy_forward_fn)
 
         # Add Dirichlet noise to the root node's prior probabilities to encourage exploration.
         if sample:
             self._add_exploration_noise(root)
 
-        # for debugging
-        # print(simulate_env.board)
-        # print('value= {}'.format([(k, v.value) for k,v in root.children.items()]))
-        # print('visit_count= {}'.format([(k, v.visit_count) for k,v in root.children.items()]))
-        # print('legal_action= {}',format(simulate_env.legal_actions))
-
         # Perform MCTS search for a fixed number of iterations.
         for n in range(self._num_simulations):
             # Initialize the simulated environment and reset it to the root node.
-            simulate_env_copy = copy.deepcopy(simulate_env)
+            self.simulate_env.reset(
+                start_player_index=state_config_for_simulate_env_reset.start_player_index,
+                init_state=state_config_for_simulate_env_reset.init_state,
+            )
             # Set the battle mode adopted by the environment during the MCTS process.
             # In ``self_play_mode``, when the environment calls the step function once, it will play one move based on the incoming action.
             # In ``play_with_bot_mode``, when the step function is called, it will play one move based on the incoming action,
             # and then it will play another move based on the action generated by the built-in bot in the environment, which means two moves in total.
             # Therefore, in the MCTS process, except for the terminal nodes, the player corresponding to each node is the same player as the root node.
-            simulate_env_copy.battle_mode = simulate_env_copy.mcts_mode
-            simulate_env_copy.render_mode = None
+            self.simulate_env.battle_mode = self.simulate_env.battle_mode_in_simulation_env
+            self.simulate_env.render_mode = None
             # Run the simulation from the root to a leaf node and update the node values along the way.
-            self._simulate(root, simulate_env_copy, policy_forward_fn)
-
-        # for debugging
-        # print('after simulation')
-        # print('value= {}'.format([(k, v.value) for k,v in root.children.items()]))
-        # print('visit_count= {}'.format([(k, v.visit_count) for k,v in root.children.items()]))
+            self._simulate(root, self.simulate_env, policy_forward_fn)
 
         # Get the visit count for each possible action at the root node.
         action_visits = []
-        for action in range(simulate_env.action_space.n):
+        for action in range(self.simulate_env.action_space.n):
             if action in root.children:
                 action_visits.append((action, root.children[action].visit_count))
             else:
@@ -264,7 +262,7 @@ class MCTS(object):
         # When the visit count of a node is 0, then the corresponding action probability will be 0 in order to prevent the selection of illegal actions.
         visits_t = torch.as_tensor(visits, dtype=torch.float32)
         visits_t = torch.pow(visits_t, 1/temperature)
-        action_probs= (visits_t / visits_t.sum()).numpy()
+        action_probs = (visits_t / visits_t.sum()).numpy()
 
         # action_probs = nn.functional.softmax(1.0 / temperature * np.log(torch.as_tensor(visits) + 1e-10), dim=0).numpy()
 
@@ -273,6 +271,7 @@ class MCTS(object):
             action = np.random.choice(actions, p=action_probs)
         else:
             action = actions[np.argmax(action_probs)]
+
         # Return the selected action and the output probability of each action.
         return action, action_probs
 
@@ -288,11 +287,6 @@ class MCTS(object):
         """
         while not node.is_leaf():
             # Traverse the tree until the leaf node.
-
-            # only for debug
-            # self.simulate_cnt += 1
-            # print('simulate_cnt: {}'.format(self.simulate_cnt))
-            # print(f'node:{node}, list(node.children.keys()) is: {list(node.children.keys())}. simulate_env.legal_actions is: {simulate_env.legal_actions}')
             action, node = self._select_child(node, simulate_env)
             # When there are no common elements in ``node.children`` and ``simulate_env.legal_actions``, action would be None, and we set the node to be a leaf node.
             if action is None:
@@ -312,7 +306,7 @@ class MCTS(object):
             # game state from the perspective of player 1.
             leaf_value = self._expand_leaf_node(node, simulate_env, policy_forward_fn)
         else:
-            if simulate_env.mcts_mode == 'self_play_mode':
+            if simulate_env.battle_mode_in_simulation_env == 'self_play_mode':
                 # In a tie game, the value corresponding to a terminal node is 0.
                 if winner == -1:
                     leaf_value = 0
@@ -322,7 +316,7 @@ class MCTS(object):
                     # which is convenient for subsequent updates.
                     leaf_value = 1 if simulate_env.current_player == winner else -1
 
-            if simulate_env.mcts_mode == 'play_with_bot_mode':
+            if simulate_env.battle_mode_in_simulation_env == 'play_with_bot_mode':
                 # in ``play_with_bot_mode``, the leaf_value should be transformed to the perspective of player 1.
                 if winner == -1:
                     leaf_value = 0
@@ -332,9 +326,9 @@ class MCTS(object):
                     leaf_value = -1
 
         # Update value and visit count of nodes in this traversal.
-        if simulate_env.mcts_mode == 'play_with_bot_mode':
-            node.update_recursive(leaf_value, simulate_env.mcts_mode)
-        elif simulate_env.mcts_mode == 'self_play_mode':
+        if simulate_env.battle_mode_in_simulation_env == 'play_with_bot_mode':
+            node.update_recursive(leaf_value, simulate_env.battle_mode_in_simulation_env)
+        elif simulate_env.battle_mode_in_simulation_env == 'self_play_mode':
             # NOTE: e.g.
             #       to_play: 1  ---------->  2  ---------->  1  ----------> 2
             #         state: s1 ---------->  s2 ---------->  s3 ----------> s4
@@ -343,7 +337,7 @@ class MCTS(object):
             # leaf_value is calculated from the perspective of player 1, leaf_value = value_func(s3),
             # but node.value should be the value of E[q(s2, action)], i.e. calculated from the perspective of player 2.
             # thus we add the negative when call update_recursive().
-            node.update_recursive(-leaf_value, simulate_env.mcts_mode)
+            node.update_recursive(-leaf_value, simulate_env.battle_mode_in_simulation_env)
 
     def _select_child(self, node: Node, simulate_env: Type[BaseEnv]) -> Tuple[Union[int, float], Node]:
         """
@@ -408,7 +402,7 @@ class MCTS(object):
         Overview:
             Compute UCB score. The score for a node is based on its value, plus an exploration bonus based on the prior.
             For more details, please refer to this paper: http://gauss.ececs.uc.edu/Workshops/isaim2010/papers/rosin.pdf
-            UCB = Q(s,a) + P(s,a) \cdot \frac{N(\text{parent})}{1+N(\text{child})} \cdot \left(c_1 + \log\left(\frac{N(\text{parent})+c_2+1}{c_2}\right)\right)
+            UCB = Q(s,a) + P(s,a) \cdot \frac{ \sqrt{N(\text{parent})}}{1+N(\text{child})} \cdot \left(c_1 + \log\left(\frac{N(\text{parent})+c_2+1}{c_2}\right)\right)
             - Q(s,a): value of a child node.
             - P(s,a): The prior of a child node.
             - N(parent): The number of the visiting of the parent node.

@@ -30,13 +30,14 @@ lunarlander_cont_sampled_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        mcts_ctree=True,
         model=dict(
             observation_shape=8,
             action_space_size=2,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             sigma_type='conditioned',
-            model_type='mlp', 
+            model_type='mlp',
             lstm_hidden_size=256,
             latent_state_dim=256,
             res_connection_in_dynamics=True,
@@ -53,6 +54,7 @@ lunarlander_cont_sampled_efficientzero_config = dict(
         grad_clip_value=0.5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
+        random_collect_episode_num=0,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
         n_episode=n_episode,

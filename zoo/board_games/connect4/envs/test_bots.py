@@ -29,7 +29,7 @@ class TestConnect4Bot():
         """
         self.cfg = EasyDict(
             battle_mode='self_play_mode',
-            mcts_mode='self_play_mode',
+            battle_mode_in_simulation_env='self_play_mode',
             channel_last=True,
             scale=True,
             agent_vs_human=False,

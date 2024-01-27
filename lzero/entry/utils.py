@@ -17,7 +17,7 @@ def random_collect(
 ) -> None:  # noqa
     assert policy_cfg.random_collect_episode_num > 0
 
-    random_policy = RandomPolicy(cfg=policy_cfg)
+    random_policy = RandomPolicy(cfg=policy_cfg, action_space=collector_env.env_ref.action_space)
     # set the policy to random policy
     collector.reset_policy(random_policy.collect_mode)
 

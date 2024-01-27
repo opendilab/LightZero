@@ -471,7 +471,7 @@ def compute_ucb_score(
             - pb_c_init: constants c1 in muzero.
             - disount_factor: the discount factor of reward.
             - players: the number of players.
-            - continuous_action_space: whether the action space is continous in current env.
+            - continuous_action_space: whether the action space is continuous in current env.
         Outputs:
             - ucb_value: the ucb score of the child.
     """
@@ -572,7 +572,7 @@ def batch_traverse(
 ) -> Tuple[List[None], List[None], List[None], list]:
     """
     Overview:
-        traverse, also called expansion. process a batch roots parallely.
+        traverse, also called expansion. process a batch roots parallelly.
     Arguments:
         - roots (:obj:`Any`): a batch of root nodes to be expanded.
         - pb_c_base (:obj:`float`): constant c1 used in pUCT rule, typically 1.25.
@@ -580,7 +580,7 @@ def batch_traverse(
         - discount_factor (:obj:`float`): The discount factor used in calculating bootstrapped value, if env is board_games, we set discount_factor=1.
         - virtual_to_play (:obj:`list`): the to_play list used in self_play collecting and training in board games,
             `virtual` is to emphasize that actions are performed on an imaginary hidden state.
-        - continuous_action_space: whether the action space is continous in current env.
+        - continuous_action_space: whether the action space is continuous in current env.
     Returns:
         - latent_state_index_in_search_path (:obj:`list`): the list of x/first index of hidden state vector of the searched node, i.e. the search depth.
         - latent_state_index_in_batch (:obj:`list`): the list of y/second index of hidden state vector of the searched node, i.e. the index of batch root node, its maximum is ``batch_size``/``env_num``.

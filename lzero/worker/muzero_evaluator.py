@@ -289,15 +289,15 @@ class MuZeroEvaluator(ISerialEvaluator):
                     policy_output = self._policy.forward(stack_obs, action_mask, to_play)
 
                     actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
-                    distributions_dict_no_env_id = {k: v['distributions'] for k, v in policy_output.items()}
+                    distributions_dict_no_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
                     if self.policy_config.sampled_algo:
                         root_sampled_actions_dict_no_env_id = {
                             k: v['root_sampled_actions']
                             for k, v in policy_output.items()
                         }
 
-                    value_dict_no_env_id = {k: v['value'] for k, v in policy_output.items()}
-                    pred_value_dict_no_env_id = {k: v['pred_value'] for k, v in policy_output.items()}
+                    value_dict_no_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
+                    pred_value_dict_no_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
                     visit_entropy_dict_no_env_id = {
                         k: v['visit_count_distribution_entropy']
                         for k, v in policy_output.items()
@@ -336,7 +336,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                         # game_segments[env_id].obs_segment.append(to_ndarray(obs['observation']))
 
                         # NOTE: the position of code snippet is very important.
-                        # the obs['action_mask'] and obs['to_play'] is corresponding to next action
+                        # the obs['action_mask'] and obs['to_play'] are corresponding to next action
                         action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                         to_play_dict[env_id] = to_ndarray(obs['to_play'])
 

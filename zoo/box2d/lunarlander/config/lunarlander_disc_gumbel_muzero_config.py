@@ -40,6 +40,8 @@ lunarlander_gumbel_muzero_config = dict(
         ),
         cuda=True,
         env_type='not_board_games',
+        # TODO: test the performance of varied_action_space.
+        action_type='varied_action_space',
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
@@ -66,16 +68,13 @@ lunarlander_gumbel_muzero_create_config = dict(
         type='lunarlander',
         import_names=['zoo.box2d.lunarlander.envs.lunarlander_env'],
     ),
-    env_manager=dict(type='subprocess'),
+    # TODO: test the performance of varied_action_space.
+    # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
     policy=dict(
         type='gumbel_muzero',
         import_names=['lzero.policy.gumbel_muzero'],
     ),
-    collector=dict(
-        type='gumbel_muzero',
-        get_train_sample=True,
-        import_names=['lzero.worker.gumbel_muzero_collector'],
-    )
 )
 lunarlander_gumbel_muzero_create_config = EasyDict(lunarlander_gumbel_muzero_create_config)
 create_config = lunarlander_gumbel_muzero_create_config

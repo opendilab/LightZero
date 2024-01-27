@@ -11,6 +11,8 @@ update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
 model_path = None
+mcts_ctree = False
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -19,12 +21,30 @@ connect4_alphazero_config = dict(
     env=dict(
         battle_mode='play_with_bot_mode',
         bot_action_type='rule',
+        channel_last=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        # ==============================================================
+        # for the creation of simulation env
+        agent_vs_human=False,
+        prob_random_agent=0,
+        prob_expert_agent=0,
+        scale=True,
+        screen_scaling=9,
+        render_mode=None,
+        replay_path=None,
+        alphazero_mcts_ctree=mcts_ctree,
+        # ==============================================================
     ),
     policy=dict(
+        mcts_ctree=mcts_ctree,
+        # ==============================================================
+        # for the creation of simulation env
+        simulation_env_name='connect4',
+        simulation_env_config_type='play_with_bot',
+        # ==============================================================
         model=dict(
             observation_shape=(3, 6, 7),
             action_space_size=7,
@@ -33,6 +53,7 @@ connect4_alphazero_config = dict(
         ),
         cuda=True,
         env_type='board_games',
+        action_type='varied_action_space',
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',

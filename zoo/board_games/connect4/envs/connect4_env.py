@@ -41,22 +41,10 @@ from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from ditk import logging
 from easydict import EasyDict
-from gym import spaces
+from gymnasium import spaces
 
 from zoo.board_games.connect4.envs.rule_bot import Connect4RuleBot
 from zoo.board_games.mcts_bot import MCTSBot
-
-
-def get_image(path: str) -> Any:
-    from os import path as os_path
-
-    import pygame
-
-    cwd = os_path.dirname(__file__)
-    image = pygame.image.load(cwd + "/" + path)
-    sfc = pygame.Surface(image.get_size(), flags=pygame.SRCALPHA)
-    sfc.blit(image, (0, 0))
-    return sfc
 
 
 @ENV_REGISTRY.register('connect4')
@@ -67,10 +55,12 @@ class Connect4Env(BaseEnv):
         # (str) The mode of the environment when take a step.
         battle_mode='self_play_mode',
         # (str) The mode of the environment when doing the MCTS.
-        mcts_mode='self_play_mode',
+        battle_mode_in_simulation_env='self_play_mode',
         # (str) The render mode. Options are 'None', 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.
         # If None, then the game will not be rendered.
         render_mode=None,
+        # (str or None) The directory in which to save the replay file. If None, the file is saved in the current directory.
+        replay_path=None,
         # (str) The type of the bot of the environment.
         bot_action_type='rule',
         # (bool) Whether to let human to play with the agent when evaluating. If False, then use the bot to evaluate the agent.
@@ -110,7 +100,7 @@ class Connect4Env(BaseEnv):
         # options = {None, 'state_realtime_mode', 'image_realtime_mode', 'image_savefile_mode'}
         self.render_mode = cfg.render_mode
         self.replay_name_suffix = "test"
-        self.replay_path = None
+        self.replay_path = cfg.replay_path
         self.replay_format = 'gif'
         self.screen = None
         self.frames = []
@@ -120,7 +110,7 @@ class Connect4Env(BaseEnv):
         self.battle_mode = cfg.battle_mode
         assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
         # The mode of MCTS is only used in AlphaZero.
-        self.mcts_mode = 'self_play_mode'
+        self.battle_mode_in_simulation_env = 'self_play_mode'
 
         # In ``eval_mode``, we can choose to play with the agent.
         self.agent_vs_human = cfg.agent_vs_human
@@ -421,17 +411,17 @@ class Connect4Env(BaseEnv):
             # Load and scale all of the necessary images.
             tile_size = (screen_width * (91 / 99)) / 7
 
-            red_chip = get_image(os.path.join("img", "C4RedPiece.png"))
+            red_chip = self.get_image(os.path.join("img", "C4RedPiece.png"))
             red_chip = pygame.transform.scale(
                 red_chip, (int(tile_size * (9 / 13)), int(tile_size * (9 / 13)))
             )
 
-            black_chip = get_image(os.path.join("img", "C4BlackPiece.png"))
+            black_chip = self.get_image(os.path.join("img", "C4BlackPiece.png"))
             black_chip = pygame.transform.scale(
                 black_chip, (int(tile_size * (9 / 13)), int(tile_size * (9 / 13)))
             )
 
-            board_img = get_image(os.path.join("img", "Connect4Board.png"))
+            board_img = self.get_image(os.path.join("img", "Connect4Board.png"))
             board_img = pygame.transform.scale(
                 board_img, ((int(screen_width)), int(screen_height))
             )
@@ -482,9 +472,11 @@ class Connect4Env(BaseEnv):
         """
         # At the end of the episode, save the frames.
         if replay_path is None:
-            filename = f'game_connect4_{replay_name_suffix}.{format}'
+            filename = f'connect4_{replay_name_suffix}.{format}'
         else:
-            filename = f'{replay_path}.{format}'
+            if not os.path.exists(replay_path):
+                os.makedirs(replay_path)
+            filename = replay_path + f'/connect4_{replay_name_suffix}.{format}'
 
         if format == 'gif':
             # Save frames as a GIF with a duration of 0.1 seconds per frame.
@@ -718,3 +710,13 @@ class Connect4Env(BaseEnv):
 
     def close(self) -> None:
         pass
+
+    def get_image(self, path: str) -> Any:
+        from os import path as os_path
+        import pygame
+
+        cwd = os_path.dirname(__file__)
+        image = pygame.image.load(cwd + "/" + path)
+        sfc = pygame.Surface(image.get_size(), flags=pygame.SRCALPHA)
+        sfc.blit(image, (0, 0))
+        return sfc

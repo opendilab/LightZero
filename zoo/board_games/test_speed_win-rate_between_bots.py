@@ -1,9 +1,9 @@
 """
 Overview:
-    Implemrnt games between different bots to test the win rates and the speed.
+    Implement games between different bots to test the win rates and the speed.
 Example:
     test_tictactoe_mcts_bot_vs_alphabeta_bot means a game between mcts_bot and alphabeta_bot where 
-    mcts_bot makes the first move(bots on the left make the first move).
+    mcts_bot makes the first move (i.e. bots on the left make the first move).
 """
 import time
 
@@ -23,7 +23,7 @@ def get_memory_usage():
 cfg_tictactoe = dict(
     battle_mode='self_play_mode',
     agent_vs_human=False,
-    bot_action_type=['v0', 'alpha_beta_pruning'],  # {'v0', 'alpha_beta_pruning'}
+    bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
     prob_random_agent=0,
     prob_expert_agent=0,
     channel_last=True,
@@ -39,13 +39,14 @@ def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
     Arguments:
         - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
+    cfg_tictactoe['bot_action_type'] = 'v0'
     # List to record the time required for each decision round and the winner.
     mcts_bot_time_list = []
     bot_action_time_list = []
     winner = []
 
     # Repeat the game for 10 rounds.
-    for i in range(100):
+    for i in range(10):
         print('-' * 10 + str(i) + '-' * 10)
         # Initialize the game, where there are two players: player 1 and player 2.
         env = TicTacToeEnv(EasyDict(cfg_tictactoe))
@@ -114,6 +115,8 @@ def test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
     Arguments:
         - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
+    cfg_tictactoe['bot_action_type'] = 'alpha_beta_pruning'
+
     # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
     rule_bot_v0_time_list = []
@@ -192,6 +195,8 @@ def test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
     Arguments:
         - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
+    cfg_tictactoe['bot_action_type'] = 'alpha_beta_pruning'
+
     # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
     mcts_bot_time_list = []
@@ -272,6 +277,8 @@ def test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
     Arguments:
         - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
+    cfg_tictactoe['bot_action_type'] = 'alpha_beta_pruning'
+
     # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
     rule_bot_v0_time_list = []
@@ -350,6 +357,8 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
     Arguments:
         - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
     """
+    cfg_tictactoe['bot_action_type'] = 'alpha_beta_pruning'
+
     # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
     mcts_bot_time_list = []
@@ -525,18 +534,21 @@ def test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
 
 if __name__ == '__main__':
     # ==============================================================
-    # test win rate between alphabeta_bot and rule_bot_v0/mcts_bot
+    # test win rate between alphabeta_bot and rule_bot_v0
     # ==============================================================
     # test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot()
     # test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot()
+    # ==============================================================
+    # test win rate between alphabeta_bot and mcts_bot
+    # ==============================================================
     # test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=2000)
-    test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=2000)
+    # test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=2000)
 
     # ==============================================================
     # test win rate between mcts_bot and rule_bot_v0
     # ==============================================================
-    # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50)
-    # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=100)
+    test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50)
     # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=500)
     # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=1000)
+
     # test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=1000)

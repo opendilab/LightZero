@@ -67,7 +67,7 @@ lunarlander_cont_disc_sampled_efficientzero_config = EasyDict(lunarlander_cont_d
 main_config = lunarlander_cont_disc_sampled_efficientzero_config
 
 lunarlander_cont_disc_sampled_efficientzero_create_config = dict(
-    # NOTE: here we use the lunarlander env with manually discretitze action space.
+    # NOTE: here we use the lunarlander env with manually discretized action space.
     env=dict(
         type='lunarlander_cont_disc',
         import_names=['zoo.box2d.lunarlander.envs.lunarlander_cont_disc_env'],
