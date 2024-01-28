@@ -1,7 +1,7 @@
 from easydict import EasyDict
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_name = 'MsPacmanNoFrameskip-v4'
+env_name = 'SeaquestNoFrameskip-v4'
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -13,6 +13,8 @@ elif env_name == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
 elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
+elif env_name == 'SeaquestNoFrameskip-v4':   
+    action_space_size = 18
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -34,7 +36,7 @@ eps_greedy_exploration_in_collect = True
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/final_mcmax_seed1',
+    f'data_mz_ctree/{env_name[:-14]}/final_mcmax_seed0',
     # losspriority: use loss to update priority,but initialize priority with value defference between pred value and search value
     env=dict(
         stop_value=int(1e6),
@@ -108,4 +110,4 @@ create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_mcma
-    train_mcma([main_config, create_config], seed=1, max_env_step=max_env_step)
+    train_mcma([main_config, create_config], seed=0, max_env_step=max_env_step)
