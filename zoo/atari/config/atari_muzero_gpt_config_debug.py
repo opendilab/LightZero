@@ -250,8 +250,8 @@ atari_muzero_create_config = dict(
         type='atari_lightzero',
         import_names=['zoo.atari.envs.atari_lightzero_env'],
     ),
-    # env_manager=dict(type='subprocess'),
-    env_manager=dict(type='base'),
+    env_manager=dict(type='subprocess'),
+    # env_manager=dict(type='base'),
     policy=dict(
         type='muzero_gpt',
         import_names=['lzero.policy.muzero_gpt'],
