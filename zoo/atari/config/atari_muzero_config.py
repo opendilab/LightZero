@@ -32,7 +32,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/final_mzssl0.99',
+    f'data_mz_ctree_debug/final_mzssl0.99',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,

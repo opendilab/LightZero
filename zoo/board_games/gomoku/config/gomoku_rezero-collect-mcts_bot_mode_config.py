@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(1)
+torch.cuda.set_device(2)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -8,7 +8,10 @@ collector_env_num = 32
 n_episode = 32
 evaluator_env_num = 5
 num_simulations = 50
-update_per_collect = 50
+# update_per_collect = 1000 # only for pong
+update_per_collect = None
+model_update_ratio = 0.25
+
 reanalyze_ratio = 0.
 batch_size = 256
 max_env_step = int(1e6)
@@ -49,6 +52,7 @@ gomoku_muzero_config = dict(
         env_type='board_games',
         action_type='varied_action_space',
         game_segment_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
+        model_update_ratio=model_update_ratio,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
@@ -91,6 +95,6 @@ if __name__ == "__main__":
 
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_rezero-collect-mcts_ctree_0128/gomoku_b{board_size}_rand{prob_random_action_in_bot}_rezero-collect-mcts_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
+        main_config.exp_name = f'data_rezero-collect-mcts_ctree_0128/gomoku/b{board_size}_rand{prob_random_action_in_bot}_rezero-collect-mcts_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
         from lzero.entry import train_mcma
         train_mcma([main_config, create_config], seed=seed, max_env_step=max_env_step)

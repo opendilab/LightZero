@@ -1,5 +1,6 @@
 from easydict import EasyDict
-
+import torch
+torch.cuda.set_device(0)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'QbertNoFrameskip-v4'
 
@@ -28,10 +29,12 @@ num_simulations = 50
 update_per_collect = None
 batch_size = 256
 model_update_ratio = 0.25
-max_env_step = int(8e5)
+max_env_step = int(1e6)
 reanalyze_ratio = 0
 
-eps_greedy_exploration_in_collect = True
+# eps_greedy_exploration_in_collect = True
+eps_greedy_exploration_in_collect = False
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -111,5 +114,10 @@ atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_mcma
-    train_mcma([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # Define a list of seeds for multiple runs
+    seeds = [0, 1]  # You can add more seed values here
+    for seed in seeds:
+        # Update exp_name to include the current seed
+        main_config.exp_name = f'data_rezero-collect-mcts_ctree_0128/{env_name[:-14]}/rezero-collect-mcts_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
+        from lzero.entry import train_mcma
+        train_mcma([main_config, create_config], seed=seed, max_env_step=max_env_step)

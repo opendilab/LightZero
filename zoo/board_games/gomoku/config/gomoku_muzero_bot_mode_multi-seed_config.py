@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(5)
+torch.cuda.set_device(3)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -8,7 +8,9 @@ collector_env_num = 32
 n_episode = 32
 evaluator_env_num = 5
 num_simulations = 50
-update_per_collect = 50
+# update_per_collect = 1000 # only for pong
+update_per_collect = None
+model_update_ratio = 0.25
 # reanalyze_ratio = 0.
 reanalyze_ratio = 1.
 
@@ -51,6 +53,7 @@ gomoku_muzero_config = dict(
         action_type='varied_action_space',
         game_segment_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
         update_per_collect=update_per_collect,
+        model_update_ratio=model_update_ratio,
         batch_size=batch_size,
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
