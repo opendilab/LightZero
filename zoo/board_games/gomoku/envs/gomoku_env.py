@@ -1,11 +1,14 @@
 import copy
 import os
 import sys
+from datetime import datetime
 from functools import lru_cache
 from typing import List, Any
 
 import gymnasium as gym
 import imageio
+import matplotlib
+matplotlib.use('Agg') 
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
@@ -136,9 +139,11 @@ class GomokuEnv(BaseEnv):
         self.screen_scaling = cfg.screen_scaling
         # options = {None, 'state_realtime_mode', 'image_realtime_mode', 'image_savefile_mode'}
         self.render_mode = cfg.render_mode
-        self.replay_name_suffix = "test"
+        assert self.render_mode in [None, 'state_realtime_mode', 'image_realtime_mode', 'image_savefile_mode']
+        self.replay_name_suffix = "" if hasattr(cfg, 'replay_name_suffix') is False else cfg.replay_name_suffix
         self.replay_path = cfg.replay_path
-        self.replay_format = 'gif'  # 'mp4' #
+        self.replay_format = 'gif' if hasattr(cfg, 'replay_format') is False else cfg.replay_format
+        assert self.replay_format in ['gif', 'mp4']
         self.screen = None
         self.frames = []
 
@@ -158,6 +163,7 @@ class GomokuEnv(BaseEnv):
             # plt is not work in mcts_ctree mode
             self.fig, self.ax = plt.subplots(figsize=(self.board_size, self.board_size))
             plt.ion()
+        self._save_replay_count = 0
 
     def reset(self, start_player_index=0, init_state=None, katago_policy_init=False, katago_game_state=None):
         """
@@ -338,7 +344,7 @@ class GomokuEnv(BaseEnv):
         if done:
             info['eval_episode_return'] = reward
             self._env.render(self.render_mode)
-            if self.render_mode == 'image_savefile_mode':
+            if self.render_mode == 'image_savefile_mode' and self.replay_path is not None:
                 self.save_render_output(replay_name_suffix=self.replay_name_suffix, replay_path=self.replay_path,
                                         format=self.replay_format)
 
@@ -598,7 +604,7 @@ class GomokuEnv(BaseEnv):
             print(np.array(self.board).reshape(self.board_size, self.board_size))
             return
         # Render the game as an image
-        elif mode == "image_realtime_mode" or mode == "image_savefile_mode":
+        elif mode == "image_realtime_mode" or (mode == "image_savefile_mode" and self.replay_path is not None):
             self.draw_board()
             # Draw the pieces on the board
             for x in range(self.board_size):
@@ -723,13 +729,28 @@ class GomokuEnv(BaseEnv):
             - replay_path (:obj:`str`): The path to save the replay file. If None, the default filename will be used.
             - format (:obj:`str`): The format of the output file. Options are 'gif' or 'mp4'.
         """
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        
         # At the end of the episode, save the frames.
-        if replay_path is None:
-            filename = f'gomoku_{self.board_size}_{replay_name_suffix}.{format}'
+        if replay_name_suffix == '':
+            if replay_path is None:
+                filename = f'gomoku_{self.board_size}_{os.getpid()}_{timestamp}.{format}'
+            else:
+                if not os.path.exists(replay_path):
+                    os.makedirs(replay_path)
+                filename = os.path.join(
+                    replay_path,
+                    f'gomoku_{self.board_size}_{os.getpid()}_{timestamp}.{format}'
+                )
         else:
-            if not os.path.exists(replay_path):
-                os.makedirs(replay_path)
-            filename = replay_path+f'/gomoku_{self.board_size}_{replay_name_suffix}.{format}'
+            if replay_path is None:
+                filename = f'gomoku_{self.board_size}_{replay_name_suffix}.{format}'
+            else:
+                if not os.path.exists(replay_path):
+                    os.makedirs(replay_path)
+                filename = replay_path+f'/gomoku_{self.board_size}_{replay_name_suffix}.{format}'
+
+        self._save_replay_count += 1
 
         if format == 'gif':
             # Save frames as a GIF with a duration of 0.1 seconds per frame.
@@ -737,7 +758,8 @@ class GomokuEnv(BaseEnv):
             imageio.mimsave(filename, self.frames, 'GIF', fps=30, subrectangles=True)
         elif format == 'mp4':
             # Save frames as an MP4 video with a frame rate of 30 frames per second.
-            imageio.mimsave(filename, self.frames, fps=30, codec='mpeg4')
+            # imageio.mimsave(filename, self.frames, fps=30, codec='mpeg4')
+            imageio.mimwrite(filename, self.frames, fps=30)
 
         else:
             raise ValueError("Unsupported format: {}".format(format))

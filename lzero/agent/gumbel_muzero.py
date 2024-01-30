@@ -338,7 +338,7 @@ class GumbelMuZeroAgent:
             if not os.path.exists(replay_save_path):
                 os.makedirs(replay_save_path)
             files = os.listdir(replay_save_path)
-            files = [file for file in files if file.endswith('0.mp4')]
+            files = [file for file in files if file.endswith('.mp4')]
             files.sort()
             if concatenate_all_replay:
                 # create a file named 'files.txt' to store the names of all mp4 files

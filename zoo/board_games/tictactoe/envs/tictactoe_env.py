@@ -266,7 +266,7 @@ class TicTacToeEnv(BaseEnv):
                     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                     path = os.path.join(
                         self._replay_path,
-                        'tictactoe_episode_{}_{}_{}.mp4'.format(os.getpid(), timestamp, self._save_replay_count)
+                        'tictactoe_{}_{}_{}.mp4'.format(os.getpid(), timestamp, self._save_replay_count)
                     )
                     self.display_frames_as_mp4(self._frames, path)
                     print(f'replay {path} saved!')
@@ -301,7 +301,7 @@ class TicTacToeEnv(BaseEnv):
                     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                     path = os.path.join(
                         self._replay_path,
-                        'tictactoe_episode_{}_{}_{}.mp4'.format(os.getpid(), timestamp, self._save_replay_count)
+                        'tictactoe_{}_{}_{}.mp4'.format(os.getpid(), timestamp, self._save_replay_count)
                     )
                     self.display_frames_as_mp4(self._frames, path)
                     print(f'replay {path} saved!')
