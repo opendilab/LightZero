@@ -92,6 +92,6 @@ if __name__ == "__main__":
     seeds = [0, 1]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_mz_ctree_0128/connect4/muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
+        main_config.exp_name = f'data_mz_ctree_0129/connect4/muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
         from lzero.entry import train_muzero
         train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)

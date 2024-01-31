@@ -200,16 +200,17 @@ def train_mcma(
             collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
             update_per_collect = int(collected_transitions_num * cfg.policy.model_update_ratio)
 
-
-
         # save returned new_data collected by the collector
         replay_buffer.push_game_segments(new_data)
         # print("remark 11111111111111111")
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
         # print("remark 22222222222222222222")
+
+        # TODO
         if replay_buffer.get_num_of_transitions()>2000:
                     replay_buffer.reanalyze_buffer(2000, policy)
+
         # print("hhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
         # print(replay_buffer.get_num_of_transitions())
         # print(f"buffer reanalyze interval is {buffer_reanalyze_interval}")
@@ -221,7 +222,6 @@ def train_mcma(
             # Learner will train ``update_per_collect`` times in one iteration.
 
             if replay_buffer.get_num_of_transitions() > batch_size:
-
 
                 # print("remark 00000000")
                 # policy对sample的影响是什么？？？？？？？？？？？？？？？？？？？？？？？？？
@@ -239,12 +239,6 @@ def train_mcma(
                 # with open('data.pkl', 'wb') as file:
                 #     pickle.dump(replay_buffer, file)
                 #     print("the buffer is saved")
-
-
-
-
-
-
 
             else:
                 logging.warning(

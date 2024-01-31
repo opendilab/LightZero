@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(7)
+torch.cuda.set_device(0)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -11,11 +11,17 @@ num_simulations = 50
 
 # update_per_collect = 1000 # only for pong
 update_per_collect = None
-model_update_ratio = 0.25
+# model_update_ratio = 0.25
+model_update_ratio = 0.05  # only for lunarlander
+
 
 batch_size = 256
-max_env_step = int(3e6)
+# max_env_step = int(3e6)
+max_env_step = int(2e6)
+
 reanalyze_ratio = 0.
+eps_greedy_exploration_in_collect = True
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -46,6 +52,15 @@ lunarlander_muzero_config = dict(
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
+        eps=dict(
+            eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
+            # need to dynamically adjust the number of decay steps 
+            # according to the characteristics of the environment and the algorithm
+            type='linear',
+            start=1.,
+            end=0.05,
+            decay=int(1e5),
+        ),
         update_per_collect=update_per_collect,
         model_update_ratio=model_update_ratio,
         batch_size=batch_size,
@@ -58,7 +73,8 @@ lunarlander_muzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(1e3),
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        # replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(5e5),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
@@ -87,10 +103,11 @@ create_config = lunarlander_muzero_create_config
 
 if __name__ == "__main__":
     # Define a list of seeds for multiple runs
-    seeds = [0, 1]  # You can add more seed values here
+    # seeds = [0, 1]  # You can add more seed values here
+    seeds = [2,3]  # You can add more seed values here
 
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_rezero-collect-mcts_ctree_0128/lunarlander/rezero-collect-mcts_ns{main_config.policy.num_simulations}_upc{main_config.policy.update_per_collect}_rr{main_config.policy.reanalyze_ratio}_seed{seed}'
+        main_config.exp_name = f'data_rezero_0129/lunarlander/rezero-collect-mcts_ns{main_config.policy.num_simulations}_upc{main_config.policy.update_per_collect}_rr{main_config.policy.reanalyze_ratio}_eps100k_rbs5e5_seed{seed}'
         from lzero.entry import train_mcma
         train_mcma([main_config, create_config], seed=seed, max_env_step=max_env_step)

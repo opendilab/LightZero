@@ -29,7 +29,7 @@ num_simulations = 50
 update_per_collect = None
 batch_size = 256
 model_update_ratio = 0.25
-max_env_step = int(1e6)
+max_env_step = int(5e5)
 reanalyze_ratio = 0
 
 # eps_greedy_exploration_in_collect = True
@@ -118,6 +118,6 @@ if __name__ == "__main__":
     seeds = [0, 1]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_rezero-collect-mcts_ctree_0128/{env_name[:-14]}/rezero-collect-mcts_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
+        main_config.exp_name = f'data_rezero-collect-mcts_ctree_0129/{env_name[:-14]}/rezero-collect-mcts_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
         from lzero.entry import train_mcma
         train_mcma([main_config, create_config], seed=seed, max_env_step=max_env_step)

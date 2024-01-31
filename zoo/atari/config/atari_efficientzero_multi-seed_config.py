@@ -1,11 +1,11 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(5)
+torch.cuda.set_device(0)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 # env_name = 'PongNoFrameskip-v4'
 # env_name = 'QbertNoFrameskip-v4'
-# env_name = 'UpNDownNoFrameskip-v4'
-env_name = 'MsPacmanNoFrameskip-v4'
+env_name = 'UpNDownNoFrameskip-v4'
+# env_name = 'MsPacmanNoFrameskip-v4'
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -32,7 +32,9 @@ update_per_collect = None
 model_update_ratio = 0.25
 
 batch_size = 256
-max_env_step = int(1e6)
+# max_env_step = int(1e6)
+max_env_step = int(5e5)
+
 reanalyze_ratio = 1
 
 eps_greedy_exploration_in_collect = False
@@ -107,9 +109,9 @@ create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
     # Define a list of seeds for multiple runs
-    seeds = [1, 2]  # You can add more seed values here
+    seeds = [5]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_ez_ctree_0128/{env_name[:-14]}/efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
+        main_config.exp_name = f'data_ez_ctree_0129/{env_name[:-14]}/efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
         from lzero.entry import train_muzero
         train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)

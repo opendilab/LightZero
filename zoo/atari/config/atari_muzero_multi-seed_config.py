@@ -1,12 +1,13 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(3)
+torch.cuda.set_device(0)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 # env_name = 'PongNoFrameskip-v4'
+# env_name = 'MsPacmanNoFrameskip-v4'
+# env_name =  'BreakoutNoFrameskip-v4'
 # env_name = 'QbertNoFrameskip-v4'
+# env_name = 'SeaquestNoFrameskip-v4'
 env_name = 'UpNDownNoFrameskip-v4'
-
-
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -18,8 +19,11 @@ elif env_name == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
 elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
+elif env_name == 'SeaquestNoFrameskip-v4':   
+    action_space_size = 18
 elif env_name == 'UpNDownNoFrameskip-v4':
     action_space_size = 6
+
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -32,8 +36,12 @@ update_per_collect = None
 model_update_ratio = 0.25
 
 batch_size = 256
-max_env_step = int(1e6)
+# max_env_step = int(1e6)
+max_env_step = int(5e5)
+
 reanalyze_ratio = 1
+# reanalyze_ratio = 0.2
+
 eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -114,9 +122,9 @@ create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     # Define a list of seeds for multiple runs
-    seeds = [0, 1]  # You can add more seed values here
+    seeds = [4]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_mz_ctree_0128/{env_name[:-14]}/muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
+        main_config.exp_name = f'data_mz_ctree_0129/{env_name[:-14]}/muzero_ns{num_simulations}_upc{update_per_collect}_mur{model_update_ratio}_rr{reanalyze_ratio}_seed{seed}'
         from lzero.entry import train_muzero
         train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)

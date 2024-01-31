@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(1)
+torch.cuda.set_device(0)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -13,7 +13,7 @@ update_per_collect = None
 model_update_ratio = 0.25
 reanalyze_ratio = 0.
 batch_size = 256
-max_env_step = int(1e6)
+max_env_step = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -88,6 +88,6 @@ if __name__ == "__main__":
 
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_rezero-collect-mcts_ctree_0128/connect4/rezero-collect-mcts_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
+        main_config.exp_name = f'data_rezero-collect-mcts_ctree_0129/connect4/rezero-collect-mcts_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
         from lzero.entry import train_mcma
         train_mcma([main_config, create_config], seed=seed, max_env_step=max_env_step)

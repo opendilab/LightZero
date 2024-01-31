@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(6)
+torch.cuda.set_device(0)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -11,7 +11,9 @@ num_simulations = 50
 
 # update_per_collect = 1000 # only for pong
 update_per_collect = None
-model_update_ratio = 0.25
+# model_update_ratio = 0.25
+model_update_ratio = 0.05  # only for lunarlander
+
 
 batch_size = 256
 max_env_step = int(3e6)
@@ -89,10 +91,11 @@ create_config = lunarlander_muzero_create_config
 
 if __name__ == "__main__":
     # Define a list of seeds for multiple runs
-    seeds = [0, 1]  # You can add more seed values here
+    # seeds = [0, 1]  # You can add more seed values here
+    seeds = [2, 3]  # You can add more seed values here
 
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_mz_ctree_0128/lunarlander/muzero_ns{main_config.policy.num_simulations}_upc{main_config.policy.update_per_collect}_rr{main_config.policy.reanalyze_ratio}_seed{seed}'
+        main_config.exp_name = f'data_mz_ctree_0129/lunarlander/muzero_ns{main_config.policy.num_simulations}_upc{main_config.policy.update_per_collect}_rr{main_config.policy.reanalyze_ratio}_seed{seed}'
         from lzero.entry import train_muzero
         train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)

@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(2)
+torch.cuda.set_device(0)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -14,7 +14,9 @@ model_update_ratio = 0.25
 
 reanalyze_ratio = 0.
 batch_size = 256
-max_env_step = int(1e6)
+# max_env_step = int(1e6)
+max_env_step = int(1e5)
+
 
 board_size = 6  # default_size is 15
 bot_action_type = 'v0'  # options={'v0', 'v1'}
@@ -91,10 +93,10 @@ create_config = gomoku_muzero_create_config
 
 if __name__ == "__main__":
     # Define a list of seeds for multiple runs
-    seeds = [0, 1]  # You can add more seed values here
+    seeds = [1]  # You can add more seed values here
 
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_rezero-collect-mcts_ctree_0128/gomoku/b{board_size}_rand{prob_random_action_in_bot}_rezero-collect-mcts_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
+        main_config.exp_name = f'data_rezero-collect-mcts_ctree_0129/gomoku/b{board_size}_rand{prob_random_action_in_bot}_rezero-collect-mcts_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
         from lzero.entry import train_mcma
         train_mcma([main_config, create_config], seed=seed, max_env_step=max_env_step)
