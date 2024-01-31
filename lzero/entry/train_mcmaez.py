@@ -16,7 +16,7 @@ from tensorboardX import SummaryWriter
 from lzero.entry.utils import log_buffer_memory_usage, log_buffer_run_time
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
-from lzero.worker import MACollector as Collector
+from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 
@@ -50,7 +50,7 @@ def iter_filter(data, batch_size, K):
     return iter_data
     
 
-def train_ma(
+def train_mcmaez(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -80,17 +80,15 @@ def train_ma(
         "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'"
 
     if create_cfg.policy.type == 'muzero':
-        from lzero.mcts import MuZeroGameBuffer as GameBuffer
+        from lzero.mcts import MAGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'efficientzero':
-        from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
+        from lzero.mcts import MAEZGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'gumbel_muzero':
         from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'stochastic_muzero':
         from lzero.mcts import StochasticMuZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'ma':
-        from lzero.mcts import MAGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
@@ -157,8 +155,7 @@ def train_ma(
     # Comparation: The agent's performance during random action-taking can be used as a reference point to evaluate the efficacy of reinforcement learning algorithms.
     if cfg.policy.random_collect_episode_num > 0:
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
-    
-    reanalyze_count = 0
+
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         log_buffer_run_time(learner.train_iter, replay_buffer, tb_logger)
@@ -211,40 +208,37 @@ def train_ma(
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
         # print("remark 22222222222222222222")
-
+        if replay_buffer.get_num_of_transitions()>2000:
+                    replay_buffer.reanalyze_buffer(2000, policy)
         # print("hhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
         # print(replay_buffer.get_num_of_transitions())
-        
+        # print(f"buffer reanalyze interval is {buffer_reanalyze_interval}")
 
         # K = cfg.policy.K_batch
-
-
         # sample_batch_size = (K+1) * batch_size
         # Learn policy from collected data.
-        for i in range(cfg.policy.buffer_reanalyze_freq):
-            if replay_buffer.get_num_of_transitions()>2000 and reanalyze_count%2 == 0:
-                replay_buffer.reanalyze_buffer(2000, policy)
+        for i in range(update_per_collect):
+            # Learner will train ``update_per_collect`` times in one iteration.
 
-            for i in range(update_per_collect):
-                # Learner will train ``update_per_collect`` times in one iteration.
-                if replay_buffer.get_num_of_transitions() > batch_size:
+            if replay_buffer.get_num_of_transitions() > batch_size:
 
 
-                    # policy对sample的影响是什么？？？？？？？？？？？？？？？？？？？？？？？？？
-                    #!!!!!!!!!!!!!!!!!!!!!!!!!value是sample时就计算好的所以如果一次sample多次训练的话会增强value的off-policy性？？？？？？？？？？？
-                    # 在非reannalyze的情况一采多训会影响value,reanalyze的情况则会额外影响policy！！！！！！！！！！！！！！！
+                # print("remark 00000000")
+                # policy对sample的影响是什么？？？？？？？？？？？？？？？？？？？？？？？？？
+                #!!!!!!!!!!!!!!!!!!!!!!!!!value是sample时就计算好的所以如果一次sample多次训练的话会增强value的off-policy性？？？？？？？？？？？
+                # 在非reannalyze的情况一采多训会影响value,reanalyze的情况则会额外影响policy！！！！！！！！！！！！！！！
 
 
-                    # 修改_make_batch函数，将batch_size扩K+1倍，但是prepare出来的context分成K+1份
-                    # 注意current_batch也要做对齐处理
+                # 修改_make_batch函数，将batch_size扩K+1倍，但是prepare出来的context分成K+1份
+                # 注意current_batch也要做对齐处理
 
-                    train_data = replay_buffer.sample(batch_size, policy)
-                    # iter_data = iter_filter(train_data, batch_size, K)
-                    # print("remark 33333333333333333333")
+                train_data = replay_buffer.sample(batch_size, policy)
+                # iter_data = iter_filter(train_data, batch_size, K)
+                # print("remark 33333333333333333333")
 
-                    # with open('data.pkl', 'wb') as file:
-                    #     pickle.dump(replay_buffer, file)
-                    #     print("the buffer is saved")
+                # with open('data.pkl', 'wb') as file:
+                #     pickle.dump(replay_buffer, file)
+                #     print("the buffer is saved")
 
 
 
@@ -252,21 +246,21 @@ def train_ma(
 
 
 
-                else:
-                    logging.warning(
-                        f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                        f'batch_size: {batch_size}, '
-                        f'{replay_buffer} '
-                        f'continue to collect now ....'
-                    )
-                    break
+            else:
+                logging.warning(
+                    f'The data in replay_buffer is not sufficient to sample a mini-batch: '
+                    f'batch_size: {batch_size}, '
+                    f'{replay_buffer} '
+                    f'continue to collect now ....'
+                )
+                break
 
-                
-                # The core train steps for MCTS+RL algorithms.
-                log_vars = learner.train(train_data, collector.envstep)
+            
+            # The core train steps for MCTS+RL algorithms.
+            log_vars = learner.train(train_data, collector.envstep)
 
-                if cfg.policy.use_priority:
-                    replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+            if cfg.policy.use_priority:
+                replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break

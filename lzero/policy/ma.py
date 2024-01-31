@@ -78,6 +78,7 @@ class MAPolicy(Policy):
         # (str) The type of environment. Options are ['not_board_games', 'board_games'].
         env_type='not_board_games',
         # (str) The type of battle mode. Options are ['play_with_bot_mode', 'self_play_mode'].
+        action_type='fixed_action_space',
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,

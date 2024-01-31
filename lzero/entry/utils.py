@@ -101,9 +101,16 @@ def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWr
     average_active_root_num = total_active_root_num / sample_times
     writer.add_scalar('Buffer/average_active_root_num', average_active_root_num, train_iter)
 
+    # Record average reanalyze time.
+    total_infer = buffer.average_infer
+    average_average_infer = total_infer / sample_times
+    writer.add_scalar('Buffer/average_infer', average_average_infer, train_iter)
+
+
     # Reset the time records.
     buffer.sample_times = 0
     buffer.compute_target_re_time = 0
     buffer.reuse_search_time = 0
     buffer.origin_search_time = 0
     buffer.active_root_num = 0
+    buffer.average_infer = 0

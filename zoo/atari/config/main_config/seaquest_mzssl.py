@@ -1,7 +1,7 @@
 from easydict import EasyDict
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_name = 'BreakoutNoFrameskip-v4'
+env_name = 'SeaquestNoFrameskip-v4'
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -13,6 +13,8 @@ elif env_name == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
 elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
+elif env_name == 'SeaquestNoFrameskip-v4':   
+    action_space_size = 18
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -34,16 +36,16 @@ eps_greedy_exploration_in_collect = True
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/final_mzssl_seed0eps',
+    f'data_mz_ctree/{env_name[:-14]}/final_mzssl_seed0',
+    # losspriority: use loss to update priority,but initialize priority with value defference between pred value and search value
     env=dict(
+        stop_value=int(1e6),
         env_name=env_name,
         obs_shape=(4, 96, 96),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        collect_max_episode_steps=3000.0,
-        eval_max_episode_steps=20000.0,
     ),
     policy=dict(
         model=dict(

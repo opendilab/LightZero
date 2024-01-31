@@ -8,3 +8,4 @@ from .train_muzero_with_gym_env import train_muzero_with_gym_env
 from .train_ma import train_ma
 from .train_reuse import train_reuse
 from .train_mcma import train_mcma
+from .train_mcmaez import train_mcmaez

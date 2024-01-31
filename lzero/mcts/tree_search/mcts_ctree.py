@@ -100,6 +100,8 @@ class EfficientZeroMCTSCtree(object):
             # the data storage of latent states: storing the latent state of all the nodes in one search.
             latent_state_batch_in_search_path = [latent_state_roots]
             # the data storage of value prefix hidden states in LSTM
+            # print(f"reward_hidden_state_roots[0]={reward_hidden_state_roots[0]}")
+            # print(f"reward_hidden_state_roots[1]={reward_hidden_state_roots[1]}")
             reward_hidden_state_c_batch = [reward_hidden_state_roots[0]]
             reward_hidden_state_h_batch = [reward_hidden_state_roots[1]]
 
@@ -194,6 +196,163 @@ class EfficientZeroMCTSCtree(object):
                     current_latent_state_index, discount_factor, value_prefix_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, is_reset_list, virtual_to_play_batch
                 )
+
+    def search_with_reuse(
+            self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any],
+            reward_hidden_state_roots: List[Any], to_play_batch: Union[int, List[Any]],
+            true_action_list = None,
+            reuse_value_list = None
+    ) -> None:
+        """
+        Overview:
+            Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
+            Use the cpp ctree.
+        Arguments:
+            - roots (:obj:`Any`): a batch of expanded root nodes
+            - latent_state_roots (:obj:`list`): the hidden states of the roots
+            - reward_hidden_state_roots (:obj:`list`): the value prefix hidden states in LSTM of the roots
+            - to_play_batch (:obj:`list`): the to_play_batch list used in self-play-mode board games
+        """
+        with torch.no_grad():
+            model.eval()
+
+            # preparation some constant
+            batch_size = roots.num
+            pb_c_base, pb_c_init, discount_factor = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount_factor
+
+            # the data storage of latent states: storing the latent state of all the nodes in one search.
+            latent_state_batch_in_search_path = [latent_state_roots]
+            # the data storage of value prefix hidden states in LSTM
+            reward_hidden_state_c_batch = [reward_hidden_state_roots[0]]
+            reward_hidden_state_h_batch = [reward_hidden_state_roots[1]]
+
+            # minimax value storage
+            min_max_stats_lst = tree_efficientzero.MinMaxStatsList(batch_size)
+            min_max_stats_lst.set_delta(self._cfg.value_delta_max)
+
+            infer_sum = 0
+
+            for simulation_index in range(self._cfg.num_simulations):
+                # In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.
+
+                latent_states = []
+                hidden_states_c_reward = []
+                hidden_states_h_reward = []
+
+                # add for reuse
+                temp_actions = []
+                temp_search_lens = [] 
+                no_inference_lst = []
+                reuse_lst = []
+
+                # prepare a result wrapper to transport results between python and c++ parts
+                results = tree_efficientzero.ResultsWrapper(num=batch_size)
+
+                # latent_state_index_in_search_path: the first index of leaf node states in latent_state_batch_in_search_path, i.e. is current_latent_state_index in one the search.
+                # latent_state_index_in_batch: the second index of leaf node states in latent_state_batch_in_search_path, i.e. the index in the batch, whose maximum is ``batch_size``.
+                # e.g. the latent state of the leaf node in (x, y) is latent_state_batch_in_search_path[x, y], where x is current_latent_state_index, y is batch_index.
+                # The index of value prefix hidden state of the leaf node is in the same manner.
+                """
+                MCTS stage 1: Selection
+                    Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
+                """
+                latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse_with_reuse(
+                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                    copy.deepcopy(to_play_batch), true_action_list, reuse_value_list
+                )
+                # obtain the search horizon for leaf nodes
+                search_lens = results.get_search_len()
+
+                # obtain the latent state for leaf node
+                for count, (ix, iy) in enumerate(zip(latent_state_index_in_search_path, latent_state_index_in_batch)):
+                    if ix != -1:
+                        latent_states.append(latent_state_batch_in_search_path[ix][iy])
+                        hidden_states_c_reward.append(reward_hidden_state_c_batch[ix][0][iy])
+                        hidden_states_h_reward.append(reward_hidden_state_h_batch[ix][0][iy])
+                        temp_actions.append(last_actions[count])
+                        temp_search_lens.append(search_lens[count])
+                    else:
+                        no_inference_lst.append(iy)
+                    if ix == 0 and last_actions[count] == true_action_list[count]:
+                        reuse_lst.append(count)
+
+                length = len(temp_actions)
+                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
+                hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(self._cfg.device
+                                                                                                 ).unsqueeze(0)
+                hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(self._cfg.device
+                                                                                                 ).unsqueeze(0)
+                temp_actions = torch.from_numpy(np.asarray(temp_actions)).to(self._cfg.device).long()
+                # temp_search_lens = torch.from_numpy(np.asarray(temp_search_lens)).to(self._cfg.device).long()
+                # .long() is only for discrete action
+                # last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
+                """
+                MCTS stage 2: Expansion
+                    At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function.
+                    Then we calculate the policy_logits and value for the leaf node (next_latent_state) by the prediction function. (aka. evaluation)
+                MCTS stage 3: Backup
+                    At the end of the simulation, the statistics along the trajectory are updated.
+                """
+                if length != 0:
+                    network_output = model.recurrent_inference(
+                        latent_states, (hidden_states_c_reward, hidden_states_h_reward), temp_actions
+                    )
+
+                    network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
+                    network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
+                    network_output.value = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value))
+                    network_output.value_prefix = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value_prefix))
+
+                    network_output.reward_hidden_state = (
+                        network_output.reward_hidden_state[0].detach().cpu().numpy(),
+                        network_output.reward_hidden_state[1].detach().cpu().numpy()
+                    )
+
+                    latent_state_batch_in_search_path.append(network_output.latent_state)
+                    # tolist() is to be compatible with cpp datatype.
+                    value_prefix_batch = network_output.value_prefix.reshape(-1).tolist()
+                    value_batch = network_output.value.reshape(-1).tolist()
+                    policy_logits_batch = network_output.policy_logits.tolist()
+
+                    reward_latent_state_batch = network_output.reward_hidden_state
+                    # reset the hidden states in LSTM every ``lstm_horizon_len`` steps in one search.
+                    # which enable the model only need to predict the value prefix in a range (e.g.: [s0,...,s5])
+                    assert self._cfg.lstm_horizon_len > 0
+                    reset_idx = (np.array(temp_search_lens) % self._cfg.lstm_horizon_len == 0)
+                    # assert len(reset_idx) == batch_size
+                    reward_latent_state_batch[0][:, reset_idx, :] = 0
+                    reward_latent_state_batch[1][:, reset_idx, :] = 0
+                    is_reset_list = reset_idx.astype(np.int32).tolist()
+                    reward_hidden_state_c_batch.append(reward_latent_state_batch[0])
+                    reward_hidden_state_h_batch.append(reward_latent_state_batch[1])
+                else:
+                    latent_state_batch_in_search_path.append([])
+                    value_batch = []
+                    policy_logits_batch = []
+                    value_prefix_batch = []
+                    reward_hidden_state_c_batch.append([])
+                    reward_hidden_state_h_batch.append([])
+                    assert self._cfg.lstm_horizon_len > 0
+                    reset_idx = (np.array(search_lens) % self._cfg.lstm_horizon_len == 0)
+                    assert len(reset_idx) == batch_size
+                    is_reset_list = reset_idx.astype(np.int32).tolist()
+
+
+                # In ``batch_backpropagate()``, we first expand the leaf node using ``the policy_logits`` and
+                # ``reward`` predicted by the model, then perform backpropagation along the search path to update the
+                # statistics.
+
+                # NOTE: simulation_index + 1 is very important, which is the depth of the current leaf node.
+                current_latent_state_index = simulation_index + 1
+                no_inference_lst.append(-1)
+                reuse_lst.append(-1)
+                tree_efficientzero.batch_backpropagate_with_reuse(
+                    current_latent_state_index, discount_factor, value_prefix_batch, value_batch, policy_logits_batch,
+                    min_max_stats_lst, results, is_reset_list, virtual_to_play_batch, no_inference_lst, reuse_lst, reuse_value_list
+                )
+                infer_sum += length
+            average_infer = infer_sum/self._cfg.num_simulations
+        return length, average_infer
 
 
 # ==============================================================
@@ -373,6 +532,8 @@ class MuZeroMCTSCtree(object):
             min_max_stats_lst = tree_muzero.MinMaxStatsList(batch_size)
             min_max_stats_lst.set_delta(self._cfg.value_delta_max)
 
+            infer_sum = 0
+
             for simulation_index in range(self._cfg.num_simulations):
                 # In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.
 
@@ -469,7 +630,9 @@ class MuZeroMCTSCtree(object):
                     current_latent_state_index, discount_factor, reward_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, virtual_to_play_batch, no_inference_lst, reuse_lst, reuse_value_list
                 )
-        return length
+                infer_sum += length
+            average_infer = infer_sum/self._cfg.num_simulations
+        return length, average_infer
 
 class GumbelMuZeroMCTSCtree(object):
     """

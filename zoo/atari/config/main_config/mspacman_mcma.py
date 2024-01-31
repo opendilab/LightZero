@@ -27,14 +27,14 @@ model_update_ratio = 0.25
 max_env_step = int(8e5)
 reanalyze_ratio = 0
 
-eps_greedy_exploration_in_collect = True
+eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/final_mcma',
+    f'data_mz_ctree/{env_name[:-14]}/final_mcmax_seed0',
     # losspriority: use loss to update priority,but initialize priority with value defference between pred value and search value
     env=dict(
         stop_value=int(1e6),

@@ -318,7 +318,7 @@ class MuZeroGameBuffer(GameBuffer):
             policy_mask = []
             # 0 -> Invalid target policy for padding outside of game segments,
             # 1 -> Previous target policy for game segments.
-            rewards, child_visits, game_segment_lens = [], [], []
+            rewards, child_visits, game_segment_lens, root_values = [], [], [], []
             # for board games
             action_mask_segment, to_play_segment = [], []
             for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
@@ -330,6 +330,7 @@ class MuZeroGameBuffer(GameBuffer):
                 to_play_segment.append(game_segment.to_play_segment)
 
                 child_visits.append(game_segment.child_visit_segment)
+                root_values.append(game_segment.root_value_segment)
                 # prepare the corresponding observations
                 game_obs = game_segment.get_unroll_obs(state_index, self._cfg.num_unroll_steps)
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
@@ -345,7 +346,7 @@ class MuZeroGameBuffer(GameBuffer):
                     policy_obs_list.append(obs)
 
         policy_re_context = [
-            policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, game_segment_lens,
+            policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, root_values, game_segment_lens,
             action_mask_segment, to_play_segment
         ]
         return policy_re_context
@@ -512,7 +513,7 @@ class MuZeroGameBuffer(GameBuffer):
         batch_target_policies_re = []
 
         # for board games
-        policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, game_segment_lens, action_mask_segment, \
+        policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, root_values, game_segment_lens, action_mask_segment, \
         to_play_segment = policy_re_context
         # transition_batch_size = game_segment_batch_size * (self._cfg.num_unroll_steps + 1)
         transition_batch_size = len(policy_obs_list)
@@ -580,17 +581,24 @@ class MuZeroGameBuffer(GameBuffer):
 
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
+            roots_values=roots.get_values()
             policy_index = 0
-            for state_index, game_index in zip(pos_in_game_segment_list, batch_index_list):
+            for state_index, child_visit, root_value in zip(pos_in_game_segment_list, child_visits, root_values):
                 target_policies = []
 
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     distributions = roots_distributions[policy_index]
+                    searched_value = roots_values[policy_index]
 
                     if policy_mask[policy_index] == 0:
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
                         target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
                     else:
+                        sim_num = sum(distributions)
+                        # print(f'the visit in index{current_index} is {child_visit[current_index]}')
+                        child_visit[current_index] = [visit_count/sim_num for visit_count in distributions]
+                        # print(f'after update the child visit is {child_visit[current_index]}')
+                        root_value[current_index] = searched_value
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
                             target_policies.append(
