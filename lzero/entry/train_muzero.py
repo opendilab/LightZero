@@ -127,6 +127,13 @@ def train_muzero(
     if cfg.policy.random_collect_episode_num > 0:
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
 
+    import time
+    import logging
+    # 其他必要的导入
+    # 初始化时间和迭代次数统计变量
+    total_time = 0
+    num_iterations = 0
+
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         log_buffer_run_time(learner.train_iter, replay_buffer, tb_logger)
@@ -169,7 +176,6 @@ def train_muzero(
         replay_buffer.remove_oldest_data_to_fit()
 
         # replay_buffer.reanalyze_buffer(replay_buffer.get_num_of_transitions(), policy)
-        
 
         # Learn policy from collected data.
         for i in range(update_per_collect):
@@ -185,8 +191,21 @@ def train_muzero(
                 )
                 break
 
+            # 记录当前时间
+            start_time = time.time()
+
             # The core train steps for MCTS+RL algorithms.
             log_vars = learner.train(train_data, collector.envstep)
+
+            # 记录结束时间
+            end_time = time.time()
+            
+            # 计算本次迭代的时间并累加到总时间
+            iteration_time = end_time - start_time
+            total_time += iteration_time
+            num_iterations += 1
+            print(f'iteration {i}: {iteration_time} seconds')
+
 
             if cfg.policy.use_priority:
                 # replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
@@ -195,8 +214,19 @@ def train_muzero(
                 # p = log_vars[0]['loss_priority']
                 # print(f'priority is loss {p}')
 
+
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break
+
+        if num_iterations>200:
+            break
+
+    # 循环结束，计算平均时间
+    if num_iterations > 0:
+        average_time = total_time / num_iterations
+        print(f'Average time per training iteration: {average_time} seconds')
+    else:
+        print('No iterations were completed.')
 
     # Learner's after_run hook.
     learner.call_hook('after_run')

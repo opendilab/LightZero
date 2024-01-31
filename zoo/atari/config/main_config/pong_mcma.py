@@ -1,6 +1,7 @@
 from easydict import EasyDict
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
+# env_name = 'QbertNoFrameskip-v4'
 env_name = 'PongNoFrameskip-v4'
 
 if env_name == 'PongNoFrameskip-v4':
@@ -13,6 +14,10 @@ elif env_name == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
 elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
+elif env_name == 'SeaquestNoFrameskip-v4':   
+    action_space_size = 18
+elif env_name == 'QbertNoFrameskip-v4':   
+    action_space_size = 6
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -21,21 +26,21 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 1000
-# K_batch = 23
+update_per_collect = None
 batch_size = 256
+model_update_ratio = 0.25
 max_env_step = int(5e5)
-buffer_reanalyze_interval = None
-buffer_reanalyze_freq = 1
 reanalyze_ratio = 0
-eps_greedy_exploration_in_collect = False
+
+eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/final_maxrf1',
+    f'data_mz_ctree/{env_name[:-14]}/final_mcmax_seed0',
+    # losspriority: use loss to update priority,but initialize priority with value defference between pred value and search value
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -70,9 +75,7 @@ atari_muzero_config = dict(
         ),
         use_augmentation=True,
         update_per_collect=update_per_collect,
-        buffer_reanalyze_interval = buffer_reanalyze_interval,
-        buffer_reanalyze_freq = buffer_reanalyze_freq,
-        # K_batch = K_batch,
+        model_update_ratio=model_update_ratio,
         batch_size=batch_size,
         optim_type='SGD',
         lr_piecewise_constant_decay=True,
@@ -97,22 +100,21 @@ atari_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='ma',
-        import_names=['lzero.policy.ma'],
+        type='muzero',
+        import_names=['lzero.policy.muzero'],
     ),
     collector=dict(
-        type='episode_ma',
-        import_names=['lzero.worker.ma_collector'],
+        type='episode_muzero',
+        import_names=['lzero.worker.muzero_collector'],
     )
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_ma
-    train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)
-    # 下面为cprofile的代码
-    # def run(max_env_step: int):
-    #     train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)
-    # import cProfile
-    # cProfile.run(f"run({30000})", filename="pong_ma_refined", sort="cumulative")
+    seeds = [1]  # You can add more seed values here
+    for seed in seeds:
+        # Update exp_name to include the current seed
+        main_config.exp_name = f'data_rezero_ctree_0129/{env_name[:-14]}_rezero-mz_mur025_seed{seed}'
+        from lzero.entry import train_mcma
+        train_mcma([main_config, create_config], seed=seed, max_env_step=max_env_step)
