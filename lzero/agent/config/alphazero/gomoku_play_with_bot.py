@@ -24,7 +24,6 @@ cfg = dict(
         env=dict(
             env_id='Gomoku-play-with-bot',
             battle_mode='play_with_bot_mode',
-            render_mode='image_savefile_mode',
             replay_format='mp4',
             board_size=board_size,
             bot_action_type='v1',
@@ -41,7 +40,7 @@ cfg = dict(
             prob_expert_agent=0,
             scale=True,
             screen_scaling=9,
-            render_mode=None,
+            render_mode='image_savefile_mode',
             replay_path=None,
             alphazero_mcts_ctree=mcts_ctree,
             # ==============================================================
