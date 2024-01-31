@@ -1,7 +1,13 @@
 from easydict import EasyDict
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_name = 'PongNoFrameskip-v4'
+# env_name = 'MsPacmanNoFrameskip-v4'
+# env_name = 'QbertNoFrameskip-v4'
+# env_name = 'UpNDownNoFrameskip-v4'
+# env_name = 'SeaquestNoFrameskip-v4'
+env_name = 'BreakoutNoFrameskip-v4'
+
+
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -13,6 +19,10 @@ elif env_name == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
 elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
+elif env_name == 'UpNDownNoFrameskip-v4':
+    action_space_size = 6
+elif env_name == 'SeaquestNoFrameskip-v4':   
+    action_space_size = 18
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -21,7 +31,7 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 1000
+update_per_collect = None
 batch_size = 256
 model_update_ratio = 0.25
 # max_env_step = int(8e5)
@@ -50,6 +60,7 @@ atari_efficientzero_config = dict(
         # eval_max_episode_steps=20000.0,
     ),
     policy=dict(
+        # NOTE: not save ckpt
         learn=dict(
             learner=dict(
                 train_iterations=1000000000,
@@ -124,8 +135,11 @@ atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
 create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
-    seeds = [0]  # You can add more seed values here
-    # seeds = [1]  # You can add more seed values here
+    # from lzero.entry import train_mcmaez
+    # train_mcmaez([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # Define a list of seeds for multiple runs
+    # seeds = [0]  # You can add more seed values here
+    seeds = [1]  # You can add more seed values here
 
     for seed in seeds:
         # Update exp_name to include the current seed
