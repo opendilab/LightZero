@@ -92,9 +92,30 @@ def batch_backpropagate(int current_latent_state_index, float discount_factor, l
                           min_max_stats_lst.cmin_max_stats_lst, results.cresults, is_reset_list, to_play_batch)
 
 @cython.binding
+def batch_backpropagate_with_reuse(int current_latent_state_index, float discount_factor, list value_prefixs, list values, list policies,
+                         MinMaxStatsList min_max_stats_lst, ResultsWrapper results, list is_reset_list,
+                         list to_play_batch, list no_inference_lst, list reuse_lst, list reuse_value_lst):
+    cdef int i
+    cdef vector[float] cvalue_prefixs = value_prefixs
+    cdef vector[float] cvalues = values
+    cdef vector[vector[float]] cpolicies = policies
+    cdef vector[float] creuse_value_lst = reuse_value_lst
+ 
+    cbatch_backpropagate_with_reuse(current_latent_state_index, discount_factor, cvalue_prefixs, cvalues, cpolicies,
+                          min_max_stats_lst.cmin_max_stats_lst, results.cresults, is_reset_list, to_play_batch, no_inference_lst, reuse_lst, creuse_value_lst)
+
+@cython.binding
 def batch_traverse(Roots roots, int pb_c_base, float pb_c_init, float discount_factor, MinMaxStatsList min_max_stats_lst,
                    ResultsWrapper results, list virtual_to_play_batch):
     cbatch_traverse(roots.roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst.cmin_max_stats_lst,
                     results.cresults, virtual_to_play_batch)
+
+    return results.cresults.latent_state_index_in_search_path, results.cresults.latent_state_index_in_batch, results.cresults.last_actions, results.cresults.virtual_to_play_batchs
+
+@cython.binding
+def batch_traverse_with_reuse(Roots roots, int pb_c_base, float pb_c_init, float discount_factor, MinMaxStatsList min_max_stats_lst,
+                   ResultsWrapper results, list virtual_to_play_batch, list true_action, list reuse_value):
+    cbatch_traverse_with_reuse(roots.roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst.cmin_max_stats_lst, results.cresults,
+                    virtual_to_play_batch, true_action, reuse_value)
 
     return results.cresults.latent_state_index_in_search_path, results.cresults.latent_state_index_in_batch, results.cresults.last_actions, results.cresults.virtual_to_play_batchs

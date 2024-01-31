@@ -79,9 +79,17 @@ cdef extern from "lib/cnode.h" namespace "tree":
                                vector[float] values, vector[vector[float]] policies,
                                CMinMaxStatsList *min_max_stats_lst, CSearchResults & results,
                                vector[int] is_reset_list, vector[int] & to_play_batch)
+    void cbatch_backpropagate_with_reuse(int current_latent_state_index, float discount_factor, vector[float] value_prefixs, 
+                                vector[float] values, vector[vector[float]] policies,
+                               CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, 
+                               vector[int] is_reset_list, vector[int] &to_play_batch, vector[int] &no_inference_lst, 
+                               vector[int] &reuse_lst, vector[float] &reuse_value_lst)
     void cbatch_traverse(CRoots *roots, int pb_c_base, float pb_c_init, float discount_factor,
                          CMinMaxStatsList *min_max_stats_lst, CSearchResults & results,
                          vector[int] & virtual_to_play_batch)
+    void cbatch_traverse_with_reuse(CRoots *roots, int pb_c_base, float pb_c_init, float discount_factor, 
+                         CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, 
+                         vector[int] &virtual_to_play_batch, vector[int] &true_action, vector[float] &reuse_value)
 
 cdef class MinMaxStatsList:
     cdef CMinMaxStatsList *cmin_max_stats_lst

@@ -213,7 +213,10 @@ class GameSegment:
             store the visit count distributions and value of the root node after MCTS.
         """
         sum_visits = sum(visit_counts)
-        if idx is None:
+        if sum_visits == 0:
+            self.child_visit_segment.append(visit_counts)
+            self.root_value_segment.append(root_value)
+        elif idx is None:
             self.child_visit_segment.append([visit_count / sum_visits for visit_count in visit_counts])
             self.root_value_segment.append(root_value)
             if self.sampled_algo:

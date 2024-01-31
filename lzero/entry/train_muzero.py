@@ -13,7 +13,7 @@ from ding.rl_utils import get_epsilon_greedy_fn
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
-from lzero.entry.utils import log_buffer_memory_usage
+from lzero.entry.utils import log_buffer_memory_usage, log_buffer_run_time
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
@@ -129,6 +129,7 @@ def train_muzero(
 
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
+        log_buffer_run_time(learner.train_iter, replay_buffer, tb_logger)
         collect_kwargs = {}
         # set temperature for visit count distributions according to the train_iter,
         # please refer to Appendix D in MuZero paper for details.
@@ -167,6 +168,9 @@ def train_muzero(
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
+        # replay_buffer.reanalyze_buffer(replay_buffer.get_num_of_transitions(), policy)
+        
+
         # Learn policy from collected data.
         for i in range(update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
@@ -185,7 +189,11 @@ def train_muzero(
             log_vars = learner.train(train_data, collector.envstep)
 
             if cfg.policy.use_priority:
+                # replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+                # priority 是一个数组里面对应着traindata里每个单个样本的priority
+                # p = log_vars[0]['loss_priority']
+                # print(f'priority is loss {p}')
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break

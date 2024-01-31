@@ -265,7 +265,9 @@ class MuZeroMCTSPtree(object):
             roots: Any,
             model: torch.nn.Module,
             latent_state_roots: List[Any],
-            to_play: Union[int, List[Any]] = -1
+            to_play: Union[int, List[Any]] = -1,
+            true_action_list = None,
+            reuse_value_list = None
     ) -> None:
         """
         Overview:
@@ -281,6 +283,7 @@ class MuZeroMCTSPtree(object):
 
             # preparation some constant
             batch_size = roots.num
+            # print(f"search batch size is {batch_size}")
             pb_c_base, pb_c_init, discount_factor = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount_factor
 
             # the data storage of latent states: storing the latent state of all the nodes in one search.
@@ -304,11 +307,19 @@ class MuZeroMCTSPtree(object):
                     Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
                 """
                 latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play = tree_muzero.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play)
+                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play), true_action_list, reuse_value_list
                 )
 
+                # print(f"latent_state_index_in_search_path is {latent_state_index_in_search_path}")
+                # print(f"latent_state_index_in_batch is {latent_state_index_in_batch}")
+                # print(f"latent_state_batch_in_search_path is {latent_state_batch_in_search_path}")
                 # obtain the latent state for leaf node
                 for ix, iy in zip(latent_state_index_in_search_path, latent_state_index_in_batch):
+                    # print(f"ix is {ix}")
+                    # print(f"iy is {iy}")
+                    # print(len(latent_state_batch_in_search_path[0]))
+                    # 这边后面要做一般性优化！！！！！！！！！！！！！！！！！！！！！！！！！！
+                    iy = iy // 6
                     latent_states.append(latent_state_batch_in_search_path[ix][iy])
                 latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
                 # only for discrete action
