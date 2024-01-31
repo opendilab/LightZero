@@ -36,7 +36,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/final_maX_rf1',
+    f'data_mz_ctree/{env_name[:-14]}/final_maX_rf0.5',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,

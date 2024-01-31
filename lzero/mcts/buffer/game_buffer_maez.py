@@ -8,8 +8,8 @@ from ding.torch_utils.data_helper import to_list
 import builtins
 # from line_profiler import line_profiler
 
-from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
-from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
+from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTSCtree
+from lzero.mcts.tree_search.mcts_ptree import EfficientZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation
 from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
 from .game_buffer import GameBuffer
@@ -26,8 +26,8 @@ def compute_all_filters(data, num_unroll_steps):
         data_by_iter.append(iter_data)
     return data_by_iter
     
-@BUFFER_REGISTRY.register('game_buffer_ma')
-class MAGameBuffer(GameBuffer):
+@BUFFER_REGISTRY.register('game_buffer_maez')
+class MAEZGameBuffer(GameBuffer):
     """
     Overview:
         The specific game buffer for MuZero policy.
@@ -89,8 +89,8 @@ class MAGameBuffer(GameBuffer):
         reward_value_context, policy_re_context, policy_non_re_context, search_contex,  current_batch = self._make_batch(
             batch_size, self._cfg.reanalyze_ratio
         )
-        # target reward, target value
-        batch_rewards, batch_target_values = self._compute_target_reward_value(
+        # target value_prefixs, target value
+        batch_value_prefixs, batch_target_values = self._compute_target_reward_value(
             reward_value_context, policy._target_model
         )
         # target policy
@@ -114,7 +114,7 @@ class MAGameBuffer(GameBuffer):
         elif self._cfg.reanalyze_ratio == 0:
             batch_target_policies = batch_target_policies_non_re
 
-        target_batch = [batch_rewards, batch_target_values, batch_target_policies]
+        target_batch = [batch_value_prefixs, batch_target_values, batch_target_policies]
 
         # a batch contains the current_batch and the target_batch
         train_data = [current_batch, target_batch]
@@ -189,7 +189,7 @@ class MAGameBuffer(GameBuffer):
             orig_data = self._sample_orig_reanalyze_data(batch_size)
             game_segment_list, pos_in_game_segment_list, batch_index_list, _, make_time_list = orig_data
             batch_size = len(batch_index_list)
-            segment_length = self.get_num_of_transitions()//2000 
+            segment_length = self.get_num_of_transitions()//2000
             policy_re_context = self._prepare_policy_reanalyzed_context(
                 [], game_segment_list,
                 pos_in_game_segment_list,
@@ -384,11 +384,11 @@ class MAGameBuffer(GameBuffer):
         """
         zero_obs = game_segment_list[0].zero_obs()
         value_obs_list = []
-        # the value is valid or not (out of game_segment)
+        # the value is valid or not (out of trajectory)
         value_mask = []
         rewards_list = []
         game_segment_lens = []
-        # for board games
+        # for two_player board games
         action_mask_segment, to_play_segment = [], []
 
         td_steps_list = []
@@ -396,6 +396,14 @@ class MAGameBuffer(GameBuffer):
             game_segment_len = len(game_segment)
             game_segment_lens.append(game_segment_len)
 
+            # ==============================================================
+            # EfficientZero related core code
+            # ==============================================================
+            # TODO(pu):
+            # for atari, off-policy correction: shorter horizon of td steps
+            # delta_td = (total_transitions - idx) // config.auto_td_steps
+            # td_steps = config.td_steps - delta_td
+            # td_steps = np.clip(td_steps, 1, 5).astype(np.int)
             td_steps = np.clip(self._cfg.td_steps, 1, max(1, game_segment_len - state_index)).astype(np.int32)
 
             # prepare the corresponding observations for bootstrapped values o_{t+k}
@@ -405,7 +413,7 @@ class MAGameBuffer(GameBuffer):
 
             rewards_list.append(game_segment.reward_segment)
 
-            # for board games
+            # for two_player board games
             action_mask_segment.append(game_segment.action_mask_segment)
             to_play_segment.append(game_segment.to_play_segment)
 
@@ -433,6 +441,158 @@ class MAGameBuffer(GameBuffer):
             action_mask_segment, to_play_segment
         ]
         return reward_value_context
+
+    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any) -> List[np.ndarray]:
+        """
+        Overview:
+            prepare reward and value targets from the context of rewards and values.
+        Arguments:
+            - reward_value_context (:obj:'list'): the reward value context
+            - model (:obj:'torch.tensor'):model of the target model
+        Returns:
+            - batch_value_prefixs (:obj:'np.ndarray): batch of value prefix
+            - batch_target_values (:obj:'np.ndarray): batch of value estimation
+        """
+        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
+        to_play_segment = reward_value_context  # noqa
+        # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
+        transition_batch_size = len(value_obs_list)
+        game_segment_batch_size = len(pos_in_game_segment_list)
+
+        to_play, action_mask = self._preprocess_to_play_and_action_mask(
+            game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
+        )
+
+        legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
+
+        # ==============================================================
+        # EfficientZero related core code
+        # ==============================================================
+        batch_target_values, batch_value_prefixs = [], []
+        with torch.no_grad():
+            value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
+            # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
+            slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
+            network_output = []
+            for i in range(slices):
+                beg_index = self._cfg.mini_infer_size * i
+                end_index = self._cfg.mini_infer_size * (i + 1)
+
+                m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
+
+                # calculate the target value
+                m_output = model.initial_inference(m_obs)
+                if not model.training:
+                    # ==============================================================
+                    # EfficientZero related core code
+                    # ==============================================================
+                    # if not in training, obtain the scalars of the value/reward
+                    [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                        [
+                            m_output.latent_state,
+                            inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                            m_output.policy_logits
+                        ]
+                    )
+                    m_output.reward_hidden_state = (
+                        m_output.reward_hidden_state[0].detach().cpu().numpy(),
+                        m_output.reward_hidden_state[1].detach().cpu().numpy()
+                    )
+                network_output.append(m_output)
+
+            # concat the output slices after model inference
+            if self._cfg.use_root_value:
+                # use the root values from MCTS, as in EfficiientZero
+                # the root values have limited improvement but require much more GPU actors;
+                _, value_prefix_pool, policy_logits_pool, latent_state_roots, reward_hidden_state_roots = concat_output(
+                    network_output, data_type='efficientzero'
+                )
+                value_prefix_pool = value_prefix_pool.squeeze().tolist()
+                policy_logits_pool = policy_logits_pool.tolist()
+                noises = [
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
+                                        ).astype(np.float32).tolist() for _ in range(transition_batch_size)
+                ]
+                if self._cfg.mcts_ctree:
+                    # cpp mcts_tree
+                    roots = MCTSCtree.roots(transition_batch_size, legal_actions)
+                    roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                    # do MCTS for a new policy with the recent target model
+                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
+                else:
+                    # python mcts_tree
+                    roots = MCTSPtree.roots(transition_batch_size, legal_actions)
+                    roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                    # do MCTS for a new policy with the recent target model
+                    MCTSPtree(self._cfg).search(
+                        roots, model, latent_state_roots, reward_hidden_state_roots, to_play=to_play
+                    )
+                roots_values = roots.get_values()
+                value_list = np.array(roots_values)
+            else:
+                # use the predicted values
+                value_list = concat_output_value(network_output)
+
+            # get last state value
+            if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
+                # TODO(pu): for board_games, very important, to check
+                value_list = value_list.reshape(-1) * np.array(
+                    [
+                        self._cfg.discount_factor ** td_steps_list[i] if int(td_steps_list[i]) %
+                        2 == 0 else -self._cfg.discount_factor ** td_steps_list[i]
+                        for i in range(transition_batch_size)
+                    ]
+                )
+            else:
+                value_list = value_list.reshape(-1) * (
+                    np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list
+                )
+
+            value_list = value_list * np.array(value_mask)
+            value_list = value_list.tolist()
+            horizon_id, value_index = 0, 0
+            for game_segment_len_non_re, reward_list, state_index, to_play_list in zip(game_segment_lens, rewards_list,
+                                                                                       pos_in_game_segment_list,
+                                                                                       to_play_segment):
+                target_values = []
+                target_value_prefixs = []
+                value_prefix = 0.0
+                base_index = state_index
+                for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
+                    bootstrap_index = current_index + td_steps_list[value_index]
+                    for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
+                        if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
+                            # TODO(pu): for board_games, very important, to check
+                            if to_play_list[base_index] == to_play_list[i]:
+                                value_list[value_index] += reward * self._cfg.discount_factor ** i
+                            else:
+                                value_list[value_index] += -reward * self._cfg.discount_factor ** i
+                        else:
+                            value_list[value_index] += reward * self._cfg.discount_factor ** i
+
+                    # reset every lstm_horizon_len
+                    if horizon_id % self._cfg.lstm_horizon_len == 0:
+                        value_prefix = 0.0
+                        base_index = current_index
+                    horizon_id += 1
+
+                    if current_index < game_segment_len_non_re:
+                        target_values.append(value_list[value_index])
+                        # TODO: Since the horizon is small and the discount_factor is close to 1.
+                        # Compute the reward sum to approximate the value prefix for simplification
+                        value_prefix += reward_list[current_index
+                                                    ]  # * self._cfg.discount_factor ** (current_index - base_index)
+                        target_value_prefixs.append(value_prefix)
+                    else:
+                        target_values.append(0)
+                        target_value_prefixs.append(value_prefix)
+                    value_index += 1
+                batch_value_prefixs.append(target_value_prefixs)
+                batch_target_values.append(target_values)
+        batch_value_prefixs = np.asarray(batch_value_prefixs, dtype=object)
+        batch_target_values = np.asarray(batch_target_values, dtype=object)
+
+        return batch_value_prefixs, batch_target_values
 
     def _prepare_policy_non_reanalyzed_context(
             self, batch_index_list: List[int], game_segment_list: List[Any], pos_in_game_segment_list: List[int]
@@ -584,153 +744,6 @@ class MAGameBuffer(GameBuffer):
         ]
         return policy_re_context
 
-    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any) -> Tuple[Any, Any]:
-        """
-        Overview:
-            prepare reward and value targets from the context of rewards and values.
-        Arguments:
-            - reward_value_context (:obj:'list'): the reward value context
-            - model (:obj:'torch.tensor'):model of the target model
-        Returns:
-            - batch_value_prefixs (:obj:'np.ndarray): batch of value prefix
-            - batch_target_values (:obj:'np.ndarray): batch of value estimation
-        """
-        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
-        to_play_segment = reward_value_context  # noqa
-        # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
-        transition_batch_size = len(value_obs_list)
-        game_segment_batch_size = len(pos_in_game_segment_list)
-
-        to_play, action_mask = self._preprocess_to_play_and_action_mask(
-            game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
-        )
-        if self._cfg.model.continuous_action_space is True:
-            # when the action space of the environment is continuous, action_mask[:] is None.
-            action_mask = [
-                list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
-            ]
-            # NOTE: in continuous action space env: we set all legal_actions as -1
-            legal_actions = [
-                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
-            ]
-        else:
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
-
-        batch_target_values, batch_rewards = [], []
-        with torch.no_grad():
-            value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
-            # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
-            slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
-            network_output = []
-            for i in range(slices):
-                beg_index = self._cfg.mini_infer_size * i
-                end_index = self._cfg.mini_infer_size * (i + 1)
-
-                m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
-
-                # calculate the target value
-                m_output = model.initial_inference(m_obs)
-
-                if not model.training:
-                    # if not in training, obtain the scalars of the value/reward
-                    [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                        [
-                            m_output.latent_state,
-                            inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
-                            m_output.policy_logits
-                        ]
-                    )
-
-                network_output.append(m_output)
-
-            # concat the output slices after model inference
-            if self._cfg.use_root_value:
-                # use the root values from MCTS, as in EfficiientZero
-                # the root values have limited improvement but require much more GPU actors;
-                _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
-                    network_output, data_type='muzero'
-                )
-                reward_pool = reward_pool.squeeze().tolist()
-                policy_logits_pool = policy_logits_pool.tolist()
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                        ).astype(np.float32).tolist() for j in range(transition_batch_size)
-                ]
-                if self._cfg.mcts_ctree:
-                    # cpp mcts_tree
-                    roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                    # do MCTS for a new policy with the recent target model
-                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-                else:
-                    # python mcts_tree
-                    roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                    # do MCTS for a new policy with the recent target model
-                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-                    # print("search in compute target reward value")
-
-                roots_values = roots.get_values()
-                value_list = np.array(roots_values)
-            else:
-                # use the predicted values
-                value_list = concat_output_value(network_output)
-
-            # get last state value
-            if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
-                # TODO(pu): for board_games, very important, to check
-                value_list = value_list.reshape(-1) * np.array(
-                    [
-                        self._cfg.discount_factor ** td_steps_list[i] if int(td_steps_list[i]) %
-                        2 == 0 else -self._cfg.discount_factor ** td_steps_list[i]
-                        for i in range(transition_batch_size)
-                    ]
-                )
-            else:
-                value_list = value_list.reshape(-1) * (
-                    np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list
-                )
-
-            value_list = value_list * np.array(value_mask)
-            value_list = value_list.tolist()
-            horizon_id, value_index = 0, 0
-
-            for game_segment_len_non_re, reward_list, state_index, to_play_list in zip(game_segment_lens, rewards_list,
-                                                                                       pos_in_game_segment_list,
-                                                                                       to_play_segment):
-                target_values = []
-                target_rewards = []
-                base_index = state_index
-                for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
-                    bootstrap_index = current_index + td_steps_list[value_index]
-                    # for i, reward in enumerate(game.rewards[current_index:bootstrap_index]):
-                    for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
-                        if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
-                            # TODO(pu): for board_games, very important, to check
-                            if to_play_list[base_index] == to_play_list[i]:
-                                value_list[value_index] += reward * self._cfg.discount_factor ** i
-                            else:
-                                value_list[value_index] += -reward * self._cfg.discount_factor ** i
-                        else:
-                            value_list[value_index] += reward * self._cfg.discount_factor ** i
-                    horizon_id += 1
-
-                    if current_index < game_segment_len_non_re:
-                        target_values.append(value_list[value_index])
-                        target_rewards.append(reward_list[current_index])
-                    else:
-                        target_values.append(0)
-                        target_rewards.append(0.0)
-                        # TODO: check
-                        # target_rewards.append(reward)
-                    value_index += 1
-
-                batch_rewards.append(target_rewards)
-                batch_target_values.append(target_values)
-
-        batch_rewards = np.asarray(batch_rewards, dtype=object)
-        batch_target_values = np.asarray(batch_target_values, dtype=object)
-        return batch_rewards, batch_target_values
     
     def _search_and_save_policy(self, policy_unsearched_context: List[Any], model: Any) -> np.ndarray:
         """
@@ -793,17 +806,22 @@ class MAGameBuffer(GameBuffer):
                             m_output.policy_logits
                         ]
                     )
+                    m_output.reward_hidden_state = (
+                        m_output.reward_hidden_state[0].detach().cpu().numpy(),
+                        m_output.reward_hidden_state[1].detach().cpu().numpy()
+                    )
 
                 network_output.append(m_output)
             
 
 
             # 得到所有的obs对应的隐根节点，以及网络预测的policy和value
-            _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(network_output, data_type='muzero')
-            # print(reward_pool)
-            reward_pool = reward_pool.squeeze().tolist()
-            if not isinstance(reward_pool, list):
-                reward_pool = [reward_pool]
+            _, value_prefix_pool, policy_logits_pool, latent_state_roots, reward_hidden_state_roots = concat_output(
+                network_output, data_type='efficientzero'
+            )
+            value_prefix_pool = value_prefix_pool.squeeze().tolist()
+            if not isinstance(value_prefix_pool, list):
+                value_prefix_pool = [value_prefix_pool]
             policy_logits_pool = policy_logits_pool.tolist()
             noises = [
                 np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
@@ -819,15 +837,15 @@ class MAGameBuffer(GameBuffer):
                 # print(f"reward pool is {reward_pool}")
                 # print(f"policy logits is {policy_logits_pool}")
                 # print(f"to play is {to_play}")
-                roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                MCTSCtree(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
 
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
@@ -959,19 +977,25 @@ class MAGameBuffer(GameBuffer):
                             m_output.policy_logits
                         ]
                     )
+                    m_output.reward_hidden_state = (
+                        m_output.reward_hidden_state[0].detach().cpu().numpy(),
+                        m_output.reward_hidden_state[1].detach().cpu().numpy()
+                    )
 
                 network_output.append(m_output)
             
 
 
             # 得到所有的obs对应的隐根节点，以及网络预测的policy和value
-            _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(network_output, data_type='muzero')
-            reward_pool = reward_pool.squeeze().tolist()
+            _, value_prefix_pool, policy_logits_pool, latent_state_roots, reward_hidden_state_roots = concat_output(
+                network_output, data_type='efficientzero'
+            )
+            value_prefix_pool = value_prefix_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
-            noises = [
-                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
-                                    ).astype(np.float32).tolist() for _ in range(transition_batch_size)
-            ]
+            # noises = [
+            #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
+            #                         ).astype(np.float32).tolist() for _ in range(transition_batch_size)
+            # ]
 
             # 根据得到的这些latent 根节点搜索新的target_policy
             # prepare之后构建新的roots类，并把现有的roots分批复制进去
@@ -985,11 +1009,37 @@ class MAGameBuffer(GameBuffer):
                 # cpp mcts_tree
                 # print("use ctree")
                 legal_actions_by_iter = compute_all_filters(legal_actions, unroll_steps)
-                noises_by_iter = compute_all_filters(noises, unroll_steps)
-                reward_pool_by_iter = compute_all_filters(reward_pool, unroll_steps)
+                # noises_by_iter = compute_all_filters(noises, unroll_steps)
+                value_prefix_pool_by_iter = compute_all_filters(value_prefix_pool, unroll_steps)
                 policy_logits_pool_by_iter = compute_all_filters(policy_logits_pool, unroll_steps)
                 to_play_by_iter = compute_all_filters(to_play, unroll_steps)
+
+                # print(f"shape of latent_state_roots is {latent_state_roots.shape}")
+
                 latent_state_roots_by_iter = compute_all_filters(latent_state_roots, unroll_steps)
+                # print(f"shape of latent_state_roots_by_iter is {np.asarray(latent_state_roots_by_iter).shape}")
+
+                batch1 = reward_hidden_state_roots[0]
+                batch1_core = batch1[0]
+
+                # print(f"batch1 is {batch1}")
+                # print(f"the shape is {batch1.shape}")
+                # print(f"batch1core is {batch1_core}")
+                # print(f"the shape is {batch1_core.shape}")
+
+                batch2 = reward_hidden_state_roots[1]
+                batch2_core = batch2[0]
+                batch1_core_by_iter = compute_all_filters(batch1_core, unroll_steps)
+
+                # print(f"batch1core_by_iter is {batch1_core_by_iter}")
+                # print(f"the shape is {np.asarray(batch1_core_by_iter).shape}")
+                # print(f"iter0 is {batch1_core_by_iter[0]}")
+                # print(f"the shape is {np.asarray(batch1_core_by_iter[0]).shape}")
+
+                batch2_core_by_iter = compute_all_filters(batch2_core, unroll_steps)
+                # print(f"combined is {np.asarray([batch1_core_by_iter[0], batch2_core_by_iter[0]])}")
+
+                # reward_hidden_state_roots_by_iter = np.asarray([batch1_by_iter, batch2_by_iter])
                 true_action_by_iter = compute_all_filters(true_action, unroll_steps)
                 # print(f"legal_actions is {legal_actions_by_iter}")
                 # print(f"noises_by_iter is {noises_by_iter}")
@@ -1016,17 +1066,20 @@ class MAGameBuffer(GameBuffer):
                     #             to_play_by_iter[iter])
 
                     roots.prepare_no_noise(
-                                reward_pool_by_iter[iter],
+                                value_prefix_pool_by_iter[iter],
                                 policy_logits_pool_by_iter[iter], 
                                 to_play_by_iter[iter])
 
                     if iter == 0:
                         with self._origin_search_timer:
-                            mcts_ctree.search(roots, model, latent_state_roots_by_iter[iter], to_play_by_iter[iter])
+                            # print(f"reward_hidden_state_roots={reward_hidden_state_roots}")
+                            # print(f"reward_hidden_state_roots_by_iter[iter]={reward_hidden_state_roots_by_iter[iter]}")
+                            mcts_ctree.search(roots, model, latent_state_roots_by_iter[iter], [[batch1_core_by_iter[iter]], [batch2_core_by_iter[iter]]], to_play_by_iter[iter])
                         self.origin_search_time += self._origin_search_timer.value
                     else:
                         with self._reuse_search_timer:
                             length, average_infer = mcts_ctree.search_with_reuse(roots, model, latent_state_roots_by_iter[iter], 
+                                                        [[batch1_core_by_iter[iter]], [batch2_core_by_iter[iter]]],
                                                         to_play_by_iter[iter],
                                                         true_action_list=true_action_by_iter[iter], 
                                                         reuse_value_list=iter_values)
@@ -1088,6 +1141,8 @@ class MAGameBuffer(GameBuffer):
                 # print("reuse data with ptree")
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
                 # 这里可以写一下prepare的时候将batch_index处理一下！！！！！！！！！
+                noises = 0
+                reward_pool = []
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                 # print(f"len of total roots is {roots.num}")
                 value_reuse = None

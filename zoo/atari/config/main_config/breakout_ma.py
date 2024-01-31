@@ -27,7 +27,7 @@ model_update_ratio = 0.25
 max_env_step = int(8e5)
 reanalyze_ratio = 0.0
 buffer_reanalyze_interval = None
-buffer_reanalyze_freq = 3
+buffer_reanalyze_freq = 1
 
 eps_greedy_exploration_in_collect = False
 # ==============================================================
@@ -36,7 +36,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/final_ma_rf3',
+    f'data_mz_ctree/{env_name[:-14]}/final_ma_rf1',
     env=dict(
         env_name=env_name,
         obs_shape=(4, 96, 96),
@@ -112,4 +112,4 @@ create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_ma
-    train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_ma([main_config, create_config], seed=1, max_env_step=max_env_step)
