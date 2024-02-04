@@ -470,6 +470,10 @@ class WorldModel(nn.Module):
             outputs_wm.logits_value = rearrange(outputs_wm.logits_value, 'b t e -> (b t) e')
             outputs_wm.logits_policy = rearrange(outputs_wm.logits_policy, 'b t e -> (b t) e')
 
+            # fou envnum8_kv-latent-8-1-env:
+            self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
+
+
         return outputs_wm
 
     @torch.no_grad()
@@ -586,6 +590,9 @@ class WorldModel(nn.Module):
             outputs_wm.logits_value = rearrange(outputs_wm.logits_value, 'b t e -> (b t) e')
             outputs_wm.logits_policy = rearrange(outputs_wm.logits_policy, 'b t e -> (b t) e')
 
+            # fou envnum8_kv-latent-8-1-env:
+            self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
+
 
         # return WorldModelOutput(x, logits_observations, logits_rewards, logits_ends, logits_policy, logits_value)
         return outputs_wm
@@ -660,11 +667,11 @@ class WorldModel(nn.Module):
         # 但如果假设环境是MDP的话，然后根据当前的 latest_state s_t 在这个列表中查找即可
         # TODO: 但如果假设环境是非MDP的话，需要维护一个 {(rootstate_action_history:kv_cache)}的列表？
 
-        if self.total_query_count>0:
-            self.hit_freq = self.hit_count/self.total_query_count
-            print('hit_freq:', self.hit_freq)
-            print('hit_count:', self.hit_count)
-            print('total_query_count:', self.total_query_count)
+        # if self.total_query_count>0:
+        #     self.hit_freq = self.hit_count/self.total_query_count
+        #     print('hit_freq:', self.hit_freq)
+        #     print('hit_count:', self.hit_count)
+        #     print('total_query_count:', self.total_query_count)
 
         self.total_query_count  += 1
         latest_state = state_action_history[-1][0]
@@ -692,7 +699,7 @@ class WorldModel(nn.Module):
                 kv_cache_v_list.append(keys_values[0]._v_cache._cache)
             self.keys_values_wm[0]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
             self.keys_values_wm[0]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
-        elif ready_env_num == self.env_num:
+        elif ready_env_num == self.env_num or ready_env_num>self.env_num:
             hash_latest_state = hash(latest_state)
             matched_value = self.past_keys_values_cache.get(hash_latest_state)
             if matched_value is not None:
@@ -703,6 +710,8 @@ class WorldModel(nn.Module):
                 # NOTE: very important, 相当于policy value由单步计算得到，往后的推理，基于context
                 # TODO: policy value也从缓存中找
                 self.keys_values_wm = self.keys_values_wm_find
+
+            
 
         assert self.keys_values_wm is not None and self.num_observations_tokens is not None
 
