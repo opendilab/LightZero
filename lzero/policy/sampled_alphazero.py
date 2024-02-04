@@ -460,10 +460,10 @@ class SampledAlphaZeroPolicy(Policy):
         return output
 
     def _get_simulation_env(self):
-        assert self._cfg.simulation_env_name in ['tictactoe', 'gomoku', 'go'], self._cfg.simulation_env_name
+        assert self._cfg.simulation_env_id in ['tictactoe', 'gomoku', 'go'], self._cfg.simulation_env_id
         assert self._cfg.simulation_env_config_type in ['play_with_bot', 'self_play', 'league',
                                                         'sampled_play_with_bot'], self._cfg.simulation_env_config_type
-        if self._cfg.simulation_env_name == 'tictactoe':
+        if self._cfg.simulation_env_id == 'tictactoe':
             from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
             if self._cfg.simulation_env_config_type == 'play_with_bot':
                 from zoo.board_games.tictactoe.config.tictactoe_alphazero_bot_mode_config import \
@@ -480,7 +480,7 @@ class SampledAlphaZeroPolicy(Policy):
 
             self.simulate_env = TicTacToeEnv(tictactoe_alphazero_config.env)
 
-        elif self._cfg.simulation_env_name == 'gomoku':
+        elif self._cfg.simulation_env_id == 'gomoku':
             from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
             if self._cfg.simulation_env_config_type == 'play_with_bot':
                 from zoo.board_games.gomoku.config.gomoku_alphazero_bot_mode_config import gomoku_alphazero_config
@@ -493,7 +493,7 @@ class SampledAlphaZeroPolicy(Policy):
                     gomoku_sampled_alphazero_config as gomoku_alphazero_config
 
             self.simulate_env = GomokuEnv(gomoku_alphazero_config.env)
-        elif self._cfg.simulation_env_name == 'go':
+        elif self._cfg.simulation_env_id == 'go':
             from zoo.board_games.go.envs.go_env import GoEnv
             if self._cfg.simulation_env_config_type == 'play_with_bot':
                 from zoo.board_games.go.config.go_alphazero_bot_mode_config import go_alphazero_config

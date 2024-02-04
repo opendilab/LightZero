@@ -21,7 +21,7 @@ lunarlander_cont_sampled_efficientzero_config = dict(
     exp_name=
     f'data_sez_ctree/lunarlander_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
-        env_name='LunarLanderContinuous-v2',
+        env_id='LunarLanderContinuous-v2',
         continuous=True,
         manually_discretization=False,
         collector_env_num=collector_env_num,

@@ -1,16 +1,16 @@
 from easydict import EasyDict
 
-env_name = 'BreakoutNoFrameskip-v4'
+env_id = 'BreakoutNoFrameskip-v4'
 
-if env_name == 'PongNoFrameskip-v4':
+if env_id == 'PongNoFrameskip-v4':
     action_space_size = 6
-elif env_name == 'QbertNoFrameskip-v4':
+elif env_id == 'QbertNoFrameskip-v4':
     action_space_size = 6
-elif env_name == 'MsPacmanNoFrameskip-v4':
+elif env_id == 'MsPacmanNoFrameskip-v4':
     action_space_size = 9
-elif env_name == 'SpaceInvadersNoFrameskip-v4':
+elif env_id == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
-elif env_name == 'BreakoutNoFrameskip-v4':
+elif env_id == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
 
 # ==============================================================
@@ -32,9 +32,9 @@ reanalyze_ratio = 0.
 
 atari_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/{env_name[:-14]}_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_sez_ctree/{env_id[:-14]}_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
-        env_name=env_name,
+        env_id=env_id,
         obs_shape=(4, 96, 96),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

@@ -40,8 +40,8 @@ class MujocoDiscEnvLZ(MujocoDiscEnv):
         """
         super().__init__(cfg)
         self._cfg = cfg
-        # We use env_name to indicate the env_id in LightZero.
-        self._cfg.env_id = self._cfg.env_name
+        # We use env_id to indicate the env_id in LightZero.
+        self._cfg.env_id = self._cfg.env_id
         self._action_clip = cfg.action_clip
         self._delay_reward_step = cfg.delay_reward_step
         self._init_flag = False
@@ -122,7 +122,7 @@ class MujocoDiscEnvLZ(MujocoDiscEnv):
         if done:
             if self._save_replay_gif:
                 path = os.path.join(
-                    self._replay_path_gif, '{}_episode_{}.gif'.format(self._cfg.env_name, self._save_replay_count)
+                    self._replay_path_gif, '{}_episode_{}.gif'.format(self._cfg.env_id, self._save_replay_count)
                 )
                 save_frames_as_gif(self._frames, path)
                 self._save_replay_count += 1
@@ -143,4 +143,4 @@ class MujocoDiscEnvLZ(MujocoDiscEnv):
         Returns:
             - repr_str (:obj:`str`): Representation string of the environment instance.
         """
-        return "LightZero modified Mujoco Env({}) with manually discretized action space".format(self._cfg.env_name)
+        return "LightZero modified Mujoco Env({}) with manually discretized action space".format(self._cfg.env_id)

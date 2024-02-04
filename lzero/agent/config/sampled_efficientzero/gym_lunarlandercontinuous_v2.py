@@ -23,7 +23,6 @@ cfg = dict(
         seed=0,
         env=dict(
             env_id='LunarLanderContinuous-v2',
-            env_name='LunarLanderContinuous-v2',
             continuous=True,
             manually_discretization=False,
             collector_env_num=collector_env_num,

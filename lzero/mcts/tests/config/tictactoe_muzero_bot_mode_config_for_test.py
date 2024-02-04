@@ -23,7 +23,7 @@ tictactoe_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        env_name="TicTacToe",
+        env_id="TicTacToe",
         mcts_mode='self_play_mode',  # only used in AlphaZero
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
         agent_vs_human=False,

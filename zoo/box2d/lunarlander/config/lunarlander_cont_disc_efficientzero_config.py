@@ -24,7 +24,7 @@ lunarlander_cont_disc_efficientzero_config = dict(
     exp_name=
     f'data_ez_ctree/lunarlander_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
-        env_name='LunarLanderContinuous-v2',
+        env_id='LunarLanderContinuous-v2',
         continuous=False,
         manually_discretization=True,
         each_dim_disc_size=each_dim_disc_size,

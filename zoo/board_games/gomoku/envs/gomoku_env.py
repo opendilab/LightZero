@@ -57,7 +57,7 @@ class GomokuEnv(BaseEnv):
 
     config = dict(
         # (str) The name of the environment registered in the environment registry.
-        env_name="Gomoku",
+        env_id="Gomoku",
         # (int) The size of the board.
         board_size=6,
         # (str) The mode of the environment when take a step.

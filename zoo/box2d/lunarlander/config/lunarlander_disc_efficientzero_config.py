@@ -19,7 +19,7 @@ lunarlander_disc_efficientzero_config = dict(
     exp_name=
     f'data_ez_ctree/lunarlander_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
-        env_name='LunarLander-v2',
+        env_id='LunarLander-v2',
         continuous=False,
         manually_discretization=False,
         collector_env_num=collector_env_num,

@@ -40,8 +40,8 @@ def _get_done_winner_func_lru(board_tuple):
 class TicTacToeEnv(BaseEnv):
 
     config = dict(
-        # env_name (str): The name of the environment.
-        env_name="TicTacToe",
+        # env_id (str): The name of the environment.
+        env_id="TicTacToe",
         # battle_mode (str): The mode of the battle. Choices are 'self_play_mode' or 'alpha_beta_pruning'.
         battle_mode='self_play_mode',
         # battle_mode_in_simulation_env (str): The mode of Monte Carlo Tree Search. This is only used in AlphaZero.

@@ -23,7 +23,6 @@ cfg = dict(
         seed=0,
         env=dict(
             env_id='MsPacmanNoFrameskip-v4',
-            env_name='MsPacmanNoFrameskip-v4',
             obs_shape=(4, 96, 96),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,

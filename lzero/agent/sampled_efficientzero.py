@@ -31,9 +31,9 @@ class SampledEfficientZeroAgent:
     Overview:
         Agent class for executing Sampled EfficientZero algorithms which include methods for training, deployment, and batch evaluation.
     Interfaces:
-        __init__, train, deploy, batch_evaluate
+        ``__init__``, ``train``, ``deploy``, ``batch_evaluate``
     Properties:
-        best
+        ``best``
 
     .. note::
         This agent class is tailored for use with the HuggingFace Model Zoo for LightZero
