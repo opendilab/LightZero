@@ -89,7 +89,7 @@ class SampledEfficientZeroMCTSPtree(object):
             - root_num (:obj:`int`): the number of the roots in a batch.
             - legal_action_list (:obj:`List[Any]`): the vector of the legal actions for the roots.
             - action_space_size (:obj:'int'): the size of action space of the current env.
-            - num_of_sampled_actions (:obj:'int'): the number of sampled actions, i.e. K in the Sampled MuZero paper.
+            - num_of_sampled_actions (:obj:'int'): The number of sampled actions, i.e. K in the Sampled MuZero paper.
             - continuous_action_space (:obj:'bool'): whether the action space is continous in current env.
         
         ..note::

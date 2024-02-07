@@ -411,6 +411,7 @@ def compute_ucb_score(
         - parent_mean_q (:obj:`float`): the mean q value of the parent node.
         - is_reset (:obj:`float`): whether the value prefix needs to be reset.
         - total_children_visit_counts (:obj:`float`): the total visit counts of the child nodes of the parent node.
+        - parent_value_prefix(:obj:`float`): The value prefix of parent node.
         - pb_c_base (:obj:`float`): constants c2 in muzero.
         - pb_c_init (:obj:`float`): constants c1 in muzero.
         - disount_factor (:obj:`float`): the discount factor of reward.
