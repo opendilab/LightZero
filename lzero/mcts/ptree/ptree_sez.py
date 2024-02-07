@@ -14,9 +14,12 @@ from .minimax import MinMaxStats
 
 class Node:
     """
-     Overview:
-         the node base class for Sampled EfficientZero.
-     """
+    Overview:
+        The Node class for EfficientZero. The basic functions of the node are implemented.
+    Interfaces:
+        ``__init__``, ``expand``, ``add_exploration_noise``, ``compute_mean_q``, ``get_trajectory``, \
+        ``get_children_distribution``, ``get_child``, ``expanded``, ``value``.
+    """
 
     def __init__(
             self,
@@ -26,6 +29,14 @@ class Node:
             num_of_sampled_actions: int = 20,
             continuous_action_space: bool = False,
     ) -> None:
+        """
+        Overview:
+            Initializes a Node instance.
+        Arguments:
+            - prior (:obj:`float`): The prior probability of the node.
+            - legal_actions (:obj:`List`, optional): The list of legal actions of the node. Defaults to None.
+            - action_space_size (:obj:`int`, optional): The size of the action space. Defaults to 9.
+        """
         self.prior = prior
         self.mu = None
         self.sigma = None
