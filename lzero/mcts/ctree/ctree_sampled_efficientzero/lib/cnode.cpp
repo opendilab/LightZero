@@ -94,7 +94,7 @@ namespace tree
     {
         /*
         Overview:
-            get the final combined hash value from the hash values of each dimension of the multi-dimensional action.
+            Get the final combined hash value from the hash values of each dimension of the multi-dimensional action.
         */
         std::vector<size_t> hash = this->get_hash();
         size_t combined_hash = hash[0];
@@ -558,7 +558,7 @@ namespace tree
         /*
         Overview:
             Find the current best trajectory starts from the current node.
-        Outputs:
+        Returns:
             - traj: a vector of node index, which is the current best trajectory from this node.
         */
         std::vector<CAction> traj;
@@ -585,7 +585,7 @@ namespace tree
         /*
         Overview:
             Get the distribution of child nodes in the format of visit_count.
-        Outputs:
+        Returns:
             - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
         */
         std::vector<int> distribution;
@@ -724,7 +724,7 @@ namespace tree
         /*
         Overview:
             Find the current best trajectory starts from each root.
-        Outputs:
+        Returns:
             - traj: a vector of node index, which is the current best trajectory from each root.
         */
         std::vector<std::vector<std::vector<float> > > trajs;
@@ -742,7 +742,7 @@ namespace tree
         /*
         Overview:
             Get the children distribution of each root.
-        Outputs:
+        Returns:
             - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
         */
         std::vector<std::vector<int> > distributions;
@@ -761,7 +761,7 @@ namespace tree
         /*
         Overview:
             Get the sampled_actions of each root.
-        Outputs:
+        Returns:
             - python_sampled_actions: a vector of sampled_actions for each root, e.g. the size of original action space is 6, the K=3, 
             python_sampled_actions = [[1,3,0], [2,4,0], [5,4,1]].
         */
@@ -984,7 +984,7 @@ namespace tree
             - mean_q: the mean q value of the parent node.
             - players: the number of players.
             - continuous_action_space: whether the action space is continous in current env.
-        Outputs:
+        Returns:
             - action: the action to select.
         */
         // sampled related core code
@@ -1040,7 +1040,7 @@ namespace tree
             - disount_factor: the discount factor of reward.
             - players: the number of players.
             - continuous_action_space: whether the action space is continous in current env.
-        Outputs:
+        Returns:
             - ucb_value: the ucb score of the child.
         */
         float pb_c = 0.0, prior_score = 0.0, value_score = 0.0;
