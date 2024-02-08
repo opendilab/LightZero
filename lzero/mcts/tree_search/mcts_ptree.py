@@ -8,6 +8,7 @@ import torch
 from lzero.mcts.ptree import MinMaxStatsList
 from lzero.policy import InverseScalarTransform, to_detach_cpu_numpy
 import lzero.mcts.ptree.ptree_mz as tree_muzero
+import lzero.mcts.ptree.ptree_ez as tree_efficientzero
 
 if TYPE_CHECKING:
     import lzero.mcts.ptree.ptree_ez as ez_ptree
@@ -16,15 +17,20 @@ if TYPE_CHECKING:
 # ==============================================================
 # EfficientZero
 # ==============================================================
-import lzero.mcts.ptree.ptree_ez as tree
 
 
 class EfficientZeroMCTSPtree(object):
     """
     Overview:
-        MCTSPtree for EfficientZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in python.
+        The Python implementation of MCTS (batch format) for EfficientZero.  \
+        It completes the ``roots``and ``search`` methods by calling functions in module ``ptree_ez``, \
+        which are implemented in Python.
     Interfaces:
-        __init__, roots, search
+        ``__init__``, ``roots``, ``search``
+    
+    ..note::
+        The benefit of searching for a batch of nodes at the same time is that \
+        it can be parallelized during model inference, thus saving time.
     """
 
     # the default_config for EfficientZeroMCTSPtree.
@@ -43,7 +49,15 @@ class EfficientZeroMCTSPtree(object):
 
     @classmethod
     def default_config(cls: type) -> EasyDict:
+        """
+        Overview:
+            A class method that returns a default configuration in the form of an EasyDict object.
+        Returns:
+            - cfg (:obj:`EasyDict`): The dict of the default configuration.
+        """
+        # Create a deep copy of the `config` attribute of the class.
         cfg = EasyDict(copy.deepcopy(cls.config))
+        # Add a new attribute `cfg_type` to the `cfg` object.
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
@@ -53,8 +67,12 @@ class EfficientZeroMCTSPtree(object):
             Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
             in the default configuration, the user-provided value will override the default configuration. Otherwise,
             the default configuration will be used.
+        Arguments:
+            - cfg (:obj:`EasyDict`): The configuration passed in by the user.
         """
+        # Get the default configuration.
         default_config = self.default_config()
+        # Update the default configuration with the values provided by the user in ``cfg``.
         default_config.update(cfg)
         self._cfg = default_config
         self.inverse_scalar_transform_handle = InverseScalarTransform(
@@ -65,13 +83,15 @@ class EfficientZeroMCTSPtree(object):
     def roots(cls: int, root_num: int, legal_actions: List[Any]) -> "ez_ptree.Roots":
         """
         Overview:
-            The initialization of CRoots with root num and legal action lists.
+            Initializes a batch of roots to search parallelly later.
         Arguments:
-            - root_num: the number of the current root.
-            - legal_action_list: the vector of the legal action of this root.
+            - root_num (:obj:`int`): the number of the roots in a batch.
+            - legal_action_list (:obj:`List[Any]`): the vector of the legal actions for the roots.
+        
+        ..note::
+            The initialization is achieved by the ``Roots`` class from the ``ptree_ez`` module.
         """
-        import lzero.mcts.ptree.ptree_ez as ptree
-        return ptree.Roots(root_num, legal_actions)
+        return tree_efficientzero.Roots(root_num, legal_actions)
 
     def search(
             self,
@@ -83,13 +103,17 @@ class EfficientZeroMCTSPtree(object):
     ) -> None:
         """
         Overview:
-            Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
-            Use the python ctree.
+            Do MCTS for a batch of roots. Parallel in model inference. \
+            Use Python to implement the tree search.
         Arguments:
-            - roots (:obj:`Any`): a batch of expanded root nodes
-            - latent_state_roots (:obj:`list`): the hidden states of the roots
-            - reward_hidden_state_roots (:obj:`list`): the value prefix hidden states in LSTM of the roots
-            - to_play (:obj:`list`): the to_play list used in in self-play-mode board games
+            - roots (:obj:`Any`): a batch of expanded root nodes.
+            - latent_state_roots (:obj:`list`): the hidden states of the roots.
+            - reward_hidden_state_roots (:obj:`list`): the value prefix hidden states in LSTM of the roots.
+            - model (:obj:`torch.nn.Module`): The model used for inference.
+            - to_play (:obj:`list`): the to_play list used in in self-play-mode board games.
+        
+        .. note::
+            The core functions ``batch_traverse`` and ``batch_backpropagate`` are implemented in Python.
         """
         with torch.no_grad():
             model.eval()
@@ -116,7 +140,7 @@ class EfficientZeroMCTSPtree(object):
                 hidden_states_h_reward = []
 
                 # prepare a result wrapper to transport results between python and c++ parts
-                results = tree.SearchResults(num=batch_size)
+                results = tree_efficientzero.SearchResults(num=batch_size)
 
                 # latent_state_index_in_search_path: the first index of leaf node states in latent_state_batch_in_search_path, i.e. is current_latent_state_index in one the search.
                 # latent_state_index_in_batch: the second index of leaf node states in latent_state_batch_in_search_path, i.e. the index in the batch, whose maximum is ``batch_size``.
@@ -126,7 +150,7 @@ class EfficientZeroMCTSPtree(object):
                 MCTS stage 1: Selection
                     Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
                 """
-                latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play = tree.batch_traverse(
+                latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play = tree_efficientzero.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play)
                 )
                 # obtain the search horizon for leaf nodes
@@ -195,7 +219,7 @@ class EfficientZeroMCTSPtree(object):
 
                 # NOTE: simulation_index + 1 is very important, which is the depth of the current leaf node.
                 current_latent_state_index = simulation_index + 1
-                tree.batch_backpropagate(
+                tree_efficientzero.batch_backpropagate(
                     current_latent_state_index, discount_factor, value_prefix_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, is_reset_list, virtual_to_play
                 )
@@ -209,9 +233,15 @@ class EfficientZeroMCTSPtree(object):
 class MuZeroMCTSPtree(object):
     """
     Overview:
-        MCTSPtree for MuZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in python.
+        The Python implementation of MCTS (batch format) for MuZero.  \
+        It completes the ``roots``and ``search`` methods by calling functions in module ``ptree_mz``, \
+        which are implemented in Python.
     Interfaces:
-        __init__, roots, search
+        ``__init__``, ``roots``, ``search``
+    
+    ..note::
+        The benefit of searching for a batch of nodes at the same time is that \
+        it can be parallelized during model inference, thus saving time.
     """
 
     # the default_config for MuZeroMCTSPtree.
@@ -230,18 +260,30 @@ class MuZeroMCTSPtree(object):
 
     @classmethod
     def default_config(cls: type) -> EasyDict:
+        """
+        Overview:
+            A class method that returns a default configuration in the form of an EasyDict object.
+        Returns:
+            - cfg (:obj:`EasyDict`): The dict of the default configuration.
+        """
+        # Create a deep copy of the `config` attribute of the class.
         cfg = EasyDict(copy.deepcopy(cls.config))
+        # Add a new attribute `cfg_type` to the `cfg` object.
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
     def __init__(self, cfg: EasyDict = None) -> None:
         """
         Overview:
-            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
-            in the default configuration, the user-provided value will override the default configuration. Otherwise,
+            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key \
+            in the default configuration, the user-provided value will override the default configuration. Otherwise, \
             the default configuration will be used.
+        Arguments:
+            - cfg (:obj:`EasyDict`): The configuration passed in by the user.
         """
+        # Get the default configuration.
         default_config = self.default_config()
+        # Update the default configuration with the values provided by the user in ``cfg``.
         default_config.update(cfg)
         self._cfg = default_config
         self.inverse_scalar_transform_handle = InverseScalarTransform(
@@ -252,13 +294,15 @@ class MuZeroMCTSPtree(object):
     def roots(cls: int, root_num: int, legal_actions: List[Any]) -> "mz_ptree.Roots":
         """
         Overview:
-            The initialization of CRoots with root num and legal action lists.
+            Initializes a batch of roots to search parallelly later.
         Arguments:
-            - root_num: the number of the current root.
-            - legal_action_list: the vector of the legal action of this root.
+            - root_num (:obj:`int`): the number of the roots in a batch.
+            - legal_action_list (:obj:`List[Any]`): the vector of the legal actions for the roots.
+        
+        ..note::
+            The initialization is achieved by the ``Roots`` class from the ``ptree_mz`` module.
         """
-        import lzero.mcts.ptree.ptree_mz as ptree
-        return ptree.Roots(root_num, legal_actions)
+        return tree_muzero.Roots(root_num, legal_actions)
 
     def search(
             self,
@@ -269,12 +313,16 @@ class MuZeroMCTSPtree(object):
     ) -> None:
         """
         Overview:
-            Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
-            Use the python ctree.
+            Do MCTS for a batch of roots. Parallel in model inference. \
+            Use Python to implement the tree search.
         Arguments:
-            - roots (:obj:`Any`): a batch of expanded root nodes
-            - latent_state_roots (:obj:`list`): the hidden states of the roots
-            - to_play (:obj:`list`): the to_play list used in in self-play-mode board games
+            - roots (:obj:`Any`): a batch of expanded root nodes.
+            - latent_state_roots (:obj:`list`): the hidden states of the roots.
+            - model (:obj:`torch.nn.Module`): The model used for inference.
+            - to_play (:obj:`list`): the to_play list used in in self-play-mode board games.
+        
+        .. note::
+            The core functions ``batch_traverse`` and ``batch_backpropagate`` are implemented in Python.
         """
         with torch.no_grad():
             model.eval()

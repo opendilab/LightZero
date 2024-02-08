@@ -21,9 +21,15 @@ if TYPE_CHECKING:
 class StochasticMuZeroMCTSPtree(object):
     """
     Overview:
-        MCTSPtree for MuZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in python.
+        The Python implementation of MCTS (batch format) for Stochastic MuZero.  \
+        It completes the ``roots``and ``search`` methods by calling functions in module ``ptree_stochastic_mz``, \
+        which are implemented in Python.
     Interfaces:
-        __init__, search
+        ``__init__``, ``roots``, ``search``
+
+    ..note::
+        The benefit of searching for a batch of nodes at the same time is that \
+        it can be parallelized during model inference, thus saving time.
     """
 
     # the default_config for MuZeroMCTSPtree.
@@ -42,7 +48,15 @@ class StochasticMuZeroMCTSPtree(object):
 
     @classmethod
     def default_config(cls: type) -> EasyDict:
+        """
+        Overview:
+            A class method that returns a default configuration in the form of an EasyDict object.
+        Returns:
+            - cfg (:obj:`EasyDict`): The dict of the default configuration.
+        """
+        # Create a deep copy of the `config` attribute of the class.
         cfg = EasyDict(copy.deepcopy(cls.config))
+        # Add a new attribute `cfg_type` to the `cfg` object.
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
@@ -52,8 +66,12 @@ class StochasticMuZeroMCTSPtree(object):
             Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
             in the default configuration, the user-provided value will override the default configuration. Otherwise,
             the default configuration will be used.
+        Arguments:
+            - cfg (:obj:`EasyDict`): The configuration passed in by the user.
         """
+        # Get the default configuration.
         default_config = self.default_config()
+        # Update the default configuration with the values provided by the user in ``cfg``.
         default_config.update(cfg)
         self._cfg = default_config
         self.inverse_scalar_transform_handle = InverseScalarTransform(
@@ -64,13 +82,15 @@ class StochasticMuZeroMCTSPtree(object):
     def roots(cls: int, root_num: int, legal_actions: List[Any]) -> "stochastic_mz_ptree.Roots":
         """
         Overview:
-            The initialization of CRoots with root num and legal action lists.
+            Initializes a batch of roots to search parallelly later.
         Arguments:
-            - root_num: the number of the current root.
-            - legal_action_list: the vector of the legal action of this root.
+            - root_num (:obj:`int`): the number of the roots in a batch.
+            - legal_action_list (:obj:`List[Any]`): the vector of the legal actions for the roots.
+        
+        ..note::
+            The initialization is achieved by the ``Roots`` class from the ``ptree_stochastic_mz`` module.
         """
-        import lzero.mcts.ptree.ptree_stochastic_mz as ptree
-        return ptree.Roots(root_num, legal_actions)
+        return tree_stochastic_muzero.Roots(root_num, legal_actions)
 
     def search(
             self,
@@ -81,12 +101,16 @@ class StochasticMuZeroMCTSPtree(object):
     ) -> None:
         """
         Overview:
-            Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
-            Use the python ctree.
+            Do MCTS for a batch of roots. Parallel in model inference. \
+            Use Python to implement the tree search.
         Arguments:
-            - roots (:obj:`Any`): a batch of expanded root nodes
-            - latent_state_roots (:obj:`list`): the hidden states of the roots
-            - to_play (:obj:`list`): the to_play list used in two_player mode board games
+            - roots (:obj:`Any`): a batch of expanded root nodes.
+            - latent_state_roots (:obj:`list`): the hidden states of the roots.
+            - model (:obj:`torch.nn.Module`): The model used for inference.
+            - to_play (:obj:`list`): the to_play list used in in self-play-mode board games.
+        
+        .. note::
+            The core functions ``batch_traverse`` and ``batch_backpropagate`` are implemented in Python.
         """
         with torch.no_grad():
             model.eval()
