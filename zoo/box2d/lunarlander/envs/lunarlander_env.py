@@ -25,7 +25,7 @@ class LunarLanderEnv(CartPoleEnv):
 
     config = dict(
         # (str) The gym environment name.
-        env_name="LunarLander-v2",
+        env_id="LunarLander-v2",
         # (bool) If True, save the replay as a gif file.
         save_replay_gif=False,
         # (str or None) The path to save the replay gif. If None, the replay gif will not be saved.
@@ -58,17 +58,17 @@ class LunarLanderEnv(CartPoleEnv):
         Overview:
             Initialize the LunarLander environment.
         Arguments:
-            - cfg (:obj:`dict`): Configuration dict. The dict should include keys like 'env_name', 'replay_path', etc.
+            - cfg (:obj:`dict`): Configuration dict. The dict should include keys like 'env_id', 'replay_path', etc.
         """
         self._cfg = cfg
         self._init_flag = False
-        # env_name options = {'LunarLander-v2', 'LunarLanderContinuous-v2'}
-        self._env_name = cfg.env_name
+        # env_id options = {'LunarLander-v2', 'LunarLanderContinuous-v2'}
+        self._env_id = cfg.env_id
         self._replay_path = cfg.replay_path
         self._replay_path_gif = cfg.replay_path_gif
         self._save_replay_gif = cfg.save_replay_gif
         self._save_replay_count = 0
-        if 'Continuous' in self._env_name:
+        if 'Continuous' in self._env_id:
             self._act_scale = cfg.act_scale  # act_scale only works in continuous env
         else:
             self._act_scale = False
@@ -81,7 +81,7 @@ class LunarLanderEnv(CartPoleEnv):
             - obs (:obj:`np.ndarray`): The initial observation after resetting.
         """
         if not self._init_flag:
-            self._env = gym.make(self._cfg.env_name, render_mode="rgb_array")
+            self._env = gym.make(self._cfg.env_id, render_mode="rgb_array")
             if self._replay_path is not None:
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 video_name = f'{self._env.spec.id}-video-{timestamp}'
@@ -111,7 +111,7 @@ class LunarLanderEnv(CartPoleEnv):
         self._eval_episode_return = 0.
         if self._save_replay_gif:
             self._frames = []
-        if 'Continuous' not in self._env_name:
+        if 'Continuous' not in self._env_id:
             action_mask = np.ones(4, 'int8')
             obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         else:
@@ -137,7 +137,7 @@ class LunarLanderEnv(CartPoleEnv):
 
         obs, rew, terminated, truncated, info = self._env.step(action)
         done = terminated or truncated
-        if 'Continuous' not in self._env_name:
+        if 'Continuous' not in self._env_id:
             action_mask = np.ones(4, 'int8')
             # TODO: test the performance of varied_action_space.
             # action_mask[0] = 0
@@ -154,7 +154,7 @@ class LunarLanderEnv(CartPoleEnv):
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 path = os.path.join(
                     self._replay_path_gif,
-                    '{}_episode_{}_seed{}_{}.gif'.format(self._env_name, self._save_replay_count, self._seed, timestamp)
+                    '{}_episode_{}_seed{}_{}.gif'.format(self._env_id, self._save_replay_count, self._seed, timestamp)
                 )
                 self.display_frames_as_gif(self._frames, path)
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')

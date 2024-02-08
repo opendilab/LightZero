@@ -51,7 +51,7 @@ from zoo.board_games.mcts_bot import MCTSBot
 class Connect4Env(BaseEnv):
     config = dict(
         # (str) The name of the environment registered in the environment registry.
-        env_name="Connect4",
+        env_id="Connect4",
         # (str) The mode of the environment when take a step.
         battle_mode='self_play_mode',
         # (str) The mode of the environment when doing the MCTS.

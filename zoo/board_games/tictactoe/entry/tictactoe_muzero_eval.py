@@ -31,8 +31,7 @@ if __name__ == "__main__":
     total_test_episodes = num_episodes_each_seed * len(seeds)
 
     # Enable saving of replay as a gif, specify the path to save the replay gif
-    main_config.env.save_replay_gif = True
-    main_config.env.replay_path_gif = './video'
+    main_config.env.replay_path = './video'
 
     returns_mean_seeds = []
     returns_seeds = []

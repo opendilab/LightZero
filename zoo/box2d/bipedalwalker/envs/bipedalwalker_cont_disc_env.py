@@ -37,7 +37,7 @@ class BipedalWalkerDiscEnv(BipedalWalkerEnv):
 
     config = dict(
         # (str) The gym environment name.
-        env_name="BipedalWalker-v3",
+        env_id="BipedalWalker-v3",
         # (int) The number of bins for each dimension of the action space.
         each_dim_disc_size=4,
         # (bool) If True, save the replay as a gif file.
@@ -65,7 +65,7 @@ class BipedalWalkerDiscEnv(BipedalWalkerEnv):
         """
         self._cfg = cfg
         self._init_flag = False
-        self._env_name = cfg.env_name
+        self._env_id = cfg.env_id
         self._act_scale = cfg.act_scale
         self._rew_clip = cfg.rew_clip
         self._replay_path = cfg.replay_path
@@ -159,7 +159,7 @@ class BipedalWalkerDiscEnv(BipedalWalkerEnv):
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 path = os.path.join(
                     self._replay_path_gif,
-                    '{}_episode_{}_seed{}_{}.gif'.format(self._env_name, self._save_replay_count, self._seed, timestamp)
+                    '{}_episode_{}_seed{}_{}.gif'.format(self._env_id, self._save_replay_count, self._seed, timestamp)
                 )
                 self.display_frames_as_gif(self._frames, path)
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')

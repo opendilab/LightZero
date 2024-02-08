@@ -1,23 +1,23 @@
 from easydict import EasyDict
 
 # options={'Hopper-v3', 'HalfCheetah-v3', 'Walker2d-v3', 'Ant-v3', 'Humanoid-v3'}
-env_name = 'Hopper-v3'
+env_id = 'Hopper-v3'
 
-if env_name == 'Hopper-v3':
+if env_id == 'Hopper-v3':
     action_space_size = 3
     observation_shape = 11
-elif env_name in ['HalfCheetah-v3', 'Walker2d-v3']:
+elif env_id in ['HalfCheetah-v3', 'Walker2d-v3']:
     action_space_size = 6
     observation_shape = 17
-elif env_name == 'Ant-v3':
+elif env_id == 'Ant-v3':
     action_space_size = 8
     observation_shape = 111
-elif env_name == 'Humanoid-v3':
+elif env_id == 'Humanoid-v3':
     action_space_size = 17
     observation_shape = 376
 
 ignore_done = False
-if env_name == 'HalfCheetah-v3':
+if env_id == 'HalfCheetah-v3':
     # for halfcheetah, we ignore done signal to predict the Q value of the last step correctly.
     ignore_done = True
 
@@ -44,9 +44,9 @@ policy_entropy_loss_weight = 0.005
 
 mujoco_disc_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/{env_name[:-3]}_bin-{each_dim_disc_size}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_pelw{policy_entropy_loss_weight}_seed0',
+    f'data_sez_ctree/{env_id[:-3]}_bin-{each_dim_disc_size}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_pelw{policy_entropy_loss_weight}_seed0',
     env=dict(
-        env_name=env_name,
+        env_id=env_id,
         action_clip=True,
         continuous=False,
         manually_discretization=False,

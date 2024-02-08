@@ -10,7 +10,7 @@ class TestGame2048():
     def setup(self) -> None:
         # Configuration for the Game2048 environment
         cfg = EasyDict(dict(
-            env_name="game_2048",
+            env_id="game_2048",
             # (str) The render mode. Options are 'None', 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.  If None, then the game will not be rendered.
             render_mode=None,
             replay_format='gif',

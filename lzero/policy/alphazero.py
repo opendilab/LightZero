@@ -334,7 +334,7 @@ class AlphaZeroPolicy(Policy):
         return output
 
     def _get_simulation_env(self):
-        if self._cfg.simulation_env_name == 'tictactoe':
+        if self._cfg.simulation_env_id == 'tictactoe':
             from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
             if self._cfg.simulation_env_config_type == 'play_with_bot':
                 from zoo.board_games.tictactoe.config.tictactoe_alphazero_bot_mode_config import \
@@ -346,7 +346,7 @@ class AlphaZeroPolicy(Policy):
                 raise NotImplementedError
             self.simulate_env = TicTacToeEnv(tictactoe_alphazero_config.env)
 
-        elif self._cfg.simulation_env_name == 'gomoku':
+        elif self._cfg.simulation_env_id == 'gomoku':
             from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
             if self._cfg.simulation_env_config_type == 'play_with_bot':
                 from zoo.board_games.gomoku.config.gomoku_alphazero_bot_mode_config import gomoku_alphazero_config
@@ -355,7 +355,7 @@ class AlphaZeroPolicy(Policy):
             else:
                 raise NotImplementedError
             self.simulate_env = GomokuEnv(gomoku_alphazero_config.env)
-        elif self._cfg.simulation_env_name == 'connect4':
+        elif self._cfg.simulation_env_id == 'connect4':
             from zoo.board_games.connect4.envs.connect4_env import Connect4Env
             if self._cfg.simulation_env_config_type == 'play_with_bot':
                 from zoo.board_games.connect4.config.connect4_alphazero_bot_mode_config import connect4_alphazero_config
