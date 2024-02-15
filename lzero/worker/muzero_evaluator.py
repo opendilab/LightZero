@@ -209,6 +209,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             - train_iter (:obj:`int`): Current training iteration.
             - envstep (:obj:`int`): Current env interaction step.
             - n_episode (:obj:`int`): Number of evaluation episodes.
+            - return_trajectory (:obj:`bool`): Return trajectory info in `episode_info` if True.
         Returns:
             - stop_flag (:obj:`bool`): Whether this training program can be ended.
             - episode_info (:obj:`Dict[str, List]`): Current evaluation episode information.

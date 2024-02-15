@@ -77,13 +77,6 @@ class MountainCarEnv(BaseEnv):
         return obs
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
-
-        # Making sure that input action is of numpy ndarray
-        # assert isinstance(action, np.ndarray), type(action)
-
-        # Extract action as int, 0-dim array
-        # action = action.squeeze()
-
         # Take a step of faith into the unknown!
         obs, rew, done, info = self._env.step(action)
 
