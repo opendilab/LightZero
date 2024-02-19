@@ -118,6 +118,7 @@ class WorldModel(nn.Module):
                 nn.LeakyReLU(negative_slope=0.01), # TODO: 2
                 nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
                 # nn.Tanh(), # TODO
+                nn.Sigmoid(),  # 这里添加Sigmoid函数 TODO
             )
         )
 

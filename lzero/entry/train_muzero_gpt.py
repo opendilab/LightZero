@@ -156,6 +156,8 @@ def train_muzero_gpt(
         else:
             collect_kwargs['epsilon'] = 0.0
 
+        # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
@@ -220,15 +222,14 @@ def train_muzero_gpt(
                 # Learner will train ``update_per_collect`` times in one iteration.
                 if replay_buffer.get_num_of_transitions() > batch_size:
                     train_data = replay_buffer.sample(batch_size, policy)
-                    # if i % 2 == 0: # for reanalyze_ratio>0
                     if cfg.policy.reanalyze_ratio > 0:
                         # if i % 20 == 0:
-                        # if i % 2 == 0:
+                        # if i % 2 == 0:# for reanalyze_ratio>0
                         policy._target_model.world_model.past_keys_values_cache.clear()
                         torch.cuda.empty_cache() # TODO: 是否需要立即释放显存
                         print('sample target_model past_keys_values_cache.clear()')
 
-                    train_data.append({'train_which_component':'transformer'})
+                    train_data.append({'train_which_component': 'transformer'})
                 else:
                     logging.warning(
                         f'The data in replay_buffer is not sufficient to sample a mini-batch: '
@@ -263,6 +264,8 @@ def train_muzero_gpt(
         policy._learn_model.world_model.past_keys_values_cache.clear() # very important
         del policy._learn_model.world_model.keys_values_wm
         policy._collect_model.world_model.past_keys_values_cache.clear() # very important
+        policy._eval_model.world_model.past_keys_values_cache.clear() # very important
+
         # del policy._collect_model.world_model.keys_values_wm
         torch.cuda.empty_cache() # TODO: NOTE
 

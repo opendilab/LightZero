@@ -912,7 +912,8 @@ class MuZeroGPTPolicy(Policy):
         active_eval_env_num = data.shape[0]
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
-            network_output = self._collect_model.initial_inference(data)
+            # network_output = self._collect_model.initial_inference(data)
+            network_output = self._eval_model.initial_inference(data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             if not self._eval_model.training:

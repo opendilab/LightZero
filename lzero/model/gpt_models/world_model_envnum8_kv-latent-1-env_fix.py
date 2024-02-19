@@ -61,6 +61,7 @@ class WorldModel(nn.Module):
         self.action_shape = config.action_shape
         self.max_cache_size = config.max_cache_size
         self.env_num = config.env_num
+        self.num_layers = config.num_layers
 
 
         all_but_last_latent_state_pattern = torch.ones(config.tokens_per_block)
@@ -412,13 +413,15 @@ class WorldModel(nn.Module):
                     keys_values_wm_list.append(self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens))
 
             # self.keys_values_wm = keys_values_wm_list
-            kv_cache_k_list = []
-            kv_cache_v_list = []
-            for keys_values in keys_values_wm_list:
-                kv_cache_k_list.append(keys_values[0]._k_cache._cache)
-                kv_cache_v_list.append(keys_values[0]._v_cache._cache)
-            self.keys_values_wm[0]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
-            self.keys_values_wm[0]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
+
+            for layer in range(self.num_layers):
+                kv_cache_k_list = []
+                kv_cache_v_list = []
+                for keys_values in keys_values_wm_list:
+                    kv_cache_k_list.append(keys_values[layer]._k_cache._cache)
+                    kv_cache_v_list.append(keys_values[layer]._v_cache._cache)
+                self.keys_values_wm[layer]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
+                self.keys_values_wm[layer]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
 
 
         elif n == int(256): 
@@ -674,13 +677,14 @@ class WorldModel(nn.Module):
                 keys_values_wm_list.append(self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens))
 
         # self.keys_values_wm <- keys_values_wm_list
-        kv_cache_k_list = []
-        kv_cache_v_list = []
-        for keys_values in keys_values_wm_list:
-            kv_cache_k_list.append(keys_values[0]._k_cache._cache)
-            kv_cache_v_list.append(keys_values[0]._v_cache._cache)
-        self.keys_values_wm[0]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
-        self.keys_values_wm[0]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
+        for layer in range(self.num_layers):
+            kv_cache_k_list = []
+            kv_cache_v_list = []
+            for keys_values in keys_values_wm_list:
+                kv_cache_k_list.append(keys_values[layer]._k_cache._cache)
+                kv_cache_v_list.append(keys_values[layer]._v_cache._cache)
+            self.keys_values_wm[layer]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
+            self.keys_values_wm[layer]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
 
 
         assert self.keys_values_wm is not None and self.num_observations_tokens is not None

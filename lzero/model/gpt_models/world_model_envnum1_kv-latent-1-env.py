@@ -118,6 +118,7 @@ class WorldModel(nn.Module):
                 nn.LeakyReLU(negative_slope=0.01), # TODO: 2
                 nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
                 # nn.Tanh(), # TODO
+                nn.Sigmoid(),  # 这里添加Sigmoid函数 TODO
             )
         )
 
@@ -650,11 +651,11 @@ class WorldModel(nn.Module):
         # 但如果假设环境是MDP的话，然后根据当前的 latest_state s_t 在这个列表中查找即可
         # TODO: 但如果假设环境是非MDP的话，需要维护一个 {(rootstate_action_history:kv_cache)}的列表？
 
-        # if self.total_query_count>0:
-        #     self.hit_freq = self.hit_count/self.total_query_count
-        #     print('hit_freq:', self.hit_freq)
-        #     print('hit_count:', self.hit_count)
-        #     print('total_query_count:', self.total_query_count)
+        if self.total_query_count>0:
+            self.hit_freq = self.hit_count/self.total_query_count
+            print('hit_freq:', self.hit_freq)
+            print('hit_count:', self.hit_count)
+            print('total_query_count:', self.total_query_count)
 
 
         latest_state = state_action_history[-1][0]
@@ -664,14 +665,14 @@ class WorldModel(nn.Module):
 
         # Try to get the value associated with the hash of latest_state
         matched_value = self.past_keys_values_cache.get(hash_latest_state)
+        self.total_query_count  += 1
         if matched_value is not None:
             # If a matching value is found, do something with it
-            
             # self.keys_values_wm = copy.deepcopy(matched_value)
             self.keys_values_wm = copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda') )
             self.hit_count += 1
-            self.total_query_count  += 1
             # print('recurrent_inference:find matched_value!')
+        # TODO:#######
         else:
             # If no matching value is found, handle the case accordingly
             # NOTE: very important
@@ -681,7 +682,6 @@ class WorldModel(nn.Module):
             # cache_key = hash(latest_state.squeeze(0))
             self.past_keys_values_cache[hash_latest_state] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
             # print('recurrent_inference:not find matched_value!')
-            self.total_query_count  += 1
 
 
         assert self.keys_values_wm is not None and self.num_observations_tokens is not None

@@ -61,6 +61,7 @@ class WorldModel(nn.Module):
         self.action_shape = config.action_shape
         self.max_cache_size = config.max_cache_size
         self.env_num = config.env_num
+        self.num_layers = config.num_layers
 
 
         all_but_last_latent_state_pattern = torch.ones(config.tokens_per_block)
@@ -118,6 +119,7 @@ class WorldModel(nn.Module):
                 nn.LeakyReLU(negative_slope=0.01), # TODO: 2
                 nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
                 # nn.Tanh(), # TODO
+                nn.Sigmoid(),  # 这里添加Sigmoid函数 TODO
             )
         )
 
@@ -242,11 +244,6 @@ class WorldModel(nn.Module):
     def __repr__(self) -> str:
         return "world_model"
 
-
-    # def forward(self, tokens: torch.LongTensor, past_keys_values: Optional[KeysValues] = None,
-    #             is_root=False) -> WorldModelOutput:
-    # def forward(self, obs_embeddings, act_tokens, past_keys_values: Optional[KeysValues] = None,
-    #         is_root=False) -> WorldModelOutput:
     # @profile
     def forward(self, obs_embeddings_or_act_tokens, past_keys_values: Optional[KeysValues] = None,
             is_root=False) -> WorldModelOutput:
@@ -390,46 +387,37 @@ class WorldModel(nn.Module):
 
             self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
             outputs_wm = self.forward({'obs_embeddings': latent_state}, past_keys_values=self.keys_values_wm, is_root=False)  # Note: is_root=False
-            self.total_query_count  += 1
             # Compute the hash of latest_state
             latest_state = latent_state.detach().cpu().numpy()
 
             # 假设 latest_state 是新的 latent_state，包含 ready_env_num 个环境的信息
             ready_env_num = latest_state.shape[0]
+            keys_values_wm_list = []
+            for i in range(ready_env_num):
+                self.total_query_count += 1
+                state_single_env = latest_state[i]  # 获取单个环境的 latent state
+                hash_latest_state = hash(state_single_env)  # 计算哈希值
+                matched_value = self.past_keys_values_cache.get(hash_latest_state)  # 检索缓存值
+                if matched_value is not None:
+                    self.hit_count += 1
+                    # 如果找到匹配的值，将其添加到列表中
+                    keys_values_wm_list.append(copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
+                else:
+                    # use zero
+                    keys_values_wm_list.append(self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens))
 
-            if ready_env_num < self.env_num:
-                keys_values_wm_list = []
-                for i in range(ready_env_num):
-                    state_single_env = latest_state[i]  # 获取单个环境的 latent state
-                    hash_latest_state = hash(state_single_env)  # 计算哈希值
-                    matched_value = self.past_keys_values_cache.get(hash_latest_state)  # 检索缓存值
-                    if matched_value is not None:
-                        self.hit_count += 1
-                        # 如果找到匹配的值，将其添加到列表中
-                        keys_values_wm_list.append(copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
-                    else:
-                        # use zero
-                        keys_values_wm_list.append(self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens))
+            # self.keys_values_wm = keys_values_wm_list
 
-                # self.keys_values_wm = keys_values_wm_list
+            for layer in range(self.num_layers):
                 kv_cache_k_list = []
                 kv_cache_v_list = []
                 for keys_values in keys_values_wm_list:
-                    kv_cache_k_list.append(keys_values[0]._k_cache._cache)
-                    kv_cache_v_list.append(keys_values[0]._v_cache._cache)
-                self.keys_values_wm[0]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
-                self.keys_values_wm[0]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
-            elif ready_env_num == self.env_num:
-                hash_latest_state = hash(latest_state)
-                matched_value = self.past_keys_values_cache.get(hash_latest_state)
-                if matched_value is not None:
-                    self.keys_values_wm_find = copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda') )
-                    self.hit_count += 1
-                    # self.total_query_count  += 1
-                    # print('recurrent_inference:find matched_value!')
-                    # NOTE: very important, 相当于policy value由单步计算得到，往后的推理，基于context
-                    # TODO: policy value也从缓存中找
-                    self.keys_values_wm = self.keys_values_wm_find
+                    kv_cache_k_list.append(keys_values[layer]._k_cache._cache)
+                    kv_cache_v_list.append(keys_values[layer]._v_cache._cache)
+                self.keys_values_wm._keys_values[layer]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
+                self.keys_values_wm._keys_values[layer]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
+                del kv_cache_k_list
+                del kv_cache_v_list
 
 
         elif n == int(256): 
@@ -469,10 +457,6 @@ class WorldModel(nn.Module):
             #  outputs_wm.logits_value.shape (30,21) = (B*6, 21)
             outputs_wm.logits_value = rearrange(outputs_wm.logits_value, 'b t e -> (b t) e')
             outputs_wm.logits_policy = rearrange(outputs_wm.logits_policy, 'b t e -> (b t) e')
-
-            # fou envnum8_kv-latent-8-1-env:
-            self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
-
 
         return outputs_wm
 
@@ -590,9 +574,6 @@ class WorldModel(nn.Module):
             outputs_wm.logits_value = rearrange(outputs_wm.logits_value, 'b t e -> (b t) e')
             outputs_wm.logits_policy = rearrange(outputs_wm.logits_policy, 'b t e -> (b t) e')
 
-            # fou envnum8_kv-latent-8-1-env:
-            self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
-
 
         # return WorldModelOutput(x, logits_observations, logits_rewards, logits_ends, logits_policy, logits_value)
         return outputs_wm
@@ -668,50 +649,41 @@ class WorldModel(nn.Module):
         # TODO: 但如果假设环境是非MDP的话，需要维护一个 {(rootstate_action_history:kv_cache)}的列表？
 
         # if self.total_query_count>0:
-        #     self.hit_freq = self.hit_count/self.total_query_count
+        #     self.hit_freq = self.hit_count/(self.total_query_count)
         #     print('hit_freq:', self.hit_freq)
         #     print('hit_count:', self.hit_count)
         #     print('total_query_count:', self.total_query_count)
 
-        self.total_query_count  += 1
         latest_state = state_action_history[-1][0]
 
         # 假设 latest_state 是新的 latent_state，包含 ready_env_num 个环境的信息
         ready_env_num = latest_state.shape[0]
-        if ready_env_num < self.env_num:
-            keys_values_wm_list = []
-            for i in range(ready_env_num):
-                state_single_env = latest_state[i]  # 获取单个环境的 latent state
-                hash_latest_state = hash(state_single_env)  # 计算哈希值
-                matched_value = self.past_keys_values_cache.get(hash_latest_state)  # 检索缓存值
-                if matched_value is not None:
-                    self.hit_count += 1
-                    # 如果找到匹配的值，将其添加到列表中
-                    keys_values_wm_list.append(copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
-                else:
-                    # use zero
-                    keys_values_wm_list.append(self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens))
-            # self.keys_values_wm <- keys_values_wm_list
+        keys_values_wm_list = []
+        for i in range(ready_env_num):
+            self.total_query_count += 1
+            state_single_env = latest_state[i]  # 获取单个环境的 latent state
+            hash_latest_state = hash(state_single_env)  # 计算哈希值
+            matched_value = self.past_keys_values_cache.get(hash_latest_state)  # 检索缓存值
+            if matched_value is not None:
+                self.hit_count += 1
+                # 如果找到匹配的值，将其添加到列表中
+                keys_values_wm_list.append(copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
+            else:
+                # use zero
+                keys_values_wm_list.append(self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens))
+
+        # self.keys_values_wm <- keys_values_wm_list
+        for layer in range(self.num_layers):
             kv_cache_k_list = []
             kv_cache_v_list = []
-            for keys_values in keys_values_wm_list:
-                kv_cache_k_list.append(keys_values[0]._k_cache._cache)
-                kv_cache_v_list.append(keys_values[0]._v_cache._cache)
-            self.keys_values_wm[0]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
-            self.keys_values_wm[0]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
-        elif ready_env_num == self.env_num or ready_env_num>self.env_num:
-            hash_latest_state = hash(latest_state)
-            matched_value = self.past_keys_values_cache.get(hash_latest_state)
-            if matched_value is not None:
-                self.keys_values_wm_find = copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda') )
-                self.hit_count += 1
-                # self.total_query_count  += 1
-                # print('recurrent_inference:find matched_value!')
-                # NOTE: very important, 相当于policy value由单步计算得到，往后的推理，基于context
-                # TODO: policy value也从缓存中找
-                self.keys_values_wm = self.keys_values_wm_find
+            for keys_values in keys_values_wm_list: # batch_size
+                kv_cache_k_list.append(keys_values[layer]._k_cache._cache)
+                kv_cache_v_list.append(keys_values[layer]._v_cache._cache)
+            self.keys_values_wm._keys_values[layer]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
+            self.keys_values_wm._keys_values[layer]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
+            del kv_cache_k_list
+            del kv_cache_v_list
 
-            
 
         assert self.keys_values_wm is not None and self.num_observations_tokens is not None
 
@@ -724,7 +696,7 @@ class WorldModel(nn.Module):
             # TODO: the impact
             _ = self.refresh_keys_values_with_initial_latent_state(torch.tensor(latest_state, dtype=torch.float32).to(self.device))
             # Depending on the shape of latent_state, create a cache key and store a deep copy of keys_values_wm
-            self.past_keys_values_cache[hash(latest_state)] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
+            # self.past_keys_values_cache[hash(latest_state)] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
 
         # if self.keys_values_wm.size>5:
         #     print('debug self.keys_values_wm.size ')
@@ -778,18 +750,16 @@ class WorldModel(nn.Module):
         # # TODO: 在计算结束后，是否需要更新最新的缓存. 是否需要deepcopy
         # self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
 
-        if latent_state.size(0)<self.env_num:
-            for i in range(latent_state.size(0)):  # 遍历每个环境
-                state_single_env = latent_state[i]   # 获取单个环境的 latent state
-                cache_key = hash(state_single_env.detach().cpu().numpy())  # 计算哈希值
-                # 复制单个环境对应的 keys_values_wm 并存储
-                keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
-                keys_values_wm_single_env[0]._k_cache._cache = self.keys_values_wm[0]._k_cache._cache[i].unsqueeze(0) # shape torch.Size([2, 100, 512])
-                keys_values_wm_single_env[0]._v_cache._cache = self.keys_values_wm[0]._v_cache._cache[i].unsqueeze(0)
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(keys_values_wm_single_env, 'cpu'))
-        elif latent_state.size(0) == self.env_num:
-            cache_key = hash(latent_state)
-            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
+        for i in range(latent_state.size(0)):  # 遍历每个环境
+            state_single_env = latent_state[i]   # 获取单个环境的 latent state
+            cache_key = hash(state_single_env.detach().cpu().numpy())  # 计算哈希值
+            # 复制单个环境对应的 keys_values_wm 并存储
+            keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
+            for layer in range(self.num_layers):
+                keys_values_wm_single_env[layer]._k_cache._cache = self.keys_values_wm[layer]._k_cache._cache[i].unsqueeze(0) # shape torch.Size([2, 100, 512])
+                keys_values_wm_single_env[layer]._v_cache._cache = self.keys_values_wm[layer]._v_cache._cache[i].unsqueeze(0)
+            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(keys_values_wm_single_env, 'cpu'))
+            del keys_values_wm_single_env
 
         # outputs_wm.logits_policy, outputs_wm.logits_value
         if len(self.past_keys_values_cache) > self.max_cache_size:
