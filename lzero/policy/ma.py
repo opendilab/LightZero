@@ -16,7 +16,7 @@ from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
     prepare_obs
-
+from line_profiler import line_profiler
 
 @POLICY_REGISTRY.register('ma')
 class MAPolicy(Policy):
@@ -263,6 +263,7 @@ class MAPolicy(Policy):
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
 
+    # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         Overview:
@@ -478,6 +479,7 @@ class MAPolicy(Policy):
         self._collect_mcts_temperature = 1
         self.collect_epsilon = 0.0
 
+    # @profile
     def _forward_collect(
             self,
             data: torch.Tensor,
@@ -612,6 +614,8 @@ class MAPolicy(Policy):
                     # 'value': value,
                     'pred_value': pred_values[i],
                     'policy_logits': policy_logits[i],
+                    # 'predicted_value': pred_values[i],
+                    # 'predicted_policy_logits': policy_logits[i],
                 }
 
         return output
@@ -651,6 +655,7 @@ class MAPolicy(Policy):
             end_index = self._cfg.model.observation_shape * (step + self._cfg.model.frame_stack_num)
         return beg_index, end_index
 
+    # @profile
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1, ready_env_id=None) -> Dict:
         """
         Overview:
@@ -721,11 +726,12 @@ class MAPolicy(Policy):
 
                 output[env_id] = {
                     'action': action,
-                    'distributions': distributions,
+                    # 'distributions': distributions,
+                    'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'value': value,
-                    'pred_value': pred_values[i],
-                    'policy_logits': policy_logits[i],
+                    'searched_value': value,
+                    'predicted_value': pred_values[i],
+                    'predicted_policy_logits': policy_logits[i],
                 }
 
         return output

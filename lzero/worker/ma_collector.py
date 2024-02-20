@@ -13,6 +13,7 @@ from torch.nn import L1Loss
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
+from line_profiler import line_profiler
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_ma')
@@ -291,6 +292,7 @@ class MACollector(ISerialCollector):
 
         return None
 
+    # @profile
     def collect(self,
                 n_episode: Optional[int] = None,
                 train_iter: int = 0,
@@ -435,23 +437,13 @@ class MACollector(ISerialCollector):
                 # TODO(pu): subprocess
                 actions = {}
 
-
-
-
-
                 # 去掉了三个dict:distribution，entropy和value!!!!!!!!!!!!!
                 # distribution主要存在segment里！！！！用于训练！！！！！！
                 # valuedict也是！！！！！此外多了一个算优先度的功能
                 # visitentropy则是用于log!!!!!!!!!!!
 
 
-
-
                 # 把三者相关的代码都删去了！！！！！！！对输出的return_data的影响主要是gamesegment里不再有distribution和value
-                
-                
-                
-                
                 
                 
                 # distributions_dict = {}
@@ -503,17 +495,9 @@ class MACollector(ISerialCollector):
                     # else:
 
 
-
-
-
                     # 因为没有进行search，所以这句话删掉！！！！！！！！！！在learn的时候使用！！！！！！！！！！！！
                     # game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
                     game_segments[env_id].store_search_stats(temp_visit_list, 0)
-
-
-
-
-
 
                     # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
                     # in ``game_segments[env_id].init``, we have append o_{t} in ``self.obs_segment``
@@ -546,7 +530,6 @@ class MACollector(ISerialCollector):
 
                     eps_steps_lst[env_id] += 1
                     total_transitions += 1
-
 
                     # 用网络value和searchvalue算优先级，这里因为没有search所以暂时不算！！！！！！！！！！
                     # if self.policy_config.use_priority:

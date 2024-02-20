@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, List, Any, Union
 import numpy as np
 import torch
 from easydict import EasyDict
-# from line_profiler import line_profiler
+from line_profiler import line_profiler
 # import cProfile
 
 from lzero.mcts.ctree.ctree_efficientzero import ez_tree as tree_efficientzero

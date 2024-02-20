@@ -13,6 +13,7 @@ from torch.nn import L1Loss
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
+from line_profiler import line_profiler
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
@@ -291,6 +292,7 @@ class MuZeroCollector(ISerialCollector):
 
         return None
 
+    # @profile
     def collect(self,
                 n_episode: Optional[int] = None,
                 train_iter: int = 0,

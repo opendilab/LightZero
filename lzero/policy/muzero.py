@@ -17,6 +17,7 @@ from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
     prepare_obs
+from line_profiler import line_profiler
 
 
 @POLICY_REGISTRY.register('muzero')
@@ -284,6 +285,7 @@ class MuZeroPolicy(Policy):
                     update_kwargs={'theta': self._cfg.target_update_theta_for_intrinsic_reward}
                 )
 
+    # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         Overview:
@@ -521,6 +523,7 @@ class MuZeroPolicy(Policy):
         self._collect_mcts_temperature = 1.
         self.collect_epsilon = 0.0
 
+    # @profile
     def _forward_collect(
             self,
             data: torch.Tensor,
@@ -659,6 +662,8 @@ class MuZeroPolicy(Policy):
             end_index = self._cfg.model.observation_shape * (step + self._cfg.model.frame_stack_num)
         return beg_index, end_index
 
+
+    # @profile
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1, ready_env_id: np.array = None,) -> Dict:
         """
         Overview:

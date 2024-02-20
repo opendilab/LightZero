@@ -19,8 +19,9 @@ from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
+from line_profiler import line_profiler
 
-
+# @profile
 def train_muzero(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,

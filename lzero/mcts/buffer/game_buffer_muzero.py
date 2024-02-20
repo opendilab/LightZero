@@ -13,6 +13,7 @@ from .game_buffer import GameBuffer
 
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
+from line_profiler import line_profiler
 
 
 @BUFFER_REGISTRY.register('game_buffer_muzero')
@@ -59,6 +60,7 @@ class MuZeroGameBuffer(GameBuffer):
         self.sample_times = 0
         self.active_root_num = 0
 
+    # @profile
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
     ) -> List[Any]:
@@ -106,6 +108,7 @@ class MuZeroGameBuffer(GameBuffer):
         self.sample_times += 1
         return train_data
 
+    # @profile
     def _make_batch(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
         """
         Overview:
@@ -197,6 +200,7 @@ class MuZeroGameBuffer(GameBuffer):
         context = reward_value_context, policy_re_context, policy_non_re_context, current_batch
         return context
 
+    # @profile
     def _prepare_reward_value_context(
             self, batch_index_list: List[str], game_segment_list: List[Any], pos_in_game_segment_list: List[Any],
             total_transitions: int
@@ -265,6 +269,8 @@ class MuZeroGameBuffer(GameBuffer):
         ]
         return reward_value_context
 
+
+    # @profile
     def _prepare_policy_non_reanalyzed_context(
             self, batch_index_list: List[int], game_segment_list: List[Any], pos_in_game_segment_list: List[int]
     ) -> List[Any]:
@@ -296,7 +302,8 @@ class MuZeroGameBuffer(GameBuffer):
             pos_in_game_segment_list, child_visits, game_segment_lens, action_mask_segment, to_play_segment
         ]
         return policy_non_re_context
-
+    
+    # @profile
     def _prepare_policy_reanalyzed_context(
             self, batch_index_list: List[str], game_segment_list: List[Any], pos_in_game_segment_list: List[str]
     ) -> List[Any]:
@@ -350,6 +357,7 @@ class MuZeroGameBuffer(GameBuffer):
         ]
         return policy_re_context
 
+    # @profile
     def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any) -> Tuple[Any, Any]:
         """
         Overview:
@@ -620,6 +628,7 @@ class MuZeroGameBuffer(GameBuffer):
 
         return batch_target_policies_re
 
+    # @profile
     def _compute_target_policy_non_reanalyzed(
             self, policy_non_re_context: List[Any], policy_shape: Optional[int]
     ) -> np.ndarray:
@@ -696,6 +705,7 @@ class MuZeroGameBuffer(GameBuffer):
         batch_target_policies_non_re = np.asarray(batch_target_policies_non_re)
         return batch_target_policies_non_re
 
+    # @profile
     def update_priority(self, train_data: List[np.ndarray], batch_priorities: Any) -> None:
         """
         Overview:

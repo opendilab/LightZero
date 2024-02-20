@@ -14,6 +14,7 @@ from easydict import EasyDict
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
+from line_profiler import line_profiler
 
 
 class MuZeroEvaluator(ISerialEvaluator):
@@ -193,6 +194,7 @@ class MuZeroEvaluator(ISerialEvaluator):
         self._last_eval_iter = train_iter
         return True
 
+    # @profile
     def eval(
             self,
             save_ckpt_fn: Callable = None,

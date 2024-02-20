@@ -1,5 +1,6 @@
 from easydict import EasyDict
-
+import torch
+torch.cuda.set_device(3)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
 
@@ -23,16 +24,15 @@ evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 1000
 batch_size = 256
-max_env_step = int(8e5)
-reanalyze_ratio = 0.99
+max_env_step = int(1e5)
+reanalyze_ratio = 1
 eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=
-    f'data_mz_ctree_debug/final_mzssl0.99',
+    exp_name=f'data_profile/pong_mz_rr1_100k-envsteps_lprofile_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -104,8 +104,8 @@ create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
+    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
     # def run(max_env_step: int):
     #     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
     # import cProfile
-    # cProfile.run(f"run({30000})", filename="pong_mzssl", sort="cumulative")
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # cProfile.run(f"run({100000})", filename="pong_mz_rr1_100k-envsteps_seed0", sort="cumulative")

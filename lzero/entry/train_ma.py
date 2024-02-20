@@ -49,7 +49,9 @@ def iter_filter(data, batch_size, K):
     
     return iter_data
     
+from line_profiler import line_profiler
 
+# @profile
 def train_ma(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
@@ -182,6 +184,8 @@ def train_ma(
         else:
             collect_kwargs['epsilon'] = 0.0
 
+        # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
@@ -202,19 +206,14 @@ def train_ma(
             collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
             update_per_collect = int(collected_transitions_num * cfg.policy.model_update_ratio)
 
-
-
         # save returned new_data collected by the collector
         replay_buffer.push_game_segments(new_data)
         # print("remark 11111111111111111")
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
         # print("remark 22222222222222222222")
-
         # print("hhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
         # print(replay_buffer.get_num_of_transitions())
-        
-
         # K = cfg.policy.K_batch
 
 
@@ -227,12 +226,9 @@ def train_ma(
             for i in range(update_per_collect):
                 # Learner will train ``update_per_collect`` times in one iteration.
                 if replay_buffer.get_num_of_transitions() > batch_size:
-
-
                     # policy对sample的影响是什么？？？？？？？？？？？？？？？？？？？？？？？？？
                     #!!!!!!!!!!!!!!!!!!!!!!!!!value是sample时就计算好的所以如果一次sample多次训练的话会增强value的off-policy性？？？？？？？？？？？
                     # 在非reannalyze的情况一采多训会影响value,reanalyze的情况则会额外影响policy！！！！！！！！！！！！！！！
-
 
                     # 修改_make_batch函数，将batch_size扩K+1倍，但是prepare出来的context分成K+1份
                     # 注意current_batch也要做对齐处理
@@ -240,16 +236,9 @@ def train_ma(
                     train_data = replay_buffer.sample(batch_size, policy)
                     # iter_data = iter_filter(train_data, batch_size, K)
                     # print("remark 33333333333333333333")
-
                     # with open('data.pkl', 'wb') as file:
                     #     pickle.dump(replay_buffer, file)
                     #     print("the buffer is saved")
-
-
-
-
-
-
 
                 else:
                     logging.warning(

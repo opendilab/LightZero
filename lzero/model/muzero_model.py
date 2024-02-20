@@ -13,6 +13,7 @@ from numpy import ndarray
 
 from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
+from line_profiler import line_profiler
 
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
@@ -196,6 +197,7 @@ class MuZeroModel(nn.Module):
                 nn.Linear(self.pred_hid, self.pred_out),
             )
 
+    # @profile
     def initial_inference(self, obs: torch.Tensor) -> MZNetworkOutput:
         """
         Overview:
@@ -228,6 +230,7 @@ class MuZeroModel(nn.Module):
             latent_state,
         )
 
+    # @profile
     def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
         """
         Overview:
@@ -295,6 +298,7 @@ class MuZeroModel(nn.Module):
         """
         return self.prediction_network(latent_state)
 
+    # @profile
     def _dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
@@ -362,6 +366,7 @@ class MuZeroModel(nn.Module):
             next_latent_state = renormalize(next_latent_state)
         return next_latent_state, reward
 
+    # @profile
     def project(self, latent_state: torch.Tensor, with_grad: bool = True) -> torch.Tensor:
         """
         Overview:

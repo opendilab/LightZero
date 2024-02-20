@@ -1,5 +1,6 @@
 from easydict import EasyDict
-
+import torch
+torch.cuda.set_device(5)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
 
@@ -24,7 +25,7 @@ num_simulations = 50
 update_per_collect = 1000
 # K_batch = 23
 batch_size = 256
-max_env_step = int(8e5)
+max_env_step = int(1e5)
 buffer_reanalyze_interval = None
 buffer_reanalyze_freq = 1
 reanalyze_ratio = 0
@@ -34,8 +35,7 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/final_maxrf1',
+    exp_name=f'data_profile/pong_rezero-mz_rr1_100k-envsteps_cprofile_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -57,6 +57,7 @@ atari_muzero_config = dict(
         ),
         cuda=True,
         env_type='not_board_games',
+        action_type='fixed_action_space',
         game_segment_length=400,
         random_collect_episode_num=0,
         eps=dict(
@@ -110,9 +111,8 @@ create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_ma
-    train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)
-    # 下面为cprofile的代码
-    # def run(max_env_step: int):
-    #     train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)
-    # import cProfile
-    # cProfile.run(f"run({30000})", filename="pong_ma_refined", sort="cumulative")
+    # train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)
+    def run(max_env_step: int):
+        train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)
+    import cProfile
+    cProfile.run(f"run({100000})", filename="pong_rezero-mz_rf1_100k-envsteps_cprofile_seed0", sort="cumulative")
