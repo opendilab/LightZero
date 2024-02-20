@@ -145,23 +145,22 @@ class SelfAttention(nn.Module):
             kv_cache.update(k, v)
             k, v = kv_cache.get()
 
-        # TODO
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-
-        # method1: efficient attention using Flash Attention CUDA kernels
-        # attn_mask = self.mask[L:L + T, :L + T].bool()  # assuming your mask is a ByteTensor
-        # eval性能很不好，与collect不一致
-        # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_pdrop if self.training else 0, is_causal=True)
-        # 测试
-        # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_pdrop, is_causal=True)
-
-        # method2: manual implementation of attention
+        # method1: manual implementation of attention
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
         att = att.masked_fill(self.mask[L:L + T, :L + T] == 0, float('-inf'))
         att = F.softmax(att, dim=-1)
         att = self.attn_drop(att)
         y = att @ v
 
+        # TODO
+        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+
+        # method2: efficient attention using Flash Attention CUDA kernels
+        # attn_mask = self.mask[L:L + T, :L + T].bool()  # assuming your mask is a ByteTensor
+        # eval性能很不好，与collect不一致
+        # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_pdrop if self.training else 0, is_causal=True)
+        # 测试
+        # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_pdrop, is_causal=True)
 
         y = rearrange(y, 'b h t e -> b t (h e)')
 

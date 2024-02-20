@@ -11,8 +11,7 @@ cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',
                     'embed_dim': 128, # z_channels
                     # 'embed_dim': 1024, # z_channels
                     # 'embed_dim': 256, # z_channels
-
-                                        'encoder':
+                    'encoder':
                                {'resolution': 64, 'in_channels': 3, 'z_channels': 128, 'ch': 64,
                                 'ch_mult': [1, 1, 1, 1, 1], 'num_res_blocks': 2, 'attn_resolutions': [8, 16],
                                 'out_ch': 3, 'dropout': 0.0},# TODO：for atari debug
@@ -61,7 +60,6 @@ cfg['world_model'] = {
                       'embed_dim':1024, # TODO：for atari
                       # 'embed_dim':256, # TODO：for atari
 
-
                       'attention': 'causal',
                       # 'num_layers': 10,# TODO：for atari
                       # 'num_layers': 2, # TODO：for atari debug
@@ -93,10 +91,8 @@ cfg['world_model'] = {
                       # "env_num":1, # TODO
                       'latent_recon_loss_weight':0.05,
                       'perceptual_loss_weight':0.05,
-
                       # 'latent_recon_loss_weight':0.,
                       # 'perceptual_loss_weight':0.,
-
 
                       }
 from easydict import EasyDict
