@@ -17,8 +17,10 @@ elif env_id == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
+# collector_env_num = 8
+# n_episode = 8
+collector_env_num = 2
+n_episode = 2
 evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 1000

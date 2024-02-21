@@ -23,7 +23,7 @@ num_simulations = 50
 update_per_collect = 1000
 batch_size = 256
 max_env_step = int(1e6)
-reanalyze_ratio = 0.
+reanalyze_ratio = 0.1
 eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user

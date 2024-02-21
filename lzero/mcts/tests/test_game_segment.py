@@ -73,7 +73,7 @@ def test_game_segment(test_algo):
                     reward_hidden_state_roots[0].detach().cpu().numpy(),
                     reward_hidden_state_roots[1].detach().cpu().numpy()
                 )
-                # for atari env, all actions is legal_action
+                # for atari env, all actions are legal_action
                 legal_actions_list = [
                     [i for i in range(config.policy.model.action_space_size)]
                     for _ in range(config.env.evaluator_env_num)
@@ -104,7 +104,7 @@ def test_game_segment(test_algo):
 
             for i in range(config.env.evaluator_env_num):
                 distributions, value, env = roots_distributions[i], roots_values[i], envs[i]
-                # ``deterministic=True``  indicates that we select the argmax action instead of sampling.
+                # ``deterministic=True`` indicates that we select the argmax action instead of sampling.
                 action, _ = select_action(distributions, temperature=1, deterministic=True)
                 # ==============================================================
                 # the core initial_inference.
