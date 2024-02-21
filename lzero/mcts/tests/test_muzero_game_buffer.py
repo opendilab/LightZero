@@ -17,7 +17,11 @@ from lzero.model.muzero_model import MuZeroModel as Model
 #                 ]
 #
 # # 将 `return_data` 保存为 `.npy` 文件
-# np.save('/Users/puyuan/code/LightZero/lzero/mcts/tests/pong_muzero_first_collect_2env.npy', return_data)
+# np.save('/Users/puyuan/code/LightZero/lzero/mcts/tests/pong_muzero_2episodes_gsl400_v0.0.4.npy', return_data)
+# # 压缩 data.npy 文件为 data.tar.gz
+# import tarfile
+# with tarfile.open('pong_muzero_2episodes_gsl400_v0.0.4.tar.gz', 'w:gz') as tar:
+#     tar.add('/Users/puyuan/code/LightZero/lzero/mcts/tests/pong_muzero_2episodes_gsl400_v0.0.4.npy')
 
 # 根据测试模式，导入配置
 test_mode_type = 'conv'
@@ -52,7 +56,7 @@ policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect'
 replay_buffer = MuZeroGameBuffer(cfg.policy)
 
 # 加载之前保存的 `new_data`
-new_data = np.load('/Users/puyuan/code/LightZero/lzero/mcts/tests/pong_muzero_first_collect_2env.npy', allow_pickle=True)
+new_data = np.load('/Users/puyuan/code/LightZero/lzero/mcts/tests/pong_muzero_2episodes_gsl400_v0.0.4.npy', allow_pickle=True)
 
 # 向 replay buffer 添加数据
 replay_buffer.push_game_segments(new_data)
