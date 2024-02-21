@@ -3,25 +3,10 @@ import pytest
 import torch
 from ding.config import compile_config
 from ding.policy import create_policy
+from huggingface_hub import hf_hub_url, cached_download
 
 from lzero.mcts.buffer.game_buffer_efficientzero import MuZeroGameBuffer
 from lzero.model.muzero_model import MuZeroModel as Model
-
-# # 假设 `return_data` 是 muzero_collector 中一次collect得到的数据
-# return_data = [self.game_segment_pool[i][0] for i in range(len(self.game_segment_pool))], [
-#                     {
-#                         'priorities': self.game_segment_pool[i][1],
-#                         'done': self.game_segment_pool[i][2],
-#                         'unroll_plus_td_steps': self.unroll_plus_td_steps
-#                     } for i in range(len(self.game_segment_pool))
-#                 ]
-#
-# # 将 `return_data` 保存为 `.npy` 文件
-# np.save('/Users/puyuan/code/LightZero/lzero/mcts/tests/pong_muzero_2episodes_gsl400_v0.0.4.npy', return_data)
-# # 压缩 data.npy 文件为 data.tar.gz
-# import tarfile
-# with tarfile.open('pong_muzero_2episodes_gsl400_v0.0.4.tar.gz', 'w:gz') as tar:
-#     tar.add('/Users/puyuan/code/LightZero/lzero/mcts/tests/pong_muzero_2episodes_gsl400_v0.0.4.npy')
 
 # 根据测试模式，导入配置
 test_mode_type = 'conv'
@@ -55,12 +40,16 @@ policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect'
 # 初始化 replay buffer
 replay_buffer = MuZeroGameBuffer(cfg.policy)
 
-# 加载之前保存的 `new_data`
-new_data = np.load('/Users/puyuan/code/LightZero/lzero/mcts/tests/pong_muzero_2episodes_gsl400_v0.0.4.npy', allow_pickle=True)
+# 从 Hugging Face上获取测试数据的下载链接
+url = hf_hub_url("puyuan1996/pong_muzero_2episodes_gsl400_v0.0.4", "pong_muzero_2episodes_gsl400_v0.0.4.npy",
+                 repo_type='dataset')
+# 下载并缓存文件
+local_filepath = cached_download(url)
+# 加载.npy文件
+data = np.load(local_filepath, allow_pickle=True)
 
 # 向 replay buffer 添加数据
-replay_buffer.push_game_segments(new_data)
-
+replay_buffer.push_game_segments(data)
 # 如果 replay buffer 满了，移除最旧的数据
 replay_buffer.remove_oldest_data_to_fit()
 
@@ -71,7 +60,7 @@ def test_sample_orig_data():
     train_data = replay_buffer.sample(cfg.policy.batch_size, policy)
 
     # 输出采样到的数据
-    # print(train_data)
+    print(train_data)
 
     # a batch contains the current_batch and the target_batch
     [current_batch, target_batch] = train_data
@@ -80,7 +69,7 @@ def test_sample_orig_data():
     assert batch_rewards.shape == (cfg.policy.batch_size, cfg.policy.num_unroll_steps + 1)
     assert batch_target_values.shape == (cfg.policy.batch_size, cfg.policy.num_unroll_steps + 1)
     assert batch_target_policies.shape == (
-    cfg.policy.batch_size, cfg.policy.num_unroll_steps + 1, cfg.policy.model.action_space_size)
+        cfg.policy.batch_size, cfg.policy.num_unroll_steps + 1, cfg.policy.model.action_space_size)
 
     [batch_obs, batch_action, batch_mask, batch_index, batch_weights, batch_make_time] = current_batch
 
