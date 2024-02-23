@@ -126,6 +126,10 @@ def train_muzero(
     # Comparison: By observing the agent's performance during random action-taking, we can establish a baseline to evaluate the effectiveness of reinforcement learning algorithms.
     if cfg.policy.random_collect_episode_num > 0:
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
+    if cfg.policy.eval_offline:
+        eval_train_iter_list = []
+        eval_train_envstep_list = []
+        cfg.policy.learn.learner.hook.save_ckpt_after_iter = cfg.policy.eval_freq
 
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
@@ -152,9 +156,13 @@ def train_muzero(
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
-            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-            if stop:
-                break
+            if cfg.policy.eval_offline:
+                eval_train_iter_list.append(learner.train_iter)
+                eval_train_envstep_list.append(collector.envstep)
+            else:
+                stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+                if stop:
+                    break
 
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
@@ -188,6 +196,18 @@ def train_muzero(
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
+            if cfg.policy.eval_offline:
+                logging.info(f'eval offline beginning...')
+                ckpt_dirname = './{}/ckpt'.format(learner.exp_name)
+                # Evaluate the performance of the pretrained model.
+                for train_iter, collector_envstep in zip(eval_train_iter_list, eval_train_envstep_list):
+                    ckpt_name = 'iteration_{}.pth.tar'.format(train_iter)
+                    ckpt_path = os.path.join(ckpt_dirname, ckpt_name)
+                    # load the ckpt of pretrained model
+                    policy.learn_mode.load_state_dict(torch.load(ckpt_path, map_location=cfg.policy.device))
+                    stop, reward = evaluator.eval(learner.save_checkpoint, train_iter, collector_envstep)
+                    logging.info(f'eval offline at train_iter: {train_iter}, collector_envstep: {collector_envstep}, reward: {reward}')
+                logging.info(f'eval offline finished!')
             break
 
     # Learner's after_run hook.
