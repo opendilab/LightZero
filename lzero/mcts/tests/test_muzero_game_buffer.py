@@ -80,3 +80,52 @@ def test_sample_orig_data():
     assert batch_index.shape == (cfg.policy.batch_size,)
     assert batch_weights.shape == (cfg.policy.batch_size,)
     assert batch_make_time.shape == (cfg.policy.batch_size,)
+
+
+@pytest.mark.unittest
+def test_sample_orig_data():
+    # 从 replay buffer 采样数据
+    train_data = replay_buffer.sample(cfg.policy.batch_size, policy)
+
+    log_vars = policy._forward_learn(train_data)
+    # List of expected keys in log_vars
+    expected_keys = [
+        'collect_mcts_temperature', 'collect_epsilon', 'cur_lr', 'weighted_total_loss',
+        'total_loss', 'policy_loss', 'policy_entropy', 'reward_loss', 'value_loss',
+        'consistency_loss', 'value_priority_orig', 'value_priority', 'target_reward',
+        'target_value', 'transformed_target_reward', 'transformed_target_value',
+        'predicted_rewards', 'predicted_values', 'total_grad_norm_before_clip'
+    ]
+
+    # Assert that all keys are present in log_vars
+    assert list(log_vars.keys()) == expected_keys
+
+    # Check that all values are floats, except for 'value_priority_orig'
+    for key, value in log_vars.items():
+        if key != 'value_priority_orig':
+            assert isinstance(value, float), f"The value for {key} should be of type float, but got {type(value)}."
+
+    assert 0 <= log_vars['collect_mcts_temperature'] <= 1
+    assert 0 <= log_vars['collect_epsilon'] <= 1
+    assert 0 <= log_vars['cur_lr'] <= 1
+    assert log_vars['weighted_total_loss'] <= 1e9
+    assert log_vars['total_loss'] <= 1e9
+    assert log_vars['policy_loss'] <= 1e9
+    assert 0 < log_vars['policy_entropy'] <= 1e9
+    assert log_vars['reward_loss'] <= 1e9
+    assert log_vars['value_loss'] <= 1e9
+    assert -1 <= log_vars['consistency_loss'] <= 1
+    assert log_vars['value_priority_orig'].shape == (cfg.policy.batch_size,)
+    assert log_vars['value_priority'] <= 1e9
+    assert log_vars['target_reward'] <= 1e9
+    assert log_vars['target_value'] <= 1e9
+    assert log_vars['transformed_target_reward'] <= 1e9
+    assert log_vars['transformed_target_value'] <= 1e9
+    assert log_vars['predicted_rewards'] <= 1e9
+    assert log_vars['predicted_values'] <= 1e9
+    assert log_vars['total_grad_norm_before_clip'] <= 1e9
+
+    if cfg.policy.use_priority:
+        replay_buffer.update_priority(train_data, log_vars['value_priority_orig'])
+
+
