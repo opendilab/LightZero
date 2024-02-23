@@ -278,7 +278,7 @@ class WorldModel(nn.Module):
                 # 获取位置嵌入
                 position_embeddings = self.pos_emb(steps_indices)
                 # 由于我们要将它们加到obs_embeddings上，需要将位置嵌入reshape回(batch_size, num_steps, embedding_dim)
-                position_embeddings = position_embeddings.view(-1, num_steps, 1024)
+                position_embeddings = position_embeddings.view(-1, num_steps, position_embeddings.shape[-1])
                 # 现在我们可以将位置嵌入加到obs_embeddings上了
                 sequences = obs_embeddings + position_embeddings
             else:
@@ -297,7 +297,7 @@ class WorldModel(nn.Module):
                 # 获取位置嵌入
                 position_embeddings = self.pos_emb(steps_indices)
                 # 由于我们要将它们加到obs_embeddings上，需要将位置嵌入reshape回(batch_size, num_steps, embedding_dim)
-                position_embeddings = position_embeddings.view(-1, num_steps, 1024)
+                position_embeddings = position_embeddings.view(-1, num_steps, position_embeddings.shape[-1])
                 # 现在我们可以将位置嵌入加到obs_embeddings上了
                 sequences = act_embeddings + position_embeddings
             else:
@@ -351,6 +351,7 @@ class WorldModel(nn.Module):
             x = []
             for k, past_kv in enumerate(past_keys_values):
                 x.append(self.transformer(sequences[k].unsqueeze(0), past_kv))
+                # self.keys_values_wm_list[k] = past_kv # NOTE: todo
             x =  torch.cat(x, dim=0)
 
             # TODO: 在collect时，是一步一步的 obs act 传入的
@@ -429,41 +430,45 @@ class WorldModel(nn.Module):
     # @profile
     def refresh_keys_values_with_initial_latent_state_for_init_infer_v2(self, latent_state: torch.LongTensor, buffer_action=None) -> torch.FloatTensor:
         n, num_observations_tokens, _ = latent_state.shape
-
         if n <= self.env_num:
             # MCTS root节点: 需要准确的估计 value, policy_logits, 或许需要结合context的kv_cache进行更准确的估计，而不是当前的从0开始推理
-            self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
-            outputs_wm = self.forward({'obs_embeddings': latent_state}, past_keys_values=self.keys_values_wm, is_root=False)
+            # self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
+            # outputs_wm = self.forward({'obs_embeddings': latent_state}, past_keys_values=self.keys_values_wm, is_root=False)
             # Compute the hash of latest_state
-            latest_state = latent_state.detach().cpu().numpy()
-
+            # latest_state = latent_state.detach().cpu().numpy()
             # 假设 latest_state 是新的 latent_state，包含 ready_env_num 个环境的信息
-            ready_env_num = latest_state.shape[0]
-            keys_values_wm_list = []
-            self.keys_values_wm_size_list = []
-            for i in range(ready_env_num):
-                self.total_query_count += 1
-                state_single_env = latest_state[i]  # 获取单个环境的 latent state
-                hash_latest_state = hash(state_single_env)  # 计算哈希值
-                matched_value = self.past_keys_values_cache.get(hash_latest_state)  # 检索缓存值
-                if matched_value is not None:
-                    self.hit_count += 1
-                    # 如果找到匹配的值，将其添加到列表中
-                    keys_values_wm_list.append(copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
-                    self.keys_values_wm_size_list.append(matched_value.size())
-                else:
-                    # use zero
-                    keys_values_wm_list.append(self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens))
-                    self.keys_values_wm_size_list.append(0)
+            # ready_env_num = latest_state.shape[0]
+            # keys_values_wm_list = []
+            # self.keys_values_wm_size_list = []
+            # for i in range(ready_env_num):
+            #     self.total_query_count += 1
+            #     state_single_env = latest_state[i]  # 获取单个环境的 latent state
+            #     hash_latest_state = hash(state_single_env)  # 计算哈希值
+            #     matched_value = self.past_keys_values_cache.get(hash_latest_state)  # 检索缓存值
+            #     if matched_value is not None:
+            #         self.hit_count += 1
+            #         # 如果找到匹配的值，将其添加到列表中
+            #         keys_values_wm_list.append(copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
+            #         self.keys_values_wm_size_list.append(matched_value.size)
+                    
+            #         keys_values_wm_list.append(self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens))
+            #         self.keys_values_wm_size_list.append(0)
+            #     else:
+            #         # use zero
+            #         keys_values_wm_list.append(self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens))
+            #         self.keys_values_wm_size_list.append(0)
+            # self.keys_values_wm_list = keys_values_wm_list
 
-            self.keys_values_wm_list = keys_values_wm_list
-
+            # use zero
+            self.keys_values_wm_list = [self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens) for i in range(n)]
+            outputs_wm = self.forward({'obs_embeddings': latent_state}, past_keys_values=self.keys_values_wm_list, is_root=False, kvcache_independent=True)
+            self.keys_values_wm_size_list = [1 for i in range(n)]
 
         elif n == int(256): 
             # TODO: n=256 means train tokenizer, 不需要计算target value
             self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
             # print('init inference: not find matched_value! reset!')
-            outputs_wm = self.forward({'obs_embeddings': latent_state}, past_keys_values=self.keys_values_wm, is_root=False)  # Note: is_root=False
+            outputs_wm = self.forward({'obs_embeddings': latent_state}, past_keys_values=self.keys_values_wm, is_root=False)
         elif n > self.env_num and n != int(256) and buffer_action is not None: 
             # train时计算target value
             # TODO: n=256 means train tokenizer
@@ -598,16 +603,11 @@ class WorldModel(nn.Module):
             self.keys_values_wm_list = [self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens) for i in range(n)]
         else:
             for i in reset_indices:
-                self.keys_values_wm_list[i] = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
-
-        obs_embeddings_or_act_tokens = {'obs_embeddings': latent_state}
-        if latent_state.shape[0]<8:
-            print('debug')
-        outputs_wm = self.forward(obs_embeddings_or_act_tokens, past_keys_values=self.keys_values_wm_list, is_root=False, kvcache_independent=True)  # Note: is_root=False
-
-
-        # return outputs_wm.output_sequence  # (B, K, E)
-        return outputs_wm
+                self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
+                outputs_wm = self.forward({'obs_embeddings': latent_state[i].unsqueeze(0).to(self.device)}, past_keys_values=self.keys_values_wm_single_env, is_root=False, kvcache_independent=False)
+                self.keys_values_wm_list[i] = self.keys_values_wm_single_env
+                self.keys_values_wm_size_list[i] = 1
+        return None
 
     @torch.no_grad()
     # @profile
@@ -619,8 +619,8 @@ class WorldModel(nn.Module):
         else:
             obs = obs_act_dict
 
-        if obs.shape[0] < 8:
-            print('debug')
+        # if obs.shape[0] < 8:
+        #     print('debug')
         outputs_wm, latent_state = self.reset_from_initial_observations_v2(obs_act_dict) # TODO
         # outputs_wm, latent_state = self.reset_from_initial_observations(obs_act_dict) # 从零开始
 
@@ -665,11 +665,17 @@ class WorldModel(nn.Module):
                 self.hit_count += 1
                 # 如果找到匹配的值，将其添加到列表中
                 keys_values_wm_list.append(copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
-                self.keys_values_wm_size_list.append(matched_value.size())
+                self.keys_values_wm_size_list.append(matched_value.size)
             else:
                 # use zero
-                keys_values_wm_list.append(self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens))
-                self.keys_values_wm_size_list.append(0)
+                # keys_values_wm_list.append(self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens))
+                # self.keys_values_wm_size_list.append(0)
+
+                self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
+                outputs_wm = self.forward({'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)}, past_keys_values=self.keys_values_wm_single_env, is_root=False)
+                keys_values_wm_list.append(self.keys_values_wm_single_env)
+                self.keys_values_wm_size_list.append(1)
+
 
         self.keys_values_wm_list = keys_values_wm_list
 
@@ -678,10 +684,10 @@ class WorldModel(nn.Module):
         num_passes = 1 + self.num_observations_tokens if should_predict_next_obs else 1
 
         output_sequence, latent_state = [], []
-        if ready_env_num < 8:
-            print('debug')
+
         reset_indices = [index for index, value in enumerate(self.keys_values_wm_size_list) if value + num_passes > self.config.max_tokens]
-        _ = self.refresh_keys_values_with_initial_latent_state(torch.tensor(latest_state, dtype=torch.float32).to(self.device), reset_indices)
+        self.refresh_keys_values_with_initial_latent_state(torch.tensor(latest_state, dtype=torch.float32).to(self.device), reset_indices)
+
 
         action = state_action_history[-1][-1]
 
@@ -699,8 +705,8 @@ class WorldModel(nn.Module):
                 obs_embeddings_or_act_tokens = {'act_tokens': token}
             else:
                 obs_embeddings_or_act_tokens = {'obs_embeddings': token}
-            if token.shape[0] < 8:
-                print('debug')
+            # if token.shape[0] < 8:
+            #     print('debug')
 
             # outputs_wm = self.forward(obs_embeddings_or_act_tokens, past_keys_values=self.keys_values_wm, is_root=False, kvcache_independent=True)
             outputs_wm = self.forward(obs_embeddings_or_act_tokens, past_keys_values=self.keys_values_wm_list, is_root=False, kvcache_independent=True)
@@ -749,6 +755,8 @@ class WorldModel(nn.Module):
             
             # self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(keys_values_wm_single_env, 'cpu'))
 
+
+            # print([self.keys_values_wm_list[i].size for i in range(8)])
             self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_list[i], 'cpu'))
 
             # del keys_values_wm_single_env
