@@ -24,6 +24,8 @@ elif env_name == 'SeaquestNoFrameskip-v4':
 elif env_name == 'BoxingNoFrameskip-v4':
     action_space_size = 18
 
+# share action space
+action_space_size = 18
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -34,36 +36,41 @@ collector_env_num = 2
 n_episode = 2
 evaluator_env_num = 1
 num_simulations = 50
-update_per_collect = 1000
+# update_per_collect = 1000
+update_per_collect = 2
+
+# update_per_collect = None  # TODO
 model_update_ratio = 0.25
 
-num_simulations = 50 
-batch_size = 256
-max_env_step = int(5e6)
+# num_simulations = 50 
+num_simulations = 5
+
+# batch_size = 256
+batch_size = 5
+
+max_env_step = int(10e6)
 reanalyze_ratio = 0.
 # reanalyze_ratio = 0.5
 
 eps_greedy_exploration_in_collect = False
 
-exp_name_prefix = 'data_mz_ctree_mt_pong-qbert_seaquest/'
+exp_name_prefix = 'data_debug_mz_ctree_mt_pong-qbert-seaquest_0226/'
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
-    # mcts_ctree, muzero_collector: empty_cache
-    exp_name=exp_name_prefix+f'{env_name[:-14]}_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl400_noprio_target100_sgd02_seed0',
-
+    # TODO NOTE: 
+    # muzero_collector: empty_cache
+    # atari env full action space
+    # game_buffer_muzero task_id
+    # mcts_ctree, 
+    exp_name=exp_name_prefix+f'{env_name[:-14]}_muzero-mt-v2_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl400_noprio_target100_sgd02_seed0',
     # exp_name=exp_name_prefix+f'{env_name[:-14]}_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl400_noprio_target100_sgd02_seed0',
-    # exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl50_noprio_target100_start2000_adamw1e-4_wd1e-4_seed0',
-    # exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_train-per-collect-one-segment_tep025_gsl50_noprio_target100_start2000_adamw1e-4_wd1e-4_seed0',
-    # exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_46464_train-per-collect-one-segment_temdecy-50k_seed0',
-    # exp_name=f'data_mz_ctree_debug/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_46464_collect-orig_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
-        # obs_shape=(4, 96, 96),
         observation_shape=(4, 64, 64),
         frame_stack_num=4,
         gray_scale=True,
@@ -72,11 +79,11 @@ atari_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: run
-        collect_max_episode_steps=int(2e4),
-        eval_max_episode_steps=int(1e4),
+        # collect_max_episode_steps=int(2e4),
+        # eval_max_episode_steps=int(1e4),
         # TODO: debug
-        # collect_max_episode_steps=int(50),
-        # eval_max_episode_steps=int(50),
+        collect_max_episode_steps=int(50),
+        eval_max_episode_steps=int(50),
     ),
     policy=dict(
         task_id=0,
@@ -92,6 +99,8 @@ atari_muzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
         ),
+        # (int) The number of samples required for mini inference.
+        mini_infer_size=1024,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=400,
@@ -136,6 +145,8 @@ atari_muzero_config = dict(
         ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
         eval_freq=int(2e3),
+        # eval_freq=int(2),
+
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -151,15 +162,15 @@ atari_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_multi_task',
-        import_names=['lzero.policy.muzero_multi_task'],
+        type='muzero_multi_task_v2',
+        import_names=['lzero.policy.muzero_multi_task_v2'],
     ),
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_multi_task
+    from lzero.entry import train_muzero_multi_task_v2
     import copy
     [main_config_2, main_config_3] = [copy.deepcopy(main_config) for _ in range(2)]
     [create_config_2, create_config_3] = [copy.deepcopy(create_config) for _ in range(2)]
@@ -170,9 +181,9 @@ if __name__ == "__main__":
     main_config_2.exp_name = exp_name_prefix + f'Qbert_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_seed0'
     main_config_3.exp_name = exp_name_prefix + f'Seaquest_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_seed0'
 
-    main_config_2.policy.model.action_space_size = 6
-    main_config_3.policy.model.action_space_size = 18
+    # main_config_2.policy.model.action_space_size = 6
+    # main_config_3.policy.model.action_space_size = 18
     main_config_2.policy.task_id = 1
     main_config_3.policy.task_id = 2
 
-    train_muzero_multi_task([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]]], seed=0, max_env_step=max_env_step)
+    train_muzero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]]], seed=0, max_env_step=max_env_step)
