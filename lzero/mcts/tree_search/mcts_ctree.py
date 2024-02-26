@@ -219,6 +219,7 @@ class MuZeroMCTSCtree(object):
         pb_c_init=1.25,
         # (float) The maximum change in value allowed during the backup step of the search tree update.
         value_delta_max=0.01,
+        env_type='not_board_games',
     )
 
     @classmethod
@@ -302,7 +303,13 @@ class MuZeroMCTSCtree(object):
                 MCTS stage 1: Selection
                     Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
                 """
-                latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
+                if self._cfg.env_type=='not_board_games':
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        to_play_batch
+                    )
+                else:
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
                     copy.deepcopy(to_play_batch)
                 )

@@ -50,10 +50,10 @@ num_simulations = 50
 
 # TODO: debug
 # num_simulations = 1
-max_env_step = int(1e6)
+max_env_step = int(10e6)
 reanalyze_ratio = 0
 
-batch_size = 32  # for num_head=2, emmbding_dim=128
+batch_size = 64  # for num_head=2, emmbding_dim=128
 num_unroll_steps = 5
 
 
@@ -79,23 +79,9 @@ eps_greedy_exploration_in_collect = False
 atari_muzero_config = dict(
     # TODO: stack muzero_gpt_model.py world_model.py (4,64,64)
     # mz: mcts_ctree, muzero_collector: empty_cache
-    exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024-nl1-nh1_lr1e-4-gcv10-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_sdpa_seed0',
+    exp_name=f'data_xzero_stack1_0219/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kv81-fix3_collect-clear200_noeval_search-toplay-nodeepcopy_seed0',
 
-    # exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd512_lr1e-4-gcv10-reconslossw0-minmax-iter60k-jointtrain_stack4_mcs5e2_collectper200-clear_seed0',
-    # exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd512-nl2-nh2_lr1e-4-gcv10-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_sdpa_seed0',
-
-    # exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd512-nl2-nh2_lr1e-4-gcv10-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_train-per-collect-one-segment_seed0',
-
-    # exp_name=f'data_mz_gpt_ctree_0113/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024_lr1e-4-gcv05-biasfalse-reconslossw01-minmax-jointtrain_stack4_mcs500_emptycache-per200-del-tocpu-envnum{collector_env_num}_maxtokendel_collectper200-clear_seed0',
-    # exp_name=f'data_mz_gpt_ctree_0113/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024_lr1e-4-gcv05-biasfalse-reconslossw0-minmax-iter60k-fixed_stack4_mcs500_emptycache-per200-del-tocpu-envnum{collector_env_num}_maxtokendel_collectper200-clear_evalsample_seed0',
-
-    # exp_name=f'data_mz_gpt_ctree_0111/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_mz-repenet-lastlinear-lsd1024_reconslossw0-minmax-iter60k-fixed_stack4_mcs500_emptycache-per200-del-tocpu_envnum8_maxtokendel_seed0',
-
-    # exp_name=f'data_mz_gpt_ctree_0111/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs500_contembdings_mz-repenet-lastlinear-lsd1024-6488-kaiming-lerelu_obsmseloss-obsloss2_kllw0-lr1e-4-gcv05-reconslossw01-minmax-latentgrad02-iter60ktrain_stack4_emptycache-per200_seed0',
-
-    # exp_name=f'data_mz_gpt_ctree_0111/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_mz-repenet-lastlinear-lsd1024-6488-kaiming-lerelu_obsmseloss-obsloss2_kllw0-lr1e-4-gcv05-biasfalse-reconslossw0-minmax-iter60k-fixed_stack4_mcs500_emptycache-per200-del_mctsdelkv_seed0',
-
-    # exp_name=f'data_mz_gpt_ctree_0111/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs500_contembdings_mz-repenet-lastlinear-lsd1024-6488-kaiming-lerelu_obsmseloss_obsloss2_kllw0-lr1e-4-gcv05-reconslossw01-minmax-latentgrad0.2-fromm60ktrain_stack4_upc1000_seed0',
+    # exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024-nl1-nh1_lr1e-4-gcv10-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_sdpa_seed0',
 
     env=dict(
         stop_value=int(1e6),
@@ -124,8 +110,8 @@ atari_muzero_config = dict(
         clip_rewards=True,
     ),
     policy=dict(
-        # model_path=None,
-        model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_ctree/Pong_muzero_ns50_upc1000_rr0.0_46464_seed0_240110_140819/ckpt/ckpt_best.pth.tar',
+        model_path=None,
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_ctree/Pong_muzero_ns50_upc1000_rr0.0_46464_seed0_240110_140819/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_ctree/Pong_muzero_ns50_upc1000_rr0.0_46464_seed0_240110_140819/ckpt/iteration_60000.pth.tar',
         # tokenizer_start_after_envsteps=int(9e9), # not train tokenizer
         tokenizer_start_after_envsteps=int(0),
@@ -156,12 +142,12 @@ atari_muzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
             
-            # reward_support_size=601,
-            # value_support_size=601,
-            # support_scale=300,
-            reward_support_size=21,
-            value_support_size=21,
-            support_scale=10,
+            reward_support_size=601,
+            value_support_size=601,
+            support_scale=300,
+            # reward_support_size=21,
+            # value_support_size=21,
+            # support_scale=10,
             embedding_dim=1024,
             # embedding_dim=512,
             # embedding_dim=256,
@@ -211,7 +197,8 @@ atari_muzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
-        eval_freq=int(5e3),
+        # eval_freq=int(5e3),
+        eval_freq=int(9e9),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

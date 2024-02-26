@@ -644,11 +644,11 @@ class WorldModel(nn.Module):
         # 但如果假设环境是MDP的话，然后根据当前的 latest_state s_t 在这个列表中查找即可
         # TODO: 但如果假设环境是非MDP的话，需要维护一个 {(rootstate_action_history:kv_cache)}的列表？
 
-        if self.total_query_count>0:
-            self.hit_freq = self.hit_count/(self.total_query_count)
-            print('hit_freq:', self.hit_freq)
-            print('hit_count:', self.hit_count)
-            print('total_query_count:', self.total_query_count)
+        # if self.total_query_count>0:
+        #     self.hit_freq = self.hit_count/(self.total_query_count)
+        #     print('hit_freq:', self.hit_freq)
+        #     print('hit_count:', self.hit_count)
+        #     print('total_query_count:', self.total_query_count)
 
         latest_state = state_action_history[-1][0]
 
@@ -739,23 +739,11 @@ class WorldModel(nn.Module):
         self.latent_state = torch.cat(latent_state, dim=1)  # (B, K)
         latent_state = self.latent_state
 
-        # cache_key = hash(latent_state.detach().cpu().numpy())
         # # TODO: 在计算结束后，是否需要更新最新的缓存. 是否需要deepcopy
-        # self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm, 'cpu'))
-
         for i in range(latent_state.shape[0]):  # 遍历每个环境
             state_single_env = latent_state[i]   # 获取单个环境的 latent state
             cache_key = hash(state_single_env.detach().cpu().numpy())  # 计算哈希值
             # 复制单个环境对应的 keys_values_wm 并存储
-            # keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
-            # for layer in range(self.num_layers):
-            #     # keys_values_wm_single_env[layer]._k_cache._cache = self.keys_values_wm[layer]._k_cache._cache[i].unsqueeze(0) # shape torch.Size([2, 100, 512])
-            #     # keys_values_wm_single_env[layer]._v_cache._cache = self.keys_values_wm[layer]._v_cache._cache[i].unsqueeze(0)
-            #     keys_values_wm_single_env[layer].update(self.keys_values_wm[layer]._k_cache._cache[i].unsqueeze(0), self.keys_values_wm[layer]._v_cache._cache[i].unsqueeze(0))
-            
-            # self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(keys_values_wm_single_env, 'cpu'))
-
-
             # print([self.keys_values_wm_list[i].size for i in range(8)])
             self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_list[i], 'cpu'))
 
@@ -822,11 +810,6 @@ class WorldModel(nn.Module):
 
     # @profile
     def compute_loss(self, batch, target_tokenizer: Tokenizer=None, **kwargs: Any) -> LossWithIntermediateLosses:
-
-        # if len(batch['observations'][0, 0].shape) == 3:
-        #     # obs is a 3-dimensional image
-        #     pass
-
         # NOTE: 这里是需要梯度的
         #with torch.no_grad():  # TODO: 非常重要
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False) # (B, C, H, W) -> (B, K, E)
