@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(6)
+torch.cuda.set_device(7)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
@@ -48,7 +48,9 @@ batch_size = 64
 num_unroll_steps = 5
 eps_greedy_exploration_in_collect = False
 
-exp_name_prefix = 'data_mz_gpt_ctree_mt_stack1_pong-qbert-seaquest/'
+# exp_name_prefix = 'data_mz_gpt_ctree_mt_stack1_pong-qbert-seaquest/'
+exp_name_prefix = 'data_xzero_mt_stack1_pong-qbert/'
+
 
 # num_simulations = 8 # debug
 # update_per_collect = 1 # debug
@@ -59,7 +61,7 @@ exp_name_prefix = 'data_mz_gpt_ctree_mt_stack1_pong-qbert-seaquest/'
 
 atari_muzero_config = dict(
     # mcts_ctree, muzero_collector: empty_cache
-    exp_name=exp_name_prefix+f'{env_name[:-14]}_mt-muzero-gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain_mcs5e2_latent-target-100_mantran_seed0',
+    exp_name=exp_name_prefix+f'{env_name[:-14]}_mt-muzero-gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005_seed0',
 
     # exp_name=exp_name_prefix+f'{env_name[:-14]}_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl400_noprio_target100_sgd02_seed0',
     # exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl50_noprio_target100_start2000_adamw1e-4_wd1e-4_seed0',
@@ -204,28 +206,39 @@ atari_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_gpt_multi_task',
-        import_names=['lzero.policy.muzero_gpt_multi_task'],
+        type='muzero_gpt_multi_task_v2',
+        import_names=['lzero.policy.muzero_gpt_multi_task_v2'],
     ),
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_gpt_multi_task
-    import copy
-    [main_config_2, main_config_3] = [copy.deepcopy(main_config) for _ in range(2)]
-    [create_config_2, create_config_3] = [copy.deepcopy(create_config) for _ in range(2)]
+    # from lzero.entry import train_muzero_gpt_multi_task_v2
+    # import copy
+    # [main_config_2, main_config_3] = [copy.deepcopy(main_config) for _ in range(2)]
+    # [create_config_2, create_config_3] = [copy.deepcopy(create_config) for _ in range(2)]
 
-    main_config_2.env.env_name = 'QbertNoFrameskip-v4'
-    main_config_3.env.env_name = 'SeaquestNoFrameskip-v4'
+    # main_config_2.env.env_name = 'QbertNoFrameskip-v4'
+    # main_config_3.env.env_name = 'SeaquestNoFrameskip-v4'
     
-    main_config_2.exp_name = exp_name_prefix + f'Qbert_mt-muzero-gpt_seed0'
-    main_config_3.exp_name = exp_name_prefix + f'Seaquest_mt-muzero-gpt_seed0'
+    # main_config_2.exp_name = exp_name_prefix + f'Qbert_mt-muzero-gpt_seed0'
+    # main_config_3.exp_name = exp_name_prefix + f'Seaquest_mt-muzero-gpt_seed0'
 
+    # # main_config_2.policy.model.action_space_size = 6
+    # # main_config_3.policy.model.action_space_size = 18
+    # main_config_2.policy.task_id = 1
+    # main_config_3.policy.task_id = 2
+    # train_muzero_gpt_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]]], seed=0, max_env_step=max_env_step)
+
+
+    from lzero.entry import train_muzero_gpt_multi_task_v2
+    import copy
+    [main_config_2] = [copy.deepcopy(main_config) for _ in range(1)]
+    [create_config_2] = [copy.deepcopy(create_config) for _ in range(1)]
+    main_config_2.env.env_name = 'QbertNoFrameskip-v4'
+    main_config_2.exp_name = exp_name_prefix + f'Qbert_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_seed0'
     # main_config_2.policy.model.action_space_size = 6
     # main_config_3.policy.model.action_space_size = 18
     main_config_2.policy.task_id = 1
-    main_config_3.policy.task_id = 2
-
-    train_muzero_gpt_multi_task([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]]], seed=0, max_env_step=max_env_step)
+    train_muzero_gpt_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]]], seed=0, max_env_step=max_env_step)
