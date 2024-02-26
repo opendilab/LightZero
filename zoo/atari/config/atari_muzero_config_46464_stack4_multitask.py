@@ -49,7 +49,7 @@ reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = False
 
 # exp_name_prefix = 'data_mz_ctree_mt_pong-qbert-seaquest_0226/'
-exp_name_prefix = 'data_mz_ctree_mt_pong-qbert_0226/'
+exp_name_prefix = 'data_mz_ctree_mt_stack4_pong-qbert_0226/'
 
 
 # ==============================================================
@@ -62,7 +62,7 @@ atari_muzero_config = dict(
     # atari env full action space
     # game_buffer_muzero task_id
     # mcts_ctree, 
-    exp_name=exp_name_prefix+f'{env_name[:-14]}_muzero-mt-v2_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl400_noprio_target100_sgd02_seed0',
+    exp_name=exp_name_prefix+f'{env_name[:-14]}_muzero-mt-v2-stack4_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl400_noprio_target100_sgd02_seed0',
 
     # exp_name=exp_name_prefix+f'{env_name[:-14]}_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl400_noprio_target100_sgd02_seed0',
     # exp_name=f'data_mz_ctree/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_collect-orig_tep025_gsl50_noprio_target100_start2000_adamw1e-4_wd1e-4_seed0',
@@ -101,8 +101,8 @@ atari_muzero_config = dict(
             norm_type='BN',
         ),
         # (int) The number of samples required for mini inference.
-        # mini_infer_size=1024,
-        mini_infer_size=2048,
+        # mini_infer_size=2048,
+        mini_infer_size=1536,  # int(256*6)
         cuda=True,
         env_type='not_board_games',
         game_segment_length=400,
