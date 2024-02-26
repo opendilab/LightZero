@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(4)
+torch.cuda.set_device(2)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -84,7 +84,7 @@ atari_muzero_config = dict(
     # TODO: muzero_gpt_model.py world_model.py (3,64,64)
     # exp_name=f'data_xzero_stack1_0219/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kv-88-notfix_seed0',
 
-    exp_name=f'data_xzero_stack1_0219/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kv81-fix3_collect-clear200_noeval_search-toplay-nodeepcopy_seed0',
+    exp_name=f'data_xzero_stack1_0219/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kvbatch-pad_collect-clear200_noeval_search-toplay-nodeepcopy_seed0',
 
     # exp_name=f'data_xzero_stack1_0219/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax_mcts-kv-reset-5-kv-81_latent-soft-target-100_mantran_seed0',
 

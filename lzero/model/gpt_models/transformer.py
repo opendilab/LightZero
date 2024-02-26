@@ -86,8 +86,8 @@ class Block(nn.Module):
         # self.gru_gating = True
         self.gru_bias  = 2.
         if self.gru_gating is True:
-            self.gate1 = GRUGatingUnit(config.embed_dim, self.gru_bias )
-            self.gate2 = GRUGatingUnit(config.embed_dim, self.gru_bias )
+            self.gate1 = GRUGatingUnit(config.embed_dim, self.gru_bias)
+            self.gate2 = GRUGatingUnit(config.embed_dim, self.gru_bias)
 
         self.ln1 = nn.LayerNorm(config.embed_dim)
         self.ln2 = nn.LayerNorm(config.embed_dim)
