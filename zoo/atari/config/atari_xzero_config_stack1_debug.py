@@ -53,8 +53,8 @@ model_update_ratio = 0.25 # for pong boxing
 num_simulations = 50
 
 max_env_step = int(10e6)
-reanalyze_ratio = 0. # batch_size*reanalyze_ratio should b
-# reanalyze_ratio = 0.25 # batch_size*reanalyze_ratio should b
+# reanalyze_ratio = 0. # batch_size*reanalyze_ratio should b
+reanalyze_ratio = 0.25 # batch_size*reanalyze_ratio should b
 
 
 batch_size = 64

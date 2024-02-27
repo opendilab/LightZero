@@ -72,7 +72,7 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:2',
+                      "device": 'cuda:5',
                     #   "device": 'cpu',
                       # 'support_size': 21,
                       'support_size': 601,
@@ -88,7 +88,9 @@ cfg['world_model'] = {
                       # 'max_cache_size':50000,
                       # 'max_cache_size':500,
                       "env_num": 8,
+                      # "env_num":16, # TODO
                       # "env_num":1, # TODO
+
                       'latent_recon_loss_weight':0.05,
                       'perceptual_loss_weight':0.05, # for stack1 rgb obs
                       # 'perceptual_loss_weight':0., # for stack4 gray obs
