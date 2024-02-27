@@ -151,6 +151,8 @@ def train_muzero_gpt_multi_task_v2(
             else:
                 collect_kwargs['epsilon'] = 0.0
 
+            # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+
             # Evaluate policy performance.
             if evaluator.should_eval(learner.train_iter):
                 stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
@@ -182,6 +184,9 @@ def train_muzero_gpt_multi_task_v2(
                 # Learner will train ``update_per_collect`` times in one iteration.
                 if replay_buffer.get_num_of_transitions() > batch_size:
                     train_data = replay_buffer.sample(batch_size, policy)
+                    # 非常重要 ====================
+                    train_data.append(task_id)
+                    train_data_multi_task.append(train_data)
                 else:
                     logging.warning(
                         f'The data in replay_buffer is not sufficient to sample a mini-batch: '
@@ -190,9 +195,6 @@ def train_muzero_gpt_multi_task_v2(
                         f'continue to collect now ....'
                     )
                     break
-                # 非常重要 ====================
-                train_data.append(task_id)
-                train_data_multi_task.append(train_data)
 
             # The core train steps for MCTS+RL algorithms.
             log_vars = learner.train(train_data_multi_task, envstep_multi_task)

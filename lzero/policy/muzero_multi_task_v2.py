@@ -466,6 +466,7 @@ class MuZeroMTV2Policy(Policy):
                 self._cfg.policy_entropy_loss_weight * policy_entropy_loss
         )
         # weighted_total_loss = (weights * loss).mean()
+        # print(loss)
         weighted_total_loss = loss.mean()
 
         gradient_scale = 1 / self._cfg.num_unroll_steps

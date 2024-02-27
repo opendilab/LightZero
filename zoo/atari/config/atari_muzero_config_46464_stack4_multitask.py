@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(7)
+torch.cuda.set_device(1)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
@@ -42,14 +42,16 @@ model_update_ratio = 0.25
 
 num_simulations = 50 
 batch_size = 256
+# batch_size = 2
+
 max_env_step = int(10e6)
 reanalyze_ratio = 0.
 # reanalyze_ratio = 0.5
 
 eps_greedy_exploration_in_collect = False
 
-# exp_name_prefix = 'data_mz_ctree_mt_pong-qbert-seaquest_0226/'
-exp_name_prefix = 'data_mz_ctree_mt_stack4_pong-qbert_0226/'
+# exp_name_prefix = 'data_mz_mt_stack4_pong-qbert-seaquest_0226/'
+exp_name_prefix = 'data_mz_mt_stack4_pong-qbert_0226/'
 
 
 # ==============================================================
@@ -83,8 +85,8 @@ atari_muzero_config = dict(
         collect_max_episode_steps=int(2e4),
         eval_max_episode_steps=int(1e4),
         # TODO: debug
-        # collect_max_episode_steps=int(50),
-        # eval_max_episode_steps=int(50),
+        # collect_max_episode_steps=int(10),
+        # eval_max_episode_steps=int(10),
     ),
     policy=dict(
         task_id=0,
@@ -176,28 +178,22 @@ if __name__ == "__main__":
     # import copy
     # [main_config_2, main_config_3] = [copy.deepcopy(main_config) for _ in range(2)]
     # [create_config_2, create_config_3] = [copy.deepcopy(create_config) for _ in range(2)]
-
     # main_config_2.env.env_name = 'QbertNoFrameskip-v4'
     # main_config_3.env.env_name = 'SeaquestNoFrameskip-v4'
-    
     # main_config_2.exp_name = exp_name_prefix + f'Qbert_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_seed0'
     # main_config_3.exp_name = exp_name_prefix + f'Seaquest_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_seed0'
-
     # # main_config_2.policy.model.action_space_size = 6
     # # main_config_3.policy.model.action_space_size = 18
     # main_config_2.policy.task_id = 1
     # main_config_3.policy.task_id = 2
-
     # train_muzero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]]], seed=0, max_env_step=max_env_step)
 
     from lzero.entry import train_muzero_multi_task_v2
     import copy
     [main_config_2] = [copy.deepcopy(main_config) for _ in range(1)]
     [create_config_2] = [copy.deepcopy(create_config) for _ in range(1)]
-
     main_config_2.env.env_name = 'QbertNoFrameskip-v4'
     main_config_2.exp_name = exp_name_prefix + f'Qbert_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_seed0'
-
     # main_config_2.policy.model.action_space_size = 6
     # main_config_3.policy.model.action_space_size = 18
     main_config_2.policy.task_id = 1

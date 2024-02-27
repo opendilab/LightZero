@@ -288,7 +288,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     # policy forward
                     # ==============================================================
-                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, self.task_id)
+                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, task_id=self.task_id)
 
                     actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                     distributions_dict_no_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}

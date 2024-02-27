@@ -48,8 +48,8 @@ batch_size = 64
 num_unroll_steps = 5
 eps_greedy_exploration_in_collect = False
 
-# exp_name_prefix = 'data_mz_gpt_ctree_mt_stack1_pong-qbert-seaquest/'
-exp_name_prefix = 'data_xzero_mt_stack1_pong-qbert/'
+# exp_name_prefix = 'data_mt/mz_gpt_ctree_mt_stack1_pong-qbert-seaquest/'
+exp_name_prefix = 'data_mt/xzero_mt_stack1_pong-qbert/'
 
 
 # num_simulations = 8 # debug

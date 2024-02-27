@@ -38,7 +38,7 @@ num_simulations = 50
 
 update_per_collect = 1000
 batch_size = 256
-max_env_step = int(1e6)
+max_env_step = int(10e6)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = False
 # eps_greedy_exploration_in_collect = True
@@ -48,8 +48,7 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=
-    f'data_mz_ctree_0124_stack1/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_46464_stack1_seed0',
+    exp_name=f'data_mz_stack1_0226/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_46464_stack1_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,

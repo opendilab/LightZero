@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(6)
+torch.cuda.set_device(1)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
@@ -48,8 +48,8 @@ reanalyze_ratio = 0.
 # reanalyze_ratio = 0.5
 eps_greedy_exploration_in_collect = False
 
-# exp_name_prefix = 'data_mz_ctree_mt_stack1_pong-qbert-seaquest_0226/'
-exp_name_prefix = 'data_mz_ctree_mt_stack1_pong-qbert_0226/'
+exp_name_prefix = 'data_mt/mz_mt_stack1_pong-qbert-seaquest_0226/'
+# exp_name_prefix = 'data_mt/mz_mt_stack1_pong-qbert_0226/'
 
 
 # num_simulations = 8 # debug
@@ -188,13 +188,10 @@ if __name__ == "__main__":
     import copy
     [main_config_2, main_config_3] = [copy.deepcopy(main_config) for _ in range(2)]
     [create_config_2, create_config_3] = [copy.deepcopy(create_config) for _ in range(2)]
-
     main_config_2.env.env_name = 'QbertNoFrameskip-v4'
     main_config_3.env.env_name = 'SeaquestNoFrameskip-v4'
-    
     main_config_2.exp_name = exp_name_prefix + f'Qbert_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_seed0'
     main_config_3.exp_name = exp_name_prefix + f'Seaquest_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_seed0'
-
     # main_config_2.policy.model.action_space_size = 6
     # main_config_3.policy.model.action_space_size = 18
     main_config_2.policy.task_id = 1
