@@ -432,37 +432,23 @@ class WorldModel(nn.Module):
         n, num_observations_tokens, _ = latent_state.shape
         if n <= self.env_num:
             # MCTS root节点: 需要准确的估计 value, policy_logits, 或许需要结合context的kv_cache进行更准确的估计，而不是当前的从0开始推理
-            # self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
-            # outputs_wm = self.forward({'obs_embeddings': latent_state}, past_keys_values=self.keys_values_wm, is_root=False)
-            # Compute the hash of latest_state
-            # latest_state = latent_state.detach().cpu().numpy()
-            # 假设 latest_state 是新的 latent_state，包含 ready_env_num 个环境的信息
-            # ready_env_num = latest_state.shape[0]
-            # keys_values_wm_list = []
-            # self.keys_values_wm_size_list = []
-            # for i in range(ready_env_num):
-            #     self.total_query_count += 1
-            #     state_single_env = latest_state[i]  # 获取单个环境的 latent state
-            #     hash_latest_state = hash(state_single_env)  # 计算哈希值
-            #     matched_value = self.past_keys_values_cache.get(hash_latest_state)  # 检索缓存值
-            #     if matched_value is not None:
-            #         self.hit_count += 1
-            #         # 如果找到匹配的值，将其添加到列表中
-            #         keys_values_wm_list.append(copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
-            #         self.keys_values_wm_size_list.append(matched_value.size)
-                    
-            #         keys_values_wm_list.append(self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens))
-            #         self.keys_values_wm_size_list.append(0)
-            #     else:
-            #         # use zero
-            #         keys_values_wm_list.append(self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens))
-            #         self.keys_values_wm_size_list.append(0)
-            # self.keys_values_wm_list = keys_values_wm_list
-
-            # use zero
-            self.keys_values_wm_list = [self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens) for i in range(n)]
-            outputs_wm = self.forward({'obs_embeddings': latent_state}, past_keys_values=self.keys_values_wm_list, is_root=False, kvcache_independent=True)
+            self.keys_values_wm = self.transformer.generate_empty_keys_values(n, max_tokens=self.config.max_tokens)
+            outputs_wm = self.forward({'obs_embeddings': latent_state}, past_keys_values=self.keys_values_wm, is_root=False, kvcache_independent=False)
             self.keys_values_wm_size_list = [1 for i in range(n)]
+
+            # 复制单个环境对应的 keys_values_wm 并存储
+            self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
+            for i in range(latent_state.size(0)):  # 遍历每个环境
+                state_single_env = latent_state[i]   # 获取单个环境的 latent state
+                cache_key = hash(state_single_env.detach().cpu().numpy())  # 计算哈希值
+                for layer in range(self.num_layers):
+                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = self.keys_values_wm._keys_values[layer]._k_cache._cache[i].unsqueeze(0) # shape torch.Size([2, 100, 512])
+                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = self.keys_values_wm._keys_values[layer]._v_cache._cache[i].unsqueeze(0)
+                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm._keys_values[layer]._k_cache._size 
+                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm._keys_values[layer]._v_cache._size
+                    # keys_values_wm_single_env[layer].update(self.keys_values_wm[layer]._k_cache._cache[i].unsqueeze(0), self.keys_values_wm[layer]._v_cache._cache[i].unsqueeze(0))
+                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+            # del keys_values_wm_single_env
 
         elif n == int(256): 
             # TODO: n=256 means train tokenizer, 不需要计算target value
@@ -516,17 +502,7 @@ class WorldModel(nn.Module):
             observations = obs_act_dict
             buffer_action = None
 
-        # NOTE: should_preprocess=True is important
-        # latent_state = self.tokenizer.encode(observations, should_preprocess=True).tokens  # (B, C, H, W) -> (B, K)
-        # _, num_observations_tokens = latent_state.shape
-
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(observations, should_preprocess=True) # (B, C, H, W) -> (B, K, E)
-        # num_observations_tokens = obs_embeddings.shape[1]
-
-        # if self.num_observations_tokens is None:
-        #     self._num_observations_tokens = num_observations_tokens
-
-        # outputs_wm = self.refresh_keys_values_with_initial_latent_state_for_init_infer(latent_state, buffer_action)
         outputs_wm = self.refresh_keys_values_with_initial_latent_state_for_init_infer(obs_embeddings, buffer_action)
 
         self.latent_state = obs_embeddings
@@ -553,9 +529,6 @@ class WorldModel(nn.Module):
             # TODO: for n=32*6=192 means 通过unroll 5 steps，计算target value 
             # latent_state = latent_state.reshape(32, 6, num_observations_tokens) # (BL, K)
             # latent_state = latent_state.view(-1, 6, num_observations_tokens) # (BL, K)
-
-            # [192, 16] -> [32, 6, 16]
-            # latent_state = latent_state.view(buffer_action.shape[0], -1, num_observations_tokens) # (BL, K) for unroll_step=1
 
             # [192, 16, 64] -> [32, 6, 16, 64]
             latent_state = latent_state.contiguous().view(buffer_action.shape[0], -1, num_observations_tokens, self.obs_per_embdding_dim) # (BL, K) for unroll_step=1
@@ -628,13 +601,10 @@ class WorldModel(nn.Module):
 
 
     """
-    past-kv-dict-batch envnum8 latest multi-step
-    fix init infer
-    把8个样本的self.keys_values_wm 看做一个整体来寻找
-
-    TODO：很多时候都是执行的refresh_keys_values_with_initial_latent_state，导致没有充分利用序列建模能力？
+    假设env_num=8
+    8个环境的kv_cache单独存储与寻找，都存储在一个dict中，在recurrent_inference时，
+    其内部也是通过for loop执行transformer forward的推理，推理的结果再组成batch
     """
-
 
     @torch.no_grad()
     # @profile
@@ -644,11 +614,13 @@ class WorldModel(nn.Module):
         # 但如果假设环境是MDP的话，然后根据当前的 latest_state s_t 在这个列表中查找即可
         # TODO: 但如果假设环境是非MDP的话，需要维护一个 {(rootstate_action_history:kv_cache)}的列表？
 
+        if self.total_query_count>0 and self.total_query_count%100==0:
         # if self.total_query_count>0:
-        #     self.hit_freq = self.hit_count/(self.total_query_count)
-        #     print('hit_freq:', self.hit_freq)
-        #     print('hit_count:', self.hit_count)
-        #     print('total_query_count:', self.total_query_count)
+            self.hit_freq = self.hit_count/(self.total_query_count)
+            print('hit_freq:', self.hit_freq)
+            print('hit_count:', self.hit_count)
+            print('total_query_count:', self.total_query_count)
+            print(self.keys_values_wm_size_list)
 
         latest_state = state_action_history[-1][0]
 
@@ -678,29 +650,19 @@ class WorldModel(nn.Module):
 
 
         self.keys_values_wm_list = keys_values_wm_list
-
         # assert self.keys_values_wm is not None and self.num_observations_tokens is not None
-
         num_passes = 1 + self.num_observations_tokens if should_predict_next_obs else 1
-
         output_sequence, latent_state = [], []
 
         reset_indices = [index for index, value in enumerate(self.keys_values_wm_size_list) if value + num_passes > self.config.max_tokens]
         self.refresh_keys_values_with_initial_latent_state(torch.tensor(latest_state, dtype=torch.float32).to(self.device), reset_indices)
 
-
         action = state_action_history[-1][-1]
-
         token = action.clone().detach() if isinstance(action, torch.Tensor) else torch.tensor(action, dtype=torch.long)
         token = token.reshape(-1, 1).to(self.device)  # (B, 1)
 
         for k in range(num_passes):  # assumption that there is only one action token.
             # action_token obs_token, ..., obs_token  1+16
-
-            # obs is in token level
-            # act_token num_steps=1, prev_steps=16
-            # obs_token_0 num_steps=1, prev_steps=17
-            # obs_token_1 num_steps=1, prev_steps=18
             if k==0:
                 obs_embeddings_or_act_tokens = {'act_tokens': token}
             else:

@@ -595,15 +595,12 @@ class WorldModel(nn.Module):
 
         return outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
 
-
     """
-    past-kv-dict-batch envnum8 latest multi-step
-    fix init infer
-    把8个样本的self.keys_values_wm 看做一个整体来寻找
-
-    TODO：很多时候都是执行的refresh_keys_values_with_initial_latent_state，导致没有充分利用序列建模能力？
+    假设env_num=8
+    8个环境的kv_cache单独存储与寻找，都存储在一个dict中，在recurrent_inference时，
+    由于不同环境找到的kv_cache的size不同，先根据最大size对kv_cache在前部补零，然后组成batch_size的kv_cache
+    其内部也是通过batch执行transformer forward的推理
     """
-
 
     @torch.no_grad()
     # @profile
