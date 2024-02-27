@@ -39,6 +39,8 @@ n_episode = 8
 
 evaluator_env_num = 1
 update_per_collect = 1000
+# update_per_collect = 100
+
 
 # collector_env_num = 1
 # n_episode = 1
@@ -106,8 +108,8 @@ atari_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        # collect_max_episode_steps=int(50),
-        # eval_max_episode_steps=int(50),
+        # collect_max_episode_steps=int(100),
+        # eval_max_episode_steps=int(100),
         # TODO: run
         collect_max_episode_steps=int(2e4),
         eval_max_episode_steps=int(1e4),

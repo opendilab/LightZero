@@ -610,7 +610,8 @@ class WorldModel(nn.Module):
         # 但如果假设环境是MDP的话，然后根据当前的 latest_state s_t 在这个列表中查找即可
         # TODO: 但如果假设环境是非MDP的话，需要维护一个 {(rootstate_action_history:kv_cache)}的列表？
 
-        if self.total_query_count>0 and self.total_query_count%10000==0:
+        if self.total_query_count>0 and self.total_query_count%99999==0:
+        # if self.total_query_count>0 and self.total_query_count%1==0:
             self.hit_freq = self.hit_count/(self.total_query_count)
             print('hit_freq:', self.hit_freq)
             print('hit_count:', self.hit_count)
@@ -621,7 +622,7 @@ class WorldModel(nn.Module):
 
         # 假设 latest_state 是新的 latent_state，包含 ready_env_num 个环境的信息
         ready_env_num = latest_state.shape[0]
-        keys_values_wm_list = []
+        self.keys_values_wm_list = []
         self.keys_values_wm_size_list = []
         for i in range(ready_env_num):
             self.total_query_count += 1
@@ -631,16 +632,15 @@ class WorldModel(nn.Module):
             if matched_value is not None:
                 self.hit_count += 1
                 # 如果找到匹配的值，将其添加到列表中
-                keys_values_wm_list.append(copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
+                self.keys_values_wm_list.append(copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
                 self.keys_values_wm_size_list.append(matched_value.size)
             else:
                 # use zero
                 self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
                 outputs_wm = self.forward({'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)}, past_keys_values=self.keys_values_wm_single_env, is_root=False)
-                keys_values_wm_list.append(self.keys_values_wm_single_env)
+                self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                 self.keys_values_wm_size_list.append(1)
 
-        self.keys_values_wm_list = keys_values_wm_list
         num_passes = 1 + self.num_observations_tokens if should_predict_next_obs else 1
         output_sequence, latent_state = [], []
 
@@ -685,6 +685,7 @@ class WorldModel(nn.Module):
             # 更新缓存的尺寸
             self.keys_values_wm._keys_values[layer]._k_cache._size = max_size
             self.keys_values_wm._keys_values[layer]._v_cache._size = max_size
+        # del self.keys_values_wm_list
 
         for k in range(num_passes):  # assumption that there is only one action token.
             # action_token obs_token, ..., obs_token  1+1
@@ -693,7 +694,6 @@ class WorldModel(nn.Module):
             else:
                 obs_embeddings_or_act_tokens = {'obs_embeddings': token}
 
-            # outputs_wm = self.forward(obs_embeddings_or_act_tokens, past_keys_values=self.keys_values_wm_list, is_root=False, kvcache_independent=True)
             outputs_wm = self.forward(obs_embeddings_or_act_tokens, past_keys_values=self.keys_values_wm, is_root=False, kvcache_independent=False)
             # if k==0, action_token self.head_observations 1,...,0,1
             output_sequence.append(outputs_wm.output_sequence)
@@ -721,14 +721,6 @@ class WorldModel(nn.Module):
         self.latent_state = torch.cat(latent_state, dim=1)  # (B, K)
 
         # # TODO: 在计算结束后，是否需要更新最新的缓存. 是否需要deepcopy
-        # for i in range(latent_state.shape[0]):  # 遍历每个环境
-        #     state_single_env = latent_state[i]   # 获取单个环境的 latent state
-        #     cache_key = hash(state_single_env.detach().cpu().numpy())  # 计算哈希值
-        #     # 复制单个环境对应的 keys_values_wm 并存储
-        #     # print([self.keys_values_wm_list[i].size for i in range(8)])
-        #     self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_list[i], 'cpu'))
-
-        # keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
         for i in range(self.latent_state.size(0)):  # 遍历每个环境
             state_single_env = self.latent_state[i]   # 获取单个环境的 latent state
             cache_key = hash(state_single_env.detach().cpu().numpy())  # 计算哈希值
@@ -740,7 +732,7 @@ class WorldModel(nn.Module):
                 self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm._keys_values[layer]._v_cache._size
                 # keys_values_wm_single_env[layer].update(self.keys_values_wm[layer]._k_cache._cache[i].unsqueeze(0), self.keys_values_wm[layer]._v_cache._cache[i].unsqueeze(0))
             self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-        # del keys_values_wm_single_env
+        # del self.keys_values_wm
 
         # outputs_wm.logits_policy, outputs_wm.logits_value
         if len(self.past_keys_values_cache) > self.max_cache_size:
