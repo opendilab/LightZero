@@ -27,6 +27,25 @@ from .utils import LossWithIntermediateLosses, init_weights
 from ding.torch_utils import to_device
 # from memory_profiler import profile
 from line_profiler import line_profiler
+from line_profiler import line_profiler
+import hashlib
+# def quantize_state(state, num_buckets=1000):
+def quantize_state(state, num_buckets=15):
+# def quantize_state(state, num_buckets=10):
+    """
+    量化状态向量。
+    参数:
+        state: 要量化的状态向量。
+        num_buckets: 量化的桶数。
+    返回:
+        量化后的状态向量的哈希值。
+    """
+    # 使用np.digitize将状态向量的每个维度值映射到num_buckets个桶中
+    quantized_state = np.digitize(state, bins=np.linspace(0, 1, num=num_buckets))
+    # 使用更稳定的哈希函数
+    quantized_state_bytes = quantized_state.tobytes()
+    hash_object = hashlib.sha256(quantized_state_bytes)
+    return hash_object.hexdigest()
 
 @dataclass
 class WorldModelOutput:
@@ -242,6 +261,9 @@ class WorldModel(nn.Module):
         )
         self.hit_count = 0
         self.total_query_count = 0
+        self.root_hit_cnt = 0
+        self.root_total_query_count = 0
+        self.length3_context_cnt = 0
 
 
 
@@ -440,15 +462,29 @@ class WorldModel(nn.Module):
             self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
             for i in range(latent_state.size(0)):  # 遍历每个环境
                 state_single_env = latent_state[i]   # 获取单个环境的 latent state
-                cache_key = hash(state_single_env.detach().cpu().numpy())  # 计算哈希值
+                # cache_key = hash(state_single_env.detach().cpu().numpy())  # 计算哈希值
+                quantized_state = state_single_env.detach().cpu().numpy()
+                cache_key = quantize_state(quantized_state)  # 使用量化后的状态计算哈希值
                 for layer in range(self.num_layers):
                     self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = self.keys_values_wm._keys_values[layer]._k_cache._cache[i].unsqueeze(0) # shape torch.Size([2, 100, 512])
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = self.keys_values_wm._keys_values[layer]._v_cache._cache[i].unsqueeze(0)
                     self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm._keys_values[layer]._k_cache._size 
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm._keys_values[layer]._v_cache._size
                     # keys_values_wm_single_env[layer].update(self.keys_values_wm[layer]._k_cache._cache[i].unsqueeze(0), self.keys_values_wm[layer]._v_cache._cache[i].unsqueeze(0))
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-            # del keys_values_wm_single_env
+                self.root_total_query_count += 1
+                if cache_key not in self.past_keys_values_cache:
+                    self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                else:
+                    self.root_hit_cnt += 1
+                    root_hit_ratio = self.root_hit_cnt / self.root_total_query_count
+                    print('root_total_query_count:', self.root_total_query_count)
+                    print(f'root_hit_ratio:{root_hit_ratio}')
+                    print(f'root_hit find size {self.past_keys_values_cache[cache_key].size}')
+                    if self.past_keys_values_cache[cache_key].size>1:
+                        print(f'=='*20)
+                        print(f'NOTE: root_hit find size > 1')
+                        print(f'=='*20)
+
 
         elif n == int(256): 
             # TODO: n=256 means train tokenizer, 不需要计算target value
@@ -614,14 +650,6 @@ class WorldModel(nn.Module):
         # 但如果假设环境是MDP的话，然后根据当前的 latest_state s_t 在这个列表中查找即可
         # TODO: 但如果假设环境是非MDP的话，需要维护一个 {(rootstate_action_history:kv_cache)}的列表？
 
-        if self.total_query_count>0 and self.total_query_count%100==0:
-        # if self.total_query_count>0:
-            self.hit_freq = self.hit_count/(self.total_query_count)
-            print('hit_freq:', self.hit_freq)
-            print('hit_count:', self.hit_count)
-            print('total_query_count:', self.total_query_count)
-            print(self.keys_values_wm_size_list)
-
         latest_state = state_action_history[-1][0]
 
         # 假设 latest_state 是新的 latent_state，包含 ready_env_num 个环境的信息
@@ -631,8 +659,9 @@ class WorldModel(nn.Module):
         for i in range(ready_env_num):
             self.total_query_count += 1
             state_single_env = latest_state[i]  # 获取单个环境的 latent state
-            hash_latest_state = hash(state_single_env)  # 计算哈希值
-            matched_value = self.past_keys_values_cache.get(hash_latest_state)  # 检索缓存值
+            # cache_key = hash(state_single_env.detach().cpu().numpy())  # 计算哈希值
+            cache_key = quantize_state(state_single_env)  # 使用量化后的状态计算哈希值
+            matched_value = self.past_keys_values_cache.get(cache_key)  # 检索缓存值
             if matched_value is not None:
                 self.hit_count += 1
                 # 如果找到匹配的值，将其添加到列表中
@@ -640,13 +669,26 @@ class WorldModel(nn.Module):
                 self.keys_values_wm_size_list.append(matched_value.size)
             else:
                 # use zero
-                # keys_values_wm_list.append(self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens))
-                # self.keys_values_wm_size_list.append(0)
-
                 self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
                 outputs_wm = self.forward({'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)}, past_keys_values=self.keys_values_wm_single_env, is_root=False)
                 keys_values_wm_list.append(self.keys_values_wm_single_env)
                 self.keys_values_wm_size_list.append(1)
+
+
+        self.length3_context_cnt += len([x for x in self.keys_values_wm_size_list if x >= 5])
+        
+        if self.total_query_count>0 and self.total_query_count%5000==0:
+        # if self.total_query_count>0 and self.total_query_count%1==0:
+            self.hit_freq = self.hit_count/(self.total_query_count)
+            print('hit_freq:', self.hit_freq)
+            # print('hit_count:', self.hit_count)
+            print('total_query_count:', self.total_query_count)
+            print(self.keys_values_wm_size_list)
+
+            length3_context_cnt_ratio = self.length3_context_cnt / self.total_query_count
+            print('>=3 node context_cnt_ratio:', length3_context_cnt_ratio)
+            print('>=3 node context_cnt:', self.length3_context_cnt)
+        # print(self.keys_values_wm_size_list)
 
 
         self.keys_values_wm_list = keys_values_wm_list
@@ -654,8 +696,8 @@ class WorldModel(nn.Module):
         num_passes = 1 + self.num_observations_tokens if should_predict_next_obs else 1
         output_sequence, latent_state = [], []
 
-        reset_indices = [index for index, value in enumerate(self.keys_values_wm_size_list) if value + num_passes > self.config.max_tokens]
-        self.refresh_keys_values_with_initial_latent_state(torch.tensor(latest_state, dtype=torch.float32).to(self.device), reset_indices)
+        # reset_indices = [index for index, value in enumerate(self.keys_values_wm_size_list) if value + num_passes > self.config.max_tokens]
+        # self.refresh_keys_values_with_initial_latent_state(torch.tensor(latest_state, dtype=torch.float32).to(self.device), reset_indices)
 
         action = state_action_history[-1][-1]
         token = action.clone().detach() if isinstance(action, torch.Tensor) else torch.tensor(action, dtype=torch.long)
@@ -667,10 +709,7 @@ class WorldModel(nn.Module):
                 obs_embeddings_or_act_tokens = {'act_tokens': token}
             else:
                 obs_embeddings_or_act_tokens = {'obs_embeddings': token}
-            # if token.shape[0] < 8:
-            #     print('debug')
 
-            # outputs_wm = self.forward(obs_embeddings_or_act_tokens, past_keys_values=self.keys_values_wm, is_root=False, kvcache_independent=True)
             outputs_wm = self.forward(obs_embeddings_or_act_tokens, past_keys_values=self.keys_values_wm_list, is_root=False, kvcache_independent=True)
 
             # if k==0, action_token self.head_observations 1,...,0,1
@@ -697,19 +736,29 @@ class WorldModel(nn.Module):
 
         output_sequence = torch.cat(output_sequence, dim=1)  # (B, 1 + K, E)
         # Before updating self.latent_state, delete the old one to free memory
-        del self.latent_state
+        # del self.latent_state
         self.latent_state = torch.cat(latent_state, dim=1)  # (B, K)
-        latent_state = self.latent_state
 
         # # TODO: 在计算结束后，是否需要更新最新的缓存. 是否需要deepcopy
-        for i in range(latent_state.shape[0]):  # 遍历每个环境
-            state_single_env = latent_state[i]   # 获取单个环境的 latent state
-            cache_key = hash(state_single_env.detach().cpu().numpy())  # 计算哈希值
+        for i in range(self.latent_state.shape[0]):  # 遍历每个环境
+            state_single_env = self.latent_state[i]   # 获取单个环境的 latent state
+            # cache_key = hash(state_single_env.detach().cpu().numpy())  # 计算哈希值
+            quantized_state = state_single_env.detach().cpu().numpy()
+            cache_key = quantize_state(quantized_state)  # 使用量化后的状态计算哈希值
             # 复制单个环境对应的 keys_values_wm 并存储
             # print([self.keys_values_wm_list[i].size for i in range(8)])
-            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_list[i], 'cpu'))
-
-            # del keys_values_wm_single_env
+            # self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_list[i], 'cpu'))
+            
+            # 比较并存储大小较大的 cache
+            if cache_key in self.past_keys_values_cache:
+                existing_kvcache = self.past_keys_values_cache[cache_key]
+                # 判断现有cache和新cache中的size是否有不同
+                if self.keys_values_wm_list[i].size  > existing_kvcache.size and self.keys_values_wm_list[i].size < self.config.max_tokens-1:
+                    # 具有size为self.config.max_tokens-1 不用存，因为使用达到最大size的kv_cache，而这会导致reset，从而一直是从零开始的
+                    self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_list[i], 'cpu'))
+            elif self.keys_values_wm_list[i].size < self.config.max_tokens-1:
+                # 具有size为self.config.max_tokens-1 不用存，因为使用达到最大size的kv_cache，而这会导致reset，从而一直是从零开始的
+                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_list[i], 'cpu'))
 
         # outputs_wm.logits_policy, outputs_wm.logits_value
         if len(self.past_keys_values_cache) > self.max_cache_size:
@@ -782,11 +831,11 @@ class WorldModel(nn.Module):
         # Decode the embeddings to reconstruct the images
         reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
         # Calculate the reconstruction loss
-        latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # TODO: for stack=4
-        perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # for stack=4 gray obs
+        # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # TODO: for stack=4
+        # perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # for stack=4 gray obs
 
-        # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # TODO: for stack=1
-        # perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # TODO: for stack=1
+        latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # TODO: for stack=1
+        perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # TODO: for stack=1
         
         # latent_recon_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)
         # perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)

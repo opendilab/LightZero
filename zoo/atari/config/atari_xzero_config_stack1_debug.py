@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(4)
+torch.cuda.set_device(0)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -51,6 +51,8 @@ update_per_collect = 1000
 # model_update_ratio = 1 # for qbet squest
 model_update_ratio = 0.25 # for pong boxing
 num_simulations = 50
+# num_simulations = 100
+
 
 max_env_step = int(10e6)
 reanalyze_ratio = 0. # batch_size*reanalyze_ratio should b
@@ -66,7 +68,7 @@ eps_greedy_exploration_in_collect = False
 
 # TODO: debug
 num_simulations = 50
-update_per_collect = 2
+update_per_collect = 5
 batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user

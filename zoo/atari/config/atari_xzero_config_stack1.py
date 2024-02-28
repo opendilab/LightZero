@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(6)
+torch.cuda.set_device(4)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
@@ -47,17 +47,13 @@ update_per_collect = 1000
 # update_per_collect = None
 # model_update_ratio = 1 # for qbet squest
 model_update_ratio = 0.25 # for pong boxing
-num_simulations = 50
+# num_simulations = 50
+num_simulations = 100
 
-# num_simulations = 5
 
-
-# TODO: debug
-# num_simulations = 1
 
 max_env_step = int(10e6)
 reanalyze_ratio = 0. 
-# reanalyze_ratio = 0.25 
 # reanalyze_ratio = 0.05 
 
 
@@ -79,12 +75,14 @@ atari_muzero_config = dict(
     # atari env action space
     # game_buffer_muzero_gpt task_id
     # TODO: muzero_gpt_model.py world_model.py (3,64,64)
-    # exp_name=f'data_xzero_stack1_0219/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kv-88-notfix_seed0',
+    # exp_name=f'data_xzero_stack1_0226/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh4_noload_seed0',
 
-    exp_name=f'data_xzero_stack1_0226/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kvbatch-pad-min_collect-clear200_noeval_search-toplay-nodeepcopy_seed0',
+    exp_name=f'data_xzero_stack1_0226/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kv-forloop-quantize15-lsd768-nh4_noload_seed0',
 
+    # exp_name=f'data_xzero_stack1_0226/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd1024-nh8_seed0',
+    # exp_name=f'data_xzero_stack1_0226/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh2_collect-clear200_train-clear20_noeval_search-toplay-nodeepcopy_seed0',
+    # exp_name=f'data_profile/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kvbatch-pad-min_collect-clear200_noeval_search-toplay-nodeepcopy_seed0',
     # exp_name=f'data_xzero_stack1_0219/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax_mcts-kv-reset-5-kv-81_latent-soft-target-100_mantran_seed0',
-
     # exp_name=f'data_xzero_stack1_0219/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e3_collectper200-clear_mcts-kv-reset-5-kv-81-base-fix_latent-sigmod_latent-soft-target-100_mantran_seed0',
     env=dict(
         stop_value=int(1e6),
@@ -116,12 +114,13 @@ atari_muzero_config = dict(
     policy=dict(
         learner=dict(
             hook=dict(
-                log_show_after_iter=100,
+                log_show_after_iter=200,
                 save_ckpt_after_iter=100000, # TODO: default:10000
                 save_ckpt_after_run=True,
             ),
         ),
         model_path=None,
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_xzero_stack1_0226/Pong_xzero_envnum8_ns50_upc1000-mur0.25_new-rr0.0_H5_bs64_stack1_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh4_collect-clear200_train-clear20_noeval_search-toplay-nodeepcopy_seed0/ckpt/iteration_220000.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_xzero_stack1_0204/Pong_xzero_envnum8_ns50_upc1000-mur0.25_new-rr0.0_H5_bs64_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e3_collectper200-clear_mcts-kv-reset-5-kv-88-base_latent-sigmod_latent-soft-target-100_mantran_seed0/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_xzero_stack1_0204/Pong_xzero_envnum8_ns50_upc1000-mur0.25_new-rr0.25_H5_bs64_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e2_collectper200-clear_target-per20-clear_evalmax_latent-soft-target-001_mantran_seed0/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree_0113_k1/Pong_muzero_gpt_envnum8_ns50_upc1000-mur0.25_rr0_H5_bs32_stack1_contembdings_lsd1024_lr1e-4-gcv10-reconslossw005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_seed0/ckpt/iteration_167000.pth.tar',
@@ -167,7 +166,7 @@ atari_muzero_config = dict(
             # reward_support_size=21,
             # value_support_size=21,
             # support_scale=10,
-            embedding_dim=1024,
+            # embedding_dim=1024,
             # embedding_dim=256,
         ),
         use_priority=False,
@@ -252,4 +251,4 @@ if __name__ == "__main__":
     # def run(max_env_step: int):
     #     train_muzero_gpt([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
     # import cProfile
-    # cProfile.run(f"run({10000})", filename="pong_muzero_gpt_ctree_cprofile_10k_envstep", sort="cumulative")
+    # cProfile.run(f"run({100000})", filename="pong_xzero_cprofile_100k_envstep", sort="cumulative")

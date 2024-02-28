@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(6)
+torch.cuda.set_device(5)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
@@ -33,7 +33,9 @@ elif env_name == 'FrostbiteNoFrameskip-v4':
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 1
-num_simulations = 50
+# num_simulations = 50
+num_simulations = 100
+
 # num_simulations = 1 # TODO: only for debug
 
 update_per_collect = 1000
@@ -51,7 +53,7 @@ atari_muzero_config = dict(
     # ('collect_model').world_model.past_keys_values_cache.clear()
     # msts search
     exp_name=
-    f'data_mz_ctree_0226_stack1/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_46464_stack1_seed0',
+    f'data_mz_stack1_0226/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_46464_stack1_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,

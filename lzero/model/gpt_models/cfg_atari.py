@@ -57,8 +57,10 @@ cfg['world_model'] = {
                       # "max_tokens": 2 * 6,  # TODO： horizon
 
                       # 'embed_dim':512, # TODO：for atari
-                      'embed_dim':1024, # TODO：for atari
                       # 'embed_dim':256, # TODO：for atari
+                      # 'embed_dim':1024, # TODO：for atari
+                      'embed_dim':768, # TODO：for atari
+
 
                       'attention': 'causal',
                       # 'num_layers': 10,# TODO：for atari
@@ -66,13 +68,15 @@ cfg['world_model'] = {
                       # 'num_heads': 4,
                       # 'num_layers': 1, # TODO：for atari debug
                       # 'num_heads': 1,
+
                       'num_layers': 2, # TODO：for atari debug
-                      'num_heads': 2,
+                      'num_heads': 4,
+
 
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:6',
+                      "device": 'cuda:0',
                     #   "device": 'cpu',
                       # 'support_size': 21,
                       'support_size': 601,
