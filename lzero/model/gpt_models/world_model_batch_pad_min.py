@@ -610,13 +610,13 @@ class WorldModel(nn.Module):
         # 但如果假设环境是MDP的话，然后根据当前的 latest_state s_t 在这个列表中查找即可
         # TODO: 但如果假设环境是非MDP的话，需要维护一个 {(rootstate_action_history:kv_cache)}的列表？
 
-        # if self.total_query_count>0 and self.total_query_count%99999==0:
-        # # if self.total_query_count>0 and self.total_query_count%1==0:
-        #     self.hit_freq = self.hit_count/(self.total_query_count)
-        #     print('hit_freq:', self.hit_freq)
-        #     print('hit_count:', self.hit_count)
-        #     print('total_query_count:', self.total_query_count)
-        #     print(self.keys_values_wm_size_list)
+        if self.total_query_count>0 and self.total_query_count%99999==0:
+        # if self.total_query_count>0 and self.total_query_count%1==0:
+            self.hit_freq = self.hit_count/(self.total_query_count)
+            print('hit_freq:', self.hit_freq)
+            print('hit_count:', self.hit_count)
+            print('total_query_count:', self.total_query_count)
+            print(self.keys_values_wm_size_list)
 
         latest_state = state_action_history[-1][0]
 
