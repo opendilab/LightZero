@@ -326,7 +326,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
             return []
         batch_target_policies_re = []
 
-        policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, game_segment_lens, action_mask_segment, \
+        policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, root_values, game_segment_lens, action_mask_segment, \
         to_play_segment = policy_re_context  # noqa
         # transition_batch_size = game_segment_batch_size * (self._cfg.num_unroll_steps + 1)
         transition_batch_size = len(policy_obs_list)
@@ -369,6 +369,7 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
             )
             value_prefix_pool = value_prefix_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
+            # noises are not necessary for reanalyze
             noises = [
                 np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
                                     ).astype(np.float32).tolist() for _ in range(transition_batch_size)
@@ -376,13 +377,13 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTSCtree(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTSPtree(self._cfg).search(
                     roots, model, latent_state_roots, reward_hidden_state_roots, to_play=to_play
@@ -390,13 +391,16 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
 
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
+            roots_values = roots.get_values()
             policy_index = 0
-            for state_index, game_index in zip(pos_in_game_segment_list, batch_index_list):
+            for state_index, child_visit, root_value in zip(pos_in_game_segment_list, child_visits, root_values):
                 target_policies = []
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     distributions = roots_distributions[policy_index]
+                    searched_value = roots_values[policy_index]
+
                     if policy_mask[policy_index] == 0:
-                        # NOTE: the invalid padding target policy, O is to make sure the correspoding cross_entropy_loss=0
+                        # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
                         target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
                     else:
                         if distributions is None:
@@ -405,6 +409,12 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                                 list(np.ones(self._cfg.model.action_space_size) / self._cfg.model.action_space_size)
                             )
                         else:
+                            # update the data in game segment
+                            sim_num = sum(distributions)
+                            # print(f'the visit in index{current_index} is {child_visit[current_index]}')
+                            child_visit[current_index] = [visit_count/sim_num for visit_count in distributions]
+                            # print(f'after update the child visit is {child_visit[current_index]}')
+                            root_value[current_index] = searched_value
                             if self._cfg.mcts_ctree:
                                 # cpp mcts_tree
                                 if self._cfg.action_type == 'fixed_action_space':
