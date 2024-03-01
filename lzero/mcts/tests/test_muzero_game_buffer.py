@@ -8,7 +8,7 @@ from huggingface_hub import hf_hub_url, cached_download
 from lzero.mcts.buffer.game_buffer_efficientzero import MuZeroGameBuffer
 from lzero.model.muzero_model import MuZeroModel as Model
 
-# 根据测试模式，导入配置
+# according to the test mode, import the configuration
 test_mode_type = 'conv'
 if test_mode_type == 'conv':
     from lzero.policy.tests.config.atari_muzero_config_for_test import atari_muzero_config as cfg
@@ -18,48 +18,47 @@ elif test_mode_type == 'mlp':
     from lzero.policy.tests.config.cartpole_muzero_config_for_test import \
         cartpole_muzero_create_config as create_cfg
 
-# 创建模型
+# create model
 model = Model(**cfg.policy.model)
 
-# 配置设备
+# configure device
 if cfg.policy.cuda and torch.cuda.is_available():
     cfg.policy.device = 'cuda'
 else:
     cfg.policy.device = 'cpu'
 
-# 编译配置
+# compile configuration
 cfg = compile_config(cfg, seed=0, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
 
-# 将模型移至指定设备并设置为评估模式
+# move the model to the specified device and set it to evaluation mode
 model.to(cfg.policy.device)
 model.eval()
 
-# 创建策略
+# create policy
 policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
-# 初始化 replay buffer
+# initialize replay buffer
 replay_buffer = MuZeroGameBuffer(cfg.policy)
 
-# 从 Hugging Face上获取测试数据的下载链接
+# get the download link of the test data from Hugging Face
 url = hf_hub_url("puyuan1996/pong_muzero_2episodes_gsl400_v0.0.4", "pong_muzero_2episodes_gsl400_v0.0.4.npy",
                  repo_type='dataset')
-# 下载并缓存文件
+# download and cache the file
 local_filepath = cached_download(url)
-# 加载.npy文件
+# load .npy file
 data = np.load(local_filepath, allow_pickle=True)
 
-# 向 replay buffer 添加数据
+# add data to replay buffer
 replay_buffer.push_game_segments(data)
-# 如果 replay buffer 满了，移除最旧的数据
+# if the replay buffer is full, remove the oldest data
 replay_buffer.remove_oldest_data_to_fit()
 
 
 @pytest.mark.unittest
 def test_sample_orig_data():
-    # 从 replay buffer 采样数据
+    # sample data from replay buffer
     train_data = replay_buffer.sample(cfg.policy.batch_size, policy)
 
-    # 输出采样到的数据
     print(train_data)
 
     # a batch contains the current_batch and the target_batch
@@ -84,7 +83,7 @@ def test_sample_orig_data():
 
 @pytest.mark.unittest
 def test_sample_orig_data():
-    # 从 replay buffer 采样数据
+    # sample data from replay buffer
     train_data = replay_buffer.sample(cfg.policy.batch_size, policy)
 
     log_vars = policy._forward_learn(train_data)
