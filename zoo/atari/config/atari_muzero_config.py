@@ -76,7 +76,6 @@ atari_muzero_config = dict(
         ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
         eval_freq=int(2e3),
-        eval_offline=True,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
