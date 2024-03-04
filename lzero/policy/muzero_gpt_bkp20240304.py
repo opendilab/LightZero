@@ -746,8 +746,6 @@ class MuZeroGPTPolicy(Policy):
             self._mcts_collect = MCTSPtree(self._cfg)
         self._collect_mcts_temperature = 1.
         self.collect_epsilon = 0.0
-        self.last_batch_obs = torch.zeros([8,3,64,64]).to(self._cfg.device)
-        self.last_batch_action = [0 for i in range(8)]
 
     def _forward_collect(
             self,
@@ -788,10 +786,7 @@ class MuZeroGPTPolicy(Policy):
         # if active_collect_env_num == 1:
         #     print('debug')
         with torch.no_grad():
-
-            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
-
-            # network_output = self._collect_model.initial_inference(data)
+            network_output = self._collect_model.initial_inference(data)
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
@@ -825,7 +820,6 @@ class MuZeroGPTPolicy(Policy):
             if ready_env_id is None:
                 ready_env_id = np.arange(active_collect_env_num)
             
-            batch_action = []
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 if self._cfg.eps.eps_greedy_exploration_in_collect:
@@ -853,10 +847,7 @@ class MuZeroGPTPolicy(Policy):
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
                 }
-                batch_action.append(action)
 
-            self.last_batch_obs = data
-            self.last_batch_action = batch_action
 
         return output
 

@@ -477,7 +477,7 @@ class WorldModel(nn.Module):
                 else:
                     self.root_hit_cnt += 1
                     root_hit_ratio = self.root_hit_cnt / self.root_total_query_cnt
-                    print('root_total_query_count:', self.root_total_query_count)
+                    print('root_total_query_cnt:', self.root_total_query_cnt)
                     print(f'root_hit_ratio:{root_hit_ratio}')
                     print(f'root_hit find size {self.past_keys_values_cache[cache_key].size}')
                     if self.past_keys_values_cache[cache_key].size>1:
@@ -645,14 +645,6 @@ class WorldModel(nn.Module):
         # 但如果假设环境是MDP的话，然后根据当前的 latest_state s_t 在这个列表中查找即可
         # TODO: 但如果假设环境是非MDP的话，需要维护一个 {(rootstate_action_history:kv_cache)}的列表？
 
-        if self.total_query_count>0 and self.total_query_count%5000==0:
-        # if self.total_query_count>0 and self.total_query_count%1==0:
-            self.hit_freq = self.hit_count/(self.total_query_count)
-            # print('hit_freq:', self.hit_freq)
-            # print('hit_count:', self.hit_count)
-            print('total_query_count:', self.total_query_count)
-
-
         latest_state = state_action_history[-1][0]
 
         # 假设 latest_state 是新的 latent_state，包含 ready_env_num 个环境的信息
@@ -698,7 +690,11 @@ class WorldModel(nn.Module):
         # if max(self.keys_values_wm_size_list) == 7:
         #     print('max(self.keys_values_wm_size_list) == 7')
         # if self.total_query_count>0 and self.total_query_count%1==0:
-        if self.total_query_count>0 and self.total_query_count%5000==0:
+        if self.total_query_count>0 and self.total_query_count%10000==0:
+            self.hit_freq = self.hit_count/(self.total_query_count)
+            # print('hit_freq:', self.hit_freq)
+            # print('hit_count:', self.hit_count)
+            print('total_query_count:', self.total_query_count)
             # 如果总查询次数大于0，计算并打印cnt的比率
             length3_context_cnt_ratio = self.length3_context_cnt / self.total_query_count
             print('>=3 node context_cnt:', self.length3_context_cnt)
@@ -777,7 +773,7 @@ class WorldModel(nn.Module):
 
         output_sequence = torch.cat(output_sequence, dim=1)  # (B, 1 + K, E)
         # Before updating self.latent_state, delete the old one to free memory
-        # del self.latent_state
+        del self.latent_state
         self.latent_state = torch.cat(latent_state, dim=1)  # (B, K)
 
         # # TODO: 在计算结束后，是否需要更新最新的缓存. 是否需要deepcopy

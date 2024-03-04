@@ -183,7 +183,7 @@ class MuZeroModelGPT(nn.Module):
         print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
 
 
-    def initial_inference(self, obs: torch.Tensor, action_batch=None) -> MZNetworkOutput:
+    def initial_inference(self, obs: torch.Tensor, action_batch=None, current_obs_batch=None) -> MZNetworkOutput:
         """
         Overview:
             Initial inference of MuZero model, which is the first step of the MuZero model.
@@ -215,7 +215,7 @@ class MuZeroModelGPT(nn.Module):
         #     latent_state,
         # )
 
-        obs_act_dict = {'obs':obs, 'action':action_batch}
+        obs_act_dict = {'obs':obs, 'action':action_batch, 'current_obs':current_obs_batch}
         x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
             obs_act_dict)
         # x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
