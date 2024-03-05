@@ -208,7 +208,8 @@ class RepresentationNetworkGPT(nn.Module):
             num_channels: int = 64,
             downsample: bool = True,
             # activation: nn.Module = nn.ReLU(inplace=True),
-            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01), # TODO
+            # activation: nn.Module = nn.GELU(), # TODO
             norm_type: str = 'BN',
             embedding_dim: int = 256,
     ) -> None:

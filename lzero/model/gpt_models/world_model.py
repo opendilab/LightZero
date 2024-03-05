@@ -108,38 +108,9 @@ class WorldModel(nn.Module):
             embedding_tables=nn.ModuleList([nn.Embedding(act_vocab_size, config.embed_dim), nn.Embedding(obs_vocab_size, config.embed_dim)])
         )
 
-        # self.act_embedder = ActEmbedder(
-        #     max_blocks=config.max_blocks,
-        #     block_masks=[act_tokens_pattern],
-        #     embedding_tables=nn.ModuleList([nn.Embedding(act_vocab_size, config.embed_dim)])
-        # )
-
         self.act_embedding_table = nn.Embedding(act_vocab_size, config.embed_dim)
 
-        # self.head_observations = Head(
-        #     max_blocks=config.max_blocks,
-        #     block_mask=all_but_last_latent_state_pattern, # 1,...,0,1 # https://github.com/eloialonso/iris/issues/19
-        #     head_module=nn.Sequential(
-        #         nn.Linear(config.embed_dim, config.embed_dim),
-        #         nn.ReLU(),
-        #         nn.Linear(config.embed_dim, obs_vocab_size)
-        #     )
-        # )
         self.obs_per_embdding_dim = config.embed_dim # 16*64=1024
-        self.head_observations = Head( # TODO
-            max_blocks=config.max_blocks,
-            block_mask=all_but_last_latent_state_pattern, # 1,...,0,1 # https://github.com/eloialonso/iris/issues/19
-            head_module=nn.Sequential(
-                nn.Linear(config.embed_dim, config.embed_dim),
-                # nn.BatchNorm1d(config.embed_dim),
-                # nn.ReLU(),
-                # nn.Linear(config.embed_dim, obs_vocab_size)
-                nn.LeakyReLU(negative_slope=0.01), # TODO: 2
-                nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
-                # nn.Tanh(), # TODO
-                nn.Sigmoid(),  # 这里添加Sigmoid函数 TODO
-            )
-        )
 
         self.head_rewards = Head(
             max_blocks=config.max_blocks,
@@ -168,18 +139,30 @@ class WorldModel(nn.Module):
                 nn.Linear(config.embed_dim, config.embed_dim),
                 nn.BatchNorm1d(config.embed_dim),
                 nn.ReLU(),
-                # nn.Linear(config.embed_dim, obs_vocab_size)
                 nn.Linear(config.embed_dim, obs_per_embdding_dim)
+            )
+        )
+        
+        ###### TODO: 2层的性能, LeakyReLU->GELU ######
+        self.head_observations = Head( # TODO
+            max_blocks=config.max_blocks,
+            block_mask=all_but_last_latent_state_pattern, # 1,...,0,1 # https://github.com/eloialonso/iris/issues/19
+            head_module=nn.Sequential(
+                nn.Linear(config.embed_dim, config.embed_dim),
+                # nn.LeakyReLU(negative_slope=0.01), # TODO: 2
+                nn.GELU(),
+                nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
+                # nn.Tanh(), # TODO
+                nn.Sigmoid(),  # 这里添加Sigmoid函数 TODO
             )
         )
         self.head_policy = Head(
             max_blocks=config.max_blocks,
             block_mask=value_policy_tokens_pattern,  # TODO: value_policy_tokens_pattern # [0,...,1,0]
             head_module=nn.Sequential( # （8, 5, 128）
-                # nn.BatchNorm1d(config.embed_dim), # TODO: 1
                 nn.Linear(config.embed_dim, config.embed_dim),
-                # nn.ReLU(),
-                nn.LeakyReLU(negative_slope=0.01), # TODO: 2
+                # nn.LeakyReLU(negative_slope=0.01), # TODO: 2
+                nn.GELU(),
                 nn.Linear(config.embed_dim, self.action_shape)  # TODO(pu); action shape
             )
         )
@@ -187,39 +170,59 @@ class WorldModel(nn.Module):
             max_blocks=config.max_blocks,
             block_mask=value_policy_tokens_pattern,
             head_module=nn.Sequential(
-                # nn.BatchNorm1d(config.embed_dim), # TODO: 1
                 nn.Linear(config.embed_dim, config.embed_dim),
-                # nn.ReLU(),
-                nn.LeakyReLU(negative_slope=0.01), # TODO: 2
+                # nn.LeakyReLU(negative_slope=0.01), # TODO: 2
+                nn.GELU(),
                 nn.Linear(config.embed_dim, self.support_size)  # TODO(pu): action shape
             )
         )
+
+        ###### TODO: 单层的性能 ######
+        # self.head_observations = Head( # TODO
+        #     max_blocks=config.max_blocks,
+        #     block_mask=all_but_last_latent_state_pattern, # 1,...,0,1 # https://github.com/eloialonso/iris/issues/19
+        #     head_module=nn.Sequential(
+        #         nn.Linear(config.embed_dim, self.obs_per_embdding_dim, bias=False),
+        #         nn.Sigmoid(),  # 这里添加Sigmoid函数 TODO
+        #     )
+        # )
+        # self.head_policy = Head(
+        #     max_blocks=config.max_blocks,
+        #     block_mask=value_policy_tokens_pattern,  # TODO: value_policy_tokens_pattern # [0,...,1,0]
+        #     head_module=nn.Sequential( # （8, 5, 128）
+        #         nn.Linear(config.embed_dim, self.action_shape, bias=False)  # TODO(pu); action shape
+        #     )
+        # )
+        # self.head_value = Head(
+        #     max_blocks=config.max_blocks,
+        #     block_mask=value_policy_tokens_pattern,
+        #     head_module=nn.Sequential(
+        #         nn.Linear(config.embed_dim, self.support_size, bias=False)  # TODO(pu): action shape
+        #     )
+        # )
 
         self.apply(init_weights)
 
         last_linear_layer_init_zero = True  # TODO: is beneficial for convergence speed.
         if last_linear_layer_init_zero:
-            # TODO: policy init : 3
-            # Locate the last linear layer and initialize its weights and biases to 0.
-            # for _, layer in enumerate(reversed(self.head_policy.head_module)):
-            #     if isinstance(layer, nn.Linear):
-            #         nn.init.zeros_(layer.weight)
-            #         nn.init.zeros_(layer.bias)
-            #         break
             for _, layer in enumerate(reversed(self.head_value.head_module)):
                 if isinstance(layer, nn.Linear):
                     nn.init.zeros_(layer.weight)
-                    nn.init.zeros_(layer.bias)
+                    if layer.bias is not None:
+                        nn.init.zeros_(layer.bias)
                     break
             for _, layer in enumerate(reversed(self.head_rewards.head_module)):
                 if isinstance(layer, nn.Linear):
                     nn.init.zeros_(layer.weight)
-                    nn.init.zeros_(layer.bias)
+                    if layer.bias is not None:
+                        nn.init.zeros_(layer.bias)
                     break
             for _, layer in enumerate(reversed(self.head_observations.head_module)):
                 if isinstance(layer, nn.Linear):
                     nn.init.zeros_(layer.weight)
-                    nn.init.zeros_(layer.bias)
+                    # layer.weight.data.fill_(0.5) # TODO
+                    if layer.bias is not None:
+                        nn.init.zeros_(layer.bias)
                     break
 
 

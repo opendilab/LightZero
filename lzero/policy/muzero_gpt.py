@@ -11,56 +11,80 @@ from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from torch.distributions import Categorical
 from torch.nn import L1Loss
-
+import inspect
 from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
-    prepare_obs, prepare_obs_for_gpt, configure_optimizers
+    prepare_obs, prepare_obs_for_gpt
 
 
-def configure_optimizer(model, learning_rate, weight_decay, exclude_submodules, *blacklist_module_names):
-    """Credits to https://github.com/karpathy/minGPT"""
-    # separate out all parameters to those that will and won't experience regularizing weight decay
-    decay = set()
-    no_decay = set()
-    whitelist_weight_modules = [torch.nn.Linear, torch.nn.Conv1d]
-    blacklist_weight_modules = [torch.nn.LayerNorm, torch.nn.Embedding]
+# def configure_optimizer(model, learning_rate, weight_decay, exclude_submodules, *blacklist_module_names):
+#     """Credits to https://github.com/karpathy/minGPT"""
+#     # separate out all parameters to those that will and won't experience regularizing weight decay
+#     decay = set()
+#     no_decay = set()
+#     whitelist_weight_modules = [torch.nn.Linear, torch.nn.Conv1d]
+#     blacklist_weight_modules = [torch.nn.LayerNorm, torch.nn.Embedding]
     
-    # Here, we make sure to exclude parameters from specified submodules when creating param_dict
-    param_dict = {}
-    for mn, m in model.named_modules():
-        # if any(mn.startswith(module_name) for module_name in exclude_submodules):
-        #     continue  # skip parameters from excluded submodules
-        for pn, p in m.named_parameters(recurse=False):
-            fpn = f'{mn}.{pn}' if mn else pn  # full param name
-            if not any(fpn.startswith(bl_module_name) for bl_module_name in blacklist_module_names):
-                param_dict[fpn] = p
-                if 'bias' in pn:
-                    no_decay.add(fpn)
-                elif pn.endswith('weight') and isinstance(m, tuple(whitelist_weight_modules)):
-                    decay.add(fpn)
-                elif pn.endswith('weight') and isinstance(m, tuple(blacklist_weight_modules)):
-                    no_decay.add(fpn)
-                else:
-                    decay.add(fpn)  # Default behavior is to add to decay
+#     # Here, we make sure to exclude parameters from specified submodules when creating param_dict
+#     param_dict = {}
+#     for mn, m in model.named_modules():
+#         if any(mn.startswith(module_name) for module_name in exclude_submodules):
+#             continue  # skip parameters from excluded submodules
+#         for pn, p in m.named_parameters(recurse=False):
+#             fpn = f'{mn}.{pn}' if mn else pn  # full param name
+#             if not any(fpn.startswith(bl_module_name) for bl_module_name in blacklist_module_names):
+#                 param_dict[fpn] = p
+#                 if 'bias' in pn:
+#                     no_decay.add(fpn)
+#                 elif pn.endswith('weight') and isinstance(m, tuple(whitelist_weight_modules)):
+#                     decay.add(fpn)
+#                 elif pn.endswith('weight') and isinstance(m, tuple(blacklist_weight_modules)):
+#                     no_decay.add(fpn)
+#                 else:
+#                     decay.add(fpn)  # Default behavior is to add to decay
 
-    # Validate that we considered every parameter
-    inter_params = decay & no_decay
-    union_params = decay | no_decay
-    assert len(inter_params) == 0, f"parameters {str(inter_params)} made it into both decay/no_decay sets!"
-    assert len(param_dict.keys() - union_params) == 0, f"parameters {str(param_dict.keys() - union_params)} were not separated into either decay/no_decay set!"
+#     # Validate that we considered every parameter
+#     inter_params = decay & no_decay
+#     union_params = decay | no_decay
+#     assert len(inter_params) == 0, f"parameters {str(inter_params)} made it into both decay/no_decay sets!"
+#     assert len(param_dict.keys() - union_params) == 0, f"parameters {str(param_dict.keys() - union_params)} were not separated into either decay/no_decay set!"
 
-    # Create the PyTorch optimizer object
+#     # Create the PyTorch optimizer object
+#     optim_groups = [
+#         {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": weight_decay},
+#         {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
+#     ]
+#     optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate)
+#     return optimizer
+
+def configure_optimizers(model, weight_decay, learning_rate, betas, device_type):
+    # start with all of the candidate parameters
+    param_dict = {pn: p for pn, p in model.named_parameters()}
+    # filter out those that do not require grad
+    param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
+    # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
+    # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
+    decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
+    nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
     optim_groups = [
-        {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": weight_decay},
-        {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
+        {'params': decay_params, 'weight_decay': weight_decay},
+        {'params': nodecay_params, 'weight_decay': 0.0}
     ]
-    optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate)
+    num_decay_params = sum(p.numel() for p in decay_params)
+    num_nodecay_params = sum(p.numel() for p in nodecay_params)
+    print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
+    print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
+    # Create AdamW optimizer and use the fused version if it is available
+    fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+    use_fused = fused_available and device_type == 'cuda'
+    extra_args = dict(fused=True) if use_fused else dict()
+    optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
+    print(f"using fused AdamW: {use_fused}")
+
     return optimizer
-
-
 
 @POLICY_REGISTRY.register('muzero_gpt')
 class MuZeroGPTPolicy(Policy):
@@ -278,15 +302,24 @@ class MuZeroGPTPolicy(Policy):
         #     # weight_decay=0.01,
         #     exclude_submodules=['tokenizer']
         # )
-        self._optimizer_world_model = configure_optimizer(
-            model=self._model.world_model,
-            # learning_rate=3e-3,
-            learning_rate=1e-4, # NOTE: TODO
-            weight_decay=self._cfg.weight_decay,
-            # weight_decay=0.01,
-            exclude_submodules=['none'] # NOTE
-        )
+        
+        # 验证没有问题的版本 
+        # self._optimizer_world_model = configure_optimizer(
+        #     model=self._model.world_model,
+        #     # learning_rate=3e-3,
+        #     learning_rate=1e-4, # NOTE: TODO
+        #     weight_decay=self._cfg.weight_decay,
+        #     # weight_decay=0.01,
+        #     exclude_submodules=['none'] # NOTE
+        # )
 
+        self._optimizer_world_model = configure_optimizers(
+            model=self._model.world_model,
+            learning_rate=1e-4,
+            weight_decay=self._cfg.weight_decay,
+            device_type=self._cfg.device,
+            betas=(0.9, 0.95),
+        )
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
@@ -392,8 +425,8 @@ class MuZeroGPTPolicy(Policy):
 
         self._learn_model.train()
         self._target_model.train()
-        # self._learn_model.tokenizer.eval() # bug
-        self._learn_model.tokenizer.train()
+        # self._learn_model.tokenizer.train()
+        # self._eval_model.world_model.transformer.train() # TODO
 
 
         if self._cfg.use_rnd_model:
@@ -782,6 +815,10 @@ class MuZeroGPTPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._collect_model.eval()
+        self._collect_model.tokenizer.eval() # TODO
+        self._collect_model.world_model.transformer.eval() # TODO
+
+
         self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
@@ -919,6 +956,9 @@ class MuZeroGPTPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._eval_model.eval()
+        # self._eval_model.tokenizer.eval() # TODO
+        # self._eval_model.world_model.transformer.eval() # TODO
+
         active_eval_env_num = data.shape[0]
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}

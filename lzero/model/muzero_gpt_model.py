@@ -116,21 +116,21 @@ class MuZeroModelGPT(nn.Module):
         self.state_norm = state_norm
         self.downsample = downsample
 
-        flatten_output_size_for_reward_head = (
-            (reward_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
-            (reward_head_channels * observation_shape[1] * observation_shape[2])
-        )
-        flatten_output_size_for_value_head = (
-            (value_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
-            (value_head_channels * observation_shape[1] * observation_shape[2])
-        )
-        flatten_output_size_for_policy_head = (
-            (policy_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
-            (policy_head_channels * observation_shape[1] * observation_shape[2])
-        )
+        # flatten_output_size_for_reward_head = (
+        #     (reward_head_channels * math.ceil(observation_shape[1] / 16) *
+        #      math.ceil(observation_shape[2] / 16)) if downsample else
+        #     (reward_head_channels * observation_shape[1] * observation_shape[2])
+        # )
+        # flatten_output_size_for_value_head = (
+        #     (value_head_channels * math.ceil(observation_shape[1] / 16) *
+        #      math.ceil(observation_shape[2] / 16)) if downsample else
+        #     (value_head_channels * observation_shape[1] * observation_shape[2])
+        # )
+        # flatten_output_size_for_policy_head = (
+        #     (policy_head_channels * math.ceil(observation_shape[1] / 16) *
+        #      math.ceil(observation_shape[2] / 16)) if downsample else
+        #     (policy_head_channels * observation_shape[1] * observation_shape[2])
+        # )
 
 
         # self.dynamics_network = DynamicsNetwork(
@@ -159,7 +159,8 @@ class MuZeroModelGPT(nn.Module):
             num_res_blocks,
             num_channels,
             downsample,
-            activation=activation,
+            activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
+            # activation=nn.GELU(),
             norm_type=norm_type,
             # embedding_dim=cfg.embedding_dim,
             embedding_dim=cfg.world_model.embed_dim,
@@ -169,18 +170,19 @@ class MuZeroModelGPT(nn.Module):
         decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(3, 64, 64)) # TODO: For K=1
 
 
-
         Encoder = Encoder(cfg.tokenizer.encoder)
         Decoder = Decoder(cfg.tokenizer.decoder)
         self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network,
                             decoder_network=decoder_network)
         self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
                                       config=cfg.world_model, tokenizer=self.tokenizer)
-        print(f'{sum(p.numel() for p in self.tokenizer.parameters())} parameters in agent.tokenizer')
+        print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
+        print('=='*20)
+        print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
         print(f'{sum(p.numel() for p in self.tokenizer.representation_network.parameters())} parameters in agent.tokenizer.representation_network')
         print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
-
-        print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
+        print(f'{sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.tokenizer.lpips')
+        
 
 
     def initial_inference(self, obs: torch.Tensor, action_batch=None, current_obs_batch=None) -> MZNetworkOutput:

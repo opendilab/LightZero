@@ -38,11 +38,11 @@ class Tokenizer(nn.Module):
     def __init__(self, vocab_size: int, embed_dim: int, encoder: Encoder, decoder: Decoder, with_lpips: bool = True, representation_network = None, decoder_network =None) -> None:
         super().__init__()
         self.vocab_size = vocab_size
-        self.encoder = encoder
+        # self.encoder = encoder
         self.pre_quant_conv = torch.nn.Conv2d(encoder.config.z_channels, embed_dim, 1)
         self.embedding = nn.Embedding(vocab_size, embed_dim)
         self.post_quant_conv = torch.nn.Conv2d(embed_dim, decoder.config.z_channels, 1)
-        self.decoder = decoder
+        # self.decoder = decoder
         self.embedding.weight.data.uniform_(-1.0 / vocab_size, 1.0 / vocab_size)
         self.lpips = LPIPS().eval() if with_lpips else None
         self.representation_network = representation_network
