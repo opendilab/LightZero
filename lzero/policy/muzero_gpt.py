@@ -780,7 +780,7 @@ class MuZeroGPTPolicy(Policy):
         self._collect_mcts_temperature = 1.
         self.collect_epsilon = 0.0
         self.last_batch_obs = torch.zeros([8,3,64,64]).to(self._cfg.device)
-        self.last_batch_action = [0 for i in range(8)]
+        self.last_batch_action = [-1 for i in range(8)]
 
     def _forward_collect(
             self,

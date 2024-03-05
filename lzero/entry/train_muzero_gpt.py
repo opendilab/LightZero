@@ -225,8 +225,8 @@ def train_muzero_gpt(
 
         torch.cuda.empty_cache() # TODO: NOTE
 
-        policy.last_batch_obs = torch.zeros([len(collector_env_cfg),3,64,64]).to(cfg.policy.device)
-        policy.last_batch_action = [0 for _ in range(len(collector_env_cfg))]
+        policy.last_batch_obs = torch.zeros([len(collector_env_cfg), 3, 64, 64]).to(cfg.policy.device)
+        policy.last_batch_action = [-1 for _ in range(len(collector_env_cfg))]
 
         # if collector.envstep > 0:
         #     # TODO: only for debug
