@@ -666,6 +666,9 @@ class MuZeroCollector(ISerialCollector):
                     ready_env_id.remove(env_id)
 
             if collected_episode >= n_episode:
+                # self._policy.get_attribute('last_batch_obs') = torch.zeros([self._env_num,3,64,64]).to(self.policy_config.device)
+                # self._policy.get_attribute('last_batch_action') = [0 for _ in range(self._env_num)]
+                       
                 # [data, meta_data]
                 return_data = [self.game_segment_pool[i][0] for i in range(len(self.game_segment_pool))], [
                     {
