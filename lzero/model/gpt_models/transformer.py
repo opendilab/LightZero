@@ -157,21 +157,25 @@ class SelfAttention(nn.Module):
             k, v = kv_cache.get()
 
         # method1: manual implementation of attention
-        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        att = att.masked_fill(self.mask[L:L + T, :L + T] == 0, float('-inf'))
-        att = F.softmax(att, dim=-1)
-        att = self.attn_drop(att)
-        y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        # att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        # att = att.masked_fill(self.mask[L:L + T, :L + T] == 0, float('-inf'))
+        # att = F.softmax(att, dim=-1)
+        # att = self.attn_drop(att)
+        # y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
 
         # TODO
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
 
         # method2: efficient attention using Flash Attention CUDA kernels
-        # 性能不太好，与method1不一致
-        # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_pdrop if self.training else 0, is_causal=True)
+        # 手动实现的掩码区域
+        manual_attn_mask = self.mask[L:L + T, :L + T]
+        # # https://github.com/pytorch/pytorch/blob/main/torch/nn/functional.py#L5243
+        manual_attn_mask = manual_attn_mask.masked_fill(manual_attn_mask == 0, float('-inf'))
+        manual_attn_mask = manual_attn_mask.masked_fill(manual_attn_mask != 0, 0)
 
+        y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=manual_attn_mask, dropout_p=self.config.attn_pdrop if self.training else 0, is_causal=False)
+        
         y = rearrange(y, 'b h t e -> b t (h e)')
-
         y = self.resid_drop(self.proj(y))
 
         return y

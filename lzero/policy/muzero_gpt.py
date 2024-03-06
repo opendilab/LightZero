@@ -956,8 +956,8 @@ class MuZeroGPTPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._eval_model.eval()
-        # self._eval_model.tokenizer.eval() # TODO
-        # self._eval_model.world_model.transformer.eval() # TODO
+        self._eval_model.tokenizer.eval() # TODO
+        self._eval_model.world_model.transformer.eval() # TODO
 
         active_eval_env_num = data.shape[0]
         with torch.no_grad():

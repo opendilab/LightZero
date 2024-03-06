@@ -114,6 +114,7 @@ class SelfAttention(nn.Module):
         super().__init__()
         assert config.embed_dim % config.num_heads == 0
         assert config.attention in ('causal', 'block_causal')
+        # config.attn_pdrop = 0
         self.config = config
         self.num_heads = config.num_heads
 
@@ -172,8 +173,20 @@ class SelfAttention(nn.Module):
 
         # Method 2: Efficient Attention Using Flash Attention CUDA Kernels
         def method2(q, k, v, is_training):
+            self.training = is_training
             attn_pdrop = self.config.attn_pdrop if is_training else 0
-            y = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=attn_pdrop, is_causal=True)
+            # 手动实现的掩码区域，将未来的时间步骤设置为负无穷
+            manual_attn_mask = self.mask[L:L + T, :L + T].clone()
+            manual_attn_mask = manual_attn_mask.masked_fill(manual_attn_mask == 0, float('-inf'))
+            manual_attn_mask = manual_attn_mask.masked_fill(manual_attn_mask != 0, 0) # https://github.com/pytorch/pytorch/blob/main/torch/nn/functional.py#L5243
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=manual_attn_mask, dropout_p=attn_pdrop, is_causal=False)
+            return y
+        
+        def method3(q, k, v, is_training):
+            self.training = is_training
+            attn_pdrop = self.config.attn_pdrop if is_training else 0
+            # 手动实现的掩码区域，将未来的时间步骤设置为负无穷
+            y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=attn_pdrop, is_causal=True)
             return y
 
         # Choose a training state to compare
@@ -183,15 +196,26 @@ class SelfAttention(nn.Module):
             # Run both methods
             y1 = method1(q, k, v, is_training)
             y2 = method2(q, k, v, is_training)
+            y3 = method3(q, k, v, is_training)
+
 
             # Calculate the difference
-            diff = (y1 - y2).abs()
+             # 在drop_p=0时，1，2是相同的
+            diff_12 = (y1 - y2).abs()
+            # 在drop_p=0时，2,3也是不同的
+            diff_23 = (y2 - y3).abs()
+
 
             # Check if the maximum error is within the tolerance level
-            if diff.max() < error_tolerance:
-                print(f"Outputs are consistent for is_training={is_training}")
+            if diff_12.max() < error_tolerance:
+                print(f"diff_12 Outputs are consistent for is_training={is_training}")
             else:
-                print(f"Outputs are not consistent for is_training={is_training}; max error is {diff.max().item()}")
+                print(f"diff_12 Outputs are not consistent for is_training={is_training}; max error is {diff_12.max().item()}")
+
+            if diff_23.max() < error_tolerance:
+                print(f"diff_23 Outputs are consistent for is_training={is_training}")
+            else:
+                print(f"diff_23 Outputs are not consistent for is_training={is_training}; max error is {diff_23.max().item()}")
 
         y = y1
         print(f'self.training:{self.training}')
