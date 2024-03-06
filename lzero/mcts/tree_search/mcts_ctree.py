@@ -341,7 +341,13 @@ class MuZeroMCTSCtree(object):
                 MCTS stage 1: Selection
                     Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
                 """
-                latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
+                if self._cfg.env_type == 'not_board_games':
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        to_play_batch
+                    )
+                else:
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
                     roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
                     copy.deepcopy(to_play_batch)
                 )
@@ -350,7 +356,9 @@ class MuZeroMCTSCtree(object):
                 for ix, iy in zip(latent_state_index_in_search_path, latent_state_index_in_batch):
                     latent_states.append(latent_state_batch_in_search_path[ix][iy])
 
-                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
+                # latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
+                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
+
                 # .long() is only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
                 """

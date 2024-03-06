@@ -397,7 +397,7 @@ class MuZeroGameBuffer(GameBuffer):
 
             # concat the output slices after model inference
             if self._cfg.use_root_value:
-                # use the root values from MCTS, as in EfficiientZero
+                # use the root values from MCTS, as in EfficientZero
                 # the root values have limited improvement but require much more GPU actors;
                 _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
                     network_output, data_type='muzero'
@@ -472,8 +472,6 @@ class MuZeroGameBuffer(GameBuffer):
                     else:
                         target_values.append(0)
                         target_rewards.append(0.0)
-                        # TODO: check
-                        # target_rewards.append(reward)
                     value_index += 1
 
                 batch_rewards.append(target_rewards)

@@ -357,7 +357,6 @@ class MuZeroPolicy(Policy):
         # Note: The following lines are just for debugging.
         predicted_rewards = []
         if self._cfg.monitor_extra_statistics:
-            latent_state_list = latent_state.detach().cpu().numpy()
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
@@ -373,9 +372,8 @@ class MuZeroPolicy(Policy):
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
         prob = torch.softmax(policy_logits, dim=-1)
-        dist = Categorical(prob)
-        policy_entropy_loss = -dist.entropy()
-
+        entropy = -(prob * prob.log()).sum(-1)
+        policy_entropy_loss = -entropy
 
         reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
@@ -421,14 +419,11 @@ class MuZeroPolicy(Policy):
             policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_k + 1])
 
             prob = torch.softmax(policy_logits, dim=-1)
-            dist = Categorical(prob)
-            policy_entropy_loss += -dist.entropy()
+            entropy = -(prob * prob.log()).sum(-1)
+            policy_entropy_loss += -entropy
 
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
-
-            # Follow MuZero, set half gradient
-            # latent_state.register_hook(lambda grad: grad * 0.5)
 
             if self._cfg.monitor_extra_statistics:
                 original_rewards = self.inverse_scalar_transform_handle(reward)
@@ -439,7 +434,6 @@ class MuZeroPolicy(Policy):
                 )
                 predicted_rewards.append(original_rewards_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
-                latent_state_list = np.concatenate((latent_state_list, latent_state.detach().cpu().numpy()))
 
         # ==============================================================
         # the core learn model update step.
@@ -458,9 +452,7 @@ class MuZeroPolicy(Policy):
         weighted_total_loss.backward()
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
-        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
-            self._learn_model.parameters(), self._cfg.grad_clip_value
-        )
+        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(self._learn_model.parameters(), self._cfg.grad_clip_value)
         self._optimizer.step()
         if self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()
@@ -480,7 +472,7 @@ class MuZeroPolicy(Policy):
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
-            'weighted_total_loss': weighted_total_loss.item(),
+            'weighted_total_loss': weighted_total_loss.detach().item(),  # TODO
             'total_loss': loss.mean().item(),
             'policy_loss': policy_loss.mean().item(),
             'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),

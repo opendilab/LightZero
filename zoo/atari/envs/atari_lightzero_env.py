@@ -56,7 +56,8 @@ class AtariLightZeroEnv(BaseEnv):
         # (bool) If True, the rewards are clipped to a certain range, usually between -1 and 1, to reduce variance.
         clip_rewards=True,
         # (bool) If True, the channels of the observation images are placed last (e.g., height, width, channels).
-        channel_last=True,
+        # Default is False, which means the channels are placed first (e.g., channels, height, width).
+        channel_last=False,
         # (bool) If True, the pixel values of the game frames are scaled down to the range [0, 1].
         scale=True,
         # (bool) If True, the game frames are preprocessed by cropping irrelevant parts and resizing to a smaller resolution.

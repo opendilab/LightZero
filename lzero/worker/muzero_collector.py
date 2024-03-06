@@ -410,10 +410,11 @@ class MuZeroCollector(ISerialCollector):
                     chance = [chance_dict[env_id] for env_id in ready_env_id]
 
                 stack_obs = to_ndarray(stack_obs)
-
+                # return stack_obs shape: [B, S*C, W, H] e.g. [8, 4*1, 96, 96]
                 stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
 
-                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
+                # stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
+                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device)
 
                 # ==============================================================
                 # policy forward
