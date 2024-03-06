@@ -156,22 +156,46 @@ class SelfAttention(nn.Module):
             kv_cache.update(k, v)
             k, v = kv_cache.get()
 
-        # method1: manual implementation of attention
-        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        att = att.masked_fill(self.mask[L:L + T, :L + T] == 0, float('-inf'))
-        att = F.softmax(att, dim=-1)
-        att = self.attn_drop(att)
-        y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        # Assume q, k, v, self.attn_drop, and self.mask are defined, and the mask is properly set up for causal attention
+        # Set your error tolerance
+        error_tolerance = 1e-6
 
-        # TODO
-        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        # Method 1: Manual Implementation of Attention
+        def method1(q, k, v, is_training):
+            self.training = is_training
+            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            att = att.masked_fill(self.mask[L:L + T, :L + T] == 0, float('-inf'))
+            att = F.softmax(att, dim=-1)
+            att = self.attn_drop(att)
+            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+            return y
 
-        # method2: efficient attention using Flash Attention CUDA kernels
-        # 性能不太好，与method1不一致
-        # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.config.attn_pdrop if self.training else 0, is_causal=True)
+        # Method 2: Efficient Attention Using Flash Attention CUDA Kernels
+        def method2(q, k, v, is_training):
+            attn_pdrop = self.config.attn_pdrop if is_training else 0
+            y = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=attn_pdrop, is_causal=True)
+            return y
 
+        # Choose a training state to compare
+        is_training_states = [True, False]
+
+        for is_training in is_training_states:
+            # Run both methods
+            y1 = method1(q, k, v, is_training)
+            y2 = method2(q, k, v, is_training)
+
+            # Calculate the difference
+            diff = (y1 - y2).abs()
+
+            # Check if the maximum error is within the tolerance level
+            if diff.max() < error_tolerance:
+                print(f"Outputs are consistent for is_training={is_training}")
+            else:
+                print(f"Outputs are not consistent for is_training={is_training}; max error is {diff.max().item()}")
+
+        y = y1
+        print(f'self.training:{self.training}')
         y = rearrange(y, 'b h t e -> b t (h e)')
-
         y = self.resid_drop(self.proj(y))
 
         return y

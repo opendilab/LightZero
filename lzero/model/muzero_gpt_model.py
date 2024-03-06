@@ -182,6 +182,7 @@ class MuZeroModelGPT(nn.Module):
         print(f'{sum(p.numel() for p in self.tokenizer.representation_network.parameters())} parameters in agent.tokenizer.representation_network')
         print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
         print(f'{sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.tokenizer.lpips')
+        print('=='*20)
         
 
 
