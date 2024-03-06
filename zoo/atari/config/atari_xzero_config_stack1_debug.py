@@ -50,8 +50,6 @@ update_per_collect = 1000
 # update_per_collect = None
 # model_update_ratio = 1 # for qbet squest
 model_update_ratio = 0.25 # for pong boxing
-num_simulations = 50
-# num_simulations = 100
 
 
 max_env_step = int(10e6)
@@ -67,7 +65,7 @@ num_unroll_steps = 5
 eps_greedy_exploration_in_collect = False
 
 # TODO: debug
-num_simulations = 50
+num_simulations = 5
 update_per_collect = 5
 batch_size = 2
 # ==============================================================
@@ -83,7 +81,7 @@ atari_muzero_config = dict(
     # game_buffer_muzero_gpt task_id
     # TODO: muzero_gpt_model.py world_model.py (3,64,64)
     # exp_name=f'data_xzero_stack1_0219/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kv-88-notfix_seed0',
-    exp_name=f'data_xzero_stack1_0226_debug/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kv81-fix3_collect-clear200_noeval_search-toplay-nodeepcopy_seed0',
+    exp_name=f'data_xzero_debug/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kv81-fix3_collect-clear200_noeval_search-toplay-nodeepcopy_seed0',
     # exp_name=f'data_xzero_stack1_0219/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax_mcts-kv-reset-5-kv-81_latent-soft-target-100_mantran_seed0',
 
     # exp_name=f'data_xzero_stack1_0219/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e3_collectper200-clear_mcts-kv-reset-5-kv-81-base-fix_latent-sigmod_latent-soft-target-100_mantran_seed0',

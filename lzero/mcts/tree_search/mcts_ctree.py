@@ -318,14 +318,16 @@ class MuZeroMCTSCtree(object):
                 for ix, iy in zip(latent_state_index_in_search_path, latent_state_index_in_batch):
                     latent_states.append(latent_state_batch_in_search_path[ix][iy])
 
-                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
+                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
+                # latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
                 # TODO: .long() is only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
 
                 # TODO
                 # 在每次模拟后更新 state_action_history
                 # state_action_history.append((last_latent_state, last_actions.detach().cpu().numpy()))
-                state_action_history.append((latent_states.detach().cpu().numpy(), last_actions.detach().cpu().numpy()))
+                # state_action_history.append((latent_states.detach().cpu().numpy(), last_actions.detach().cpu().numpy()))
+                state_action_history.append((latent_states.detach().cpu().numpy(), last_actions))
 
                 """
                 MCTS stage 2: Expansion

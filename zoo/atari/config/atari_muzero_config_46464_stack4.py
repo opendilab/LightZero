@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(6)
+torch.cuda.set_device(0)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 # env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'

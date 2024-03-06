@@ -359,7 +359,22 @@ class MuZeroGPTPolicy(Policy):
         self.inverse_scalar_transform_handle = InverseScalarTransform(
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
-        self.intermediate_losses = defaultdict(float)
+
+        if self._cfg.use_rnd_model:
+            if self._cfg.target_model_for_intrinsic_reward_update_type == 'assign':
+                self._target_model_for_intrinsic_reward = model_wrap(
+                    self._target_model,
+                    wrapper_name='target',
+                    update_type='assign',
+                    update_kwargs={'freq': self._cfg.target_update_freq_for_intrinsic_reward}
+                )
+            elif self._cfg.target_model_for_intrinsic_reward_update_type == 'momentum':
+                self._target_model_for_intrinsic_reward = model_wrap(
+                    self._target_model,
+                    wrapper_name='target',
+                    update_type='momentum',
+                    update_kwargs={'theta': self._cfg.target_update_theta_for_intrinsic_reward}
+                )
 
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -377,6 +392,8 @@ class MuZeroGPTPolicy(Policy):
         # current_batch, target_batch, train_which_component_dict = data
         if data[-1]['train_which_component'] == 'transformer':
             return_loss_dict = self._forward_learn_transformer(data)
+        elif data[-1]['train_which_component'] == 'tokenizer':
+            return_loss_dict = self._forward_learn_tokenizer(data)
         else:
             ValueError('Unknown component type')
         
@@ -411,6 +428,9 @@ class MuZeroGPTPolicy(Policy):
         # self._learn_model.tokenizer.train()
         # self._eval_model.world_model.transformer.train() # TODO
 
+
+        if self._cfg.use_rnd_model:
+            self._target_model_for_intrinsic_reward.train()
 
         # current_batch, target_batch = data
         current_batch, target_batch, train_which_component_dict = data
@@ -481,6 +501,10 @@ class MuZeroGPTPolicy(Policy):
         batch_for_gpt['target_value'] = target_value_categorical[:, :-1]  # (B, T-1, V)
         batch_for_gpt['target_policy'] = target_policy[:, :-1]  # (B, T-1, A)
         # NOTE: TODO: next latent state's policy value
+        # batch_for_gpt['target_value'] = target_value_categorical[:, 1:]  # (B, T-1, V)
+        # batch_for_gpt['target_policy'] = target_policy[:, 1:]  # (B, T-1, A)
+
+        # self._learn_model.world_model.train()
 
         # get valid target_policy data
         valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
@@ -491,24 +515,25 @@ class MuZeroGPTPolicy(Policy):
         # print(f'Average entropy: {average_entropy}')
 
 
+        # if train_which_component_dict['train_which_component'] == 'transformer':
         # ==============================================================
         # update world model
         # ==============================================================
-        losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer) 
-        # losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._learn_model.world_model.tokenizer) # test
-
+        intermediate_losses = defaultdict(float)
+        # losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._learn_model.tokenizer)
+        losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer)
 
         weighted_total_loss = losses.loss_total
         for loss_name, loss_value in losses.intermediate_losses.items():
-            self.intermediate_losses[f"{loss_name}"] = loss_value
-
-        obs_loss = self.intermediate_losses['loss_obs']
-        reward_loss = self.intermediate_losses['loss_rewards']
-        policy_loss = self.intermediate_losses['loss_policy']
-        value_loss = self.intermediate_losses['loss_value']
-        latent_kl_loss = self.intermediate_losses['latent_kl_loss']
-        latent_recon_loss = self.intermediate_losses['latent_recon_loss']
-        perceptual_loss = self.intermediate_losses['perceptual_loss']
+            intermediate_losses[f"{loss_name}"] = loss_value
+        # print(intermediate_losses)
+        obs_loss = intermediate_losses['loss_obs']
+        reward_loss = intermediate_losses['loss_rewards']
+        policy_loss = intermediate_losses['loss_policy']
+        value_loss = intermediate_losses['loss_value']
+        latent_kl_loss = intermediate_losses['latent_kl_loss']
+        latent_recon_loss = intermediate_losses['latent_recon_loss']
+        perceptual_loss = intermediate_losses['perceptual_loss']
 
 
         # ==============================================================
@@ -546,6 +571,8 @@ class MuZeroGPTPolicy(Policy):
         # the core target model update step.
         # ==============================================================
         self._target_model.update(self._learn_model.state_dict())
+        if self._cfg.use_rnd_model:
+            self._target_model_for_intrinsic_reward.update(self._learn_model.state_dict())
 
 
         # 确保所有的CUDA核心完成工作，以便准确统计显存使用情况
@@ -594,11 +621,150 @@ class MuZeroGPTPolicy(Policy):
             # 'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
             # 'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
-            # 'total_grad_norm_before_clip_rep_net': total_grad_norm_before_clip_rep_net.item(),  
+            'total_grad_norm_before_clip_rep_net': total_grad_norm_before_clip_rep_net.item(),  
         }
 
         return return_loss_dict
 
+
+    def _forward_learn_tokenizer(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
+        """
+        Overview:
+            The forward function for learning policy in learn mode, which is the core of the learning process.
+            The data is sampled from replay buffer.
+            The loss is calculated by the loss function and the loss is backpropagated to update the model.
+        Arguments:
+            - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
+                The first tensor is the current_batch, the second tensor is the target_batch.
+        Returns:
+            - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
+                current learning loss and learning statistics.
+        """
+        self._learn_model.train()
+        self._target_model.train()
+        if self._cfg.use_rnd_model:
+            self._target_model_for_intrinsic_reward.train()
+
+        # current_batch, target_batch = data
+        current_batch, target_batch, train_which_component_dict = data
+
+
+        obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
+        target_reward, target_value, target_policy = target_batch
+
+        obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+
+        # do augmentations
+        if self._cfg.use_augmentation:
+            obs_batch = self.image_transforms.transform(obs_batch)
+            if self._cfg.model.self_supervised_learning_loss:
+                obs_target_batch = self.image_transforms.transform(obs_target_batch)
+
+        # shape: (batch_size, num_unroll_steps, action_dim)
+        # NOTE: .long(), in discrete action space.
+        # action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
+        # data_list = [
+        #     mask_batch,
+        #     target_reward.astype('float32'),
+        #     target_value.astype('float32'), target_policy, weights
+        # ]
+
+        # [mask_batch, target_reward, target_value, target_policy,
+        #  weights] = to_torch_float_tensor(data_list, self._cfg.device)
+
+        # target_reward = target_reward.view(self._cfg.batch_size, -1)
+        # target_value = target_value.view(self._cfg.batch_size, -1)
+
+        # assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
+
+
+        batch_for_gpt = {}
+        # TODO: for cartpole self._cfg.model.observation_shape
+        if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape)==1:
+            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
+        elif len(self._cfg.model.observation_shape)==3:
+            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  *self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
+
+        batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]  # (B, T-1, O) or (B, T-1, C, H, W)
+
+        # if train_which_component_dict['train_which_component'] == 'tokenizer':
+
+        # ==============================================================
+        # update tokenizer
+        # ==============================================================
+        # TODO: train tokenlizer
+        self._learn_model.tokenizer.train()
+        
+        # for name, param in self._learn_model.tokenizer.named_parameters():
+        #     if param.requires_grad:
+        #         print(name, param.shape)
+
+        losses_tokenizer = self._learn_model.tokenizer.compute_loss(batch_for_gpt)
+        
+        self._optimizer_tokenizer.zero_grad()
+
+        weighted_total_loss_tokenizer = losses_tokenizer.loss_total
+        weighted_total_loss_tokenizer.backward()
+        # losses_tokenizer.loss_total.backward()
+
+        total_grad_norm_before_clip_tokenizer = torch.nn.utils.clip_grad_norm_(
+            self._learn_model.tokenizer.parameters(), self._cfg.grad_clip_value
+        )
+
+
+        self._optimizer_tokenizer.step()
+
+        intermediate_losses_tokenizer= defaultdict(float)
+        for loss_name, loss_value in losses_tokenizer.intermediate_losses.items():
+            intermediate_losses_tokenizer[f"{loss_name}"] = loss_value
+        # print(intermediate_losses)
+        commitment_loss= intermediate_losses_tokenizer['commitment_loss']
+        reconstruction_loss = intermediate_losses_tokenizer['reconstruction_loss']
+        perceptual_loss = intermediate_losses_tokenizer['perceptual_loss']
+
+
+        # # ==============================================================
+        # # the core target model update step.
+        # # ==============================================================
+        # self._target_model.update(self._learn_model.state_dict())
+        # if self._cfg.use_rnd_model:
+        #     self._target_model_for_intrinsic_reward.update(self._learn_model.state_dict())
+
+
+        return_loss_dict = {
+            'collect_mcts_temperature': self._collect_mcts_temperature,
+            'collect_epsilon': self.collect_epsilon,
+            'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
+            'cur_lr_tokenizer': self._optimizer_tokenizer.param_groups[0]['lr'],
+
+            # 'weighted_total_loss': weighted_total_loss.item(),
+            # 'obs_loss': obs_loss,
+            # 'policy_loss': policy_loss,
+            # 'target_policy_entropy': average_target_policy_entropy,
+            # 'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),
+            # 'reward_loss': reward_loss,
+            # 'value_loss': value_loss,
+            # 'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
+
+            # ==============================================================
+            # priority related
+            # ==============================================================
+            # 'value_priority_orig': value_priority,
+            # 'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
+            # 'value_priority': value_priority.mean().item(),
+            # 'target_reward': target_reward.detach().cpu().numpy().mean().item(),
+            # 'target_value': target_value.detach().cpu().numpy().mean().item(),
+            # 'transformed_target_reward': transformed_target_reward.detach().cpu().numpy().mean().item(),
+            # 'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
+            # 'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
+            # 'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
+            'total_grad_norm_before_clip_tokenizer': total_grad_norm_before_clip_tokenizer.item(),
+            'commitment_loss':commitment_loss,
+            'reconstruction_loss':reconstruction_loss,
+            'perceptual_loss': perceptual_loss,
+        }
+
+        return return_loss_dict
 
     def _init_collect(self) -> None:
         """
@@ -890,7 +1056,7 @@ class MuZeroGPTPolicy(Policy):
             # 'transformed_target_value',
             'total_grad_norm_before_clip_tokenizer',
             'total_grad_norm_before_clip_wm',
-            # 'total_grad_norm_before_clip_rep_net',
+            'total_grad_norm_before_clip_rep_net',
             # tokenizer
             'commitment_loss',
             'reconstruction_loss',

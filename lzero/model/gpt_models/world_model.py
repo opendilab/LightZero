@@ -573,8 +573,7 @@ class WorldModel(nn.Module):
             act_tokens = torch.cat((act_tokens, last_steps), dim=1)
 
             # print('init inference: unroll 5 steps!')  17*6=102  17*5=85
-            obs_embeddings = latent_state
-            outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, is_root=False)
+            outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (latent_state, act_tokens)}, is_root=False)
 
             # 选择每个样本的最后一步
             last_steps_value = outputs_wm.logits_value[:, -1:, :]  # 这将选择最后一列并保持维度不变
@@ -685,11 +684,11 @@ class WorldModel(nn.Module):
 
     @torch.no_grad()
     # @profile
-    def forward_initial_inference(self, obs_act_dict: torch.LongTensor):
-        if isinstance(obs_act_dict, dict):
-            obs = obs_act_dict['obs']
-        else:
-            obs = obs_act_dict
+    def forward_initial_inference(self, obs_act_dict):
+        # if isinstance(obs_act_dict, dict):
+        #     obs = obs_act_dict['obs']
+        # else:
+        #     obs = obs_act_dict
         outputs_wm, latent_state = self.reset_from_initial_observations_v2(obs_act_dict) # root节点也有context
 
         return outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
@@ -729,7 +728,8 @@ class WorldModel(nn.Module):
         # token = action.clone().detach() if isinstance(action, torch.Tensor) else torch.tensor(action, dtype=torch.long)
         # token = token.reshape(-1, 1).to(self.device)  # (B, 1)
 
-        token = torch.tensor(action, dtype=torch.long).reshape(-1, 1).to(self.device) 
+        # token = torch.tensor(action, dtype=torch.long).reshape(-1, 1).to(self.device) 
+        token = action.reshape(-1, 1)
 
 
         # print(self.keys_values_wm_size_list)
@@ -977,12 +977,12 @@ class WorldModel(nn.Module):
         # NOTE: 这里是需要梯度的
         #with torch.no_grad():  # TODO: 非常重要
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False) # (B, C, H, W) -> (B, K, E)
-        obs_embeddings.register_hook(lambda grad: grad * 1/5)  # TODO：只提供重建损失更新表征网络
-        # obs_embeddings.register_hook(lambda grad: grad * 1)  # TODO：只提供重建损失更新表征网络
+        obs_embeddings.register_hook(lambda grad: grad * 1/5)  # TODO：测试这句的作用
 
         # Assume that 'cont_embeddings' and 'original_images' are available from prior code
         # Decode the embeddings to reconstruct the images
         reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+
         # Calculate the reconstruction loss
         # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # TODO: for stack=4
         # perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # for stack=4 gray obs
@@ -995,14 +995,14 @@ class WorldModel(nn.Module):
 
         latent_kl_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)
 
-
         act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
 
         # TODO: 是否只用重建损失更新表征网络 非常重要
-        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, is_root=False)
+        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, is_root=False) # 联合更新性能更好
         # outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens)}, is_root=False)
 
-        with torch.no_grad(): 
+        with torch.no_grad():
+            # 为了训练稳定性，world_model预测的next_latent_state是用target world_model 产生的
             traget_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False) # (B, C, H, W) -> (B, K, E)
 
         labels_observations, labels_rewards, labels_ends = self.compute_labels_world_model(traget_obs_embeddings, batch['rewards'],

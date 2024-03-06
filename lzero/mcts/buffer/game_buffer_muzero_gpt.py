@@ -402,7 +402,7 @@ class MuZeroGameBufferGPT(GameBuffer):
             #     network_output.append(m_output)
 
             network_output = []
-            m_obs = torch.from_numpy(value_obs_list).to(self._cfg.device).float()
+            m_obs = torch.from_numpy(value_obs_list).to(self._cfg.device)
 
             # calculate the target value
             # action_batch.shape (32, 10)
@@ -561,7 +561,7 @@ class MuZeroGameBufferGPT(GameBuffer):
             #     m_output = model.initial_inference(m_obs)
 
             network_output = []
-            m_obs = torch.from_numpy(policy_obs_list).to(self._cfg.device).float()
+            m_obs = torch.from_numpy(policy_obs_list).to(self._cfg.device)
             # calculate the target value
             # action_batch.shape (32, 10)
             # m_obs.shape torch.Size([352, 3, 64, 64])
@@ -614,11 +614,10 @@ class MuZeroGameBufferGPT(GameBuffer):
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
                         target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
                     else:
-                        # TODO very important: use latest MCTS visit count distribution
+                        #  NOTE: very important: use latest MCTS visit count distribution
                         # if current_index < len(child_visit):
                         sum_visits = sum(distributions)
                         child_visit[current_index] = [visit_count / sum_visits for visit_count in distributions]
-
 
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy

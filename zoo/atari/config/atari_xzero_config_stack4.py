@@ -78,9 +78,11 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     # TODO: 
-    # stack muzero_gpt_model.py world_model.py (4,64,64)
-    # mz: mcts_ctree, muzero_collector: empty_cache
-    exp_name=f'data_xzero_stack1_0226/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh4_seed0',
+    # muzero_gpt_model.py world_model.py stack (4,64,64)
+    # muzero: mcts_ctree, muzero_collector: empty_cache
+    exp_name=f'data_xzero_0307/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh4_fixroot_seed0',
+
+    # exp_name=f'data_xzero_0307/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh4_fixroot_head-2-layer_mantrans-nobatch_seed0',
 
 
     # exp_name=f'data_xzero_stack1_0219/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kv81-fix3_collect-clear200_noeval_search-toplay-nodeepcopy_seed0',
@@ -103,8 +105,8 @@ atari_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        # collect_max_episode_steps=int(50),
-        # eval_max_episode_steps=int(50),
+        # collect_max_episode_steps=int(5),
+        # eval_max_episode_steps=int(5),
         # TODO: run
         collect_max_episode_steps=int(2e4),
         eval_max_episode_steps=int(1e4),

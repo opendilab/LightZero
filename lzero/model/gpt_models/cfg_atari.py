@@ -53,6 +53,10 @@ cfg['world_model'] = {
                       "max_tokens": 2 * 5,  # TODO： horizon
 
                       # 'tokens_per_block': 2,
+                      # 'max_blocks': 10,
+                      # "max_tokens": 2 * 10,  # TODO： horizon
+
+                      # 'tokens_per_block': 2,
                       # 'max_blocks': 6,
                       # "max_tokens": 2 * 6,  # TODO： horizon
 
@@ -70,13 +74,14 @@ cfg['world_model'] = {
                       # 'num_heads': 1,
 
                       'num_layers': 2, # TODO：for atari debug
-                      'num_heads': 4,
+                      # 'num_heads': 4,
+                      'num_heads': 8,
 
 
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:0',
+                      "device": 'cuda:7',
                     #   "device": 'cpu',
                       # 'support_size': 21,
                       'support_size': 601,

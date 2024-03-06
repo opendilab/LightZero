@@ -117,12 +117,12 @@ class SelfAttention(nn.Module):
         self.config = config
         self.num_heads = config.num_heads
 
-        # self.key = nn.Linear(config.embed_dim, config.embed_dim)
-        # self.query = nn.Linear(config.embed_dim, config.embed_dim)
-        # self.value = nn.Linear(config.embed_dim, config.embed_dim)
+        self.key = nn.Linear(config.embed_dim, config.embed_dim)
+        self.query = nn.Linear(config.embed_dim, config.embed_dim)
+        self.value = nn.Linear(config.embed_dim, config.embed_dim)
 
         # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.embed_dim, 3 * config.embed_dim)
+        # self.c_attn = nn.Linear(config.embed_dim, 3 * config.embed_dim)
 
         self.attn_drop = nn.Dropout(config.attn_pdrop)
         self.resid_drop = nn.Dropout(config.resid_pdrop)
@@ -143,37 +143,36 @@ class SelfAttention(nn.Module):
             L = 0
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        q, k, v  = self.c_attn(x).split(self.config.embed_dim, dim=2)
-        k = k.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2) # (B, nh, T, hs)
-        q = q.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2) # (B, nh, T, hs)
-        v = v.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2) # (B, nh, T, hs)
+        # q, k, v  = self.c_attn(x).split(self.config.embed_dim, dim=2)
+        # k = k.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2) # (B, nh, T, hs)
+        # q = q.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2) # (B, nh, T, hs)
+        # v = v.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2) # (B, nh, T, hs)
 
-        # q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)   # (B, nh, T, hs)
-        # k = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)     # (B, nh, T, hs)
-        # v = self.value(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)   # (B, nh, T, hs)
+        q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)   # (B, nh, T, hs)
+        k = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)     # (B, nh, T, hs)
+        v = self.value(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)   # (B, nh, T, hs)
 
         if kv_cache is not None:
             kv_cache.update(k, v)
             k, v = kv_cache.get()
 
         # method1: manual implementation of attention
-        # att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-        # att = att.masked_fill(self.mask[L:L + T, :L + T] == 0, float('-inf'))
-        # att = F.softmax(att, dim=-1)
-        # att = self.attn_drop(att)
-        # y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+        att = att.masked_fill(self.mask[L:L + T, :L + T] == 0, float('-inf'))
+        att = F.softmax(att, dim=-1)
+        att = self.attn_drop(att)
+        y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
 
         # TODO
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
 
         # method2: efficient attention using Flash Attention CUDA kernels
         # 手动实现的掩码区域
-        manual_attn_mask = self.mask[L:L + T, :L + T]
-        # # https://github.com/pytorch/pytorch/blob/main/torch/nn/functional.py#L5243
-        manual_attn_mask = manual_attn_mask.masked_fill(manual_attn_mask == 0, float('-inf'))
-        manual_attn_mask = manual_attn_mask.masked_fill(manual_attn_mask != 0, 0)
-
-        y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=manual_attn_mask, dropout_p=self.config.attn_pdrop if self.training else 0, is_causal=False)
+        # manual_attn_mask = self.mask[L:L + T, :L + T]
+        # # # https://github.com/pytorch/pytorch/blob/main/torch/nn/functional.py#L5243
+        # manual_attn_mask = manual_attn_mask.masked_fill(manual_attn_mask == 0, float('-inf'))
+        # manual_attn_mask = manual_attn_mask.masked_fill(manual_attn_mask != 0, 0)
+        # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=manual_attn_mask, dropout_p=self.config.attn_pdrop if self.training else 0, is_causal=False)
         
         y = rearrange(y, 'b h t e -> b t (h e)')
         y = self.resid_drop(self.proj(y))
