@@ -379,7 +379,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # Note: The following lines are just for logging.
         predicted_value_prefixs = []
         if self._cfg.monitor_extra_statistics:
-            latent_state_list = latent_state.detach().cpu().numpy()
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
@@ -424,10 +423,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             latent_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(
                 network_output
             )
-
-            # transform the scaled value or its categorical representation to its original value,
-            # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
-            original_value = self.inverse_scalar_transform_handle(value)
 
             if self._cfg.model.self_supervised_learning_loss:
                 # ==============================================================
@@ -495,7 +490,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 )
                 predicted_value_prefixs.append(original_value_prefixs_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
-                latent_state_list = np.concatenate((latent_state_list, latent_state.detach().cpu().numpy()))
 
         # ==============================================================
         # the core learn model update step.
@@ -716,7 +710,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             - target_sampled_actions (:obj:`torch.Tensor`): The target sampled actions tensor.
         """
         prob = torch.softmax(policy_logits, dim=-1)
-        dist = Categorical(prob)
 
         # take the init hypothetical step k=unroll_step
         target_normalized_visit_count = target_policy[:, unroll_step]
@@ -726,15 +719,17 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             target_normalized_visit_count, 0,
             torch.nonzero(mask_batch[:, unroll_step]).squeeze(-1)
         )
-        target_dist = Categorical(target_normalized_visit_count_masked)
-        target_policy_entropy = target_dist.entropy().mean()
+
+        target_policy_entropy = -((target_normalized_visit_count_masked + 1e-6) * (
+                    target_normalized_visit_count_masked + 1e-6).log()).sum(-1).mean()
 
         # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim) -> (batch_size,
         # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2) ->  (4, 20, 2)
         target_sampled_actions = child_sampled_actions_batch[:, unroll_step]
 
-        policy_entropy = dist.entropy().mean()
-        policy_entropy_loss = -dist.entropy()
+        entropy = -(prob * prob.log()).sum(-1)
+        policy_entropy = entropy.mean()
+        policy_entropy_loss = -entropy
 
         # Project the sampled-based improved policy back onto the space of representable policies. calculate KL
         # loss (batch_size, num_of_sampled_actions) -> (4,20) target_normalized_visit_count is

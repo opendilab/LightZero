@@ -332,7 +332,8 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
     # Return the prepared batches: one for the initial inference and one for the consistency loss calculation (if applicable).
     return obs_batch, obs_target_batch
 
-def prepare_obs_v0(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
+
+def prepare_obs_bkp(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Overview:
         Prepare the observations for the model, including:

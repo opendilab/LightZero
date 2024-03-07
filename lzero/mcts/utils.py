@@ -97,7 +97,7 @@ def prepare_observation(observation_list, model_type='conv'):
     Returns:
         - np.ndarray: Reshaped array of observations.
     """
-    # assert model_type in ['conv', 'mlp'], "model_type must be either 'conv' or 'mlp'"
+    assert model_type in ['conv', 'mlp'], "model_type must be either 'conv' or 'mlp'"
     observation_array = np.array(observation_list)
     batch_size = observation_array.shape[0]
 
