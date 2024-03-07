@@ -57,7 +57,7 @@ class TicTacToeEnv(BaseEnv):
         # prob_expert_agent (int): The probability of the expert agent.
         prob_expert_agent=0,
         # channel_last (bool): If True, the channel will be the last dimension.
-        channel_last=True,
+        channel_last=False,
         # scale (bool): If True, the pixel values will be scaled.
         scale=True,
         # stop_value (int): The value to stop the game.

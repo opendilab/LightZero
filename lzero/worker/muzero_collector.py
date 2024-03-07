@@ -677,11 +677,6 @@ class MuZeroCollector(ISerialCollector):
                     } for i in range(len(self.game_segment_pool))
                 ]
                 self.game_segment_pool.clear()
-                # for i in range(len(self.game_segment_pool)):
-                #     print(self.game_segment_pool[i][0].obs_segment.__len__())
-                #     print(self.game_segment_pool[i][0].reward_segment)
-                # for i in range(len(return_data[0])):
-                #     print(return_data[0][i].reward_segment)
                 break
 
         collected_duration = sum([d['time'] for d in self._episode_info])
