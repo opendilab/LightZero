@@ -14,7 +14,7 @@ import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import SequenceType
 import torch.nn.init as init
-
+import torch.nn.functional as F
 # use dataclass to make the output of network more convenient to use
 @dataclass
 class EZNetworkOutput:
@@ -159,7 +159,7 @@ class DownSample(nn.Module):
 
 #     return flat_input.view(*input.shape)
 
-def renormalize(x): # min-max
+def renormalize_min_max(x): # min-max
     # x is a 2D tensor of shape (batch_size, num_features)
     # Compute the min and max for each feature across the batch
     x_min = torch.min(x, dim=0, keepdim=True).values
@@ -195,6 +195,29 @@ def renormalize(x): # min-max
 #     x_scaled = (x - q1) / (iqr + 1e-8)  # Again, add epsilon to avoid division by zero
 
 #     return x_scaled
+
+class SimNorm(nn.Module):
+    """
+    Simplicial normalization.
+    Adapted from https://arxiv.org/abs/2204.00616.
+    """
+
+    def __init__(self, simnorm_dim):
+        super().__init__()
+        self.dim = simnorm_dim
+
+    def forward(self, x):
+        shp = x.shape
+        # Ensure that there is at least one simplex to normalize across.
+        if shp[1] != 0:
+            x = x.view(*shp[:-1], -1, self.dim)
+            x = F.softmax(x, dim=-1)
+            return x.view(*shp)
+        else:
+            return x
+
+    def __repr__(self):
+        return f"SimNorm(dim={self.dim})"
 
 def AvgL1Norm(x, eps=1e-8):
 	return x/x.abs().mean(-1,keepdim=True).clamp(min=eps)
@@ -273,6 +296,8 @@ class RepresentationNetworkGPT(nn.Module):
         # Initialize biases to zero
         # init.zeros_(self.last_linear.bias)
 
+        self.sim_norm = SimNorm(simnorm_dim=8)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
@@ -301,7 +326,9 @@ class RepresentationNetworkGPT(nn.Module):
 
         # print('cont embedings before renormalize', x.max(), x.min(), x.mean())
         # x = torch.tanh(x)
-        x = renormalize(x)
+        # x = renormalize_min_max(x)
+        x = self.sim_norm(x)
+
         # print('after renormalize', x.max(), x.min(),x.mean())
         
         return x

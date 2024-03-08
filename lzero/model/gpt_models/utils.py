@@ -115,7 +115,9 @@ class LossWithIntermediateLosses:
         # self.ends_loss_weight = 0.
 
         # self.obs_loss_weight = 0.1
-        self.obs_loss_weight = 2.
+        self.obs_loss_weight = 10
+        # self.obs_loss_weight = 2
+
 
         self.reward_loss_weight = 1.
         self.value_loss_weight = 0.25
@@ -150,8 +152,8 @@ class LossWithIntermediateLosses:
                 self.loss_total += self.latent_recon_loss_weight * v
             elif k == 'perceptual_loss':
                 self.loss_total += self.perceptual_loss_weight * v
-            else:
-                raise ValueError(f"Unknown loss type : {k}")
+            # else:
+            #     raise ValueError(f"Unknown loss type : {k}")
 
         self.intermediate_losses = {k: v.item() for k, v in kwargs.items()}
 

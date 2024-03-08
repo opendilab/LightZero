@@ -25,9 +25,35 @@ from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
 from ding.torch_utils import to_device
+
+
 # from memory_profiler import profile
 from line_profiler import line_profiler
 import hashlib
+
+class SimNorm(nn.Module):
+    """
+    Simplicial normalization.
+    Adapted from https://arxiv.org/abs/2204.00616.
+    """
+
+    def __init__(self, simnorm_dim):
+        super().__init__()
+        self.dim = simnorm_dim
+
+    def forward(self, x):
+        shp = x.shape
+        # Ensure that there is at least one simplex to normalize across.
+        if shp[1] != 0:
+            x = x.view(*shp[:-1], -1, self.dim)
+            x = F.softmax(x, dim=-1)
+            return x.view(*shp)
+        else:
+            return x
+
+    def __repr__(self):
+        return f"SimNorm(dim={self.dim})"
+
 # def quantize_state(state, num_buckets=1000):
 def quantize_state(state, num_buckets=15):
 # def quantize_state(state, num_buckets=10):
@@ -45,6 +71,8 @@ def quantize_state(state, num_buckets=15):
     quantized_state_bytes = quantized_state.tobytes()
     hash_object = hashlib.sha256(quantized_state_bytes)
     return hash_object.hexdigest()
+
+
 
 @dataclass
 class WorldModelOutput:
@@ -66,6 +94,7 @@ class WorldModel(nn.Module):
         self.tokenizer = tokenizer
         self.obs_vocab_size, self.act_vocab_size = obs_vocab_size, act_vocab_size
         self.config = config
+        self.policy_entropy_weight = config.policy_entropy_weight
 
         self.transformer = Transformer(config)
         # self.num_observations_tokens = 16
@@ -80,7 +109,7 @@ class WorldModel(nn.Module):
         self.max_cache_size = config.max_cache_size
         self.env_num = config.env_num
         self.num_layers = config.num_layers
-
+        self.sim_norm = SimNorm(simnorm_dim=8)
 
         all_but_last_latent_state_pattern = torch.ones(config.tokens_per_block)
         all_but_last_latent_state_pattern[-2] = 0 # 1,...,0,1
@@ -98,7 +127,7 @@ class WorldModel(nn.Module):
         # value_policy_tokens_pattern[-1] = 1  # [0,...,0,1]
 
         obs_per_embdding_dim=config.embed_dim
-
+        # TODO
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim)
 
 
@@ -109,6 +138,7 @@ class WorldModel(nn.Module):
         )
 
         self.act_embedding_table = nn.Embedding(act_vocab_size, config.embed_dim)
+        # self.act_embedding_table.weight.requires_grad = False  # TODO: 测试效果
 
         self.obs_per_embdding_dim = config.embed_dim # 16*64=1024
 
@@ -153,7 +183,8 @@ class WorldModel(nn.Module):
                 nn.GELU(),
                 nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
                 # nn.Tanh(), # TODO
-                nn.Sigmoid(),  # 这里添加Sigmoid函数 TODO
+                # nn.Sigmoid(),  # 这里添加Sigmoid函数 TODO
+                self.sim_norm,
             )
         )
         self.head_policy = Head(
@@ -272,7 +303,7 @@ class WorldModel(nn.Module):
     def __repr__(self) -> str:
         return "world_model"
 
-    # @profile
+    #@profile
     def forward(self, obs_embeddings_or_act_tokens, past_keys_values: Optional[KeysValues] = None,
             is_root=False, kvcache_independent=False) -> WorldModelOutput:
         
@@ -336,9 +367,6 @@ class WorldModel(nn.Module):
                 obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1], self.num_observations_tokens, -1)
 
             num_steps = int(obs_embeddings.size(1)*(obs_embeddings.size(2)+1)) # L(k+1)
-            # assert num_steps <= self.config.max_tokens
-            # Rearrange observation embeddings from (B, L, K, E) to (B, L*K, E)
-            # obs_embeddings = rearrange(obs_embeddings, 'b l k e -> b (l k) e')
 
             # Generate action embeddings from action tokens
             # (B, L, 1) -> (B, L, 1, E) 
@@ -348,7 +376,6 @@ class WorldModel(nn.Module):
             # 而且让得到的obs_act_embeddings的第2个维度的数据为：obs act, obs, act, ..., obs, act，即 L, 1, L,1 ... 这样的排列顺序。请给出高效的实现，用中文回答
 
             B, L, K, E = obs_embeddings.size()
-            # _, _, _, _ = act_embeddings.size()
 
             # 初始化一个新的空tensor，用于存放最终的拼接结果
             obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=obs_embeddings.device)
@@ -365,9 +392,6 @@ class WorldModel(nn.Module):
                 # 将结果填充到最终的tensor中
                 obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
 
-            # 确保形状正确无误
-            # assert obs_act_embeddings.shape == (B, L * (K + 1), E)
-
             # Add positional embeddings
             sequences = obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device))
 
@@ -378,15 +402,12 @@ class WorldModel(nn.Module):
             for k, past_kv in enumerate(past_keys_values):
                 x.append(self.transformer(sequences[k].unsqueeze(0), past_kv))
             x =  torch.cat(x, dim=0)
-
             # TODO: 在collect时，是一步一步的 obs act 传入的
             # prev_steps = prev_steps//1
-
         else:
             x = self.transformer(sequences, past_keys_values)
 
         # print('transformer forward done')
-
 
         if is_root:
             logits_observations = self.head_observations_for_root(x, num_steps=num_steps, prev_steps=prev_steps)
@@ -395,14 +416,14 @@ class WorldModel(nn.Module):
             logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
         
         logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_ends = self.head_ends(x, num_steps=num_steps, prev_steps=prev_steps)
-        # return WorldModelOutput(x, logits_observations, logits_rewards, logits_ends)
+        # logits_ends = self.head_ends(x, num_steps=num_steps, prev_steps=prev_steps)
 
         logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
 
         # TODO: root reward value
-        return WorldModelOutput(x, logits_observations, logits_rewards, logits_ends, logits_policy, logits_value)
+        return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)
+        # return WorldModelOutput(x, logits_observations, logits_rewards, logits_ends, logits_policy, logits_value)
 
     @torch.no_grad()
     def render_batch(self) -> List[Image.Image]:
@@ -428,7 +449,7 @@ class WorldModel(nn.Module):
         return self.render_batch()[0]
 
     @torch.no_grad()
-    # @profile
+    #@profile
     def reset_from_initial_observations_v2(self, obs_act_dict: torch.FloatTensor) -> torch.FloatTensor:
         if isinstance(obs_act_dict, dict):
             observations = obs_act_dict['obs']
@@ -452,7 +473,7 @@ class WorldModel(nn.Module):
         return outputs_wm, self.latent_state
 
     @torch.no_grad()
-    # @profile
+    #@profile
     def refresh_keys_values_with_initial_latent_state_for_init_infer_v2(self, latent_state: torch.LongTensor, buffer_action=None, current_obs_embeddings=None) -> torch.FloatTensor:
         n, num_observations_tokens, _ = latent_state.shape
         if n <= self.env_num:
@@ -591,7 +612,7 @@ class WorldModel(nn.Module):
         return outputs_wm
 
     @torch.no_grad()
-    # @profile
+    # #@profile
     def reset_from_initial_observations(self, obs_act_dict: torch.FloatTensor) -> torch.FloatTensor:
         if isinstance(obs_act_dict, dict):
             # obs_act_dict = {'obs':obs, 'action':action_batch}
@@ -609,7 +630,7 @@ class WorldModel(nn.Module):
 
 
     @torch.no_grad()
-    # @profile
+    # #@profile
     def refresh_keys_values_with_initial_latent_state_for_init_infer(self, latent_state: torch.LongTensor, buffer_action=None) -> torch.FloatTensor:
         n, num_observations_tokens, _ = latent_state.shape
         if n <= self.env_num:
@@ -667,7 +688,7 @@ class WorldModel(nn.Module):
 
 
     @torch.no_grad()
-    # @profile
+    # #@profile
     def refresh_keys_values_with_initial_latent_state(self, latent_state: torch.LongTensor, reset_indices=None) -> torch.FloatTensor:
         n, num_observations_tokens, _ = latent_state.shape
         assert num_observations_tokens == self.num_observations_tokens
@@ -683,7 +704,7 @@ class WorldModel(nn.Module):
         return None
 
     @torch.no_grad()
-    # @profile
+    #@profile
     def forward_initial_inference(self, obs_act_dict):
         # if isinstance(obs_act_dict, dict):
         #     obs = obs_act_dict['obs']
@@ -701,7 +722,7 @@ class WorldModel(nn.Module):
     """
 
     @torch.no_grad()
-    # @profile
+    #@profile
     def forward_recurrent_inference(self, state_action_history):
         # 一般来讲，在一次 MCTS search中，我们需要维护H长度的context来使用transformer进行推理。
         # 由于在一次search里面。agent最多访问sim个不同的节点，因此我们只需维护一个 {(state:kv_cache)}的列表。
@@ -972,7 +993,7 @@ class WorldModel(nn.Module):
         total_memory_gb = total_memory_bytes / (1024 ** 3)
         return total_memory_gb
 
-    # @profile
+    #@profile
     def compute_loss(self, batch, target_tokenizer: Tokenizer=None, **kwargs: Any) -> LossWithIntermediateLosses:
         # NOTE: 这里是需要梯度的
         #with torch.no_grad():  # TODO: 非常重要
@@ -1018,6 +1039,7 @@ class WorldModel(nn.Module):
 
         
         loss_obs = torch.nn.functional.mse_loss(logits_observations, labels_observations.detach(), reduction='none').mean(-1)
+
         mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1) # TODO:
         # mask_padding_expanded = batch['mask_padding'][:, 1:].reshape(-1)
 
@@ -1028,36 +1050,70 @@ class WorldModel(nn.Module):
                                                                                    batch['mask_padding'])
 
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
-        loss_policy = self.compute_cross_entropy_loss(outputs, labels_policy, batch, element='policy')
+        loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy, batch, element='policy')
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
 
         return LossWithIntermediateLosses(latent_recon_loss_weight=self.latent_recon_loss_weight, perceptual_loss_weight=self.perceptual_loss_weight, loss_obs=loss_obs, loss_rewards=loss_rewards, loss_value=loss_value,
-                                          loss_policy=loss_policy, latent_kl_loss=latent_kl_loss, latent_recon_loss=latent_recon_loss, perceptual_loss=perceptual_loss)
+                                          loss_policy=loss_policy, latent_kl_loss=latent_kl_loss, latent_recon_loss=latent_recon_loss, perceptual_loss=perceptual_loss, orig_policy_loss=orig_policy_loss, policy_entropy=policy_entropy)
+
+    # def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
+    #     # Assume outputs.logits_rewards and labels are your predictions and targets
+    #     # And mask_padding is a boolean tensor with True at positions to keep and False at positions to ignore
+    #     if element == 'rewards':
+    #         logits = outputs.logits_rewards
+    #     elif element == 'policy':
+    #         logits = outputs.logits_policy
+    #     elif element == 'value':
+    #         logits = outputs.logits_value
+
+    #     # Reshape your tensors
+    #     logits_rewards = rearrange(logits, 'b t e -> (b t) e')
+    #     labels = labels.reshape(-1, labels.shape[-1])  # Assuming labels originally has shape [b, t, reward_dim]
+
+    #     # Reshape your mask. True means valid data.
+    #     mask_padding = rearrange(batch['mask_padding'], 'b t -> (b t)')
+
+    #     loss_rewards = -(torch.log_softmax(logits_rewards, dim=1) * labels).sum(1)
+    #     # loss_rewards = (loss_rewards * mask_padding.squeeze(-1).float()).mean()
+    #     loss_rewards = (loss_rewards * mask_padding).mean()
+
+    #     return loss_rewards
 
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
-        # Assume outputs.logits_rewards and labels are your predictions and targets
-        # And mask_padding is a boolean tensor with True at positions to keep and False at positions to ignore
+        # Assume outputs is an object with logits attributes for 'rewards', 'policy', and 'value'
+        # And labels is a tensor with targets to compare against. The batch is a dictionary
+        # with a mask to indicate valid timesteps.
 
-        if element == 'rewards':
-            logits = outputs.logits_rewards
-        elif element == 'policy':
-            logits = outputs.logits_policy
-        elif element == 'value':
-            logits = outputs.logits_value
+        logits = getattr(outputs, f'logits_{element}')
 
         # Reshape your tensors
-        logits_rewards = rearrange(logits, 'b t e -> (b t) e')
-        labels = labels.reshape(-1, labels.shape[-1])  # Assuming labels originally has shape [b, t, reward_dim]
+        logits = rearrange(logits, 'b t e -> (b t) e')
+        labels = labels.reshape(-1, labels.shape[-1])  # Assuming labels originally has shape [batch, time, dim]
 
         # Reshape your mask. True means valid data.
         mask_padding = rearrange(batch['mask_padding'], 'b t -> (b t)')
 
-        loss_rewards = -(torch.log_softmax(logits_rewards, dim=1) * labels).sum(1)
-        # loss_rewards = (loss_rewards * mask_padding.squeeze(-1).float()).mean()
-        loss_rewards = (loss_rewards * mask_padding).mean()
+        # Compute the cross entropy loss
+        loss = -(torch.log_softmax(logits, dim=1) * labels).sum(1)
+        loss = (loss * mask_padding).mean()
 
+        if element == 'policy':
+            # Calculate policy entropy loss
+            policy_entropy = self.compute_policy_entropy_loss(logits, mask_padding)
+            # Combine the losses with the specified weight
+            combined_loss = loss - self.policy_entropy_weight * policy_entropy
+            return combined_loss, loss, policy_entropy
 
-        return loss_rewards
+        return loss
+
+    def compute_policy_entropy_loss(self, logits, mask):
+        # Calculate the entropy of the policy
+        probs = torch.softmax(logits, dim=1)
+        log_probs = torch.log_softmax(logits, dim=1)
+        entropy = -(probs * log_probs).sum(1)
+        # Apply the mask and return the mean entropy loss
+        entropy_loss = (entropy * mask).mean()
+        return entropy_loss
 
     def compute_labels_world_model(self, obs_embeddings: torch.Tensor, rewards: torch.Tensor, ends: torch.Tensor,
                                    mask_padding: torch.BoolTensor) -> Tuple[

@@ -18,6 +18,7 @@ from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
     prepare_obs, prepare_obs_for_gpt
+from line_profiler import line_profiler
 
 
 # def configure_optimizer(model, learning_rate, weight_decay, exclude_submodules, *blacklist_module_names):
@@ -361,6 +362,7 @@ class MuZeroGPTPolicy(Policy):
         )
         self.intermediate_losses = defaultdict(float)
 
+    #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         Overview:
@@ -382,6 +384,7 @@ class MuZeroGPTPolicy(Policy):
         
         return return_loss_dict
 
+    #@profile
     def monitor_weights_and_grads(self, model):
         for name, param in model.named_parameters():
             if param.requires_grad:
@@ -392,6 +395,7 @@ class MuZeroGPTPolicy(Policy):
                     f"Grad std: {param.grad.std():.4f}")
                     
 
+    #@profile
     def _forward_learn_transformer(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         Overview:
@@ -509,6 +513,8 @@ class MuZeroGPTPolicy(Policy):
         latent_kl_loss = self.intermediate_losses['latent_kl_loss']
         latent_recon_loss = self.intermediate_losses['latent_recon_loss']
         perceptual_loss = self.intermediate_losses['perceptual_loss']
+        orig_policy_loss = self.intermediate_losses['orig_policy_loss']
+        policy_entropy = self.intermediate_losses['policy_entropy']
 
 
         # ==============================================================
@@ -575,6 +581,9 @@ class MuZeroGPTPolicy(Policy):
             'latent_recon_loss':latent_recon_loss,
             'perceptual_loss':perceptual_loss,
             'policy_loss': policy_loss,
+            'orig_policy_loss':orig_policy_loss.item(),
+            'policy_entropy':policy_entropy.item(),
+
             'target_policy_entropy': average_target_policy_entropy,
             # 'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),
             'reward_loss': reward_loss,
@@ -616,6 +625,7 @@ class MuZeroGPTPolicy(Policy):
         self.last_batch_obs = torch.zeros([8,self._cfg.model.observation_shape[0],64,64]).to(self._cfg.device)
         self.last_batch_action = [-1 for i in range(8)]
 
+    #@profile
     def _forward_collect(
             self,
             data: torch.Tensor,
@@ -874,6 +884,8 @@ class MuZeroGPTPolicy(Policy):
             # 'total_loss',
             'obs_loss',
             'policy_loss',
+            'orig_policy_loss',
+            'policy_entropy',
             'latent_kl_loss',
             'latent_recon_loss',
             # 'policy_entropy',

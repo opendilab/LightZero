@@ -550,16 +550,6 @@ class MuZeroGameBufferGPT(GameBuffer):
 
         with torch.no_grad():
             policy_obs_list = prepare_observation(policy_obs_list, self._cfg.model.model_type)
-            # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
-            # slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
-            # network_output = []
-            # for i in range(slices):
-            #     beg_index = self._cfg.mini_infer_size * i
-            #     end_index = self._cfg.mini_infer_size * (i + 1)
-            #     m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device).float()
-
-            #     m_output = model.initial_inference(m_obs)
-
             network_output = []
             m_obs = torch.from_numpy(policy_obs_list).to(self._cfg.device)
             # calculate the target value
@@ -568,7 +558,6 @@ class MuZeroGameBufferGPT(GameBuffer):
             # m_obs.shape torch.Size([352, 4])  32*11
             # m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num], self.task_id)  # NOTE: :self.reanalyze_num
             m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
-
 
             if not model.training:
                 # if not in training, obtain the scalars of the value/reward

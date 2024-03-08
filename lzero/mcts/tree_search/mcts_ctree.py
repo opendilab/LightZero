@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from lzero.mcts.ctree.ctree_efficientzero import ez_tree as ez_ctree
     from lzero.mcts.ctree.ctree_muzero import mz_tree as mz_ctree
     from lzero.mcts.ctree.ctree_gumbel_muzero import gmz_tree as gmz_ctree
-
+from line_profiler import line_profiler
 # ==============================================================
 # EfficientZero
 # ==============================================================
@@ -254,6 +254,7 @@ class MuZeroMCTSCtree(object):
         from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
         return ctree.Roots(active_collect_env_num, legal_actions)
 
+    # @profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
                                                                                                           List[Any]]

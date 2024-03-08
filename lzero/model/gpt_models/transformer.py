@@ -133,7 +133,7 @@ class SelfAttention(nn.Module):
         self.register_buffer('mask', causal_mask if config.attention == 'causal' else block_causal_mask)
 
 
-    # @profile
+    #@profile
     def forward(self, x: torch.Tensor, kv_cache: Optional[KVCache] = None) -> torch.Tensor:
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
         if kv_cache is not None:

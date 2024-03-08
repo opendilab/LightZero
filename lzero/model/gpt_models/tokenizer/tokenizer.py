@@ -13,6 +13,7 @@ import torch.nn as nn
 from .lpips import LPIPS
 from .nets import Encoder, Decoder
 # from utils import LossWithIntermediateLosses
+from line_profiler import line_profiler
 
 
 class LossWithIntermediateLosses:
@@ -124,6 +125,7 @@ class Tokenizer(nn.Module):
 
         return TokenizerEncoderOutput(z, z_q, tokens)
 
+    #@profile
     def encode_to_obs_embeddings(self, x: torch.Tensor, should_preprocess: bool = False):
         # if should_preprocess:
         #     x = self.preprocess_input(x)
@@ -189,10 +191,12 @@ class Tokenizer(nn.Module):
 
         return obs_embeddings
 
+    #@profile
     def decode_to_obs(self, embeddings: torch.Tensor) -> torch.Tensor:
         return self.decoder_network(embeddings)
 
 
+    #@profile
     def reconstruction_loss(self, original_images: torch.Tensor, reconstructed_images: torch.Tensor) -> torch.Tensor:
         # Mean Squared Error (MSE) is commonly used as a reconstruction loss
         # loss = nn.MSELoss()(original_images, reconstructed_images) # L1 loss
@@ -201,6 +205,7 @@ class Tokenizer(nn.Module):
 
 
 
+    #@profile
     def perceptual_loss(self, original_images: torch.Tensor, reconstructed_images: torch.Tensor) -> torch.Tensor:
         # Mean Squared Error (MSE) is commonly used as a reconstruction loss
         perceptual_loss = torch.mean(self.lpips(original_images, reconstructed_images))
