@@ -534,11 +534,12 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                                 )
                             )
                         else:
-                            # update the data in game segment
+                            # Update the data in game segment:
+                            # after the reanalyze search, new target policies and root values are obtained
+                            # the target policies and root values are stored in the gamesegment, specifically, ``child_visit_segment`` and ``root_value_segment``
+                            # we replace the data at the corresponding location with the latest search results to keep the most up-to-date targets
                             sim_num = sum(distributions)
-                            # print(f'the visit in index{current_index} is {child_visit[current_index]}')
                             child_visit[current_index] = [visit_count/sim_num for visit_count in distributions]
-                            # print(f'after update the child visit is {child_visit[current_index]}')
                             root_value[current_index] = searched_value
                             if self._cfg.action_type == 'fixed_action_space':
                                 sum_visits = sum(distributions)
