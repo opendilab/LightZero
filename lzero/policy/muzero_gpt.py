@@ -581,8 +581,8 @@ class MuZeroGPTPolicy(Policy):
             'latent_recon_loss':latent_recon_loss,
             'perceptual_loss':perceptual_loss,
             'policy_loss': policy_loss,
-            'orig_policy_loss':orig_policy_loss.item(),
-            'policy_entropy':policy_entropy.item(),
+            'orig_policy_loss':orig_policy_loss,
+            'policy_entropy':policy_entropy,
 
             'target_policy_entropy': average_target_policy_entropy,
             # 'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),

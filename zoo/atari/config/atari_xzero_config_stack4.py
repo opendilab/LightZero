@@ -24,37 +24,16 @@ elif env_name == 'BreakoutNoFrameskip-v4':
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 1
+
 update_per_collect = 1000
-# update_per_collect = None
-model_update_ratio = 0.25
 
-# update_per_collect = 500
-
-
-# collector_env_num = 4
-# n_episode = 4
-# evaluator_env_num = 1
-# update_per_collect = 500
-
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 1
-# update_per_collect = 250
-
-# update_per_collect = 2000
-
-# update_per_collect = None
-# model_update_ratio = 0.25
-num_simulations = 50
-# num_simulations = 25
-
-# TODO: debug
-# num_simulations = 1
-max_env_step = int(10e6)
 reanalyze_ratio = 0
+# reanalyze_ratio = 0.05
 
 batch_size = 64  # for num_head=2, emmbding_dim=128
 num_unroll_steps = 5
+max_env_step = int(10e6)
+num_simulations = 50
 
 
 # for debug
@@ -80,7 +59,7 @@ atari_muzero_config = dict(
     # TODO: 
     # muzero_gpt_model.py world_model.py stack (4,64,64)
     # muzero: mcts_ctree, muzero_collector: empty_cache
-    exp_name=f'data_xzero_0307/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh4_fixroot_seed0',
+    exp_name=f'data_xzero_0307/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh8_fixroot_simnorm_latentw10_pew0_seed0',
 
     # exp_name=f'data_xzero_0307/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh4_fixroot_head-2-layer_mantrans-nobatch_seed0',
 
