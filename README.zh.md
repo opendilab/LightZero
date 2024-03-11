@@ -352,7 +352,7 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
   - ExpEnv: Gridworld and SysAdmin
 - [Efficient Learning for AlphaZero via Path Consistency](https://proceedings.mlr.press/v162/zhao22h/zhao22h.pdf) 2022
   - Dengwei Zhao, Shikui Tu, Lei Xu
-  - Key: limited amount of self-plays,  path consistency (PC) optimality
+  - Key: limited amount of self-plays, path consistency (PC) optimality
   - ExpEnv: Go, Othello, Gomoku
 - [Visualizing MuZero Models](https://arxiv.org/abs/2102.12924) 2021
   - Joery A. de Vries, Ken S. Voskuil, Thomas M. Moerland, Aske Plaat
@@ -361,7 +361,7 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 and internal state transition dynamics,
 - [Convex Regularization in Monte-Carlo Tree Search](https://arxiv.org/pdf/2007.00391.pdf) 2021
   - Tuan Dam, Carlo D'Eramo, Jan Peters, Joni Pajarinen
-  - Key: entropy-regularization backup operators, regret analysis, Tsallis etropy, 
+  - Key: entropy-regularization backup operators, regret analysis, Tsallis etropy
   - ExpEnv: synthetic tree, Atari
 - [Information Particle Filter Tree: An Online Algorithm for POMDPs with Belief-Based Rewards on Continuous Domains](http://proceedings.mlr.press/v119/fischer20a/fischer20a.pdf) 2020
   - Johannes Fischer, Ömer Sahin Tas
@@ -429,8 +429,8 @@ and internal state transition dynamics,
   - Binghong Chen, Bo Dai, Qinjie Lin, Guo Ye, Han Liu, Le Song
   - Key: meta path planning algorithm, exploits a novel neural architecture which can learn promising search directions from problem structures.
   - ExpEnv: a 2d workspace with a 2 DoF (degrees of freedom) point robot, a 3 DoF stick robot and a 5 DoF snake robot
-#### NeurIPS
 
+#### NeurIPS
 - [LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios](https://openreview.net/pdf?id=oIUXpBnyjv) 2023
   - Yazhe Niu, Yuan Pu, Zhenjie Yang, Xueyan Li, Tong Zhou, Jiyuan Ren, Shuai Hu, Hongsheng Li, Yu Liu
   - Key: the first unified benchmark for deploying MCTS/MuZero in general sequential decision scenarios.
@@ -451,6 +451,10 @@ and internal state transition dynamics,
   - Yangqing Fu, Ming Sun, Buqing Nie, Yue Gao
   - Key: probability tree state abstraction, transitivity and aggregation error bound
   - ExpEnv: Atari, CartPole, LunarLander, Gomoku
+- [Spending Thinking Time Wisely: Accelerating MCTS with Virtual Expansions](https://openreview.net/pdf?id=B_LdLljS842) 2022
+  - Weirui Ye, Pieter Abbeel, Yang Gao
+  - Key: trade off computation versus performancem, virtual expansions, spend thinking time adaptively.
+  - ExpEnv: Atari, 9x9 Go
 - [Planning for Sample Efficient Imitation Learning](https://openreview.net/forum?id=BkN5UoAqF7) 2022
   - Zhao-Heng Yin, Weirui Ye, Qifeng Chen, Yang Gao
   - Key: Behavioral Cloning，Adversarial Imitation Learning (AIL)，MCTS-based RL，
@@ -494,6 +498,7 @@ and internal state transition dynamics,
   - [Code](https://github.com/matthewfaw/mixnmatch)
 
 #### Other Conference or Journal
+- [Learning to Stop: Dynamic Simulation Monte-Carlo Tree Search](https://arxiv.org/pdf/2012.07910.pdf) AAAI 2021.
 - [On Monte Carlo Tree Search and Reinforcement Learning](https://www.jair.org/index.php/jair/article/download/11099/26289/20632) Journal of Artificial Intelligence Research 2017.
 - [Sample-Efficient Neural Architecture Search by Learning Actions for Monte Carlo Tree Search](https://arxiv.org/pdf/1906.06832) IEEE Transactions on Pattern Analysis and Machine Intelligence 2022.
 </details>

@@ -450,6 +450,10 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - Yangqing Fu, Ming Sun, Buqing Nie, Yue Gao
   - Key: probability tree state abstraction, transitivity and aggregation error bound
   - ExpEnv: Atari, CartPole, LunarLander, Gomoku
+- [Spending Thinking Time Wisely: Accelerating MCTS with Virtual Expansions](https://openreview.net/pdf?id=B_LdLljS842) 2022
+  - Weirui Ye, Pieter Abbeel, Yang Gao
+  - Key: trade off computation versus performancem, virtual expansions, spend thinking time adaptively.
+  - ExpEnv: Atari, 9x9 Go
 - [Planning for Sample Efficient Imitation Learning](https://openreview.net/forum?id=BkN5UoAqF7) 2022
   - Zhao-Heng Yin, Weirui Ye, Qifeng Chen, Yang Gao
   - Key: Behavioral Cloning，Adversarial Imitation Learning (AIL)，MCTS-based RL.
@@ -493,6 +497,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - [Code](https://github.com/matthewfaw/mixnmatch)
 
 #### Other Conference or Journal
+- [Learning to Stop: Dynamic Simulation Monte-Carlo Tree Search](https://arxiv.org/pdf/2012.07910.pdf) AAAI 2021.
 - [On Monte Carlo Tree Search and Reinforcement Learning](https://www.jair.org/index.php/jair/article/download/11099/26289/20632) Journal of Artificial Intelligence Research 2017.
 - [Sample-Efficient Neural Architecture Search by Learning Actions for Monte Carlo Tree Search](https://arxiv.org/pdf/1906.06832) IEEE Transactions on Pattern Analysis and Machine Intelligence 2022.
 </details>
