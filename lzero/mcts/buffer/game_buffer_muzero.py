@@ -553,7 +553,10 @@ class MuZeroGameBuffer(GameBuffer):
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
+                if self._cfg.noise111:
+                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                else:
+                    roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
             else:
