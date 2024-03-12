@@ -472,7 +472,7 @@ class MuZeroPolicy(Policy):
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
-            'weighted_total_loss': weighted_total_loss.detach().item(),  # TODO
+            'weighted_total_loss': weighted_total_loss.item(),
             'total_loss': loss.mean().item(),
             'policy_loss': policy_loss.mean().item(),
             'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),

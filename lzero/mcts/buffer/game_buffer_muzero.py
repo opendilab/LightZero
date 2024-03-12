@@ -378,7 +378,6 @@ class MuZeroGameBuffer(GameBuffer):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
 
-                # m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
                 m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device)
 
                 # calculate the target value
@@ -526,7 +525,7 @@ class MuZeroGameBuffer(GameBuffer):
             for i in range(slices):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
-                m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device).float()
+                m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device)
                 m_output = model.initial_inference(m_obs)
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
