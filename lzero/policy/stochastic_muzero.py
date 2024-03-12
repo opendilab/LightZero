@@ -347,7 +347,6 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
         # Note: The following lines are just for debugging.
         predicted_rewards = []
         if self._cfg.monitor_extra_statistics:
-            latent_state_list = latent_state.detach().cpu().numpy()
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
@@ -474,7 +473,6 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
                 )
                 predicted_rewards.append(original_rewards_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
-                latent_state_list = np.concatenate((latent_state_list, latent_state.detach().cpu().numpy()))
 
         # ==============================================================
         # the core learn model update step.
@@ -522,17 +520,16 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
 
             td_data = (
                 value_priority,
-                target_reward.detach().cpu().numpy(),
-                target_value.detach().cpu().numpy(),
-                transformed_target_reward.detach().cpu().numpy(),
-                transformed_target_value.detach().cpu().numpy(),
-                target_reward_categorical.detach().cpu().numpy(),
-                target_value_categorical.detach().cpu().numpy(),
-                predicted_rewards.detach().cpu().numpy(),
-                predicted_values.detach().cpu().numpy(),
-                target_policy.detach().cpu().numpy(),
-                predicted_policies.detach().cpu().numpy(),
-                latent_state_list,
+                target_reward,
+                target_value,
+                transformed_target_reward,
+                transformed_target_value,
+                target_reward_categorical,
+                target_value_categorical,
+                predicted_rewards,
+                predicted_values,
+                target_policy,
+                predicted_policies,
             )
 
         return {
@@ -547,20 +544,18 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
             'afterstate_policy_loss': loss_info[6],
             'afterstate_value_loss': loss_info[7],
             'commitment_loss': loss_info[8],
-
+            'target_reward': td_data[1].mean().item(),
+            'target_value': td_data[2].mean().item(),
+            'transformed_target_reward': td_data[3].mean().item(),
+            'transformed_target_value': td_data[4].mean().item(),
+            'predicted_rewards': td_data[7].mean().item(),
+            'predicted_values': td_data[8].mean().item(),
+            'total_grad_norm_before_clip': total_grad_norm_before_clip,
             # ==============================================================
             # priority related
             # ==============================================================
             'value_priority_orig': value_priority,
-            'value_priority': td_data[0].flatten().mean().item(),
-            
-            'target_reward': td_data[1].flatten().mean().item(),
-            'target_value': td_data[2].flatten().mean().item(),
-            'transformed_target_reward': td_data[3].flatten().mean().item(),
-            'transformed_target_value': td_data[4].flatten().mean().item(),
-            'predicted_rewards': td_data[7].flatten().mean().item(),
-            'predicted_values': td_data[8].flatten().mean().item(),
-            'total_grad_norm_before_clip': total_grad_norm_before_clip
+            'value_priority': td_data[0].mean().item(),
         }
 
     def _init_collect(self) -> None:

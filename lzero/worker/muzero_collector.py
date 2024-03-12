@@ -410,10 +410,11 @@ class MuZeroCollector(ISerialCollector):
                     chance = [chance_dict[env_id] for env_id in ready_env_id]
 
                 stack_obs = to_ndarray(stack_obs)
-
+                # return stack_obs shape: [B, S*C, W, H] e.g. [8, 4*1, 96, 96]
                 stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
 
-                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
+                # stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
+                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device)
 
                 # ==============================================================
                 # policy forward
@@ -676,11 +677,6 @@ class MuZeroCollector(ISerialCollector):
                     } for i in range(len(self.game_segment_pool))
                 ]
                 self.game_segment_pool.clear()
-                # for i in range(len(self.game_segment_pool)):
-                #     print(self.game_segment_pool[i][0].obs_segment.__len__())
-                #     print(self.game_segment_pool[i][0].reward_segment)
-                # for i in range(len(return_data[0])):
-                #     print(return_data[0][i].reward_segment)
                 break
 
         collected_duration = sum([d['time'] for d in self._episode_info])

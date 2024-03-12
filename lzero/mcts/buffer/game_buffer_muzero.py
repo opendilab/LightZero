@@ -378,7 +378,7 @@ class MuZeroGameBuffer(GameBuffer):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
 
-                m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
+                m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device)
 
                 # calculate the target value
                 m_output = model.initial_inference(m_obs)
@@ -397,7 +397,7 @@ class MuZeroGameBuffer(GameBuffer):
 
             # concat the output slices after model inference
             if self._cfg.use_root_value:
-                # use the root values from MCTS, as in EfficiientZero
+                # use the root values from MCTS, as in EfficientZero
                 # the root values have limited improvement but require much more GPU actors;
                 _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
                     network_output, data_type='muzero'
@@ -472,8 +472,6 @@ class MuZeroGameBuffer(GameBuffer):
                     else:
                         target_values.append(0)
                         target_rewards.append(0.0)
-                        # TODO: check
-                        # target_rewards.append(reward)
                     value_index += 1
 
                 batch_rewards.append(target_rewards)
@@ -527,7 +525,7 @@ class MuZeroGameBuffer(GameBuffer):
             for i in range(slices):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
-                m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device).float()
+                m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device)
                 m_output = model.initial_inference(m_obs)
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward

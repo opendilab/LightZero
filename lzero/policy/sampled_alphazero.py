@@ -198,11 +198,10 @@ class SampledAlphaZeroPolicy(Policy):
         reward = reward.to(device=self._device, dtype=torch.float)
 
         policy_probs, values = self._learn_model.compute_policy_value(state_batch)
-        policy_log_probs = torch.log(policy_probs)
 
         # calculate policy entropy, for monitoring only
-        entropy = compute_entropy(policy_probs)
-        entropy_loss = -entropy
+        policy_entropy = -(policy_probs * policy_probs.log()).sum(-1).mean()
+        policy_entropy_loss = -policy_entropy
 
         # ==============================================================
         # policy loss
@@ -215,7 +214,7 @@ class SampledAlphaZeroPolicy(Policy):
         # ==============================================================
         value_loss = F.mse_loss(values.view(-1), reward)
 
-        total_loss = self._value_weight * value_loss + policy_loss + self._entropy_weight * entropy_loss
+        total_loss = self._value_weight * value_loss + policy_loss + self._entropy_weight * policy_entropy_loss
         self._optimizer.zero_grad()
         total_loss.backward()
 
@@ -235,7 +234,7 @@ class SampledAlphaZeroPolicy(Policy):
             'total_loss': total_loss.item(),
             'policy_loss': policy_loss.item(),
             'value_loss': value_loss.item(),
-            'entropy_loss': entropy_loss.item(),
+            'policy_entropy_loss': policy_entropy_loss.item(),
             'total_grad_norm_before_clip': total_grad_norm_before_clip.item(),
             'collect_mcts_temperature': self.collect_mcts_temperature,
         }
@@ -538,7 +537,7 @@ class SampledAlphaZeroPolicy(Policy):
             tensorboard according to the return value ``_forward_learn``.
         """
         return super()._monitor_vars_learn() + [
-            'cur_lr', 'total_loss', 'policy_loss', 'value_loss', 'entropy_loss', 'total_grad_norm_before_clip',
+            'cur_lr', 'total_loss', 'policy_loss', 'value_loss', 'policy_entropy_loss', 'total_grad_norm_before_clip',
             'collect_mcts_temperature'
         ]
 

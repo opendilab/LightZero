@@ -341,7 +341,6 @@ class EfficientZeroPolicy(MuZeroPolicy):
         # Note: The following lines are just for debugging.
         predicted_value_prefixs = []
         if self._cfg.monitor_extra_statistics:
-            latent_state_list = latent_state.detach().cpu().numpy()
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
@@ -351,8 +350,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
         value_priority = value_priority.data.cpu().numpy() + 1e-6
 
         prob = torch.softmax(policy_logits, dim=-1)
-        dist = Categorical(prob)
-        policy_entropy = dist.entropy().mean()
+        policy_entropy = -(prob * prob.log()).sum(-1).mean()
 
         # ==============================================================
         # calculate policy and value loss for the first step.
@@ -369,11 +367,10 @@ class EfficientZeroPolicy(MuZeroPolicy):
             target_normalized_visit_count_masked = torch.index_select(
                 target_normalized_visit_count_init_step, 0, non_masked_indices
             )
-            target_dist = Categorical(target_normalized_visit_count_masked)
-            target_policy_entropy = target_dist.entropy().mean()
+            target_policy_entropy = -((target_normalized_visit_count_masked+1e-6) * (target_normalized_visit_count_masked+1e-6).log()).sum(-1).mean()
         else:
-            # Set target_policy_entropy to 0 if all rows are masked
-            target_policy_entropy = 0
+            # Set target_policy_entropy to log(|A|) if all rows are masked
+            target_policy_entropy = torch.log(torch.tensor(target_normalized_visit_count_init_step.shape[-1]))
 
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
@@ -426,8 +423,8 @@ class EfficientZeroPolicy(MuZeroPolicy):
 
             # Here we take the hypothetical step k = step_k + 1
             prob = torch.softmax(policy_logits, dim=-1)
-            dist = Categorical(prob)
-            policy_entropy += dist.entropy().mean()
+            policy_entropy += -(prob * prob.log()).sum(-1).mean()
+
             target_normalized_visit_count = target_policy[:, step_k + 1]
 
             # ******* NOTE: target_policy_entropy is only for debug.  ******
@@ -437,11 +434,10 @@ class EfficientZeroPolicy(MuZeroPolicy):
                 target_normalized_visit_count_masked = torch.index_select(
                     target_normalized_visit_count, 0, non_masked_indices
                 )
-                target_dist = Categorical(target_normalized_visit_count_masked)
-                target_policy_entropy += target_dist.entropy().mean()
+                target_policy_entropy += -((target_normalized_visit_count_masked+1e-6) * (target_normalized_visit_count_masked+1e-6).log()).sum(-1).mean()
             else:
-                # Set target_policy_entropy to 0 if all rows are masked
-                target_policy_entropy += 0
+                # Set target_policy_entropy to log(|A|) if all rows are masked
+                target_policy_entropy += torch.log(torch.tensor(target_normalized_visit_count.shape[-1]))
 
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
             value_prefix_loss += cross_entropy_loss(value_prefix, target_value_prefix_categorical[:, step_k])
@@ -456,13 +452,11 @@ class EfficientZeroPolicy(MuZeroPolicy):
             if self._cfg.monitor_extra_statistics:
                 original_value_prefixs = self.inverse_scalar_transform_handle(value_prefix)
                 original_value_prefixs_cpu = original_value_prefixs.detach().cpu()
-
                 predicted_values = torch.cat(
                     (predicted_values, self.inverse_scalar_transform_handle(value).detach().cpu())
                 )
                 predicted_value_prefixs.append(original_value_prefixs_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
-                latent_state_list = np.concatenate((latent_state_list, latent_state.detach().cpu().numpy()))
 
         # ==============================================================
         # the core learn model update step.
@@ -508,19 +502,18 @@ class EfficientZeroPolicy(MuZeroPolicy):
             'value_prefix_loss': value_prefix_loss.mean().item(),
             'value_loss': value_loss.mean().item(),
             'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
-
+            'target_value_prefix': target_value_prefix.mean().item(),
+            'target_value': target_value.mean().item(),
+            'transformed_target_value_prefix': transformed_target_value_prefix.mean().item(),
+            'transformed_target_value': transformed_target_value.mean().item(),
+            'predicted_value_prefixs': predicted_value_prefixs.mean().item(),
+            'predicted_values': predicted_values.mean().item(),
+            'total_grad_norm_before_clip': total_grad_norm_before_clip.item(),
             # ==============================================================
             # priority related
             # ==============================================================
             'value_priority': value_priority.mean().item(),
             'value_priority_orig': value_priority,
-            'target_value_prefix': target_value_prefix.detach().cpu().numpy().mean().item(),
-            'target_value': target_value.detach().cpu().numpy().mean().item(),
-            'transformed_target_value_prefix': transformed_target_value_prefix.detach().cpu().numpy().mean().item(),
-            'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
-            'predicted_value_prefixs': predicted_value_prefixs.detach().cpu().numpy().mean().item(),
-            'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
-            'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
         }
 
     def _init_collect(self) -> None:
@@ -543,7 +536,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
         temperature: float = 1,
         to_play: List = [-1],
         epsilon: float = 0.25,
-        ready_env_id = None
+        ready_env_id: np.array = None
     ):
         """
         Overview:

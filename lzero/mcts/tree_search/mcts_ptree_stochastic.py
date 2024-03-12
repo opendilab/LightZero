@@ -1,21 +1,16 @@
-from typing import TYPE_CHECKING, List, Any, Union
-from easydict import EasyDict
-
 import copy
+from typing import TYPE_CHECKING, List, Any, Union
+
 import numpy as np
 import torch
+from easydict import EasyDict
 
+import lzero.mcts.ptree.ptree_stochastic_mz as tree_stochastic_muzero
 from lzero.mcts.ptree import MinMaxStatsList
 from lzero.policy import InverseScalarTransform
-import lzero.mcts.ptree.ptree_stochastic_mz as tree_stochastic_muzero
 
 if TYPE_CHECKING:
     import lzero.mcts.ptree.ptree_stochastic_mz as stochastic_mz_ptree
-
-
-# ==============================================================
-# Stochastic MuZero
-# ==============================================================
 
 
 class StochasticMuZeroMCTSPtree(object):
@@ -97,7 +92,7 @@ class StochasticMuZeroMCTSPtree(object):
             roots: Any,
             model: torch.nn.Module,
             latent_state_roots: List[Any],
-            to_play: Union[int, List[Any]] = -1
+            to_play_batch: Union[int, List[Any]] = -1
     ) -> None:
         """
         Overview:
@@ -107,7 +102,7 @@ class StochasticMuZeroMCTSPtree(object):
             - roots (:obj:`Any`): a batch of expanded root nodes.
             - latent_state_roots (:obj:`list`): the hidden states of the roots.
             - model (:obj:`torch.nn.Module`): The model used for inference.
-            - to_play (:obj:`list`): the to_play list used in in self-play-mode board games.
+            - to_play_batch (:obj:`list`): the to_play_batch list used in in self-play-mode board games.
         
         .. note::
             The core functions ``batch_traverse`` and ``batch_backpropagate`` are implemented in Python.
@@ -143,12 +138,19 @@ class StochasticMuZeroMCTSPtree(object):
                 MCTS stage 1: Selection
                     Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
                 """
-                # leaf_nodes, latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play = tree_stochastic_muzero.batch_traverse(
-                #     roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play)
+                # leaf_nodes, latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_stochastic_muzero.batch_traverse(
+                #     roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play_batch)
                 # )
-                results, virtual_to_play = tree_stochastic_muzero.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play)
-                )
+                if self._cfg.env_type == 'not_board_games':
+                    results, virtual_to_play_batch = tree_stochastic_muzero.batch_traverse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, to_play_batch
+                    )
+                else:
+                    # the ``to_play_batch`` is only used in board games, here we need to deepcopy it to avoid changing the original data.
+                    results, virtual_to_play_batch = tree_stochastic_muzero.batch_traverse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results, copy.deepcopy(to_play_batch)
+                    )
+
                 leaf_nodes, latent_state_index_in_search_path, latent_state_index_in_batch, last_actions = results.nodes, results.latent_state_index_in_search_path, results.latent_state_index_in_batch, results.last_actions
 
                 # obtain the states for leaf nodes
@@ -157,7 +159,7 @@ class StochasticMuZeroMCTSPtree(object):
                         latent_state_batch_in_search_path[ix][
                             iy])  # latent_state_batch_in_search_path[ix][iy] shape e.g. (64,4,4)
 
-                latent_states = torch.from_numpy(np.asarray(latent_states)).to(device).float()
+                latent_states = torch.from_numpy(np.asarray(latent_states)).to(device)
                 # only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()
                 """
@@ -239,7 +241,7 @@ class StochasticMuZeroMCTSPtree(object):
                     tree_stochastic_muzero.batch_backpropagate(
                         current_latent_state_index, discount_factor, reward_batch_chance, value_batch_chance,
                         policy_logits_batch_chance,
-                        min_max_stats_lst, results, virtual_to_play, child_is_chance_batch, chance_nodes
+                        min_max_stats_lst, results, virtual_to_play_batch, child_is_chance_batch, chance_nodes
                     )
                 if len(decision_nodes) > 0:
                     value_batch_decision = np.concatenate(value_batch_decision, axis=0)
@@ -248,5 +250,5 @@ class StochasticMuZeroMCTSPtree(object):
                     tree_stochastic_muzero.batch_backpropagate(
                         current_latent_state_index, discount_factor, reward_batch_decision, value_batch_decision,
                         policy_logits_batch_decision,
-                        min_max_stats_lst, results, virtual_to_play, child_is_chance_batch, decision_nodes
+                        min_max_stats_lst, results, virtual_to_play_batch, child_is_chance_batch, decision_nodes
                     )
