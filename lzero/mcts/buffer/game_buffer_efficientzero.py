@@ -235,13 +235,19 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
                 if self._cfg.mcts_ctree:
                     # cpp mcts_tree
                     roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                    roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                    if self._cfg.reanalyze_noise:
+                        roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                    else:
+                        roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
                     MCTSCtree(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
                 else:
                     # python mcts_tree
                     roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                    roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                    if self._cfg.reanalyze_noise:
+                        roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                    else:
+                        roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
                     MCTSPtree(self._cfg).search(
                         roots, model, latent_state_roots, reward_hidden_state_roots, to_play=to_play
@@ -377,13 +383,19 @@ class EfficientZeroGameBuffer(MuZeroGameBuffer):
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+                if self._cfg.reanalyze_noise:
+                    roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                else:
+                    roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTSCtree(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+                if self._cfg.reanalyze_noise:
+                    roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                else:
+                    roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTSPtree(self._cfg).search(
                     roots, model, latent_state_roots, reward_hidden_state_roots, to_play=to_play

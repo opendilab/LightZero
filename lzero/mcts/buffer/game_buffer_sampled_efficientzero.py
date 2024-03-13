@@ -324,8 +324,10 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                         transition_batch_size, legal_actions, self._cfg.model.action_space_size,
                         self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                     )
-
-                    roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                    if self._cfg.reanalyze_noise:
+                        roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                    else:
+                        roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
                     MCTSCtree(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
                 else:
@@ -334,7 +336,10 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                         transition_batch_size, legal_actions, self._cfg.model.action_space_size,
                         self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                     )
-                    roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                    if self._cfg.reanalyze_noise:
+                        roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                    else:
+                        roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
                     MCTSPtree.roots(self._cfg
                                     ).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
@@ -496,7 +501,10 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     transition_batch_size, legal_actions, self._cfg.model.action_space_size,
                     self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
-                roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+                if self._cfg.reanalyze_noise:
+                    roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                else:
+                    roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTSCtree(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
             else:
@@ -505,13 +513,26 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     transition_batch_size, legal_actions, self._cfg.model.action_space_size,
                     self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
-                roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+                if self._cfg.reanalyze_noise:
+                    roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                else:
+                    roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTSPtree.roots(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
 
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
             roots_values = roots.get_values()
+
+            # ==============================================================
+            # fix reanalyze in sez
+            # ==============================================================
+            roots_sampled_actions = roots.get_sampled_actions()
+            try:
+                root_sampled_actions = np.array([action.value for action in roots_sampled_actions])
+            except Exception:
+                root_sampled_actions = np.array([action for action in roots_sampled_actions])
+            
             policy_index = 0
             for state_index, child_visit, root_value in zip(pos_in_game_segment_list, child_visits, root_values):
                 target_policies = []
