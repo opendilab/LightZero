@@ -211,11 +211,6 @@ namespace tree
         return mean_q;
     }
 
-    void CNode::print_out()
-    {
-        return;
-    }
-
     int CNode::expanded()
     {
         /*

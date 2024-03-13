@@ -255,8 +255,6 @@ class Roots:
 
             if to_play in [-1, None]:
                 self.roots[i].expand(-1, 0, i, value_prefixs[i], policies[i])
-            elif to_play is [None]:
-                print('debug')
             else:
                 self.roots[i].expand(to_play[i], 0, i, value_prefixs[i], policies[i])
 
@@ -456,7 +454,7 @@ def batch_traverse(
         discount_factor: float,
         min_max_stats_lst: List[MinMaxStats],
         results: SearchResults,
-        virtual_to_play: List,
+        virtual_to_play: Union[list, int],
 ) -> Tuple[List[None], List[None], List[None], Union[list, int]]:
     """
     Overview:
@@ -467,13 +465,13 @@ def batch_traverse(
         - pb_c_init (:obj:`float`): Constant c2 used in pUCT rule, typically 19652.
         - discount_factor (:obj:`float`): The discount factor used in calculating bootstrapped value, if env is board_games, we set discount_factor=1.
         - results (:obj:`SearchResults`): An instance to record the simulation results for all the roots in the batch.
-        - virtual_to_play (:obj:`list`): The to_play list used in self_play collecting and training in board games,
+        - virtual_to_play (:obj:`Union[list, int]`): The to_play list used in self_play collecting and training in board games,
             `virtual` is to emphasize that actions are performed on an imaginary hidden state.
     Returns:
         - latent_state_index_in_search_path (:obj:`list`): The list of x/first index of hidden state vector of the searched node, i.e. the search depth.
         - latent_state_index_in_batch (:obj:`list`): The list of y/second index of hidden state vector of the searched node, i.e. the index of batch root node, its maximum is ``batch_size``/``env_num``.
         - last_actions (:obj:`list`): The action performed by the previous node.
-        - virtual_to_play (:obj:`list`): The to_play list used in self_play collecting and trainin gin board games,
+        - virtual_to_play (:obj:`Union[list, int]`): The to_play list used in self_play collecting and trainin gin board games,
             `virtual` is to emphasize that actions are performed on an imaginary hidden state.
     """
     parent_q = 0.0
