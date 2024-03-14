@@ -1,4 +1,5 @@
 import copy
+from datetime import datetime
 from typing import List
 
 import gymnasium as gym
@@ -7,6 +8,10 @@ from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
+
+from PIL import Image
+import matplotlib.pyplot as plt
+import os
 
 
 @ENV_REGISTRY.register('memory_lightzero')
@@ -20,6 +25,8 @@ class MemoryEnvLightZero(BaseEnv):
         _init_flag (bool): Flag to check if the environment is initialized.
         _env_id (str): The name of the Visual Match environment.
         _save_replay (bool): Flag to check if replays are saved.
+        _render (bool): Flag to check if real-time rendering is enabled.
+        _gif_images (list): List to store frames for creating GIF replay.
         _max_step (int): Maximum number of steps for the environment.
     """
     config = dict(
@@ -38,6 +45,9 @@ class MemoryEnvLightZero(BaseEnv):
             "distractor": 30,
             "reward": 15
         },  # Maximum frames per phase
+        save_replay=False,  # Whether to save GIF replay
+        render=False,  # Whether to enable real-time rendering
+        scale_observation=True,  # Whether to scale the observation to [0, 1]
     )
 
     @classmethod
@@ -55,7 +65,9 @@ class MemoryEnvLightZero(BaseEnv):
         """
         self._cfg = cfg
         self._init_flag = False
-        self._save_replay = False
+        self._save_replay = cfg.save_replay
+        self._render = cfg.render
+        self._gif_images = []
 
     def reset(self) -> np.ndarray:
         """
@@ -101,8 +113,10 @@ class MemoryEnvLightZero(BaseEnv):
                 )
 
             self._episode = self._game.make_episode()
-
-            self._observation_space = gym.spaces.Box(0, 1, shape=(1, 5, 5), dtype='float32')
+            if self._cfg.scale_observation:
+                self._observation_space = gym.spaces.Box(0, 1, shape=(1, 5, 5), dtype='float32')
+            else:
+                self._observation_space = gym.spaces.Box(0, 1000, shape=(1, 5, 5), dtype='int64')
             self._action_space = gym.spaces.Discrete(self._game.num_actions)
             self._reward_space = gym.spaces.Box(low=-float('inf'), high=float('inf'), shape=(1,), dtype=np.float32)
 
@@ -114,24 +128,13 @@ class MemoryEnvLightZero(BaseEnv):
         obs = obs[0].reshape(1, 5, 5)
         obs = to_ndarray(obs)
         action_mask = np.ones(self.action_space.n, 'int8')
+        if self._cfg.scale_observation:
+            obs = obs / 1000.0
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
+        self._gif_images = []
+
         return obs
-
-    def close(self) -> None:
-        """
-        Close the environment.
-        """
-        self._init_flag = False
-
-    def seed(self, seed: int, dynamic_seed: bool = True) -> None:
-        """
-        Set the seed for the environment's random number generator. Can handle both static and dynamic seeding.
-        """
-        self._seed = seed
-        self._dynamic_seed = dynamic_seed
-        np.random.seed(self._seed)
-        self._rng = np.random.RandomState(self._seed)
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
         """
@@ -163,6 +166,36 @@ class MemoryEnvLightZero(BaseEnv):
         observation = to_ndarray(observation)
         reward = to_ndarray([reward])
         action_mask = np.ones(self.action_space.n, 'int8')
+
+        if self._save_replay or self._render:
+            # Convert observation to RGB format
+            obs_rgb = np.zeros((5, 5, 3), dtype=np.uint8)
+            for char, color in self._game._colours.items():
+                # NOTE： self._game._colours is a dictionary that maps the characters in the game to their corresponding (true) colors, ranging in [0,999].
+                #  Because the np.uint8 type array will perform a modulo 256 operation (taking the remainder), that is to say,
+                #  any value greater than 255 will be subtracted by an integer multiple of 256 until the value falls within the range of 0-255.
+                #  For example, 1000 will become 232 (because 1000 % 256 = 232)
+                obs_rgb[observation.reshape(5, 5) == ord(char)] = color
+            img = Image.fromarray(obs_rgb)
+
+            if self._save_replay:
+                self._gif_images.append(img)
+
+            if self._render:
+                plt.imshow(img)
+                plt.axis('off')
+                plt.pause(0.0001)
+                plt.clf()
+
+        if done and self._save_replay:
+            gif_dir = os.path.join(os.path.dirname(__file__), 'replay')
+            os.makedirs(gif_dir, exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            gif_file = os.path.join(gif_dir, f'episode_{self._current_step}_{timestamp}.gif')
+            self._gif_images[0].save(gif_file, save_all=True, append_images=self._gif_images[1:], duration=100, loop=0)
+
+        if self._cfg.scale_observation:
+            observation = observation / 1000.0
         observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1}
 
         return BaseEnvTimestep(observation, reward, done, info)
@@ -174,6 +207,21 @@ class MemoryEnvLightZero(BaseEnv):
         random_action = self.action_space.sample()
         random_action = to_ndarray([random_action], dtype=np.int64)
         return random_action
+
+    def seed(self, seed: int, dynamic_seed: bool = True) -> None:
+        """
+        Set the seed for the environment's random number generator. Can handle both static and dynamic seeding.
+        """
+        self._seed = seed
+        self._dynamic_seed = dynamic_seed
+        np.random.seed(self._seed)
+        self._rng = np.random.RandomState(self._seed)
+
+    def close(self) -> None:
+        """
+        Close the environment.
+        """
+        self._init_flag = False
 
     @property
     def observation_space(self) -> gym.spaces.Space:

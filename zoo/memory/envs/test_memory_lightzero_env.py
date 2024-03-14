@@ -17,9 +17,12 @@ class TestMemoryEnvLightZero(unittest.TestCase):
         """
         self.config = dict(
             env_name='visual_match',  # The name of the environment, options: 'visual_match', 'key_to_door'
+            # max_step=60,  # The maximum number of steps for each episode
             num_apples=10,  # Number of apples in the distractor phase
-            apple_reward=(1, 10),  # Range of rewards for collecting an apple
-            fix_apple_reward_in_episode=True,  # Whether to fix apple reward () within an episode
+            # apple_reward=(1, 10),  # Range of rewards for collecting an apple
+            # apple_reward=(1, 1),  # Range of rewards for collecting an apple
+            apple_reward=(0, 0),  # Range of rewards for collecting an apple
+            fix_apple_reward_in_episode=False,  # Whether to fix apple reward (DEFAULT_APPLE_REWARD) within an episode
             final_reward=10.0,  # Reward for choosing the correct door in the final phase
             respawn_every=300,  # Respawn interval for apples
             crop=True,  # Whether to crop the observation
@@ -28,6 +31,9 @@ class TestMemoryEnvLightZero(unittest.TestCase):
                 "distractor": 30,
                 "reward": 15
             },  # Maximum frames per phase
+            save_replay=False,  # Whether to save GIF replay
+            render=False,  # Whether to enable real-time rendering
+            scale_observation=True,
         )
         self.env = MemoryEnvLightZero(EasyDict(self.config))
         self.env.seed(123)
