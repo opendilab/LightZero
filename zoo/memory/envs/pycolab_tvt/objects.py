@@ -16,14 +16,9 @@
 # ============================================================================
 """Pycolab sprites."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 from pycolab import things as plab_things
 from pycolab.prefab_parts import sprites as prefab_sprites
 
-# import six
 from . import common
 
 

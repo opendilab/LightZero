@@ -23,17 +23,11 @@ The game is split up into three phases:
     previously collected.
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 from pycolab import ascii_art
 from pycolab import storytelling
 from pycolab import things as plab_things
 
-
 from zoo.memory.envs.pycolab_tvt import common, game, objects
-
 
 COLOURS = {
     "i": (1000, 1000, 1000),  # Indicator.
@@ -71,6 +65,8 @@ REWARD_GRID_CCA = [
 
 # MAX_FRAMES_PER_PHASE_SR = {"explore": 15, "distractor": 60, "reward": 10}
 MAX_FRAMES_PER_PHASE_SR = {"explore": 15, "distractor": 30, "reward": 15}
+
+
 # MAX_FRAMES_PER_PHASE_CCA = {"explore": 15, "distractor": 30, "reward": 15}
 
 
@@ -117,7 +113,6 @@ class PlayerSprite(common.PlayerSprite):
         )
 
     def update(self, actions, board, layers, backdrop, things, the_plot):
-
         # Allow moving through the door if key is previously collected.
         if common.DOOR in self.impassable and the_plot.get("has_key"):
             self._impassable.remove(common.DOOR)
@@ -131,17 +126,17 @@ class Game(game.AbstractGame):
     """Key To Door Game."""
 
     def __init__(
-        self,
-        rng,
-        num_apples=10,
-        # apple_reward=(1, 10),
-        apple_reward=(0, 0),
-        fix_apple_reward_in_episode=False,
-        final_reward=10.0,
-        respawn_every=common.DEFAULT_APPLE_RESPAWN_TIME,
-        crop=True,
-        max_frames=MAX_FRAMES_PER_PHASE_SR,
-        REWARD_GRID=REWARD_GRID_SR,
+            self,
+            rng,
+            num_apples=10,
+            # apple_reward=(1, 10),
+            apple_reward=(0, 0),
+            fix_apple_reward_in_episode=False,
+            final_reward=10.0,
+            respawn_every=common.DEFAULT_APPLE_RESPAWN_TIME,
+            crop=True,
+            max_frames=MAX_FRAMES_PER_PHASE_SR,
+            REWARD_GRID=REWARD_GRID_SR,
     ):
         del rng  # Each episode is identical and colours are not randomised.
         self._num_apples = num_apples

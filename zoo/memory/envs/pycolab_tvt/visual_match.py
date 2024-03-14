@@ -22,10 +22,6 @@ The game is split up into three phases:
     the one of the same color as the colour in the first phase.
 """
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 from pycolab import ascii_art
 from pycolab import storytelling
 

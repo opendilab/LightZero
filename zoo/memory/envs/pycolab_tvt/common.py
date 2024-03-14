@@ -16,17 +16,13 @@
 # ============================================================================
 """Common utilities for Pycolab games."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import colorsys
+
 import numpy as np
 from pycolab import ascii_art
 from pycolab import cropping
 from pycolab import things as plab_things
 from pycolab.prefab_parts import sprites as prefab_sprites
-
 
 # Actions.
 # Those with a negative ID are not allowed for the agent.
@@ -57,7 +53,6 @@ FIXED_COLOURS = {
     DOOR: (529, 808, 922),
     APPLE: (550, 700, 0),
 }
-
 
 APPLE_DISTRACTOR_GRID = [
     "###########",
@@ -119,12 +114,12 @@ def get_cropper():
 
 
 def distractor_phase(
-    player_sprite,
-    num_apples,
-    max_frames,
-    apple_reward=DEFAULT_APPLE_REWARD,
-    fix_apple_reward_in_episode=False,
-    respawn_every=DEFAULT_APPLE_RESPAWN_TIME,
+        player_sprite,
+        num_apples,
+        max_frames,
+        apple_reward=DEFAULT_APPLE_REWARD,
+        fix_apple_reward_in_episode=False,
+        respawn_every=DEFAULT_APPLE_RESPAWN_TIME,
 ):
     """Distractor phase engine factory.
 
@@ -240,7 +235,7 @@ class AppleDrape(plab_things.Drape):
     """Drape for the apples used in the distractor phase."""
 
     def __init__(
-        self, curtain, character, respawn_every, reward, fix_apple_reward_in_episode
+            self, curtain, character, respawn_every, reward, fix_apple_reward_in_episode
     ):
         """Constructor.
 
@@ -274,7 +269,7 @@ class AppleDrape(plab_things.Drape):
         player_position = things[PLAYER].position
         # decide the apple_reward
         if self._fix_apple_reward_in_episode and not the_plot.get(
-            "sampled_apple_reward", None
+                "sampled_apple_reward", None
         ):
             the_plot["sampled_apple_reward"] = np.random.choice(
                 (self._reward[0], self._reward[1])
@@ -303,7 +298,7 @@ class TimerSprite(plab_things.Sprite):
     """
 
     def __init__(
-        self, corner, position, character, max_frames, track_chapter_reward=False
+            self, corner, position, character, max_frames, track_chapter_reward=False
     ):
         super(TimerSprite, self).__init__(corner, position, character)
         if not isinstance(max_frames, int):

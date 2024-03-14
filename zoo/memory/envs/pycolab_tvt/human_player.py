@@ -17,14 +17,14 @@
 
 import curses
 
+import numpy as np
 from absl import app
 from absl import flags
-import numpy as np
 from pycolab import human_ui
 
-import visual_match
 import common
 import key_to_door
+import visual_match
 
 FLAGS = flags.FLAGS
 
@@ -62,5 +62,5 @@ def main(unused_argv):
 if __name__ == '__main__':
     app.run(main)
     # export TERM=xterm-256color
-    # terminal 中执行 python3 human_player.py -- --game=key_to_door
-    # terminal 中执行 python3 human_player.py -- --game=visual_match
+    # python3 human_player.py -- --game=key_to_door
+    # python3 human_player.py -- --game=visual_match
