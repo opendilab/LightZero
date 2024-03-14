@@ -18,7 +18,7 @@ def main():
     args = parser.parse_args()
 
     config = dict(
-        env_name='visual_match',  # The name of the environment, options: 'visual_match', 'key_to_door'
+        env_id='key_to_door',  # The name of the environment, options: 'visual_match', 'key_to_door'
         # max_step=60,  # The maximum number of steps for each episode
         num_apples=10,  # Number of apples in the distractor phase
         # apple_reward=(1, 10),  # Range of rewards for collecting an apple
@@ -36,6 +36,7 @@ def main():
         save_replay=args.save_replay,
         render=args.render,
         scale_observation=True,
+        flate_observation=False,  # Whether to flatten the observation
     )
 
     for i in range(args.num_episodes):

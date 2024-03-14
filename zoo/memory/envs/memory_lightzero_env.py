@@ -30,7 +30,7 @@ class MemoryEnvLightZero(BaseEnv):
         _max_step (int): Maximum number of steps for the environment.
     """
     config = dict(
-        env_name='visual_match',  # The name of the environment, options: 'visual_match', 'key_to_door'
+        env_id='visual_match',  # The name of the environment, options: 'visual_match', 'key_to_door'
         # max_step=60,  # The maximum number of steps for each episode
         num_apples=10,  # Number of apples in the distractor phase
         # apple_reward=(1, 10),  # Range of rewards for collecting an apple
@@ -48,6 +48,7 @@ class MemoryEnvLightZero(BaseEnv):
         save_replay=False,  # Whether to save GIF replay
         render=False,  # Whether to enable real-time rendering
         scale_observation=True,  # Whether to scale the observation to [0, 1]
+        flate_observation=False,  # Whether to flatten the observation
     )
 
     @classmethod
@@ -76,60 +77,62 @@ class MemoryEnvLightZero(BaseEnv):
         Returns:
             - obs (:obj:`np.ndarray`): Initial observation from the environment.
         """
-        self._seed = 0
-        if not self._init_flag:
-            if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
-                np_seed = 100 * np.random.randint(1, 1000)
-                self._seed = self._seed + np_seed
-                self._rng = np.random.RandomState(self._seed)
-            elif hasattr(self, '_seed'):
-                self._rng = np.random.RandomState(self._seed)
+        self._seed = 0  # TODO
+        # if not self._init_flag:
+        if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
+            np_seed = 100 * np.random.randint(1, 1000)
+            self._seed = self._seed + np_seed
+            self._rng = np.random.RandomState(self._seed)
+        elif hasattr(self, '_seed'):
+            self._rng = np.random.RandomState(self._seed)
 
-            if self._cfg.env_name == 'visual_match':
-                from zoo.memory.envs.pycolab_tvt.visual_match import Game, PASSIVE_EXPLORE_GRID
-                self._game = Game(
-                    self._rng,
-                    num_apples=self._cfg.num_apples,
-                    apple_reward=self._cfg.apple_reward,
-                    fix_apple_reward_in_episode=self._cfg.fix_apple_reward_in_episode,
-                    final_reward=self._cfg.final_reward,
-                    respawn_every=self._cfg.respawn_every,
-                    crop=self._cfg.crop,
-                    max_frames=self._cfg.max_frames,
-                    EXPLORE_GRID=PASSIVE_EXPLORE_GRID,
-                )
-            elif self._cfg.env_name == 'key_to_door':
-                from zoo.memory.envs.pycolab_tvt.key_to_door import Game, REWARD_GRID_SR, MAX_FRAMES_PER_PHASE_SR
-                self._game = Game(
-                    self._rng,
-                    num_apples=self._cfg.num_apples,
-                    apple_reward=self._cfg.apple_reward,
-                    fix_apple_reward_in_episode=self._cfg.fix_apple_reward_in_episode,
-                    final_reward=self._cfg.final_reward,
-                    respawn_every=self._cfg.respawn_every,
-                    crop=self._cfg.crop,
-                    max_frames=self._cfg.max_frames,
-                    REWARD_GRID=REWARD_GRID_SR,
-                )
+        if self._cfg.env_id == 'visual_match':
+            from zoo.memory.envs.pycolab_tvt.visual_match import Game, PASSIVE_EXPLORE_GRID
+            self._game = Game(
+                self._rng,
+                num_apples=self._cfg.num_apples,
+                apple_reward=self._cfg.apple_reward,
+                fix_apple_reward_in_episode=self._cfg.fix_apple_reward_in_episode,
+                final_reward=self._cfg.final_reward,
+                respawn_every=self._cfg.respawn_every,
+                crop=self._cfg.crop,
+                max_frames=self._cfg.max_frames,
+                EXPLORE_GRID=PASSIVE_EXPLORE_GRID,
+            )
+        elif self._cfg.env_id == 'key_to_door':
+            from zoo.memory.envs.pycolab_tvt.key_to_door import Game, REWARD_GRID_SR, MAX_FRAMES_PER_PHASE_SR
+            self._game = Game(
+                self._rng,
+                num_apples=self._cfg.num_apples,
+                apple_reward=self._cfg.apple_reward,
+                fix_apple_reward_in_episode=self._cfg.fix_apple_reward_in_episode,
+                final_reward=self._cfg.final_reward,
+                respawn_every=self._cfg.respawn_every,
+                crop=self._cfg.crop,
+                max_frames=self._cfg.max_frames,
+                REWARD_GRID=REWARD_GRID_SR,
+            )
 
-            self._episode = self._game.make_episode()
-            if self._cfg.scale_observation:
-                self._observation_space = gym.spaces.Box(0, 1, shape=(1, 5, 5), dtype='float32')
-            else:
-                self._observation_space = gym.spaces.Box(0, 1000, shape=(1, 5, 5), dtype='int64')
-            self._action_space = gym.spaces.Discrete(self._game.num_actions)
-            self._reward_space = gym.spaces.Box(low=-float('inf'), high=float('inf'), shape=(1,), dtype=np.float32)
+        self._episode = self._game.make_episode()
+        if self._cfg.scale_observation:
+            self._observation_space = gym.spaces.Box(0, 1, shape=(1, 5, 5), dtype='float32')
+        else:
+            self._observation_space = gym.spaces.Box(0, 1000, shape=(1, 5, 5), dtype='int64')
+        self._action_space = gym.spaces.Discrete(self._game.num_actions)
+        self._reward_space = gym.spaces.Box(low=-float('inf'), high=float('inf'), shape=(1,), dtype=np.float32)
 
-            self._init_flag = True
+        # self._init_flag = True
 
         self._current_step = 0
         self._eval_episode_return = 0
         obs, _, _ = self._episode.its_showtime()
         obs = obs[0].reshape(1, 5, 5)
-        obs = to_ndarray(obs)
+        obs = to_ndarray(obs, dtype=np.float32)
         action_mask = np.ones(self.action_space.n, 'int8')
         if self._cfg.scale_observation:
-            obs = obs / 1000.0
+            obs = obs / 1000
+        if self._cfg.flate_observation:
+            obs = obs.flatten()
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
         self._gif_images = []
@@ -163,7 +166,7 @@ class MemoryEnvLightZero(BaseEnv):
             info['success'] = 1 if reward == self._cfg.final_reward else 0
             info['eval_episode_return'] = info['success']
 
-        observation = to_ndarray(observation)
+        observation = to_ndarray(observation, dtype=np.float32)
         reward = to_ndarray([reward])
         action_mask = np.ones(self.action_space.n, 'int8')
 
@@ -195,7 +198,9 @@ class MemoryEnvLightZero(BaseEnv):
             self._gif_images[0].save(gif_file, save_all=True, append_images=self._gif_images[1:], duration=100, loop=0)
 
         if self._cfg.scale_observation:
-            observation = observation / 1000.0
+            observation = observation / 1000
+        if self._cfg.flate_observation:
+            observation = observation.flatten()
         observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1}
 
         return BaseEnvTimestep(observation, reward, done, info)

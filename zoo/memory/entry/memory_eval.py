@@ -1,4 +1,4 @@
-from zoo.minigrid.config.minigrid_muzero_config import main_config, create_config
+from zoo.memory.config.memory_muzero_config import main_config, create_config
 from lzero.entry import eval_muzero
 import numpy as np
 

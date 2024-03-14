@@ -1,8 +1,8 @@
 from easydict import EasyDict
 
-# The typical MiniGrid env id: {'MiniGrid-Empty-8x8-v0', 'MiniGrid-FourRooms-v0', 'MiniGrid-DoorKey-8x8-v0','MiniGrid-DoorKey-16x16-v0'},
-# please refer to https://github.com/Farama-Foundation/MiniGrid for details.
-env_id = 'MiniGrid-Empty-8x8-v0'
+env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
+memory_length = 30
+
 max_env_step = int(1e6)
 
 # ==============================================================
@@ -29,15 +29,19 @@ target_model_for_intrinsic_reward_update_type = 'assign'  # 'assign' or 'momentu
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-minigrid_muzero_rnd_config = dict(
-    exp_name=f'data_mz_rnd_ctree/{env_id}_muzero-rnd_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}'
+memory_muzero_rnd_config = dict(
+    exp_name=f'data_mz_rnd_ctree/{env_id}_memlen-{memory_length}_muzero-rnd_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}'
              f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}_pelw{policy_entropy_loss_weight}'
              f'_rnd-rew-{input_type}-{target_model_for_intrinsic_reward_update_type}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
-        continuous=False,
-        manually_discretization=False,
+        flate_observation=True,  # Whether to flatten the observation
+        max_frames={
+            "explore": 15,
+            "distractor": memory_length,
+            "reward": 15
+        },  # Maximum frames per phase
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -111,13 +115,13 @@ minigrid_muzero_rnd_config = dict(
     ),
 )
 
-minigrid_muzero_rnd_config = EasyDict(minigrid_muzero_rnd_config)
-main_config = minigrid_muzero_rnd_config
+memory_muzero_rnd_config = EasyDict(memory_muzero_rnd_config)
+main_config = memory_muzero_rnd_config
 
-minigrid_muzero_create_config = dict(
+memory_muzero_create_config = dict(
     env=dict(
-        type='minigrid_lightzero',
-        import_names=['zoo.minigrid.envs.minigrid_lightzero_env'],
+        type='memory_lightzero',
+        import_names=['zoo.memory.envs.memory_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
@@ -129,8 +133,8 @@ minigrid_muzero_create_config = dict(
         import_names=['lzero.worker.muzero_collector'],
     )
 )
-minigrid_muzero_create_config = EasyDict(minigrid_muzero_create_config)
-create_config = minigrid_muzero_create_config
+memory_muzero_create_config = EasyDict(memory_muzero_create_config)
+create_config = memory_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero_with_reward_model

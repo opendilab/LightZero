@@ -1,37 +1,44 @@
 from easydict import EasyDict
 
-# The typical MiniGrid env id: {'MiniGrid-Empty-8x8-v0', 'MiniGrid-FourRooms-v0', 'MiniGrid-DoorKey-8x8-v0','MiniGrid-DoorKey-16x16-v0'},
-# please refer to https://github.com/Farama-Foundation/MiniGrid for details.
-env_id = 'MiniGrid-Empty-8x8-v0'
+env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
+memory_length = 30
+
 max_env_step = int(1e6)
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 seed = 0
+
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
+continuous_action_space = False
+K = 5  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = 200
 batch_size = 256
+
 reanalyze_ratio = 0
+random_collect_episode_num = 0
 td_steps = 5
-policy_entropy_loss_weight = 0.  # 0.005
+policy_entropy_loss_weight = 0.
 threshold_training_steps_for_final_temperature = int(5e5)
 eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-minigrid_muzero_config = dict(
-    exp_name=f'data_mz_ctree/{env_id}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_'
-             f'collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}_pelw{policy_entropy_loss_weight}_seed{seed}',
+memory_sampled_efficientzero_config = dict(
+    exp_name=f'data_sez_ctree/{env_id}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
     env=dict(
-        stop_value=int(1e6),
         env_id=env_id,
-        continuous=False,
-        manually_discretization=False,
+        flate_observation=True,  # Whether to flatten the observation
+        max_frames={
+            "explore": 15,
+            "distractor": memory_length,
+            "reward": 15
+        },  # Maximum frames per phase
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -41,18 +48,19 @@ minigrid_muzero_config = dict(
         model=dict(
             observation_shape=2835,
             action_space_size=7,
-            model_type='mlp',
+            continuous_action_space=continuous_action_space,
+            num_of_sampled_actions=K,
+            model_type='mlp', 
             lstm_hidden_size=256,
-            latent_state_dim=512,
+            latent_state_dim=256,
             discrete_action_encoding_type='one_hot',
-            norm_type='BN',
-            self_supervised_learning_loss=True,  # NOTE: default is False.
+            norm_type='BN', 
         ),
+        policy_entropy_loss_weight=policy_entropy_loss_weight,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
             decay=int(2e5),
         ),
-        policy_entropy_loss_weight=policy_entropy_loss_weight,
         td_steps=td_steps,
         manual_temperature_decay=True,
         threshold_training_steps_for_final_temperature=threshold_training_steps_for_final_temperature,
@@ -64,7 +72,6 @@ minigrid_muzero_config = dict(
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        ssl_loss_weight=2,  # NOTE: default is 0.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
@@ -75,27 +82,38 @@ minigrid_muzero_config = dict(
     ),
 )
 
-minigrid_muzero_config = EasyDict(minigrid_muzero_config)
-main_config = minigrid_muzero_config
+memory_sampled_efficientzero_config = EasyDict(memory_sampled_efficientzero_config)
+main_config = memory_sampled_efficientzero_config
 
-minigrid_muzero_create_config = dict(
+memory_sampled_efficientzero_create_config = dict(
     env=dict(
-        type='minigrid_lightzero',
-        import_names=['zoo.minigrid.envs.minigrid_lightzero_env'],
+        type='memory_lightzero',
+        import_names=['zoo.memory.envs.memory_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero',
-        import_names=['lzero.policy.muzero'],
+        type='sampled_efficientzero',
+        import_names=['lzero.policy.sampled_efficientzero'],
     ),
     collector=dict(
         type='episode_muzero',
         import_names=['lzero.worker.muzero_collector'],
     )
 )
-minigrid_muzero_create_config = EasyDict(minigrid_muzero_create_config)
-create_config = minigrid_muzero_create_config
+memory_sampled_efficientzero_create_config = EasyDict(memory_sampled_efficientzero_create_config)
+create_config = memory_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero
+    # Users can use different train entry by specifying the entry_type.
+    entry_type = "train_muzero"  # options={"train_muzero", "train_muzero_with_gym_env"}
+
+    if entry_type == "train_muzero":
+        from lzero.entry import train_muzero
+    elif entry_type == "train_muzero_with_gym_env":
+        """
+        The ``train_muzero_with_gym_env`` entry means that the environment used in the training process is generated by wrapping the original gym environment with LightZeroEnvWrapper.
+        Users can refer to lzero/envs/wrappers for more details.
+        """
+        from lzero.entry import train_muzero_with_gym_env as train_muzero
+
     train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)
