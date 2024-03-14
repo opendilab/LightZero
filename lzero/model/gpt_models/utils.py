@@ -11,44 +11,6 @@ import torch.nn as nn
 from .episode import Episode
 
 
-# def configure_optimizer(model, learning_rate, weight_decay, *blacklist_module_names):
-#     """Credits to https://github.com/karpathy/minGPT"""
-#     # separate out all parameters to those that will and won't experience regularizing weight decay
-#     decay = set()
-#     no_decay = set()
-#     whitelist_weight_modules = (torch.nn.Linear, torch.nn.Conv1d)
-#     blacklist_weight_modules = (torch.nn.LayerNorm, torch.nn.Embedding)
-#     for mn, m in model.named_modules():
-#         for pn, p in m.named_parameters():
-#             fpn = '%s.%s' % (mn, pn) if mn else pn  # full param name
-#             if any([fpn.startswith(module_name) for module_name in blacklist_module_names]):
-#                 no_decay.add(fpn)
-#             elif 'bias' in pn:
-#                 # all biases will not be decayed
-#                 no_decay.add(fpn)
-#             elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
-#                 # weights of whitelist modules will be weight decayed
-#                 decay.add(fpn)
-#             elif pn.endswith('weight') and isinstance(m, blacklist_weight_modules):
-#                 # weights of blacklist modules will NOT be weight decayed
-#                 no_decay.add(fpn)
-
-#     # validate that we considered every parameter
-#     param_dict = {pn: p for pn, p in model.named_parameters()}
-#     inter_params = decay & no_decay
-#     union_params = decay | no_decay
-#     assert len(inter_params) == 0, f"parameters {str(inter_params)} made it into both decay/no_decay sets!"
-#     assert len(
-#         param_dict.keys() - union_params) == 0, f"parameters {str(param_dict.keys() - union_params)} were not separated into either decay/no_decay set!"
-
-#     # create the pytorch optimizer object
-#     optim_groups = [
-#         {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": weight_decay},
-#         {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
-#     ]
-#     optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate)
-#     return optimizer
-
 from lzero.model.common import RepresentationNetwork
 
 def init_weights(module):
@@ -114,7 +76,6 @@ class LossWithIntermediateLosses:
         # # self.ends_loss_weight = 1.
         # self.ends_loss_weight = 0.
 
-        # self.obs_loss_weight = 0.1
         self.obs_loss_weight = 10
         # self.obs_loss_weight = 2
 
@@ -124,9 +85,6 @@ class LossWithIntermediateLosses:
         self.policy_loss_weight = 1.
         # self.ends_loss_weight = 1.
         self.ends_loss_weight = 0.
-
-        # self.latent_kl_loss_weight = 0.1 # for lunarlander
-        self.latent_kl_loss_weight = 0. # for lunarlander
 
         self.latent_recon_loss_weight = latent_recon_loss_weight
         self.perceptual_loss_weight = perceptual_loss_weight
@@ -146,8 +104,6 @@ class LossWithIntermediateLosses:
                 self.loss_total += self.value_loss_weight * v
             elif k == 'loss_ends':
                 self.loss_total += self.ends_loss_weight * v
-            elif k == 'latent_kl_loss':
-                self.loss_total += self.latent_kl_loss_weight * v
             elif k == 'latent_recon_loss':
                 self.loss_total += self.latent_recon_loss_weight * v
             elif k == 'perceptual_loss':

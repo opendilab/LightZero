@@ -510,7 +510,6 @@ class MuZeroGPTPolicy(Policy):
         reward_loss = self.intermediate_losses['loss_rewards']
         policy_loss = self.intermediate_losses['loss_policy']
         value_loss = self.intermediate_losses['loss_value']
-        latent_kl_loss = self.intermediate_losses['latent_kl_loss']
         latent_recon_loss = self.intermediate_losses['latent_recon_loss']
         perceptual_loss = self.intermediate_losses['perceptual_loss']
         orig_policy_loss = self.intermediate_losses['orig_policy_loss']
@@ -539,7 +538,6 @@ class MuZeroGPTPolicy(Policy):
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(), self._cfg.grad_clip_value)
         # TODO
         # total_grad_norm_before_clip_rep_net = torch.nn.utils.clip_grad_norm_(self._learn_model.tokenizer.representation_network.parameters(), max_norm=1.0)
-        
         # print('total_grad_norm_before_clip_rep_net:', total_grad_norm_before_clip_rep_net)
 
 
@@ -577,7 +575,6 @@ class MuZeroGPTPolicy(Policy):
 
             'weighted_total_loss': weighted_total_loss.item(),
             'obs_loss': obs_loss,
-            'latent_kl_loss': latent_kl_loss,
             'latent_recon_loss':latent_recon_loss,
             'perceptual_loss':perceptual_loss,
             'policy_loss': policy_loss,
@@ -752,6 +749,8 @@ class MuZeroGPTPolicy(Policy):
             self._mcts_eval = MCTSCtree(self._cfg)
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
+        self.last_batch_obs = torch.zeros([3,self._cfg.model.observation_shape[0],64,64]).to(self._cfg.device)
+        self.last_batch_action = [-1 for i in range(3)]
 
     def _get_target_obs_index_in_step_k(self, step):
         """
@@ -807,7 +806,7 @@ class MuZeroGPTPolicy(Policy):
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             # network_output = self._collect_model.initial_inference(data)
-            network_output = self._eval_model.initial_inference(data)
+            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             if not self._eval_model.training:
@@ -835,6 +834,8 @@ class MuZeroGPTPolicy(Policy):
 
             if ready_env_id is None:
                 ready_env_id = np.arange(active_eval_env_num)
+            
+            batch_action = []
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
@@ -862,6 +863,10 @@ class MuZeroGPTPolicy(Policy):
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
                 }
+                batch_action.append(action)
+
+            self.last_batch_obs = data
+            self.last_batch_action = batch_action
 
         return output
 
@@ -886,7 +891,6 @@ class MuZeroGPTPolicy(Policy):
             'policy_loss',
             'orig_policy_loss',
             'policy_entropy',
-            'latent_kl_loss',
             'latent_recon_loss',
             # 'policy_entropy',
             'target_policy_entropy',

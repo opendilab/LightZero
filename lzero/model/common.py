@@ -139,25 +139,6 @@ class DownSample(nn.Module):
 
         return output
 
-# EZ original
-# def renormalize(inputs: torch.Tensor, first_dim: int = 1) -> torch.Tensor:
-#     """
-#     Overview:
-#         Normalize the input data using the max-min-normalization.
-#     Arguments:
-#         - inputs (:obj:`torch.Tensor`): The input data needs to be normalized.
-#         - first_dim (:obj:`int`): The first dimension of flattening the input data.
-#     Returns:
-#         - output (:obj:`torch.Tensor`): The normalized data.
-#     """
-#     if first_dim < 0:
-#         first_dim = len(inputs.shape) + first_dim
-#     flat_input = inputs.view(*inputs.shape[:first_dim], -1)
-#     max_val = torch.max(flat_input, first_dim, keepdim=True).values
-#     min_val = torch.min(flat_input, first_dim, keepdim=True).values
-#     flat_input = (flat_input - min_val) / (max_val - min_val)
-
-#     return flat_input.view(*input.shape)
 
 def renormalize_min_max(x): # min-max
     # x is a 2D tensor of shape (batch_size, num_features)
@@ -171,30 +152,6 @@ def renormalize_min_max(x): # min-max
 
     return x_scaled
 
-# def renormalize(x): # z-score
-#     # x is a 2D tensor of shape (batch_size, num_features)
-#     # Compute the mean and standard deviation for each feature across the batch
-#     mean = torch.mean(x, dim=0, keepdim=True)
-#     std = torch.std(x, dim=0, keepdim=True)
-
-#     # Apply z-score normalization
-#     x_normalized = (x - mean) / (std + 1e-8)  # Add a small epsilon to avoid division by zero
-
-#     return x_normalized
-
-# def renormalize(x): # robust scaling
-#     # x is a 2D tensor of shape (batch_size, num_features)
-#     # Compute the 1st and 3rd quartile
-#     q1 = torch.quantile(x, 0.25, dim=0, keepdim=True)
-#     q3 = torch.quantile(x, 0.75, dim=0, keepdim=True)
-
-#     # Compute the interquartile range (IQR)
-#     iqr = q3 - q1
-
-#     # Apply robust scaling
-#     x_scaled = (x - q1) / (iqr + 1e-8)  # Again, add epsilon to avoid division by zero
-
-#     return x_scaled
 
 class SimNorm(nn.Module):
     """

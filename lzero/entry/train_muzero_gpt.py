@@ -156,14 +156,20 @@ def train_muzero_gpt(
         else:
             collect_kwargs['epsilon'] = 0.0
 
+        # policy.last_batch_obs = torch.zeros([len(evaluator_env_cfg), cfg.policy.model.observation_shape[0], 64, 64]).to(cfg.policy.device)
+        # policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
         # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
+            policy.last_batch_obs = torch.zeros([len(evaluator_env_cfg), cfg.policy.model.observation_shape[0], 64, 64]).to(cfg.policy.device)
+            policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
                 break
 
+        policy.last_batch_obs = torch.zeros([len(collector_env_cfg), cfg.policy.model.observation_shape[0], 64, 64]).to(cfg.policy.device)
+        policy.last_batch_action = [-1 for _ in range(len(collector_env_cfg))]
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         if cfg.policy.update_per_collect is None:
@@ -214,19 +220,11 @@ def train_muzero_gpt(
         policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad
         print('sample target_model past_keys_values_cache.clear()')
 
-        # del policy._learn_model.world_model.keys_values_wm
-
-        # TODO: for batch world model ,to improve kv reuse, we can donot reset
-        # policy._learn_model.world_model.past_keys_values_cache.clear() # very important
-        # policy._eval_model.world_model.past_keys_values_cache.clear() # very important
-        
         policy._collect_model.world_model.past_keys_values_cache.clear() # very important
         policy._collect_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
 
         torch.cuda.empty_cache() # TODO: NOTE
 
-        policy.last_batch_obs = torch.zeros([len(collector_env_cfg), cfg.policy.model.observation_shape[0], 64, 64]).to(cfg.policy.device)
-        policy.last_batch_action = [-1 for _ in range(len(collector_env_cfg))]
 
         # if collector.envstep > 0:
         #     # TODO: only for debug

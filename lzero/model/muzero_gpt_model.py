@@ -166,8 +166,8 @@ class MuZeroModelGPT(nn.Module):
             embedding_dim=cfg.world_model.embed_dim,
         )
         # Instantiate the decoder
-        decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(4, 64, 64)) # TODO: For K=4
-        # decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(3, 64, 64)) # TODO: For K=1
+        # decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(4, 64, 64)) # TODO: For K=4
+        decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(3, 64, 64)) # TODO: For K=1
 
 
         Encoder = Encoder(cfg.tokenizer.encoder)

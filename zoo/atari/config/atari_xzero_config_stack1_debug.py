@@ -37,7 +37,7 @@ n_episode = 8
 # collector_env_num = 1
 # n_episode = 1
 
-evaluator_env_num = 1
+evaluator_env_num = 3
 update_per_collect = 1000
 
 # collector_env_num = 1
@@ -120,8 +120,8 @@ atari_muzero_config = dict(
                 save_ckpt_after_run=True,
             ),
         ),
-        # model_path=None,
-        model_path='/mnt/afs/niuyazhe/code/LightZero/data_xzero_0307/Pong_xzero_envnum8_ns50_upc1000-mur0.125_new-rr0.0_H5_bs64_stack1_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh8_fixroot_seed0/ckpt/iteration_60000.pth.tar',
+        model_path=None,
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_xzero_0307/Pong_xzero_envnum8_ns50_upc1000-mur0.125_new-rr0.0_H5_bs64_stack1_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh8_fixroot_seed0/ckpt/iteration_60000.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_xzero_stack1_0204/Pong_xzero_envnum8_ns50_upc1000-mur0.25_new-rr0.0_H5_bs64_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e3_collectper200-clear_mcts-kv-reset-5-kv-88-base_latent-sigmod_latent-soft-target-100_mantran_seed0/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_xzero_stack1_0204/Pong_xzero_envnum8_ns50_upc1000-mur0.25_new-rr0.25_H5_bs64_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005-minmax-jointtrain-true_mcs5e2_collectper200-clear_target-per20-clear_evalmax_latent-soft-target-001_mantran_seed0/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree_0113_k1/Pong_muzero_gpt_envnum8_ns50_upc1000-mur0.25_rr0_H5_bs32_stack1_contembdings_lsd1024_lr1e-4-gcv10-reconslossw005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_seed0/ckpt/iteration_167000.pth.tar',
@@ -214,8 +214,9 @@ atari_muzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
-        # eval_freq=int(5e3),
-        eval_freq=int(9e9),
+        eval_freq=int(5e3),
+        # eval_freq=int(9e9),
+        # eval_freq=int(1),
         # eval_freq=int(1e5),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,

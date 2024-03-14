@@ -81,17 +81,17 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:0',
+                      "device": 'cuda:3',
                     #   "device": 'cpu',
                       # 'support_size': 21,
                       'support_size': 601,
 
                       # 'action_shape': 18,# TODO：for multi-task
 
-                      # 'action_shape': 18,# TODO：for Seaquest boxing
+                      # 'action_shape': 18,# TODO：for Seaquest boxing Frostbite
                       # 'action_shape': 9,# TODO：for mspacman
-                      # 'action_shape': 4,# TODO：for breakout
-                      'action_shape': 6,# TODO：for pong qbert 
+                      'action_shape': 4,# TODO：for breakout
+                      # 'action_shape': 6,# TODO：for pong qbert 
 
                       'max_cache_size':5000,
                       # 'max_cache_size':50000,
@@ -106,8 +106,12 @@ cfg['world_model'] = {
 
                       # 'latent_recon_loss_weight':0.,
                       # 'perceptual_loss_weight':0.,
-                      'policy_entropy_weight': 0,
-                      # 'policy_entropy_weight': 1e-4,
+
+                      # 'policy_entropy_weight': 0,
+                      'policy_entropy_weight': 1e-4,
+
+                      'predict_latent_loss_type': 'group_kl', # 'mse'
+                      # 'predict_latent_loss_type': 'mse', # 'mse'
 
                       }
 from easydict import EasyDict
