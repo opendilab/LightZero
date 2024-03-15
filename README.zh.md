@@ -27,7 +27,7 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
-最近更新于 2024.02.08 LightZero-v0.0.4
+最近更新于 2024.03.15 LightZero-v0.0.4
 
 > LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库。
 
@@ -191,6 +191,14 @@ python3 -u zoo/atari/config/atari_muzero_config.py
 cd LightZero
 python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 ```
+## 定制化文档
+
+为希望定制环境和算法的用户，我们提供了全面的指南：
+
+- **环境定制：** [定制环境](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/envs/customize_envs_zh.md)
+- **算法定制：** [定制算法](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/algos/customize_algos_zh.md)
+
+如有任何疑问，欢迎随时联系我们寻求帮助。
 
 ## 基线算法比较
 

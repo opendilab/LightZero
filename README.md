@@ -27,7 +27,7 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
-Updated on 2024.02.08 LightZero-v0.0.4
+Updated on 2024.03.15 LightZero-v0.0.4
 
 > LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL). 
 
@@ -206,6 +206,15 @@ Train a MuZero agent to play [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-t
 cd LightZero
 python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 ```
+
+## Customization Documentation
+
+For those looking to tailor environments and algorithms, we offer comprehensive guides:
+
+- **Environments:** [Customize Environments](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/envs/customize_envs.md)
+- **Algorithms:** [Customize Algorithms](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/algos/customize_algos.md)
+
+Should you have any questions, feel free to contact us for support.
 
 ## Benchmark
 
