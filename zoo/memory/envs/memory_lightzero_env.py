@@ -77,7 +77,6 @@ class MemoryEnvLightZero(BaseEnv):
         Returns:
             - obs (:obj:`np.ndarray`): Initial observation from the environment.
         """
-        self._seed = 0  # TODO
         # if not self._init_flag:
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
@@ -85,6 +84,8 @@ class MemoryEnvLightZero(BaseEnv):
             self._rng = np.random.RandomState(self._seed)
         elif hasattr(self, '_seed'):
             self._rng = np.random.RandomState(self._seed)
+        else:
+            self._rng = np.random.RandomState(0)
 
         if self._cfg.env_id == 'visual_match':
             from zoo.memory.envs.pycolab_tvt.visual_match import Game, PASSIVE_EXPLORE_GRID

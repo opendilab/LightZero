@@ -3,7 +3,7 @@ from easydict import EasyDict
 env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
 memory_length = 30
 
-max_env_step = int(1e6)
+max_env_step = int(10e6)
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -19,12 +19,12 @@ reanalyze_ratio = 0
 td_steps = 5
 
 # debug
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 5
-update_per_collect = 2
-batch_size = 2
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 5
+# update_per_collect = 2
+# batch_size = 2
 
 policy_entropy_loss_weight = 1e-4
 threshold_training_steps_for_final_temperature = int(5e5)
@@ -71,7 +71,7 @@ memory_muzero_config = dict(
         threshold_training_steps_for_final_temperature=threshold_training_steps_for_final_temperature,
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=50,
+        game_segment_length=60,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
@@ -81,7 +81,7 @@ memory_muzero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(2e2),
+        eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
