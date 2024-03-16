@@ -156,9 +156,9 @@ def train_muzero_gpt(
         else:
             collect_kwargs['epsilon'] = 0.0
 
-        # policy.last_batch_obs = torch.zeros([len(evaluator_env_cfg), cfg.policy.model.observation_shape[0], 64, 64]).to(cfg.policy.device)
-        # policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
-        # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+        policy.last_batch_obs = torch.zeros([len(evaluator_env_cfg), cfg.policy.model.observation_shape[0], 64, 64]).to(cfg.policy.device)
+        policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
+        stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):

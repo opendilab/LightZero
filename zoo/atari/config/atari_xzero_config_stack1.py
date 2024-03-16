@@ -1,13 +1,15 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(4)
+
+# ==== NOTE: 需要设置cfg_atari中的action_shape =====
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_name = 'PongNoFrameskip-v4'
+# env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
 # env_name = 'QbertNoFrameskip-v4'
 # env_name = 'SeaquestNoFrameskip-v4'
-# env_name = 'BreakoutNoFrameskip-v4'  # collect_env_steps=5e3 
+env_name = 'BreakoutNoFrameskip-v4'  # collect_env_steps=5e3 
 # env_name = 'BoxingNoFrameskip-v4'
 # env_name = 'FrostbiteNoFrameskip-v4'
 
@@ -34,7 +36,7 @@ elif env_name == 'FrostbiteNoFrameskip-v4':
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-# update_per_collect = 1000  # for pong boxing
+update_per_collect = 1000  # for pong boxing
 update_per_collect = None # for others
 
 model_update_ratio = 0.25 
@@ -62,7 +64,7 @@ atari_muzero_config = dict(
     # atari env action space
     # game_buffer_muzero_gpt task_id
     # TODO: muzero_gpt_model.py world_model.py (3,64,64)
-    exp_name=f'data_xzero_atari_0316/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_fixed-act-emb_nogradscale_seed0',
+    exp_name=f'data_xzero_atari_0316/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_fixed-act-emb_nogradscale_seed0_after-merge-memory',
 
     # exp_name=f'data_xzero_0312/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_nogradscale_seed0',
     # exp_name=f'data_xzero_0307/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh8_fixroot_simnorm_latentw10_pew1e-4_seed0',
@@ -86,8 +88,8 @@ atari_muzero_config = dict(
         # collect_max_episode_steps=int(50),
         # eval_max_episode_steps=int(50),
         # TODO: run
-        # collect_max_episode_steps=int(5e3), # for breakout
-        collect_max_episode_steps=int(2e4), # for others
+        collect_max_episode_steps=int(5e3), # for breakout
+        # collect_max_episode_steps=int(2e4), # for others
         eval_max_episode_steps=int(1e4),
         # eval_max_episode_steps=int(108000),
         clip_rewards=True,
