@@ -1,38 +1,22 @@
 from easydict import EasyDict
 import torch
 torch.cuda.set_device(0)
-# torch.cuda.empty_cache()
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 
 
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 1
-# num_simulations = 25
-# update_per_collect = 200
-# model_update_ratio = 1
-# batch_size = 64
-# max_env_step = int(2e5)
-# reanalyze_ratio = 0
-# # num_unroll_steps = 20
-# num_unroll_steps = 5
-# import os
-# os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
-
-# # debug
-collector_env_num = 4
-n_episode = 4
-evaluator_env_num = 1
-num_simulations = 1
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 25
 update_per_collect = None
-model_update_ratio = 0.01
-batch_size = 5
+model_update_ratio = 0.5
 max_env_step = int(2e5)
 reanalyze_ratio = 0
+batch_size = 64
 num_unroll_steps = 5
-# num_unroll_steps = 10
+# num_unroll_steps = 2
 
 
 # ==============================================================
@@ -42,10 +26,7 @@ num_unroll_steps = 5
 cartpole_muzero_gpt_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer: lpips loss
-    exp_name=f'data_mz_gpt_ctree_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs5000_batch8_obs-token-lw2_recons-obs_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_multistep__fix-init-infer_seed0',
-
-    # exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs50_batch8_obs-token-lw2_recons-obs_bs{batch_size}_indep0_trans-wd0.01_pt2_argmaxtoken_orig-sdpa_onestep_seed0',
-    # exp_name=f'data_mz_gpt_ctree_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_batch8_obs-token-lw2_recons-obs_bs{batch_size}_indep0_trans-wd0.01_pt2_argmaxtokenp_seed0',
+    exp_name=f'data_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_bs{batch_size}_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -54,28 +35,18 @@ cartpole_muzero_gpt_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        # TODO: debug
-        collect_max_episode_steps=int(6),
-        eval_max_episode_steps=int(6),
     ),
     policy=dict(
         model_path=None,
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/cartpole_muzero_gpt_ns25_upc200-mur1_rr0_H5_nlayers2_emd64_smallnet_bs64_mcs50_batch8_obs-token-lw2_recons-obs_bs64_indep0_trans-wd0.01_pt2_argmaxtoken_pt2sdpa-drop0ineval_seed0/ckpt/ckpt_best.pth.tar',
         tokenizer_start_after_envsteps=int(0),
         transformer_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,
         update_per_collect_tokenizer=update_per_collect,
-        # transformer_start_after_envsteps=int(5e3),
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/cartpole_muzero_gpt_ns25_upc20-mur1_rr0_H5_nlayers2_emd128_mediumnet_bs64_mcs25_fixedtokenizer_fixloss_fixlatent_seed0/ckpt/ckpt_best.pth.tar',
         num_unroll_steps=num_unroll_steps,
         model=dict(
             observation_shape=4,
             action_space_size=2,
             model_type='mlp',
-            lstm_hidden_size=128,
-            # latent_state_dim=128,
-            latent_state_dim=256,
-
             self_supervised_learning_loss=True,  # NOTE: default is False.
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
@@ -87,19 +58,21 @@ cartpole_muzero_gpt_config = dict(
             support_scale=10,
         ),
         cuda=True,
-        # cuda=False,
+        use_augmentation=False,
         env_type='not_board_games',
         game_segment_length=50,
         model_update_ratio=model_update_ratio,
         batch_size=batch_size,
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
-        learning_rate=0.003,
-        ssl_loss_weight=2,  # NOTE: default is 0.
+        learning_rate=0.0001,
+        target_update_freq=100,
+        grad_clip_value = 0.5, # TODO: 10
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(2e3),
+        # eval_freq=int(1e4),
+        eval_freq=int(500),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

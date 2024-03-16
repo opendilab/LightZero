@@ -56,7 +56,7 @@ eps_greedy_exploration_in_collect = False
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-atari_muzero_config = dict(
+atari_xzero_config = dict(
     # TODO NOTE: 
     # mcts_ctree, 
     # muzero_collector: empty_cache
@@ -170,9 +170,7 @@ atari_muzero_config = dict(
         lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
         target_update_freq=100,
-
         grad_clip_value = 0.5, # TODO: 10
-
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         ssl_loss_weight=2,  # default is 0
@@ -184,10 +182,10 @@ atari_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
     ),
 )
-atari_muzero_config = EasyDict(atari_muzero_config)
-main_config = atari_muzero_config
+atari_xzero_config = EasyDict(atari_xzero_config)
+main_config = atari_xzero_config
 
-atari_muzero_create_config = dict(
+atari_xzero_create_config = dict(
     env=dict(
         type='atari_lightzero',
         import_names=['zoo.atari.envs.atari_lightzero_env'],
@@ -198,8 +196,8 @@ atari_muzero_create_config = dict(
         import_names=['lzero.policy.muzero_gpt'],
     ),
 )
-atari_muzero_create_config = EasyDict(atari_muzero_create_config)
-create_config = atari_muzero_create_config
+atari_xzero_create_config = EasyDict(atari_xzero_create_config)
+create_config = atari_xzero_create_config
 
 if __name__ == "__main__":
     # max_env_step = 10000

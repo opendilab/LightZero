@@ -192,6 +192,7 @@ class RepresentationNetworkGPT(nn.Module):
             # activation: nn.Module = nn.GELU(), # TODO
             norm_type: str = 'BN',
             embedding_dim: int = 256,
+            group_size: int = 8,
     ) -> None:
         """
         Overview:
@@ -210,7 +211,7 @@ class RepresentationNetworkGPT(nn.Module):
         """
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
-
+        self.observation_shape = observation_shape
         self.downsample = downsample
         if self.downsample:
             self.downsample_net = DownSample(
@@ -253,7 +254,8 @@ class RepresentationNetworkGPT(nn.Module):
         # Initialize biases to zero
         # init.zeros_(self.last_linear.bias)
 
-        self.sim_norm = SimNorm(simnorm_dim=8)
+        self.sim_norm = SimNorm(simnorm_dim=group_size)
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -279,15 +281,14 @@ class RepresentationNetworkGPT(nn.Module):
         # x = self.last_linear(x.contiguous().view(-1, 64*8*8))
         x = self.last_linear(x.reshape(-1, 64*8*8)) # TODO
 
-        x = x.view(-1, self.embedding_dim)
+        x = x.view(-1, self.embedding_dim) # TODO
 
         # print('cont embedings before renormalize', x.max(), x.min(), x.mean())
-        # x = torch.tanh(x)
-        # x = renormalize_min_max(x)
+        # x = torch.softmax(x)
         x = self.sim_norm(x)
-
         # print('after renormalize', x.max(), x.min(),x.mean())
-        
+
+            
         return x
 
     def get_param_mean(self) -> float:
@@ -349,9 +350,11 @@ class RepresentationNetworkMLP(nn.Module):
             observation_shape: int,
             hidden_channels: int = 64,
             layer_num: int = 2,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            # activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01), # TODO
             last_linear_layer_init_zero: bool = True,
             norm_type: Optional[str] = 'BN',
+            group_size: int = 8,
     ) -> torch.Tensor:
         """
         Overview:
@@ -384,6 +387,8 @@ class RepresentationNetworkMLP(nn.Module):
             # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=True,
         )
+        self.sim_norm = SimNorm(simnorm_dim=group_size)
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -392,16 +397,8 @@ class RepresentationNetworkMLP(nn.Module):
             - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
         """
         x = self.fc_representation(x)
-        # print('no AvgL1Norm', x.max(), x.min())
         # print('before cont embediings', x.max(), x.min(), x.mean())
-        x = renormalize(x)
-
-        # print('after cont embediings', x.max(), x.min(), x.mean())
-        # print('before tanh', x.max(), x.min(),x.mean())
-        # x = AvgL1Norm(x)
-        # print('after AvgL1Norm', x.max(), x.min())
-        # x = torch.tanh(x)
-        # print('after tanh', x.max(), x.min(),x.mean())
+        x = self.sim_norm(x)
 
         return x
 

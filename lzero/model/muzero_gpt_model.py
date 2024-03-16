@@ -11,7 +11,7 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
-from .common import MZNetworkOutput, RepresentationNetworkGPT, PredictionNetwork, LatentDecoder
+from .common import MZNetworkOutput, RepresentationNetworkGPT, RepresentationNetworkMLP, PredictionNetwork, LatentDecoder
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -86,10 +86,10 @@ class MuZeroModelGPT(nn.Module):
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
         """
         super(MuZeroModelGPT, self).__init__()
-        if isinstance(observation_shape, int) or len(observation_shape) == 1:
-            # for vector obs input, e.g. classical control and box2d environments
-            # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
-            observation_shape = [1, observation_shape, 1]
+        # if isinstance(observation_shape, int) or len(observation_shape) == 1:
+        #     # for vector obs input, e.g. classical control and box2d environments
+        #     # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
+        #     observation_shape = [1, observation_shape, 1]
 
         self.categorical_distribution = categorical_distribution
         if self.categorical_distribution:
@@ -120,36 +120,59 @@ class MuZeroModelGPT(nn.Module):
         from .gpt_models.tokenizer.tokenizer import Tokenizer
         from .gpt_models.tokenizer.nets import Encoder, Decoder
         # from .gpt_models.cfg_cartpole import cfg
-        from .gpt_models.cfg_atari import cfg
-
-        self.representation_network = RepresentationNetworkGPT(
+        from .gpt_models.cfg_memory import cfg
+        # from .gpt_models.cfg_atari import cfg
+        if cfg.world_model.obs_type == 'vector':
+            self.representation_network = RepresentationNetworkMLP(
             observation_shape,
-            num_res_blocks,
-            num_channels,
-            downsample,
+            hidden_channels= cfg.world_model.embed_dim,
+            layer_num = 2, # NOTE
             activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
             # activation=nn.GELU(),
-            norm_type=norm_type,
-            embedding_dim=cfg.world_model.embed_dim,
-        )
-        # Instantiate the decoder
-        # decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(4, 64, 64)) # TODO: For K=4
-        decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(3, 64, 64)) # TODO: For K=1
+            group_size=cfg.world_model.group_size,
+            )
+            decoder_network=None
+            Encoder = Encoder(cfg.tokenizer.encoder)
+            self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, None, with_lpips=False, representation_network=self.representation_network,
+                                decoder_network=None)
+            self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
+                                        config=cfg.world_model, tokenizer=self.tokenizer)
+            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
+            print('=='*20)
+            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
+            print(f'{sum(p.numel() for p in self.tokenizer.representation_network.parameters())} parameters in agent.tokenizer.representation_network')
+            print('=='*20)
+        elif cfg.world_model.obs_type == 'image':
+            self.representation_network = RepresentationNetworkGPT(
+                observation_shape,
+                num_res_blocks,
+                num_channels,
+                downsample,
+                activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
+                # activation=nn.GELU(),
+                norm_type=norm_type,
+                embedding_dim=cfg.world_model.embed_dim,
+                group_size=cfg.world_model.group_size,
+            )
+            # Instantiate the decoder
+            # decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(4, 64, 64)) # TODO: For K=4
+            decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(3, 64, 64)) # TODO: For K=1
 
+            Encoder = Encoder(cfg.tokenizer.encoder)
+            Decoder = Decoder(cfg.tokenizer.decoder)
+            self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network,
+                                decoder_network=decoder_network)
+            self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
+                                        config=cfg.world_model, tokenizer=self.tokenizer)
+            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
+            print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters())-sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
 
-        Encoder = Encoder(cfg.tokenizer.encoder)
-        Decoder = Decoder(cfg.tokenizer.decoder)
-        self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network,
-                            decoder_network=decoder_network)
-        self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
-                                      config=cfg.world_model, tokenizer=self.tokenizer)
-        print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-        print('=='*20)
-        print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
-        print(f'{sum(p.numel() for p in self.tokenizer.representation_network.parameters())} parameters in agent.tokenizer.representation_network')
-        print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
-        print(f'{sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.tokenizer.lpips')
-        print('=='*20)
+            print('=='*20)
+            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
+            print(f'{sum(p.numel() for p in self.tokenizer.representation_network.parameters())} parameters in agent.tokenizer.representation_network')
+            print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
+            print(f'{sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.tokenizer.lpips')
+            print('=='*20)
         
 
 

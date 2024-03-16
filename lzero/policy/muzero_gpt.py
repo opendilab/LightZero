@@ -283,7 +283,8 @@ class MuZeroGPTPolicy(Policy):
             # return 'MuZeroModel', ['lzero.model.muzero_gpt_model']
             return 'MuZeroModelGPT', ['lzero.model.muzero_gpt_model']
         elif self._cfg.model.model_type == "mlp":
-            return 'MuZeroModelGPT', ['lzero.model.muzero_gpt_model_vector_obs']
+            # return 'MuZeroModelGPT', ['lzero.model.muzero_gpt_model_vector_obs']
+            return 'MuZeroModelGPT', ['lzero.model.muzero_gpt_model']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
@@ -415,10 +416,7 @@ class MuZeroGPTPolicy(Policy):
         self._learn_model.train()
         self._target_model.train()
 
-        # current_batch, target_batch = data
-        current_batch, target_batch, train_which_component_dict = data
-
-
+        current_batch, target_batch, _ = data
         obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
@@ -426,7 +424,6 @@ class MuZeroGPTPolicy(Policy):
             obs_batch, obs_target_batch = prepare_obs_stack4_for_gpt(obs_batch_ori, self._cfg)
         else:
             obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
-
 
         # do augmentations
         if self._cfg.use_augmentation:
@@ -469,14 +466,10 @@ class MuZeroGPTPolicy(Policy):
         elif len(self._cfg.model.observation_shape)==3:
             batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  *self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
 
-
         batch_for_gpt['actions'] = action_batch.squeeze(-1)  # (B, T-1, A) -> (B, T-1)
-
         batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]  # (B, T, R) -> (B, T-1, R)
-
         batch_for_gpt['mask_padding'] = mask_batch == 1.0  # (B, T) NOTE: 0 means invalid padding data
         batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]  # (B, T-1) TODO
-
 
         batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]  # (B, T-1, O) or (B, T-1, C, H, W)
         batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long, device=self._cfg.device) # (B, T-1)
@@ -493,13 +486,10 @@ class MuZeroGPTPolicy(Policy):
         average_target_policy_entropy = target_policy_entropy.mean().item()
         # print(f'Average entropy: {average_entropy}')
 
-
         # ==============================================================
         # update world model
         # ==============================================================
         losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer) 
-        # losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._learn_model.world_model.tokenizer) # test
-
 
         weighted_total_loss = losses.loss_total
         for loss_name, loss_value in losses.intermediate_losses.items():
@@ -535,21 +525,15 @@ class MuZeroGPTPolicy(Policy):
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(), self._cfg.grad_clip_value)
-        # TODO
-        # total_grad_norm_before_clip_rep_net = torch.nn.utils.clip_grad_norm_(self._learn_model.tokenizer.representation_network.parameters(), max_norm=1.0)
-        # print('total_grad_norm_before_clip_rep_net:', total_grad_norm_before_clip_rep_net)
-
 
         self._optimizer_world_model.step()
         if self._cfg.lr_piecewise_constant_decay:
                 self.lr_scheduler.step()
 
-
         # ==============================================================
         # the core target model update step.
         # ==============================================================
         self._target_model.update(self._learn_model.state_dict())
-
 
         # 确保所有的CUDA核心完成工作，以便准确统计显存使用情况
         torch.cuda.synchronize()
@@ -562,7 +546,6 @@ class MuZeroGPTPolicy(Policy):
         current_memory_allocated_gb = current_memory_allocated / (1024**3)
         max_memory_allocated_gb = max_memory_allocated / (1024**3)
         # 使用SummaryWriter记录当前和最大显存使用量
-
 
         return_loss_dict = {
             'Current_GPU': current_memory_allocated_gb,
@@ -618,8 +601,12 @@ class MuZeroGPTPolicy(Policy):
             self._mcts_collect = MCTSPtree(self._cfg)
         self._collect_mcts_temperature = 1.
         self.collect_epsilon = 0.0
-        self.last_batch_obs = torch.zeros([8,self._cfg.model.observation_shape[0],64,64]).to(self._cfg.device)
-        self.last_batch_action = [-1 for i in range(8)]
+        if self._cfg.model.model_type == 'conv':
+            self.last_batch_obs = torch.zeros([8,self._cfg.model.observation_shape[0],64,64]).to(self._cfg.device)
+            self.last_batch_action = [-1 for i in range(8)]
+        elif self._cfg.model.model_type == 'mlp':
+            self.last_batch_obs = torch.zeros([8,self._cfg.model.observation_shape]).to(self._cfg.device)
+            self.last_batch_action = [-1 for i in range(8)]
 
     #@profile
     def _forward_collect(
@@ -748,8 +735,12 @@ class MuZeroGPTPolicy(Policy):
             self._mcts_eval = MCTSCtree(self._cfg)
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
-        self.last_batch_obs = torch.zeros([3,self._cfg.model.observation_shape[0],64,64]).to(self._cfg.device)
-        self.last_batch_action = [-1 for i in range(3)]
+        if self._cfg.model.model_type == 'conv':
+            self.last_batch_obs = torch.zeros([3,self._cfg.model.observation_shape[0],64,64]).to(self._cfg.device)
+            self.last_batch_action = [-1 for i in range(3)]
+        elif self._cfg.model.model_type == 'mlp':
+            self.last_batch_obs = torch.zeros([3,self._cfg.model.observation_shape]).to(self._cfg.device)
+            self.last_batch_action = [-1 for i in range(3)]
 
     def _get_target_obs_index_in_step_k(self, step):
         """

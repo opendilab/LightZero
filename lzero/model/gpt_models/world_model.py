@@ -87,6 +87,9 @@ class WorldModel(nn.Module):
         self.config = config
         self.policy_entropy_weight = config.policy_entropy_weight
         self.predict_latent_loss_type = config.predict_latent_loss_type
+        self.group_size = config.group_size
+        self.num_groups = config.embed_dim // config.group_size
+        self.obs_type = config.obs_type
 
         self.transformer = Transformer(config)
         self.num_observations_tokens = config.tokens_per_block - 1
@@ -100,7 +103,8 @@ class WorldModel(nn.Module):
         self.max_cache_size = config.max_cache_size
         self.env_num = config.env_num
         self.num_layers = config.num_layers
-        self.sim_norm = SimNorm(simnorm_dim=8)  # NOTE
+        self.sim_norm = SimNorm(simnorm_dim=self.group_size)
+
 
         all_but_last_latent_state_pattern = torch.ones(config.tokens_per_block)
         all_but_last_latent_state_pattern[-2] = 0  # 1,...,0,1
@@ -122,7 +126,8 @@ class WorldModel(nn.Module):
         )
 
         self.act_embedding_table = nn.Embedding(act_vocab_size, config.embed_dim)
-        self.act_embedding_table.weight.requires_grad = False  # NOTE: 对于离散动作，使用fixed_act_embedding，效率更高
+         # NOTE: 对于离散动作，使用fixed_act_embedding，效率更高, 注意需要self.act_embedding_table.weight不是全零初始化的 ####
+        self.act_embedding_table.weight.requires_grad = False
 
         self.obs_per_embdding_dim = config.embed_dim  # 16*64=1024
 
@@ -700,16 +705,22 @@ class WorldModel(nn.Module):
         # 但是否必要取决于具体问题,需要通过实验来验证。
         # obs_embeddings.register_hook(lambda grad: grad * 1/5)
         
-        # 从潜在状态表示重建观察
-        reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+        if self.obs_type == 'image':
+            # 从潜在状态表示重建观察
+            reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+            
+            # 计算重建损失和感知损失
+            latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
+            perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
+
+            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # NOTE: for stack=4
+            # perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
         
-        # 计算重建损失和感知损失
-        latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
-        perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
-        
-        # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # NOTE: for stack=4
-        # perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
-        
+        elif self.obs_type == 'vector':
+            latent_recon_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
+            perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
+
+
         # 动作tokens
         act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
 
@@ -736,11 +747,10 @@ class WorldModel(nn.Module):
         elif self.predict_latent_loss_type == 'group_kl':
             # Group KL损失,将特征分组,然后计算组内的KL散度
             batch_size, num_features = logits_observations.shape
-            group_size = 8  # TODO
-            num_groups = num_features // group_size
 
-            logits_reshaped = logits_observations.reshape(batch_size, num_groups, group_size)
-            labels_reshaped = labels_observations.reshape(batch_size, num_groups, group_size)
+
+            logits_reshaped = logits_observations.reshape(batch_size, self.num_groups, self.group_size)
+            labels_reshaped = labels_observations.reshape(batch_size, self.num_groups,self. group_size)
 
             loss_obs = F.kl_div(logits_reshaped.log(), labels_reshaped, reduction='none').sum(dim=-1).mean(dim=-1)
         

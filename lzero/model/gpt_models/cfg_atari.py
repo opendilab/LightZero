@@ -65,7 +65,6 @@ cfg['world_model'] = {
                       # 'embed_dim':1024, # TODO：for atari
                       'embed_dim':768, # TODO：for atari
 
-
                       'attention': 'causal',
                       # 'num_layers': 10,# TODO：for atari
                       # 'num_layers': 2, # TODO：for atari debug

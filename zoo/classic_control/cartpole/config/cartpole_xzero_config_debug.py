@@ -7,37 +7,31 @@ torch.cuda.set_device(0)
 # ==============================================================
 
 
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 1
-num_simulations = 25
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 1
+# num_simulations = 25
 # update_per_collect = 200
-update_per_collect = None
-model_update_ratio = 0.5
-max_env_step = int(2e5)
-
-reanalyze_ratio = 0
-# num_unroll_steps = 20
-
-batch_size = 32
-num_unroll_steps = 5
-
-# batch_size = 32
-# num_unroll_steps = 10
-
-
+# model_update_ratio = 1
+# batch_size = 64
+# max_env_step = int(2e5)
+# reanalyze_ratio = 0
+# # num_unroll_steps = 20
+# num_unroll_steps = 5
+# import os
+# os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
 # # debug
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 1
-# num_simulations = 2
-# update_per_collect = 2
-# model_update_ratio = 1
-# batch_size = 2
-# max_env_step = int(1e5)
-# reanalyze_ratio = 0
-# num_unroll_steps = 5
+collector_env_num = 4
+n_episode = 4
+evaluator_env_num = 1
+num_simulations = 1
+update_per_collect = None
+model_update_ratio = 0.01
+batch_size = 5
+max_env_step = int(2e5)
+reanalyze_ratio = 0
+num_unroll_steps = 5
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -46,15 +40,7 @@ num_unroll_steps = 5
 cartpole_muzero_gpt_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer: lpips loss
-    exp_name=f'data_mz_gpt_ctree_0105/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_trans-obs-emb-init0_rep-noavgl1norm-klloss0-noseclatstd01_seed0',
-
-    # exp_name=f'data_mz_gpt_ctree_0105/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_trans-obs-emb-init0_rep-avgl1norm-only-train-first-step_seed0',
-    # exp_name=f'data_mz_gpt_ctree_0105/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_trans-obs-emb-init0_rep-avgl1norm-2k-then-fixed_seed0',
-
-    # exp_name=f'data_mz_gpt_ctree_1226/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_trans-obs-emb-init0_rep-robustscaling-norm_seed0',
-
-    # exp_name=f'data_mz_gpt_ctree/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs50_batch8_obs-token-lw2_recons-obs_bs{batch_size}_indep0_trans-wd0.01_pt2_argmaxtoken_orig-sdpa_onestep_seed0',
-    # exp_name=f'data_mz_gpt_ctree_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_batch8_obs-token-lw2_recons-obs_bs{batch_size}_indep0_trans-wd0.01_pt2_argmaxtokenp_seed0',
+    exp_name=f'data_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs5000_batch8_obs-token-lw2_recons-obs_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_multistep__fix-init-infer_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -66,33 +52,23 @@ cartpole_muzero_gpt_config = dict(
     ),
     policy=dict(
         model_path=None,
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/cartpole_muzero_gpt_ns25_upc200-mur1_rr0_H5_nlayers2_emd64_smallnet_bs64_mcs50_batch8_obs-token-lw2_recons-obs_bs64_indep0_trans-wd0.01_pt2_argmaxtoken_pt2sdpa-drop0ineval_seed0/ckpt/ckpt_best.pth.tar',
         tokenizer_start_after_envsteps=int(0),
         transformer_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,
         update_per_collect_tokenizer=update_per_collect,
-        # transformer_start_after_envsteps=int(5e3),
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/cartpole_muzero_gpt_ns25_upc20-mur1_rr0_H5_nlayers2_emd128_mediumnet_bs64_mcs25_fixedtokenizer_fixloss_fixlatent_seed0/ckpt/ckpt_best.pth.tar',
         num_unroll_steps=num_unroll_steps,
         model=dict(
             observation_shape=4,
             action_space_size=2,
             model_type='mlp',
-            lstm_hidden_size=128,
-            # latent_state_dim=128,
-            latent_state_dim=256,
             self_supervised_learning_loss=True,  # NOTE: default is False.
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
-            # reward_support_size=601,
-            # value_support_size=601,
-            # support_scale=300,
-            reward_support_size=21,
-            value_support_size=21,
-            support_scale=10,
+            reward_support_size=601,
+            value_support_size=601,
+            support_scale=300,
         ),
         cuda=True,
-        # cuda=False,
         env_type='not_board_games',
         game_segment_length=50,
         model_update_ratio=model_update_ratio,
@@ -100,7 +76,6 @@ cartpole_muzero_gpt_config = dict(
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        ssl_loss_weight=2,  # NOTE: default is 0.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
