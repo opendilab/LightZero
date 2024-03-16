@@ -53,7 +53,8 @@ class SimNorm(nn.Module):
     def __repr__(self):
         return f"SimNorm(dim={self.dim})"
 
-def quantize_state(state, num_buckets=15):
+# def quantize_state(state, num_buckets=15): # for atari
+def quantize_state(state, num_buckets=100): # for memory NOTE:TODO
     """
     量化状态向量。
     参数:
@@ -209,8 +210,8 @@ class WorldModel(nn.Module):
 
         self.hit_count = 0
         self.total_query_count = 0
-        self.length3_context_cnt = 0
-        self.length2_context_cnt = 0
+        self.length_largethan_maxminus5_context_cnt = 0
+        self.length_largethan_maxminus7_context_cnt = 0
         self.root_hit_cnt = 0
         self.root_total_query_cnt = 0
         self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
@@ -490,20 +491,20 @@ class WorldModel(nn.Module):
         # 获取self.keys_values_wm_size_list的最小值min_size
         min_size = min(self.keys_values_wm_size_list)
         if min_size >= self.config.max_tokens - 5:
-            self.length3_context_cnt += len(self.keys_values_wm_size_list)
-        if min_size >= 3:
-            self.length2_context_cnt += len(self.keys_values_wm_size_list)
+            self.length_largethan_maxminus5_context_cnt += len(self.keys_values_wm_size_list)
+        if min_size >= self.config.max_tokens - 7:
+            self.length_largethan_maxminus7_context_cnt += len(self.keys_values_wm_size_list)
         # 打印统计信息
         if self.total_query_count > 0 and self.total_query_count % 10000 == 0:
             self.hit_freq = self.hit_count / (self.total_query_count)
             print('total_query_count:', self.total_query_count)
             # 如果总查询次数大于0,计算并打印cnt的比率
-            length3_context_cnt_ratio = self.length3_context_cnt / self.total_query_count
-            print('>=3 node context_cnt:', self.length3_context_cnt)
-            print('>=3 node context_cnt_ratio:', length3_context_cnt_ratio)
-            length2_context_cnt_ratio = self.length2_context_cnt / self.total_query_count
-            print('>=2 node context_cnt_ratio:', length2_context_cnt_ratio)
-            print('>=2 node context_cnt:', self.length2_context_cnt)
+            length_largethan_maxminus5_context_cnt_ratio = self.length_largethan_maxminus5_context_cnt / self.total_query_count
+            print('largethan_maxminus5_context:', self.length_largethan_maxminus5_context_cnt)
+            print('largethan_maxminus5_context_ratio:', length_largethan_maxminus5_context_cnt_ratio)
+            length_largethan_maxminus7_context_cnt_ratio = self.length_largethan_maxminus7_context_cnt / self.total_query_count
+            print('largethan_maxminus7_context_ratio:', length_largethan_maxminus7_context_cnt_ratio)
+            print('largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
 
         # 输入self.keys_values_wm_list,输出为self.keys_values_wm
         self.trim_and_pad_kv_cache()

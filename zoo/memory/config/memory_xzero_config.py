@@ -1,14 +1,15 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(6)
 
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 # memory_length = 30
-memory_length = 2
+memory_length = 2  # to_test [2, 50, 100, 250, 500, 750, 1000]
 
 
 max_env_step = int(10e6)
 # ==== NOTE: 需要设置cfg_memory中的action_shape =====
+# ==== NOTE: 需要设置cfg_memory中的policy_entropy_weight =====
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -37,17 +38,17 @@ td_steps = 5
 # update_per_collect = 2
 # batch_size = 2
 
-policy_entropy_loss_weight = 1e-4
 threshold_training_steps_for_final_temperature = int(5e5)
-eps_greedy_exploration_in_collect = False
+# eps_greedy_exploration_in_collect = False
+eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 memory_xzero_config = dict(
-    exp_name=f'data_memory/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1'
+    exp_name=f'data_memory/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}'
              f'collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
-             f'_pelw{policy_entropy_loss_weight}_seed{seed}',
+             f'_pelw1e-3_quan100_gkl_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -71,7 +72,6 @@ memory_xzero_config = dict(
             ),
         ),
         model_path=None,
-        tokenizer_start_after_envsteps=int(0),
         transformer_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,
         update_per_collect_tokenizer=update_per_collect,
@@ -89,15 +89,14 @@ memory_xzero_config = dict(
         ),
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            decay=int(2e5),
+            decay=int(2e5),  # NOTE: TODO
         ),
-        policy_entropy_loss_weight=policy_entropy_loss_weight,
         td_steps=td_steps,
         manual_temperature_decay=True,
         threshold_training_steps_for_final_temperature=threshold_training_steps_for_final_temperature,
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=num_unroll_steps,  # TODO
+        game_segment_length=num_unroll_steps,  # TODO:
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
