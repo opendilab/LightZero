@@ -148,6 +148,8 @@ class MuZeroGPTPolicy(Policy):
         evaluator_env_num=3,
         # (str) The type of environment. Options are ['not_board_games', 'board_games'].
         env_type='not_board_games',
+        # (str) The type of action space. Options are ['fixed_action_space', 'varied_action_space'].
+        action_type='fixed_action_space',
         # (str) The type of battle mode. Options are ['play_with_bot_mode', 'self_play_mode'].
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
@@ -412,9 +414,6 @@ class MuZeroGPTPolicy(Policy):
 
         self._learn_model.train()
         self._target_model.train()
-        # self._learn_model.tokenizer.train()
-        # self._eval_model.world_model.transformer.train() # TODO
-
 
         # current_batch, target_batch = data
         current_batch, target_batch, train_which_component_dict = data

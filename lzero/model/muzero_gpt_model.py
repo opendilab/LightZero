@@ -116,38 +116,6 @@ class MuZeroModelGPT(nn.Module):
         self.state_norm = state_norm
         self.downsample = downsample
 
-        # flatten_output_size_for_reward_head = (
-        #     (reward_head_channels * math.ceil(observation_shape[1] / 16) *
-        #      math.ceil(observation_shape[2] / 16)) if downsample else
-        #     (reward_head_channels * observation_shape[1] * observation_shape[2])
-        # )
-        # flatten_output_size_for_value_head = (
-        #     (value_head_channels * math.ceil(observation_shape[1] / 16) *
-        #      math.ceil(observation_shape[2] / 16)) if downsample else
-        #     (value_head_channels * observation_shape[1] * observation_shape[2])
-        # )
-        # flatten_output_size_for_policy_head = (
-        #     (policy_head_channels * math.ceil(observation_shape[1] / 16) *
-        #      math.ceil(observation_shape[2] / 16)) if downsample else
-        #     (policy_head_channels * observation_shape[1] * observation_shape[2])
-        # )
-
-
-        # self.dynamics_network = DynamicsNetwork(
-        #     observation_shape,
-        #     self.action_encoding_dim,
-        #     num_res_blocks,
-        #     num_channels + self.action_encoding_dim,
-        #     reward_head_channels,
-        #     fc_reward_layers,
-        #     self.reward_support_size,
-        #     flatten_output_size_for_reward_head,
-        #     downsample,
-        #     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-        #     activation=activation,
-        #     norm_type=norm_type
-        # )
-
         from .gpt_models.world_model import WorldModel
         from .gpt_models.tokenizer.tokenizer import Tokenizer
         from .gpt_models.tokenizer.nets import Encoder, Decoder
@@ -162,7 +130,6 @@ class MuZeroModelGPT(nn.Module):
             activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
             # activation=nn.GELU(),
             norm_type=norm_type,
-            # embedding_dim=cfg.embedding_dim,
             embedding_dim=cfg.world_model.embed_dim,
         )
         # Instantiate the decoder

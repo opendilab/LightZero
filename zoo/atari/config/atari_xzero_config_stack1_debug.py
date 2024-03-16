@@ -11,6 +11,7 @@ env_name = 'PongNoFrameskip-v4'
 # env_name = 'BoxingNoFrameskip-v4'
 # env_name = 'FrostbiteNoFrameskip-v4'
 
+# NOTE: 需要设置cfg_atari中的action_shape
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
 elif env_name == 'QbertNoFrameskip-v4':

@@ -81,7 +81,7 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:3',
+                      "device": 'cuda:0',
                     #   "device": 'cpu',
                       # 'support_size': 21,
                       'support_size': 601,
@@ -90,8 +90,8 @@ cfg['world_model'] = {
 
                       # 'action_shape': 18,# TODO：for Seaquest boxing Frostbite
                       # 'action_shape': 9,# TODO：for mspacman
-                      'action_shape': 4,# TODO：for breakout
-                      # 'action_shape': 6,# TODO：for pong qbert 
+                      # 'action_shape': 4,# TODO：for breakout
+                      'action_shape': 6,# TODO：for pong qbert 
 
                       'max_cache_size':5000,
                       # 'max_cache_size':50000,

@@ -407,7 +407,6 @@ class MuZeroCollector(ISerialCollector):
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
                     chance_dict = {env_id: chance_dict[env_id] for env_id in ready_env_id}
-                    chance = [chance_dict[env_id] for env_id in ready_env_id]
 
                 stack_obs = to_ndarray(stack_obs)
                 # return stack_obs shape: [B, S*C, W, H] e.g. [8, 4*1, 96, 96]

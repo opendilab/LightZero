@@ -79,7 +79,7 @@ class WorldModelOutput:
     logits_value: torch.FloatTensor
 
 class WorldModel(nn.Module):
-    def __init__(self, obs_vocab_size: int, act_vocab_size: int, config: TransformerConfig, tokenizer, representation_network=None) -> None:
+    def __init__(self, obs_vocab_size: int, act_vocab_size: int, config: TransformerConfig, tokenizer) -> None:
         super().__init__()
 
         self.tokenizer = tokenizer
