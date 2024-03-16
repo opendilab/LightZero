@@ -1,7 +1,7 @@
 import os
 from typing import Union
 
-import gym
+import gymnasium as gym
 import numpy as np
 from ding.envs import BaseEnvTimestep
 from ding.envs.common import save_frames_as_gif
@@ -21,8 +21,12 @@ class MujocoEnvLZ(MujocoEnv):
         stop_value=int(1e6),
         action_clip=False,
         delay_reward_step=0,
+        # replay_path (str or None): The path to save the replay video. If None, the replay will not be saved.
+        # Only effective when env_manager.type is 'base'.
         replay_path=None,
+        # (bool) If True, save the replay as a gif file.
         save_replay_gif=False,
+        # (str or None) The path to save the replay gif. If None, the replay gif will not be saved.
         replay_path_gif=None,
         action_bins_per_branch=None,
         norm_obs=dict(use_norm=False, ),
@@ -30,10 +34,16 @@ class MujocoEnvLZ(MujocoEnv):
     )
 
     def __init__(self, cfg: dict) -> None:
+        """
+        Overview:
+            Initialize the MuJoCo environment.
+        Arguments:
+            - cfg (:obj:`dict`): Configuration dict. The dict should include keys like 'env_id', 'replay_path', etc.
+        """
         super().__init__(cfg)
         self._cfg = cfg
-        # We use env_name to indicate the env_id in LightZero.
-        self._cfg.env_id = self._cfg.env_name
+        # We use env_id to indicate the env_id in LightZero.
+        self._cfg.env_id = self._cfg.env_id
         self._action_clip = cfg.action_clip
         self._delay_reward_step = cfg.delay_reward_step
         self._init_flag = False
@@ -43,6 +53,12 @@ class MujocoEnvLZ(MujocoEnv):
         self._action_bins_per_branch = cfg.action_bins_per_branch
 
     def reset(self) -> np.ndarray:
+        """
+        Overview:
+            Reset the environment and return the initial observation.
+        Returns:
+            - obs (:obj:`np.ndarray`): The initial observation after resetting.
+        """
         if not self._init_flag:
             self._env = self._make_env()
             if self._replay_path is not None:
@@ -75,6 +91,23 @@ class MujocoEnvLZ(MujocoEnv):
         return obs
 
     def step(self, action: Union[np.ndarray, list]) -> BaseEnvTimestep:
+        """
+        Overview:
+            Perform a step in the environment using the provided action, and return the next state of the environment.
+            The next state is encapsulated in a BaseEnvTimestep object, which includes the new observation, reward,
+            done flag, and info dictionary.
+        Arguments:
+            - action (:obj:`Union[np.ndarray, list]`): The action to be performed in the environment. 
+        Returns:
+            - timestep (:obj:`BaseEnvTimestep`): An object containing the new observation, reward, done flag,
+              and info dictionary.
+        .. note::
+            - The cumulative reward (`_eval_episode_return`) is updated with the reward obtained in this step.
+            - If the episode ends (done is True), the total reward for the episode is stored in the info dictionary
+              under the key 'eval_episode_return'.
+            - An action mask is created with ones, which represents the availability of each action in the action space.
+            - Observations are returned in a dictionary format containing 'observation', 'action_mask', and 'to_play'.
+        """
         if self._action_bins_per_branch:
             action = self.map_action(action)
         action = to_ndarray(action)
@@ -87,7 +120,7 @@ class MujocoEnvLZ(MujocoEnv):
         if done:
             if self._save_replay_gif:
                 path = os.path.join(
-                    self._replay_path_gif, '{}_episode_{}.gif'.format(self._cfg.env_name, self._save_replay_count)
+                    self._replay_path_gif, '{}_episode_{}.gif'.format(self._cfg.env_id, self._save_replay_count)
                 )
                 save_frames_as_gif(self._frames, path)
                 self._save_replay_count += 1
@@ -102,5 +135,8 @@ class MujocoEnvLZ(MujocoEnv):
         return BaseEnvTimestep(obs, rew, done, info)
 
     def __repr__(self) -> str:
-        return "LightZero Mujoco Env({})".format(self._cfg.env_name)
+        """
+        String representation of the environment.
+        """
+        return "LightZero Mujoco Env({})".format(self._cfg.env_id)
 

@@ -1,10 +1,11 @@
-from typing import Any, List, Tuple, Union, TYPE_CHECKING, Optional
+from typing import Any, Tuple
 
 import numpy as np
 from ding.utils import BUFFER_REGISTRY
 
-from lzero.mcts.utils import prepare_observation
 from lzero.mcts.buffer import MuZeroGameBuffer
+from lzero.mcts.utils import prepare_observation
+
 
 @BUFFER_REGISTRY.register('game_buffer_gumbel_muzero')
 class GumbelMuZeroGameBuffer(MuZeroGameBuffer):
@@ -44,15 +45,16 @@ class GumbelMuZeroGameBuffer(MuZeroGameBuffer):
             pos_in_game_segment = pos_in_game_segment_list[i]
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
-                                              self._cfg.num_unroll_steps].tolist()
-            
-            _improved_policy = game.improved_policy_probs[pos_in_game_segment:pos_in_game_segment + self._cfg.num_unroll_steps]
+                                                                  self._cfg.num_unroll_steps].tolist()
+
+            _improved_policy = game.improved_policy_probs[
+                               pos_in_game_segment:pos_in_game_segment + self._cfg.num_unroll_steps]
             if not isinstance(_improved_policy, list):
                 _improved_policy = _improved_policy.tolist()
 
             # add mask for invalid actions (out of trajectory)
             mask_tmp = [1. for i in range(len(actions_tmp))]
-            mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps+1 - len(mask_tmp))]
+            mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
             actions_tmp += [
@@ -60,12 +62,13 @@ class GumbelMuZeroGameBuffer(MuZeroGameBuffer):
                 for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
             ]
 
-            # pad improved policy with with a value such that the sum of the values is equal to 1
-            _improved_policy.extend(np.random.dirichlet(np.ones(game.action_space_size),size=self._cfg.num_unroll_steps + 1 - len(_improved_policy)))
+            # pad improved policy with a value such that the sum of the values is equal to 1
+            _improved_policy.extend(np.random.dirichlet(np.ones(game.action_space_size),
+                                                        size=self._cfg.num_unroll_steps + 1 - len(_improved_policy)))
 
             # obtain the input observations
             # pad if length of obs in game_segment is less than stack+num_unroll_steps
-            # e.g. stack+num_unroll_steps  4+5
+            # e.g. stack+num_unroll_steps = 4+5
             obs_list.append(
                 game_segment_list[i].get_unroll_obs(
                     pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
@@ -79,7 +82,8 @@ class GumbelMuZeroGameBuffer(MuZeroGameBuffer):
         obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
 
         # formalize the inputs of a batch
-        current_batch = [obs_list, action_list, improved_policy_list, mask_list, batch_index_list, weights_list, make_time_list]
+        current_batch = [obs_list, action_list, improved_policy_list, mask_list, batch_index_list, weights_list,
+                         make_time_list]
         for i in range(len(current_batch)):
             current_batch[i] = np.asarray(current_batch[i])
 

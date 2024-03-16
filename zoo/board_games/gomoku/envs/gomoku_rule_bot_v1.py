@@ -1,4 +1,5 @@
 # Reference link:
+
 # https://github.com/LouisCaixuran/gomoku/blob/c1b6d508522d9e8c78be827f326bbee54c4dfd8b/gomoku/expert.py
 """
 Sometimes, when GomokuRuleBotV1 has 4-connect, and the opponent also have 4-connect, GomokuRuleBotV1 will block the opponent and don't

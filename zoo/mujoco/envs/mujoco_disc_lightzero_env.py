@@ -2,7 +2,7 @@ import os
 from itertools import product
 from typing import Union
 
-import gym
+import gymnasium as gym
 import numpy as np
 from ding.envs import BaseEnvTimestep
 from ding.envs.common import save_frames_as_gif
@@ -32,10 +32,16 @@ class MujocoDiscEnvLZ(MujocoDiscEnv):
     )
 
     def __init__(self, cfg: dict) -> None:
+        """
+        Overview:
+            Initialize the MuJoCo environment with the given config dictionary.
+        Arguments:
+            - cfg (:obj:`dict`): Configuration dictionary.
+        """
         super().__init__(cfg)
         self._cfg = cfg
-        # We use env_name to indicate the env_id in LightZero.
-        self._cfg.env_id = self._cfg.env_name
+        # We use env_id to indicate the env_id in LightZero.
+        self._cfg.env_id = self._cfg.env_id
         self._action_clip = cfg.action_clip
         self._delay_reward_step = cfg.delay_reward_step
         self._init_flag = False
@@ -44,6 +50,13 @@ class MujocoDiscEnvLZ(MujocoDiscEnv):
         self._save_replay_gif = cfg.save_replay_gif
 
     def reset(self) -> np.ndarray:
+        """
+        Overview:
+            Reset the environment. During the reset phase, the original environment will be created,
+            and at the same time, the action space will be discretized into "each_dim_disc_size" bins.
+        Returns:
+            - info_dict (:obj:`Dict[str, Any]`): Including observation, action_mask, and to_play label.
+        """
         if not self._init_flag:
             self._env = self._make_env()
             self._env.observation_space.dtype = np.float32
@@ -85,6 +98,15 @@ class MujocoDiscEnvLZ(MujocoDiscEnv):
         return obs
 
     def step(self, action: Union[np.ndarray, list]) -> BaseEnvTimestep:
+        """
+        Overview:
+            Take an action in the environment. During the step phase, the environment first converts the discrete action into a continuous action,
+            and then passes it into the original environment.
+        Arguments:
+            - action (:obj:`Union[np.ndarray, list]`): Discrete action to be taken in the environment.
+        Returns:
+            - BaseEnvTimestep (:obj:`BaseEnvTimestep`): A tuple containing observation, reward, done, and info.
+        """
         # disc_to_cont: transform discrete action index to original continuous action
         action = [-1 + 2 / self.n * k for k in self.disc_to_cont[int(action)]]
         action = to_ndarray(action)
@@ -100,7 +122,7 @@ class MujocoDiscEnvLZ(MujocoDiscEnv):
         if done:
             if self._save_replay_gif:
                 path = os.path.join(
-                    self._replay_path_gif, '{}_episode_{}.gif'.format(self._cfg.env_name, self._save_replay_count)
+                    self._replay_path_gif, '{}_episode_{}.gif'.format(self._cfg.env_id, self._save_replay_count)
                 )
                 save_frames_as_gif(self._frames, path)
                 self._save_replay_count += 1
@@ -115,4 +137,10 @@ class MujocoDiscEnvLZ(MujocoDiscEnv):
         return BaseEnvTimestep(obs, rew, done, info)
 
     def __repr__(self) -> str:
-        return "LightZero modified Mujoco Env({}) with manually discretized action space".format(self._cfg.env_name)
+        """
+        Overview:
+            Represent the environment instance as a string.
+        Returns:
+            - repr_str (:obj:`str`): Representation string of the environment instance.
+        """
+        return "LightZero modified Mujoco Env({}) with manually discretized action space".format(self._cfg.env_id)

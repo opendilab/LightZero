@@ -84,12 +84,19 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         evaluator_env_num=3,
         # (str) The type of environment. The options are ['not_board_games', 'board_games'].
         env_type='not_board_games',
+        # (str) The type of action space. Options are ['fixed_action_space', 'varied_action_space'].
+        action_type='fixed_action_space',
         # (str) The type of battle mode. The options are ['play_with_bot_mode', 'self_play_mode'].
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,
         # (int) The transition number of one ``GameSegment``.
         game_segment_length=200,
+        # (bool): Indicates whether to perform an offline evaluation of the checkpoint (ckpt).
+        # If set to True, the checkpoint will be evaluated after the training process is complete.
+        # IMPORTANT: Setting eval_offline to True requires configuring the saving of checkpoints to align with the evaluation frequency.
+        # This is done by setting the parameter learn.learner.hook.save_ckpt_after_iter to the same value as eval_freq in the train_muzero.py automatically.
+        eval_offline=False,
 
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
@@ -172,6 +179,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         fixed_temperature_value=0.25,
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
+        # (bool) Whether to add noise to roots during reanalyze process.
+        reanalyze_noise=False,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
@@ -330,7 +339,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
         # shape: (batch_size, num_unroll_steps, action_dim)
         # NOTE: .float(), in continuous action space.
-        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).float().unsqueeze(-1)
+        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).float()
         data_list = [
             mask_batch,
             target_value_prefix.astype('float32'),
@@ -341,8 +350,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # ==============================================================
         # sampled related core code
         # ==============================================================
-        # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim, 1), e.g. (4, 6, 5, 1, 1)
-        child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device).unsqueeze(-1)
+        # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim), e.g. (4, 6, 5, 1)
+        child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device)
 
         target_value_prefix = target_value_prefix.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
@@ -372,7 +381,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # Note: The following lines are just for logging.
         predicted_value_prefixs = []
         if self._cfg.monitor_extra_statistics:
-            latent_state_list = latent_state.detach().cpu().numpy()
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
@@ -417,10 +425,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             latent_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(
                 network_output
             )
-
-            # transform the scaled value or its categorical representation to its original value,
-            # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
-            original_value = self.inverse_scalar_transform_handle(value)
 
             if self._cfg.model.self_supervised_learning_loss:
                 # ==============================================================
@@ -488,7 +492,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 )
                 predicted_value_prefixs.append(original_value_prefixs_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
-                latent_state_list = np.concatenate((latent_state_list, latent_state.detach().cpu().numpy()))
 
         # ==============================================================
         # the core learn model update step.
@@ -623,9 +626,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             # Set target_policy_entropy to 0 if all rows are masked
             target_policy_entropy = 0
 
-        # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1) -> (batch_size,
-        # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2, 1) ->  (4, 20, 2)
-        target_sampled_actions = child_sampled_actions_batch[:, unroll_step].squeeze(-1)
+        # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim) -> (batch_size,
+        # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2) ->  (4, 20, 2)
+        target_sampled_actions = child_sampled_actions_batch[:, unroll_step]
 
         policy_entropy = dist.entropy().mean()
         policy_entropy_loss = -dist.entropy()
@@ -648,9 +651,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             y = 1 - target_sampled_actions[:, k, :].pow(2)
 
             # NOTE: for numerical stability.
-            target_sampled_actions_clamped = torch.clamp(
-                target_sampled_actions[:, k, :], torch.tensor(-1 + 1e-6), torch.tensor(1 - 1e-6)
-            )
+            min_val = torch.tensor(-1 + 1e-6).to(target_sampled_actions.device)
+            max_val = torch.tensor(1 - 1e-6).to(target_sampled_actions.device)
+            target_sampled_actions_clamped = torch.clamp(target_sampled_actions[:, k, :], min_val, max_val)
             target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
 
             # keep dimension for loss computation (usually for action space is 1 env. e.g. pendulum)
@@ -709,7 +712,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             - target_sampled_actions (:obj:`torch.Tensor`): The target sampled actions tensor.
         """
         prob = torch.softmax(policy_logits, dim=-1)
-        dist = Categorical(prob)
 
         # take the init hypothetical step k=unroll_step
         target_normalized_visit_count = target_policy[:, unroll_step]
@@ -719,15 +721,17 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             target_normalized_visit_count, 0,
             torch.nonzero(mask_batch[:, unroll_step]).squeeze(-1)
         )
-        target_dist = Categorical(target_normalized_visit_count_masked)
-        target_policy_entropy = target_dist.entropy().mean()
 
-        # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim, 1) -> (batch_size,
-        # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2, 1) ->  (4, 20, 2)
-        target_sampled_actions = child_sampled_actions_batch[:, unroll_step].squeeze(-1)
+        target_policy_entropy = -((target_normalized_visit_count_masked + 1e-6) * (
+                    target_normalized_visit_count_masked + 1e-6).log()).sum(-1).mean()
 
-        policy_entropy = dist.entropy().mean()
-        policy_entropy_loss = -dist.entropy()
+        # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim) -> (batch_size,
+        # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2) ->  (4, 20, 2)
+        target_sampled_actions = child_sampled_actions_batch[:, unroll_step]
+
+        entropy = -(prob * prob.log()).sum(-1)
+        policy_entropy = entropy.mean()
+        policy_entropy_loss = -entropy
 
         # Project the sampled-based improved policy back onto the space of representable policies. calculate KL
         # loss (batch_size, num_of_sampled_actions) -> (4,20) target_normalized_visit_count is

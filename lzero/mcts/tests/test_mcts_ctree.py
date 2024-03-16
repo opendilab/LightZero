@@ -92,6 +92,7 @@ policy_config = EasyDict(
         support_scale=300,
         categorical_distribution=True,
     ),
+    env_type='not_board_games',
 )
 
 batch_size = env_nums = policy_config.batch_size

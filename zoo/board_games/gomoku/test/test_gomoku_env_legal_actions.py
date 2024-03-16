@@ -20,6 +20,12 @@ class TestGomokuEnv:
             bot_action_type='v0',
             prob_random_action_in_bot=0.,
             check_action_to_connect4_in_bot_v0=False,
+            prob_expert_agent=0,
+            simulation_env_id="gomoku",
+            screen_scaling=9,
+            render_mode=None,
+            replay_path=None,
+            alphazero_mcts_ctree=False,
         )
         env = GomokuEnv(cfg)
         obs = env.reset()

@@ -27,7 +27,7 @@ def train_muzero_with_gym_env(
     """
     Overview:
         The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
-        We create a gym environment using env_name parameter, and then convert it to the format required by LightZero using LightZeroEnvWrapper class.
+        We create a gym environment using env_id parameter, and then convert it to the format required by LightZero using LightZeroEnvWrapper class.
         Please refer to the get_wrappered_env method for more details.
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
@@ -65,10 +65,10 @@ def train_muzero_with_gym_env(
     collector_env_cfg = DingEnvWrapper.create_collector_env_cfg(cfg.env)
     evaluator_env_cfg = DingEnvWrapper.create_evaluator_env_cfg(cfg.env)
     collector_env = BaseEnvManager(
-        [get_wrappered_env(c, cfg.env.env_name) for c in collector_env_cfg], cfg=BaseEnvManager.default_config()
+        [get_wrappered_env(c, cfg.env.env_id) for c in collector_env_cfg], cfg=BaseEnvManager.default_config()
     )
     evaluator_env = BaseEnvManager(
-        [get_wrappered_env(c, cfg.env.env_name) for c in evaluator_env_cfg], cfg=BaseEnvManager.default_config()
+        [get_wrappered_env(c, cfg.env.env_id) for c in evaluator_env_cfg], cfg=BaseEnvManager.default_config()
     )
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)

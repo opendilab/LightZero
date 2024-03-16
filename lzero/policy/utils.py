@@ -11,6 +11,34 @@ from scipy.stats import entropy
 from torch.nn import functional as F
 
 
+def pad_and_get_lengths(inputs, num_of_sampled_actions):
+    """
+    Overview:
+        Pad root_sampled_actions to make sure that the length of root_sampled_actions is equal to num_of_sampled_actions.
+        Also record the true length of each sequence before padding.
+    Arguments:
+        - inputs (:obj:`List[dict]`): The input data.
+        - num_of_sampled_actions (:obj:`int`): The number of sampled actions.
+    Returns:
+        - inputs (:obj:`List[dict]`): The input data after padding. Each dict also contains 'action_length' which indicates
+                                      the true length of 'root_sampled_actions' before padding.
+    Example:
+        >>> inputs = [{'root_sampled_actions': torch.tensor([1, 2])}, {'root_sampled_actions': torch.tensor([3, 4, 5])}]
+        >>> num_of_sampled_actions = 5
+        >>> result = pad_and_get_lengths(inputs, num_of_sampled_actions)
+        >>> print(result)  # Prints [{'root_sampled_actions': tensor([1, 2, 2, 2, 2]), 'action_length': 2},
+                                       {'root_sampled_actions': tensor([3, 4, 5, 5, 5]), 'action_length': 3}]
+    """
+    for input_dict in inputs:
+        root_sampled_actions = input_dict['root_sampled_actions']
+        input_dict['action_length'] = len(root_sampled_actions)
+        if len(root_sampled_actions) < num_of_sampled_actions:
+            # Use the last element to pad root_sampled_actions
+            padding = root_sampled_actions[-1].repeat(num_of_sampled_actions - len(root_sampled_actions))
+            input_dict['root_sampled_actions'] = torch.cat((root_sampled_actions, padding))
+    return inputs
+
+
 def visualize_avg_softmax(logits):
     """
     Overview:
@@ -338,6 +366,52 @@ def prepare_obs_for_gpt(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch
 def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Overview:
+        Prepare the observations for the model by converting the original batch of observations
+        to a PyTorch tensor, and then slicing it to create the batches used for the initial inference
+        and for calculating the consistency loss if required.
+
+    Arguments:
+        - obs_batch_ori (:obj:`np.ndarray`): The original observations in a batch style.
+        - cfg (:obj:`EasyDict`): The configuration dictionary containing model settings.
+
+    Returns:
+        - obs_batch (:obj:`torch.Tensor`): The tensor containing the observations for the initial inference.
+        - obs_target_batch (:obj:`torch.Tensor`): The tensor containing the observations for calculating
+                                                   the consistency loss, if applicable.
+    """
+    # Convert the numpy array of original observations to a PyTorch tensor and transfer it to the specified device.
+    # Also, ensure the tensor is of the correct floating-point type for the model.
+    # obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
+    obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device)
+
+    # Calculate the dimension size to slice based on the model configuration.
+    # For convolutional models ('conv'), use the number of frames to stack times the number of channels.
+    # For multi-layer perceptron models ('mlp'), use the number of frames to stack times the size of the observation space.
+    stack_dim = cfg.model.frame_stack_num * (
+        cfg.model.image_channel if cfg.model.model_type == 'conv' else cfg.model.observation_shape)
+
+    # Slice the original observation tensor to obtain the batch for the initial inference.
+    obs_batch = obs_batch_ori[:, :stack_dim]
+
+    # Initialize the target batch for consistency loss as `None`. It will only be set if consistency loss calculation is enabled.
+    obs_target_batch = None
+    # If the model configuration specifies the use of self-supervised learning loss, prepare the target batch for the consistency loss.
+    if cfg.model.self_supervised_learning_loss:
+        # Determine the starting dimension to exclude based on the model type.
+        # For 'conv', exclude the first 'image_channel' dimensions.
+        # For 'mlp', exclude the first 'observation_shape' dimensions.
+        exclude_dim = cfg.model.image_channel if cfg.model.model_type == 'conv' else cfg.model.observation_shape
+
+        # Slice the original observation tensor to obtain the batch for consistency loss calculation.
+        obs_target_batch = obs_batch_ori[:, exclude_dim:]
+
+    # Return the prepared batches: one for the initial inference and one for the consistency loss calculation (if applicable).
+    return obs_batch, obs_target_batch
+
+
+def prepare_obs_bkp(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Overview:
         Prepare the observations for the model, including:
         1. convert the obs to torch tensor
         2. stack the obs
@@ -354,19 +428,20 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
         # for 3-dimensional image obs
         """
         ``obs_batch_ori`` is the original observations in a batch style, shape is:
-        (batch_size, stack_num+num_unroll_steps, W, H, C) -> (batch_size, (stack_num+num_unroll_steps)*C, W, H )
+        (batch_size, stack_num+num_unroll_steps, C, W, H) -> (batch_size, (stack_num+num_unroll_steps)*C, W, H )
 
         e.g. in pong: stack_num=4, num_unroll_steps=5
-        (4, 9, 96, 96, 3) -> (4, 9*3, 96, 96) = (4, 27, 96, 96)
+        (4, (4+5), 3, 96, 96) -> (4, 9, 3, 96, 96) -> (4, 9*3, 96, 96) = (4, 27, 96, 96)
 
         the second dim of ``obs_batch_ori``:
         timestep t:     1,   2,   3,  4,    5,   6,   7,   8,     9
         channel_num:    3    3    3   3     3    3    3    3      3
                        ---, ---, ---, ---,  ---, ---, ---, ---,   ---
         """
-        obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
+        # obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
+        obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device)
         # ``obs_batch`` is used in ``initial_inference()``, which is the first stacked obs at timestep t in
-        # ``obs_batch_ori``. shape is (4, 4*3, 96, 96) = (4, 12, 96, 96)
+        # ``obs_batch_ori``. shape is (4, (4+5)*1, 96, 96) = (4, 9, 96, 96)
         obs_batch = obs_batch_ori[:, 0:cfg.model.frame_stack_num * cfg.model.image_channel, :, :]
 
         if cfg.model.self_supervised_learning_loss:
@@ -420,6 +495,12 @@ def negative_cosine_similarity(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tens
     x1 = F.normalize(x1, p=2., dim=-1, eps=1e-5)
     x2 = F.normalize(x2, p=2., dim=-1, eps=1e-5)
     return -(x1 * x2).sum(dim=1)
+
+
+def compute_entropy(policy_probs: torch.Tensor) -> torch.Tensor:
+    dist = torch.distributions.Categorical(probs=policy_probs)
+    entropy = dist.entropy().mean()
+    return entropy
 
 
 def get_max_entropy(action_shape: int) -> np.float32:

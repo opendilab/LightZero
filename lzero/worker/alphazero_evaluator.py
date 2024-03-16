@@ -1,11 +1,11 @@
 from collections import namedtuple
 from typing import Optional, Callable, Tuple
-import torch
+
 import numpy as np
+import torch
 from ding.envs import BaseEnv
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_tensor, to_item
-
 from ding.utils import build_logger, EasyTimer, SERIAL_EVALUATOR_REGISTRY
 from ding.utils import get_world_size, get_rank, broadcast_object_list
 from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, VectorEvalMonitor
@@ -15,9 +15,9 @@ from ding.worker.collector.base_serial_evaluator import ISerialEvaluator, Vector
 class AlphaZeroEvaluator(ISerialEvaluator):
     """
     Overview:
-        AlphaZero Evaluator.
+        AlphaZero Evaluator class which handles the evaluation of the trained policy.
     Interfaces:
-        __init__, reset, reset_policy, reset_env, close, should_eval, eval
+        ``__init__``, ``reset``, ``reset_policy``, ``reset_env``, ``close``, ``should_eval``, ``eval``
     Property:
         env, policy
     """
@@ -36,17 +36,17 @@ class AlphaZeroEvaluator(ISerialEvaluator):
     ) -> None:
         """
         Overview:
-            Init the AlphaZero evaluator according to input arguments.
+            Initialize the AlphaZero evaluator with the given parameters.
         Arguments:
-            - eval_freq (:obj:`int`): evaluation frequency in terms of training steps.
-            - n_evaluator_episode (:obj:`int`): the number of episodes to eval in total.
-            - env (:obj:`BaseEnvManager`): The env for the collection, the BaseEnvManager object or \
-                its derivatives are supported.
-            - policy (:obj:`Policy`): The policy to be collected.
-            - tb_logger (:obj:`SummaryWriter`): Logger, defaultly set as 'SummaryWriter' for model summary.
-            - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
-            - instance_name (:obj:`Optional[str]`): Name of this instance.
-            - env_config: Config of environment
+            - eval_freq (:obj:`int`): Evaluation frequency in terms of training steps.
+            - n_evaluator_episode (:obj:`int`): Number of episodes for each evaluation.
+            - stop_value (:obj:`float`): Reward threshold to stop training if surpassed.
+            - env (:obj:`Optional[BaseEnvManager]`): Environment manager for managing multiple environments.
+            - policy (:obj:`Optional[namedtuple]`): Policy to be evaluated.
+            - tb_logger (:obj:`Optional[SummaryWriter]`): TensorBoard logger for logging statistics.
+            - exp_name (:obj:`str`): Name of the experiment for logging purposes.
+            - instance_name (:obj:`str`): Unique identifier for this evaluator instance.
+            - env_config (:obj:`Optional[dict]`): Configuration for the environment.
         """
         self._eval_freq = eval_freq
         self._exp_name = exp_name
@@ -78,14 +78,12 @@ class AlphaZeroEvaluator(ISerialEvaluator):
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
         """
         Overview:
-            Reset evaluator's environment. In some case, we need evaluator use the same policy in different \
-                environments. We can use reset_env to reset the environment.
+            Reset or replace the environment in the evaluator.
             If _env is None, reset the old environment.
             If _env is not None, replace the old environment in the evaluator with the \
                 new passed in environment and launch.
         Arguments:
-            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-                env_manager(BaseEnvManager)
+            - _env (:obj:`Optional[BaseEnvManager]`): New environment to replace the existing one, if provided.
         """
         if _env is not None:
             self._env = _env
@@ -97,8 +95,7 @@ class AlphaZeroEvaluator(ISerialEvaluator):
     def reset_policy(self, _policy: Optional[namedtuple] = None) -> None:
         """
         Overview:
-            Reset evaluator's policy. In some case, we need evaluator work in this same environment but use\
-                different policy. We can use reset_policy to reset the policy.
+            Reset or replace the policy in the evaluator.
             If _policy is None, reset the old policy.
             If _policy is not None, replace the old policy in the evaluator with the new passed in policy.
         Arguments:
@@ -112,16 +109,15 @@ class AlphaZeroEvaluator(ISerialEvaluator):
     def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
         """
         Overview:
-            Reset evaluator's policy and environment. Use new policy and environment to collect data.
+            Reset the environment and policy within the evaluator.
             If _env is None, reset the old environment.
             If _env is not None, replace the old environment in the evaluator with the new passed in \
                 environment and launch.
             If _policy is None, reset the old policy.
             If _policy is not None, replace the old policy in the evaluator with the new passed in policy.
         Arguments:
-            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of eval_mode policy
-            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-                env_manager(BaseEnvManager)
+            - _policy (:obj:`Optional[namedtuple]`): New policy to replace the existing one, if provided.
+            - _env (:obj:`Optional[BaseEnvManager]`): New environment to replace the existing one, if provided.
         """
         if _env is not None:
             self.reset_env(_env)
@@ -134,8 +130,8 @@ class AlphaZeroEvaluator(ISerialEvaluator):
     def close(self) -> None:
         """
         Overview:
-            Close the evaluator. If end_flag is False, close the environment, flush the tb_logger\
-                and close the tb_logger.
+            Close the evaluator and clean up resources such as environment and logger.
+            If end_flag is False, close the environment, flush the tb_logger and close the tb_logger.
         """
         if self._end_flag:
             return
@@ -148,18 +144,18 @@ class AlphaZeroEvaluator(ISerialEvaluator):
     def __del__(self) -> None:
         """
         Overview:
-            Execute the close command and close the evaluator. __del__ is automatically called \
-                to destroy the evaluator instance when the evaluator finishes its work
+            Destructor method that is called when the evaluator object is being destroyed.
+             __del__ is automatically called to destroy the evaluator instance when the evaluator finishes its work.
         """
         self.close()
 
     def should_eval(self, train_iter: int) -> bool:
         """
         Overview:
-            Determine whether you need to start the evaluation mode, if the number of training has reached\
-                the maximum number of times to start the evaluator, return True
-        Arguments:
-            - train_iter (:obj:`int`): Current training iteration.
+            Check if it is time to evaluate the policy based on the training iteration count.
+            If the amount of training has reached the maximum number of times to start the evaluator, return True.
+        Returns:
+            - (:obj:`bool`): Flag indicating whether evaluation should be performed.
         """
         if train_iter == self._last_eval_iter:
             return False
@@ -178,17 +174,18 @@ class AlphaZeroEvaluator(ISerialEvaluator):
     ) -> Tuple[bool, dict]:
         """
         Overview:
-            Evaluate policy and store the best policy based on whether it reaches the highest historical reward.
+            Execute the evaluation of the policy and determine if the stopping condition has been met.
         Arguments:
-            - save_ckpt_fn (:obj:`Callable`): Saving ckpt function, which will be triggered by getting the best reward.
-            - train_iter (:obj:`int`): Current training iteration.
-            - envstep (:obj:`int`): Current env interaction step.
-            - n_episode (:obj:`int`): Number of evaluation episodes.
+            - save_ckpt_fn (:obj:`Optional[Callable]`): Callback function to save a checkpoint.
+            - train_iter (:obj:`int`): Current number of training iterations completed.
+            - envstep (:obj:`int`): Current number of environment steps completed.
+            - n_episode (:obj:`Optional[int]`): Number of episodes to evaluate. Defaults to preset if None.
+            - force_render (:obj:`bool`): Force rendering of the environment, if applicable.
         Returns:
-            - stop_flag (:obj:`bool`): Whether this training program can be ended.
-            - return_info (:obj:`dict`): Current evaluation return information.
+            - stop_flag (:obj:`bool`): Whether the training process should stop based on evaluation results.
+            - return_info (:obj:`dict`): Information about the evaluation results.
         """
-        # evaluator only work on rank0
+        # the evaluator only works on rank0
         stop_flag, return_info = False, []
         if get_rank() == 0:
             if n_episode is None:
