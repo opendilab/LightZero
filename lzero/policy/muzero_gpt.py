@@ -17,7 +17,7 @@ from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
-    prepare_obs, prepare_obs_for_gpt
+    prepare_obs, prepare_obs_stack4_for_gpt
 from line_profiler import line_profiler
 
 
@@ -423,7 +423,7 @@ class MuZeroGPTPolicy(Policy):
         target_reward, target_value, target_policy = target_batch
 
         if self._cfg.model.frame_stack_num == 4:
-            obs_batch, obs_target_batch = prepare_obs_for_gpt(obs_batch_ori, self._cfg)
+            obs_batch, obs_target_batch = prepare_obs_stack4_for_gpt(obs_batch_ori, self._cfg)
         else:
             obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 

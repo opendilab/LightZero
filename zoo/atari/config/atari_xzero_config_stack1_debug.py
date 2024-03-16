@@ -89,12 +89,12 @@ atari_muzero_config = dict(
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
-        # obs_shape=(4, 96, 96),
-        # obs_shape=(1, 96, 96),
 
+        # NOTE: for stack1
         observation_shape=(3, 64, 64),
         gray_scale=False,
 
+        # NOTE: for stack4
         # observation_shape=(4, 64, 64),
         # gray_scale=True,
 
@@ -138,19 +138,13 @@ atari_muzero_config = dict(
         # transformer_start_after_envsteps=int(5e3),
         num_unroll_steps=num_unroll_steps,
         model=dict(
-            # observation_shape=(4, 96, 96),
-            # frame_stack_num=4,
-            # observation_shape=(1, 96, 96),
-            # image_channel=3,
-            # frame_stack_num=1,
-            # gray_scale=False,
-
+            # NOTE: for stack1
             observation_shape=(3, 64, 64),
             image_channel=3,
             frame_stack_num=1,
             gray_scale=False,
 
-            # NOTE: very important
+            # NOTE: for stack4
             # observation_shape=(4, 64, 64),
             # image_channel=1,
             # frame_stack_num=4,
@@ -168,8 +162,6 @@ atari_muzero_config = dict(
             # reward_support_size=21,
             # value_support_size=21,
             # support_scale=10,
-            embedding_dim=1024,
-            # embedding_dim=256,
         ),
         use_priority=False,
         cuda=True,

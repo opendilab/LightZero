@@ -1,13 +1,13 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(3)
+torch.cuda.set_device(0)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-# env_name = 'PongNoFrameskip-v4'
+env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
 # env_name = 'QbertNoFrameskip-v4'
 # env_name = 'SeaquestNoFrameskip-v4'
-env_name = 'BreakoutNoFrameskip-v4'  # collect_env_steps=5e3 
+# env_name = 'BreakoutNoFrameskip-v4'  # collect_env_steps=5e3 
 # env_name = 'BoxingNoFrameskip-v4'
 # env_name = 'FrostbiteNoFrameskip-v4'
 

@@ -286,7 +286,7 @@ def configure_optimizers(
 
     return optimizer
 
-def prepare_obs_for_gpt(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
+def prepare_obs_stack4_for_gpt_bkp(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     概述:
         为模型准备观测数据,包括:
@@ -361,7 +361,7 @@ def prepare_obs_for_gpt(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch
 
     return obs_batch, obs_target_batch
 
-def prepare_obs_for_gpt_v2(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
+def prepare_obs_stack4_for_gpt(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
     obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
     obs_batch = obs_batch_ori[:, :cfg.model.frame_stack_num * (cfg.model.image_channel if cfg.model.model_type == 'conv' else cfg.model.observation_shape), ...]
 
@@ -393,7 +393,6 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
     """
     # Convert the numpy array of original observations to a PyTorch tensor and transfer it to the specified device.
     # Also, ensure the tensor is of the correct floating-point type for the model.
-    # obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
     obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device)
 
     # Calculate the dimension size to slice based on the model configuration.

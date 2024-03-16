@@ -27,7 +27,6 @@ class AtariLightZeroEnv(BaseEnv):
         frame_skip=4,
         episode_life=True,
         clip_rewards=True,
-        # channel_last=True,
         channel_last=False,
         render_mode_human=False,
         scale=True,
