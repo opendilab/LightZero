@@ -257,7 +257,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
             ready_env_id = set()
             remain_episode = n_episode
-
+            eps_steps_lst =  np.zeros(env_nums)
             with self._timer:
                 while not eval_monitor.is_finished():
                     # Get current ready env obs.
@@ -321,6 +321,15 @@ class MuZeroEvaluator(ISerialEvaluator):
                     timesteps = to_tensor(timesteps, dtype=torch.float32)
                     for env_id, t in timesteps.items():
                         obs, reward, done, info = t.obs, t.reward, t.done, t.info
+
+                        eps_steps_lst[env_id] += 1
+                        if eps_steps_lst[env_id] % 200 == 0:
+                            self._policy.get_attribute('eval_model').world_model.past_keys_values_cache.clear()
+                            self._policy.get_attribute('eval_model').world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
+                            torch.cuda.empty_cache() # TODO: NOTE
+                            print('evaluator: eval_model clear()')
+                            print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
+
 
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
@@ -393,6 +402,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                                         for _ in range(self.policy_config.model.frame_stack_num)
                                     ]
                                 )
+
+
+                            eps_steps_lst[env_id] = 0
 
                             # Env reset is done by env_manager automatically.
                             self._policy.reset([env_id])

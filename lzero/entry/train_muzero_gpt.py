@@ -21,6 +21,17 @@ from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 import torch.nn as nn
 
+def initialize_zeros_batch(observation_shape, batch_size, device):
+    """Initialize a zeros tensor for batch observations based on the shape."""
+    if isinstance(observation_shape, list):
+        shape = [batch_size, *observation_shape]
+    elif isinstance(observation_shape, int):
+        shape = [batch_size, observation_shape]
+    else:
+        raise TypeError("observation_shape must be either an int or a list")
+    
+    return torch.zeros(shape).to(device)
+
 
 def train_muzero_gpt(
         input_cfg: Tuple[dict, dict],
@@ -133,8 +144,12 @@ def train_muzero_gpt(
     num_unroll_steps = copy.deepcopy(replay_buffer._cfg.num_unroll_steps)
     collect_cnt = -1
 
-    # policy.last_batch_obs = torch.zeros([len(evaluator_env_cfg), cfg.policy.model.observation_shape[0], 64, 64]).to(cfg.policy.device)
-    policy.last_batch_obs = torch.zeros([len(evaluator_env_cfg), cfg.policy.model.observation_shape]).to(cfg.policy.device)
+    # Usage
+    policy.last_batch_obs = initialize_zeros_batch(
+        cfg.policy.model.observation_shape,
+        len(evaluator_env_cfg),
+        cfg.policy.device
+    )
     policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
     stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
@@ -165,15 +180,21 @@ def train_muzero_gpt(
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
-            # policy.last_batch_obs = torch.zeros([len(evaluator_env_cfg), cfg.policy.model.observation_shape[0], 64, 64]).to(cfg.policy.device)
-            policy.last_batch_obs = torch.zeros([len(evaluator_env_cfg), cfg.policy.model.observation_shape]).to(cfg.policy.device)
+            policy.last_batch_obs = initialize_zeros_batch(
+                cfg.policy.model.observation_shape,
+                len(evaluator_env_cfg),
+                cfg.policy.device
+            )
             policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
                 break
 
-        policy.last_batch_obs = torch.zeros([len(collector_env_cfg), cfg.policy.model.observation_shape]).to(cfg.policy.device)
-        # policy.last_batch_obs = torch.zeros([len(collector_env_cfg), cfg.policy.model.observation_shape[0], 64, 64]).to(cfg.policy.device)
+        policy.last_batch_obs = initialize_zeros_batch(
+            cfg.policy.model.observation_shape,
+            len(collector_env_cfg),
+            cfg.policy.device
+        )
         policy.last_batch_action = [-1 for _ in range(len(collector_env_cfg))]
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
@@ -227,6 +248,10 @@ def train_muzero_gpt(
 
         policy._collect_model.world_model.past_keys_values_cache.clear() # very important
         policy._collect_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
+
+        # policy._eval_model.world_model.past_keys_values_cache.clear() # very important
+        # policy._eval_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
+
 
         torch.cuda.empty_cache() # TODO: NOTE
 

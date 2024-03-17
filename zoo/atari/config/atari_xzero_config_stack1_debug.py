@@ -66,7 +66,7 @@ num_unroll_steps = 5
 eps_greedy_exploration_in_collect = False
 
 # TODO: debug
-num_simulations = 5
+num_simulations = 2
 update_per_collect = 5
 batch_size = 2
 # ==============================================================
@@ -183,7 +183,7 @@ atari_muzero_config = dict(
         ),
         # TODO: NOTE
         # use_augmentation=True,
-        use_augmentation=False,
+        use_augmentation=True,  # NOTE
         update_per_collect=update_per_collect,
         model_update_ratio = model_update_ratio,
         batch_size=batch_size,

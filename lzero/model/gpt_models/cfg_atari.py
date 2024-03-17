@@ -64,25 +64,20 @@ cfg['world_model'] = {
                       # 'embed_dim':256, # TODO：for atari
                       # 'embed_dim':1024, # TODO：for atari
                       'embed_dim':768, # TODO：for atari
+                      'group_size': 8,  # NOTE
 
                       'attention': 'causal',
-                      # 'num_layers': 10,# TODO：for atari
+
                       # 'num_layers': 2, # TODO：for atari debug
-                      # 'num_heads': 4,
-                      # 'num_layers': 1, # TODO：for atari debug
-                      # 'num_heads': 1,
-
-                      'num_layers': 2, # TODO：for atari debug
-                      # 'num_heads': 4,
+                      # 'num_layers': 6, # TODO：for atari debug
+                      'num_layers': 12, # TODO：for atari debug
                       'num_heads': 8,
-
 
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:0',
+                      "device": 'cuda:2',
                     #   "device": 'cpu',
-                      # 'support_size': 21,
                       'support_size': 601,
 
                       # 'action_shape': 18,# TODO：for multi-task
@@ -109,8 +104,9 @@ cfg['world_model'] = {
                       # 'policy_entropy_weight': 0,
                       'policy_entropy_weight': 1e-4,
 
-                      'predict_latent_loss_type': 'group_kl', # 'mse'
-                      # 'predict_latent_loss_type': 'mse', # 'mse'
+                      # 'predict_latent_loss_type': 'group_kl',
+                      'predict_latent_loss_type': 'mse',
+                      'obs_type': 'image', # 'vector', 'image'
 
                       }
 from easydict import EasyDict

@@ -127,8 +127,8 @@ class WorldModel(nn.Module):
         )
 
         self.act_embedding_table = nn.Embedding(act_vocab_size, config.embed_dim)
-         # NOTE: 对于离散动作，使用fixed_act_embedding，效率更高, 注意需要self.act_embedding_table.weight不是全零初始化的 ####
-        self.act_embedding_table.weight.requires_grad = False
+         # NOTE: 对于离散动作，使用fixed_act_embedding，可能前期效率更高, 注意需要self.act_embedding_table.weight不是全零初始化的 ####
+        # self.act_embedding_table.weight.requires_grad = False
 
         self.obs_per_embdding_dim = config.embed_dim  # 16*64=1024
 
@@ -396,9 +396,9 @@ class WorldModel(nn.Module):
                                 print('root_total_query_cnt:', self.root_total_query_cnt)
                                 print(f'root_hit_ratio:{root_hit_ratio}')
                                 print(f'root_hit find size {self.past_keys_values_cache[cache_key].size}')
-                                if self.past_keys_values_cache[cache_key].size >= 7:
+                                if self.past_keys_values_cache[cache_key].size >= self.config.max_tokens - 5:
                                     print(f'==' * 20)
-                                    print(f'NOTE: root_hit find size >= 7')
+                                    print(f'NOTE: root_hit find size >= self.config.max_tokens - 5')
                                     print(f'==' * 20)
                             # 这里需要deepcopy因为在transformer的forward中会原地修改matched_value
                             self.keys_values_wm_list.append(copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
@@ -744,11 +744,10 @@ class WorldModel(nn.Module):
         # 计算观察的预测损失。这里提供了两种选择:MSE和Group KL  
         if self.predict_latent_loss_type == 'mse':
             # MSE损失,直接比较logits和labels
-            loss_obs = torch.nn.functional.mse_loss(logits_observations, labels_observations.detach(), reduction='none').mean(-1)
+            loss_obs = torch.nn.functional.mse_loss(logits_observations, labels_observations, reduction='none').mean(-1) # labels_observations.detach()是冗余的，因为前面是在with torch.no_grad()中计算的
         elif self.predict_latent_loss_type == 'group_kl':
             # Group KL损失,将特征分组,然后计算组内的KL散度
             batch_size, num_features = logits_observations.shape
-
 
             logits_reshaped = logits_observations.reshape(batch_size, self.num_groups, self.group_size)
             labels_reshaped = labels_observations.reshape(batch_size, self.num_groups,self. group_size)
