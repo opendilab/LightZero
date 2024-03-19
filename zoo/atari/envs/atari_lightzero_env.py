@@ -13,10 +13,10 @@ from zoo.atari.envs.atari_wrappers import wrap_lightzero
 
 
 @ENV_REGISTRY.register('atari_lightzero')
-class AtariLightZeroEnv(BaseEnv):
+class AtariEnvLightZero(BaseEnv):
     """
     Overview:
-        AtariLightZeroEnv is a derived class from BaseEnv and represents the environment for the Atari LightZero game.
+        AtariEnvLightZero is a derived class from BaseEnv and represents the environment for the Atari LightZero game.
         This class provides the necessary interfaces to interact with the environment, including reset, step, seed,
         close, etc. and manages the environment's properties such as observation_space, action_space, and reward_space.
     Properties:
@@ -79,7 +79,7 @@ class AtariLightZeroEnv(BaseEnv):
         Overview:
             Return the default configuration for the Atari LightZero environment.
         Arguments:
-            - cls (:obj:`type`): The class AtariLightZeroEnv.
+            - cls (:obj:`type`): The class AtariEnvLightZero.
         Returns:
             - cfg (:obj:`EasyDict`): The default configuration dictionary.
         """
