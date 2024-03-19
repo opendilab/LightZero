@@ -41,8 +41,7 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 atari_efficientzero_config = dict(
-    exp_name=
-    f'data_ez_ctree/{env_id[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ddp_{gpu_num}gpu_seed0',
+    exp_name=f'data_ez_ctree/{env_id[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ddp_{gpu_num}gpu_seed0',
     env=dict(
         env_id=env_id,
         obs_shape=(4, 96, 96),
