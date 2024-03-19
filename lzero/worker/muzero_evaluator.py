@@ -194,7 +194,8 @@ class MuZeroEvaluator(ISerialEvaluator):
             train_iter: int = -1,
             envstep: int = -1,
             n_episode: Optional[int] = None,
-    ) -> Tuple[bool, Dict[str, Any]]:
+            return_trajectory: bool = False,
+    ) -> Tuple[bool, float]:
         """
         Overview:
             Evaluate the current policy, storing the best policy if it achieves the highest historical reward.
@@ -203,6 +204,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             - train_iter (:obj:`int`): The current training iteration count.
             - envstep (:obj:`int`): The current environment step count.
             - n_episode (:obj:`Optional[int]`): Optional number of evaluation episodes; defaults to the evaluator's setting.
+            - return_trajectory (:obj:`bool`): Return the evaluated trajectory `game_segments` in `episode_info` if True.
         Returns:
             - stop_flag (:obj:`bool`): Indicates whether the training can be stopped based on the stop value.
             - episode_info (:obj:`Dict[str, Any]`): A dictionary containing information about the evaluation episodes.
@@ -450,4 +452,6 @@ class MuZeroEvaluator(ISerialEvaluator):
             stop_flag, episode_info = objects
 
         episode_info = to_item(episode_info)
+        if return_trajectory:
+            episode_info['trajectory'] = game_segments
         return stop_flag, episode_info
