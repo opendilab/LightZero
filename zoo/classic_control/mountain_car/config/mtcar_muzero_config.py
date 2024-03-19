@@ -51,7 +51,6 @@ mountain_car_muzero_config = dict(
         ),
         cuda=True,
         env_type='not_board_games',
-        # action_type='varied_action_space',
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
@@ -77,7 +76,7 @@ mountain_car_muzero_create_config = dict(
         type='mountain_car_lightzero',
         import_names=['zoo.classic_control.mountain_car.envs.mtcar_lightzero_env'],
     ),
-    env_manager=dict(type='base'),
+    env_manager=dict(type='subprocess'),
     policy=dict(
         type='muzero',
         import_names=['lzero.policy.muzero'],
