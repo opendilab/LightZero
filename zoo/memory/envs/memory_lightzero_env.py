@@ -19,6 +19,9 @@ class MemoryEnvLightZero(BaseEnv):
     """
     Overview:
         The MemoryEnvLightZero environment for LightZero, based on the Visual-Match and Key-to-Door Task from DeepMind.
+        Please refer to the following repository for more details:
+            - https://github.com/deepmind/deepmind-research/tree/master/tvt/pycolab
+            - https://github.com/twni2016/Memory-RL
     Attributes:
         config (dict): Configuration dict. Default configurations can be updated using this.
         _cfg (dict): Internal configuration dict that stores runtime configurations.
@@ -27,14 +30,11 @@ class MemoryEnvLightZero(BaseEnv):
         _save_replay (bool): Flag to check if replays are saved.
         _render (bool): Flag to check if real-time rendering is enabled.
         _gif_images (list): List to store frames for creating GIF replay.
-        _max_step (int): Maximum number of steps for the environment.
     """
     config = dict(
         env_id='visual_match',  # The name of the environment, options: 'visual_match', 'key_to_door'
-        # max_step=60,  # The maximum number of steps for each episode
         num_apples=10,  # Number of apples in the distractor phase
         # apple_reward=(1, 10),  # Range of rewards for collecting an apple
-        # apple_reward=(1, 1),  # Range of rewards for collecting an apple
         apple_reward=(0, 0),  # Range of rewards for collecting an apple
         fix_apple_reward_in_episode=False,  # Whether to fix apple reward (DEFAULT_APPLE_REWARD) within an episode
         final_reward=10.0,  # Reward for choosing the correct door in the final phase
@@ -77,7 +77,6 @@ class MemoryEnvLightZero(BaseEnv):
         Returns:
             - obs (:obj:`np.ndarray`): Initial observation from the environment.
         """
-        # if not self._init_flag:
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
             self._seed = self._seed + np_seed
@@ -86,7 +85,7 @@ class MemoryEnvLightZero(BaseEnv):
             self._rng = np.random.RandomState(self._seed)
         else:
             self._rng = np.random.RandomState(0)
-
+        print(f'memory_lightzero_env reset self._seed: {self._seed}')
         if self._cfg.env_id == 'visual_match':
             from zoo.memory.envs.pycolab_tvt.visual_match import Game, PASSIVE_EXPLORE_GRID
             self._game = Game(
@@ -101,7 +100,7 @@ class MemoryEnvLightZero(BaseEnv):
                 EXPLORE_GRID=PASSIVE_EXPLORE_GRID,
             )
         elif self._cfg.env_id == 'key_to_door':
-            from zoo.memory.envs.pycolab_tvt.key_to_door import Game, REWARD_GRID_SR, MAX_FRAMES_PER_PHASE_SR
+            from zoo.memory.envs.pycolab_tvt.key_to_door import Game, REWARD_GRID_SR
             self._game = Game(
                 self._rng,
                 num_apples=self._cfg.num_apples,
@@ -122,8 +121,6 @@ class MemoryEnvLightZero(BaseEnv):
         self._action_space = gym.spaces.Discrete(self._game.num_actions)
         self._reward_space = gym.spaces.Box(low=-float('inf'), high=float('inf'), shape=(1,), dtype=np.float32)
 
-        # self._init_flag = True
-
         self._current_step = 0
         self._eval_episode_return = 0
         obs, _, _ = self._episode.its_showtime()
@@ -135,7 +132,6 @@ class MemoryEnvLightZero(BaseEnv):
         if self._cfg.flate_observation:
             obs = obs.flatten()
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
-
         self._gif_images = []
 
         return obs

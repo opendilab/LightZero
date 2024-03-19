@@ -75,7 +75,6 @@ class Game(game.AbstractGame):
         final_reward=10.0,
         respawn_every=common.DEFAULT_APPLE_RESPAWN_TIME,
         crop=True,
-        # crop=False,
         max_frames=MAX_FRAMES_PER_PHASE,
         EXPLORE_GRID=PASSIVE_EXPLORE_GRID,
     ):
