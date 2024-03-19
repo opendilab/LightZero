@@ -31,7 +31,7 @@ class AtariLightZeroEnv(BaseEnv):
         # (int) The number of episodes to evaluate during each evaluation period.
         n_evaluator_episode=3,
         # (str) The name of the Atari game environment.
-        env_name='PongNoFrameskip-v4',
+        # env_id='PongNoFrameskip-v4',
         # (str) The type of the environment, here it's Atari.
         env_type='Atari',
         # (tuple) The shape of the observation space, which is a stacked frame of 4 images each of 96x96 pixels.
@@ -56,7 +56,8 @@ class AtariLightZeroEnv(BaseEnv):
         # (bool) If True, the rewards are clipped to a certain range, usually between -1 and 1, to reduce variance.
         clip_rewards=True,
         # (bool) If True, the channels of the observation images are placed last (e.g., height, width, channels).
-        channel_last=True,
+        # Default is False, which means the channels are placed first (e.g., channels, height, width).
+        channel_last=False,
         # (bool) If True, the pixel values of the game frames are scaled down to the range [0, 1].
         scale=True,
         # (bool) If True, the game frames are preprocessed by cropping irrelevant parts and resizing to a smaller resolution.
@@ -211,7 +212,7 @@ class AtariLightZeroEnv(BaseEnv):
         return self._reward_space
 
     def __repr__(self) -> str:
-        return "LightZero Atari Env({})".format(self.cfg.env_name)
+        return "LightZero Atari Env({})".format(self.cfg.env_id)
 
     @staticmethod
     def create_collector_env_cfg(cfg: dict) -> List[dict]:

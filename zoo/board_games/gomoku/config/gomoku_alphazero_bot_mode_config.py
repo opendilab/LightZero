@@ -45,7 +45,7 @@ gomoku_alphazero_config = dict(
         mcts_ctree=mcts_ctree,
         # ==============================================================
         # for the creation of simulation env
-        simulation_env_name='gomoku',
+        simulation_env_id='gomoku',
         simulation_env_config_type='play_with_bot',
         # ==============================================================
         torch_compile=False,

@@ -9,18 +9,18 @@ from lzero.policy import InverseScalarTransform
 from lzero.mcts.ctree.ctree_stochastic_muzero import stochastic_mz_tree
 
 
-# ==============================================================
-# Stochastic MuZero
-# ==============================================================
-
-
 class StochasticMuZeroMCTSCtree(object):
     """
     Overview:
-        MCTSCtree for Stochastic MuZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in C++.
-
+        The C++ implementation of MCTS (batch format) for Stochastic MuZero.  \
+        It completes the ``roots``and ``search`` methods by calling functions in module ``ctree_stochastic_muzero``, \
+        which are implemented in C++.
     Interfaces:
-        __init__, roots, search
+        ``__init__``, ``roots``, ``search``
+    
+    ..note::
+        The benefit of searching for a batch of nodes at the same time is that \
+        it can be parallelized during model inference, thus saving time.
     """
 
     config = dict(
@@ -38,7 +38,15 @@ class StochasticMuZeroMCTSCtree(object):
 
     @classmethod
     def default_config(cls: type) -> EasyDict:
+        """
+        Overview:
+            A class method that returns a default configuration in the form of an EasyDict object.
+        Returns:
+            - cfg (:obj:`EasyDict`): The dict of the default configuration.
+        """
+        # Create a deep copy of the `config` attribute of the class.
         cfg = EasyDict(copy.deepcopy(cls.config))
+        # Add a new attribute `cfg_type` to the `cfg` object.
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
@@ -48,8 +56,12 @@ class StochasticMuZeroMCTSCtree(object):
             Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
             in the default configuration, the user-provided value will override the default configuration. Otherwise,
             the default configuration will be used.
+        Arguments:
+            - cfg (:obj:`EasyDict`): The configuration passed in by the user.
         """
+        # Get the default configuration.
         default_config = self.default_config()
+        # Update the default configuration with the values provided by the user in ``cfg``.
         default_config.update(cfg)
         self._cfg = default_config
         self.inverse_scalar_transform_handle = InverseScalarTransform(
@@ -61,13 +73,15 @@ class StochasticMuZeroMCTSCtree(object):
               chance_space_size: int = 2) -> "stochastic_mz_tree.Roots":
         """
         Overview:
-            The initialization of CRoots with root num and legal action lists.
+            Initializes a batch of roots to search parallelly later.
         Arguments:
-            - root_num (:obj:`int`): the number of the current root.
-            - legal_action_list (:obj:`list`): the vector of the legal action of this root.
+            - root_num (:obj:`int`): the number of the roots in a batch.
+            - legal_action_list (:obj:`List[Any]`): the vector of the legal actions for the roots.
+        
+        ..note::
+            The initialization is achieved by the ``Roots`` class from the ``ctree_stochastic_muzero`` module.
         """
-        from lzero.mcts.ctree.ctree_stochastic_muzero import stochastic_mz_tree as ctree
-        return ctree.Roots(active_collect_env_num, legal_actions, chance_space_size)
+        return stochastic_mz_tree.Roots(active_collect_env_num, legal_actions, chance_space_size)
 
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
@@ -75,12 +89,16 @@ class StochasticMuZeroMCTSCtree(object):
     ) -> None:
         """
         Overview:
-            Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
-             Use the cpp ctree.
+            Do MCTS for a batch of roots. Parallel in model inference. \
+            Use C++ to implement the tree search.
         Arguments:
-            - roots (:obj:`Any`): a batch of expanded root nodes
-            - latent_state_roots (:obj:`list`): the hidden states of the roots
-            - to_play_batch (:obj:`list`): the to_play_batch list used in in self-play-mode board games
+            - roots (:obj:`Any`): a batch of expanded root nodes.
+            - latent_state_roots (:obj:`list`): the hidden states of the roots.
+            - model (:obj:`torch.nn.Module`): The model used for inference.
+            - to_play (:obj:`list`): the to_play list used in in self-play-mode board games.
+        
+        .. note::
+            The core functions ``batch_traverse`` and ``batch_backpropagate`` are implemented in C++.
         """
         with torch.no_grad():
             model.eval()
@@ -111,16 +129,23 @@ class StochasticMuZeroMCTSCtree(object):
                 MCTS stage 1: Selection
                     Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
                 """
-                leaf_node_is_chance, latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = stochastic_mz_tree.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
-                    copy.deepcopy(to_play_batch)
-                )
+                if self._cfg.env_type == 'not_board_games':
+                    leaf_node_is_chance, latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = stochastic_mz_tree.batch_traverse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        to_play_batch
+                    )
+                else:
+                    # the ``to_play_batch`` is only used in board games, here we need to deepcopy it to avoid changing the original data.
+                    leaf_node_is_chance, latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = stochastic_mz_tree.batch_traverse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        copy.deepcopy(to_play_batch)
+                    )
 
                 # obtain the latent state for leaf node
                 for ix, iy in zip(latent_state_index_in_search_path, latent_state_index_in_batch):
                     latent_states.append(latent_state_batch_in_search_path[ix][iy])
 
-                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
+                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
                 # .long() is only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
                 """

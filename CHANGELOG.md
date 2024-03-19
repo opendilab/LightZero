@@ -1,3 +1,16 @@
+2024.02.08 (v0.0.4)
+- polish: add agent configurations & polish replay video saving method (#184)
+- polish: polish comments in worker files
+- polish: polish comments in tree search files (#185)
+- polish: rename mcts_mode to battle_mode_in_simulation_env, add sampled alphazero config for tictactoe (#179)
+- polish: polish redundant data squeeze operations (#177)
+- polish: polish the continuous action process in sez model
+- polish: polish bipedalwalker env
+- fix: fix completed value inf bug when zero exists in action_mask in gumbel muzero (#178)
+- fix: fix render settings when using gymnasium (#173)
+- fix: fix lstm_hidden_size in sampled_efficientzero_model.py
+- fix: fix action_mask in bipedalwalker_cont_disc_env, fix device bug in sampled efficientzero (#168)
+
 2023.12.07 (v0.0.3)
 - env: MiniGrid env (#110)
 - env: Bsuite env (#110)

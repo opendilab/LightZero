@@ -2,7 +2,7 @@ from easydict import EasyDict
 
 # The typical MiniGrid env id: {'MiniGrid-Empty-8x8-v0', 'MiniGrid-FourRooms-v0', 'MiniGrid-DoorKey-8x8-v0','MiniGrid-DoorKey-16x16-v0'},
 # please refer to https://github.com/Farama-Foundation/MiniGrid for details.
-env_name = 'MiniGrid-Empty-8x8-v0'
+env_id = 'MiniGrid-Empty-8x8-v0'
 max_env_step = int(1e6)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -29,9 +29,9 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 minigrid_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/{env_name}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
+    exp_name=f'data_sez_ctree/{env_id}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
     env=dict(
-        env_name=env_name,
+        env_id=env_id,
         continuous=False,
         manually_discretization=False,
         collector_env_num=collector_env_num,

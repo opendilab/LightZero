@@ -203,12 +203,12 @@ class LightZeroEnvWrapper(gym.Wrapper):
 Specifically, use the following function to wrap a gym environment into the format required by LightZero using `LightZeroEnvWrapper`. The `get_wrappered_env` function returns an anonymous function that generates a `DingEnvWrapper` instance each time it is called. This instance takes `LightZeroEnvWrapper` as an anonymous function and internally wraps the original environment into the format required by LightZero.
 
 ```python
-def get_wrappered_env(wrapper_cfg: EasyDict, env_name: str):
+def get_wrappered_env(wrapper_cfg: EasyDict, env_id: str):
     # overview comments
     ...
     if wrapper_cfg.manually_discretization:
         return lambda: DingEnvWrapper(
-            gym.make(env_name),
+            gym.make(env_id),
             cfg={
                 'env_wrapper': [
                     lambda env: ActionDiscretizationEnvWrapper(env, wrapper_cfg), lambda env:
@@ -218,7 +218,7 @@ def get_wrappered_env(wrapper_cfg: EasyDict, env_name: str):
         )
     else:
         return lambda: DingEnvWrapper(
-            gym.make(env_name), cfg={'env_wrapper': [lambda env: LightZeroEnvWrapper(env, wrapper_cfg)]}
+            gym.make(env_id), cfg={'env_wrapper': [lambda env: LightZeroEnvWrapper(env, wrapper_cfg)]}
         )
 ```
 

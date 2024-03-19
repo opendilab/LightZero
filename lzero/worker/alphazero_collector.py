@@ -1,11 +1,11 @@
 from collections import namedtuple
-from typing import Optional, Any, List, Dict
+from typing import Optional, Any, List
 
 import numpy as np
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
-from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, one_time_warning, get_rank, get_world_size, \
-    broadcast_object_list, allreduce_data
+from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, get_rank, get_world_size, \
+    allreduce_data
 from ding.worker.collector.base_serial_collector import ISerialCollector, CachePool, TrajBuffer, INF, \
     to_tensor_transitions
 
@@ -14,9 +14,10 @@ from ding.worker.collector.base_serial_collector import ISerialCollector, CacheP
 class AlphaZeroCollector(ISerialCollector):
     """
     Overview:
-        AlphaZero collector (n_episode).
+        AlphaZero collector for collecting episodes of experience during self-play or playing against an opponent.
+        This collector is specifically designed for the AlphaZero algorithm.
     Interfaces:
-        __init__, reset, reset_env, reset_policy, collect, close
+        ``__init__``, ``reset``, ``reset_env``, ``reset_policy``, ``collect``, ``close``
     Property:
         envstep
     """
@@ -35,18 +36,17 @@ class AlphaZeroCollector(ISerialCollector):
             env_config=None,
     ) -> None:
         """
-            Overview:
-                Init the AlphaZero collector according to input arguments.
-            Arguments:
-                - collect_print_freq (:obj:`int`): collect_print_frequency in terms of training_steps.
-                - env (:obj:`BaseEnvManager`): The env for the collection, the BaseEnvManager object or \
-                    its derivatives are supported.
-                - policy (:obj:`Policy`): The policy to be collected.
-                - tb_logger (:obj:`SummaryWriter`): Logger, defaultly set as 'SummaryWriter' for model summary.
-                - instance_name (:obj:`Optional[str]`): Name of this instance.
-                - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
-                - env_config: Config of environment
-            """
+        Overview:
+            Initialize the AlphaZero collector with the provided environment, policy, and configurations.
+        Arguments:
+            - collect_print_freq (:obj:`int`): Frequency of printing collection statistics (in training steps).
+            - env (:obj:`Optional[BaseEnvManager]`): Environment manager for managing multiple environments.
+            - policy (:obj:`Optional[namedtuple]`): Policy used for making decisions during collection.
+            - tb_logger (:obj:`Optional[SummaryWriter]`): TensorBoard logger for logging statistics.
+            - exp_name (:obj:`str`): Name of the experiment for logging purposes.
+            - instance_name (:obj:`str`): Unique identifier for this collector instance.
+            - env_config (:obj:`Optional[dict]`): Configuration for the environment.
+        """
         self._exp_name = exp_name
         self._instance_name = instance_name
         self._collect_print_freq = collect_print_freq
@@ -79,13 +79,12 @@ class AlphaZeroCollector(ISerialCollector):
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
         """
         Overview:
-            Reset the environment.
+            Reset or replace the environment in the collector.
             If _env is None, reset the old environment.
             If _env is not None, replace the old environment in the collector with the new passed \
                 in environment and launch.
         Arguments:
-            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-                env_manager(BaseEnvManager)
+            - _env (:obj:`Optional[BaseEnvManager]`): New environment to replace the existing one, if provided.
         """
         if _env is not None:
             self._env = _env
@@ -97,11 +96,11 @@ class AlphaZeroCollector(ISerialCollector):
     def reset_policy(self, _policy: Optional[namedtuple] = None) -> None:
         """
         Overview:
-            Reset the policy.
+            Reset or replace the policy in the collector.
             If _policy is None, reset the old policy.
             If _policy is not None, replace the old policy in the collector with the new passed in policy.
         Arguments:
-            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy
+            - _policy (:obj:`Optional[namedtuple]`): New policy to replace the existing one, if provided.
         """
         assert hasattr(self, '_env'), "please set env first"
         if _policy is not None:
@@ -119,16 +118,15 @@ class AlphaZeroCollector(ISerialCollector):
     def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
         """
         Overview:
-            Reset the environment and policy.
+            Reset the environment and policy within the collector.
             If _env is None, reset the old environment.
             If _env is not None, replace the old environment in the collector with the new passed \
                 in environment and launch.
             If _policy is None, reset the old policy.
             If _policy is not None, replace the old policy in the collector with the new passed in policy.
         Arguments:
-            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy
-            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-                env_manager(BaseEnvManager)
+            - _policy (:obj:`Optional[namedtuple]`): New policy to replace the existing one, if provided.
+            - _env (:obj:`Optional[BaseEnvManager]`): New environment to replace the existing one, if provided.
         """
         if _env is not None:
             self.reset_env(_env)
@@ -151,9 +149,10 @@ class AlphaZeroCollector(ISerialCollector):
     def _reset_stat(self, env_id: int) -> None:
         """
         Overview:
-            Reset the collector's state. Including reset the traj_buffer, obs_pool, policy_output_pool\
-                and env_info. Reset these states according to env_id. You can refer to base_serial_collector\
-                to get more messages.
+            Reset the statistics for a specific environment.
+            Including reset the traj_buffer, obs_pool, policy_output_pool and env_info.
+            Reset these states according to env_id.
+            You can refer to base_serial_collector to get more messages.
         Arguments:
             - env_id (:obj:`int`): the id where we need to reset the collector's state
         """
@@ -165,8 +164,8 @@ class AlphaZeroCollector(ISerialCollector):
     def close(self) -> None:
         """
         Overview:
-            Close the collector. If end_flag is False, close the environment, flush the tb_logger\
-                and close the tb_logger.
+            Close the collector. If end_flag is False, close the environment, flush the tb_logger
+            and close the tb_logger.
         """
         if self._end_flag:
             return
@@ -182,13 +181,13 @@ class AlphaZeroCollector(ISerialCollector):
                 policy_kwargs: Optional[dict] = None) -> List[Any]:
         """
         Overview:
-            Collect `n_episode` data with policy_kwargs, which is already trained `train_iter` iterations
+            Collect experience data for a specified number of episodes using the current policy.
         Arguments:
-            - n_episode (:obj:`int`): the number of collecting data episode
-            - train_iter (:obj:`int`): the number of training iteration
-            - policy_kwargs (:obj:`dict`): the keyword args for policy forward
+            - n_episode (:obj:`Optional[int]`): Number of episodes to collect. Defaults to a pre-set value if None.
+            - train_iter (:obj:`int`): Current training iteration.
+            - policy_kwargs (:obj:`Optional[dict]`): Additional keyword arguments for the policy.
         Returns:
-            - return_data (:obj:`List`): A list containing collected episodes.
+            - return_data (:obj:`List[Any]`): A list of collected experience episodes.
         """
         if n_episode is None:
             if self._default_n_episode is None:
@@ -295,17 +294,16 @@ class AlphaZeroCollector(ISerialCollector):
     def envstep(self) -> int:
         """
         Overview:
-            Print the total envstep count.
-        Return:
-            - envstep (:obj:`int`): the total envstep count
+            Get the total number of environment steps taken by the collector.
+        Returns:
+            - envstep (:obj:`int`): Total count of environment steps.
         """
         return self._total_envstep_count
 
     def close(self) -> None:
         """
         Overview:
-            Close the collector. If end_flag is False, close the environment, flush the tb_logger\
-                and close the tb_logger.
+            Close the collector and clean up resources such as environment and logger.
         """
         if self._end_flag:
             return
@@ -318,18 +316,16 @@ class AlphaZeroCollector(ISerialCollector):
     def __del__(self) -> None:
         """
         Overview:
-            Execute the close command and close the collector. __del__ is automatically called to \
-                destroy the collector instance when the collector finishes its work
+            Destructor method that is called when the collector object is being destroyed.
         """
         self.close()
 
     def _output_log(self, train_iter: int) -> None:
         """
         Overview:
-            Print the output log information. You can refer to Docs/Best Practice/How to understand\
-             training generated folders/Serial mode/log/collector for more details.
+            Output logging information for the current collection phase.
         Arguments:
-            - train_iter (:obj:`int`): the number of training iteration.
+            - train_iter (:obj:`int`): Current training iteration for logging purposes.
         """
         if self._rank != 0:
             return
@@ -368,9 +364,9 @@ class AlphaZeroCollector(ISerialCollector):
     def reward_shaping(self, transitions, eval_episode_return):
         """
         Overview:
-            Shape the reward according to the player.
+            Shape the rewards in the collected transitions based on the outcome of the episode.
         Return:
-            - transitions: data transitions.
+            - transitions (:obj:`List[dict]`): List of data transitions.
         """
         reward = transitions[-1]['reward']
         to_play = transitions[-1]['obs']['to_play']
