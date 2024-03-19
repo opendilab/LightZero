@@ -133,6 +133,9 @@ def train_muzero(
         eval_train_iter_list = []
         eval_train_envstep_list = []
 
+    # Evaluate the random agent
+    stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         collect_kwargs = {}

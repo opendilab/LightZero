@@ -496,17 +496,6 @@ class DynamicsNetwork(nn.Module):
                 ) for _ in range(num_res_blocks)
             ]
         )
-        self.reward_resblocks = nn.ModuleList(
-            [
-                ResBlock(
-                    in_channels=num_channels - self.action_encoding_dim,
-                    activation=self.activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
-                ) for _ in range(num_res_blocks)
-            ]
-        )
 
         self.conv1x1_reward = nn.Conv2d(num_channels - self.action_encoding_dim, reward_head_channels, 1)
         
