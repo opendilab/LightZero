@@ -93,7 +93,7 @@ def test_sample_orig_data():
         'total_loss', 'policy_loss', 'policy_entropy', 'reward_loss', 'value_loss',
         'consistency_loss', 'target_reward', 'target_value', 'transformed_target_reward',
         'transformed_target_value', 'predicted_rewards', 'predicted_values',
-        'total_grad_norm_before_clip', 'value_priority_orig', 'value_priority',
+        'total_grad_norm_before_clip', 'value_priority', 'value_priority_orig'
     ]
 
     # Assert that all keys are present in log_vars
