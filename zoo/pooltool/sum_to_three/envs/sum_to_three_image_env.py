@@ -50,7 +50,7 @@ def calc_reward(state: State) -> float:
     if not state.game.shot_info.turn_over:
         return 1.0
 
-    if len(pt.filter_type(state.system.events, pt.EventType.BALL_BALL)):
+    if len(pt.events.filter_type(state.system.events, pt.EventType.BALL_BALL)):
         return 0.1
 
     return 0.0

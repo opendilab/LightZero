@@ -19,7 +19,7 @@ ObservationDict = Dict[str, Any]
 @attrs.define
 class State:
     system: pt.System
-    game: pt.Ruleset
+    game: pt.ruleset.Ruleset
 
     @classmethod
     def example(cls, game_type: pt.GameType = pt.GameType.SUMTOTHREE) -> State:
@@ -29,7 +29,7 @@ class State:
         balls = pt.get_rack(
             game_type=game_type,
             table=table,
-            params=None,
+            ball_params=None,
             ballset=None,
             spacing_factor=1e-3,
         )

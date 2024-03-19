@@ -318,7 +318,7 @@ if __name__ == "__main__":
     balls = pt.get_rack(
         game_type=game_type,
         table=table,
-        params=None,
+        ball_params=None,
         ballset=None,
         spacing_factor=1e-3,
     )
