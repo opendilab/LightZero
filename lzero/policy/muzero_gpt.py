@@ -21,46 +21,6 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
 from line_profiler import line_profiler
 
 
-# def configure_optimizer(model, learning_rate, weight_decay, exclude_submodules, *blacklist_module_names):
-#     """Credits to https://github.com/karpathy/minGPT"""
-#     # separate out all parameters to those that will and won't experience regularizing weight decay
-#     decay = set()
-#     no_decay = set()
-#     whitelist_weight_modules = [torch.nn.Linear, torch.nn.Conv1d]
-#     blacklist_weight_modules = [torch.nn.LayerNorm, torch.nn.Embedding]
-    
-#     # Here, we make sure to exclude parameters from specified submodules when creating param_dict
-#     param_dict = {}
-#     for mn, m in model.named_modules():
-#         if any(mn.startswith(module_name) for module_name in exclude_submodules):
-#             continue  # skip parameters from excluded submodules
-#         for pn, p in m.named_parameters(recurse=False):
-#             fpn = f'{mn}.{pn}' if mn else pn  # full param name
-#             if not any(fpn.startswith(bl_module_name) for bl_module_name in blacklist_module_names):
-#                 param_dict[fpn] = p
-#                 if 'bias' in pn:
-#                     no_decay.add(fpn)
-#                 elif pn.endswith('weight') and isinstance(m, tuple(whitelist_weight_modules)):
-#                     decay.add(fpn)
-#                 elif pn.endswith('weight') and isinstance(m, tuple(blacklist_weight_modules)):
-#                     no_decay.add(fpn)
-#                 else:
-#                     decay.add(fpn)  # Default behavior is to add to decay
-
-#     # Validate that we considered every parameter
-#     inter_params = decay & no_decay
-#     union_params = decay | no_decay
-#     assert len(inter_params) == 0, f"parameters {str(inter_params)} made it into both decay/no_decay sets!"
-#     assert len(param_dict.keys() - union_params) == 0, f"parameters {str(param_dict.keys() - union_params)} were not separated into either decay/no_decay set!"
-
-#     # Create the PyTorch optimizer object
-#     optim_groups = [
-#         {"params": [param_dict[pn] for pn in sorted(list(decay))], "weight_decay": weight_decay},
-#         {"params": [param_dict[pn] for pn in sorted(list(no_decay))], "weight_decay": 0.0},
-#     ]
-#     optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate)
-#     return optimizer
-
 def configure_optimizers(model, weight_decay, learning_rate, betas, device_type):
     # start with all of the candidate parameters
     param_dict = {pn: p for pn, p in model.named_parameters()}
@@ -293,30 +253,7 @@ class MuZeroGPTPolicy(Policy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
-        self._optimizer_tokenizer = optim.Adam(
-            self._model.tokenizer.parameters(), lr=1e-4 # weight_decay=0
-        )
-
         # TODO: nanoGPT optimizer
-        # self._optimizer_world_model = configure_optimizer(
-        #     model=self._model.world_model,
-        #     learning_rate=3e-3,
-        #     # learning_rate=1e-4,
-        #     weight_decay=self._cfg.weight_decay,
-        #     # weight_decay=0.01,
-        #     exclude_submodules=['tokenizer']
-        # )
-        
-        # 验证没有问题的版本 
-        # self._optimizer_world_model = configure_optimizer(
-        #     model=self._model.world_model,
-        #     # learning_rate=3e-3,
-        #     learning_rate=1e-4, # NOTE: TODO
-        #     weight_decay=self._cfg.weight_decay,
-        #     # weight_decay=0.01,
-        #     exclude_submodules=['none'] # NOTE
-        # )
-
         self._optimizer_world_model = configure_optimizers(
             model=self._model.world_model,
             learning_rate=1e-4,
@@ -332,7 +269,7 @@ class MuZeroGPTPolicy(Policy):
         self._model = torch.compile(self._model)
         self._target_model = torch.compile(self._target_model)
 
-
+        # TODO: hard target
         # self._target_model = model_wrap(
         #     self._target_model,
         #     wrapper_name='target',
@@ -348,10 +285,6 @@ class MuZeroGPTPolicy(Policy):
             update_kwargs={'theta': 0.01} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
         )
         self._learn_model = self._model
-
-        # TODO: only for debug
-        # for param in self._learn_model.tokenizer.parameters():
-        #     param.requires_grad = False
 
         if self._cfg.use_augmentation:
             self.image_transforms = ImageTransforms(
@@ -384,7 +317,6 @@ class MuZeroGPTPolicy(Policy):
             return_loss_dict = self._forward_learn_transformer(data)
         else:
             ValueError('Unknown component type')
-        
         return return_loss_dict
 
     #@profile
@@ -553,7 +485,6 @@ class MuZeroGPTPolicy(Policy):
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
             'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
-            'cur_lr_tokenizer': self._optimizer_tokenizer.param_groups[0]['lr'],
 
             'weighted_total_loss': weighted_total_loss.item(),
             'obs_loss': obs_loss,
@@ -914,7 +845,6 @@ class MuZeroGPTPolicy(Policy):
             'model': self._learn_model.state_dict(),
             'target_model': self._target_model.state_dict(),
             'optimizer_world_model': self._optimizer_world_model.state_dict(),
-            'optimizer_tokenizer': self._optimizer_tokenizer.state_dict(),
         }
 
     # TODO:
@@ -928,7 +858,6 @@ class MuZeroGPTPolicy(Policy):
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
         self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
-        self._optimizer_tokenizer.load_state_dict(state_dict['optimizer_tokenizer'])
 
     # def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
     #     """

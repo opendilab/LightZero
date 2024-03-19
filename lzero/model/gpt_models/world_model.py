@@ -53,8 +53,8 @@ class SimNorm(nn.Module):
     def __repr__(self):
         return f"SimNorm(dim={self.dim})"
 
-# def quantize_state(state, num_buckets=15): # for atari
-def quantize_state(state, num_buckets=100): # for memory NOTE:TODO
+def quantize_state(state, num_buckets=15): # for atari
+# def quantize_state(state, num_buckets=100): # for memory NOTE:TODO
     """
     量化状态向量。
     参数:

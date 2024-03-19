@@ -1,9 +1,13 @@
 from easydict import EasyDict
+import torch
+torch.cuda.set_device(7)
 
-env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
-memory_length = 30
+env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
+memory_length = 2
+# to_test [2, 30, 50, 100]
+# hard [250, 500, 750, 1000]
 
-max_env_step = int(1e6)
+max_env_step = int(5e6)
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -13,28 +17,32 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 200
+update_per_collect = None # for others
+model_update_ratio = 0.25 
 batch_size = 256
 reanalyze_ratio = 0
 td_steps = 5
+num_unroll_steps = 30+memory_length
 
 # debug
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 5
-update_per_collect = 2
-batch_size = 2
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 5
+# update_per_collect = 2
+# batch_size = 2
 
 policy_entropy_loss_weight = 1e-4
 threshold_training_steps_for_final_temperature = int(5e5)
-eps_greedy_exploration_in_collect = False
+# eps_greedy_exploration_in_collect = False
+eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 memory_muzero_config = dict(
-    exp_name=f'data_mz_ctree/{env_id}_memlen-{memory_length}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_'
+    # mcts_ctree.py muzero_collector muzero_evaluator
+    exp_name=f'data_memory/{env_id}_memlen-{memory_length}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_'
              f'collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
              f'_pelw{policy_entropy_loss_weight}_seed{seed}',
     env=dict(
@@ -71,7 +79,7 @@ memory_muzero_config = dict(
         threshold_training_steps_for_final_temperature=threshold_training_steps_for_final_temperature,
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=50,
+        game_segment_length=num_unroll_steps,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
@@ -81,7 +89,7 @@ memory_muzero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(2e2),
+        eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

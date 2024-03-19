@@ -208,9 +208,8 @@ def train_muzero_gpt(
         replay_buffer.remove_oldest_data_to_fit()
 
         replay_buffer._cfg.num_unroll_steps = num_unroll_steps
-        batch_size = 64
+        batch_size = policy._cfg.batch_size
         replay_buffer._cfg.batch_size = batch_size
-        policy._cfg.batch_size = batch_size # policy._cfg.num_unroll_steps = 6
         if collector.envstep > cfg.policy.transformer_start_after_envsteps:
             # TODO：transformer tokenizer交替更新
             # Learn policy from collected data.
@@ -251,7 +250,6 @@ def train_muzero_gpt(
 
         # policy._eval_model.world_model.past_keys_values_cache.clear() # very important
         # policy._eval_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
-
 
         torch.cuda.empty_cache() # TODO: NOTE
 

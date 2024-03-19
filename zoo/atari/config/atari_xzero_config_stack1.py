@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(2)
+torch.cuda.set_device(4)
 
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 
@@ -10,6 +10,7 @@ env_name = 'PongNoFrameskip-v4'
 # env_name = 'QbertNoFrameskip-v4'
 # env_name = 'SeaquestNoFrameskip-v4'
 # env_name = 'BreakoutNoFrameskip-v4'  # collect_env_steps=5e3 
+
 # env_name = 'BoxingNoFrameskip-v4'
 # env_name = 'FrostbiteNoFrameskip-v4'
 
@@ -36,15 +37,16 @@ elif env_name == 'FrostbiteNoFrameskip-v4':
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-# update_per_collect = 1000  # for pong boxing
-update_per_collect = None # for others
+update_per_collect = 1000  # for pong boxing
+# update_per_collect = 2000  # for pong boxing
+# update_per_collect = None # for others
 
-# model_update_ratio = 0.25  # for others 
-model_update_ratio = 0.125  # for pong boxing
+model_update_ratio = 0.25  # for others 
+# model_update_ratio = 0.125  # for pong boxing
 
 num_simulations = 50
 
-max_env_step = int(2e6)
+max_env_step = int(1.5e6)
 reanalyze_ratio = 0. 
 # reanalyze_ratio = 0.05 # TODO
 
@@ -52,8 +54,8 @@ batch_size = 64
 num_unroll_steps = 5
 # num_unroll_steps = 10
 
-# eps_greedy_exploration_in_collect = True
-eps_greedy_exploration_in_collect = False
+# eps_greedy_exploration_in_collect = True # for breakout
+eps_greedy_exploration_in_collect = False 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -66,7 +68,9 @@ atari_xzero_config = dict(
     # atari env action space
     # game_buffer_muzero_gpt task_id
     # TODO: muzero_gpt_model.py world_model.py (3,64,64)
-    exp_name=f'data_xzero_atari_0316/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-mse_learned-act-emb_nogradscale_seed0_after-merge-memory_nlayer12',
+    exp_name=f'data_xzero_atari_0318/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-mse_no-aug_no-priority_nlayer4_seed0',
+
+    # exp_name=f'data_xzero_atari_0316/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-mse_learned-act-emb_nogradscale_seed0_after-merge-memory_priority',
     # exp_name=f'data_xzero_atari_0316/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-mse_learned-act-emb_nogradscale_seed0_after-merge-memory_useaug',
 
     # exp_name=f'data_xzero_0312/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_nogradscale_seed0',
@@ -145,6 +149,9 @@ atari_xzero_config = dict(
             # support_scale=10,
         ),
         use_priority=False,
+        # use_priority=True, # NOTE
+        use_augmentation=False,  # NOTE
+        # use_augmentation=True,  # NOTE: only for image-based atari
         cuda=True,
         env_type='not_board_games',
         game_segment_length=400,
@@ -156,10 +163,9 @@ atari_xzero_config = dict(
             type='linear',
             start=1.,
             end=0.01,
-            decay=int(1e4),  # 10k
+            # decay=int(1e4),  # 10k
+            decay=int(1e5),  # 100k
         ),
-        use_augmentation=False,  # NOTE
-        # use_augmentation=True,  # NOTE: only for image-based atari
 
         update_per_collect=update_per_collect,
         model_update_ratio = model_update_ratio,
@@ -178,7 +184,6 @@ atari_xzero_config = dict(
         grad_clip_value = 0.5, # TODO: 10
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
         # eval_freq=int(9e9),
         eval_freq=int(1e4),

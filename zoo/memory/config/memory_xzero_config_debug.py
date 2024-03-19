@@ -1,14 +1,13 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(6)
+torch.cuda.set_device(0)
 
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
-memory_length = 50 
-# to_test [2, 30, 50, 100]
-# hard [250, 500, 750, 1000]
+# memory_length = 30
+memory_length = 2  # to_test [2, 50, 100, 250, 500, 750, 1000]
 
 
-max_env_step = int(5e6)
+max_env_step = int(10e6)
 # ==== NOTE: 需要设置cfg_memory中的action_shape =====
 # ==== NOTE: 需要设置cfg_memory中的policy_entropy_weight =====
 
@@ -47,10 +46,9 @@ eps_greedy_exploration_in_collect = True
 # ==============================================================
 
 memory_xzero_config = dict(
-    # mcts_ctree.py muzero_collector muzero_evaluator
-    exp_name=f'data_memory/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}'
-             f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
-             f'_pelw1e-4_quan15_mse_emd64_seed{seed}',
+    exp_name=f'data_memory_debug/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}'
+             f'collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
+             f'_pelw1e-4_quan15_mse_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -95,6 +93,7 @@ memory_xzero_config = dict(
             decay=int(2e5),  # NOTE: TODO
         ),
         use_priority=False,
+        # use_priority=True, # NOTE
         use_augmentation=False,  # NOTE
         td_steps=td_steps,
         manual_temperature_decay=True,

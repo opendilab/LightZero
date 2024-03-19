@@ -77,7 +77,6 @@ class MemoryEnvLightZero(BaseEnv):
         Returns:
             - obs (:obj:`np.ndarray`): Initial observation from the environment.
         """
-        # if not self._init_flag:
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
             self._seed = self._seed + np_seed
@@ -87,7 +86,7 @@ class MemoryEnvLightZero(BaseEnv):
         else:
             self._seed = 0  # TODO
             self._rng = np.random.RandomState(self._seed)
-        print(f'self._seed: {self._seed}')
+        print(f'memory_lightzero_env reset self._seed: {self._seed}')
         if self._cfg.env_id == 'visual_match':
             from zoo.memory.envs.pycolab_tvt.visual_match import Game, PASSIVE_EXPLORE_GRID
             self._game = Game(
@@ -123,9 +122,8 @@ class MemoryEnvLightZero(BaseEnv):
         self._action_space = gym.spaces.Discrete(self._game.num_actions)
         self._reward_space = gym.spaces.Box(low=-float('inf'), high=float('inf'), shape=(1,), dtype=np.float32)
 
-        # self._init_flag = True
-
         self._current_step = 0
+        self.episode_reward_list = []
         self._eval_episode_return = 0
         obs, _, _ = self._episode.its_showtime()
         obs = obs[0].reshape(1, 5, 5)
@@ -155,6 +153,7 @@ class MemoryEnvLightZero(BaseEnv):
             action = action.squeeze()  # 0-dim array
 
         observation, reward, _ = self._episode.play(action)
+        self.episode_reward_list.append(reward)
         observation = observation[0].reshape(1, 5, 5)
 
         self._current_step += 1
@@ -165,8 +164,9 @@ class MemoryEnvLightZero(BaseEnv):
         if done:
             # TODO
             info['eval_episode_return'] = self._eval_episode_return
-            info['success'] = 1 if reward == self._cfg.final_reward else 0
+            info['success'] = 1 if self._eval_episode_return == self._cfg.final_reward else 0
             info['eval_episode_return'] = info['success']
+            print(f'episode seed:{self._seed} done! self.episode_reward_list is: {self.episode_reward_list}')
 
         observation = to_ndarray(observation, dtype=np.float32)
         reward = to_ndarray([reward])
