@@ -19,7 +19,7 @@ reanalyze_ratio = 0.
 
 metadrive_muzero_config = dict(
     exp_name=
-    f'data_sez_ctree/muzero_metadrive{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_sez_ctree/muzero_metadrive_old{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='MetaDrive',
         continuous=True,
