@@ -1,4 +1,4 @@
-from zoo.memory.config.memory_muzero_config import main_config, create_config
+from zoo.memory.config.memory_xzero_config import main_config, create_config
 from lzero.entry import eval_muzero
 import numpy as np
 
@@ -24,7 +24,9 @@ if __name__ == "__main__":
         please refer to its own documentation.
     """
     # model_path = './ckpt/ckpt_best.pth.tar'
-    model_path = None
+    # model_path = None
+    model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match/memlen-30_xzero_H60_ns50_upcNone-mur0.25_rr0_H60_bs64_collect-eps-True_temp-final-steps-500000_pelw1e-4_quan15_mse_emd64_seed0/ckpt/ckpt_best.pth.tar'
+
 
     # Initialize a list with a single seed for the experiment
     seeds = [0]
@@ -33,10 +35,10 @@ if __name__ == "__main__":
     num_episodes_each_seed = 1
 
     # Specify the number of environments for the evaluator to use
-    main_config.env.evaluator_env_num = 1
+    main_config.env.evaluator_env_num = 8
 
     # Set the number of episodes for the evaluator to run
-    main_config.env.n_evaluator_episode = 1
+    main_config.env.n_evaluator_episode = 8
 
     # The total number of test episodes is the product of the number of episodes per seed and the number of seeds
     total_test_episodes = num_episodes_each_seed * len(seeds)
@@ -45,8 +47,9 @@ if __name__ == "__main__":
     # main_config.env.replay_path = './video'
 
     # Enable saving of replay as a gif, specify the path to save the replay gif
-    main_config.env.save_replay_gif = True
-    main_config.env.replay_path_gif = './video'
+    # main_config.env.save_replay_gif = True
+    # main_config.env.replay_path_gif = './video'
+    main_config.env.save_replay=True
 
     # Initialize lists to store the mean and total returns for each seed
     returns_mean_seeds = []

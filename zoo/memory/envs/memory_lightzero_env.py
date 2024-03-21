@@ -198,6 +198,7 @@ class MemoryEnvLightZero(BaseEnv):
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             gif_file = os.path.join(gif_dir, f'episode_{self._current_step}_{timestamp}.gif')
             self._gif_images[0].save(gif_file, save_all=True, append_images=self._gif_images[1:], duration=100, loop=0)
+            print(f'saved replay to {gif_file}')
 
         if self._cfg.scale_observation:
             observation = observation / 1000

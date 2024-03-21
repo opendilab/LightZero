@@ -157,9 +157,9 @@ class MuZeroMCTSCtree(object):
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
-                network_output = model.recurrent_inference(latent_states, last_actions) # for classic muzero
+                # network_output = model.recurrent_inference(latent_states, last_actions) # for classic muzero
                 # network_output = model.recurrent_inference(last_actions)  # TODO: for muzero_gpt latent_states is not used in the model.
-                # network_output = model.recurrent_inference(state_action_history)  # TODO: latent_states is not used in the model.
+                network_output = model.recurrent_inference(state_action_history)  # TODO: latent_states is not used in the model.
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)

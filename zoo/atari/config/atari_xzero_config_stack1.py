@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(4)
+torch.cuda.set_device(7)
 
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 
@@ -46,7 +46,9 @@ model_update_ratio = 0.25  # for others
 
 num_simulations = 50
 
-max_env_step = int(1.5e6)
+# max_env_step = int(1.5e6)
+max_env_step = int(2e6)
+
 reanalyze_ratio = 0. 
 # reanalyze_ratio = 0.05 # TODO
 
@@ -54,6 +56,7 @@ batch_size = 64
 num_unroll_steps = 5
 # num_unroll_steps = 10
 
+threshold_training_steps_for_final_temperature = int(2e5)  # train_iter 100k 1->0.5->0.25
 # eps_greedy_exploration_in_collect = True # for breakout
 eps_greedy_exploration_in_collect = False 
 # ==============================================================
@@ -68,7 +71,7 @@ atari_xzero_config = dict(
     # atari env action space
     # game_buffer_muzero_gpt task_id
     # TODO: muzero_gpt_model.py world_model.py (3,64,64)
-    exp_name=f'data_xzero_atari_0318/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-mse_no-aug_no-priority_nlayer4_seed0',
+    exp_name=f'data_xzero_atari_0321/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_use-aug_no-priority_nlayer2_temp-final-steps-{threshold_training_steps_for_final_temperature}_seed0',
 
     # exp_name=f'data_xzero_atari_0316/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-mse_learned-act-emb_nogradscale_seed0_after-merge-memory_priority',
     # exp_name=f'data_xzero_atari_0316/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-mse_learned-act-emb_nogradscale_seed0_after-merge-memory_useaug',
@@ -150,8 +153,8 @@ atari_xzero_config = dict(
         ),
         use_priority=False,
         # use_priority=True, # NOTE
-        use_augmentation=False,  # NOTE
-        # use_augmentation=True,  # NOTE: only for image-based atari
+        # use_augmentation=False,  # NOTE
+        use_augmentation=True,  # NOTE: only for image-based atari
         cuda=True,
         env_type='not_board_games',
         game_segment_length=400,
@@ -174,8 +177,8 @@ atari_xzero_config = dict(
         # lr_piecewise_constant_decay=True,
         # learning_rate=0.2,
 
-        # manual_temperature_decay=True,
-        # threshold_training_steps_for_final_temperature=int(5e4), # 100k 1->0.5->0.25
+        manual_temperature_decay=True,
+        threshold_training_steps_for_final_temperature=threshold_training_steps_for_final_temperature,
 
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
@@ -186,7 +189,7 @@ atari_xzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         # eval_freq=int(9e9),
-        eval_freq=int(1e4),
+        eval_freq=int(2e4),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

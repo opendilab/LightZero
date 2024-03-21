@@ -7,7 +7,7 @@ env_id = 'visual_match'  # The name of the environment, options: 'visual_match',
 memory_length = 2  # to_test [2, 50, 100, 250, 500, 750, 1000]
 
 
-max_env_step = int(10e6)
+max_env_step = int(5e6)
 # ==== NOTE: 需要设置cfg_memory中的action_shape =====
 # ==== NOTE: 需要设置cfg_memory中的policy_entropy_weight =====
 
@@ -17,7 +17,7 @@ max_env_step = int(10e6)
 seed = 0
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 3
+evaluator_env_num = 8
 num_simulations = 50
 update_per_collect = None # for others
 model_update_ratio = 0.25 
