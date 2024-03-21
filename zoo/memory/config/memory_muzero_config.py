@@ -1,11 +1,11 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(4)
+torch.cuda.set_device(6)
 
-env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
-# env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
+# env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
+env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
 
-memory_length = 250
+memory_length = 1000
 # to_test [2, 30, 50, 100]
 # hard [250, 500, 750, 1000]
 
@@ -44,13 +44,14 @@ eps_greedy_exploration_in_collect = True
 
 memory_muzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
-    exp_name=f'data_memory_{env_id}/memlen-{memory_length}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_'
+    exp_name=f'data_memory_{env_id}_fixscale/{env_id}_memlen-{memory_length}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_'
              f'collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
              f'_pelw{policy_entropy_loss_weight}_seed{seed}_evalnum{evaluator_env_num}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
         flate_observation=True,  # Whether to flatten the observation
+        obs_max_scale=100,
         max_frames={
             "explore": 15,
             "distractor": memory_length,

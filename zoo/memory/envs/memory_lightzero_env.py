@@ -49,6 +49,9 @@ class MemoryEnvLightZero(BaseEnv):
         render=False,  # Whether to enable real-time rendering
         scale_observation=True,  # Whether to scale the observation to [0, 1]
         flate_observation=False,  # Whether to flatten the observation
+        # obs_max_scale=107,  # Maximum value of the observation, for key_to_door
+        # obs_max_scale=101,  # Maximum value of the observation, for visual_match
+        obs_max_scale=100,  # Maximum value of the observation
     )
 
     @classmethod
@@ -69,6 +72,7 @@ class MemoryEnvLightZero(BaseEnv):
         self._save_replay = cfg.save_replay
         self._render = cfg.render
         self._gif_images = []
+        self.obs_max_scale = cfg.obs_max_scale
 
     def reset(self) -> np.ndarray:
         """
@@ -118,7 +122,7 @@ class MemoryEnvLightZero(BaseEnv):
         if self._cfg.scale_observation:
             self._observation_space = gym.spaces.Box(0, 1, shape=(1, 5, 5), dtype='float32')
         else:
-            self._observation_space = gym.spaces.Box(0, 1000, shape=(1, 5, 5), dtype='int64')
+            self._observation_space = gym.spaces.Box(0, self.obs_max_scale, shape=(1, 5, 5), dtype='int64')
         self._action_space = gym.spaces.Discrete(self._game.num_actions)
         self._reward_space = gym.spaces.Box(low=-float('inf'), high=float('inf'), shape=(1,), dtype=np.float32)
 
@@ -130,7 +134,7 @@ class MemoryEnvLightZero(BaseEnv):
         obs = to_ndarray(obs, dtype=np.float32)
         action_mask = np.ones(self.action_space.n, 'int8')
         if self._cfg.scale_observation:
-            obs = obs / 1000
+            obs = obs / self.obs_max_scale
         if self._cfg.flate_observation:
             obs = obs.flatten()
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
@@ -168,6 +172,7 @@ class MemoryEnvLightZero(BaseEnv):
             info['eval_episode_return'] = info['success']
             print(f'episode seed:{self._seed} done! self.episode_reward_list is: {self.episode_reward_list}')
 
+        # print(f"Action: {action}, Reward: {reward}, Observation: {observation}, Done: {done}, Info: {info}")
         observation = to_ndarray(observation, dtype=np.float32)
         reward = to_ndarray([reward])
         action_mask = np.ones(self.action_space.n, 'int8')
@@ -201,7 +206,7 @@ class MemoryEnvLightZero(BaseEnv):
             print(f'saved replay to {gif_file}')
 
         if self._cfg.scale_observation:
-            observation = observation / 1000
+            observation = observation / self.obs_max_scale
         if self._cfg.flate_observation:
             observation = observation.flatten()
         observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1}

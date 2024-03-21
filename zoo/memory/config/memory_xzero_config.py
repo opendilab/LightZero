@@ -1,11 +1,11 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(3)
 
-env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
-# env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
+# env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
+env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
 
-memory_length = 30
+memory_length = 500
 # to_test [2, 30, 50, 100]
 # hard [250, 500, 750, 1000]
 
@@ -28,6 +28,7 @@ model_update_ratio = 0.25
 batch_size = 64
 # num_unroll_steps = 5
 num_unroll_steps = 30+memory_length
+game_segment_length=30+memory_length # TODO:
 
 
 reanalyze_ratio = 0
@@ -50,13 +51,16 @@ eps_greedy_exploration_in_collect = True
 
 memory_xzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
-    exp_name=f'data_memory_{env_id}_eval/memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}'
+    exp_name=f'data_memory_{env_id}_fixscale/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
              f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
-             f'_pelw1e-4_quan15_mse_emd64_seed{seed}_eval{evaluator_env_num}',
+             f'_pelw1e-4_quan15_mse_emd64_seed{seed}_eval{evaluator_env_num}_clearper20-notcache',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
         flate_observation=True,  # Whether to flatten the observation
+        # obs_max_scale=107,  # Maximum value of the observation, for key_to_door
+        # obs_max_scale=101,  # Maximum value of the observation, for visual_match
+        obs_max_scale=100,
         max_frames={
             "explore": 15,
             "distractor": memory_length,
@@ -104,7 +108,7 @@ memory_xzero_config = dict(
         threshold_training_steps_for_final_temperature=threshold_training_steps_for_final_temperature,
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=num_unroll_steps,  # TODO:
+        game_segment_length=game_segment_length,  # TODO:
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         lr_piecewise_constant_decay=False,

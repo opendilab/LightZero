@@ -323,10 +323,12 @@ class MuZeroEvaluator(ISerialEvaluator):
                         obs, reward, done, info = t.obs, t.reward, t.done, t.info
 
                         eps_steps_lst[env_id] += 1
-                        if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE
-                        # if eps_steps_lst[env_id] % 20 == 0:
-                            self._policy.get_attribute('eval_model').world_model.past_keys_values_cache.clear()
-                            self._policy.get_attribute('eval_model').world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
+                        # if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE
+                        if eps_steps_lst[env_id] % 20 == 0:
+                            # TODO: 是否需要clear
+                            # self._policy.get_attribute('collect_model').world_model.past_keys_values_cache.clear()
+                            self._policy.get_attribute('collect_model').world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
+                        
                             torch.cuda.empty_cache()
                             print('evaluator: eval_model clear()')
                             print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
