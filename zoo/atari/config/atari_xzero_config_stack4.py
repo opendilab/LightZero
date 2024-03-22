@@ -95,13 +95,17 @@ atari_muzero_config = dict(
         clip_rewards=True,
     ),
     policy=dict(
-        learner=dict(
-            hook=dict(
-                log_show_after_iter=200,
-                save_ckpt_after_iter=100000, # TODO: default:10000
-                save_ckpt_after_run=True,
+        learn=dict(
+            learner=dict(
+                hook=dict(
+                    load_ckpt_before_run='',
+                    log_show_after_iter=100,
+                    save_ckpt_after_iter=100000,  # default is 1000
+                    save_ckpt_after_run=True,
+                ),
             ),
         ),
+
         model_path=None,
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_ctree/Pong_muzero_ns50_upc1000_rr0.0_46464_seed0_240110_140819/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_ctree/Pong_muzero_ns50_upc1000_rr0.0_46464_seed0_240110_140819/ckpt/iteration_60000.pth.tar',

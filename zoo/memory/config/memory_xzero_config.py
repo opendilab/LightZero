@@ -1,16 +1,16 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(3)
+torch.cuda.set_device(7)
 
-# env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
-env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
+env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
+# env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
 
-memory_length = 500
-# to_test [2, 30, 50, 100]
-# hard [250, 500, 750, 1000]
+memory_length = 100
+# visual_match [2, 60, 100, 250, 500]
+# key_to_door [2, 60, 120, 250, 500]
 
 
-max_env_step = int(5e6)
+max_env_step = int(3e6)
 # ==== NOTE: 需要设置cfg_memory中的action_shape =====
 # ==== NOTE: 需要设置cfg_memory中的policy_entropy_weight =====
 
@@ -43,7 +43,8 @@ td_steps = 5
 # batch_size = 2
 
 # threshold_training_steps_for_final_temperature = int(5e5)
-threshold_training_steps_for_final_temperature = int(1e5)
+threshold_training_steps_for_final_temperature = int(1e5)  # TODO: 100k train iter
+
 
 # eps_greedy_exploration_in_collect = False
 eps_greedy_exploration_in_collect = True
@@ -53,9 +54,13 @@ eps_greedy_exploration_in_collect = True
 
 memory_xzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
-    exp_name=f'data_memory_{env_id}_fixscale/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
+    exp_name=f'data_memory_{env_id}_0323/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
              f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
-             f'_pelw1e-4_quan15_mse_emd64_seed{seed}_eval{evaluator_env_num}_clearper20-notcache',
+             f'_pelw1e-4_quan15_mse_emd64_seed{seed}_eval{evaluator_env_num}_nl4-nh8',
+    # exp_name=f'data_memory_{env_id}_fixscale_no-dynamic-seed/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}-fix_rr{reanalyze_ratio}_bs{batch_size}'
+    #         f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
+    #         f'_pelw1e-1_quan15_mse_emd64_seed{seed}_eval{evaluator_env_num}_clearper20-notcache_no-dynamic-seed',
+    
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -74,11 +79,14 @@ memory_xzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        learner=dict(
-            hook=dict(
-                log_show_after_iter=200,
-                save_ckpt_after_iter=100000, # TODO: default:10000
-                save_ckpt_after_run=True,
+        learn=dict(
+            learner=dict(
+                hook=dict(
+                    load_ckpt_before_run='',
+                    log_show_after_iter=100,
+                    save_ckpt_after_iter=20000,  # default is 10000
+                    save_ckpt_after_run=True,
+                ),
             ),
         ),
 
@@ -101,16 +109,20 @@ memory_xzero_config = dict(
         ),
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            decay=int(2e5),  # NOTE: TODO
+            # decay=int(2e5),  # NOTE: TODO
+            decay=int(5e4),  # NOTE: 50k env steps
         ),
         use_priority=False,
         use_augmentation=False,  # NOTE
         td_steps=td_steps,
+
         manual_temperature_decay=True,
         threshold_training_steps_for_final_temperature=threshold_training_steps_for_final_temperature,
+        
         cuda=True,
         env_type='not_board_games',
         game_segment_length=game_segment_length,  # TODO:
+        model_update_ratio=model_update_ratio,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         lr_piecewise_constant_decay=False,
@@ -120,7 +132,8 @@ memory_xzero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(1e4),
+        # eval_freq=int(1e4),
+        eval_freq=int(5e3),  # TODO
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

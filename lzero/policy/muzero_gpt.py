@@ -140,7 +140,7 @@ class MuZeroGPTPolicy(Policy):
         # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.
         update_per_collect=None,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
-        model_update_ratio=0.1,
+        model_update_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam']
@@ -281,8 +281,8 @@ class MuZeroGPTPolicy(Policy):
             self._target_model,
             wrapper_name='target',
             update_type='momentum',
-            # update_kwargs={'theta': 0.005}
             update_kwargs={'theta': 0.01} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
+            # update_kwargs={'theta': 0.05} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
         )
         self._learn_model = self._model
 
@@ -729,6 +729,7 @@ class MuZeroGPTPolicy(Policy):
             # network_output = self._collect_model.initial_inference(data)
             network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
+            # print(f"latent_state_roots:{latent_state_roots}")  # TODO
 
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
@@ -760,7 +761,7 @@ class MuZeroGPTPolicy(Policy):
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                print("roots_visit_count_distributions:", distributions, "root_value:", value)  # TODO
+                # print("roots_visit_count_distributions:", distributions, "root_value:", value)  # TODO
 
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.

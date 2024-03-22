@@ -13,6 +13,8 @@ from PIL import Image
 import matplotlib.pyplot as plt
 import os
 
+from matplotlib import animation
+
 
 @ENV_REGISTRY.register('memory_lightzero')
 class MemoryEnvLightZero(BaseEnv):
@@ -140,6 +142,7 @@ class MemoryEnvLightZero(BaseEnv):
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
         self._gif_images = []
+        self._gif_images_numpy = []
 
         return obs
 
@@ -172,7 +175,7 @@ class MemoryEnvLightZero(BaseEnv):
             info['eval_episode_return'] = info['success']
             print(f'episode seed:{self._seed} done! self.episode_reward_list is: {self.episode_reward_list}')
 
-        print(f"Step: {self._current_step}, Action: {action}, Reward: {reward}, Observation: {observation}, Done: {done}, Info: {info}")
+        # print(f"Step: {self._current_step}, Action: {action}, Reward: {reward}, Observation: {observation}, Done: {done}, Info: {info}")  # TODO
         observation = to_ndarray(observation, dtype=np.float32)
         reward = to_ndarray([reward])
         action_mask = np.ones(self.action_space.n, 'int8')
@@ -190,6 +193,7 @@ class MemoryEnvLightZero(BaseEnv):
 
             if self._save_replay:
                 self._gif_images.append(img)
+                self._gif_images_numpy.append(obs_rgb)
 
             if self._render:
                 plt.imshow(img)
@@ -203,6 +207,7 @@ class MemoryEnvLightZero(BaseEnv):
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             gif_file = os.path.join(gif_dir, f'episode_seed{self._seed}_len{self._current_step}_{timestamp}.gif')
             self._gif_images[0].save(gif_file, save_all=True, append_images=self._gif_images[1:], duration=100, loop=0)
+            # self.display_frames_as_gif(self._gif_images_numpy, gif_file)
             print(f'saved replay to {gif_file}')
 
         if self._cfg.scale_observation:
@@ -222,6 +227,8 @@ class MemoryEnvLightZero(BaseEnv):
         return random_action
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
+    # def seed(self, seed: int, dynamic_seed: bool = False) -> None: # TODO
+    
         """
         Set the seed for the environment's random number generator. Can handle both static and dynamic seeding.
         """
@@ -235,6 +242,17 @@ class MemoryEnvLightZero(BaseEnv):
         Close the environment.
         """
         self._init_flag = False
+
+    @staticmethod
+    def display_frames_as_gif(frames: list, path: str) -> None:
+        patch = plt.imshow(frames[0])
+        plt.axis('off')
+
+        def animate(i):
+            patch.set_data(frames[i])
+
+        anim = animation.FuncAnimation(plt.gcf(), animate, frames=len(frames), interval=5)
+        anim.save(path, writer='imagemagick', fps=20)
 
     @property
     def observation_space(self) -> gym.spaces.Space:

@@ -324,9 +324,22 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                         eps_steps_lst[env_id] += 1
                         # if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE
-                        if eps_steps_lst[env_id] % 20 == 0:
+                        #     # TODO: 是否需要clear
+                        #     self._policy.get_attribute('collect_model').world_model.past_keys_values_cache.clear()
+                        #     self._policy.get_attribute('collect_model').world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
+                        
+                        #     torch.cuda.empty_cache()
+                        #     print('evaluator: eval_model clear()')
+                        #     print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
+
+                        # if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE
+                        # if eps_steps_lst[env_id] % 90 == 0:
+                        if eps_steps_lst[env_id] % 130 == 0:
+                        # if eps_steps_lst[env_id] % 150 == 0:
+                        # if eps_steps_lst[env_id] % 280 == 0:
+                        
                             # TODO: 是否需要clear
-                            # self._policy.get_attribute('collect_model').world_model.past_keys_values_cache.clear()
+                            self._policy.get_attribute('collect_model').world_model.past_keys_values_cache.clear()
                             self._policy.get_attribute('collect_model').world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
                         
                             torch.cuda.empty_cache()

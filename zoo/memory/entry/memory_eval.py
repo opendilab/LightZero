@@ -26,8 +26,8 @@ if __name__ == "__main__":
     # model_path = './ckpt/ckpt_best.pth.tar'
     # model_path = None
     # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_fixscale/memlen-2_muzero_ns50_upcNone_rr0_collect-eps-True_temp-final-steps-500000_pelw0.0001_seed0_evalnum10/ckpt/iteration_120000.pth.tar'
-    model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_key_to_door_fixscale/key_to_door_memlen-2_xzero_H32_ns50_upcNone-mur0.25_rr0_bs64_collect-eps-True_temp-final-steps-500000_pelw1e-4_quan15_mse_emd64_seed0_eval8_clearper20-notcache/ckpt/ckpt_best.pth.tar'
-
+    # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_key_to_door_fixscale/key_to_door_memlen-2_xzero_H32_ns50_upcNone-mur0.25_rr0_bs64_collect-eps-True_temp-final-steps-500000_pelw1e-4_quan15_mse_emd64_seed0_eval8_clearper20-notcache/ckpt/ckpt_best.pth.tar'
+    model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_fixscale_no-dynamic-seed/visual_match_memlen-2_xzero_H32_ns50_upcNone-mur0.25-fix_rr0_bs64_collect-eps-True_temp-final-steps-50000_pelw1e-4_quan15_mse_emd64_seed0_eval8_clearper20-notcache_no-dynamic-seed/ckpt/iteration_100000.pth.tar'
 
     # Initialize a list with a single seed for the experiment
     seeds = [0]

@@ -2,8 +2,8 @@ from easydict import EasyDict
 import torch
 torch.cuda.set_device(0)
 
-# env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
-env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
+env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
+# env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
 
 memory_length = 2
 # to_test [2, 30, 50, 100]
@@ -43,17 +43,17 @@ td_steps = 5
 # batch_size = 2
 
 # threshold_training_steps_for_final_temperature = int(5e5)
-threshold_training_steps_for_final_temperature = int(1e5)
+threshold_training_steps_for_final_temperature = int(1e4)
 
-# eps_greedy_exploration_in_collect = False
-eps_greedy_exploration_in_collect = True
+eps_greedy_exploration_in_collect = False
+# eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 memory_xzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
-    exp_name=f'data_memory_{env_id}_fixscale_debug/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
+    exp_name=f'data_debug/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
              f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
              f'_pelw1e-4_quan15_mse_emd64_seed{seed}_eval{evaluator_env_num}_clearper20-notcache',
     env=dict(
@@ -74,17 +74,21 @@ memory_xzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        learner=dict(
-            hook=dict(
-                log_show_after_iter=200,
-                save_ckpt_after_iter=100000, # TODO: default:10000
-                save_ckpt_after_run=True,
+        learn=dict(
+            learner=dict(
+                hook=dict(
+                    load_ckpt_before_run='',
+                    log_show_after_iter=100,
+                    save_ckpt_after_iter=100000,  # default is 1000
+                    save_ckpt_after_run=True,
+                ),
             ),
         ),
 
+
         # model_path=None,
-        model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_key_to_door_fixscale/key_to_door_memlen-2_xzero_H32_ns50_upcNone-mur0.25_rr0_bs64_collect-eps-True_temp-final-steps-500000_pelw1e-4_quan15_mse_emd64_seed0_eval8_clearper20-notcache/ckpt/ckpt_best.pth.tar',
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match/memlen-2_xzero_H32_ns50_upcNone-mur0.25_rr0_H32_bs64_collect-eps-True_temp-final-steps-500000_pelw1e-4_quan15_mse_emd64_seed0_240320_190454/ckpt/ckpt_best.pth.tar',
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_key_to_door_fixscale/key_to_door_memlen-2_xzero_H32_ns50_upcNone-mur0.25_rr0_bs64_collect-eps-True_temp-final-steps-500000_pelw1e-4_quan15_mse_emd64_seed0_eval8_clearper20-notcache/ckpt/ckpt_best.pth.tar',
+        model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_fixscale/visual_match_memlen-2_xzero_H32_ns50_upcNone-mur0.25_rr0_bs64_collect-eps-True_temp-final-steps-500000_pelw1e-4_quan15_mse_emd64_seed0_eval8_clearper20-notcache/ckpt/iteration_60000.pth.tar',
         transformer_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,
         update_per_collect_tokenizer=update_per_collect,
@@ -112,6 +116,7 @@ memory_xzero_config = dict(
         cuda=True,
         env_type='not_board_games',
         game_segment_length=game_segment_length,  # TODO:
+        model_update_ratio=model_update_ratio,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         lr_piecewise_constant_decay=False,
