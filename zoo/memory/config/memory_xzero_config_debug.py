@@ -2,9 +2,12 @@ from easydict import EasyDict
 import torch
 torch.cuda.set_device(0)
 
-env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
-# memory_length = 30
-memory_length = 2  # to_test [2, 50, 100, 250, 500, 750, 1000]
+# env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
+env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
+
+memory_length = 2
+# to_test [2, 30, 50, 100]
+# hard [250, 500, 750, 1000]
 
 
 max_env_step = int(5e6)
@@ -25,6 +28,7 @@ model_update_ratio = 0.25
 batch_size = 64
 # num_unroll_steps = 5
 num_unroll_steps = 30+memory_length
+game_segment_length=30+memory_length # TODO:
 
 
 reanalyze_ratio = 0
@@ -38,7 +42,9 @@ td_steps = 5
 # update_per_collect = 2
 # batch_size = 2
 
-threshold_training_steps_for_final_temperature = int(5e5)
+# threshold_training_steps_for_final_temperature = int(5e5)
+threshold_training_steps_for_final_temperature = int(1e5)
+
 # eps_greedy_exploration_in_collect = False
 eps_greedy_exploration_in_collect = True
 # ==============================================================
@@ -46,13 +52,17 @@ eps_greedy_exploration_in_collect = True
 # ==============================================================
 
 memory_xzero_config = dict(
-    exp_name=f'data_memory_debug/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}'
-             f'collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
-             f'_pelw1e-4_quan15_mse_seed{seed}',
+    # mcts_ctree.py muzero_collector muzero_evaluator
+    exp_name=f'data_memory_{env_id}_fixscale_debug/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
+             f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
+             f'_pelw1e-4_quan15_mse_emd64_seed{seed}_eval{evaluator_env_num}_clearper20-notcache',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
         flate_observation=True,  # Whether to flatten the observation
+        # obs_max_scale=107,  # Maximum value of the observation, for key_to_door
+        # obs_max_scale=101,  # Maximum value of the observation, for visual_match
+        obs_max_scale=100,
         max_frames={
             "explore": 15,
             "distractor": memory_length,
@@ -72,7 +82,9 @@ memory_xzero_config = dict(
             ),
         ),
 
-        model_path=None,
+        # model_path=None,
+        model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_key_to_door_fixscale/key_to_door_memlen-2_xzero_H32_ns50_upcNone-mur0.25_rr0_bs64_collect-eps-True_temp-final-steps-500000_pelw1e-4_quan15_mse_emd64_seed0_eval8_clearper20-notcache/ckpt/ckpt_best.pth.tar',
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match/memlen-2_xzero_H32_ns50_upcNone-mur0.25_rr0_H32_bs64_collect-eps-True_temp-final-steps-500000_pelw1e-4_quan15_mse_emd64_seed0_240320_190454/ckpt/ckpt_best.pth.tar',
         transformer_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,
         update_per_collect_tokenizer=update_per_collect,
@@ -93,14 +105,13 @@ memory_xzero_config = dict(
             decay=int(2e5),  # NOTE: TODO
         ),
         use_priority=False,
-        # use_priority=True, # NOTE
         use_augmentation=False,  # NOTE
         td_steps=td_steps,
         manual_temperature_decay=True,
         threshold_training_steps_for_final_temperature=threshold_training_steps_for_final_temperature,
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=num_unroll_steps,  # TODO:
+        game_segment_length=game_segment_length,  # TODO:
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         lr_piecewise_constant_decay=False,

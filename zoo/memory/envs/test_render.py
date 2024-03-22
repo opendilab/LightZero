@@ -37,6 +37,7 @@ def main():
         render=args.render,
         scale_observation=True,
         flate_observation=False,  # Whether to flatten the observation
+        obs_max_scale=100,  # Maximum value of the observation
     )
 
     for i in range(args.num_episodes):
@@ -54,7 +55,8 @@ def main():
             done = timestep.done
             info = timestep.info
             episode_return += reward
-            print(f"Action: {action}, Reward: {reward}, Done: {done}, Info: {info}")
+            # print(f"Action: {action}, Reward: {reward}, Observation: {obs}, Done: {done}, Info: {info}")
+            # print(f"Observation max: {obs['observation'].max()}, min: {obs['observation'].min()}, mean: {obs['observation'].mean()}")
 
         print(f"Episode {i} finished with return: {episode_return}")
 
@@ -75,5 +77,4 @@ def get_human_action(env):
 
 if __name__ == '__main__':
     main()
-    # python test_render.py --save_replay --render --mode human
-    # python test_render.py --save_replay --render --mode random
+    # python test_render.py

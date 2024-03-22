@@ -35,7 +35,9 @@ game_segment_length = 30+memory_length
 # batch_size = 2
 
 policy_entropy_loss_weight = 1e-4
-threshold_training_steps_for_final_temperature = int(5e5)
+# threshold_training_steps_for_final_temperature = int(5e5)
+threshold_training_steps_for_final_temperature = int(1e5)
+
 # eps_greedy_exploration_in_collect = False
 eps_greedy_exploration_in_collect = True
 # ==============================================================

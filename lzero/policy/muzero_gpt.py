@@ -760,6 +760,8 @@ class MuZeroGPTPolicy(Policy):
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
+                print("roots_visit_count_distributions:", distributions, "root_value:", value)  # TODO
+
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
                 #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than

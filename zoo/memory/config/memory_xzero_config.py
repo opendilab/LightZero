@@ -42,7 +42,9 @@ td_steps = 5
 # update_per_collect = 2
 # batch_size = 2
 
-threshold_training_steps_for_final_temperature = int(5e5)
+# threshold_training_steps_for_final_temperature = int(5e5)
+threshold_training_steps_for_final_temperature = int(1e5)
+
 # eps_greedy_exploration_in_collect = False
 eps_greedy_exploration_in_collect = True
 # ==============================================================

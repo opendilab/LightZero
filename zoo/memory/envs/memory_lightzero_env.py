@@ -172,7 +172,7 @@ class MemoryEnvLightZero(BaseEnv):
             info['eval_episode_return'] = info['success']
             print(f'episode seed:{self._seed} done! self.episode_reward_list is: {self.episode_reward_list}')
 
-        # print(f"Action: {action}, Reward: {reward}, Observation: {observation}, Done: {done}, Info: {info}")
+        print(f"Step: {self._current_step}, Action: {action}, Reward: {reward}, Observation: {observation}, Done: {done}, Info: {info}")
         observation = to_ndarray(observation, dtype=np.float32)
         reward = to_ndarray([reward])
         action_mask = np.ones(self.action_space.n, 'int8')
@@ -201,7 +201,7 @@ class MemoryEnvLightZero(BaseEnv):
             gif_dir = os.path.join(os.path.dirname(__file__), 'replay')
             os.makedirs(gif_dir, exist_ok=True)
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            gif_file = os.path.join(gif_dir, f'episode_{self._current_step}_{timestamp}.gif')
+            gif_file = os.path.join(gif_dir, f'episode_seed{self._seed}_len{self._current_step}_{timestamp}.gif')
             self._gif_images[0].save(gif_file, save_all=True, append_images=self._gif_images[1:], duration=100, loop=0)
             print(f'saved replay to {gif_file}')
 

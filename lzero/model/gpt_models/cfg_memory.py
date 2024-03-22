@@ -13,8 +13,8 @@ cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',
 cfg['world_model'] = {
                       'tokens_per_block': 2, 
 
-                      # 'max_blocks': 32,
-                      # "max_tokens": 2 * 32,  # memory_length = 2
+                      'max_blocks': 32,
+                      "max_tokens": 2 * 32,  # memory_length = 2
 
                       # 'max_blocks': 60,  # memory_length = 30 
                       # "max_tokens": 2 * 60,  
@@ -28,8 +28,8 @@ cfg['world_model'] = {
                       # 'max_blocks': 280, # memory_length = 250
                       # "max_tokens": 2 * 280, 
 
-                       'max_blocks': 530, #  memory_length = 500
-                      "max_tokens": 2 * 530, 
+                    #    'max_blocks': 530, #  memory_length = 500
+                    #   "max_tokens": 2 * 530, 
 
                       #   'max_blocks': 780, #  memory_length = 750
                       # "max_tokens": 2 * 780, 
@@ -48,7 +48,7 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:3',
+                      "device": 'cuda:0',
                       'support_size': 21,
                       'action_shape': 4, # NOTE：for memory
                       'max_cache_size': 5000,
