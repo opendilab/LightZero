@@ -128,8 +128,12 @@ class Tokenizer(nn.Module):
     #@profile
     def reconstruction_loss(self, original_images: torch.Tensor, reconstructed_images: torch.Tensor) -> torch.Tensor:
         # Mean Squared Error (MSE) is commonly used as a reconstruction loss
-        # loss = nn.MSELoss()(original_images, reconstructed_images) # L1 loss
-        loss = torch.abs(original_images - reconstructed_images).mean()
+        if len(original_images.shape) == 2: # TODO
+            # for memory env
+            loss = nn.MSELoss()(original_images, reconstructed_images) # L2 loss
+        else:
+            # for atari image env
+            loss = torch.abs(original_images - reconstructed_images).mean() # L1 loss
         return loss
 
     #@profile

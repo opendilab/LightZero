@@ -332,9 +332,10 @@ class MuZeroEvaluator(ISerialEvaluator):
                         #     print('evaluator: eval_model clear()')
                         #     print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
 
-                        # if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE
+                        if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE
+                        # if eps_steps_lst[env_id] % 32 == 0:  # TODO: NOTE
                         # if eps_steps_lst[env_id] % 90 == 0:
-                        if eps_steps_lst[env_id] % 130 == 0:
+                        # if eps_steps_lst[env_id] % 130 == 0:
                         # if eps_steps_lst[env_id] % 150 == 0:
                         # if eps_steps_lst[env_id] % 280 == 0:
                         

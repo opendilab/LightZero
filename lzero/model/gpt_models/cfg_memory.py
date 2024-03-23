@@ -16,6 +16,12 @@ cfg['world_model'] = {
                     # 'max_blocks': 5,
                     #   "max_tokens": 2 * 5,  # H=5
 
+                      'max_blocks': 16,
+                      "max_tokens": 2 * 16,  # memory_length = 0
+
+                      # 'max_blocks': 18,
+                      # "max_tokens": 2 * 18,  # memory_length = 2
+
                       # 'max_blocks': 32,
                       # "max_tokens": 2 * 32,  # memory_length = 2
 
@@ -28,8 +34,8 @@ cfg['world_model'] = {
                       #   'max_blocks': 90, # memory_length = 60 
                       # "max_tokens": 2 * 90, 
 
-                        'max_blocks': 130, # memory_length = 100
-                      "max_tokens": 2 * 130, 
+                      #   'max_blocks': 130, # memory_length = 100
+                      # "max_tokens": 2 * 130, 
 
                       #   'max_blocks': 150, # memory_length = 120 
                       # "max_tokens": 2 * 150, 
@@ -56,29 +62,33 @@ cfg['world_model'] = {
                       'group_size': 8,  # NOTE
 
                       'attention': 'causal',
-                      # 'num_layers': 2, 
-                      # 'num_heads': 2, # same as <Transformer shine in RL> paper
+                      'num_layers': 2, 
+                      'num_heads': 2, # same as <Transformer shine in RL> paper
                       
-                      'num_layers': 4, 
-                      'num_heads': 8, # same as <Transformer shine in RL> paper
+                      # 'num_layers': 4, 
+                      # 'num_heads': 8, 
 
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:7',
+                      "device": 'cuda:3',
                       'support_size': 21,
                       'action_shape': 4, # NOTE：for memory
                       'max_cache_size': 5000,
                       "env_num": 8,
 
-                      'latent_recon_loss_weight':0.,
+                      'latent_recon_loss_weight':0.05,
+                      # 'latent_recon_loss_weight':0.5,
+                      # 'latent_recon_loss_weight':1,
+
+
                       'perceptual_loss_weight':0.,
 
                       'policy_entropy_weight': 1e-4,  # NOTE：for key_to_door 
                       # 'policy_entropy_weight': 1e-1,  # NOTE：for visual_match
 
-                      # 'predict_latent_loss_type': 'group_kl', # 'mse'
-                      'predict_latent_loss_type': 'mse', # 'mse'
+                      'predict_latent_loss_type': 'group_kl', # 'mse'
+                      # 'predict_latent_loss_type': 'mse', # 'mse'
                       'obs_type': 'vector', # 'vector', 'image'
                       }
 from easydict import EasyDict

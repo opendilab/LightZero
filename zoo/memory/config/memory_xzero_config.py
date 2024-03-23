@@ -1,11 +1,12 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(7)
+# torch.cuda.set_device(0)
+torch.cuda.set_device(3)
 
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 # env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
 
-memory_length = 100
+memory_length = 0
 # visual_match [2, 60, 100, 250, 500]
 # key_to_door [2, 60, 120, 250, 500]
 
@@ -27,8 +28,13 @@ model_update_ratio = 0.25
 
 batch_size = 64
 # num_unroll_steps = 5
-num_unroll_steps = 30+memory_length
-game_segment_length=30+memory_length # TODO:
+# for key_to_door
+# num_unroll_steps = 30+memory_length
+# game_segment_length=30+memory_length # TODO:
+
+# for visual_match
+num_unroll_steps = 16+memory_length
+game_segment_length=16+memory_length # TODO:
 
 
 reanalyze_ratio = 0
@@ -43,8 +49,8 @@ td_steps = 5
 # batch_size = 2
 
 # threshold_training_steps_for_final_temperature = int(5e5)
-threshold_training_steps_for_final_temperature = int(1e5)  # TODO: 100k train iter
-
+# threshold_training_steps_for_final_temperature = int(1e5)  # TODO: 100k train iter
+threshold_training_steps_for_final_temperature = int(5e4)  # TODO: 100k train iter
 
 # eps_greedy_exploration_in_collect = False
 eps_greedy_exploration_in_collect = True
@@ -56,7 +62,7 @@ memory_xzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
     exp_name=f'data_memory_{env_id}_0323/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
              f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
-             f'_pelw1e-4_quan15_mse_emd64_seed{seed}_eval{evaluator_env_num}_nl4-nh8',
+             f'_pelw1e-4_quan15_groupkl_emd64_seed{seed}_eval{evaluator_env_num}_nl2-nh2_soft005_reclw005',
     # exp_name=f'data_memory_{env_id}_fixscale_no-dynamic-seed/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}-fix_rr{reanalyze_ratio}_bs{batch_size}'
     #         f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
     #         f'_pelw1e-1_quan15_mse_emd64_seed{seed}_eval{evaluator_env_num}_clearper20-notcache_no-dynamic-seed',

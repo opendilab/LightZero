@@ -281,8 +281,8 @@ class MuZeroGPTPolicy(Policy):
             self._target_model,
             wrapper_name='target',
             update_type='momentum',
-            update_kwargs={'theta': 0.01} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
-            # update_kwargs={'theta': 0.05} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
+            # update_kwargs={'theta': 0.01} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
+            update_kwargs={'theta': 0.05} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
         )
         self._learn_model = self._model
 
@@ -768,13 +768,13 @@ class MuZeroGPTPolicy(Policy):
                 #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than
                 # sampling during the evaluation phase.
                 
-                action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=1, deterministic=True
-                )
-                # TODO: eval
                 # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                #         distributions, temperature=self._collect_mcts_temperature, deterministic=False
+                #     distributions, temperature=1, deterministic=True
                 # )
+                # TODO: eval for breakout
+                action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=0.25, deterministic=False
+                )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]

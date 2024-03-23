@@ -343,6 +343,57 @@ class LatentDecoder(nn.Module):
         # The output x should have the shape of (B, output_shape[0], output_shape[1], output_shape[2])
         return x
 
+class LatentDecoderMemory(nn.Module):
+    # def __init__(self, embedding_dim: int, output_shape: SequenceType, hidden_size: int = 64):
+    def __init__(
+            self,
+            embedding_dim: int, 
+            output_shape: SequenceType,
+            hidden_channels: int = 64,
+            layer_num: int = 2,
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01), # TODO
+            norm_type: Optional[str] = 'BN',
+    ) -> torch.Tensor:
+        """
+        Overview:
+            Representation network used in MuZero and derived algorithms. Encode the vector obs into latent state \
+                with Multi-Layer Perceptron (MLP).
+        Arguments:
+            - observation_shape (:obj:`int`): The shape of vector observation space, e.g. N = 10.
+            - num_res_blocks (:obj:`int`): The number of residual blocks.
+            - hidden_channels (:obj:`int`): The channel of output hidden state.
+            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
+                defaults to True. This option is often used in video games like Atari. In board games like go, \
+                we don't need this module.
+            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
+                Use the inplace operation to speed up.
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+        """
+        super().__init__()
+        self.fc_representation = MLP(
+            in_channels=embedding_dim,
+            hidden_channels=hidden_channels,
+            out_channels=output_shape,
+            layer_num=layer_num,
+            activation=activation,
+            norm_type=norm_type,
+            # don't use activation and norm in the last layer of representation network is important for convergence.
+            output_activation=False,
+            output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
+            last_linear_layer_init_zero=True,
+        )
+
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Shapes:
+            - x (:obj:`torch.Tensor`): :math:`(B, N)`, where B is batch size, N is the length of vector observation.
+            - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
+        """
+        x = self.fc_representation(x)
+        return x
+
 class RepresentationNetworkMLP(nn.Module):
 
     def __init__(

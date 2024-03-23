@@ -91,6 +91,7 @@ class WorldModel(nn.Module):
         self.group_size = config.group_size
         self.num_groups = config.embed_dim // config.group_size
         self.obs_type = config.obs_type
+        self.embed_dim = config.embed_dim 
 
         self.transformer = Transformer(config)
         self.num_observations_tokens = config.tokens_per_block - 1
@@ -718,8 +719,16 @@ class WorldModel(nn.Module):
             # perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
         
         elif self.obs_type == 'vector':
-            latent_recon_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
             perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
+
+            # TODO: no decoder
+            # latent_recon_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
+            
+            # 从潜在状态表示重建观察
+            reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings.reshape(-1, self.embed_dim))
+            # 计算重建损失
+            latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 25), reconstructed_images) # NOTE: for stack=1
+            
 
 
         # 动作tokens

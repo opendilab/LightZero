@@ -11,7 +11,7 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
-from .common import MZNetworkOutput, RepresentationNetworkGPT, RepresentationNetworkMLP, PredictionNetwork, LatentDecoder
+from .common import MZNetworkOutput, RepresentationNetworkGPT, RepresentationNetworkMLP, PredictionNetwork, LatentDecoder, LatentDecoderMemory
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -125,17 +125,19 @@ class MuZeroModelGPT(nn.Module):
 
         if cfg.world_model.obs_type == 'vector':
             self.representation_network = RepresentationNetworkMLP(
-            observation_shape,
-            hidden_channels= cfg.world_model.embed_dim,
-            layer_num = 2, # NOTE
-            activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
-            # activation=nn.GELU(),
-            group_size=cfg.world_model.group_size,
+                observation_shape,
+                hidden_channels= cfg.world_model.embed_dim,
+                layer_num = 2, # NOTE
+                activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
+                # activation=nn.GELU(),
+                group_size=cfg.world_model.group_size,
             )
-            decoder_network=None
+            # decoder_network=None
+            decoder_network = LatentDecoderMemory(embedding_dim=cfg.world_model.embed_dim, output_shape=25) # TODO: For memory
+
             Encoder = Encoder(cfg.tokenizer.encoder)
             self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, None, with_lpips=False, representation_network=self.representation_network,
-                                decoder_network=None)
+                                decoder_network=decoder_network)
             self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
                                         config=cfg.world_model, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')

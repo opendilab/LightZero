@@ -51,7 +51,7 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:7',
+                      "device": 'cuda:4',
                     #   "device": 'cpu',
                       'support_size': 601,
 

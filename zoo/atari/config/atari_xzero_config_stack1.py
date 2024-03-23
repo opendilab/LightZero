@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(7)
+torch.cuda.set_device(4)
 
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 
@@ -9,27 +9,35 @@ env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
 # env_name = 'QbertNoFrameskip-v4'
 # env_name = 'SeaquestNoFrameskip-v4'
-# env_name = 'BreakoutNoFrameskip-v4'  # collect_env_steps=5e3 
-
 # env_name = 'BoxingNoFrameskip-v4'
 # env_name = 'FrostbiteNoFrameskip-v4'
+# env_name = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample
+
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
+    update_per_collect = 1000  # for pong boxing
 elif env_name == 'QbertNoFrameskip-v4':
     action_space_size = 6
+    update_per_collect = None # for others
 elif env_name == 'MsPacmanNoFrameskip-v4':
     action_space_size = 9
+    update_per_collect = None # for others
 elif env_name == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
+    update_per_collect = None # for others
 elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
+    update_per_collect = None # for others
 elif env_name == 'SeaquestNoFrameskip-v4':
     action_space_size = 18
+    update_per_collect = None # for others
 elif env_name == 'BoxingNoFrameskip-v4':
     action_space_size = 18
+    update_per_collect = 1000  # for pong boxing
 elif env_name == 'FrostbiteNoFrameskip-v4':
     action_space_size = 18
+    update_per_collect = None # for others
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -37,64 +45,36 @@ elif env_name == 'FrostbiteNoFrameskip-v4':
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-update_per_collect = 1000  # for pong boxing
-# update_per_collect = 2000  # for pong boxing
-# update_per_collect = None # for others
 
-model_update_ratio = 0.25  # for others 
-# model_update_ratio = 0.125  # for pong boxing
-
+model_update_ratio = 0.25
 num_simulations = 50
-
-# max_env_step = int(1.5e6)
-max_env_step = int(2e6)
+max_env_step = int(1e6)
 
 reanalyze_ratio = 0. 
 # reanalyze_ratio = 0.05 # TODO
 
 batch_size = 64
 num_unroll_steps = 5
-# num_unroll_steps = 10
+# num_unroll_steps = 10 # TODO
 
 threshold_training_steps_for_final_temperature = int(5e4)  # train_iter 50k 1->0.5->0.25
-# eps_greedy_exploration_in_collect = True # for breakout
-eps_greedy_exploration_in_collect = False 
+eps_greedy_exploration_in_collect = True # for breakout, qbert, boxing
+# eps_greedy_exploration_in_collect = False 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_xzero_config = dict(
-    # TODO NOTE: 
-    # mcts_ctree, 
-    # muzero_collector: empty_cache
-    # evaluator
-    # atari env action space
-    # game_buffer_muzero_gpt task_id
-    # TODO: muzero_gpt_model.py world_model.py (3,64,64)
-    exp_name=f'data_xzero_atari_0321/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_nlayer2_seed0',
-    # exp_name=f'data_xzero_atari_0321/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_no-aug_no-priority_nlayer2_soft005_seed0',
-    # exp_name=f'data_xzero_atari_0321/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_no-aug_no-priority_nlayer2_temp50k_seed0',
-    # exp_name=f'data_xzero_atari_0321/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_no-aug_no-priority_nlayer2_eps20k_seed0',
-
-    # exp_name=f'data_xzero_atari_0321/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_use-aug_no-priority_nlayer2_temp-final-steps-{threshold_training_steps_for_final_temperature}_seed0',
-
-    # exp_name=f'data_xzero_atari_0316/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-mse_learned-act-emb_nogradscale_seed0_after-merge-memory_priority',
-    # exp_name=f'data_xzero_atari_0316/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-mse_learned-act-emb_nogradscale_seed0_after-merge-memory_useaug',
-
-    # exp_name=f'data_xzero_0312/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_nogradscale_seed0',
-    # exp_name=f'data_xzero_0307/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh8_fixroot_simnorm_latentw10_pew1e-4_seed0',
-     env=dict(
+    # TODO: 
+    # mcts_ctree
+    # muzero_collector/evaluator: empty_cache
+    exp_name=f'data_xzero_atari_0323/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_nlayer2_soft005_gcv05_eps20k_seed0',
+    # exp_name=f'data_xzero_atari_0323/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_nlayer2_soft005_gcv05_eps20k_evalsample_seed0',
+    env=dict(
         stop_value=int(1e6),
         env_name=env_name,
-        # obs_shape=(4, 96, 96),
-        # obs_shape=(1, 96, 96),
-
         observation_shape=(3, 64, 64),
         gray_scale=False,
-
-        # observation_shape=(4, 64, 64),
-        # gray_scale=True,
-
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -102,9 +82,11 @@ atari_xzero_config = dict(
         # TODO: debug
         # collect_max_episode_steps=int(50),
         # eval_max_episode_steps=int(50),
-        # TODO: run
+        # TODO: for breakout
         # collect_max_episode_steps=int(5e3), # for breakout
-        collect_max_episode_steps=int(2e4), # for others
+        # eval_max_episode_steps=int(5e3), # for breakout
+        # TODO: for others
+        collect_max_episode_steps=int(2e4), 
         eval_max_episode_steps=int(1e4),
         # eval_max_episode_steps=int(108000),
         clip_rewards=True,
@@ -129,40 +111,21 @@ atari_xzero_config = dict(
         update_per_collect_tokenizer=update_per_collect,
         num_unroll_steps=num_unroll_steps,
         model=dict(
-            # observation_shape=(4, 96, 96),
-            # frame_stack_num=4,
-            # observation_shape=(1, 96, 96),
-            # image_channel=3,
-            # frame_stack_num=1,
-            # gray_scale=False,
-
             observation_shape=(3, 64, 64),
             image_channel=3,
             frame_stack_num=1,
             gray_scale=False,
-
-            # NOTE: very important
-            # observation_shape=(4, 64, 64),
-            # image_channel=1,
-            # frame_stack_num=4,
-            # gray_scale=True,
-
             action_space_size=action_space_size,
             downsample=True,
             self_supervised_learning_loss=True,  # default is False
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
-            
             reward_support_size=601,
             value_support_size=601,
             support_scale=300,
-            # reward_support_size=21,
-            # value_support_size=21,
-            # support_scale=10,
         ),
-        use_priority=False,
-        # use_priority=True, # NOTE
-        use_augmentation=False,  # NOTE
+        use_priority=False, # TODO
+        use_augmentation=False,  # TODO
         # use_augmentation=True,  # NOTE: only for image-based atari
         cuda=True,
         env_type='not_board_games',
@@ -175,30 +138,23 @@ atari_xzero_config = dict(
             type='linear',
             start=1.,
             end=0.01,
-            decay=int(2e4),  # 20k
+            decay=int(2e4),  # TODO: 20k
         ),
-
         update_per_collect=update_per_collect,
         model_update_ratio = model_update_ratio,
         batch_size=batch_size,
-        # optim_type='SGD',
-        # lr_piecewise_constant_decay=True,
-        # learning_rate=0.2,
-
         # manual_temperature_decay=True,
         # threshold_training_steps_for_final_temperature=threshold_training_steps_for_final_temperature,
-
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
         target_update_freq=100,
-        grad_clip_value = 0.5, # TODO: 10
+        grad_clip_value = 0.5, # TODO: 1
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         # eval_freq=int(9e9),
-        eval_freq=int(2e4),
-        # eval_freq=int(1e4),
+        eval_freq=int(1e4),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
