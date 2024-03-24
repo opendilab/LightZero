@@ -10,6 +10,8 @@ num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
+mcts_ctree = False
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -20,7 +22,7 @@ tictactoe_alphazero_config = dict(
         board_size=3,
         battle_mode='play_with_bot_mode',
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
-        channel_last=False,  # NOTE
+        channel_last=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -31,12 +33,16 @@ tictactoe_alphazero_config = dict(
         prob_random_agent=0,
         prob_expert_agent=0,
         scale=True,
+        alphazero_mcts_ctree=mcts_ctree,
+        save_replay_gif=False,
+        replay_path_gif='./replay_gif',
         # ==============================================================
     ),
     policy=dict(
+        mcts_ctree=mcts_ctree,
         # ==============================================================
         # for the creation of simulation env
-        simulation_env_name='tictactoe',
+        simulation_env_id='tictactoe',
         simulation_env_config_type='play_with_bot',
         # ==============================================================
         model=dict(

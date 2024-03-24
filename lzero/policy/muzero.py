@@ -80,12 +80,19 @@ class MuZeroPolicy(Policy):
         evaluator_env_num=3,
         # (str) The type of environment. Options are ['not_board_games', 'board_games'].
         env_type='not_board_games',
+        # (str) The type of action space. Options are ['fixed_action_space', 'varied_action_space'].
+        action_type='fixed_action_space',
         # (str) The type of battle mode. Options are ['play_with_bot_mode', 'self_play_mode'].
         battle_mode='play_with_bot_mode',
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,
         # (int) The transition number of one ``GameSegment``.
         game_segment_length=200,
+        # (bool): Indicates whether to perform an offline evaluation of the checkpoint (ckpt).
+        # If set to True, the checkpoint will be evaluated after the training process is complete.
+        # IMPORTANT: Setting eval_offline to True requires configuring the saving of checkpoints to align with the evaluation frequency.
+        # This is done by setting the parameter learn.learner.hook.save_ckpt_after_iter to the same value as eval_freq in the train_muzero.py automatically.
+        eval_offline=False,
 
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
@@ -161,6 +168,8 @@ class MuZeroPolicy(Policy):
         fixed_temperature_value=0.25,
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
+        # (bool) Whether to add noise to roots during reanalyze process.
+        reanalyze_noise=False,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
@@ -353,7 +362,6 @@ class MuZeroPolicy(Policy):
         # Note: The following lines are just for debugging.
         predicted_rewards = []
         if self._cfg.monitor_extra_statistics:
-            latent_state_list = latent_state.detach().cpu().numpy()
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
@@ -369,9 +377,8 @@ class MuZeroPolicy(Policy):
         value_loss = cross_entropy_loss(value, target_value_categorical[:, 0])
 
         prob = torch.softmax(policy_logits, dim=-1)
-        dist = Categorical(prob)
-        policy_entropy_loss = -dist.entropy()
-
+        entropy = -(prob * prob.log()).sum(-1)
+        policy_entropy_loss = -entropy
 
         reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
@@ -417,14 +424,11 @@ class MuZeroPolicy(Policy):
             policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_k + 1])
 
             prob = torch.softmax(policy_logits, dim=-1)
-            dist = Categorical(prob)
-            policy_entropy_loss += -dist.entropy()
+            entropy = -(prob * prob.log()).sum(-1)
+            policy_entropy_loss += -entropy
 
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
-
-            # Follow MuZero, set half gradient
-            # latent_state.register_hook(lambda grad: grad * 0.5)
 
             if self._cfg.monitor_extra_statistics:
                 original_rewards = self.inverse_scalar_transform_handle(reward)
@@ -435,7 +439,6 @@ class MuZeroPolicy(Policy):
                 )
                 predicted_rewards.append(original_rewards_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
-                latent_state_list = np.concatenate((latent_state_list, latent_state.detach().cpu().numpy()))
 
         # ==============================================================
         # the core learn model update step.
@@ -454,9 +457,7 @@ class MuZeroPolicy(Policy):
         weighted_total_loss.backward()
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
-        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
-            self._learn_model.parameters(), self._cfg.grad_clip_value
-        )
+        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(self._learn_model.parameters(), self._cfg.grad_clip_value)
         self._optimizer.step()
         if self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()
@@ -483,19 +484,18 @@ class MuZeroPolicy(Policy):
             'reward_loss': reward_loss.mean().item(),
             'value_loss': value_loss.mean().item(),
             'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
-
+            'target_reward': target_reward.mean().item(),
+            'target_value': target_value.mean().item(),
+            'transformed_target_reward': transformed_target_reward.mean().item(),
+            'transformed_target_value': transformed_target_value.mean().item(),
+            'predicted_rewards': predicted_rewards.mean().item(),
+            'predicted_values': predicted_values.mean().item(),
+            'total_grad_norm_before_clip': total_grad_norm_before_clip.item(),
             # ==============================================================
             # priority related
             # ==============================================================
             'value_priority_orig': value_priority,
             'value_priority': value_priority.mean().item(),
-            'target_reward': target_reward.detach().cpu().numpy().mean().item(),
-            'target_value': target_value.detach().cpu().numpy().mean().item(),
-            'transformed_target_reward': transformed_target_reward.detach().cpu().numpy().mean().item(),
-            'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
-            'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
-            'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
-            'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
         }
 
     def _init_collect(self) -> None:
@@ -529,6 +529,7 @@ class MuZeroPolicy(Policy):
             - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
             - temperature (:obj:`float`): The temperature of the policy.
             - to_play (:obj:`int`): The player to play.
+            - epsilon (:obj:`float`): The epsilon of the eps greedy exploration.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
         Shape:
             - data (:obj:`torch.Tensor`):
@@ -538,6 +539,7 @@ class MuZeroPolicy(Policy):
             - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
             - temperature: :math:`(1, )`.
             - to_play: :math:`(N, 1)`, where N is the number of collect_env.
+            - epsilon: :math:`(1, )`.
             - ready_env_id: None
         Returns:
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \

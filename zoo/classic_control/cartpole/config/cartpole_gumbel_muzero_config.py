@@ -18,7 +18,7 @@ reanalyze_ratio = 0
 cartpole_gumbel_muzero_config = dict(
     exp_name=f'data_mz_ctree/cartpole_gumbel_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
-        env_name='CartPole-v0',
+        env_id='CartPole-v0',
         continuous=False,
         manually_discretization=False,
         collector_env_num=collector_env_num,
@@ -70,10 +70,6 @@ cartpole_gumbel_muzero_create_config = dict(
         type='gumbel_muzero',
         import_names=['lzero.policy.gumbel_muzero'],
     ),
-    collector=dict(
-        type='gumbel_muzero',
-        import_names=['lzero.worker.gumbel_muzero_collector'],
-    )
 )
 cartpole_gumbel_muzero_create_config = EasyDict(cartpole_gumbel_muzero_create_config)
 create_config = cartpole_gumbel_muzero_create_config

@@ -33,6 +33,7 @@ class MuZeroGameBuffer(GameBuffer):
         default_config.update(cfg)
         self._cfg = default_config
         assert self._cfg.env_type in ['not_board_games', 'board_games']
+        assert self._cfg.action_type in ['fixed_action_space', 'varied_action_space']
         self.replay_buffer_size = self._cfg.replay_buffer_size
         self.batch_size = self._cfg.batch_size
         self._alpha = self._cfg.priority_prob_alpha
@@ -304,7 +305,7 @@ class MuZeroGameBuffer(GameBuffer):
             policy_mask = []
             # 0 -> Invalid target policy for padding outside of game segments,
             # 1 -> Previous target policy for game segments.
-            rewards, child_visits, game_segment_lens = [], [], []
+            rewards, child_visits, game_segment_lens, root_values = [], [], [], []
             # for board games
             action_mask_segment, to_play_segment = [], []
             for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
@@ -316,6 +317,7 @@ class MuZeroGameBuffer(GameBuffer):
                 to_play_segment.append(game_segment.to_play_segment)
 
                 child_visits.append(game_segment.child_visit_segment)
+                root_values.append(game_segment.root_value_segment)
                 # prepare the corresponding observations
                 game_obs = game_segment.get_unroll_obs(state_index, self._cfg.num_unroll_steps)
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
@@ -331,7 +333,7 @@ class MuZeroGameBuffer(GameBuffer):
                     policy_obs_list.append(obs)
 
         policy_re_context = [
-            policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, game_segment_lens,
+            policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, root_values, game_segment_lens,
             action_mask_segment, to_play_segment
         ]
         return policy_re_context
@@ -378,7 +380,7 @@ class MuZeroGameBuffer(GameBuffer):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
 
-                m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
+                m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device)
 
                 # calculate the target value
                 m_output = model.initial_inference(m_obs, self.task_id)
@@ -399,7 +401,7 @@ class MuZeroGameBuffer(GameBuffer):
 
             # concat the output slices after model inference
             if self._cfg.use_root_value:
-                # use the root values from MCTS, as in EfficiientZero
+                # use the root values from MCTS, as in EfficientZero
                 # the root values have limited improvement but require much more GPU actors;
                 _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
                     network_output, data_type='muzero'
@@ -413,13 +415,19 @@ class MuZeroGameBuffer(GameBuffer):
                 if self._cfg.mcts_ctree:
                     # cpp mcts_tree
                     roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                    if self._cfg.reanalyze_noise:
+                        roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                    else:
+                        roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
                     MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
                 else:
                     # python mcts_tree
                     roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                    if self._cfg.reanalyze_noise:
+                        roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                    else:
+                        roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
                     MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
 
@@ -474,8 +482,6 @@ class MuZeroGameBuffer(GameBuffer):
                     else:
                         target_values.append(0)
                         target_rewards.append(0.0)
-                        # TODO: check
-                        # target_rewards.append(reward)
                     value_index += 1
 
                 batch_rewards.append(target_rewards)
@@ -499,8 +505,8 @@ class MuZeroGameBuffer(GameBuffer):
         batch_target_policies_re = []
 
         # for board games
-        policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, game_segment_lens, action_mask_segment, \
-        to_play_segment = policy_re_context  # noqa
+        policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, root_values, game_segment_lens, action_mask_segment, \
+        to_play_segment = policy_re_context
         # transition_batch_size = game_segment_batch_size * (self._cfg.num_unroll_steps + 1)
         transition_batch_size = len(policy_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)
@@ -529,7 +535,9 @@ class MuZeroGameBuffer(GameBuffer):
             for i in range(slices):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
-                m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device).float()
+                # m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device).float()
+                m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device)
+                
                 m_output = model.initial_inference(m_obs, self.task_id)
                 # m_output = model.initial_inference(m_obs)
 
@@ -548,6 +556,7 @@ class MuZeroGameBuffer(GameBuffer):
             _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(network_output, data_type='muzero')
             reward_pool = reward_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
+            # noises are not necessary for reanalyze
             noises = [
                 np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
                                     ).astype(np.float32).tolist() for _ in range(transition_batch_size)
@@ -555,18 +564,25 @@ class MuZeroGameBuffer(GameBuffer):
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                if self._cfg.reanalyze_noise:
+                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                else:
+                    roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                if self._cfg.reanalyze_noise:
+                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                else:
+                    roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
 
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
+            roots_values = roots.get_values()
             policy_index = 0
             # TODO very important: use latest MCTS visit count distribution
             for state_index, child_visit, game_index in zip(pos_in_game_segment_list, child_visits, batch_index_list):
@@ -574,6 +590,7 @@ class MuZeroGameBuffer(GameBuffer):
 
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     distributions = roots_distributions[policy_index]
+                    searched_value = roots_values[policy_index]
 
                     if policy_mask[policy_index] == 0:
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
@@ -590,7 +607,14 @@ class MuZeroGameBuffer(GameBuffer):
                                 list(np.ones(self._cfg.model.action_space_size) / self._cfg.model.action_space_size)
                             )
                         else:
-                            if self._cfg.env_type == 'not_board_games':
+                            # Update the data in game segment:
+                            # after the reanalyze search, new target policies and root values are obtained
+                            # the target policies and root values are stored in the gamesegment, specifically, ``child_visit_segment`` and ``root_value_segment``
+                            # we replace the data at the corresponding location with the latest search results to keep the most up-to-date targets
+                            sim_num = sum(distributions)
+                            child_visit[current_index] = [visit_count/sim_num for visit_count in distributions]
+                            root_value[current_index] = searched_value
+                            if self._cfg.action_type == 'fixed_action_space':
                                 # for atari/classic_control/box2d environments that only have one player.
                                 sum_visits = sum(distributions)
                                 policy = [visit_count / sum_visits for visit_count in distributions]
@@ -668,7 +692,7 @@ class MuZeroGameBuffer(GameBuffer):
                         policy_mask.append(1)
                         # NOTE: child_visit is already a distribution
                         distributions = child_visit[current_index]
-                        if self._cfg.env_type == 'not_board_games':
+                        if self._cfg.action_type == 'fixed_action_space':
                             # for atari/classic_control/box2d environments that only have one player.
                             target_policies.append(distributions)
                         else:

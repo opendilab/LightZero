@@ -46,6 +46,7 @@ gomoku_gumbel_muzero_config = dict(
         ),
         cuda=True,
         env_type='board_games',
+        action_type='varied_action_space',
         game_segment_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
         update_per_collect=update_per_collect,
         batch_size=batch_size,
@@ -80,10 +81,6 @@ gomoku_gumbel_muzero_create_config = dict(
         type='gumbel_muzero',
         import_names=['lzero.policy.gumbel_muzero'],
     ),
-    collector=dict(
-        type='gumbel_muzero',
-        import_names=['lzero.worker.gumbel_muzero_collector'],
-    )
 )
 gomoku_gumbel_muzero_create_config = EasyDict(gomoku_gumbel_muzero_create_config)
 create_config = gomoku_gumbel_muzero_create_config

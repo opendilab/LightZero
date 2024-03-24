@@ -14,6 +14,7 @@ config = EasyDict(
         replay_buffer_size=10000,
         env_type='not_board_games',
         use_priority=True,
+        action_type='fixed_action_space',
     )
 )
 

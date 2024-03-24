@@ -1,14 +1,14 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(6)
+torch.cuda.set_device(5)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-# env_name = 'PongNoFrameskip-v4'
+env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
 # env_name = 'BreakoutNoFrameskip-v4'
 # env_name = 'QbertNoFrameskip-v4'
 # env_name = 'SeaquestNoFrameskip-v4'
 # env_name = 'BoxingNoFrameskip-v4'
-env_name = 'FrostbiteNoFrameskip-v4'
+# env_name = 'FrostbiteNoFrameskip-v4'
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -32,8 +32,10 @@ elif env_name == 'FrostbiteNoFrameskip-v4':
 # ==============================================================
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 3
-num_simulations = 50
+evaluator_env_num = 1
+# num_simulations = 50
+num_simulations = 100
+
 # num_simulations = 1 # TODO: only for debug
 
 update_per_collect = 1000

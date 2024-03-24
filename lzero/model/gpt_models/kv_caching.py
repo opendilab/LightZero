@@ -72,9 +72,9 @@ class KeysValues:
 
     @property
     def size(self): # TODO
-        # return self._keys_values[0].shape[2]
+        return self._keys_values[0].shape[2]
         # print([self._keys_values[layer].shape[2] for layer in range(len(self._keys_values))])
-        return min(self._keys_values[layer].shape[2] for layer in range(len(self._keys_values)))
+        # return min(self._keys_values[layer].shape[2] for layer in range(len(self._keys_values)))
 
     def reset(self) -> None:
         for kv_cache in self._keys_values:

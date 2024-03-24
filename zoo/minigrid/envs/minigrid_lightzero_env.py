@@ -1,5 +1,6 @@
 import copy
 import os
+from datetime import datetime
 from typing import List, Optional
 
 import gymnasium as gym
@@ -25,14 +26,20 @@ class MiniGridEnvLightZero(MiniGridEnv):
         config (dict): Configuration dict. Default configurations can be updated using this.
         _cfg (dict): Internal configuration dict that stores runtime configurations.
         _init_flag (bool): Flag to check if the environment is initialized.
-        _env_name (str): The name of the MiniGrid environment.
+        _env_id (str): The name of the MiniGrid environment.
         _flat_obs (bool): Flag to check if flat observations are returned.
         _save_replay (bool): Flag to check if replays are saved.
         _max_step (int): Maximum number of steps for the environment.
     """
     config = dict(
-        env_name='MiniGrid-Empty-8x8-v0',
+        # (str) The gym environment name.
+        env_id='MiniGrid-Empty-8x8-v0',
+        # (bool) If True, save the replay as a gif file.
+        save_replay_gif=False,
+        # (str or None) The path to save the replay gif. If None, the replay gif will not be saved.
+        replay_path_gif=None,
         flat_obs=True,
+        # (int) The maximum number of steps for each episode.
         max_step=300,
     )
 
@@ -58,10 +65,12 @@ class MiniGridEnvLightZero(MiniGridEnv):
         """
         self._cfg = cfg
         self._init_flag = False
-        self._env_name = cfg.env_name
+        self._env_id = cfg.env_id
         self._flat_obs = cfg.flat_obs
-        self._save_replay = False
+        self._save_replay_gif = cfg.save_replay_gif
+        self._replay_path_gif = cfg.replay_path_gif
         self._max_step = cfg.max_step
+        self._save_replay_count = 0
 
     def reset(self) -> np.ndarray:
         """
@@ -71,18 +80,18 @@ class MiniGridEnvLightZero(MiniGridEnv):
             - obs (:obj:`np.ndarray`): Initial observation from the environment.
         """
         if not self._init_flag:
-            if self._save_replay:
-                self._env = gym.make(self._env_name, render_mode="rgb_array")
+            if self._save_replay_gif:
+                self._env = gym.make(self._env_id, render_mode="rgb_array")
             else:
-                self._env = gym.make(self._env_name)
+                self._env = gym.make(self._env_id)
             # NOTE: customize the max step of the env
             self._env.max_steps = self._max_step
 
-            if self._env_name in ['MiniGrid-AKTDT-13x13-v0' or 'MiniGrid-AKTDT-13x13-1-v0']:
+            if self._env_id in ['MiniGrid-AKTDT-13x13-v0' or 'MiniGrid-AKTDT-13x13-1-v0']:
                 # customize the agent field of view size, note this must be an odd number
                 # This also related to the observation space, see gym_minigrid.wrappers for more details
                 self._env = ViewSizeWrapper(self._env, agent_view_size=5)
-            if self._env_name == 'MiniGrid-AKTDT-7x7-1-v0':
+            if self._env_id == 'MiniGrid-AKTDT-7x7-1-v0':
                 self._env = ViewSizeWrapper(self._env, agent_view_size=3)
             if self._flat_obs:
                 self._env = FlatObsWrapper(self._env)
@@ -115,7 +124,7 @@ class MiniGridEnvLightZero(MiniGridEnv):
         obs = to_ndarray(obs)
         self._eval_episode_return = 0
         self._current_step = 0
-        if self._save_replay:
+        if self._save_replay_gif:
             self._frames = []
 
         action_mask = np.ones(self.action_space.n, 'int8')
@@ -124,22 +133,46 @@ class MiniGridEnvLightZero(MiniGridEnv):
         return obs
 
     def close(self) -> None:
+        """
+        Close the environment, and set the initialization flag to False.
+        """
         if self._init_flag:
             self._env.close()
         self._init_flag = False
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
+        """
+        Set the seed for the environment's random number generator. Can handle both static and dynamic seeding.
+        """
         self._seed = seed
         self._dynamic_seed = dynamic_seed
         np.random.seed(self._seed)
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
+        """
+        Overview:
+            Perform a step in the environment using the provided action, and return the next state of the environment.
+            The next state is encapsulated in a BaseEnvTimestep object, which includes the new observation, reward,
+            done flag, and info dictionary.
+        Arguments:
+            - action (:obj:`np.ndarray`): The action to be performed in the environment. 
+        Returns:
+            - timestep (:obj:`BaseEnvTimestep`): An object containing the new observation, reward, done flag,
+              and info dictionary.
+        .. note::
+            - The cumulative reward (`_eval_episode_return`) is updated with the reward obtained in this step.
+            - If the episode ends (done is True), the total reward for the episode is stored in the info dictionary
+              under the key 'eval_episode_return'.
+            - An action mask is created with ones, which represents the availability of each action in the action space.
+            - Observations are returned in a dictionary format containing 'observation', 'action_mask', and 'to_play'.
+        """
         if isinstance(action, np.ndarray) and action.shape == (1, ):
             action = action.squeeze()  # 0-dim array
-        if self._save_replay:
+        if self._save_replay_gif:
             self._frames.append(self._env.render())
         # using the step method of Gymnasium env, return is (observation, reward, terminated, truncated, info)
-        obs, rew, done, _, info = self._env.step(action)
+        obs, rew, terminated, truncated, info = self._env.step(action)
+        done = terminated or truncated
         rew = float(rew)
         self._eval_episode_return += rew
         self._current_step += 1
@@ -149,11 +182,16 @@ class MiniGridEnvLightZero(MiniGridEnv):
             info['eval_episode_return'] = self._eval_episode_return
             info['current_step'] = self._current_step
             info['max_step'] = self._max_step
-            if self._save_replay:
+            if self._save_replay_gif:
+                if not os.path.exists(self._replay_path_gif):
+                    os.makedirs(self._replay_path_gif)
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 path = os.path.join(
-                    self._replay_path, '{}_episode_{}.gif'.format(self._env_name, self._save_replay_count)
+                    self._replay_path_gif,
+                    '{}_episode_{}_seed{}_{}.gif'.format(self._env_id, self._save_replay_count, self._seed, timestamp)
                 )
                 self.display_frames_as_gif(self._frames, path)
+                print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
                 self._save_replay_count += 1
         obs = to_ndarray(obs)
         rew = to_ndarray([rew])  # wrapped to be transferred to an array with shape (1,)
@@ -164,11 +202,17 @@ class MiniGridEnvLightZero(MiniGridEnv):
         return BaseEnvTimestep(obs, rew, done, info)
 
     def random_action(self) -> np.ndarray:
+        """
+         Generate a random action using the action space's sample method. Returns a numpy array containing the action.
+        """
         random_action = self.action_space.sample()
         random_action = to_ndarray([random_action], dtype=np.int64)
         return random_action
 
     def enable_save_replay(self, replay_path: Optional[str] = None) -> None:
+        """
+        Enable the saving of replay videos. If no replay path is given, a default is used.
+        """
         if replay_path is None:
             replay_path = './video'
         self._save_replay = True
@@ -188,14 +232,23 @@ class MiniGridEnvLightZero(MiniGridEnv):
 
     @property
     def observation_space(self) -> gym.spaces.Space:
+        """
+        Property to access the observation space of the environment.
+        """
         return self._observation_space
 
     @property
     def action_space(self) -> gym.spaces.Space:
+        """
+        Property to access the action space of the environment.
+        """
         return self._action_space
 
     @property
     def reward_space(self) -> gym.spaces.Space:
+        """
+        Property to access the reward space of the environment.
+        """
         return self._reward_space
 
     @staticmethod
@@ -213,4 +266,7 @@ class MiniGridEnvLightZero(MiniGridEnv):
         return [cfg for _ in range(evaluator_env_num)]
 
     def __repr__(self) -> str:
-        return "LightZero MiniGrid Env({})".format(self._cfg.env_name)
+        """
+        String representation of the environment.
+        """
+        return "LightZero MiniGrid Env({})".format(self._cfg.env_id)

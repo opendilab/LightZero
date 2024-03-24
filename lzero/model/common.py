@@ -14,7 +14,7 @@ import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import SequenceType
 import torch.nn.init as init
-
+import torch.nn.functional as F
 # use dataclass to make the output of network more convenient to use
 @dataclass
 class EZNetworkOutput:
@@ -139,27 +139,8 @@ class DownSample(nn.Module):
 
         return output
 
-# EZ original
-# def renormalize(inputs: torch.Tensor, first_dim: int = 1) -> torch.Tensor:
-#     """
-#     Overview:
-#         Normalize the input data using the max-min-normalization.
-#     Arguments:
-#         - inputs (:obj:`torch.Tensor`): The input data needs to be normalized.
-#         - first_dim (:obj:`int`): The first dimension of flattening the input data.
-#     Returns:
-#         - output (:obj:`torch.Tensor`): The normalized data.
-#     """
-#     if first_dim < 0:
-#         first_dim = len(inputs.shape) + first_dim
-#     flat_input = inputs.view(*inputs.shape[:first_dim], -1)
-#     max_val = torch.max(flat_input, first_dim, keepdim=True).values
-#     min_val = torch.min(flat_input, first_dim, keepdim=True).values
-#     flat_input = (flat_input - min_val) / (max_val - min_val)
 
-#     return flat_input.view(*input.shape)
-
-def renormalize(x): # min-max
+def renormalize_min_max(x): # min-max
     # x is a 2D tensor of shape (batch_size, num_features)
     # Compute the min and max for each feature across the batch
     x_min = torch.min(x, dim=0, keepdim=True).values
@@ -171,30 +152,29 @@ def renormalize(x): # min-max
 
     return x_scaled
 
-# def renormalize(x): # z-score
-#     # x is a 2D tensor of shape (batch_size, num_features)
-#     # Compute the mean and standard deviation for each feature across the batch
-#     mean = torch.mean(x, dim=0, keepdim=True)
-#     std = torch.std(x, dim=0, keepdim=True)
 
-#     # Apply z-score normalization
-#     x_normalized = (x - mean) / (std + 1e-8)  # Add a small epsilon to avoid division by zero
+class SimNorm(nn.Module):
+    """
+    Simplicial normalization.
+    Adapted from https://arxiv.org/abs/2204.00616.
+    """
 
-#     return x_normalized
+    def __init__(self, simnorm_dim):
+        super().__init__()
+        self.dim = simnorm_dim
 
-# def renormalize(x): # robust scaling
-#     # x is a 2D tensor of shape (batch_size, num_features)
-#     # Compute the 1st and 3rd quartile
-#     q1 = torch.quantile(x, 0.25, dim=0, keepdim=True)
-#     q3 = torch.quantile(x, 0.75, dim=0, keepdim=True)
+    def forward(self, x):
+        shp = x.shape
+        # Ensure that there is at least one simplex to normalize across.
+        if shp[1] != 0:
+            x = x.view(*shp[:-1], -1, self.dim)
+            x = F.softmax(x, dim=-1)
+            return x.view(*shp)
+        else:
+            return x
 
-#     # Compute the interquartile range (IQR)
-#     iqr = q3 - q1
-
-#     # Apply robust scaling
-#     x_scaled = (x - q1) / (iqr + 1e-8)  # Again, add epsilon to avoid division by zero
-
-#     return x_scaled
+    def __repr__(self):
+        return f"SimNorm(dim={self.dim})"
 
 def AvgL1Norm(x, eps=1e-8):
 	return x/x.abs().mean(-1,keepdim=True).clamp(min=eps)
@@ -208,9 +188,11 @@ class RepresentationNetworkGPT(nn.Module):
             num_channels: int = 64,
             downsample: bool = True,
             # activation: nn.Module = nn.ReLU(inplace=True),
-            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01), # TODO
+            # activation: nn.Module = nn.GELU(), # TODO
             norm_type: str = 'BN',
             embedding_dim: int = 256,
+            group_size: int = 8,
     ) -> None:
         """
         Overview:
@@ -229,7 +211,7 @@ class RepresentationNetworkGPT(nn.Module):
         """
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
-
+        self.observation_shape = observation_shape
         self.downsample = downsample
         if self.downsample:
             self.downsample_net = DownSample(
@@ -272,6 +254,9 @@ class RepresentationNetworkGPT(nn.Module):
         # Initialize biases to zero
         # init.zeros_(self.last_linear.bias)
 
+        self.sim_norm = SimNorm(simnorm_dim=group_size)
+
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
@@ -296,13 +281,14 @@ class RepresentationNetworkGPT(nn.Module):
         # x = self.last_linear(x.contiguous().view(-1, 64*8*8))
         x = self.last_linear(x.reshape(-1, 64*8*8)) # TODO
 
-        x = x.view(-1, self.embedding_dim)
+        x = x.view(-1, self.embedding_dim) # TODO
 
         # print('cont embedings before renormalize', x.max(), x.min(), x.mean())
-        # x = torch.tanh(x)
-        x = renormalize(x)
+        # x = torch.softmax(x)
+        x = self.sim_norm(x)
         # print('after renormalize', x.max(), x.min(),x.mean())
-        
+
+            
         return x
 
     def get_param_mean(self) -> float:
@@ -357,6 +343,57 @@ class LatentDecoder(nn.Module):
         # The output x should have the shape of (B, output_shape[0], output_shape[1], output_shape[2])
         return x
 
+class LatentDecoderMemory(nn.Module):
+    # def __init__(self, embedding_dim: int, output_shape: SequenceType, hidden_size: int = 64):
+    def __init__(
+            self,
+            embedding_dim: int, 
+            output_shape: SequenceType,
+            hidden_channels: int = 64,
+            layer_num: int = 2,
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01), # TODO
+            norm_type: Optional[str] = 'BN',
+    ) -> torch.Tensor:
+        """
+        Overview:
+            Representation network used in MuZero and derived algorithms. Encode the vector obs into latent state \
+                with Multi-Layer Perceptron (MLP).
+        Arguments:
+            - observation_shape (:obj:`int`): The shape of vector observation space, e.g. N = 10.
+            - num_res_blocks (:obj:`int`): The number of residual blocks.
+            - hidden_channels (:obj:`int`): The channel of output hidden state.
+            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
+                defaults to True. This option is often used in video games like Atari. In board games like go, \
+                we don't need this module.
+            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
+                Use the inplace operation to speed up.
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+        """
+        super().__init__()
+        self.fc_representation = MLP(
+            in_channels=embedding_dim,
+            hidden_channels=hidden_channels,
+            out_channels=output_shape,
+            layer_num=layer_num,
+            activation=activation,
+            norm_type=norm_type,
+            # don't use activation and norm in the last layer of representation network is important for convergence.
+            output_activation=False,
+            output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
+            last_linear_layer_init_zero=True,
+        )
+
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Shapes:
+            - x (:obj:`torch.Tensor`): :math:`(B, N)`, where B is batch size, N is the length of vector observation.
+            - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
+        """
+        x = self.fc_representation(x)
+        return x
+
 class RepresentationNetworkMLP(nn.Module):
 
     def __init__(
@@ -364,9 +401,11 @@ class RepresentationNetworkMLP(nn.Module):
             observation_shape: int,
             hidden_channels: int = 64,
             layer_num: int = 2,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            # activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01), # TODO
             last_linear_layer_init_zero: bool = True,
             norm_type: Optional[str] = 'BN',
+            group_size: int = 8,
     ) -> torch.Tensor:
         """
         Overview:
@@ -399,6 +438,8 @@ class RepresentationNetworkMLP(nn.Module):
             # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=True,
         )
+        self.sim_norm = SimNorm(simnorm_dim=group_size)
+
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -407,16 +448,8 @@ class RepresentationNetworkMLP(nn.Module):
             - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
         """
         x = self.fc_representation(x)
-        # print('no AvgL1Norm', x.max(), x.min())
         # print('before cont embediings', x.max(), x.min(), x.mean())
-        x = renormalize(x)
-
-        # print('after cont embediings', x.max(), x.min(), x.mean())
-        # print('before tanh', x.max(), x.min(),x.mean())
-        # x = AvgL1Norm(x)
-        # print('after AvgL1Norm', x.max(), x.min())
-        # x = torch.tanh(x)
-        # print('after tanh', x.max(), x.min(),x.mean())
+        x = self.sim_norm(x)
 
         return x
 

@@ -402,7 +402,7 @@ class MuZeroGameBufferGPT(GameBuffer):
             #     network_output.append(m_output)
 
             network_output = []
-            m_obs = torch.from_numpy(value_obs_list).to(self._cfg.device).float()
+            m_obs = torch.from_numpy(value_obs_list).to(self._cfg.device)
 
             # calculate the target value
             # action_batch.shape (32, 10)
@@ -550,25 +550,14 @@ class MuZeroGameBufferGPT(GameBuffer):
 
         with torch.no_grad():
             policy_obs_list = prepare_observation(policy_obs_list, self._cfg.model.model_type)
-            # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
-            # slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
-            # network_output = []
-            # for i in range(slices):
-            #     beg_index = self._cfg.mini_infer_size * i
-            #     end_index = self._cfg.mini_infer_size * (i + 1)
-            #     m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device).float()
-
-            #     m_output = model.initial_inference(m_obs)
-
             network_output = []
-            m_obs = torch.from_numpy(policy_obs_list).to(self._cfg.device).float()
+            m_obs = torch.from_numpy(policy_obs_list).to(self._cfg.device)
             # calculate the target value
             # action_batch.shape (32, 10)
             # m_obs.shape torch.Size([352, 3, 64, 64])
             # m_obs.shape torch.Size([352, 4])  32*11
             # m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num], self.task_id)  # NOTE: :self.reanalyze_num
             m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
-
 
             if not model.training:
                 # if not in training, obtain the scalars of the value/reward
@@ -614,11 +603,10 @@ class MuZeroGameBufferGPT(GameBuffer):
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
                         target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
                     else:
-                        # TODO very important: use latest MCTS visit count distribution
+                        #  NOTE: very important: use latest MCTS visit count distribution
                         # if current_index < len(child_visit):
                         sum_visits = sum(distributions)
                         child_visit[current_index] = [visit_count / sum_visits for visit_count in distributions]
-
 
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy

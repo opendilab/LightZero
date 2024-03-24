@@ -21,6 +21,17 @@ from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 import torch.nn as nn
 
+def initialize_zeros_batch(observation_shape, batch_size, device):
+    """Initialize a zeros tensor for batch observations based on the shape."""
+    if isinstance(observation_shape, list):
+        shape = [batch_size, *observation_shape]
+    elif isinstance(observation_shape, int):
+        shape = [batch_size, observation_shape]
+    else:
+        raise TypeError("observation_shape must be either an int or a list")
+    
+    return torch.zeros(shape).to(device)
+
 
 def train_muzero_gpt(
         input_cfg: Tuple[dict, dict],
@@ -132,6 +143,17 @@ def train_muzero_gpt(
     import copy
     num_unroll_steps = copy.deepcopy(replay_buffer._cfg.num_unroll_steps)
     collect_cnt = -1
+
+    # Usage
+    policy.last_batch_obs = initialize_zeros_batch(
+        cfg.policy.model.observation_shape,
+        len(evaluator_env_cfg),
+        cfg.policy.device
+    )
+    policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
+    # TODO: comment if debugging
+    stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+
     while True:
         collect_cnt += 1
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
@@ -156,14 +178,25 @@ def train_muzero_gpt(
         else:
             collect_kwargs['epsilon'] = 0.0
 
-        # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
+            policy.last_batch_obs = initialize_zeros_batch(
+                cfg.policy.model.observation_shape,
+                len(evaluator_env_cfg),
+                cfg.policy.device
+            )
+            policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
                 break
 
+        policy.last_batch_obs = initialize_zeros_batch(
+            cfg.policy.model.observation_shape,
+            len(collector_env_cfg),
+            cfg.policy.device
+        )
+        policy.last_batch_action = [-1 for _ in range(len(collector_env_cfg))]
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         if cfg.policy.update_per_collect is None:
@@ -175,45 +208,9 @@ def train_muzero_gpt(
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
-        # if collect_cnt % 3 == 0:
-        # if collect_cnt % 1 == 0:
-        # if learner.train_iter <=  int(1e5) :  # 100K fixed
-        # # if learner.train_iter <=  int(5e4) :  # 50K fixed
-        #     # TODO: 0, 2, 4 更新
-        #     replay_buffer._cfg.num_unroll_steps = 1
-        #     batch_size = 256
-        #     # batch_size = 3
-        #     replay_buffer._cfg.batch_size = batch_size
-        #     policy._cfg.batch_size = batch_size  # policy._cfg.num_unroll_steps = 1
-        #     if collector.envstep > cfg.policy.tokenizer_start_after_envsteps:
-        #         print(f'collect_cnt: {collect_cnt}, update tokenizer')
-        #     # fixed
-        #     # if collector.envstep > cfg.policy.tokenizer_start_after_envsteps and collector.envstep < cfg.policy.transformer_start_after_envsteps:
-        #         # Learn policy from collected data.
-        #         # for i in range(cfg.policy.update_per_collect_tokenizer):
-        #         # for i in range(update_per_collect):
-        #         # for _ in range(int(update_per_collect*0.5)):
-        #         # for _ in range(int(update_per_collect*0.1)):
-        #         for _ in range(int(update_per_collect)):
-        #             # Learner will train ``update_per_collect`` times in one iteration.
-        #             if replay_buffer.get_num_of_transitions() > batch_size:
-        #                 train_data = replay_buffer.sample(batch_size, policy)
-        #                 train_data.append({'train_which_component':'tokenizer'})
-        #             else:
-        #                 logging.warning(
-        #                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-        #                     f'batch_size: {batch_size}, '
-        #                     f'{replay_buffer} '
-        #                     f'continue to collect now ....'
-        #                 )
-        #                 break
-        #             # The core train steps for MCTS+RL algorithms.
-        #             log_vars = learner.train(train_data, collector.envstep)
-
         replay_buffer._cfg.num_unroll_steps = num_unroll_steps
-        batch_size = 64
+        batch_size = policy._cfg.batch_size
         replay_buffer._cfg.batch_size = batch_size
-        policy._cfg.batch_size = batch_size # policy._cfg.num_unroll_steps = 6
         if collector.envstep > cfg.policy.transformer_start_after_envsteps:
             # TODO：transformer tokenizer交替更新
             # Learn policy from collected data.
@@ -223,11 +220,12 @@ def train_muzero_gpt(
                 if replay_buffer.get_num_of_transitions() > batch_size:
                     train_data = replay_buffer.sample(batch_size, policy)
                     if cfg.policy.reanalyze_ratio > 0:
-                        # if i % 20 == 0:
+                        if i % 20 == 0:
                         # if i % 2 == 0:# for reanalyze_ratio>0
-                        policy._target_model.world_model.past_keys_values_cache.clear()
-                        torch.cuda.empty_cache() # TODO: 是否需要立即释放显存
-                        print('sample target_model past_keys_values_cache.clear()')
+                            policy._target_model.world_model.past_keys_values_cache.clear()
+                            policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad
+                            torch.cuda.empty_cache() # TODO: 是否需要立即释放显存
+                            print('sample target_model past_keys_values_cache.clear()')
 
                     train_data.append({'train_which_component': 'transformer'})
                 else:
@@ -240,34 +238,22 @@ def train_muzero_gpt(
                     break
                 # The core train steps for MCTS+RL algorithms.
                 log_vars = learner.train(train_data, collector.envstep)
-                # if learner.train_iter % 20000 ==0:  # replay_ratio=16 40000; replay_ratio=8 20000; replay_ratio=4 10000; replay_ratio=2 5000; replay_ratio=1 2500
-                # if learner.train_iter % 2500 ==0: # replay_ratio=1
-                #     nn.init.zeros_(policy._learn_model.world_model.head_value.head_module[-1].weight)
-                #     nn.init.zeros_(policy._learn_model.world_model.head_value.head_module[-1].bias)
-                #     nn.init.zeros_(policy._learn_model.world_model.head_policy.head_module[-1].weight)
-                #     nn.init.zeros_(policy._learn_model.world_model.head_policy.head_module[-1].bias)
-                    # nn.init.zeros_(policy._learn_model.world_model.tokenizer.representation_network[-1].weight)
-                    # 获取 representation_network 的最后一层权重和偏置
-                    # last_layer_weights = policy._learn_model.world_model.tokenizer.representation_network.last_linear.weight
-                    # # 计算新的权重和偏置
-                    # new_weights = 0.2 * 0.02 * torch.randn_like(last_layer_weights) + 0.8 * last_layer_weights
-                    # # 用新的权重和偏置替换原来的参数
-                    # with torch.no_grad(): # 确保不会跟踪这些操作的梯度
-                    #     policy._learn_model.world_model.tokenizer.representation_network.last_linear.weight.copy_(new_weights)
-
 
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
         
-        # NOTE: TODO
-        # TODO: for batch world model ,to improve kv reuse, we could donot reset
-        policy._learn_model.world_model.past_keys_values_cache.clear() # very important
-        del policy._learn_model.world_model.keys_values_wm
-        policy._collect_model.world_model.past_keys_values_cache.clear() # very important
-        policy._eval_model.world_model.past_keys_values_cache.clear() # very important
+        policy._target_model.world_model.past_keys_values_cache.clear()
+        policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad
+        print('sample target_model past_keys_values_cache.clear()')
 
-        # del policy._collect_model.world_model.keys_values_wm
+        policy._collect_model.world_model.past_keys_values_cache.clear() # very important
+        policy._collect_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
+
+        # policy._eval_model.world_model.past_keys_values_cache.clear() # very important
+        # policy._eval_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
+
         torch.cuda.empty_cache() # TODO: NOTE
+
 
         # if collector.envstep > 0:
         #     # TODO: only for debug

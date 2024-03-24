@@ -1,6 +1,6 @@
 from easydict import EasyDict
 
-env_name = 'PongNoFrameskip-v4'
+env_id = 'PongNoFrameskip-v4'
 action_space_size = 6
 
 # ==============================================================
@@ -21,7 +21,7 @@ reanalyze_ratio = 0.
 atari_efficientzero_config = dict(
     exp_name='data_ez_ctree/efficientzero_seed0',
     env=dict(
-        env_name=env_name,
+        env_id=env_id,
         obs_shape=(4, 96, 96),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -33,7 +33,7 @@ atari_efficientzero_config = dict(
         frame_skip=4,
         episode_life=True,
         clip_rewards=True,
-        channel_last=True,
+        channel_last=False,
         render_mode_human=False,
         scale=True,
         warp_frame=True,
