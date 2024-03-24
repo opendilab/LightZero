@@ -58,7 +58,7 @@ eps_greedy_exploration_in_collect = True # for breakout, qbert, boxing
 # eps_greedy_exploration_in_collect = False 
 
 # exp_name_prefix = 'data_xzero_mt/xzero_mt_stack1_pong-mspacman-seaquest/'
-exp_name_prefix = 'data_xzero_mt/xzero-mt_stack1_pong-mspacman/'
+exp_name_prefix = 'data_xzero_mt_0323/xzero-mt_stack1_pong-mspacman/'
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
