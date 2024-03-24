@@ -768,13 +768,13 @@ class MuZeroGPTPolicy(Policy):
                 #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than
                 # sampling during the evaluation phase.
                 
-                # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                #     distributions, temperature=1, deterministic=True
-                # )
-                # TODO: eval for breakout
                 action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=0.25, deterministic=False
+                    distributions, temperature=1, deterministic=True
                 )
+                # TODO: eval for breakout
+                # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                #         distributions, temperature=0.25, deterministic=False
+                # )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]

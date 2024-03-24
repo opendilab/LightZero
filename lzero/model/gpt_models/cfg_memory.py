@@ -16,11 +16,11 @@ cfg['world_model'] = {
                     # 'max_blocks': 5,
                     #   "max_tokens": 2 * 5,  # H=5
 
-                      'max_blocks': 16,
-                      "max_tokens": 2 * 16,  # memory_length = 0
+                      # 'max_blocks': 17,
+                      # "max_tokens": 2 * 17,  # memory_length = 0
 
-                      # 'max_blocks': 18,
-                      # "max_tokens": 2 * 18,  # memory_length = 2
+                      'max_blocks': 18,
+                      "max_tokens": 2 * 18,  # memory_length = 1
 
                       # 'max_blocks': 32,
                       # "max_tokens": 2 * 32,  # memory_length = 2
@@ -71,7 +71,7 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:3',
+                      "device": 'cuda:0',
                       'support_size': 21,
                       'action_shape': 4, # NOTE：for memory
                       'max_cache_size': 5000,

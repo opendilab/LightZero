@@ -1,7 +1,7 @@
 from easydict import EasyDict
 import torch
-# torch.cuda.set_device(0)
-torch.cuda.set_device(3)
+torch.cuda.set_device(0)
+# torch.cuda.set_device(3)
 
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 # env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
@@ -11,7 +11,9 @@ memory_length = 0
 # key_to_door [2, 60, 120, 250, 500]
 
 
-max_env_step = int(3e6)
+max_env_step = int(1e6)
+# max_env_step = int(3e6)
+
 # ==== NOTE: 需要设置cfg_memory中的action_shape =====
 # ==== NOTE: 需要设置cfg_memory中的policy_entropy_weight =====
 
@@ -33,8 +35,8 @@ batch_size = 64
 # game_segment_length=30+memory_length # TODO:
 
 # for visual_match
-num_unroll_steps = 16+memory_length
-game_segment_length=16+memory_length # TODO:
+num_unroll_steps = 17+memory_length
+game_segment_length=17+memory_length # TODO:
 
 
 reanalyze_ratio = 0
@@ -60,7 +62,7 @@ eps_greedy_exploration_in_collect = True
 
 memory_xzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
-    exp_name=f'data_memory_{env_id}_0323/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
+    exp_name=f'data_memory_{env_id}_0326/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
              f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
              f'_pelw1e-4_quan15_groupkl_emd64_seed{seed}_eval{evaluator_env_num}_nl2-nh2_soft005_reclw005',
     # exp_name=f'data_memory_{env_id}_fixscale_no-dynamic-seed/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}-fix_rr{reanalyze_ratio}_bs{batch_size}'
@@ -75,7 +77,8 @@ memory_xzero_config = dict(
         # obs_max_scale=101,  # Maximum value of the observation, for visual_match
         obs_max_scale=100,
         max_frames={
-            "explore": 15,
+            # "explore": 15, # for key_to_door
+            "explore": 2, # for visual_match
             "distractor": memory_length,
             "reward": 15
         },  # Maximum frames per phase

@@ -43,7 +43,7 @@ class MemoryEnvLightZero(BaseEnv):
         respawn_every=300,  # Respawn interval for apples
         crop=True,  # Whether to crop the observation
         max_frames={
-            "explore": 15,
+            "explore": 15,  # NOTE: "explore" should >=2, otherwise the agent won't be able to see the target color or key.
             "distractor": 30,
             "reward": 15
         },  # Maximum frames per phase
