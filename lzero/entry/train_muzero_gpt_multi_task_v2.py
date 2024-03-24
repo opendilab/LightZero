@@ -21,6 +21,16 @@ from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 from lzero.mcts import MuZeroGameBufferGPT as GameBuffer
 
+def initialize_zeros_batch(observation_shape, batch_size, device):
+    """Initialize a zeros tensor for batch observations based on the shape."""
+    if isinstance(observation_shape, list):
+        shape = [batch_size, *observation_shape]
+    elif isinstance(observation_shape, int):
+        shape = [batch_size, observation_shape]
+    else:
+        raise TypeError("observation_shape must be either an int or a list")
+    
+    return torch.zeros(shape).to(device)
 
 def train_muzero_gpt_multi_task_v2(
         input_cfg_list: List[Tuple[dict, dict]],
@@ -121,6 +131,18 @@ def train_muzero_gpt_multi_task_v2(
     # Main loop
     learner.call_hook('before_run')
 
+    for task_id, (cfg, evaluator, collector, replay_buffer) in enumerate(zip(cfgs, evaluators, collectors, game_buffers)):
+        # Usage
+        print(f'='*20)
+        print(f'evaluate task_id: {task_id}...')
+        policy.last_batch_obs = initialize_zeros_batch(
+            cfg.policy.model.observation_shape,
+            len(evaluator_env_cfg),
+            cfg.policy.device
+        )
+        policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
+        # TODO: comment if debugging
+        stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
     while True:
         # 每个环境单独收集数据，并放入各自独立的replay buffer中
@@ -151,15 +173,30 @@ def train_muzero_gpt_multi_task_v2(
             else:
                 collect_kwargs['epsilon'] = 0.0
 
-            # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-
             # Evaluate policy performance.
             if evaluator.should_eval(learner.train_iter):
+                print(f'='*20)
+                print(f'evaluate task_id: {task_id}...')
+                policy.last_batch_obs = initialize_zeros_batch(
+                    cfg.policy.model.observation_shape,
+                    len(evaluator_env_cfg),
+                    cfg.policy.device
+                )
+                policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
                 stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
                 if stop:
                     break
 
+            policy.last_batch_obs = initialize_zeros_batch(
+                cfg.policy.model.observation_shape,
+                len(collector_env_cfg),
+                cfg.policy.device
+            )
+            policy.last_batch_action = [-1 for _ in range(len(collector_env_cfg))]
+            
             # Collect data by default config n_sample/n_episode.
+            print(f'='*20)
+            print(f'collect task_id: {task_id}...')
             new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
             if cfg.policy.update_per_collect is None:
                 # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
@@ -170,41 +207,57 @@ def train_muzero_gpt_multi_task_v2(
             # remove the oldest data if the replay buffer is full.
             replay_buffer.remove_oldest_data_to_fit()
 
-            # replay_buffer._cfg.num_unroll_steps = num_unroll_steps
-            # batch_size = 64
-            # replay_buffer._cfg.batch_size = batch_size
-            # policy._cfg.batch_size = batch_size # policy._cfg.num_unroll_steps = 6
+
+        not_enough_data = False
+        for task_id, replay_buffer in enumerate(game_buffers):
+            if replay_buffer.get_num_of_transitions() < batch_size:
+                not_enough_data = True
 
         # Learn policy from collected data.
-        for i in range(update_per_collect):
-            train_data_multi_task = []
-            envstep_multi_task = 0
-            for task_id, (cfg, collector, replay_buffer) in enumerate(zip(cfgs, collectors, game_buffers)):
-                envstep_multi_task += collector.envstep
-                # Learner will train ``update_per_collect`` times in one iteration.
-                if replay_buffer.get_num_of_transitions() > batch_size:
-                    train_data = replay_buffer.sample(batch_size, policy)
-                    # 非常重要 ====================
-                    train_data.append(task_id)
-                    train_data_multi_task.append(train_data)
-                else:
-                    logging.warning(
-                        f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                        f'batch_size: {batch_size}, '
-                        f'{replay_buffer} '
-                        f'continue to collect now ....'
-                    )
-                    break
+        if not not_enough_data:
+            for i in range(update_per_collect):
+                train_data_multi_task = []
+                envstep_multi_task = 0
+                for task_id, (cfg, collector, replay_buffer) in enumerate(zip(cfgs, collectors, game_buffers)):
+                    envstep_multi_task += collector.envstep
+                    # Learner will train ``update_per_collect`` times in one iteration.
+                    if replay_buffer.get_num_of_transitions() > batch_size:
+                        train_data = replay_buffer.sample(batch_size, policy)
+                        if cfg.policy.reanalyze_ratio > 0:
+                            if i % 20 == 0: # for reanalyze_ratio>0
+                                policy._target_model.world_model.past_keys_values_cache.clear()
+                                policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad
+                                torch.cuda.empty_cache() # TODO: 是否需要立即释放显存
+                                print('sample target_model past_keys_values_cache.clear()')
 
+                        #  ==================== 非常重要 ====================
+                        train_data.append(task_id)
+                        train_data_multi_task.append(train_data)
+                    else:
+                        logging.warning(
+                            f'The data in replay_buffer is not sufficient to sample a mini-batch: '
+                            f'batch_size: {batch_size}, '
+                            f'{replay_buffer} '
+                            f'continue to collect now ....'
+                        )
+                        break
+
+            # if len(train_data_multi_task) != 0:
             # The core train steps for MCTS+RL algorithms.
             log_vars = learner.train(train_data_multi_task, envstep_multi_task)
 
             # if cfg.policy.use_priority:
             #     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
+        policy._target_model.world_model.past_keys_values_cache.clear()
+        policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad
+        print('sample target_model past_keys_values_cache.clear()')
+        policy._collect_model.world_model.past_keys_values_cache.clear() # very important
+        policy._collect_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
+        torch.cuda.empty_cache() # TODO: NOTE
 
         # Break condition
-        if any(collector.envstep >= max_env_step for collector in collectors) or learner.train_iter >= max_train_iter:
+        if all(collector.envstep >= max_env_step for collector in collectors) or learner.train_iter >= max_train_iter:
             break
 
     learner.call_hook('after_run')

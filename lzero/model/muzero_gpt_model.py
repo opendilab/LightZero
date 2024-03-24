@@ -120,8 +120,8 @@ class MuZeroModelGPT(nn.Module):
         from .gpt_models.tokenizer.tokenizer import Tokenizer
         from .gpt_models.tokenizer.nets import Encoder, Decoder
         # from .gpt_models.cfg_cartpole import cfg
-        from .gpt_models.cfg_memory import cfg # NOTE: TODO
-        # from .gpt_models.cfg_atari import cfg
+        # from .gpt_models.cfg_memory import cfg # NOTE: TODO
+        from .gpt_models.cfg_atari import cfg
 
         if cfg.world_model.obs_type == 'vector':
             self.representation_network = RepresentationNetworkMLP(
@@ -202,20 +202,9 @@ class MuZeroModelGPT(nn.Module):
                 latent state, W_ is the width of latent state.
          """
         batch_size = obs.size(0)
-        # latent_state = self._representation(obs)
-        # policy_logits, value = self._prediction(latent_state)
-        # return MZNetworkOutput(
-        #     value,
-        #     [0. for _ in range(batch_size)],
-        #     policy_logits,
-        #     latent_state,
-        # )
-
         obs_act_dict = {'obs':obs, 'action':action_batch, 'current_obs':current_obs_batch}
         x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
             obs_act_dict)
-        # x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
-        #     obs, action_batch)
         reward, policy_logits, value = logits_rewards, logits_policy, logits_value
 
         # obs discrete distribution to one_hot latent state?

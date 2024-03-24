@@ -20,18 +20,6 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
     prepare_obs, prepare_obs_stack4_for_gpt
 from line_profiler import line_profiler
 
-def generate_task_loss_dict(multi_task_losses, task_name_template):
-    """
-    生成每个任务的损失字典
-    :param multi_task_losses: 包含每个任务损失的列表
-    :param task_name_template: 任务名称模板，例如 'obs_loss_task{}'
-    :return: 一个字典，包含每个任务的损失
-    """
-    task_loss_dict = {}
-    for task_idx, task_loss in enumerate(multi_task_losses):
-        task_name = task_name_template.format(task_idx)
-        task_loss_dict[task_name] = task_loss.item() if hasattr(task_loss, 'item') else task_loss
-    return task_loss_dict
 
 def configure_optimizers(model, weight_decay, learning_rate, betas, device_type):
     # start with all of the candidate parameters
@@ -363,12 +351,9 @@ class MuZeroGPTMTV2Policy(Policy):
         perceptual_loss_multi_task = []
         orig_policy_loss_multi_task = []
         policy_entropy_multi_task = []
-        # weighted_total_loss = torch.tensor(0., device=self._cfg.device)
-        # weighted_total_loss.requires_grad = True
-        weighted_total_loss = 0.0  # 初始化为0,避免使用in-place操作
+        weighted_total_loss = torch.tensor(0., device=self._cfg.device)
+        weighted_total_loss.requires_grad = True
         
-        average_target_policy_entropy_multi_task = []
-
         for task_id, data_one_task in enumerate(data):
             current_batch, target_batch, task_id = data_one_task
             obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
@@ -438,7 +423,6 @@ class MuZeroGPTMTV2Policy(Policy):
             target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
             # compute average entropy
             average_target_policy_entropy = target_policy_entropy.mean().item()
-            average_target_policy_entropy_multi_task.append(average_target_policy_entropy)
             # print(f'Average entropy: {average_entropy}')
 
             # ==============================================================
@@ -448,7 +432,6 @@ class MuZeroGPTMTV2Policy(Policy):
             losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer, task_id)
 
             weighted_total_loss += losses.loss_total
-            # weighted_total_loss = weighted_total_loss + losses.loss_total  # 修改为非in-place操作
             for loss_name, loss_value in losses.intermediate_losses.items():
                 intermediate_losses[f"{loss_name}"] = loss_value
 
@@ -499,12 +482,14 @@ class MuZeroGPTMTV2Policy(Policy):
         if self._cfg.lr_piecewise_constant_decay:
                 self.lr_scheduler.step()
 
+
         # ==============================================================
         # the core target model update step.
         # ==============================================================
         self._target_model.update(self._learn_model.state_dict())
         if self._cfg.use_rnd_model:
             self._target_model_for_intrinsic_reward.update(self._learn_model.state_dict())
+
 
         # 确保所有的CUDA核心完成工作，以便准确统计显存使用情况
         torch.cuda.synchronize()
@@ -519,73 +504,41 @@ class MuZeroGPTMTV2Policy(Policy):
         # 使用SummaryWriter记录当前和最大显存使用量
 
 
-
-        # 然后，在您的代码中，使用这个函数来构建损失字典：
         return_loss_dict = {
             'Current_GPU': current_memory_allocated_gb,
             'Max_GPU': max_memory_allocated_gb,
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
             'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
+
             'weighted_total_loss': weighted_total_loss.item(),
-            # 'policy_entropy': policy_entropy,
-            # 'target_policy_entropy': average_target_policy_entropy,
+            # 'obs_loss': mean(obs_loss_multi_task),
+            'obs_loss': obs_loss,
+            'latent_recon_loss':latent_recon_loss,
+            'perceptual_loss':perceptual_loss,
+            'policy_loss': policy_loss,
+            'orig_policy_loss':orig_policy_loss,
+            'policy_entropy':policy_entropy,
+            'target_policy_entropy': average_target_policy_entropy,
+            'reward_loss': reward_loss,
+            'value_loss': value_loss,
+
+            # ==============================================================
+            # priority related
+            # ==============================================================
+            # 'value_priority_orig': value_priority,
+            'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
+            # 'value_priority': value_priority.mean().item(),
+            'target_reward': target_reward.mean().item(),
+            'target_value': target_value.mean().item(),
+            'transformed_target_reward': transformed_target_reward.mean().item(),
+            'transformed_target_value': transformed_target_value.mean().item(),
+            # 'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
+            # 'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
         }
 
-        # 用于存储多任务损失的字典
-        multi_task_loss_dicts = {
-            **generate_task_loss_dict(obs_loss_multi_task, 'obs_loss_task{}'),
-            **generate_task_loss_dict(latent_recon_loss_multi_task, 'latent_recon_loss_task{}'),
-            **generate_task_loss_dict(perceptual_loss_multi_task, 'perceptual_loss_task{}'),
-            **generate_task_loss_dict(policy_loss_multi_task, 'policy_loss_task{}'),
-            **generate_task_loss_dict(orig_policy_loss_multi_task, 'orig_policy_loss_task{}'),
-            **generate_task_loss_dict(policy_entropy_multi_task, 'policy_entropy_task{}'),
-            **generate_task_loss_dict(reward_loss_multi_task, 'reward_loss_task{}'),
-            **generate_task_loss_dict(value_loss_multi_task, 'value_loss_task{}'),
-            **generate_task_loss_dict(average_target_policy_entropy_multi_task, 'target_policy_entropy_task{}'),
-
-        }
-
-        # 合并两个字典
-        return_loss_dict.update(multi_task_loss_dicts)
-
-        # 返回最终的损失字典
         return return_loss_dict
-
-        # return_loss_dict = {
-        #     'Current_GPU': current_memory_allocated_gb,
-        #     'Max_GPU': max_memory_allocated_gb,
-        #     'collect_mcts_temperature': self._collect_mcts_temperature,
-        #     'collect_epsilon': self.collect_epsilon,
-        #     'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
-
-        #     'weighted_total_loss': weighted_total_loss.item(),
-        #     # 'obs_loss': mean(obs_loss_multi_task),
-        #     'obs_loss': obs_loss,  # TODO: 多个任务各自的统计量，目前是最后一个任务的统计量
-        #     'latent_recon_loss': latent_recon_loss,
-        #     'perceptual_loss':perceptual_loss,
-        #     'policy_loss': policy_loss,
-        #     'orig_policy_loss': orig_policy_loss,
-        #     'policy_entropy': policy_entropy,
-        #     'target_policy_entropy': average_target_policy_entropy,
-        #     'reward_loss': reward_loss,
-        #     'value_loss': value_loss,
-
-        #     # ==============================================================
-        #     # priority related
-        #     # ==============================================================
-        #     # 'value_priority_orig': value_priority,
-        #     'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
-        #     # 'value_priority': value_priority.mean().item(),
-        #     'target_reward': target_reward.mean().item(),
-        #     'target_value': target_value.mean().item(),
-        #     'transformed_target_reward': transformed_target_reward.mean().item(),
-        #     'transformed_target_value': transformed_target_value.mean().item(),
-        #     'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
-        # }
-
-        # return return_loss_dict
 
 
     def _init_collect(self) -> None:
@@ -602,10 +555,10 @@ class MuZeroGPTMTV2Policy(Policy):
         self._collect_mcts_temperature = 1.
         self.collect_epsilon = 0.0
         if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros([8, self._cfg.model.observation_shape[0],64,64]).to(self._cfg.device)
+            self.last_batch_obs = torch.zeros([8,self._cfg.model.observation_shape[0],64,64]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(8)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([8, self._cfg.model.observation_shape]).to(self._cfg.device)
+            self.last_batch_obs = torch.zeros([8,self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(8)]
 
     #@profile
@@ -864,28 +817,19 @@ class MuZeroGPTMTV2Policy(Policy):
 
         return output
 
-
-    # TODO: num_tasks
-    def _monitor_vars_learn(self, num_tasks=2) -> List[str]:
+    def _monitor_vars_learn(self) -> List[str]:
         """
         Overview:
             Register the variables to be monitored in learn mode. The registered variables will be logged in
             tensorboard according to the return value ``_forward_learn``.
-            If num_tasks is provided, generate monitored variables for each task.
         """
-        # Basic monitored variables that do not depend on the number of tasks
-        monitored_vars = [
+        return [
             'Current_GPU',
             'Max_GPU',
             'collect_epsilon',
             'collect_mcts_temperature',
             'cur_lr_world_model',
             'weighted_total_loss',
-            'total_grad_norm_before_clip_wm',
-        ]
-        
-        # Variable names that will have task-specific counterparts
-        task_specific_vars = [
             'obs_loss',
             'orig_policy_loss',
             'policy_loss',
@@ -894,55 +838,15 @@ class MuZeroGPTMTV2Policy(Policy):
             'target_policy_entropy',
             'reward_loss',
             'value_loss',
+            'consistency_loss',
+            'value_priority',
+            'target_reward',
+            'target_value',
+            'total_grad_norm_before_clip_wm',
+            'commitment_loss',
+            'reconstruction_loss',
             'perceptual_loss',
         ]
-
-        # If the number of tasks is provided, extend the monitored variables list with task-specific variables
-        if num_tasks is not None:
-            for var in task_specific_vars:
-                for task_idx in range(num_tasks):
-                    monitored_vars.append(f'{var}_task{task_idx}')
-        else:
-            # If num_tasks is not provided, we assume there's only one task and keep the original variable names
-            monitored_vars.extend(task_specific_vars)
-
-        return monitored_vars
-
-    # # Example usage:
-    # # Assuming you have 3 tasks
-    # monitored_vars = self._monitor_vars_learn(num_tasks=3)
-
-    # def _monitor_vars_learn(self) -> List[str]:
-    #     """
-    #     Overview:
-    #         Register the variables to be monitored in learn mode. The registered variables will be logged in
-    #         tensorboard according to the return value ``_forward_learn``.
-    #     """
-    #     return [
-    #         'Current_GPU',
-    #         'Max_GPU',
-    #         'collect_epsilon',
-    #         'collect_mcts_temperature',
-    #         'cur_lr_world_model',
-    #         'weighted_total_loss',
-            
-    #         'obs_loss',
-    #         'orig_policy_loss',
-    #         'policy_loss',
-    #         'latent_recon_loss',
-    #         'policy_entropy',
-    #         'target_policy_entropy',
-    #         'reward_loss',
-    #         'value_loss',
-    #         'consistency_loss',
-    #         'value_priority',
-    #         'target_reward',
-    #         'target_value',
-    #         'total_grad_norm_before_clip_wm',
-    #         'commitment_loss',
-    #         'reconstruction_loss',
-    #         'perceptual_loss',
-    #     ]
 
     def _state_dict_learn(self) -> Dict[str, Any]:
         """

@@ -102,13 +102,13 @@ class MuZeroModelGPTMT(nn.Module):
         # self.action_space_size = action_space_size
         self.action_space_size = 18 # for multi-task
 
-
         assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
         self.discrete_action_encoding_type = discrete_action_encoding_type
         if self.discrete_action_encoding_type == 'one_hot':
             self.action_encoding_dim = action_space_size
         elif self.discrete_action_encoding_type == 'not_one_hot':
             self.action_encoding_dim = 1
+
         self.proj_hid = proj_hid
         self.proj_out = proj_out
         self.pred_hid = pred_hid
@@ -117,71 +117,70 @@ class MuZeroModelGPTMT(nn.Module):
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
         self.downsample = downsample
-
-        flatten_output_size_for_reward_head = (
-            (reward_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
-            (reward_head_channels * observation_shape[1] * observation_shape[2])
-        )
-        flatten_output_size_for_value_head = (
-            (value_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
-            (value_head_channels * observation_shape[1] * observation_shape[2])
-        )
-        flatten_output_size_for_policy_head = (
-            (policy_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
-            (policy_head_channels * observation_shape[1] * observation_shape[2])
-        )
-
-        # self.dynamics_network = DynamicsNetwork(
-        #     observation_shape,
-        #     self.action_encoding_dim,
-        #     num_res_blocks,
-        #     num_channels + self.action_encoding_dim,
-        #     reward_head_channels,
-        #     fc_reward_layers,
-        #     self.reward_support_size,
-        #     flatten_output_size_for_reward_head,
-        #     downsample,
-        #     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-        #     activation=activation,
-        #     norm_type=norm_type
-        # )
-
         from .gpt_models.world_model_multi_task import WorldModelMT
         from .gpt_models.tokenizer.tokenizer import Tokenizer
         from .gpt_models.tokenizer.nets import Encoder, Decoder
         # from .gpt_models.cfg_cartpole import cfg
+        # from .gpt_models.cfg_memory import cfg # NOTE: TODO
         from .gpt_models.cfg_atari import cfg
 
-        self.representation_network = RepresentationNetworkGPT(
-            observation_shape,
-            num_res_blocks,
-            num_channels,
-            downsample,
-            activation=activation,
-            norm_type=norm_type,
-            # embedding_dim=cfg.embedding_dim,
-            embedding_dim=cfg.world_model.embed_dim,
-        )
-        # Instantiate the decoder
-        # decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(4, 64, 64)) # TODO: For K=4
-        decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(3, 64, 64)) # TODO: For K=1
+        if cfg.world_model.obs_type == 'vector':
+            self.representation_network = RepresentationNetworkMLP(
+                observation_shape,
+                hidden_channels= cfg.world_model.embed_dim,
+                layer_num = 2, # NOTE
+                activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
+                # activation=nn.GELU(),
+                group_size=cfg.world_model.group_size,
+            )
+            # decoder_network=None
+            decoder_network = LatentDecoderMemory(embedding_dim=cfg.world_model.embed_dim, output_shape=25) # TODO: For memory
+
+            Encoder = Encoder(cfg.tokenizer.encoder)
+            self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, None, with_lpips=False, representation_network=self.representation_network,
+                                decoder_network=decoder_network)
+            self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
+                                        config=cfg.world_model, tokenizer=self.tokenizer)
+            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
+            print('=='*20)
+            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
+            print(f'{sum(p.numel() for p in self.tokenizer.representation_network.parameters())} parameters in agent.tokenizer.representation_network')
+            print('=='*20)
+        elif cfg.world_model.obs_type == 'image':
+            self.representation_network = RepresentationNetworkGPT(
+                observation_shape,
+                num_res_blocks,
+                num_channels,
+                downsample,
+                activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
+                # activation=nn.GELU(),
+                norm_type=norm_type,
+                embedding_dim=cfg.world_model.embed_dim,
+                group_size=cfg.world_model.group_size,
+            )
+            # Instantiate the decoder
+            # decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(4, 64, 64)) # TODO: For K=4
+            decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(3, 64, 64)) # TODO: For K=1
+
+            Encoder = Encoder(cfg.tokenizer.encoder)
+            Decoder = Decoder(cfg.tokenizer.decoder)
+            self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network,
+                                decoder_network=decoder_network)
+            self.world_model = WorldModelMT(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
+                                        config=cfg.world_model, tokenizer=self.tokenizer)
+            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
+            print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters())-sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
+
+            print('=='*20)
+            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
+            print(f'{sum(p.numel() for p in self.tokenizer.representation_network.parameters())} parameters in agent.tokenizer.representation_network')
+            print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
+            print(f'{sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.tokenizer.lpips')
+            print('=='*20)
+        
 
 
-
-        Encoder = Encoder(cfg.tokenizer.encoder)
-        Decoder = Decoder(cfg.tokenizer.decoder)
-        self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network,
-                            decoder_network=decoder_network)
-        self.world_model = WorldModelMT(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
-                                      config=cfg.world_model, tokenizer=self.tokenizer)
-        print(f'{sum(p.numel() for p in self.tokenizer.parameters())} parameters in agent.tokenizer')
-        print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-
-
-    def initial_inference(self, obs: torch.Tensor, action_batch=None, task_id=0) -> MZNetworkOutput:
+    def initial_inference(self, obs: torch.Tensor, action_batch=None, current_obs_batch=None, task_id=0) -> MZNetworkOutput:
         """
         Overview:
             Initial inference of MuZero model, which is the first step of the MuZero model.
@@ -204,20 +203,9 @@ class MuZeroModelGPTMT(nn.Module):
                 latent state, W_ is the width of latent state.
          """
         batch_size = obs.size(0)
-        # latent_state = self._representation(obs)
-        # policy_logits, value = self._prediction(latent_state)
-        # return MZNetworkOutput(
-        #     value,
-        #     [0. for _ in range(batch_size)],
-        #     policy_logits,
-        #     latent_state,
-        # )
-
-        obs_act_dict = {'obs':obs, 'action':action_batch}
+        obs_act_dict = {'obs':obs, 'action':action_batch, 'current_obs':current_obs_batch}
         x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
             obs_act_dict, task_id=task_id)
-        # x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
-        #     obs, action_batch)
         reward, policy_logits, value = logits_rewards, logits_policy, logits_value
 
         # obs discrete distribution to one_hot latent state?

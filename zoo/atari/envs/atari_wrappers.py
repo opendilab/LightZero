@@ -90,7 +90,7 @@ def wrap_lightzero(config, episode_life, clip_rewards):
         - the wrapped atari environment.
     """
     # TODO: full_action_space=True
-    full_action_space=True
+    full_action_space = True
     # full_action_space=False
 
     if config.render_mode_human:

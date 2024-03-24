@@ -527,7 +527,6 @@ class MuZeroCollector(ISerialCollector):
                     if eps_steps_lst[env_id] % 200 == 0:
                         self._policy.get_attribute('collect_model').world_model.past_keys_values_cache.clear()
                         self._policy.get_attribute('collect_model').world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
-                        
                         torch.cuda.empty_cache()
                         print('collector: collect_model clear()')
                         print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')

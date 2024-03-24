@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(5)
 
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
@@ -37,43 +37,40 @@ elif env_name == 'FrostbiteNoFrameskip-v4':
     action_space_size = 18
     update_per_collect = None # for others
 
-# shared action space
+# share action space
 action_space_size = 18
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 50
-# model_update_ratio = 0.25
-# batch_size = 256
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
 
-# for debug
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 1
-model_update_ratio = 0.01
-batch_size = 2
-
+num_simulations = 50
+model_update_ratio = 0.25
+batch_size = 256
 max_env_step = int(3e6)
 reanalyze_ratio = 0.
 batch_size = 64
 num_unroll_steps = 5
 threshold_training_steps_for_final_temperature = int(5e4)  # train_iter 50k 1->0.5->0.25
 eps_greedy_exploration_in_collect = True # for breakout, qbert, boxing
+# eps_greedy_exploration_in_collect = False 
 
-# exp_name_prefix = 'data_xzero_mt/xzero_mt_stack1_pong-mspacman-seaquest/'
-exp_name_prefix = 'data_xzero_mt_debug/xzero_mt_stack1_pong-mspacman/'
+# exp_name_prefix = 'data_mt/mz_gpt_ctree_mt_stack1_pong-qbert-seaquest/'
+exp_name_prefix = 'data_mt/xzero_mt_stack1_pong-qbert/'
+
+
+# num_simulations = 8 # debug
+# update_per_collect = 1 # debug
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
-    # mcts_ctree; muzero_collector/evaluator: empty_cache; atari_env
-    exp_name=exp_name_prefix+f'{env_name[:-14]}_xzero-mt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_soft005_eps20k_seed0',
+    # mcts_ctree, muzero_collector: empty_cache
+    exp_name=exp_name_prefix+f'{env_name[:-14]}_mt-xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_contembdings_lsd1024_lr1e-4-reconlwperlw-005_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -84,14 +81,15 @@ atari_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        collect_max_episode_steps=int(50),
-        eval_max_episode_steps=int(50),
+        # collect_max_episode_steps=int(50),
+        # eval_max_episode_steps=int(50),
         # TODO: for breakout
         # collect_max_episode_steps=int(5e3), # for breakout
         # eval_max_episode_steps=int(5e3), # for breakout
         # TODO: for others
-        # collect_max_episode_steps=int(2e4), 
-        # eval_max_episode_steps=int(1e4),
+        collect_max_episode_steps=int(2e4), 
+        eval_max_episode_steps=int(1e4),
+        # eval_max_episode_steps=int(108000),
         clip_rewards=True,
     ),
     policy=dict(
@@ -99,8 +97,7 @@ atari_muzero_config = dict(
             learner=dict(
                 hook=dict(
                     load_ckpt_before_run='',
-                    # log_show_after_iter=100,
-                    log_show_after_iter=2,
+                    log_show_after_iter=100,
                     save_ckpt_after_iter=100000,  # default is 1000
                     save_ckpt_after_run=True,
                 ),
@@ -118,14 +115,17 @@ atari_muzero_config = dict(
             image_channel=3,
             frame_stack_num=1,
             gray_scale=False,
+
             action_space_size=action_space_size,
             downsample=True,
             self_supervised_learning_loss=True,  # default is False
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
+            
             reward_support_size=601,
             value_support_size=601,
             support_scale=300,
+            embedding_dim=1024,
         ),
         use_priority=False, # TODO
         use_augmentation=False,  # TODO
@@ -147,7 +147,7 @@ atari_muzero_config = dict(
         model_update_ratio = model_update_ratio,
         batch_size=batch_size,
         # manual_temperature_decay=True,
-        # threshold_training_steps_for_final_temperature=int(5e4), # 50k 1->0.5->0.25
+        # threshold_training_steps_for_final_temperature=int(5e4), # 100k 1->0.5->0.25
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
@@ -186,10 +186,10 @@ if __name__ == "__main__":
     # [main_config_2, main_config_3] = [copy.deepcopy(main_config) for _ in range(2)]
     # [create_config_2, create_config_3] = [copy.deepcopy(create_config) for _ in range(2)]
 
-    # main_config_2.env.env_name = 'MsPacmanNoFrameskip-v4'
+    # main_config_2.env.env_name = 'QbertNoFrameskip-v4'
     # main_config_3.env.env_name = 'SeaquestNoFrameskip-v4'
     
-    # main_config_2.exp_name = exp_name_prefix + f'MsPacman_mt-muzero-gpt_seed0'
+    # main_config_2.exp_name = exp_name_prefix + f'Qbert_mt-muzero-gpt_seed0'
     # main_config_3.exp_name = exp_name_prefix + f'Seaquest_mt-muzero-gpt_seed0'
 
     # # main_config_2.policy.model.action_space_size = 6
@@ -203,7 +203,9 @@ if __name__ == "__main__":
     import copy
     [main_config_2] = [copy.deepcopy(main_config) for _ in range(1)]
     [create_config_2] = [copy.deepcopy(create_config) for _ in range(1)]
-    main_config_2.env.env_name = 'MsPacmanNoFrameskip-v4'
-    main_config_2.exp_name = exp_name_prefix + f'MsPacman_xzero-mt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_seed0'
+    main_config_2.env.env_name = 'QbertNoFrameskip-v4'
+    main_config_2.exp_name = exp_name_prefix + f'Qbert_mt-muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_46464_seed0'
+    # main_config_2.policy.model.action_space_size = 6
+    # main_config_3.policy.model.action_space_size = 18
     main_config_2.policy.task_id = 1
     train_muzero_gpt_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]]], seed=0, max_env_step=max_env_step)
