@@ -75,7 +75,8 @@ memory_xzero_config = dict(
         # obs_max_scale=101,  # Maximum value of the observation, for visual_match
         obs_max_scale=100,
         max_frames={
-            "explore": 15,
+            # "explore": 15, # for key_to_door
+            "explore": 1, # for visual_match
             "distractor": memory_length,
             "reward": 15
         },  # Maximum frames per phase
