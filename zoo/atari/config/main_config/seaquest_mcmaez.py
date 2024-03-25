@@ -38,7 +38,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/{env_name[:-14]}/mcmaez_0320seed1',
+    f'data_ez_ctree/{env_name[:-14]}/mcmaez_0321seed1',
     env=dict(
         env_name=env_name,
         obs_shape=(4, 96, 96),

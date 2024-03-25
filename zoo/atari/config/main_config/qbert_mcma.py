@@ -31,7 +31,7 @@ model_update_ratio = 0.25
 max_env_step = int(8e5)
 reanalyze_ratio = 0
 
-eps_greedy_exploration_in_collect = True
+eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
