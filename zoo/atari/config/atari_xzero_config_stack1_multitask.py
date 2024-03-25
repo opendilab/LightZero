@@ -93,7 +93,7 @@ atari_muzero_config = dict(
                 hook=dict(
                     load_ckpt_before_run='',
                     log_show_after_iter=100,
-                    save_ckpt_after_iter=100000,  # default is 1000
+                    save_ckpt_after_iter=10000,  # default is 1000
                     save_ckpt_after_run=True,
                 ),
             ),

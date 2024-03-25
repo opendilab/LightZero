@@ -146,7 +146,7 @@ def train_muzero_gpt_multi_task_v2(
 
     while True:
         # 每个环境单独收集数据，并放入各自独立的replay buffer中
-        for task_id, (cfg, collector, replay_buffer) in enumerate(zip(cfgs, collectors, game_buffers)):
+        for task_id, (cfg, collector, evaluator, replay_buffer) in enumerate(zip(cfgs, collectors, evaluators, game_buffers)):
             # Perform task-specific collection, evaluation, and training as needed
             # ... (same collection code as before, but with task-specific components)
             # When sampling for training, sample from each task's replay buffer and combine into train_data
@@ -242,12 +242,12 @@ def train_muzero_gpt_multi_task_v2(
                         )
                         break
 
-            # if len(train_data_multi_task) != 0:
-            # The core train steps for MCTS+RL algorithms.
-            log_vars = learner.train(train_data_multi_task, envstep_multi_task)
+                # if len(train_data_multi_task) != 0:
+                # The core train steps for MCTS+RL algorithms.
+                log_vars = learner.train(train_data_multi_task, envstep_multi_task)
 
-            # if cfg.policy.use_priority:
-            #     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+                # if cfg.policy.use_priority:
+                #     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
         policy._target_model.world_model.past_keys_values_cache.clear()
         policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad
