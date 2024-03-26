@@ -201,10 +201,10 @@ def train_muzero(
             end_time = time.time()
             
             # 计算本次迭代的时间并累加到总时间
-            iteration_time = end_time - start_time
-            total_time += iteration_time
-            num_iterations += 1
-            print(f'iteration {i}: {iteration_time} seconds')
+            # iteration_time = end_time - start_time
+            # total_time += iteration_time
+            # num_iterations += 1
+            # print(f'iteration {i}: {iteration_time} seconds')
 
 
             if cfg.policy.use_priority:
