@@ -1,7 +1,7 @@
 from easydict import EasyDict
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_name = 'BreakoutNoFrameskip-v4'
+env_name = 'SeaquestNoFrameskip-v4'
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -13,6 +13,8 @@ elif env_name == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
 elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
+elif env_name == 'SeaquestNoFrameskip-v4':   
+    action_space_size = 18
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -29,14 +31,14 @@ reanalyze_ratio = 0.
 
 
 
-eps_greedy_exploration_in_collect = True 
+eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/{env_name[:-14]}/mcmaez_0325seed0',
+    f'data_ez_ctree/{env_name[:-14]}/mcmaez_0321seed1',
     env=dict(
         env_name=env_name,
         obs_shape=(4, 96, 96),
@@ -44,8 +46,8 @@ atari_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        collect_max_episode_steps=3000.0,
-        eval_max_episode_steps=20000.0,
+        # collect_max_episode_steps=5000.0,
+        # eval_max_episode_steps=20000.0,
     ),
     policy=dict(
         model=dict(
@@ -107,4 +109,4 @@ create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_mcmaez
-    train_mcmaez([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_mcmaez([main_config, create_config], seed=1, max_env_step=max_env_step)

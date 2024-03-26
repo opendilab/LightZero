@@ -21,13 +21,11 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 1000
+update_per_collect = None
 batch_size = 256
 model_update_ratio = 0.25
-# max_env_step = int(8e5)
 max_env_step = int(5e5)
-
-reanalyze_ratio = 0
+reanalyze_ratio = 0.
 
 
 
@@ -38,7 +36,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/{env_name[:-14]}/final_mcmaez',
+    f'data_ez_ctree/{env_name[:-14]}/mcmaez_0321seed0',
     env=dict(
         env_name=env_name,
         obs_shape=(4, 96, 96),

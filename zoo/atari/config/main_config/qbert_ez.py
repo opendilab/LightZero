@@ -33,7 +33,7 @@ reanalyze_ratio = 0.99
 
 
 
-eps_greedy_exploration_in_collect = True 
+eps_greedy_exploration_in_collect = False 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
