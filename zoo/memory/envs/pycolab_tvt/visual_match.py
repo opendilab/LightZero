@@ -59,7 +59,8 @@ REWARD_GRID = [
     "   #####   ",
 ]
 
-MAX_FRAMES_PER_PHASE = {"explore": 15, "distractor": 30, "reward": 15}
+# MAX_FRAMES_PER_PHASE = {"explore": 15, "distractor": 30, "reward": 15}
+MAX_FRAMES_PER_PHASE = {"explore": 2, "distractor": 1, "reward": 15}
 
 
 class Game(game.AbstractGame):

@@ -15,6 +15,8 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import SequenceType
 import torch.nn.init as init
 import torch.nn.functional as F
+
+
 # use dataclass to make the output of network more convenient to use
 @dataclass
 class EZNetworkOutput:
@@ -36,8 +38,9 @@ class MZNetworkOutput:
 
 
 class DownSample(nn.Module):
-            
-    def __init__(self, observation_shape: SequenceType, out_channels: int, activation: nn.Module = nn.ReLU(inplace=True),
+
+    def __init__(self, observation_shape: SequenceType, out_channels: int,
+                 activation: nn.Module = nn.ReLU(inplace=True),
                  norm_type: Optional[str] = 'BN',
                  ) -> None:
         """
@@ -135,12 +138,12 @@ class DownSample(nn.Module):
         for block in self.resblocks3:
             x = block(x)
         # output = self.pooling2(x) 
-        output = x # TODO: for (4,64,64) obs
+        output = x  # TODO: for (4,64,64) obs
 
         return output
 
 
-def renormalize_min_max(x): # min-max
+def renormalize_min_max(x):  # min-max
     # x is a 2D tensor of shape (batch_size, num_features)
     # Compute the min and max for each feature across the batch
     x_min = torch.min(x, dim=0, keepdim=True).values
@@ -176,8 +179,10 @@ class SimNorm(nn.Module):
     def __repr__(self):
         return f"SimNorm(dim={self.dim})"
 
+
 def AvgL1Norm(x, eps=1e-8):
-	return x/x.abs().mean(-1,keepdim=True).clamp(min=eps)
+    return x / x.abs().mean(-1, keepdim=True).clamp(min=eps)
+
 
 class RepresentationNetworkGPT(nn.Module):
 
@@ -188,7 +193,7 @@ class RepresentationNetworkGPT(nn.Module):
             num_channels: int = 64,
             downsample: bool = True,
             # activation: nn.Module = nn.ReLU(inplace=True),
-            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01), # TODO
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),  # TODO
             # activation: nn.Module = nn.GELU(), # TODO
             norm_type: str = 'BN',
             embedding_dim: int = 256,
@@ -227,10 +232,11 @@ class RepresentationNetworkGPT(nn.Module):
                 self.norm = nn.BatchNorm2d(num_channels)
             elif norm_type == 'LN':
                 if downsample:
-                    self.norm = nn.LayerNorm([num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                    self.norm = nn.LayerNorm(
+                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
                 else:
                     self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]])
-            
+
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
@@ -245,17 +251,16 @@ class RepresentationNetworkGPT(nn.Module):
 
         # self.last_linear = nn.Linear(64*4*4, 256)
         # self.last_linear = nn.Linear(64*8*8, self.embedding_dim)
-        self.last_linear = nn.Linear(64*8*8, self.embedding_dim, bias=False)
+        self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
 
         # TODO
         # Initialize weights using He initialization
         init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
-        
+
         # Initialize biases to zero
         # init.zeros_(self.last_linear.bias)
 
         self.sim_norm = SimNorm(simnorm_dim=group_size)
-
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -279,16 +284,15 @@ class RepresentationNetworkGPT(nn.Module):
 
         # NOTE: very important. for muzero_gpt atari 64,8,8 = 4096 -> 1024
         # x = self.last_linear(x.contiguous().view(-1, 64*8*8))
-        x = self.last_linear(x.reshape(-1, 64*8*8)) # TODO
+        x = self.last_linear(x.reshape(-1, 64 * 8 * 8))  # TODO
 
-        x = x.view(-1, self.embedding_dim) # TODO
+        x = x.view(-1, self.embedding_dim)  # TODO
 
         # print('cont embedings before renormalize', x.max(), x.min(), x.mean())
         # x = torch.softmax(x)
         x = self.sim_norm(x)
         # print('after renormalize', x.max(), x.min(),x.mean())
 
-            
         return x
 
     def get_param_mean(self) -> float:
@@ -311,12 +315,13 @@ class LatentDecoder(nn.Module):
         self.embedding_dim = embedding_dim
         self.output_shape = output_shape  # (C, H, W)
         self.num_channels = num_channels
-        
+
         # Assuming that the output shape is (C, H, W) = (12, 96, 96) and embedding_dim is 256
         # We will reverse the process of the representation network
-        self.initial_size = (num_channels, output_shape[1] // 8, output_shape[2] // 8)  # This should match the last layer of the encoder
+        self.initial_size = (
+            num_channels, output_shape[1] // 8, output_shape[2] // 8)  # This should match the last layer of the encoder
         self.fc = nn.Linear(self.embedding_dim, np.prod(self.initial_size))
-        
+
         # Upsampling blocks
         self.conv_blocks = nn.ModuleList([
             # Block 1: (num_channels, H/8, W/8) -> (num_channels//2, H/4, W/4)
@@ -324,34 +329,184 @@ class LatentDecoder(nn.Module):
             nn.ReLU(),
             nn.BatchNorm2d(num_channels // 2),
             # Block 2: (num_channels//2, H/4, W/4) -> (num_channels//4, H/2, W/2)
-            nn.ConvTranspose2d(num_channels // 2, num_channels // 4, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ConvTranspose2d(num_channels // 2, num_channels // 4, kernel_size=3, stride=2, padding=1,
+                               output_padding=1),
             nn.ReLU(),
             nn.BatchNorm2d(num_channels // 4),
             # Block 3: (num_channels//4, H/2, W/2) -> (output_shape[0], H, W)
-            nn.ConvTranspose2d(num_channels // 4, output_shape[0], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ConvTranspose2d(num_channels // 4, output_shape[0], kernel_size=3, stride=2, padding=1,
+                               output_padding=1),
         ])
-        
+        # TODO: last layer use sigmoid?
+
     def forward(self, embeddings: torch.Tensor) -> torch.Tensor:
         # Map embeddings back to the image space
         x = self.fc(embeddings)  # (B, embedding_dim) -> (B, C*H/8*W/8)
         x = x.view(-1, *self.initial_size)  # (B, C*H/8*W/8) -> (B, C, H/8, W/8)
-        
+
         # Apply conv blocks
         for block in self.conv_blocks:
             x = block(x)  # Upsample progressively
-        
+
         # The output x should have the shape of (B, output_shape[0], output_shape[1], output_shape[2])
         return x
 
-class LatentDecoderMemory(nn.Module):
+
+def conv_output_shape(h_w, kernel_size=1, stride=1, pad=0, dilation=1):
+    """
+    Utility function for computing output of convolutions
+    takes a tuple of (h,w) and returns a tuple of (h,w)
+    """
+    from math import floor
+
+    if type(kernel_size) is not tuple:
+        kernel_size = (kernel_size, kernel_size)
+    h = floor(
+        ((h_w[0] + (2 * pad) - (dilation * (kernel_size[0] - 1)) - 1) / stride) + 1
+    )
+    w = floor(
+        ((h_w[1] + (2 * pad) - (dilation * (kernel_size[1] - 1)) - 1) / stride) + 1
+    )
+    return h, w
+
+
+class ImageEncoderMemory(nn.Module):
+    def __init__(
+            self,
+            image_shape=(3, 5, 5),
+            embedding_size=100,
+            channels=[8, 16],
+            kernel_sizes=[2, 2],
+            strides=[1, 1],
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),  # TODO
+            from_flattened=False,
+            normalize_pixel=False,
+            group_size: int = 8,
+            **kwargs,
+    ):
+        super(ImageEncoderMemory, self).__init__()
+        self.shape = image_shape
+        self.channels = [image_shape[0]] + list(channels)
+
+        layers = []
+        h_w = self.shape[-2:]
+
+        for i in range(len(self.channels) - 1):
+            layers.append(
+                nn.Conv2d(
+                    self.channels[i], self.channels[i + 1], kernel_sizes[i], strides[i]
+                )
+            )
+            layers.append(activation)
+            h_w = conv_output_shape(h_w, kernel_sizes[i], strides[i])
+
+        self.cnn = nn.Sequential(*layers)
+
+        self.linear = nn.Linear(
+            h_w[0] * h_w[1] * self.channels[-1], embedding_size
+        )  # dreamer does not use it
+
+        self.from_flattened = from_flattened
+        self.normalize_pixel = normalize_pixel
+        self.embedding_size = embedding_size
+        self.sim_norm = SimNorm(simnorm_dim=group_size)
+
+    def forward(self, image):
+        # return embedding of shape [N, embedding_size]
+        if self.from_flattened:
+            # image of size (T, B, C*H*W)
+            batch_size = image.shape[:-1]
+            img_shape = [np.prod(batch_size)] + list(self.shape)  # (T*B, C, H, W)
+            image = torch.reshape(image, img_shape)
+        else:  # image of size (N, C, H, W)
+            batch_size = [image.shape[0]]
+
+        if self.normalize_pixel:
+            image = image / 255.0
+
+        embed = self.cnn(image.float())  # (T*B, C, H, W)
+        embed = torch.reshape(embed, list(batch_size) + [-1])  # (T, B, C*H*W)
+        embed = self.linear(embed)  # (T, B, embedding_size)
+        # TODO
+        x = self.sim_norm(embed)
+        return x
+
+
+class ImageDecoderMemory(nn.Module):
+    def __init__(
+            self,
+            image_shape=(3, 5, 5),
+            embedding_size=100,
+            channels=[16, 8],
+            kernel_sizes=[2, 2],
+            # kernel_sizes=[1, 1], # NOTE: for memory env
+            strides=[1, 1],
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),
+            **kwargs,
+    ):
+        super(ImageDecoderMemory, self).__init__()
+        self.shape = image_shape
+        self.channels = list(channels) + [image_shape[0]]
+
+        self.linear = nn.Linear(embedding_size, image_shape[-2] * image_shape[-1] * channels[0])
+
+        layers = []
+        h_w = (image_shape[-2], image_shape[-1])
+
+        for i in range(len(self.channels) - 1):
+            layers.append(
+                nn.ConvTranspose2d(
+                    self.channels[i], self.channels[i + 1], kernel_sizes[i], strides[i]
+                )
+            )
+            if i < len(self.channels) - 2:
+                layers.append(activation)
+            else:
+                layers.append(nn.Sigmoid())  # TODO NOTE: for memory env
+            h_w = conv_transpose_output_shape(h_w, kernel_sizes[i], strides[i])
+
+        self.deconv = nn.Sequential(*layers)
+        self.embedding_size = embedding_size
+
+    def forward(self, embedding):
+        # Decode the embedding into an image
+        batch_size = embedding.shape[:-1]
+        embedding = embedding.view(np.prod(batch_size), self.embedding_size)
+        x = self.linear(embedding)
+        x = x.view(np.prod(batch_size), self.channels[0], self.shape[-2], self.shape[-1])
+        x = self.deconv(x)
+        x = x.view(*batch_size, *self.shape)
+        return x
+
+
+def conv_transpose_output_shape(h_w, kernel_size, stride, pad=0, out_pad=0):
+    """
+    Utility function for computing output of transposed convolutions
+    """
+    if isinstance(h_w, int):
+        h_w = (h_w, h_w)
+
+    if isinstance(kernel_size, int):
+        kernel_size = (kernel_size, kernel_size)
+
+    if isinstance(stride, int):
+        stride = (stride, stride)
+
+    h = (h_w[0] - 1) * stride[0] - 2 * pad + kernel_size[0] + out_pad
+    w = (h_w[1] - 1) * stride[1] - 2 * pad + kernel_size[1] + out_pad
+
+    return h, w
+
+
+class VectorDecoderMemory(nn.Module):
     # def __init__(self, embedding_dim: int, output_shape: SequenceType, hidden_size: int = 64):
     def __init__(
             self,
-            embedding_dim: int, 
+            embedding_dim: int,
             output_shape: SequenceType,
             hidden_channels: int = 64,
             layer_num: int = 2,
-            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01), # TODO
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),  # TODO
             norm_type: Optional[str] = 'BN',
     ) -> torch.Tensor:
         """
@@ -384,7 +539,6 @@ class LatentDecoderMemory(nn.Module):
             last_linear_layer_init_zero=True,
         )
 
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
@@ -394,6 +548,7 @@ class LatentDecoderMemory(nn.Module):
         x = self.fc_representation(x)
         return x
 
+
 class RepresentationNetworkMLP(nn.Module):
 
     def __init__(
@@ -402,7 +557,7 @@ class RepresentationNetworkMLP(nn.Module):
             hidden_channels: int = 64,
             layer_num: int = 2,
             # activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01), # TODO
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),  # TODO
             last_linear_layer_init_zero: bool = True,
             norm_type: Optional[str] = 'BN',
             group_size: int = 8,
@@ -439,7 +594,6 @@ class RepresentationNetworkMLP(nn.Module):
             last_linear_layer_init_zero=True,
         )
         self.sim_norm = SimNorm(simnorm_dim=group_size)
-
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -513,23 +667,25 @@ class PredictionNetwork(nn.Module):
 
         self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
         self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
-        
+
         if norm_type == 'BN':
             self.norm_value = nn.BatchNorm2d(value_head_channels)
             self.norm_policy = nn.BatchNorm2d(policy_head_channels)
         elif norm_type == 'LN':
             if downsample:
-                self.norm_value = nn.LayerNorm([value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
-                self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                self.norm_value = nn.LayerNorm(
+                    [value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16),
+                                                 math.ceil(observation_shape[-1] / 16)])
             else:
                 self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]])
                 self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]])
-        
+
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
 
-        self.flatten_output_size_for_value_head = 16*8*8 # TODO: only for obs (4,64,64)
-        self.flatten_output_size_for_policy_head = 16*8*8 # TODO: only for obs (4,64,64)
+        self.flatten_output_size_for_value_head = 16 * 8 * 8  # TODO: only for obs (4,64,64)
+        self.flatten_output_size_for_policy_head = 16 * 8 * 8  # TODO: only for obs (4,64,64)
 
         self.activation = activation
 
@@ -677,6 +833,7 @@ class PredictionNetworkMLP(nn.Module):
         policy = self.fc_policy_head(x_prediction_common)
         return policy, value
 
+
 class RepresentationNetwork(nn.Module):
 
     def __init__(
@@ -721,10 +878,11 @@ class RepresentationNetwork(nn.Module):
                 self.norm = nn.BatchNorm2d(num_channels)
             elif norm_type == 'LN':
                 if downsample:
-                    self.norm = nn.LayerNorm([num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                    self.norm = nn.LayerNorm(
+                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
                 else:
                     self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]])
-            
+
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(

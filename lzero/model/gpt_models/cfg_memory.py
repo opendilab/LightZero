@@ -58,7 +58,8 @@ cfg['world_model'] = {
                       #  'max_blocks': 1030, #  memory_length = 1000
                       # "max_tokens": 2 * 1030, 
 
-                      'embed_dim': 64,  # TODO：for memory # same as <Transformer shine in RL> paper
+                        'embed_dim': 64,  # TODO：for memory # same as <Transformer shine in RL> paper
+                        # 'embed_dim': 100,  # TODO：for memory # same as <Transformer shine in RL> paper
                       'group_size': 8,  # NOTE
 
                       'attention': 'causal',
@@ -71,25 +72,27 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:3',
+                      "device": 'cuda:0',
                       'support_size': 21,
                       'action_shape': 4, # NOTE：for memory
                       'max_cache_size': 5000,
                       "env_num": 8,
+                      #   "env_num": 20,
 
                       'latent_recon_loss_weight':0.05,
                       # 'latent_recon_loss_weight':0.5,
                       # 'latent_recon_loss_weight':1,
 
 
-                      'perceptual_loss_weight':0.,
-
-                      'policy_entropy_weight': 1e-4,  # NOTE：for key_to_door 
+                      'perceptual_loss_weight': 0.,
+                      'policy_entropy_weight': 1e-4,  # NOTE：for key_to_door
                       # 'policy_entropy_weight': 1e-1,  # NOTE：for visual_match
 
-                      'predict_latent_loss_type': 'group_kl', # 'mse'
-                      # 'predict_latent_loss_type': 'mse', # 'mse'
-                      'obs_type': 'vector', # 'vector', 'image'
-                      }
+                      'predict_latent_loss_type': 'group_kl',
+                      # 'predict_latent_loss_type': 'mse',
+
+                      'obs_type': 'image_memory',  # 'vector', 'image'
+
+}
 from easydict import EasyDict
 cfg = EasyDict(cfg)
