@@ -11,7 +11,7 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
-from .common import MZNetworkOutput, RepresentationNetworkGPT, RepresentationNetworkMLP, PredictionNetwork, LatentDecoder, LatentDecoderMemory
+from .common import MZNetworkOutput, RepresentationNetworkGPT, RepresentationNetworkMLP, PredictionNetwork, LatentDecoder, VectorDecoderMemory, ImageEncoderMemory, ImageDecoderMemory
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -133,7 +133,7 @@ class MuZeroModelGPT(nn.Module):
                 group_size=cfg.world_model.group_size,
             )
             # decoder_network=None
-            decoder_network = LatentDecoderMemory(embedding_dim=cfg.world_model.embed_dim, output_shape=25) # TODO: For memory
+            decoder_network = VectorDecoderMemory(embedding_dim=cfg.world_model.embed_dim, output_shape=25) # TODO: For memory
 
             Encoder = Encoder(cfg.tokenizer.encoder)
             self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, None, with_lpips=False, representation_network=self.representation_network,
@@ -176,7 +176,42 @@ class MuZeroModelGPT(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
             print(f'{sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.tokenizer.lpips')
             print('=='*20)
-        
+        elif cfg.world_model.obs_type == 'image_memory':
+            self.representation_network = ImageEncoderMemory(
+                image_shape=(3, 5, 5),
+                embedding_size=cfg.world_model.embed_dim,
+                channels=[8, 16],
+                kernel_sizes=[2, 2],
+                strides=[1, 1],
+                activation= nn.LeakyReLU(negative_slope=0.01),  # TODO
+                group_size =cfg.world_model.group_size,
+            )
+            # Instantiate the decoder
+            decoder_network = ImageDecoderMemory(
+                image_shape=(3, 5, 5),
+                embedding_size=cfg.world_model.embed_dim,
+                channels=[16, 8],
+                # kernel_sizes=[2, 2],
+                kernel_sizes=[1, 1],
+                strides=[1, 1],
+                activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
+            )
+
+            Encoder = Encoder(cfg.tokenizer.encoder)
+            Decoder = Decoder(cfg.tokenizer.decoder)
+            self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network,
+                                decoder_network=decoder_network)
+            self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
+                                        config=cfg.world_model, tokenizer=self.tokenizer)
+            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
+            print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters())-sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
+
+            print('=='*20)
+            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
+            print(f'{sum(p.numel() for p in self.tokenizer.representation_network.parameters())} parameters in agent.tokenizer.representation_network')
+            print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
+            print(f'{sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.tokenizer.lpips')
+            print('=='*20)
 
 
     def initial_inference(self, obs: torch.Tensor, action_batch=None, current_obs_batch=None) -> MZNetworkOutput:

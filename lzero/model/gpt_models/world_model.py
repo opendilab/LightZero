@@ -728,8 +728,15 @@ class WorldModel(nn.Module):
             reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings.reshape(-1, self.embed_dim))
             # 计算重建损失
             latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 25), reconstructed_images) # NOTE: for stack=1
-            
+        elif self.obs_type == 'image_memory':
+            # 从潜在状态表示重建观察
+            reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
 
+            # 计算重建损失和感知损失
+            latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 5, 5),
+                                                                   reconstructed_images)  # NOTE: for stack=1
+            # latent_recon_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
+            perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
 
         # 动作tokens
         act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
