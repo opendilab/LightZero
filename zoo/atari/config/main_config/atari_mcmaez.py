@@ -1,7 +1,13 @@
 from easydict import EasyDict
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_name = 'QbertNoFrameskip-v4'
+# env_name = 'MsPacmanNoFrameskip-v4'
+# env_name = 'QbertNoFrameskip-v4'
+# env_name = 'UpNDownNoFrameskip-v4'
+# env_name = 'SeaquestNoFrameskip-v4'
+env_name = 'BreakoutNoFrameskip-v4'
+
+
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -13,10 +19,10 @@ elif env_name == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
 elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
+elif env_name == 'UpNDownNoFrameskip-v4':
+    action_space_size = 6
 elif env_name == 'SeaquestNoFrameskip-v4':   
     action_space_size = 18
-elif env_name == 'QbertNoFrameskip-v4':   
-    action_space_size = 6
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -28,16 +34,23 @@ num_simulations = 50
 update_per_collect = None
 batch_size = 256
 model_update_ratio = 0.25
+# max_env_step = int(8e5)
 max_env_step = int(5e5)
-reanalyze_ratio = 0.99
 
-eps_greedy_exploration_in_collect = False 
+reanalyze_ratio = 0
+
+
+
+# eps_greedy_exploration_in_collect = False 
+eps_greedy_exploration_in_collect = True 
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_efficientzero_config = dict(
-    exp_name=f'data_ez_0326/{env_name[:-14]}/final_ez_seed0',
+    exp_name=
+    f'data_ez_ctree/{env_name[:-14]}/final_mcmaez',
     env=dict(
         env_name=env_name,
         obs_shape=(4, 96, 96),
@@ -45,10 +58,28 @@ atari_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        # collect_max_episode_steps=5000.0,
-        # eval_max_episode_steps=20000.0,
+        # NOTE: for breakout
+        collect_max_episode_steps=5e3,
+        eval_max_episode_steps=2e4,
     ),
     policy=dict(
+        # NOTE: not save ckpt
+        learn=dict(
+            learner=dict(
+                train_iterations=1000000000,
+                dataloader=dict(
+                    num_workers=0,
+                ),
+                log_policy=True,
+                hook=dict(
+                    load_ckpt_before_run='',
+                    log_show_after_iter=1000,
+                    save_ckpt_after_iter=1000000,
+                    save_ckpt_after_run=True,
+                ),
+                cfg_type='BaseLearnerDict',
+            ),
+        ),
         model=dict(
             observation_shape=(4, 96, 96),
             frame_stack_num=4,
@@ -107,5 +138,14 @@ atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
 create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # from lzero.entry import train_mcmaez
+    # train_mcmaez([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # Define a list of seeds for multiple runs
+    # seeds = [0]  # You can add more seed values here
+    seeds = [1]  # You can add more seed values here
+
+    for seed in seeds:
+        # Update exp_name to include the current seed
+        main_config.exp_name = f'data_rezero_ctree_0129/{env_name[:-14]}_rezero-ez_eps100k_seed{seed}'
+        from lzero.entry import train_mcmaez
+        train_mcmaez([main_config, create_config], seed=seed, max_env_step=max_env_step)

@@ -1,5 +1,6 @@
 from easydict import EasyDict
-
+import torch
+torch.cuda.set_device(0)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_name = 'PongNoFrameskip-v4'
 
@@ -22,8 +23,11 @@ n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 1000
+# update_per_collect = None
+model_update_ratio = 0.25
+
 batch_size = 256
-max_env_step = int(8e5)
+max_env_step = int(5e5)
 reanalyze_ratio = 0.99
 eps_greedy_exploration_in_collect = False
 # ==============================================================
@@ -67,6 +71,7 @@ atari_muzero_config = dict(
         ),
         use_augmentation=True,
         update_per_collect=update_per_collect,
+        model_update_ratio=model_update_ratio,
         batch_size=batch_size,
         optim_type='SGD',
         lr_piecewise_constant_decay=True,
@@ -103,9 +108,11 @@ atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero
-    # def run(max_env_step: int):
-    #     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
-    # import cProfile
-    # cProfile.run(f"run({30000})", filename="pong_mzssl", sort="cumulative")
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # seeds = [1]  # You can add more seed values here
+    seeds = [0]  # You can add more seed values here
+
+    for seed in seeds:
+        # Update exp_name to include the current seed
+        main_config.exp_name = f'data_rezero_ctree_0129_debug/{env_name[:-14]}_mz_rr1_mur025_seed{seed}'
+        from lzero.entry import train_muzero
+        train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)
