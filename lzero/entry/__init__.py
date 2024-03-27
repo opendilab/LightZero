@@ -9,3 +9,4 @@ from .train_ma import train_ma
 from .train_reuse import train_reuse
 from .train_mcma import train_mcma
 from .train_mcmaez import train_mcmaez
+from .train_nrma import train_nrma

@@ -419,8 +419,8 @@ class MACollector(ISerialCollector):
                 #         k: v['root_sampled_actions']
                 #         for k, v in policy_output.items()
                 #     }
-                # value_dict_no_env_id = {k: v['value'] for k, v in policy_output.items()}
-                pred_value_dict_no_env_id = {k: v['pred_value'] for k, v in policy_output.items()}
+                value_dict_no_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
+                pred_value_dict_no_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
                 # visit_entropy_dict_no_env_id = {
                 #     k: v['visit_count_distribution_entropy']
                 #     for k, v in policy_output.items()
@@ -457,7 +457,7 @@ class MACollector(ISerialCollector):
                 # distributions_dict = {}
                 # if self.policy_config.sampled_algo:
                 #     root_sampled_actions_dict = {}
-                # value_dict = {}
+                value_dict = {}
                 pred_value_dict = {}
                 # visit_entropy_dict = {}
                 # if self.policy_config.gumbel_algo:
@@ -468,7 +468,7 @@ class MACollector(ISerialCollector):
                     # distributions_dict[env_id] = distributions_dict_no_env_id.pop(index)
                     # if self.policy_config.sampled_algo:
                     #     root_sampled_actions_dict[env_id] = root_sampled_actions_dict_no_env_id.pop(index)
-                    # value_dict[env_id] = value_dict_no_env_id.pop(index)
+                    value_dict[env_id] = value_dict_no_env_id.pop(index)
                     pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
                     # visit_entropy_dict[env_id] = visit_entropy_dict_no_env_id.pop(index)
                     # if self.policy_config.gumbel_algo:

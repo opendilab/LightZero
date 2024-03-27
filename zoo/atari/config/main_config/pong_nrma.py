@@ -36,7 +36,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/ma_ablation0327_seed0',
+    f'data_mz_ctree/{env_name[:-14]}/ma_nr0327_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -111,8 +111,8 @@ atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_ma
-    train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import train_nrma
+    train_nrma([main_config, create_config], seed=0, max_env_step=max_env_step)
     # 下面为cprofile的代码
     # def run(max_env_step: int):
     #     train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)
