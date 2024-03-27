@@ -17,7 +17,7 @@ class TestGame2048():
             replay_name_suffix='eval',
             replay_path=None,
             act_scale=True,
-            channel_last=True,
+            channel_last=False,
             # (str) The type of observation to use. Options are 'raw_board', 'raw_encoded_board', and 'dict_encoded_board'.
             obs_type='raw_encoded_board',
             reward_type='raw',  # options=['raw', 'merged_tiles_plus_log_max_tile_num']
