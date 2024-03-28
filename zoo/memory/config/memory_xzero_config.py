@@ -1,6 +1,7 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(2)
+
+torch.cuda.set_device(0)
 # torch.cuda.set_device(3)
 
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
@@ -10,10 +11,7 @@ memory_length = 1
 # visual_match [2, 60, 100, 250, 500]
 # key_to_door [2, 60, 120, 250, 500]
 
-
-max_env_step = int(1e6)
-# max_env_step = int(3e6)
-
+max_env_step = int(3e6)
 # ==== NOTE: 需要设置cfg_memory中的action_shape =====
 # ==== NOTE: 需要设置cfg_memory中的policy_entropy_weight =====
 
@@ -42,7 +40,6 @@ game_segment_length = 16 + memory_length  # TODO: for "explore": 1
 reanalyze_ratio = 0
 td_steps = 5
 
-
 # threshold_training_steps_for_final_temperature = int(5e5)
 # threshold_training_steps_for_final_temperature = int(1e5)  # TODO: 100k train iter
 threshold_training_steps_for_final_temperature = int(5e4)  # TODO: 100k train iter
@@ -55,13 +52,12 @@ eps_greedy_exploration_in_collect = True
 
 memory_xzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
-    exp_name=f'data_memory_{env_id}_0326/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
+    exp_name=f'data_memory_{env_id}_0328/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
              f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
-             f'_pelw1e-4_quan15_groupkl_emd96_seed{seed}_eval{evaluator_env_num}_nl2-nh2_soft005_reclw005',
+             f'_pelw1e-4_quan15_groupkl_seed{seed}_eval{evaluator_env_num}_nl2-nh2_soft005_reclw005_emd64_train-with-full-episode',
     # exp_name=f'data_memory_{env_id}_fixscale_no-dynamic-seed/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}-fix_rr{reanalyze_ratio}_bs{batch_size}'
     #         f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
     #         f'_pelw1e-1_quan15_mse_emd64_seed{seed}_eval{evaluator_env_num}_clearper20-notcache_no-dynamic-seed',
-
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -90,6 +86,7 @@ memory_xzero_config = dict(
                 ),
             ),
         ),
+        sample_type='episode',  # NOTE: very important for memory env
         model_path=None,
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match/memlen-2_xzero_H32_ns50_upcNone-mur0.25_rr0_H32_bs64_collect-eps-True_temp-final-steps-500000_pelw1e-4_quan15_mse_emd64_seed0_240320_190454/ckpt/ckpt_best.pth.tar',
         transformer_start_after_envsteps=int(0),
@@ -99,7 +96,6 @@ memory_xzero_config = dict(
         model=dict(
             # observation_shape=25,
             # observation_shape=75,
-
             observation_shape=(3, 5, 5),
             model_type='conv',
             image_channel=3,
@@ -170,5 +166,6 @@ create_config = memory_xzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero_gpt
+
     train_muzero_gpt([main_config, create_config], seed=0, model_path=main_config.policy.model_path,
                      max_env_step=max_env_step)

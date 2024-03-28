@@ -40,10 +40,13 @@ def configure_optimizers(model, weight_decay, learning_rate, betas, device_type)
     print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
     # Create AdamW optimizer and use the fused version if it is available
     fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
-    use_fused = fused_available and device_type == 'cuda'
-    extra_args = dict(fused=True) if use_fused else dict()
-    optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
-    print(f"using fused AdamW: {use_fused}")
+    if torch.cuda.is_available():
+        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas)
+    else:
+        use_fused = fused_available and device_type == 'cuda'
+        extra_args = dict(fused=True) if use_fused else dict()
+        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
+        print(f"using fused AdamW: {use_fused}")
 
     return optimizer
 
@@ -365,7 +368,7 @@ class MuZeroGPTPolicy(Policy):
 
         # shape: (batch_size, num_unroll_steps, action_dim)
         # NOTE: .long(), in discrete action space.
-        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
+        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()  # TODO: only for discrete action space
         data_list = [
             mask_batch,
             target_reward.astype('float32'),
@@ -467,17 +470,22 @@ class MuZeroGPTPolicy(Policy):
         # ==============================================================
         self._target_model.update(self._learn_model.state_dict())
 
-        # 确保所有的CUDA核心完成工作，以便准确统计显存使用情况
-        torch.cuda.synchronize()
-        # 获取当前分配的显存总量（字节）
-        current_memory_allocated = torch.cuda.memory_allocated()
-        # 获取程序运行到目前为止分配过的最大显存量（字节）
-        max_memory_allocated = torch.cuda.max_memory_allocated()
+        # # 确保所有的CUDA核心完成工作，以便准确统计显存使用情况
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            # 获取当前分配的显存总量（字节）
+            current_memory_allocated = torch.cuda.memory_allocated()
+            # 获取程序运行到目前为止分配过的最大显存量（字节）
+            max_memory_allocated = torch.cuda.max_memory_allocated()
 
-        # 将显存使用量从字节转换为GB
-        current_memory_allocated_gb = current_memory_allocated / (1024**3)
-        max_memory_allocated_gb = max_memory_allocated / (1024**3)
-        # 使用SummaryWriter记录当前和最大显存使用量
+            # 将显存使用量从字节转换为GB
+            current_memory_allocated_gb = current_memory_allocated / (1024**3)
+            max_memory_allocated_gb = max_memory_allocated / (1024**3)
+            # 使用SummaryWriter记录当前和最大显存使用量
+        else:
+            # TODO
+            current_memory_allocated_gb = 0.
+            max_memory_allocated_gb = 0.
 
         return_loss_dict = {
             'Current_GPU': current_memory_allocated_gb,

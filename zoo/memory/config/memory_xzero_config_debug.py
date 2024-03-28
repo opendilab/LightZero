@@ -28,10 +28,12 @@ evaluator_env_num = 1
 num_simulations = 50
 # num_simulations = 5
 
-update_per_collect = None  # for others
+# update_per_collect = None  # for others
 model_update_ratio = 0.25
+update_per_collect = 1  # TODO: for debug
 
-batch_size = 64
+# batch_size = 64
+batch_size = 6
 # num_unroll_steps = 5
 
 # for key_to_door
@@ -81,6 +83,7 @@ memory_xzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        sample_type='episode',  # NOTE: very important for memory env
         learn=dict(
             learner=dict(
                 hook=dict(
@@ -92,6 +95,7 @@ memory_xzero_config = dict(
             ),
         ),
         model_path=None,
+        # model_path='/Users/puyuan/code/LightZero/data_memory/visual_match_memlen-0_xzero_H16_ns50_upcNone-mur0.25_rr0_bs64_collect-eps-True_temp-final-steps-50000_pelw1e-4_quan15_groupkl_emd96_seed0_eval8_nl2-nh2_soft005_reclw005/ckpt/ckpt_best.pth.tar',
         # model_path='/Users/puyuan/code/LightZero/data_memory/visual_match_memlen-0_xzero_H17_ns50_upcNone-mur0.25_rr0_bs64_collect-eps-True_temp-final-steps-50000_pelw1e-4_quan15_groupkl_emd64_seed0_eval8_nl2-nh2_soft005_reclw005/ckpt/iteration_180000.pth.tar',
         transformer_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,

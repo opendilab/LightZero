@@ -217,7 +217,8 @@ def train_muzero_gpt(
             # for i in range(cfg.policy.update_per_collect_transformer):
             for i in range(update_per_collect):
                 # Learner will train ``update_per_collect`` times in one iteration.
-                if replay_buffer.get_num_of_transitions() > batch_size:
+                # if replay_buffer.get_num_of_transitions() > batch_size:
+                if replay_buffer.get_num_of_game_segments() > batch_size:  # TODO: for memory env
                     train_data = replay_buffer.sample(batch_size, policy)
                     if cfg.policy.reanalyze_ratio > 0:
                         if i % 20 == 0:
