@@ -424,10 +424,10 @@ class WorldModel(nn.Module):
                     # 复制单个环境对应的 keys_values_wm 并存储
                     self.update_cache(current_obs_embeddings)
 
-        elif n == int(256):
-            # TODO: n=256 表示训练 tokenizer, 不需要计算target value
-            self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
-            outputs_wm = self.forward({'obs_embeddings': latent_state}, past_keys_values=self.keys_values_wm)
+        # elif n == int(256):
+        #     # TODO: n=256 表示训练 tokenizer, 不需要计算target value
+        #     self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
+        #     outputs_wm = self.forward({'obs_embeddings': latent_state}, past_keys_values=self.keys_values_wm)
         elif n > self.env_num and n != int(256) and buffer_action is not None:
             # 训练时计算 target value
             # [192, 16, 64] -> [32, 6, 16, 64]

@@ -38,6 +38,8 @@ class GameBuffer(ABC, object):
         use_root_value=False,
         # (int) The number of samples required for mini inference.
         mini_infer_size=10240,
+        # (str) The type of sampled data. The default is 'transition'. Options: 'transition', 'episode'.
+        sample_type='transition',
     )
 
     def __init__(self, cfg: dict):
@@ -145,6 +147,55 @@ class GameBuffer(ABC, object):
             pos_in_game_segment_list.append(pos_in_game_segment)
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
+
+        orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
+        return orig_data
+
+    def _sample_orig_data_episode(self, batch_size: int) -> Tuple:
+        """
+        Overview:
+             sample orig_data that contains:
+                game_segment_list: a list of game segments
+                pos_in_game_segment_list: transition index in game (relative index)
+                batch_index_list: the index of start transition of sampled minibatch in replay buffer
+                weights_list: the weight concerning the priority
+                make_time: the time the batch is made (for correctly updating replay buffer when data is deleted)
+        Arguments:
+            - batch_size (:obj:`int`): batch size
+            - beta: float the parameter in PER for calculating the priority
+        """
+        assert self._beta > 0
+        num_of_transitions = self.get_num_of_transitions()
+        if self._cfg.use_priority is False:
+            self.game_pos_priorities = np.ones_like(self.game_pos_priorities)
+
+        # +1e-6 for numerical stability
+        probs = self.game_pos_priorities ** self._alpha + 1e-6
+        probs /= probs.sum()
+
+        # sample according to game_segment index
+        # TODO(pu): replace=True
+        num_of_game_segments = self.get_num_of_game_segments()
+        batch_episode_index_list = np.random.choice(num_of_game_segments, batch_size, replace=False)
+        if self._cfg.reanalyze_outdated is True:
+            # NOTE: used in reanalyze part
+            batch_episode_index_list.sort()
+
+        batch_index_list = batch_episode_index_list * self._cfg.game_segment_length
+
+        weights_list = (num_of_transitions * probs[batch_index_list]) ** (-self._beta)
+        weights_list /= weights_list.max()
+
+        game_segment_list = []
+        pos_in_game_segment_list = []
+
+        for episode_index in batch_episode_index_list:
+            game_segment = self.game_segment_buffer[episode_index]
+            game_segment_list.append(game_segment)
+            # pos_in_game_segment = 0
+            pos_in_game_segment_list.append(0)
+
+        make_time = [time.time() for _ in range(len(batch_episode_index_list))]
 
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
         return orig_data
