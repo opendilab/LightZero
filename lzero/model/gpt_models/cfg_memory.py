@@ -13,17 +13,20 @@ cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',
 cfg['world_model'] = {
     'tokens_per_block': 2,
 
-    # 'max_blocks': 5,
-    #   "max_tokens": 2 * 5,  # H=5
+    'max_blocks': 5,
+      "max_tokens": 2 * 5,  # H=5
 
-    'max_blocks': 16,
-    "max_tokens": 2 * 16,  # memory_length = 0
+    # 'max_blocks': 9,
+    # "max_tokens": 2 * 9,  # 1+0+8 memory_length = 0
 
-    # 'max_blocks': 18,
-    # "max_tokens": 2 * 18,  # memory_length = 2
+    # 'max_blocks': 16,
+    # "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
+
+    # 'max_blocks': 30,
+    # "max_tokens": 2 * 30,  # 15+0+15 memory_length = 0
 
     # 'max_blocks': 32,
-    # "max_tokens": 2 * 32,  # memory_length = 2
+    # "max_tokens": 2 * 32,  # 15+2+15 memory_length = 2
 
     # 'max_blocks': 60,  # memory_length = 30
     # "max_tokens": 2 * 60,
@@ -58,8 +61,8 @@ cfg['world_model'] = {
     #  'max_blocks': 1030, #  memory_length = 1000
     # "max_tokens": 2 * 1030,
 
-    'embed_dim': 64,  # TODO：for memory # same as <Transformer shine in RL> paper
-    # 'embed_dim': 96,  # TODO：for memory # same as <Transformer shine in RL> paper
+    # 'embed_dim': 64,  # TODO：for memory # same as <Transformer shine in RL> paper
+    'embed_dim': 96,  # TODO：for memory # same as <Transformer shine in RL> paper
     'group_size': 8,  # NOTE
 
     'attention': 'causal',
@@ -71,7 +74,7 @@ cfg['world_model'] = {
     'embed_pdrop': 0.1,
     'resid_pdrop': 0.1,
     'attn_pdrop': 0.1,
-    "device": 'cuda:0',
+    "device": 'cuda:5',
     'support_size': 21,
     'action_shape': 4,  # NOTE：for memory
     'max_cache_size': 5000,

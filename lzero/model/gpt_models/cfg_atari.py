@@ -22,9 +22,14 @@ cfg['world_model'] = {
                       # 'max_blocks': 50,
                       # "max_tokens": 2 * 50,  # TODO： horizon
 
+                      # 'tokens_per_block': 2,
+                      # 'max_blocks': 5,
+                      # "max_tokens": 2 * 5,  # TODO： horizon
+
+
                       'tokens_per_block': 2,
-                      'max_blocks': 5,
-                      "max_tokens": 2 * 5,  # TODO： horizon
+                      'max_blocks': 8,
+                      "max_tokens": 2 * 8,  # TODO： horizon:8
 
                       # 'tokens_per_block': 2,
                       # 'max_blocks': 10,
@@ -51,11 +56,11 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:4',
+                      "device": 'cuda:2',
                     #   "device": 'cpu',
                       'support_size': 601,
 
-                      # 'action_shape': 18,# TODO：for multi-task
+                      # 'action_shape': 18, # TODO：for multi-task
 
                       # 'action_shape': 18,# TODO：for Seaquest boxing Frostbite
                       # 'action_shape': 9,# TODO：for mspacman
@@ -69,8 +74,8 @@ cfg['world_model'] = {
                       # "env_num":16, # TODO
                       # "env_num":1, # TODO
 
-                      'latent_recon_loss_weight':0.05,
-                      'perceptual_loss_weight':0.05, # for stack1 rgb obs
+                      'latent_recon_loss_weight': 0.05,
+                      'perceptual_loss_weight': 0.05, # for stack1 rgb obs
                       # 'perceptual_loss_weight':0., # for stack4 gray obs
 
                       # 'latent_recon_loss_weight':0.,
@@ -82,6 +87,8 @@ cfg['world_model'] = {
                       'predict_latent_loss_type': 'group_kl',
                       # 'predict_latent_loss_type': 'mse',
                       'obs_type': 'image', # 'vector', 'image'
+
+                      'gamma': 0.5, # 0.5, 0.9, 0.99, 0.999
 
                       }
 from easydict import EasyDict

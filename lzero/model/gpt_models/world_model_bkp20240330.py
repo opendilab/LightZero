@@ -92,7 +92,6 @@ class WorldModel(nn.Module):
         self.num_groups = config.embed_dim // config.group_size
         self.obs_type = config.obs_type
         self.embed_dim = config.embed_dim 
-        self.gamma = config.gamma
 
         self.transformer = Transformer(config)
         self.num_observations_tokens = config.tokens_per_block - 1
@@ -773,7 +772,7 @@ class WorldModel(nn.Module):
         
         # 应用mask到loss_obs
         mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1)
-        loss_obs = (loss_obs * mask_padding_expanded)
+        loss_obs = (loss_obs * mask_padding_expanded).mean()
 
         # 计算策略和价值的标签
         labels_policy, labels_value = self.compute_labels_world_model_value_policy(batch['target_value'],
@@ -784,52 +783,19 @@ class WorldModel(nn.Module):
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
         loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy, batch, element='policy')
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
-        
-        # return LossWithIntermediateLosses(
-        #     latent_recon_loss_weight=self.latent_recon_loss_weight,
-        #     perceptual_loss_weight=self.perceptual_loss_weight,
-        #     loss_obs=loss_obs,
-        #     loss_rewards=loss_rewards,
-        #     loss_value=loss_value,
-        #     loss_policy=loss_policy,
-        #     latent_recon_loss=latent_recon_loss,
-        #     perceptual_loss=perceptual_loss,
-        #     orig_policy_loss=orig_policy_loss,
-        #     policy_entropy=policy_entropy
-        # )
-
-        # 计算时间步
-        timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
-        # 计算每个时间步的折扣系数
-        discounts = self.gamma ** timesteps
-
-        # 将折扣系数应用到每个损失项
-        # discounted_latent_recon_loss = (latent_recon_loss.view(-1, batch['actions'].shape[1]) * discounts).mean()
-        # discounted_perceptual_loss = (perceptual_loss.view(-1, batch['actions'].shape[1]) * discounts).mean()
-        discounted_latent_recon_loss = latent_recon_loss
-        discounted_perceptual_loss = perceptual_loss
-
-        discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).mean()
-        discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).mean()
-        discounted_loss_value = (loss_value.view(-1, batch['actions'].shape[1]) * discounts).mean()
-        discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * discounts).mean()
-        discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).mean()
-        discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).mean()
 
         return LossWithIntermediateLosses(
             latent_recon_loss_weight=self.latent_recon_loss_weight,
             perceptual_loss_weight=self.perceptual_loss_weight,
-            loss_obs=discounted_loss_obs,
-            loss_rewards=discounted_loss_rewards,
-            loss_value=discounted_loss_value,
-            loss_policy=discounted_loss_policy,
-            latent_recon_loss=discounted_latent_recon_loss,
-            perceptual_loss=discounted_perceptual_loss,
-            orig_policy_loss=discounted_orig_policy_loss,
-            policy_entropy=discounted_policy_entropy
+            loss_obs=loss_obs,
+            loss_rewards=loss_rewards,
+            loss_value=loss_value,
+            loss_policy=loss_policy,
+            latent_recon_loss=latent_recon_loss,
+            perceptual_loss=perceptual_loss,
+            orig_policy_loss=orig_policy_loss,
+            policy_entropy=policy_entropy
         )
-
-
 
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
         # 假设outputs是一个具有'rewards'、'policy'和'value'的logits属性的对象
@@ -846,7 +812,7 @@ class WorldModel(nn.Module):
 
         # 计算交叉熵损失
         loss = -(torch.log_softmax(logits, dim=1) * labels).sum(1)
-        loss = (loss * mask_padding)
+        loss = (loss * mask_padding).mean()
 
         if element == 'policy':
             # 计算策略熵损失
@@ -863,7 +829,7 @@ class WorldModel(nn.Module):
         log_probs = torch.log_softmax(logits, dim=1)
         entropy = -(probs * log_probs).sum(1)
         # 应用mask并返回平均熵损失
-        entropy_loss = (entropy * mask)
+        entropy_loss = (entropy * mask).mean()
         return entropy_loss
 
     def compute_labels_world_model(self, obs_embeddings: torch.Tensor, rewards: torch.Tensor, ends: torch.Tensor,

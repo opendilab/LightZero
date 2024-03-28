@@ -1,20 +1,21 @@
 from easydict import EasyDict
 import torch
 
-torch.cuda.set_device(0)
+torch.cuda.set_device(5)
 # torch.cuda.set_device(3)
 
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 # env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
 
-memory_length = 1
+memory_length = 0
 # visual_match [2, 60, 100, 250, 500]
 # key_to_door [2, 60, 120, 250, 500]
 
-max_env_step = int(3e6)
+# max_env_step = int(3e6)
+max_env_step = int(1e6)
+
 # ==== NOTE: 需要设置cfg_memory中的action_shape =====
 # ==== NOTE: 需要设置cfg_memory中的policy_entropy_weight =====
-
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -34,8 +35,12 @@ batch_size = 64
 # game_segment_length=30+memory_length # TODO: for "explore": 15
 
 # for visual_match
-num_unroll_steps = 16 + memory_length
-game_segment_length = 16 + memory_length  # TODO: for "explore": 1
+# num_unroll_steps = 16 + memory_length
+# game_segment_length = 16 + memory_length  # TODO: for "explore": 1
+
+num_unroll_steps = 9 + memory_length
+game_segment_length = 9 + memory_length  # TODO: for "explore": 1
+
 
 reanalyze_ratio = 0
 td_steps = 5
@@ -52,9 +57,9 @@ eps_greedy_exploration_in_collect = True
 
 memory_xzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
-    exp_name=f'data_memory_{env_id}_0328/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
+    exp_name=f'data_memory_{env_id}_0330/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
              f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
-             f'_pelw1e-4_quan15_groupkl_seed{seed}_eval{evaluator_env_num}_nl2-nh2_soft005_reclw005_emd64_train-with-full-episode',
+             f'_pelw1e-4_quan15_groupkl_seed{seed}_eval{evaluator_env_num}_nl2-nh2_soft005_reclw005_emd96_train-with-full-episode',
     # exp_name=f'data_memory_{env_id}_fixscale_no-dynamic-seed/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}-fix_rr{reanalyze_ratio}_bs{batch_size}'
     #         f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
     #         f'_pelw1e-1_quan15_mse_emd64_seed{seed}_eval{evaluator_env_num}_clearper20-notcache_no-dynamic-seed',
@@ -68,7 +73,8 @@ memory_xzero_config = dict(
             # "explore": 15, # for key_to_door
             "explore": 1,  # for visual_match
             "distractor": memory_length,
-            "reward": 15
+            # "reward": 15
+            "reward": 8  # debug
         },  # Maximum frames per phase
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
