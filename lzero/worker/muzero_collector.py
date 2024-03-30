@@ -570,7 +570,6 @@ class MuZeroCollector(ISerialCollector):
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
-                    self._total_episode_count += 1
                     reward = timestep.info['eval_episode_return']
                     info = {
                         'reward': reward,
@@ -686,7 +685,7 @@ class MuZeroCollector(ISerialCollector):
             collected_episode = allreduce_data(collected_episode, 'sum')
             collected_duration = allreduce_data(collected_duration, 'sum')
         self._total_envstep_count += collected_step
-        # self._total_episode_count += collected_episode
+        self._total_episode_count += collected_episode
         self._total_duration += collected_duration
 
         # log
