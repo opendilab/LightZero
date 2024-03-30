@@ -686,7 +686,7 @@ class MuZeroCollector(ISerialCollector):
             collected_episode = allreduce_data(collected_episode, 'sum')
             collected_duration = allreduce_data(collected_duration, 'sum')
         self._total_envstep_count += collected_step
-        self._total_episode_count += collected_episode
+        # self._total_episode_count += collected_episode
         self._total_duration += collected_duration
 
         # log
