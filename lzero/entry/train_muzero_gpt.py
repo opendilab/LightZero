@@ -223,7 +223,8 @@ def train_muzero_gpt(
                     if cfg.policy.reanalyze_ratio > 0:
                         if i % 20 == 0:
                         # if i % 2 == 0:# for reanalyze_ratio>0
-                            policy._target_model.world_model.past_keys_values_cache.clear()
+                            policy._target_model.world_model.past_keys_values_cache_init_infer.clear()
+                            policy._target_model.world_model.past_keys_values_cache_recurrent_infer.clear()
                             policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad
                             torch.cuda.empty_cache() # TODO: 是否需要立即释放显存
                             print('sample target_model past_keys_values_cache.clear()')
@@ -243,16 +244,14 @@ def train_muzero_gpt(
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
         
-        policy._target_model.world_model.past_keys_values_cache.clear()
+        policy._target_model.world_model.past_keys_values_cache_init_infer.clear()
+        policy._target_model.world_model.past_keys_values_cache_recurrent_infer.clear()
         policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad
         print('sample target_model past_keys_values_cache.clear()')
 
-        policy._collect_model.world_model.past_keys_values_cache.clear() # very important
+        policy._collect_model.world_model.past_keys_values_cache_init_infer.clear() # very important
+        policy._collect_model.world_model.past_keys_values_cache_recurrent_infer.clear() # very important
         policy._collect_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
-
-        # policy._eval_model.world_model.past_keys_values_cache.clear() # very important
-        # policy._eval_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
-
         torch.cuda.empty_cache() # TODO: NOTE
 
 

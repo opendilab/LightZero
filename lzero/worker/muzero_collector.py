@@ -539,7 +539,9 @@ class MuZeroCollector(ISerialCollector):
                     # if eps_steps_lst[env_id] % 150 == 0:
                     # if eps_steps_lst[env_id] % 280 == 0:
                         # TODO: 是否需要clear
-                        self._policy.get_attribute('collect_model').world_model.past_keys_values_cache.clear()
+                        self._policy.get_attribute('collect_model').world_model.past_keys_values_cache_init_infer.clear()
+                        self._policy.get_attribute('collect_model').world_model.past_keys_values_cache_recurrent_infer.clear()
+                        
                         self._policy.get_attribute('collect_model').world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
                         
                         torch.cuda.empty_cache()
@@ -594,7 +596,6 @@ class MuZeroCollector(ISerialCollector):
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
-                    self._total_episode_count += 1
                     reward = timestep.info['eval_episode_return']
                     info = {
                         'reward': reward,

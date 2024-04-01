@@ -22,11 +22,12 @@ cfg['world_model'] = {
                       # 'max_blocks': 50,
                       # "max_tokens": 2 * 50,  # TODO： horizon
 
-                      # 'tokens_per_block': 2,
-                      # 'max_blocks': 5,
-                      # "max_tokens": 2 * 5,  # TODO： horizon
-                      # "context_length": 10,
-                      # # "gru_gating": False,
+                      'tokens_per_block': 2,
+                      'max_blocks': 5,
+                      "max_tokens": 2 * 5,  # TODO： horizon
+                      "context_length": 10,
+                      "context_length_for_recurrent":8,
+                      "gru_gating": False,
                       # "gru_gating": True,
 
 
@@ -43,23 +44,29 @@ cfg['world_model'] = {
                       # "max_tokens": 2 * 8,  # TODO： horizon:8
                       # "context_length": 2 * 8,
                       # # "context_length": 10,
-                      # # "gru_gating": False,
-                      # "gru_gating": True,
+                      # "context_length_for_recurrent":8,
+                      # "gru_gating": False,
+                      # # "gru_gating": True,
 
-
-                      'tokens_per_block': 2,
-                      'max_blocks': 10,
-                      "max_tokens": 2 * 10,  # TODO： horizon:8
-                      # "context_length": 2 * 10,
-                      "context_length": 10,
-                      "gru_gating": False,
-                      # "gru_gating": True,
 
                       # 'tokens_per_block': 2,
-                      # 'max_blocks': 6,
-                      # "max_tokens": 2 * 6,  # TODO： horizon
+                      # 'max_blocks': 10,
+                      # "max_tokens": 2 * 10,  # TODO： horizon:8
+                      # # "context_length": 2 * 10,
+                      # "context_length": 10,
+                      # "gru_gating": False,
+                      # # "gru_gating": True,
+
+                      # 'tokens_per_block': 2,
+                      # 'max_blocks': 20,
+                      # "max_tokens": 2 * 20,  # TODO： horizon:20
+                      # "context_length": 2 * 20,
+                      # "context_length": 10,
+                      # "gru_gating": False,
+                      # # "gru_gating": True,
 
                       # 'embed_dim':512, # TODO：for atari
+
                       # 'embed_dim':256, # TODO：for atari
                       # 'embed_dim':1024, # TODO：for atari
                       'embed_dim': 768, # TODO：for atari
@@ -77,10 +84,10 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:4',
+                      "device": 'cuda:6',
                     #   "device": 'cpu',
-                      'support_size': 601,
-                      # 'support_size': 101,  # TODO
+                      # 'support_size': 601,
+                      'support_size': 101,  # TODO
 
                       # 'action_shape': 18, # TODO：for multi-task
 

@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(4)
+torch.cuda.set_device(6)
 
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 
@@ -58,9 +58,9 @@ reanalyze_ratio = 0.
 
 batch_size = 64
 # num_unroll_steps = 6
-# num_unroll_steps = 5
+num_unroll_steps = 5
 # num_unroll_steps = 8
-num_unroll_steps = 10 # TODO
+# num_unroll_steps = 10 # TODO
 
 threshold_training_steps_for_final_temperature = int(5e4)  # train_iter 50k 1->0.5->0.25
 eps_greedy_exploration_in_collect = True # for breakout, qbert, boxing
@@ -74,7 +74,7 @@ atari_xzero_config = dict(
     # mcts_ctree
     # muzero_collector/evaluator: empty_cache
     # exp_name=f'data_xzero_atari_0401/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nlayer1-nh8_grugating-false_simnorm_latentw10_pew1e-4_latent-groupkl_soft005_eps20k_nogradscale_gcv5_seed0',
-    exp_name=f'data_xzero_atari_0401/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nlayer1-nh8_grugating-false_contextlength10_simnorm_latentw10_pew1e-4_latent-groupkl_soft005_eps20k_nogradscale_gcv5_seed0',
+    exp_name=f'data_xzero_atari_0401/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nlayer1-nh8_grugating-false_simnorm_latentw10_pew1e-4_latent-groupkl_soft005_eps20k_nogradscale_gcv05_conlen10-conlenrecur8_fix-init-recur_seed0',
     # exp_name=f'data_xzero_atari_0401/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nlayer2-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_soft005_eps20k_nogradscale_gcv5_contextlength10_seed0',
     # exp_name=f'data_xzero_atari_0401/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_nlayer1_soft005_eps20k_gamma1_nogradscale_gcv5_seed0',
     # exp_name=f'data_xzero_atari_0330/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw20-other01_pew1e-4_latent-groupkl_nlayer2_soft005_gcv05_noeps_gamma05_seed0',
@@ -129,12 +129,12 @@ atari_xzero_config = dict(
             self_supervised_learning_loss=True,  # default is False
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
-            reward_support_size=601,
-            value_support_size=601,
-            support_scale=300,
-            # reward_support_size=101,
-            # value_support_size=101,
-            # support_scale=50,
+            # reward_support_size=601,
+            # value_support_size=601,
+            # support_scale=300,
+            reward_support_size=101,
+            value_support_size=101,
+            support_scale=50,
         ),
         use_priority=False, # TODO
         use_augmentation=False,  # TODO
@@ -161,8 +161,8 @@ atari_xzero_config = dict(
         lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
         target_update_freq=100,
-        # grad_clip_value = 0.5, # TODO: 1
-        grad_clip_value = 5, # TODO: 1
+        grad_clip_value = 0.5, # TODO: 1
+        # grad_clip_value = 5, # TODO: 1
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

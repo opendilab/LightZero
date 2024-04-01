@@ -1,7 +1,7 @@
 from easydict import EasyDict
 import torch
 
-torch.cuda.set_device(5)
+torch.cuda.set_device(4)
 # torch.cuda.set_device(3)
 
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
@@ -35,11 +35,11 @@ batch_size = 64
 # game_segment_length=30+memory_length # TODO: for "explore": 15
 
 # for visual_match
-# num_unroll_steps = 16 + memory_length
-# game_segment_length = 16 + memory_length  # TODO: for "explore": 1
+num_unroll_steps = 16 + memory_length
+game_segment_length = 16 + memory_length  # TODO: for "explore": 1
 
-num_unroll_steps = 9 + memory_length
-game_segment_length = 9 + memory_length  # TODO: for "explore": 1
+# num_unroll_steps = 9 + memory_length
+# game_segment_length = 9 + memory_length  # TODO: for "explore": 1
 
 
 reanalyze_ratio = 0
@@ -57,9 +57,12 @@ eps_greedy_exploration_in_collect = True
 
 memory_xzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
-    exp_name=f'data_memory_{env_id}_0330/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
-             f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
-             f'_pelw1e-4_quan15_groupkl_seed{seed}_eval{evaluator_env_num}_nl2-nh2_soft005_reclw005_emd96_train-with-full-episode',
+    exp_name=f'data_memory_{env_id}_0401/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
+             f'_eps-20k_temp-final-steps-{threshold_training_steps_for_final_temperature}'
+             f'_pelw1e-4_quan15_groupkl_seed{seed}_eval{evaluator_env_num}_nl2-nh2_soft005_reclw005_emd96_train-with-full-episode_fixcache',
+    # exp_name=f'data_memory_{env_id}_0401/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
+    #          f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
+    #          f'_pelw1e-4_quan15_groupkl_seed{seed}_eval{evaluator_env_num}_nl2-nh2_soft005_reclw005_emd96_train-with-full-episode_fixcache',
     # exp_name=f'data_memory_{env_id}_fixscale_no-dynamic-seed/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}-fix_rr{reanalyze_ratio}_bs{batch_size}'
     #         f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
     #         f'_pelw1e-1_quan15_mse_emd64_seed{seed}_eval{evaluator_env_num}_clearper20-notcache_no-dynamic-seed',
@@ -73,8 +76,8 @@ memory_xzero_config = dict(
             # "explore": 15, # for key_to_door
             "explore": 1,  # for visual_match
             "distractor": memory_length,
-            # "reward": 15
-            "reward": 8  # debug
+            "reward": 15
+            # "reward": 8  # debug
         },  # Maximum frames per phase
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -94,7 +97,6 @@ memory_xzero_config = dict(
         ),
         sample_type='episode',  # NOTE: very important for memory env
         model_path=None,
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match/memlen-2_xzero_H32_ns50_upcNone-mur0.25_rr0_H32_bs64_collect-eps-True_temp-final-steps-500000_pelw1e-4_quan15_mse_emd64_seed0_240320_190454/ckpt/ckpt_best.pth.tar',
         transformer_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,
         update_per_collect_tokenizer=update_per_collect,
@@ -119,7 +121,8 @@ memory_xzero_config = dict(
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
             # decay=int(2e5),  # NOTE: TODO
-            decay=int(5e4),  # NOTE: 50k env steps
+            decay=int(2e4),  # NOTE: 20k env steps
+            # decay=int(5e4),  # NOTE: 50k env steps
         ),
         use_priority=False,
         use_augmentation=False,  # NOTE
@@ -137,7 +140,8 @@ memory_xzero_config = dict(
         lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
         target_update_freq=100,
-        grad_clip_value=0.5,  # TODO: 10
+        # grad_clip_value=0.5,  # TODO: 10
+        grad_clip_value=5,  # TODO: 10
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
