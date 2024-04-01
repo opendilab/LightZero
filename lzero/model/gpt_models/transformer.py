@@ -82,7 +82,8 @@ class Block(nn.Module):
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__()
         # TODO
-        self.gru_gating = False
+        self.gru_gating = config.gru_gating
+        # self.gru_gating = False
         # self.gru_gating = True
         self.gru_bias  = 2.
         if self.gru_gating is True:

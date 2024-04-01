@@ -25,15 +25,35 @@ cfg['world_model'] = {
                       # 'tokens_per_block': 2,
                       # 'max_blocks': 5,
                       # "max_tokens": 2 * 5,  # TODO： horizon
+                      # "context_length": 10,
+                      # # "gru_gating": False,
+                      # "gru_gating": True,
+
+
+
+                      # 'tokens_per_block': 2,
+                      # 'max_blocks': 6,
+                      # "max_tokens": 2 * 6,  # TODO： horizon
+                      # "context_length": 12,
+                      # "gru_gating": False,
+                      # # "gru_gating": True,
+
+                      # 'tokens_per_block': 2,
+                      # 'max_blocks': 8,
+                      # "max_tokens": 2 * 8,  # TODO： horizon:8
+                      # "context_length": 2 * 8,
+                      # # "context_length": 10,
+                      # # "gru_gating": False,
+                      # "gru_gating": True,
 
 
                       'tokens_per_block': 2,
-                      'max_blocks': 8,
-                      "max_tokens": 2 * 8,  # TODO： horizon:8
-
-                      # 'tokens_per_block': 2,
-                      # 'max_blocks': 10,
-                      # "max_tokens": 2 * 10,  # TODO： horizon
+                      'max_blocks': 10,
+                      "max_tokens": 2 * 10,  # TODO： horizon:8
+                      # "context_length": 2 * 10,
+                      "context_length": 10,
+                      "gru_gating": False,
+                      # "gru_gating": True,
 
                       # 'tokens_per_block': 2,
                       # 'max_blocks': 6,
@@ -47,7 +67,8 @@ cfg['world_model'] = {
 
                       'attention': 'causal',
 
-                      'num_layers': 2, # TODO：for atari debug
+                      # 'num_layers': 2, # TODO：for atari debug
+                      'num_layers': 1, # TODO：for atari debug
                       # 'num_layers': 4, # TODO：for atari debug
                       # 'num_layers': 6, # TODO：for atari debug
                       # 'num_layers': 12, # TODO：for atari debug
@@ -56,9 +77,10 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:2',
+                      "device": 'cuda:4',
                     #   "device": 'cpu',
                       'support_size': 601,
+                      # 'support_size': 101,  # TODO
 
                       # 'action_shape': 18, # TODO：for multi-task
 
@@ -88,7 +110,7 @@ cfg['world_model'] = {
                       # 'predict_latent_loss_type': 'mse',
                       'obs_type': 'image', # 'vector', 'image'
 
-                      'gamma': 0.5, # 0.5, 0.9, 0.99, 0.999
+                      'gamma': 1, # 0.5, 0.9, 0.99, 0.999
 
                       }
 from easydict import EasyDict

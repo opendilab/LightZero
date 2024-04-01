@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(2)
+torch.cuda.set_device(4)
 
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 
@@ -11,7 +11,7 @@ env_name = 'PongNoFrameskip-v4'
 # env_name = 'SeaquestNoFrameskip-v4'
 # env_name = 'BoxingNoFrameskip-v4'
 # env_name = 'FrostbiteNoFrameskip-v4'
-# env_name = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample
+# env_name = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
 
 
 if env_name == 'PongNoFrameskip-v4':
@@ -35,7 +35,8 @@ elif env_name == 'SeaquestNoFrameskip-v4':
     update_per_collect = None # for others
 elif env_name == 'BoxingNoFrameskip-v4':
     action_space_size = 18
-    update_per_collect = 1000  # for pong boxing
+    # update_per_collect = 1000  # for pong boxing
+    update_per_collect = None # for others
 elif env_name == 'FrostbiteNoFrameskip-v4':
     action_space_size = 18
     update_per_collect = None # for others
@@ -48,6 +49,7 @@ n_episode = 8
 evaluator_env_num = 3
 
 model_update_ratio = 0.25
+# model_update_ratio = 0.5
 num_simulations = 50
 max_env_step = int(1e6)
 
@@ -55,13 +57,14 @@ reanalyze_ratio = 0.
 # reanalyze_ratio = 0.05 # TODO
 
 batch_size = 64
+# num_unroll_steps = 6
 # num_unroll_steps = 5
-num_unroll_steps = 8
-# num_unroll_steps = 10 # TODO
+# num_unroll_steps = 8
+num_unroll_steps = 10 # TODO
 
 threshold_training_steps_for_final_temperature = int(5e4)  # train_iter 50k 1->0.5->0.25
-# eps_greedy_exploration_in_collect = True # for breakout, qbert, boxing
-eps_greedy_exploration_in_collect = False 
+eps_greedy_exploration_in_collect = True # for breakout, qbert, boxing
+# eps_greedy_exploration_in_collect = False 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -70,7 +73,10 @@ atari_xzero_config = dict(
     # TODO: 
     # mcts_ctree
     # muzero_collector/evaluator: empty_cache
-    exp_name=f'data_xzero_atari_0330/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw20_pew1e-4_latent-groupkl_nlayer2_soft005_gcv05_noeps_gamma05_seed0',
+    # exp_name=f'data_xzero_atari_0401/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nlayer1-nh8_grugating-false_simnorm_latentw10_pew1e-4_latent-groupkl_soft005_eps20k_nogradscale_gcv5_seed0',
+    exp_name=f'data_xzero_atari_0401/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nlayer1-nh8_grugating-false_contextlength10_simnorm_latentw10_pew1e-4_latent-groupkl_soft005_eps20k_nogradscale_gcv5_seed0',
+    # exp_name=f'data_xzero_atari_0401/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nlayer2-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_soft005_eps20k_nogradscale_gcv5_contextlength10_seed0',
+    # exp_name=f'data_xzero_atari_0401/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_nlayer1_soft005_eps20k_gamma1_nogradscale_gcv5_seed0',
     # exp_name=f'data_xzero_atari_0330/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw20-other01_pew1e-4_latent-groupkl_nlayer2_soft005_gcv05_noeps_gamma05_seed0',
     # exp_name=f'data_xzero_atari_0323/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_nlayer2_soft005_gcv05_eps20k_evalsample_seed0',
     env=dict(
@@ -91,7 +97,6 @@ atari_xzero_config = dict(
         # TODO: for others
         collect_max_episode_steps=int(2e4), 
         eval_max_episode_steps=int(1e4),
-        # eval_max_episode_steps=int(108000),
         clip_rewards=True,
     ),
     policy=dict(
@@ -107,6 +112,7 @@ atari_xzero_config = dict(
         ),
 
         model_path=None,
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_xzero_atari_0330/Pong_xzero_envnum8_ns50_upc1000-mur0.25_rr0.0_H8_bs64_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_nlayer2_soft005_gcv05_noeps_gamma1_nogradscale_seed0/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_xzero_stack1_0226/Pong_xzero_envnum8_ns50_upc1000-mur0.25_new-rr0.0_H5_bs64_stack1_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh4_collect-clear200_train-clear20_noeval_search-toplay-nodeepcopy_seed0/ckpt/iteration_220000.pth.tar',
         tokenizer_start_after_envsteps=int(0),
         transformer_start_after_envsteps=int(0),
@@ -126,6 +132,9 @@ atari_xzero_config = dict(
             reward_support_size=601,
             value_support_size=601,
             support_scale=300,
+            # reward_support_size=101,
+            # value_support_size=101,
+            # support_scale=50,
         ),
         use_priority=False, # TODO
         use_augmentation=False,  # TODO
@@ -152,7 +161,8 @@ atari_xzero_config = dict(
         lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
         target_update_freq=100,
-        grad_clip_value = 0.5, # TODO: 1
+        # grad_clip_value = 0.5, # TODO: 1
+        grad_clip_value = 5, # TODO: 1
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

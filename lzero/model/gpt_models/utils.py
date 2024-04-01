@@ -76,8 +76,8 @@ class LossWithIntermediateLosses:
         # # self.ends_loss_weight = 1.
         # self.ends_loss_weight = 0.
 
-        # self.obs_loss_weight = 10
-        self.obs_loss_weight = 20
+        self.obs_loss_weight = 10
+        # self.obs_loss_weight = 20
         self.reward_loss_weight = 1.
         self.value_loss_weight = 0.25
         self.policy_loss_weight = 1.

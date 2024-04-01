@@ -211,7 +211,6 @@ class WorldModel(nn.Module):
 
         # 使用collections.OrderedDict作为缓存结构，可以维持插入顺序
         self.past_keys_values_cache = collections.OrderedDict()
-        self.past_keys_values_cache_init_infer = collections.OrderedDict()
 
         self.keys_values_wm_list = []
         self.keys_values_wm_size_list = []
@@ -373,16 +372,16 @@ class WorldModel(nn.Module):
                         self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm._keys_values[layer]._k_cache._size
                         self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm._keys_values[layer]._v_cache._size
                     self.root_total_query_cnt += 1
-                    if cache_key not in self.past_keys_values_cache_init_infer:
-                        self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                    if cache_key not in self.past_keys_values_cache:
+                        self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
                     else:
                         self.root_hit_cnt += 1
                         root_hit_ratio = self.root_hit_cnt / self.root_total_query_cnt
                         print('root_total_query_cnt:', self.root_total_query_cnt)
                         print(f'root_hit_ratio:{root_hit_ratio}')
                         print(f'root_hit_cnt:{self.root_hit_cnt}')
-                        print(f'root_hit find size {self.past_keys_values_cache_init_infer[cache_key].size}')
-                        if self.past_keys_values_cache_init_infer[cache_key].size > 1:
+                        print(f'root_hit find size {self.past_keys_values_cache[cache_key].size}')
+                        if self.past_keys_values_cache[cache_key].size > 1:
                             print(f'==' * 20)
                             print(f'NOTE: root_hit find size > 1')
                             print(f'==' * 20)
@@ -395,7 +394,7 @@ class WorldModel(nn.Module):
 
                     # 复制单个环境对应的 keys_values_wm 并存储
                     # self.update_cache(current_obs_embeddings)
-                    self.update_cache_context(current_obs_embeddings, is_init_infer=True) # TODO
+                    self.update_cache_context(current_obs_embeddings) # TODO
                 else:
                     # 假设 latest_state 是新的 latent_state，包含 ready_env_num 个环境的信息
                     ready_env_num = current_obs_embeddings.shape[0]
@@ -405,7 +404,7 @@ class WorldModel(nn.Module):
                         state_single_env = latent_state[i]  # 获取单个环境的 latent state
                         quantized_state = state_single_env.detach().cpu().numpy()
                         cache_key = quantize_state(quantized_state)  # 使用量化后的状态计算哈希值
-                        matched_value = self.past_keys_values_cache_init_infer.get(cache_key)  # 检索缓存值
+                        matched_value = self.past_keys_values_cache.get(cache_key)  # 检索缓存值
                         self.root_total_query_cnt += 1
                         if matched_value is not None:
                             # 如果找到匹配的值，将其添加到列表中
@@ -414,8 +413,8 @@ class WorldModel(nn.Module):
                                 root_hit_ratio = self.root_hit_cnt / self.root_total_query_cnt
                                 print('root_total_query_cnt:', self.root_total_query_cnt)
                                 print(f'root_hit_ratio:{root_hit_ratio}')
-                                print(f'root_hit find size {self.past_keys_values_cache_init_infer[cache_key].size}')
-                                if self.past_keys_values_cache_init_infer[cache_key].size >= self.config.max_tokens - 5:
+                                print(f'root_hit find size {self.past_keys_values_cache[cache_key].size}')
+                                if self.past_keys_values_cache[cache_key].size >= self.config.max_tokens - 5:
                                     print(f'==' * 20)
                                     print(f'NOTE: root_hit find size >= self.config.max_tokens - 5')
                                     print(f'==' * 20)
@@ -441,7 +440,7 @@ class WorldModel(nn.Module):
 
                     # 复制单个环境对应的 keys_values_wm 并存储
                     # self.update_cache(current_obs_embeddings)
-                    self.update_cache_context(current_obs_embeddings, is_init_infer=True) # TODO
+                    self.update_cache_context(current_obs_embeddings) # TODO
 
 
         elif n > self.env_num and buffer_action is not None:
@@ -551,7 +550,7 @@ class WorldModel(nn.Module):
         self.latent_state = torch.cat(latent_state_list, dim=1)  # (B, K)
 
         # self.update_cache(self.latent_state)
-        self.update_cache_context(self.latent_state, is_init_infer=False) # TODO
+        self.update_cache_context(self.latent_state) # TODO
 
 
         return outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value
@@ -605,7 +604,7 @@ class WorldModel(nn.Module):
             self.keys_values_wm._keys_values[layer]._k_cache._size = min_size
             self.keys_values_wm._keys_values[layer]._v_cache._size = min_size
 
-    def update_cache(self, latent_state): # backup
+    def update_cache(self, latent_state):
         for i in range(latent_state.size(0)):  # 遍历每个环境
             state_single_env = latent_state[i]  # 获取单个环境的潜在状态
             quantized_state = state_single_env.detach().cpu().numpy()  # 分离并将状态移至CPU
@@ -694,28 +693,17 @@ class WorldModel(nn.Module):
             # TODO: memory_env;每次都存最新的
             if is_init_infer:
                 # init_infer: laten_state是encoder编码得到的，没有误差
-                # 比较并存储较大的缓存
-                if cache_key in self.past_keys_values_cache_init_infer:
-                    existing_kvcache = self.past_keys_values_cache_init_infer[cache_key]
-                    # 检查现有缓存和新缓存之间是否存在大小差异
-                    # if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
-                    if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.context_length-1:
-                        # 仅在大小小于 max_tokens - 1 时存储,以避免重置
-                        self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-                # elif self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
-                elif self.keys_values_wm_single_env.size < self.context_length-1:
-                    # 仅在大小小于 max_tokens - 1 时存储,以避免重置
-                    self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
             else:
                 # recurrent_infer: laten_state是预测的，会有误差
                 # 比较并存储较大的缓存
                 if cache_key in self.past_keys_values_cache:
                     existing_kvcache = self.past_keys_values_cache[cache_key]
-                    # 检查现有缓存和新缓存之间是否存在大小差异
-                    # if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
-                    if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.context_length-1:
-                        # 仅在大小小于 max_tokens - 1 时存储,以避免重置
-                        self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                        # 检查现有缓存和新缓存之间是否存在大小差异
+                        # if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
+                        if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.context_length-1:
+                            # 仅在大小小于 max_tokens - 1 时存储,以避免重置
+                            self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+
                 # elif self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
                 elif self.keys_values_wm_single_env.size < self.context_length-1:
                     # 仅在大小小于 max_tokens - 1 时存储,以避免重置
@@ -731,11 +719,7 @@ class WorldModel(nn.Module):
             state_single_env = latent_state[i]  # 获取单个环境的潜在状态
             cache_key = quantize_state(state_single_env)  # 使用量化后的状态计算哈希值
             # 如果存在,检索缓存值
-            # 先在self.past_keys_values_cache_init_infer中寻找
-            matched_value = self.past_keys_values_cache_init_infer.get(cache_key)
-            # 再在self.past_keys_values_cache中寻找
-            if matched_value is None:
-                matched_value = self.past_keys_values_cache.get(cache_key)
+            matched_value = self.past_keys_values_cache.get(cache_key)
             if matched_value is not None:
                 # 如果找到匹配值,将其添加到列表中
                 self.hit_count += 1
