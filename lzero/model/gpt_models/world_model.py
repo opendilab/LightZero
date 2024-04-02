@@ -229,7 +229,9 @@ class WorldModel(nn.Module):
         self.root_total_query_cnt = 0
         self.context_length = config.context_length  # TODO config.context_length
         self.context_length_for_recurrent = config.context_length_for_recurrent
+
         # self.context_length = self.config.max_tokens  # TODO
+        # self.context_length_for_recurrent = self.config.max_tokens  # TODO
         self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
         # TODO: Transformer更新后应该清除缓存 
         self.keys_values_wm = self.transformer.generate_empty_keys_values(n=self.env_num, max_tokens=self.context_length)
@@ -445,6 +447,10 @@ class WorldModel(nn.Module):
     @torch.no_grad()
     def forward_initial_inference(self, obs_act_dict):
         outputs_wm, latent_state = self.reset_from_initial_observations(obs_act_dict)  # root节点也有context
+        # self.past_keys_values_cache_recurrent_infer
+        # TODO: 每次search后清空，可以保证存储的 kv_cache_recurrent 都是从根节点的最长context来的
+        # 或者每次search后不清空，但每次都重新存储，这样便可以保证 存储的kv_cache_recurrent, latent_state是预测部分的限制在一次search内
+        self.past_keys_values_cache_recurrent_infer.clear()
         return outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
 
     """
@@ -455,7 +461,7 @@ class WorldModel(nn.Module):
     """
 
     @torch.no_grad()
-    def forward_recurrent_inference(self, state_action_history):
+    def forward_recurrent_inference(self, state_action_history, simulation_index=0):
         # 一般来讲,在一次 MCTS search中,我们需要维护H长度的context来使用transformer进行推理。
         # 由于在一次search里面。agent最多访问sim个不同的节点,因此我们只需维护一个 {(state:kv_cache)}的列表。
         # 但如果假设环境是MDP的话,然后根据当前的 latest_state s_t 在这个列表中查找即可
@@ -467,7 +473,7 @@ class WorldModel(nn.Module):
         ready_env_num = latest_state.shape[0]
         self.keys_values_wm_list = []
         self.keys_values_wm_size_list = []
-        self.retrieve_or_generate_kvcache(latest_state, ready_env_num)  
+        self.retrieve_or_generate_kvcache(latest_state, ready_env_num, simulation_index)  
 
         latent_state_list = []
         token = action.reshape(-1, 1)
@@ -517,7 +523,7 @@ class WorldModel(nn.Module):
         del self.latent_state
         self.latent_state = torch.cat(latent_state_list, dim=1)  # (B, K)
 
-        self.update_cache_context(self.latent_state, is_init_infer=False) # TODO
+        self.update_cache_context(self.latent_state, is_init_infer=False, simulation_index=simulation_index) # TODO
 
 
         return outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value
@@ -571,7 +577,7 @@ class WorldModel(nn.Module):
             self.keys_values_wm._keys_values[layer]._k_cache._size = min_size
             self.keys_values_wm._keys_values[layer]._v_cache._size = min_size
 
-    def update_cache_context(self, latent_state, is_init_infer=True):
+    def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0):
         for i in range(latent_state.size(0)):  # 遍历每个环境
             state_single_env = latent_state[i]  # 获取单个环境的潜在状态
             quantized_state = state_single_env.detach().cpu().numpy()  # 分离并将状态移至CPU
@@ -646,7 +652,7 @@ class WorldModel(nn.Module):
                     # 仅在大小小于 max_tokens - 1 时存储,以避免重置
                     self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
 
-    def retrieve_or_generate_kvcache(self, latent_state, ready_env_num):
+    def retrieve_or_generate_kvcache(self, latent_state, ready_env_num, simulation_index=0):
         """
         This method iterates over the environments, retrieves a matching cache if available,
         or generates a new one otherwise. It updates the lists with the keys_values caches and their sizes.

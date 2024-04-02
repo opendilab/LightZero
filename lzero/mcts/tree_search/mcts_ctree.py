@@ -360,7 +360,7 @@ class EfficientZeroMCTSCtree(object):
                 """
                 # network_output = model.recurrent_inference(latent_states, last_actions) # for classic muzero
                 # network_output = model.recurrent_inference(last_actions)  # TODO: for muzero_gpt latent_states is not used in the model.
-                network_output = model.recurrent_inference(state_action_history)  # TODO: latent_states is not used in the model.
+                network_output = model.recurrent_inference(state_action_history, simulation_index)  # TODO: latent_states is not used in the model.
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)

@@ -16,6 +16,7 @@ cfg['world_model'] = {
     'max_blocks': 16,
     "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
     "context_length": 2 * 16,
+    "context_length_for_recurrent": 2 * 16,
 
     # 'max_blocks': 30,
     # "max_tokens": 2 * 30,  # 15+0+15 memory_length = 0
@@ -59,7 +60,7 @@ cfg['world_model'] = {
     'embed_pdrop': 0.1,
     'resid_pdrop': 0.1,
     'attn_pdrop': 0.1,
-    "device": 'cuda:4',
+    "device": 'cuda:7',
 
     'support_size': 21,
     'action_shape': 4,  # NOTE：for memory

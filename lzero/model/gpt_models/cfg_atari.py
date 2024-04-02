@@ -11,31 +11,21 @@ cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',
                      'ch_mult': [1, 1, 1, 1, 1], 'num_res_blocks': 2, 'attn_resolutions': [8, 16],
                      'out_ch': 3, 'dropout': 0.0}}  # TODO：for atari debug
 cfg['world_model'] = {
-                      # 'tokens_per_block': 17,
-                      # 'max_blocks': 20,
-                      #   "max_tokens": 17 * 20,  # TODO： horizon
-                      # 'max_blocks': 5,
-                      # "max_tokens": 17 * 5,  # TODO： horizon
-                      # 'embed_dim': 128, # TODO：for atari
-
-                      # 'tokens_per_block': 2,
-                      # 'max_blocks': 50,
-                      # "max_tokens": 2 * 50,  # TODO： horizon
 
                       'tokens_per_block': 2,
-                      'max_blocks': 5,
-                      "max_tokens": 2 * 5,  # TODO： horizon
-                      "context_length": 10,
-                      "context_length_for_recurrent":8,
+                      'max_blocks': 4,
+                      "max_tokens": 2 * 4,  # TODO： horizon:4
+                      "context_length": 2 * 4,
+                      "context_length_for_recurrent":2 * 4,
                       "gru_gating": False,
                       # "gru_gating": True,
 
 
-
                       # 'tokens_per_block': 2,
-                      # 'max_blocks': 6,
-                      # "max_tokens": 2 * 6,  # TODO： horizon
-                      # "context_length": 12,
+                      # 'max_blocks': 8,
+                      # "max_tokens": 2 * 8,  # TODO： horizon:8
+                      # "context_length": 2 * 8,
+                      # "context_length_for_recurrent":2 * 8,
                       # "gru_gating": False,
                       # # "gru_gating": True,
 
@@ -43,30 +33,22 @@ cfg['world_model'] = {
                       # 'max_blocks': 8,
                       # "max_tokens": 2 * 8,  # TODO： horizon:8
                       # "context_length": 2 * 8,
-                      # # "context_length": 10,
-                      # "context_length_for_recurrent":8,
+                      # "context_length_for_recurrent":2 * 8,
                       # "gru_gating": False,
                       # # "gru_gating": True,
 
 
-                      # 'tokens_per_block': 2,
-                      # 'max_blocks': 10,
-                      # "max_tokens": 2 * 10,  # TODO： horizon:8
-                      # # "context_length": 2 * 10,
-                      # "context_length": 10,
-                      # "gru_gating": False,
-                      # # "gru_gating": True,
+                      'tokens_per_block': 2,
+                      'max_blocks': 10,
+                      "max_tokens": 2 * 10,  # TODO： horizon:8
+                      "context_length": 2 * 10,
+                      "context_length_for_recurrent":2 * 10,
+                      "gru_gating": False,
+                      # "gru_gating": True,
 
-                      # 'tokens_per_block': 2,
-                      # 'max_blocks': 20,
-                      # "max_tokens": 2 * 20,  # TODO： horizon:20
-                      # "context_length": 2 * 20,
-                      # "context_length": 10,
-                      # "gru_gating": False,
-                      # # "gru_gating": True,
+
 
                       # 'embed_dim':512, # TODO：for atari
-
                       # 'embed_dim':256, # TODO：for atari
                       # 'embed_dim':1024, # TODO：for atari
                       'embed_dim': 768, # TODO：for atari
