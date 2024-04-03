@@ -13,10 +13,15 @@ cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',
 cfg['world_model'] = {
     'tokens_per_block': 2,
 
+    # 'max_blocks': 16,
+    # "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
+    # "context_length": 2 * 16,
+    # "context_length_for_recurrent": 2 * 16,
+
     'max_blocks': 16,
     "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
-    "context_length": 2 * 16,
-    "context_length_for_recurrent": 2 * 16,
+    "context_length": 8,
+    "context_length_for_recurrent": 8,
 
     # 'max_blocks': 30,
     # "max_tokens": 2 * 30,  # 15+0+15 memory_length = 0

@@ -65,8 +65,8 @@ def quantize_state_with_lru_cache(state, num_buckets=15):
 # 在retrieve_or_generate_kvcache方法中使用优化后的缓存函数
 # cache_key = quantize_state_with_lru_cache(state_single_env)
 
-def quantize_state(state, num_buckets=15): # for atari
-# def quantize_state(state, num_buckets=100): # for memory NOTE:TODO
+# def quantize_state(state, num_buckets=15): # for atari
+def quantize_state(state, num_buckets=100): # for memory NOTE:TODO
     """
     量化状态向量。
     参数:
@@ -119,6 +119,7 @@ class WorldModel(nn.Module):
         self.env_num = config.env_num
         self.num_layers = config.num_layers
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
+        self.recurrent_keep_deepth = config.recurrent_keep_deepth
 
 
         all_but_last_latent_state_pattern = torch.ones(config.tokens_per_block)
@@ -444,6 +445,7 @@ class WorldModel(nn.Module):
 
         return outputs_wm
 
+
     @torch.no_grad()
     def forward_initial_inference(self, obs_act_dict):
         outputs_wm, latent_state = self.reset_from_initial_observations(obs_act_dict)  # root节点也有context
@@ -451,6 +453,10 @@ class WorldModel(nn.Module):
         # TODO: 每次search后清空，可以保证存储的 kv_cache_recurrent 都是从根节点的最长context来的
         # 或者每次search后不清空，但每次都重新存储，这样便可以保证 存储的kv_cache_recurrent, latent_state是预测部分的限制在一次search内
         self.past_keys_values_cache_recurrent_infer.clear()
+        # print('=='*20)
+        # print('self.past_keys_values_cache_recurrent_infer.clear() after init_inference')
+        self.latent_state_index_in_search_path = [[] for i in range(latent_state.shape[0])]
+        self.next_latent_state_depth = [[] for i in range(latent_state.shape[0])]
         return outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
 
     """
@@ -460,14 +466,41 @@ class WorldModel(nn.Module):
     其内部也是通过batch执行transformer forward的推理 
     """
 
+    def convert_to_depth(self, search_path):
+        depth_map = {0: 1}  # 根节点处的深度映射
+        depth_in_search_path = []
+        for index in search_path:
+            # 如果当前索引对应的深度没有被计算过，则基于父节点的深度计算它
+            if index not in depth_map:
+                if search_path[index] not in depth_map:
+                    depth_map[search_path[index]] = max(list(depth_map.values())) + 1
+                else:
+                    depth_map[index] = depth_map[search_path[index]] + 1
+            depth_in_search_path.append(depth_map[index])
+
+        return depth_in_search_path
+
+
     @torch.no_grad()
-    def forward_recurrent_inference(self, state_action_history, simulation_index=0):
+    def forward_recurrent_inference(self, state_action_history, simulation_index=0, latent_state_index_in_search_path=[]):
         # 一般来讲,在一次 MCTS search中,我们需要维护H长度的context来使用transformer进行推理。
         # 由于在一次search里面。agent最多访问sim个不同的节点,因此我们只需维护一个 {(state:kv_cache)}的列表。
         # 但如果假设环境是MDP的话,然后根据当前的 latest_state s_t 在这个列表中查找即可
         # TODO: 但如果假设环境是非MDP的话,需要维护一个 {(rootstate_action_history:kv_cache)}的列表?
-
+        # print(f'latent_state_index_in_search_path:{latent_state_index_in_search_path}')
         latest_state, action = state_action_history[-1]
+        # print(f'action:{action}')
+
+        for i, latent_state_index in enumerate(latent_state_index_in_search_path):
+            self.latent_state_index_in_search_path[i].append(latent_state_index) 
+            # 示例数据
+            # latent_state_index_in_search_path = [0, 0, 0, 0, 2, 0, 2, 3, 4]
+            # 转换为深度表示
+            self.next_latent_state_depth[i] = self.convert_to_depth(self.latent_state_index_in_search_path[i])
+            # 打印结果
+            # print(f'next_latent_state_depth:{self.next_latent_state_depth[i]}')
+
+        # print(f'next_latent_state_depth:{self.next_latent_state_depth}')
 
         # 假设 latest_state 是新的 latent_state,包含 ready_env_num 个环境的信息
         ready_env_num = latest_state.shape[0]
@@ -490,11 +523,11 @@ class WorldModel(nn.Module):
             print('total_query_count:', self.total_query_count)
             # 如果总查询次数大于0,计算并打印cnt的比率
             length_largethan_maxminus5_context_cnt_ratio = self.length_largethan_maxminus5_context_cnt / self.total_query_count
-            print('largethan_maxminus5_context:', self.length_largethan_maxminus5_context_cnt)
-            print('largethan_maxminus5_context_ratio:', length_largethan_maxminus5_context_cnt_ratio)
+            print('recurrent largethan_maxminus5_context:', self.length_largethan_maxminus5_context_cnt)
+            print('recurrent largethan_maxminus5_context_ratio:', length_largethan_maxminus5_context_cnt_ratio)
             length_largethan_maxminus7_context_cnt_ratio = self.length_largethan_maxminus7_context_cnt / self.total_query_count
-            print('largethan_maxminus7_context_ratio:', length_largethan_maxminus7_context_cnt_ratio)
-            print('largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
+            print('recurrent largethan_maxminus7_context_ratio:', length_largethan_maxminus7_context_cnt_ratio)
+            print('recurrent largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
 
         # 输入self.keys_values_wm_list,输出为self.keys_values_wm
         self.trim_and_pad_kv_cache()
@@ -523,7 +556,7 @@ class WorldModel(nn.Module):
         del self.latent_state
         self.latent_state = torch.cat(latent_state_list, dim=1)  # (B, K)
 
-        self.update_cache_context(self.latent_state, is_init_infer=False, simulation_index=simulation_index) # TODO
+        self.update_cache_context(self.latent_state, is_init_infer=False, simulation_index=simulation_index, latent_state_index_in_search_path=latent_state_index_in_search_path) # TODO
 
 
         return outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value
@@ -577,7 +610,7 @@ class WorldModel(nn.Module):
             self.keys_values_wm._keys_values[layer]._k_cache._size = min_size
             self.keys_values_wm._keys_values[layer]._v_cache._size = min_size
 
-    def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0):
+    def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0, latent_state_index_in_search_path=[]):
         for i in range(latent_state.size(0)):  # 遍历每个环境
             state_single_env = latent_state[i]  # 获取单个环境的潜在状态
             quantized_state = state_single_env.detach().cpu().numpy()  # 分离并将状态移至CPU
@@ -646,17 +679,25 @@ class WorldModel(nn.Module):
                     # if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
                     if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.context_length_for_recurrent-1:
                         # 仅在大小小于 max_tokens - 1 时存储,以避免重置
-                        self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                        # if latent_state_index_in_search_path[i] == 0:
+                        if self.next_latent_state_depth[i][-1] <= self.recurrent_keep_deepth:
+                            # TODO: (root_latent_state, a, current_latent_state) kv_cache 即相当于只是在root下一层的预测state才存储kv_cache
+                            # print('save kv_cache of predicted latent state')
+                            self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
                 # elif self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
                 elif self.keys_values_wm_single_env.size < self.context_length_for_recurrent-1:
-                    # 仅在大小小于 max_tokens - 1 时存储,以避免重置
-                    self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                    # if latent_state_index_in_search_path[i] == 0: # bug: < self.action_shape**(self.recurrent_keep_deepth-1):
+                    if self.next_latent_state_depth[i][-1] <= self.recurrent_keep_deepth:
+                        # TODO: (root_latent_state, a, current_latent_state) kv_cache 即相当于只是在root下一层的预测state才存储kv_cache
+                        # print('save kv_cache of predicted latent state')
+                        self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
 
     def retrieve_or_generate_kvcache(self, latent_state, ready_env_num, simulation_index=0):
         """
         This method iterates over the environments, retrieves a matching cache if available,
         or generates a new one otherwise. It updates the lists with the keys_values caches and their sizes.
         """
+        # self.root_latent_state = [False for i in range(ready_env_num)]
         for i in range(ready_env_num):
             self.total_query_count += 1
             state_single_env = latent_state[i]  # 获取单个环境的潜在状态

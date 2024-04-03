@@ -159,7 +159,8 @@ class MuZeroMCTSCtree(object):
                 """
                 # network_output = model.recurrent_inference(latent_states, last_actions) # for classic muzero
                 # network_output = model.recurrent_inference(last_actions)  # TODO: for muzero_gpt latent_states is not used in the model.
-                network_output = model.recurrent_inference(state_action_history)  # TODO: latent_states is not used in the model.
+                # print(f'latent_state_index_in_search_path:{latent_state_index_in_search_path}')
+                network_output = model.recurrent_inference(state_action_history, simulation_index, latent_state_index_in_search_path)  # TODO: latent_states is not used in the model.
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
@@ -358,9 +359,10 @@ class EfficientZeroMCTSCtree(object):
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
+                ## EZ ######################
                 # network_output = model.recurrent_inference(latent_states, last_actions) # for classic muzero
                 # network_output = model.recurrent_inference(last_actions)  # TODO: for muzero_gpt latent_states is not used in the model.
-                network_output = model.recurrent_inference(state_action_history, simulation_index)  # TODO: latent_states is not used in the model.
+                network_output = model.recurrent_inference(state_action_history)  # TODO: latent_states is not used in the model.
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)

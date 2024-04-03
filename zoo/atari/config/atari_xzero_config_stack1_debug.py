@@ -58,7 +58,9 @@ max_env_step = int(1e6)
 reanalyze_ratio = 0. 
 # reanalyze_ratio = 0.05 # TODO
 
-batch_size = 64
+# batch_size = 64
+batch_size = 6
+
 # num_unroll_steps = 6
 # num_unroll_steps = 5
 num_unroll_steps = 8
@@ -68,8 +70,8 @@ threshold_training_steps_for_final_temperature = int(5e4)  # train_iter 50k 1->0
 eps_greedy_exploration_in_collect = True # for breakout, qbert, boxing
 # eps_greedy_exploration_in_collect = False 
 
-num_simulations = 5
-update_per_collect = 1  # for debug
+num_simulations = 50
+update_per_collect = 10  # for debug
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -89,14 +91,14 @@ atari_xzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        # collect_max_episode_steps=int(50),
-        # eval_max_episode_steps=int(50),
+        collect_max_episode_steps=int(50),
+        eval_max_episode_steps=int(50),
         # TODO: for breakout
         # collect_max_episode_steps=int(5e3), # for breakout
         # eval_max_episode_steps=int(5e3), # for breakout
         # TODO: for others
-        collect_max_episode_steps=int(2e4), 
-        eval_max_episode_steps=int(1e4),
+        # collect_max_episode_steps=int(2e4), 
+        # eval_max_episode_steps=int(1e4),
         clip_rewards=True,
     ),
     policy=dict(

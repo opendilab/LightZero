@@ -120,8 +120,8 @@ class MuZeroModelGPT(nn.Module):
         from .gpt_models.tokenizer.tokenizer import Tokenizer
         from .gpt_models.tokenizer.nets import Encoder, Decoder
         # from .gpt_models.cfg_cartpole import cfg
-        from .gpt_models.cfg_memory import cfg # NOTE: TODO
-        # from .gpt_models.cfg_atari import cfg
+        # from .gpt_models.cfg_memory import cfg # NOTE: TODO
+        from .gpt_models.cfg_atari import cfg
 
         if cfg.world_model.obs_type == 'vector':
             self.representation_network = RepresentationNetworkMLP(
@@ -271,7 +271,7 @@ class MuZeroModelGPT(nn.Module):
         )
 
     # def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
-    def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index=0) -> MZNetworkOutput:
+    def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index=0, latent_state_index_in_search_path=[]) -> MZNetworkOutput:
         """
         Overview:
             Recurrent inference of MuZero model, which is the rollout step of the MuZero model.
@@ -305,7 +305,7 @@ class MuZeroModelGPT(nn.Module):
         # return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
 
         x, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
-            state_action_history, simulation_index)
+            state_action_history, simulation_index, latent_state_index_in_search_path)
         logits_observations, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
 
         # obs discrete distribution to one_hot latent state?

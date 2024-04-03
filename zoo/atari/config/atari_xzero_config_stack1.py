@@ -73,8 +73,9 @@ atari_xzero_config = dict(
     # TODO: 
     # mcts_ctree
     # muzero_collector/evaluator: empty_cache
+    exp_name=f'data_xzero_atari_0403/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nlayer1-nh8_grugating-false_latent-groupkl_conleninit{8}-conlenrecur{8}clear-keepdepth2_seed0',
     # exp_name=f'data_xzero_atari_0401/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nlayer1-nh8_grugating-false_simnorm_latentw10_pew1e-4_latent-groupkl_soft005_eps20k_nogradscale_gcv5_seed0',
-    exp_name=f'data_xzero_atari_0401/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nlayer1-nh8_grugating-false_simnorm_latentw10_pew1e-4_latent-groupkl_soft005_eps20k_nogradscale_gcv05_conlen{2*num_unroll_steps}-conlenrecur{2*num_unroll_steps}clear_seed0',
+    # exp_name=f'data_xzero_atari_0403/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nlayer1-nh8_grugating-false_simnorm_latentw10_pew1e-4_latent-groupkl_soft005_eps20k_nogradscale_gcv5_conleninit{16}-conlenrecur{16}clear-keepdepth1_seed0',
     # exp_name=f'data_xzero_atari_0401/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nlayer2-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_soft005_eps20k_nogradscale_gcv5_contextlength10_seed0',
     env=dict(
         stop_value=int(1e6),
@@ -157,8 +158,8 @@ atari_xzero_config = dict(
         lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
         target_update_freq=100,
-        grad_clip_value = 0.5, # TODO: 1
-        # grad_clip_value = 5, # TODO: 1
+        # grad_clip_value = 0.5, # TODO: 1
+        grad_clip_value = 5, # TODO: 1
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

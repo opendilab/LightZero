@@ -11,12 +11,14 @@ cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',
                      'ch_mult': [1, 1, 1, 1, 1], 'num_res_blocks': 2, 'attn_resolutions': [8, 16],
                      'out_ch': 3, 'dropout': 0.0}}  # TODO：for atari debug
 cfg['world_model'] = {
+                      "device": 'cuda:6',
 
                       'tokens_per_block': 2,
                       'max_blocks': 4,
                       "max_tokens": 2 * 4,  # TODO： horizon:4
                       "context_length": 2 * 4,
                       "context_length_for_recurrent":2 * 4,
+                      "recurrent_keep_deepth": 2,
                       "gru_gating": False,
                       # "gru_gating": True,
 
@@ -26,6 +28,9 @@ cfg['world_model'] = {
                       # "max_tokens": 2 * 8,  # TODO： horizon:8
                       # "context_length": 2 * 8,
                       # "context_length_for_recurrent":2 * 8,
+                      # "recurrent_keep_deepth": 1,
+                      # # "context_length": 4,
+                      # # "context_length_for_recurrent":4,
                       # "gru_gating": False,
                       # # "gru_gating": True,
 
@@ -34,17 +39,19 @@ cfg['world_model'] = {
                       # "max_tokens": 2 * 8,  # TODO： horizon:8
                       # "context_length": 2 * 8,
                       # "context_length_for_recurrent":2 * 8,
+                      # # "context_length": 8,
+                      # # "context_length_for_recurrent":8,
                       # "gru_gating": False,
                       # # "gru_gating": True,
 
 
-                      'tokens_per_block': 2,
-                      'max_blocks': 10,
-                      "max_tokens": 2 * 10,  # TODO： horizon:8
-                      "context_length": 2 * 10,
-                      "context_length_for_recurrent":2 * 10,
-                      "gru_gating": False,
-                      # "gru_gating": True,
+                      # 'tokens_per_block': 2,
+                      # 'max_blocks': 10,
+                      # "max_tokens": 2 * 10,  # TODO： horizon:8
+                      # "context_length": 2 * 10,
+                      # "context_length_for_recurrent":2 * 10,
+                      # "gru_gating": False,
+                      # # "gru_gating": True,
 
 
 
@@ -66,7 +73,6 @@ cfg['world_model'] = {
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
                       'attn_pdrop': 0.1,
-                      "device": 'cuda:6',
                     #   "device": 'cpu',
                       # 'support_size': 601,
                       'support_size': 101,  # TODO
