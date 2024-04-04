@@ -339,10 +339,10 @@ class WorldModel(nn.Module):
             observations = obs_act_dict['obs']
             buffer_action = obs_act_dict['action']
             current_obs = obs_act_dict['current_obs']
-        else:
-            observations = obs_act_dict
-            buffer_action = None
-            current_obs = None
+        # else:
+        #     observations = obs_act_dict
+        #     buffer_action = None
+        #     current_obs = None
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(observations, should_preprocess=True)  # (B, C, H, W) -> (B, K, E)
 
         if current_obs is not None:
@@ -386,9 +386,9 @@ class WorldModel(nn.Module):
                                 print('root_total_query_cnt:', self.root_total_query_cnt)
                                 print(f'root_hit_ratio:{root_hit_ratio}')
                                 print(f'root_hit find size {self.past_keys_values_cache_init_infer[cache_key].size}')
-                                if self.past_keys_values_cache_init_infer[cache_key].size >= self.config.max_tokens - 5:
+                                if self.past_keys_values_cache_init_infer[cache_key].size >= self.config.max_tokens - 3:
                                     print(f'==' * 20)
-                                    print(f'NOTE: root_hit find size >= self.config.max_tokens - 5')
+                                    print(f'NOTE: root_hit find size >= self.config.max_tokens - 3')
                                     print(f'==' * 20)
                             # 这里需要deepcopy因为在transformer的forward中会原地修改matched_value
                             self.keys_values_wm_list.append(copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
@@ -424,7 +424,8 @@ class WorldModel(nn.Module):
             act_tokens = rearrange(buffer_action, 'b l -> b l 1')
 
             # 选择每个样本的最后一步
-            last_steps = act_tokens[:, -1:, :]  # 这将选择最后一列并保持维度不变, 最后一步的target policy/value本身就没有用到
+            ###### 这将选择最后一列并保持维度不变, 最后一步的target policy/value本身就没有用到 ######
+            last_steps = act_tokens[:, -1:, :]  
             # 使用torch.cat在第二个维度上连接原始act_tokens和last_steps
             act_tokens = torch.cat((act_tokens, last_steps), dim=1)
 
@@ -455,8 +456,13 @@ class WorldModel(nn.Module):
         self.past_keys_values_cache_recurrent_infer.clear()
         # print('=='*20)
         # print('self.past_keys_values_cache_recurrent_infer.clear() after init_inference')
-        self.latent_state_index_in_search_path = [[] for i in range(latent_state.shape[0])]
-        self.next_latent_state_depth = [[] for i in range(latent_state.shape[0])]
+
+        # self.latent_state_index_in_search_path = [[] for i in range(latent_state.shape[0])]
+        # self.next_latent_state_depth = [[] for i in range(latent_state.shape[0])]
+        # self.last_depth = [0 for i in range(latent_state.shape[0])]
+        # 维护一个全局的depth_map字典,用于存储已计算过的深度信息
+        # self.depth_map =  [{0: 1} for i in range(latent_state.shape[0])]  # 根节点处的深度映射
+        
         return outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
 
     """
@@ -466,19 +472,21 @@ class WorldModel(nn.Module):
     其内部也是通过batch执行transformer forward的推理 
     """
 
-    def convert_to_depth(self, search_path):
-        depth_map = {0: 1}  # 根节点处的深度映射
-        depth_in_search_path = []
-        for index in search_path:
-            # 如果当前索引对应的深度没有被计算过，则基于父节点的深度计算它
-            if index not in depth_map:
-                if search_path[index] not in depth_map:
-                    depth_map[search_path[index]] = max(list(depth_map.values())) + 1
-                else:
-                    depth_map[index] = depth_map[search_path[index]] + 1
-            depth_in_search_path.append(depth_map[index])
-
-        return depth_in_search_path
+    def convert_to_depth(self, search_path, depth_map, last_depth):
+        # 获取新加入的元素
+        new_index = search_path[-1]
+        
+        # 如果新加入的元素对应的深度没有被计算过,则基于父节点的深度计算它
+        if new_index not in depth_map:
+            if search_path[new_index] not in depth_map:
+                depth_map[search_path[new_index]] = max(list(depth_map.values())) + 1
+            else:
+                depth_map[new_index] = depth_map[search_path[new_index]] + 1
+        
+        # 将新加入元素的深度添加到last_depth的末尾
+        last_depth.append(depth_map[new_index])
+        
+        return last_depth
 
 
     @torch.no_grad()
@@ -491,17 +499,17 @@ class WorldModel(nn.Module):
         latest_state, action = state_action_history[-1]
         # print(f'action:{action}')
 
-        for i, latent_state_index in enumerate(latent_state_index_in_search_path):
-            self.latent_state_index_in_search_path[i].append(latent_state_index) 
-            # 示例数据
-            # latent_state_index_in_search_path = [0, 0, 0, 0, 2, 0, 2, 3, 4]
-            # 转换为深度表示
-            self.next_latent_state_depth[i] = self.convert_to_depth(self.latent_state_index_in_search_path[i])
-            # 打印结果
-            # print(f'next_latent_state_depth:{self.next_latent_state_depth[i]}')
+        # for i, latent_state_index in enumerate(latent_state_index_in_search_path):
+        #     self.latent_state_index_in_search_path[i].append(latent_state_index)
+            
+        #     # 如果是第一次计算,则初始化self.next_latent_state_depth[i]
+        #     if simulation_index == 0:
+        #         self.next_latent_state_depth[i] = self.convert_to_depth(self.latent_state_index_in_search_path[i], self.depth_map[i], [])
+        #     else:
+        #         # 否则,在上一次计算得到的self.next_latent_state_depth[i]的基础上,只计算新加入的元素的深度
+        #         self.next_latent_state_depth[i] = self.convert_to_depth(self.latent_state_index_in_search_path[i], self.depth_map[i], self.next_latent_state_depth[i])
 
         # print(f'next_latent_state_depth:{self.next_latent_state_depth}')
-
         # 假设 latest_state 是新的 latent_state,包含 ready_env_num 个环境的信息
         ready_env_num = latest_state.shape[0]
         self.keys_values_wm_list = []
@@ -655,42 +663,49 @@ class WorldModel(nn.Module):
                     self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = context_length-3
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = context_length-3
 
-            # TODO: memory_env;每次都存最新的
+
             if is_init_infer:
-                # init_infer: laten_state是encoder编码得到的，没有误差
-                # 比较并存储较大的缓存
-                if cache_key in self.past_keys_values_cache_init_infer:
-                    existing_kvcache = self.past_keys_values_cache_init_infer[cache_key]
-                    # 检查现有缓存和新缓存之间是否存在大小差异
-                    # if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
-                    if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.context_length-1:
-                        # 仅在大小小于 max_tokens - 1 时存储,以避免重置
-                        self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-                # elif self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
-                elif self.keys_values_wm_single_env.size < self.context_length-1:
-                    # 仅在大小小于 max_tokens - 1 时存储,以避免重置
-                    self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                # TODO：每次都存储最新的    
+                self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
             else:
-                # recurrent_infer: laten_state是预测的，会有误差
-                # 比较并存储较大的缓存
-                if cache_key in self.past_keys_values_cache_recurrent_infer:
-                    existing_kvcache = self.past_keys_values_cache_recurrent_infer[cache_key]
-                    # 检查现有缓存和新缓存之间是否存在大小差异
-                    # if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
-                    if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.context_length_for_recurrent-1:
-                        # 仅在大小小于 max_tokens - 1 时存储,以避免重置
-                        # if latent_state_index_in_search_path[i] == 0:
-                        if self.next_latent_state_depth[i][-1] <= self.recurrent_keep_deepth:
-                            # TODO: (root_latent_state, a, current_latent_state) kv_cache 即相当于只是在root下一层的预测state才存储kv_cache
-                            # print('save kv_cache of predicted latent state')
-                            self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-                # elif self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
-                elif self.keys_values_wm_single_env.size < self.context_length_for_recurrent-1:
-                    # if latent_state_index_in_search_path[i] == 0: # bug: < self.action_shape**(self.recurrent_keep_deepth-1):
-                    if self.next_latent_state_depth[i][-1] <= self.recurrent_keep_deepth:
-                        # TODO: (root_latent_state, a, current_latent_state) kv_cache 即相当于只是在root下一层的预测state才存储kv_cache
-                        # print('save kv_cache of predicted latent state')
-                        self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+
+            # # TODO: memory_env;每次都存最新的
+            # if is_init_infer:
+            #     # init_infer: laten_state是encoder编码得到的，没有误差
+            #     # 比较并存储较大的缓存
+            #     if cache_key in self.past_keys_values_cache_init_infer:
+            #         existing_kvcache = self.past_keys_values_cache_init_infer[cache_key]
+            #         # 检查现有缓存和新缓存之间是否存在大小差异
+            #         # if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
+            #         if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.context_length-1:
+            #             # 仅在大小小于 max_tokens - 1 时存储,以避免重置
+            #             self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+            #     # elif self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
+            #     elif self.keys_values_wm_single_env.size < self.context_length-1:
+            #         # 仅在大小小于 max_tokens - 1 时存储,以避免重置
+            #         self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+            # else:
+            #     # recurrent_infer: laten_state是预测的，会有误差
+            #     # 比较并存储较大的缓存
+            #     if cache_key in self.past_keys_values_cache_recurrent_infer:
+            #         existing_kvcache = self.past_keys_values_cache_recurrent_infer[cache_key]
+            #         # 检查现有缓存和新缓存之间是否存在大小差异
+            #         # if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
+            #         if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.context_length_for_recurrent-1:
+            #             # 仅在大小小于 max_tokens - 1 时存储,以避免重置
+            #             # if latent_state_index_in_search_path[i] == 0:
+            #             if self.next_latent_state_depth[i][-1] <= self.recurrent_keep_deepth:
+            #                 # TODO: (root_latent_state, a, current_latent_state) kv_cache 即相当于只是在root下一层的预测state才存储kv_cache
+            #                 # print('save kv_cache of predicted latent state')
+            #                 self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+            #     # elif self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
+            #     elif self.keys_values_wm_single_env.size < self.context_length_for_recurrent-1:
+            #         # if latent_state_index_in_search_path[i] == 0: # bug: < self.action_shape**(self.recurrent_keep_deepth-1):
+            #         if self.next_latent_state_depth[i][-1] <= self.recurrent_keep_deepth:
+            #             # TODO: (root_latent_state, a, current_latent_state) kv_cache 即相当于只是在root下一层的预测state才存储kv_cache
+            #             # print('save kv_cache of predicted latent state')
+            #             self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
 
     def retrieve_or_generate_kvcache(self, latent_state, ready_env_num, simulation_index=0):
         """
