@@ -1,7 +1,7 @@
 from easydict import EasyDict
 import torch
 
-torch.cuda.set_device(4)
+torch.cuda.set_device(2)
 
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 # env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
@@ -44,10 +44,8 @@ game_segment_length = 16 + memory_length  # TODO: for "explore": 1
 reanalyze_ratio = 0
 td_steps = 5
 
-# threshold_training_steps_for_final_temperature = int(5e5)
 # threshold_training_steps_for_final_temperature = int(1e5)  # TODO: 100k train iter
 threshold_training_steps_for_final_temperature = int(5e4)  # TODO: 100k train iter
-
 # eps_greedy_exploration_in_collect = False
 eps_greedy_exploration_in_collect = True
 # ==============================================================

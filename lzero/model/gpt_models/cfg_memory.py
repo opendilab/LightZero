@@ -12,7 +12,7 @@ cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',
                          'out_ch': 3, 'dropout': 0.0}}  # TODO：for atari debug
 cfg['world_model'] = {
     'tokens_per_block': 2,
-    "device": 'cuda:4',
+    "device": 'cuda:2',
 
     # 'max_blocks': 16,
     # "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0

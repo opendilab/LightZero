@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(2)
+torch.cuda.set_device(0)
 
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 # env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
@@ -33,7 +33,7 @@ model_update_ratio = 0.25
 update_per_collect = 1  # TODO: for debug
 
 # batch_size = 64
-batch_size = 6
+batch_size = 2
 # num_unroll_steps = 5
 
 # for key_to_door

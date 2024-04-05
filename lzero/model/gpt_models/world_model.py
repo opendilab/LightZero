@@ -669,22 +669,14 @@ class WorldModel(nn.Module):
                     k_cache_trimmed = k_cache_current[:, 2:context_length-1, :]
                     v_cache_trimmed = v_cache_current[:, 2:context_length-1, :]
                     
-                    # 计算原始位置编码和新位置编码的差值
-                    # original_pos_emb_k = self.positional_embedding_k[layer][:, :, 2:context_length-1, :] # self.positional_embedding_k[layer] shape: torch.Size([1, 8, 16, 96])
-                    # new_pos_emb_k = self.positional_embedding_k[layer][:, :, 0:context_length-3, :]
-                    # pos_emb_diff_k = new_pos_emb_k - original_pos_emb_k
-                    # original_pos_emb_v = self.positional_embedding_v[layer][:, :, 2:context_length-1, :] 
-                    # new_pos_emb_v = self.positional_embedding_v[layer][:, :, 0:context_length-3, :]
-                    # pos_emb_diff_v = new_pos_emb_v - original_pos_emb_v
-                    
                     # 索引预先计算的位置编码差值
                     pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length-1)]
                     pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length-1)]
-                    # 对k和v应用位置编码矫正
+                    #=========== 对k和v应用位置编码矫正 ==================
                     k_cache_trimmed += pos_emb_diff_k.squeeze(0)
                     v_cache_trimmed += pos_emb_diff_v.squeeze(0)
 
-                    # 沿第3维填充后2步
+                    # 沿第3维，用0填充后2步
                     padding_size = (0, 0, 0, 3)  # F.pad的参数(0, 0, 0, 2)指定了在每个维度上的填充量。这些参数是按(左, 右, 上, 下)的顺序给出的,对于三维张量来说,分别对应于(维度2左侧, 维度2右侧, 维度1左侧, 维度1右侧)的填充。
                     k_cache_padded = F.pad(k_cache_trimmed, padding_size, 'constant', 0)
                     v_cache_padded = F.pad(v_cache_trimmed, padding_size, 'constant', 0)
@@ -692,8 +684,6 @@ class WorldModel(nn.Module):
                     self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = k_cache_padded.unsqueeze(0)
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = v_cache_padded.unsqueeze(0)
                     
-                    # self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.config.max_tokens - 3
-                    # self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.config.max_tokens - 3
                     self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = context_length-3
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = context_length-3
 
@@ -897,49 +887,47 @@ class WorldModel(nn.Module):
         loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy, batch, element='policy')
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
         
-        # return LossWithIntermediateLosses(
-        #     latent_recon_loss_weight=self.latent_recon_loss_weight,
-        #     perceptual_loss_weight=self.perceptual_loss_weight,
-        #     loss_obs=loss_obs,
-        #     loss_rewards=loss_rewards,
-        #     loss_value=loss_value,
-        #     loss_policy=loss_policy,
-        #     latent_recon_loss=latent_recon_loss,
-        #     perceptual_loss=perceptual_loss,
-        #     orig_policy_loss=orig_policy_loss,
-        #     policy_entropy=policy_entropy
-        # )
-
-        # 计算时间步
-        timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
-        # 计算每个时间步的折扣系数
-        discounts = self.gamma ** timesteps
-
-        # 将折扣系数应用到每个损失项
-        # discounted_latent_recon_loss = (latent_recon_loss.view(-1, batch['actions'].shape[1]) * discounts).mean()
-        # discounted_perceptual_loss = (perceptual_loss.view(-1, batch['actions'].shape[1]) * discounts).mean()
-        discounted_latent_recon_loss = latent_recon_loss
-        discounted_perceptual_loss = perceptual_loss
-
-        discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).mean()
-        discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).mean()
-        discounted_loss_value = (loss_value.view(-1, batch['actions'].shape[1]) * discounts).mean()
-        discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * discounts).mean()
-        discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).mean()
-        discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).mean()
-
         return LossWithIntermediateLosses(
             latent_recon_loss_weight=self.latent_recon_loss_weight,
             perceptual_loss_weight=self.perceptual_loss_weight,
-            loss_obs=discounted_loss_obs,
-            loss_rewards=discounted_loss_rewards,
-            loss_value=discounted_loss_value,
-            loss_policy=discounted_loss_policy,
-            latent_recon_loss=discounted_latent_recon_loss,
-            perceptual_loss=discounted_perceptual_loss,
-            orig_policy_loss=discounted_orig_policy_loss,
-            policy_entropy=discounted_policy_entropy
+            loss_obs=loss_obs.mean(),
+            loss_rewards=loss_rewards.mean(),
+            loss_value=loss_value.mean(),
+            loss_policy=loss_policy.mean(),
+            latent_recon_loss=latent_recon_loss,
+            perceptual_loss=perceptual_loss,
+            orig_policy_loss=orig_policy_loss.mean(),
+            policy_entropy=policy_entropy.mean()
         )
+
+        # # 计算时间步
+        # timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
+        # # 计算每个时间步的折扣系数
+        # discounts = self.gamma ** timesteps
+
+        # # 将折扣系数应用到每个损失项
+        # discounted_latent_recon_loss = latent_recon_loss
+        # discounted_perceptual_loss = perceptual_loss
+
+        # discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).mean()
+        # discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).mean()
+        # discounted_loss_value = (loss_value.view(-1, batch['actions'].shape[1]) * discounts).mean()
+        # discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * discounts).mean()
+        # discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).mean()
+        # discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).mean()
+
+        # return LossWithIntermediateLosses(
+        #     latent_recon_loss_weight=self.latent_recon_loss_weight,
+        #     perceptual_loss_weight=self.perceptual_loss_weight,
+        #     loss_obs=discounted_loss_obs,
+        #     loss_rewards=discounted_loss_rewards,
+        #     loss_value=discounted_loss_value,
+        #     loss_policy=discounted_loss_policy,
+        #     latent_recon_loss=discounted_latent_recon_loss,
+        #     perceptual_loss=discounted_perceptual_loss,
+        #     orig_policy_loss=discounted_orig_policy_loss,
+        #     policy_entropy=discounted_policy_entropy
+        # )
 
 
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
