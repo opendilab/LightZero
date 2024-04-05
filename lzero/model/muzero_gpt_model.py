@@ -120,8 +120,8 @@ class MuZeroModelGPT(nn.Module):
         from .gpt_models.tokenizer.tokenizer import Tokenizer
         from .gpt_models.tokenizer.nets import Encoder, Decoder
         # from .gpt_models.cfg_cartpole import cfg
-        from .gpt_models.cfg_memory import cfg # NOTE: TODO
-        # from .gpt_models.cfg_atari import cfg
+        # from .gpt_models.cfg_memory import cfg # NOTE: TODO
+        from .gpt_models.cfg_atari import cfg
 
         if cfg.world_model.obs_type == 'vector':
             self.representation_network = RepresentationNetworkMLP(

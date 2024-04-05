@@ -244,6 +244,10 @@ def train_muzero_gpt(
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
         
+        # 预先计算位置编码矩阵，只用于 collect/eval 的推理阶段，不用于训练阶段
+        policy._collect_model.world_model.precompute_pos_emb_diff_kv() # 非常重要，kv更新后需要重新计算
+        policy._target_model.world_model.precompute_pos_emb_diff_kv() # 非常重要，kv更新后需要重新计算
+
         policy._target_model.world_model.past_keys_values_cache_init_infer.clear()
         policy._target_model.world_model.past_keys_values_cache_recurrent_infer.clear()
         policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad

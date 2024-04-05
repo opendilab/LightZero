@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(6)
+torch.cuda.set_device(4)
 
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 
@@ -73,7 +73,11 @@ atari_xzero_config = dict(
     # TODO: 
     # mcts_ctree
     # muzero_collector/evaluator: empty_cache
-    exp_name=f'data_xzero_atari_0404/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nlayer1-nh8_grugating-false_latent-groupkl_conleninit{10}-conlenrecur{10}clear-alwayslateset_seed0',
+    exp_name=f'data_xzero_atari_0404/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nlayer1-nh8_grugating-false_latent-groupkl_conleninit{6}-conlenrecur{6}clear-fixposemb_seed0',
+
+    # exp_name=f'data_xzero_atari_0404/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nlayer1-nh8_grugating-false_latent-groupkl_conleninit{6}-conlenrecur{6}clear-reset_seed0',
+
+    # exp_name=f'data_xzero_atari_0404/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nlayer1-nh8_grugating-false_latent-groupkl_conleninit{10}-conlenrecur{10}clear-alwayslateset_seed0',
     # exp_name=f'data_xzero_atari_0404/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nlayer1-nh8_grugating-false_latent-groupkl_conleninit{6}-conlenrecur{6}clear-keepdepth2_seed0',
     # exp_name=f'data_xzero_atari_0403/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nlayer1-nh8_grugating-false_latent-groupkl_conleninit{2*num_unroll_steps}-conlenrecur{2*num_unroll_steps}clear-keepdepth0_seed0',
     # exp_name=f'data_xzero_atari_0401/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nlayer1-nh8_grugating-false_simnorm_latentw10_pew1e-4_latent-groupkl_soft005_eps20k_nogradscale_gcv5_seed0',

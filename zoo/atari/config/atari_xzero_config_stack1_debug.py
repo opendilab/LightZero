@@ -68,9 +68,8 @@ num_unroll_steps = 8
 
 threshold_training_steps_for_final_temperature = int(5e4)  # train_iter 50k 1->0.5->0.25
 eps_greedy_exploration_in_collect = True # for breakout, qbert, boxing
-# eps_greedy_exploration_in_collect = False 
 
-num_simulations = 50
+num_simulations = 5
 update_per_collect = 10  # for debug
 # ==============================================================
 # end of the most frequently changed config specified by the user

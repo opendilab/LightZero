@@ -11,7 +11,7 @@ cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',
                      'ch_mult': [1, 1, 1, 1, 1], 'num_res_blocks': 2, 'attn_resolutions': [8, 16],
                      'out_ch': 3, 'dropout': 0.0}}  # TODO：for atari debug
 cfg['world_model'] = {
-                      "device": 'cuda:6',
+                      "device": 'cuda:4',
 
                       # 'tokens_per_block': 2,
                       # 'max_blocks': 4,
@@ -28,8 +28,10 @@ cfg['world_model'] = {
                       "max_tokens": 2 * 8,  # TODO： horizon:8
                       # "context_length": 2 * 8,
                       # "context_length_for_recurrent":2 * 8,
-                      "context_length": 10,
-                      "context_length_for_recurrent": 10,
+                      "context_length": 6,
+                      "context_length_for_recurrent":6,
+                      # "context_length": 10,
+                      # "context_length_for_recurrent": 10,
                       # "recurrent_keep_deepth": 2,
                       "recurrent_keep_deepth": 100,
                       # "context_length": 4,

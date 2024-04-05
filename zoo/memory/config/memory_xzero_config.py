@@ -1,7 +1,7 @@
 from easydict import EasyDict
 import torch
 
-torch.cuda.set_device(7)
+torch.cuda.set_device(4)
 
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 # env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
@@ -58,7 +58,7 @@ memory_xzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
     exp_name=f'data_memory_{env_id}_0404/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
         f'_eps-20k_temp-final-steps-{threshold_training_steps_for_final_temperature}'
-        f'_seed{seed}_eval{evaluator_env_num}_nl2-nh2_emd96_train-with-episode_conleninit{16}-conlenrecur{16}-clear-alwayslateset',
+        f'_seed{seed}_eval{evaluator_env_num}_nl2-nh2_emd96_train-with-episode_conleninit{16}-conlenrecur{16}clear-fixposemb',
     # exp_name=f'data_memory_{env_id}_0404/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
     #         f'_eps-20k_temp-final-steps-{threshold_training_steps_for_final_temperature}'
     #         f'_pelw1e-4_quan15_groupkl_seed{seed}_eval{evaluator_env_num}_nl2-nh2_soft005_reclw005_emd96_train-with-episode_conleninit{16}-conlenrecur{16}-clear-alwayslateset',

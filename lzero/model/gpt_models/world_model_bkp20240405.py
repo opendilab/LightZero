@@ -104,12 +104,7 @@ class WorldModel(nn.Module):
         self.num_groups = config.embed_dim // config.group_size
         self.obs_type = config.obs_type
         self.embed_dim = config.embed_dim 
-        self.num_heads = config.num_heads
         self.gamma = config.gamma
-        self.context_length = config.context_length  # TODO config.context_length
-        self.context_length_for_recurrent = config.context_length_for_recurrent
-        # self.context_length = self.config.max_tokens  # TODO
-        # self.context_length_for_recurrent = self.config.max_tokens  # TODO
 
         self.transformer = Transformer(config)
         self.num_observations_tokens = config.tokens_per_block - 1
@@ -126,6 +121,7 @@ class WorldModel(nn.Module):
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
         self.recurrent_keep_deepth = config.recurrent_keep_deepth
 
+
         all_but_last_latent_state_pattern = torch.ones(config.tokens_per_block)
         all_but_last_latent_state_pattern[-2] = 0  # 1,...,0,1
 
@@ -137,17 +133,17 @@ class WorldModel(nn.Module):
         value_policy_tokens_pattern = torch.zeros(config.tokens_per_block)
         value_policy_tokens_pattern[-2] = 1  # [0,...,1,0]
 
+        # TODO: delete
+        self.embedder = Embedder(
+            max_blocks=config.max_blocks,
+            block_masks=[act_tokens_pattern, latent_state_pattern],
+            embedding_tables=nn.ModuleList([nn.Embedding(act_vocab_size, config.embed_dim), nn.Embedding(obs_vocab_size, config.embed_dim)])
+        )
+
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim)
 
-        # 预先计算位置编码矩阵，只用于collect/eval 的推理阶段，不用于训练阶段
-        # self.positional_embedding_k = [self.transformer.blocks[layer].attn.key(self.pos_emb.weight).view(1, config.max_tokens, self.num_heads, self.embed_dim // self.num_heads).transpose(1, 2).cuda().detach() for layer in range(config.num_layers)]  # (B, nh, T, hs)
-        # self.positional_embedding_v = [self.transformer.blocks[layer].attn.value(self.pos_emb.weight).view(1, config.max_tokens, self.num_heads, self.embed_dim // self.num_heads).transpose(1, 2).cuda().detach() for layer in range(config.num_layers)]  # (B, nh, T, hs)
-        
-        # 预先计算位置编码矩阵，只用于collect/eval 的推理阶段，不用于训练阶段
-        self.precompute_pos_emb_diff_kv()
-
         self.act_embedding_table = nn.Embedding(act_vocab_size, config.embed_dim)
-         # NOTE: 对于离散动作，使用fixed_act_embedding，可能前期效率更高,但后期性能较差, 注意需要self.act_embedding_table.weight不是全零初始化的 ####
+         # NOTE: 对于离散动作，使用fixed_act_embedding，可能前期效率更高, 注意需要self.act_embedding_table.weight不是全零初始化的 ####
         # self.act_embedding_table.weight.requires_grad = False
 
         self.obs_per_embdding_dim = config.embed_dim  # 16*64=1024
@@ -232,36 +228,15 @@ class WorldModel(nn.Module):
         self.length_largethan_maxminus7_context_cnt = 0
         self.root_hit_cnt = 0
         self.root_total_query_cnt = 0
+        self.context_length = config.context_length  # TODO config.context_length
+        self.context_length_for_recurrent = config.context_length_for_recurrent
 
+        # self.context_length = self.config.max_tokens  # TODO
+        # self.context_length_for_recurrent = self.config.max_tokens  # TODO
         self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
         # TODO: Transformer更新后应该清除缓存 
         self.keys_values_wm = self.transformer.generate_empty_keys_values(n=self.env_num, max_tokens=self.context_length)
 
-
-    def precompute_pos_emb_diff_kv(self):
-        # 预先计算位置编码矩阵,只用于collect/eval的推理阶段,不用于训练阶段
-        self.positional_embedding_k = [self.transformer.blocks[layer].attn.key(self.pos_emb.weight).view(1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads).transpose(1, 2).cuda().detach() for layer in range(self.config.num_layers)]  # (B, nh, T, hs)
-        self.positional_embedding_v = [self.transformer.blocks[layer].attn.value(self.pos_emb.weight).view(1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads).transpose(1, 2).cuda().detach() for layer in range(self.config.num_layers)]  # (B, nh, T, hs)
-        
-        # 预先计算所有可能的位置编码差值
-        self.pos_emb_diff_k = []
-        self.pos_emb_diff_v = []
-        for layer in range(self.config.num_layers):
-            layer_pos_emb_diff_k = {}
-            layer_pos_emb_diff_v = {}
-            # for start in range(self.config.max_tokens):
-            #     for end in range(start+1, self.config.max_tokens):
-            for start in [2]:
-                for end in [self.context_length-1]:
-                    original_pos_emb_k = self.positional_embedding_k[layer][:,:, start:end, :]
-                    new_pos_emb_k = self.positional_embedding_k[layer][:,:, :end-start, :]
-                    layer_pos_emb_diff_k[(start, end)] = new_pos_emb_k - original_pos_emb_k
-                    
-                    original_pos_emb_v = self.positional_embedding_v[layer][:,:, start:end, :]
-                    new_pos_emb_v = self.positional_embedding_v[layer][:,:, :end-start, :]
-                    layer_pos_emb_diff_v[(start, end)] = new_pos_emb_v - original_pos_emb_v
-            self.pos_emb_diff_k.append(layer_pos_emb_diff_k)
-            self.pos_emb_diff_v.append(layer_pos_emb_diff_v)
 
     def forward(self, obs_embeddings_or_act_tokens, past_keys_values: Optional[KeysValues] = None, kvcache_independent=False) -> WorldModelOutput:
         if kvcache_independent:
@@ -364,6 +339,10 @@ class WorldModel(nn.Module):
             observations = obs_act_dict['obs']
             buffer_action = obs_act_dict['action']
             current_obs = obs_act_dict['current_obs']
+        # else:
+        #     observations = obs_act_dict
+        #     buffer_action = None
+        #     current_obs = None
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(observations, should_preprocess=True)  # (B, C, H, W) -> (B, K, E)
 
         if current_obs is not None:
@@ -522,14 +501,15 @@ class WorldModel(nn.Module):
 
         # for i, latent_state_index in enumerate(latent_state_index_in_search_path):
         #     self.latent_state_index_in_search_path[i].append(latent_state_index)
+            
         #     # 如果是第一次计算,则初始化self.next_latent_state_depth[i]
         #     if simulation_index == 0:
         #         self.next_latent_state_depth[i] = self.convert_to_depth(self.latent_state_index_in_search_path[i], self.depth_map[i], [])
         #     else:
         #         # 否则,在上一次计算得到的self.next_latent_state_depth[i]的基础上,只计算新加入的元素的深度
         #         self.next_latent_state_depth[i] = self.convert_to_depth(self.latent_state_index_in_search_path[i], self.depth_map[i], self.next_latent_state_depth[i])
-        # print(f'next_latent_state_depth:{self.next_latent_state_depth}')
 
+        # print(f'next_latent_state_depth:{self.next_latent_state_depth}')
         # 假设 latest_state 是新的 latent_state,包含 ready_env_num 个环境的信息
         ready_env_num = latest_state.shape[0]
         self.keys_values_wm_list = []
@@ -651,13 +631,14 @@ class WorldModel(nn.Module):
 
             # 从全局缓存复制keys和values到单个环境缓存
             for layer in range(self.num_layers):
+                # if self.keys_values_wm._keys_values[layer]._k_cache._size < self.config.max_tokens - 1:
                 if self.keys_values_wm._keys_values[layer]._k_cache._size < context_length-1:  # 固定只保留最近5个timestep的context
                     self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = self.keys_values_wm._keys_values[layer]._k_cache._cache[i].unsqueeze(0)  # Shape torch.Size([2, 100, 512])
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = self.keys_values_wm._keys_values[layer]._v_cache._cache[i].unsqueeze(0)
                     self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm._keys_values[layer]._k_cache._size
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm._keys_values[layer]._v_cache._size
+                # elif self.keys_values_wm._keys_values[layer]._k_cache._size == self.config.max_tokens - 1:
                 else:
-                    # return # TODO: reset kv_cache。如果上下文信息是滑动窗口（Sliding Window），需要修复position_embedding的kv_cache，增加了计算开销。
                     # 裁剪和填充逻辑
                     # 假设cache的维度是 [batch_size, num_heads, sequence_length, features]
                     k_cache_current = self.keys_values_wm._keys_values[layer]._k_cache._cache[i]
@@ -669,21 +650,6 @@ class WorldModel(nn.Module):
                     k_cache_trimmed = k_cache_current[:, 2:context_length-1, :]
                     v_cache_trimmed = v_cache_current[:, 2:context_length-1, :]
                     
-                    # 计算原始位置编码和新位置编码的差值
-                    # original_pos_emb_k = self.positional_embedding_k[layer][:, :, 2:context_length-1, :] # self.positional_embedding_k[layer] shape: torch.Size([1, 8, 16, 96])
-                    # new_pos_emb_k = self.positional_embedding_k[layer][:, :, 0:context_length-3, :]
-                    # pos_emb_diff_k = new_pos_emb_k - original_pos_emb_k
-                    # original_pos_emb_v = self.positional_embedding_v[layer][:, :, 2:context_length-1, :] 
-                    # new_pos_emb_v = self.positional_embedding_v[layer][:, :, 0:context_length-3, :]
-                    # pos_emb_diff_v = new_pos_emb_v - original_pos_emb_v
-                    
-                    # 索引预先计算的位置编码差值
-                    pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length-1)]
-                    pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length-1)]
-                    # 对k和v应用位置编码矫正
-                    k_cache_trimmed += pos_emb_diff_k.squeeze(0)
-                    v_cache_trimmed += pos_emb_diff_v.squeeze(0)
-
                     # 沿第3维填充后2步
                     padding_size = (0, 0, 0, 3)  # F.pad的参数(0, 0, 0, 2)指定了在每个维度上的填充量。这些参数是按(左, 右, 上, 下)的顺序给出的,对于三维张量来说,分别对应于(维度2左侧, 维度2右侧, 维度1左侧, 维度1右侧)的填充。
                     k_cache_padded = F.pad(k_cache_trimmed, padding_size, 'constant', 0)
@@ -697,13 +663,14 @@ class WorldModel(nn.Module):
                     self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = context_length-3
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = context_length-3
 
+
             if is_init_infer:
                 # TODO：每次都存储最新的    
                 self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
             else:
                 self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
 
-
+            # # TODO: memory_env;每次都存最新的
             # if is_init_infer:
             #     # init_infer: laten_state是encoder编码得到的，没有误差
             #     # 比较并存储较大的缓存
