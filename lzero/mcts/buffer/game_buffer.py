@@ -9,14 +9,14 @@ from ding.utils import BUFFER_REGISTRY
 from easydict import EasyDict
 
 if TYPE_CHECKING:
-    from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy, GumeblMuZeroPolicy
+    from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy, GumbelMuZeroPolicy
 
 
 @BUFFER_REGISTRY.register('game_buffer')
 class GameBuffer(ABC, object):
     """
     Overview:
-        The base game buffer class for MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy, GumeblMuZeroPolicy.
+        The base game buffer class for MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy, GumbelMuZeroPolicy.
     """
 
     @classmethod
@@ -37,7 +37,7 @@ class GameBuffer(ABC, object):
         # (bool) Whether to use the root value in the reanalyzing part. Please refer to EfficientZero paper for details.
         use_root_value=False,
         # (int) The number of samples required for mini inference.
-        mini_infer_size=256,
+        mini_infer_size=10240,
     )
 
     def __init__(self, cfg: dict):
@@ -53,6 +53,8 @@ class GameBuffer(ABC, object):
         self._cfg = default_config
         self._cfg = cfg
         assert self._cfg.env_type in ['not_board_games', 'board_games']
+        assert self._cfg.action_type in ['fixed_action_space', 'varied_action_space']
+
         self.replay_buffer_size = self._cfg.replay_buffer_size
         self.batch_size = self._cfg.batch_size
         self._alpha = self._cfg.priority_prob_alpha
@@ -69,14 +71,14 @@ class GameBuffer(ABC, object):
 
     @abstractmethod
     def sample(
-            self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy", "GumeblMuZeroPolicy"]
+            self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy", "GumbelMuZeroPolicy"]
     ) -> List[Any]:
         """
         Overview:
             sample data from ``GameBuffer`` and prepare the current and target batch for training.
         Arguments:
             - batch_size (:obj:`int`): batch size.
-            - policy (:obj:`Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy", "GumeblMuZeroPolicy"]`): policy.
+            - policy (:obj:`Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy", "GumbelMuZeroPolicy"]`): policy.
         Returns:
             - train_data (:obj:`List`): List of train data, including current_batch and target_batch.
         """

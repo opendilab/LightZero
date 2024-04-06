@@ -6,8 +6,7 @@ from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
 from lzero.policy import select_action
 
-# args = ['EfficientZero', 'MuZero']
-args = ["MuZero"]
+args = ["MuZero"]  # ['EfficientZero', 'MuZero']
 
 
 @pytest.mark.unittest
@@ -17,14 +16,14 @@ def test_game_segment(test_algo):
     if test_algo == 'EfficientZero':
         from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTSCtree
         from lzero.model.efficientzero_model import EfficientZeroModel as Model
-        from lzero.mcts.tests.atari_efficientzero_config_test import atari_efficientzero_config as config
-        from zoo.atari.envs.atari_lightzero_env import AtariLightZeroEnv
-        envs = [AtariLightZeroEnv(config.env) for _ in range(config.env.evaluator_env_num)]
+        from lzero.mcts.tests.config.atari_efficientzero_config_for_test import atari_efficientzero_config as config
+        from zoo.atari.envs.atari_lightzero_env import AtariEnvLightZero
+        envs = [AtariEnvLightZero(config.env) for _ in range(config.env.evaluator_env_num)]
 
     elif test_algo == 'MuZero':
         from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
         from lzero.model.muzero_model import MuZeroModel as Model
-        from lzero.mcts.tests.tictactoe_muzero_bot_mode_config_test import tictactoe_muzero_config as config
+        from lzero.mcts.tests.config.tictactoe_muzero_bot_mode_config_for_test import tictactoe_muzero_config as config
         from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
         envs = [TicTacToeEnv(config.env) for _ in range(config.env.evaluator_env_num)]
 
@@ -34,6 +33,21 @@ def test_game_segment(test_algo):
         config.policy.device = 'cuda'
     else:
         config.policy.device = 'cpu'
+
+    # load pretrained model
+    if config.policy.model_path is not None:
+        # Load the state dictionary from the specified file path
+        state_dict = torch.load(config.policy.model_path, map_location=config.policy.device)
+        # Create a new state dictionary that contains only the matching keys
+        model_state_dict = model.state_dict()
+        matched_state_dict = {k: v for k, v in state_dict['model'].items() if k in model_state_dict}
+        # Load the matched state dictionary into the model
+        model.load_state_dict(matched_state_dict, strict=False)
+        # Print a message indicating the number of loaded parameters
+        num_loaded_params = len(matched_state_dict)
+        num_model_params = len(model_state_dict)
+        print(f"Loaded {num_loaded_params} out of {num_model_params} parameters from the state dictionary.")
+
     model.to(config.policy.device)
     model.eval()
 
@@ -73,7 +87,7 @@ def test_game_segment(test_algo):
                     reward_hidden_state_roots[0].detach().cpu().numpy(),
                     reward_hidden_state_roots[1].detach().cpu().numpy()
                 )
-                # for atari env, all actions is legal_action
+                # for atari env, all actions are legal_action
                 legal_actions_list = [
                     [i for i in range(config.policy.model.action_space_size)]
                     for _ in range(config.env.evaluator_env_num)
@@ -104,7 +118,7 @@ def test_game_segment(test_algo):
 
             for i in range(config.env.evaluator_env_num):
                 distributions, value, env = roots_distributions[i], roots_values[i], envs[i]
-                # ``deterministic=True``  indicates that we select the argmax action instead of sampling.
+                # ``deterministic=True`` indicates that we select the argmax action instead of sampling.
                 action, _ = select_action(distributions, temperature=1, deterministic=True)
                 # ==============================================================
                 # the core initial_inference.

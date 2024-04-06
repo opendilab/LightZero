@@ -6,7 +6,8 @@ import numpy as np
 import torch
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
-from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY
+from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, get_rank, get_world_size, \
+    allreduce_data
 from ding.worker.collector.base_serial_collector import ISerialCollector
 from torch.nn import L1Loss
 
@@ -19,10 +20,12 @@ class MuZeroCollector(ISerialCollector):
     """
     Overview:
         The Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.
+        It manages the data collection process for training these algorithms using a serial mechanism.
     Interfaces:
-        __init__, reset, reset_env, reset_policy, _reset_stat, envstep, __del__, _compute_priorities, pad_and_save_last_trajectory, collect, _output_log, close
-    Property:
-        envstep
+        ``__init__``, ``reset``, ``reset_env``, ``reset_policy``, ``_reset_stat``, ``envstep``, ``__del__``, ``_compute_priorities``,
+        ``pad_and_save_last_trajectory``, ``collect``, ``_output_log``, ``close``
+    Properties:
+        ``envstep``
     """
 
     # TO be compatible with ISerialCollector
@@ -40,15 +43,15 @@ class MuZeroCollector(ISerialCollector):
     ) -> None:
         """
         Overview:
-            Init the collector according to input arguments.
+            Initialize the MuZeroCollector with the given parameters.
         Arguments:
-            - collect_print_freq (:obj:`int`): collect_print_frequency in terms of training_steps.
-            - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
-            - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
-            - tb_logger (:obj:`SummaryWriter`): tensorboard handle
-            - instance_name (:obj:`Optional[str]`): Name of this instance.
-            - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
-            - policy_config: Config of game.
+            - collect_print_freq (:obj:`int`): Frequency (in training steps) at which to print collection information.
+            - env (:obj:`Optional[BaseEnvManager]`): Instance of the subclass of vectorized environment manager.
+            - policy (:obj:`Optional[namedtuple]`): namedtuple of the collection mode policy API.
+            - tb_logger (:obj:`Optional[SummaryWriter]`): TensorBoard logger instance.
+            - exp_name (:obj:`str`): Name of the experiment, used for logging and saving purposes.
+            - instance_name (:obj:`str`): Unique identifier for this collector instance.
+            - policy_config (:obj:`Optional[policy_config]`): Configuration object for the policy.
         """
         self._exp_name = exp_name
         self._instance_name = instance_name
@@ -56,15 +59,25 @@ class MuZeroCollector(ISerialCollector):
         self._timer = EasyTimer()
         self._end_flag = False
 
-        if tb_logger is not None:
+        self._rank = get_rank()
+        self._world_size = get_world_size()
+        if self._rank == 0:
+            if tb_logger is not None:
+                self._logger, _ = build_logger(
+                    path='./{}/log/{}'.format(self._exp_name, self._instance_name),
+                    name=self._instance_name,
+                    need_tb=False
+                )
+                self._tb_logger = tb_logger
+            else:
+                self._logger, self._tb_logger = build_logger(
+                    path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name
+                )
+        else:
             self._logger, _ = build_logger(
                 path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name, need_tb=False
             )
-            self._tb_logger = tb_logger
-        else:
-            self._logger, self._tb_logger = build_logger(
-                path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name
-            )
+            self._tb_logger = None
 
         self.policy_config = policy_config
 
@@ -73,13 +86,12 @@ class MuZeroCollector(ISerialCollector):
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
         """
         Overview:
-            Reset the environment.
+            Reset or replace the environment managed by this collector.
             If _env is None, reset the old environment.
             If _env is not None, replace the old environment in the collector with the new passed \
                 in environment and launch.
         Arguments:
-            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-                env_manager(BaseEnvManager)
+            - env (:obj:`Optional[BaseEnvManager]`): New environment to manage, if provided.
         """
         if _env is not None:
             self._env = _env
@@ -91,7 +103,7 @@ class MuZeroCollector(ISerialCollector):
     def reset_policy(self, _policy: Optional[namedtuple] = None) -> None:
         """
         Overview:
-            Reset the policy.
+            Reset or replace the policy used by this collector.
             If _policy is None, reset the old policy.
             If _policy is not None, replace the old policy in the collector with the new passed in policy.
         Arguments:
@@ -109,7 +121,7 @@ class MuZeroCollector(ISerialCollector):
     def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
         """
         Overview:
-            Reset the environment and policy.
+            Reset the collector with the given policy and/or environment.
             If _env is None, reset the old environment.
             If _env is not None, replace the old environment in the collector with the new passed \
                 in environment and launch.
@@ -141,9 +153,9 @@ class MuZeroCollector(ISerialCollector):
     def _reset_stat(self, env_id: int) -> None:
         """
         Overview:
-            Reset the collector's state. Including reset the traj_buffer, obs_pool, policy_output_pool\
-                and env_info. Reset these states according to env_id. You can refer to base_serial_collector\
-                to get more messages.
+            Reset the collector's state. Including reset the traj_buffer, obs_pool, policy_output_pool \
+            and env_info. Reset these states according to env_id. You can refer to base_serial_collector\
+            to get more messages.
         Arguments:
             - env_id (:obj:`int`): the id where we need to reset the collector's state
         """
@@ -153,74 +165,87 @@ class MuZeroCollector(ISerialCollector):
     def envstep(self) -> int:
         """
         Overview:
-            Print the total envstep count.
-        Return:
-            - envstep (:obj:`int`): the total envstep count
+            Get the total number of environment steps collected.
+        Returns:
+            - envstep (:obj:`int`): Total number of environment steps collected.
         """
         return self._total_envstep_count
 
     def close(self) -> None:
         """
         Overview:
-            Close the collector. If end_flag is False, close the environment, flush the tb_logger\
-                and close the tb_logger.
+            Close the collector. If end_flag is False, close the environment, flush the tb_logger \
+            and close the tb_logger.
         """
         if self._end_flag:
             return
         self._end_flag = True
         self._env.close()
-        self._tb_logger.flush()
-        self._tb_logger.close()
+        if self._tb_logger:
+            self._tb_logger.flush()
+            self._tb_logger.close()
 
     def __del__(self) -> None:
         """
         Overview:
             Execute the close command and close the collector. __del__ is automatically called to \
-                destroy the collector instance when the collector finishes its work
+            destroy the collector instance when the collector finishes its work
         """
         self.close()
 
     # ==============================================================
     # MCTS+RL related core code
     # ==============================================================
-    def _compute_priorities(self, i, pred_values_lst, search_values_lst):
+    def _compute_priorities(self, i: int, pred_values_lst: List[float], search_values_lst: List[float]) -> np.ndarray:
         """
         Overview:
-            obtain the priorities at index i.
+            Compute the priorities for transitions based on prediction and search value discrepancies.
         Arguments:
-            - i: index.
-            - pred_values_lst: The list of value being predicted.
-            - search_values_lst: The list of value obtained through search.
+            - i (:obj:`int`): Index of the values in the list to compute the priority for.
+            - pred_values_lst (:obj:`List[float]`): List of predicted values.
+            - search_values_lst (:obj:`List[float]`): List of search values obtained from MCTS.
+        Returns:
+            - priorities (:obj:`np.ndarray`): Array of computed priorities.
         """
-        if self.policy_config.use_priority and not self.policy_config.use_max_priority_for_new_data:
+        if self.policy_config.use_priority:
+            # Calculate priorities. The priorities are the L1 losses between the predicted
+            # values and the search values. We use 'none' as the reduction parameter, which
+            # means the loss is calculated for each element individually, instead of being summed or averaged. 
+            # A small constant (1e-6) is added to the results to avoid zero priorities. This
+            # is done because zero priorities could potentially cause issues in some scenarios.
             pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.policy_config.device).float().view(-1)
             search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.policy_config.device
                                                                                 ).float().view(-1)
             priorities = L1Loss(reduction='none'
                                 )(pred_values,
-                                  search_values).detach().cpu().numpy() + self.policy_config.prioritized_replay_eps
+                                  search_values).detach().cpu().numpy() + 1e-6
         else:
             # priorities is None -> use the max priority for all newly collected data
             priorities = None
 
         return priorities
 
-    def pad_and_save_last_trajectory(self, i, last_game_segments, last_game_priorities, game_segments, done) -> None:
+    def pad_and_save_last_trajectory(self, i: int, last_game_segments: List[GameSegment],
+                                     last_game_priorities: List[np.ndarray],
+                                     game_segments: List[GameSegment], done: np.ndarray) -> None:
         """
         Overview:
-            put the last game block into the pool if the current game is finished
+            Save the game segment to the pool if the current game is finished, padding it if necessary.
         Arguments:
-            - last_game_segments (:obj:`list`): list of the last game segments
-            - last_game_priorities (:obj:`list`): list of the last game priorities
-            - game_segments (:obj:`list`): list of the current game segments
+            - i (:obj:`int`): Index of the current game segment.
+            - last_game_segments (:obj:`List[GameSegment]`): List of the last game segments to be padded and saved.
+            - last_game_priorities (:obj:`List[np.ndarray]`): List of priorities of the last game segments.
+            - game_segments (:obj:`List[GameSegment]`): List of the current game segments.
+            - done (:obj:`np.ndarray`): Array indicating whether each game is done.
         Note:
             (last_game_segments[i].obs_segment[-4:][j] == game_segments[i].obs_segment[:4][j]).all() is True
         """
-        # pad over last block trajectory
+        # pad over last segment trajectory
         beg_index = self.policy_config.model.frame_stack_num
         end_index = beg_index + self.policy_config.num_unroll_steps
 
-        # the start <frame_stack_num> obs is init zero obs, so we take the [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
+        # the start <frame_stack_num> obs is init zero obs, so we take the
+        # [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
         # e.g. the start 4 obs is init zero obs, the num_unroll_steps is 5, so we take the [4:9] obs as the pad obs
         pad_obs_lst = game_segments[i].obs_segment[beg_index:end_index]
         pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps]
@@ -232,6 +257,8 @@ class MuZeroCollector(ISerialCollector):
         end_index = beg_index + self.unroll_plus_td_steps - 1
 
         pad_reward_lst = game_segments[i].reward_segment[beg_index:end_index]
+        if self.policy_config.use_ture_chance_label_in_chance_encoder:
+            chance_lst = game_segments[i].chance_segment[beg_index:end_index]
 
         beg_index = 0
         end_index = beg_index + self.unroll_plus_td_steps
@@ -243,9 +270,14 @@ class MuZeroCollector(ISerialCollector):
 
         # pad over and save
         if self.policy_config.gumbel_algo:
-            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst, next_segment_improved_policy = pad_improved_policy_prob)
+            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst,
+                                           next_segment_improved_policy=pad_improved_policy_prob)
         else:
-            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
+            if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst,
+                                               next_chances=chance_lst)
+            else:
+                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
         """
         Note:
             game_segment element shape:
@@ -260,7 +292,7 @@ class MuZeroCollector(ISerialCollector):
 
         last_game_segments[i].game_segment_to_array()
 
-        # put the game block into the pool
+        # put the game segment into the pool
         self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
 
         # reset last game_segments
@@ -275,13 +307,13 @@ class MuZeroCollector(ISerialCollector):
                 policy_kwargs: Optional[dict] = None) -> List[Any]:
         """
         Overview:
-            Collect `n_episode` data with policy_kwargs, which is already trained `train_iter` iterations.
+            Collect `n_episode` episodes of data with policy_kwargs, trained for `train_iter` iterations.
         Arguments:
-            - n_episode (:obj:`int`): the number of collecting data episode.
-            - train_iter (:obj:`int`): the number of training iteration.
-            - policy_kwargs (:obj:`dict`): the keyword args for policy forward.
+            - n_episode (:obj:`Optional[int]`): Number of episodes to collect.
+            - train_iter (:obj:`int`): Number of training iterations completed so far.
+            - policy_kwargs (:obj:`Optional[dict]`): Additional keyword arguments for the policy.
         Returns:
-            - return_data (:obj:`List`): A list containing collected game_segments
+            - return_data (:obj:`List[Any]`): Collected data in the form of a list.
         """
         if n_episode is None:
             if self._default_n_episode is None:
@@ -292,8 +324,10 @@ class MuZeroCollector(ISerialCollector):
         if policy_kwargs is None:
             policy_kwargs = {}
         temperature = policy_kwargs['temperature']
+        epsilon = policy_kwargs['epsilon']
 
         collected_episode = 0
+        collected_step = 0
         env_nums = self._env_num
 
         # initializations
@@ -301,7 +335,7 @@ class MuZeroCollector(ISerialCollector):
 
         retry_waiting_time = 0.001
         while len(init_obs.keys()) != self._env_num:
-            # In order to be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
+            # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
             # len(self._env.ready_obs), especially in tictactoe env.
             self._logger.info('The current init_obs.keys() is {}'.format(init_obs.keys()))
             self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
@@ -314,6 +348,8 @@ class MuZeroCollector(ISerialCollector):
 
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
+        if self.policy_config.use_ture_chance_label_in_chance_encoder:
+            chance_dict = {i: to_ndarray(init_obs[i]['chance']) for i in range(env_nums)}
 
         game_segments = [
             GameSegment(
@@ -369,27 +405,31 @@ class MuZeroCollector(ISerialCollector):
                 to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
                 action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
+                if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                    chance_dict = {env_id: chance_dict[env_id] for env_id in ready_env_id}
+                    chance = [chance_dict[env_id] for env_id in ready_env_id]
 
                 stack_obs = to_ndarray(stack_obs)
-
+                # return stack_obs shape: [B, S*C, W, H] e.g. [8, 4*1, 96, 96]
                 stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
 
-                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
+                # stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
+                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device)
 
                 # ==============================================================
                 # policy forward
                 # ==============================================================
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play)
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon)
 
                 actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
-                distributions_dict_no_env_id = {k: v['distributions'] for k, v in policy_output.items()}
+                distributions_dict_no_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
                 if self.policy_config.sampled_algo:
                     root_sampled_actions_dict_no_env_id = {
                         k: v['root_sampled_actions']
                         for k, v in policy_output.items()
                     }
-                value_dict_no_env_id = {k: v['value'] for k, v in policy_output.items()}
-                pred_value_dict_no_env_id = {k: v['pred_value'] for k, v in policy_output.items()}
+                value_dict_no_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
+                pred_value_dict_no_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
                 visit_entropy_dict_no_env_id = {
                     k: v['visit_count_distribution_entropy']
                     for k, v in policy_output.items()
@@ -435,7 +475,7 @@ class MuZeroCollector(ISerialCollector):
                 with self._timer:
                     if timestep.info.get('abnormal', False):
                         # If there is an abnormal timestep, reset all the related variables(including this env).
-                        # suppose there is no reset param, just reset this env
+                        # suppose there is no reset param, reset this env
                         self._env.reset({env_id: None})
                         self._policy.reset([env_id])
                         self._reset_stat(env_id)
@@ -448,22 +488,35 @@ class MuZeroCollector(ISerialCollector):
                             distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
                         )
                     elif self.policy_config.gumbel_algo:
-                        game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id], improved_policy = improved_policy_dict[env_id])
+                        game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id],
+                                                                 improved_policy=improved_policy_dict[env_id])
                     else:
                         game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
                     # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
-                    # in ``game_segments[env_id].init``, we have append o_{t} in ``self.obs_segment``
-                    game_segments[env_id].append(
-                        actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                        to_play_dict[env_id]
-                    )
+                    # in ``game_segments[env_id].init``, we have appended o_{t} in ``self.obs_segment``
+                    if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                        game_segments[env_id].append(
+                            actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
+                            to_play_dict[env_id], chance_dict[env_id]
+                        )
+                    else:
+                        game_segments[env_id].append(
+                            actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
+                            to_play_dict[env_id]
+                        )
 
                     # NOTE: the position of code snippet is very important.
-                    # the obs['action_mask'] and obs['to_play'] is corresponding to next action
+                    # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
                     action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                     to_play_dict[env_id] = to_ndarray(obs['to_play'])
+                    if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                        chance_dict[env_id] = to_ndarray(obs['chance'])
 
-                    dones[env_id] = done
+                    if self.policy_config.ignore_done:
+                        dones[env_id] = False
+                    else:
+                        dones[env_id] = done
+
                     visit_entropies_lst[env_id] += visit_entropy_dict[env_id]
                     if self.policy_config.gumbel_algo:
                         completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
@@ -471,7 +524,7 @@ class MuZeroCollector(ISerialCollector):
                     eps_steps_lst[env_id] += 1
                     total_transitions += 1
 
-                    if self.policy_config.use_priority and not self.policy_config.use_max_priority_for_new_data:
+                    if self.policy_config.use_priority:
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
                         if self.policy_config.gumbel_algo:
@@ -481,14 +534,14 @@ class MuZeroCollector(ISerialCollector):
                     observation_window_stack[env_id].append(to_ndarray(obs['observation']))
 
                     # ==============================================================
-                    # we will save a game block if it is the end of the game or the next game block is finished.
+                    # we will save a game segment if it is the end of the game or the next game segment is finished.
                     # ==============================================================
 
-                    # if game block is full, we will save the last game block
+                    # if game segment is full, we will save the last game segment
                     if game_segments[env_id].is_full():
-                        # pad over last block trajectory
+                        # pad over last segment trajectory
                         if last_game_segments[env_id] is not None:
-                            # TODO(pu): return the one game block
+                            # TODO(pu): return the one game segment
                             self.pad_and_save_last_trajectory(
                                 env_id, last_game_segments, last_game_priorities, game_segments, dones
                             )
@@ -513,12 +566,10 @@ class MuZeroCollector(ISerialCollector):
                         game_segments[env_id].reset(observation_window_stack[env_id])
 
                     self._env_info[env_id]['step'] += 1
-                    self._total_envstep_count += 1
+                    collected_step += 1
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
-
                 if timestep.done:
-                    self._total_episode_count += 1
                     reward = timestep.info['eval_episode_return']
                     if timestep.info.get('performance_info') is not None:
                         mean_aoi = timestep.info['performance_info']['mean_aoi']
@@ -548,24 +599,24 @@ class MuZeroCollector(ISerialCollector):
                     self._episode_info.append(info)
 
                     # ==============================================================
-                    # if it is the end of the game, we will save the game block
+                    # if it is the end of the game, we will save the game segment
                     # ==============================================================
 
-                    # NOTE: put the penultimate game block in one episode into the trajectory_pool
+                    # NOTE: put the penultimate game segment in one episode into the trajectory_pool
                     # pad over 2th last game_segment using the last game_segment
                     if last_game_segments[env_id] is not None:
                         self.pad_and_save_last_trajectory(
                             env_id, last_game_segments, last_game_priorities, game_segments, dones
                         )
 
-                    # store current block trajectory
+                    # store current segment trajectory
                     priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
 
-                    # NOTE: put the last game block in one episode into the trajectory_pool
+                    # NOTE: put the last game segment in one episode into the trajectory_pool
                     game_segments[env_id].game_segment_to_array()
 
                     # assert len(game_segments[env_id]) == len(priorities)
-                    # NOTE: save the last game block in one episode into the trajectory_pool if it's not null
+                    # NOTE: save the last game segment in one episode into the trajectory_pool if it's not null
                     if len(game_segments[env_id].reward_segment) != 0:
                         self.game_segment_pool.append((game_segments[env_id], priorities, dones[env_id]))
 
@@ -597,6 +648,8 @@ class MuZeroCollector(ISerialCollector):
 
                         action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                         to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
+                        if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                            chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
                         game_segments[env_id] = GameSegment(
                             self._env.action_space,
@@ -638,12 +691,19 @@ class MuZeroCollector(ISerialCollector):
                         'unroll_plus_td_steps': self.unroll_plus_td_steps
                     } for i in range(len(self.game_segment_pool))
                 ]
-                # for i in range(len(self.game_segment_pool)):
-                #     print(self.game_segment_pool[i][0].obs_segment.__len__())
-                #     print(self.game_segment_pool[i][0].reward_segment)
-                # for i in range(len(return_data[0])):
-                #     print(return_data[0][i].reward_segment)
+                self.game_segment_pool.clear()
                 break
+
+        collected_duration = sum([d['time'] for d in self._episode_info])
+        # reduce data when enables DDP
+        if self._world_size > 1:
+            collected_step = allreduce_data(collected_step, 'sum')
+            collected_episode = allreduce_data(collected_episode, 'sum')
+            collected_duration = allreduce_data(collected_duration, 'sum')
+        self._total_envstep_count += collected_step
+        self._total_episode_count += collected_episode
+        self._total_duration += collected_duration
+
         # log
         self._output_log(train_iter)
         return return_data
@@ -651,11 +711,12 @@ class MuZeroCollector(ISerialCollector):
     def _output_log(self, train_iter: int) -> None:
         """
         Overview:
-            Print the output log information. You can refer to Docs/Best Practice/How to understand\
-             training generated folders/Serial mode/log/collector for more details.
+            Log the collector's data and output the log information.
         Arguments:
-            - train_iter (:obj:`int`): the number of training iteration.
+            - train_iter (:obj:`int`): Current training iteration number for logging context.
         """
+        if self._rank != 0:
+            return
         if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
             self._last_train_iter = train_iter
             episode_count = len(self._episode_info)

@@ -22,7 +22,7 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
     exp_name=
     f'data_sez_ctree/lunarlander_cont_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
-        env_name='LunarLanderContinuous-v2',
+        env_id='LunarLanderContinuous-v2',
         continuous=False,
         manually_discretization=True,
         each_dim_disc_size=each_dim_disc_size,
@@ -67,7 +67,7 @@ lunarlander_cont_disc_sampled_efficientzero_config = EasyDict(lunarlander_cont_d
 main_config = lunarlander_cont_disc_sampled_efficientzero_config
 
 lunarlander_cont_disc_sampled_efficientzero_create_config = dict(
-    # NOTE: here we use the lunarlander env with manually discretitze action space.
+    # NOTE: here we use the lunarlander env with manually discretized action space.
     env=dict(
         type='lunarlander_cont_disc',
         import_names=['zoo.box2d.lunarlander.envs.lunarlander_cont_disc_env'],
@@ -77,10 +77,6 @@ lunarlander_cont_disc_sampled_efficientzero_create_config = dict(
         type='sampled_efficientzero',
         import_names=['lzero.policy.sampled_efficientzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 lunarlander_cont_disc_sampled_efficientzero_create_config = EasyDict(
     lunarlander_cont_disc_sampled_efficientzero_create_config

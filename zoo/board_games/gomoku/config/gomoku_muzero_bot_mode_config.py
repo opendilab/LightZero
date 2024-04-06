@@ -46,6 +46,7 @@ gomoku_muzero_config = dict(
         ),
         cuda=True,
         env_type='board_games',
+        action_type='varied_action_space',
         game_segment_length=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
         update_per_collect=update_per_collect,
         batch_size=batch_size,
@@ -79,15 +80,10 @@ gomoku_muzero_create_config = dict(
         type='muzero',
         import_names=['lzero.policy.muzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 gomoku_muzero_create_config = EasyDict(gomoku_muzero_create_config)
 create_config = gomoku_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-
     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

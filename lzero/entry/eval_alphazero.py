@@ -79,15 +79,15 @@ def eval_alphazero(
         # ==============================================================
         returns = []
         for i in range(num_episodes_each_seed):
-            stop, reward = evaluator.eval()
-            returns.append(reward[0]['eval_episode_return'])
+            stop_flag, episode_info = evaluator.eval()
+            returns.append(episode_info['eval_episode_return'])
 
         returns = np.array(returns)
 
         if print_seed_details:
             print("=" * 20)
             print(f'In seed {seed}, returns: {returns}')
-            if cfg.policy.env_type == 'board_games':
+            if cfg.policy.simulation_env_id in ['tictactoe', 'connect4', 'gomoku', 'chess']:
                 print(
                     f'win rate: {len(np.where(returns == 1.)[0]) / num_episodes_each_seed}, draw rate: {len(np.where(returns == 0.)[0]) / num_episodes_each_seed}, lose rate: {len(np.where(returns == -1.)[0]) / num_episodes_each_seed}'
                 )

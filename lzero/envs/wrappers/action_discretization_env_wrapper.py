@@ -34,7 +34,7 @@ class ActionDiscretizationEnvWrapper(gym.Wrapper):
         assert 'is_train' in cfg, '`is_train` flag must set in the config of env'
         self.is_train = cfg.is_train
         self.cfg = cfg
-        self.env_name = cfg.env_name
+        self.env_id = cfg.env_id
         self.continuous = cfg.continuous
 
     def reset(self, **kwargs):

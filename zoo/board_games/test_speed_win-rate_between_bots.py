@@ -1,3 +1,10 @@
+"""
+Overview:
+    Implement games between different bots to test the win rates and the speed.
+Example:
+    test_tictactoe_mcts_bot_vs_alphabeta_bot means a game between mcts_bot and alphabeta_bot where 
+    mcts_bot makes the first move (i.e. bots on the left make the first move).
+"""
 import time
 
 import numpy as np
@@ -10,28 +17,45 @@ from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 cfg_tictactoe = dict(
     battle_mode='self_play_mode',
     agent_vs_human=False,
-    bot_action_type=['v0', 'alpha_beta_pruning'],  # {'v0', 'alpha_beta_pruning'}
+    bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
     prob_random_agent=0,
     prob_expert_agent=0,
-    channel_last=True,
+    channel_last=False,
     scale=True,
     prob_random_action_in_bot=0.,
 )
 
 
 def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
+    """
+    Overview:
+        A tictactoe game between mcts_bot and rule_bot, where rule_bot take the first move.
+    Arguments:
+        - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
+    """
+    cfg_tictactoe['bot_action_type'] = 'v0'
+    # List to record the time required for each decision round and the winner.
     mcts_bot_time_list = []
     bot_action_time_list = []
     winner = []
 
-    for i in range(100):
+    # Repeat the game for 10 rounds.
+    for i in range(10):
         print('-' * 10 + str(i) + '-' * 10)
+        # Initialize the game, where there are two players: player 1 and player 2.
         env = TicTacToeEnv(EasyDict(cfg_tictactoe))
+        # Reset the environment, set the board to a clean board and the  start player to be player 1.
         env.reset()
         state = env.board
-        player = MCTSBot(TicTacToeEnv, cfg_tictactoe, 'a', num_simulations)  # player_index = 0, player = 1
+        player = MCTSBot(env, 'a', num_simulations)  # player_index = 0, player = 1
+        # Set player 1 to move first.
         player_index = 0
         while not env.get_done_reward()[0]:
+            """
+            Overview:
+                The two players take turns to make moves, and the time required for each decision is recorded.
+            """
+            # Set rule_bot to be player 1.
             if player_index == 0:
                 t1 = time.time()
                 action = env.bot_action()
@@ -40,6 +64,7 @@ def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
                 # print("The time difference is :", t2-t1)
                 mcts_bot_time_list.append(t2 - t1)
                 player_index = 1
+            # Set mcts_bot to be player 2.
             else:
                 t1 = time.time()
                 # action = env.bot_action()
@@ -52,14 +77,17 @@ def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
             state = env.board
             print(state)
 
+        # Record the winner.
         winner.append(env.get_done_winner()[1])
 
+    # Calculate the variance and mean of decision times.
     mcts_bot_mu = np.mean(mcts_bot_time_list)
     mcts_bot_var = np.var(mcts_bot_time_list)
 
     bot_action_mu = np.mean(bot_action_time_list)
     bot_action_var = np.var(bot_action_time_list)
 
+    # Print the information of the games.
     print('num_simulations={}\n'.format(num_simulations))
     print('mcts_bot_time_list={}\n'.format(mcts_bot_time_list))
     print('mcts_bot_mu={}, mcts_bot_var={}\n'.format(mcts_bot_mu, mcts_bot_var))
@@ -75,18 +103,36 @@ def test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
 
 
 def test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
+    """
+    Overview:
+        A tictactoe game between alphabeta_bot and rule_bot, where alphabeta_bot take the first move.
+    Arguments:
+        - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
+    """
+    cfg_tictactoe['bot_action_type'] = 'alpha_beta_pruning'
+
+    # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
     rule_bot_v0_time_list = []
     winner = []
 
+    # Repeat the game for 10 rounds.
     for i in range(10):
         print('-' * 10 + str(i) + '-' * 10)
+        # Initialize the game, where there are two players: player 1 and player 2.
         env = TicTacToeEnv(EasyDict(cfg_tictactoe))
-        env.reset()
+        # Reset the environment, set the board to a clean board and the  start player to be player 1.
+        env.reset(start_player_index=1)
         state = env.board
-        player = MCTSBot(TicTacToeEnv, cfg_tictactoe, 'a', num_simulations)  # player_index = 0, player = 1
+        player = MCTSBot(env, 'a', num_simulations)  # player_index = 0, player = 1
+        # Set player 2 to move first.
         player_index = 1
         while not env.get_done_reward()[0]:
+            """
+            Overview:
+                The two players take turns to make moves, and the time required for each decision is recorded.
+            """
+            # Set rule_bot to be player 1.
             if player_index == 0:
                 t1 = time.time()
                 action = env.rule_bot_v0()
@@ -97,6 +143,7 @@ def test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
                 rule_bot_v0_time_list.append(t2 - t1)
 
                 player_index = 1
+            # Set alpha_beta_bot to be player 2.
             else:
                 t1 = time.time()
                 action = env.bot_action_alpha_beta_pruning()
@@ -110,14 +157,17 @@ def test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
             if env.get_done_reward()[0]:
                 print(state)
 
+        # Record the winner.
         winner.append(env.get_done_winner()[1])
 
+    # Calculate the variance and mean of decision times.
     alphabeta_pruning_mu = np.mean(alphabeta_pruning_time_list)
     alphabeta_pruning_var = np.var(alphabeta_pruning_time_list)
 
     rule_bot_v0_mu = np.mean(rule_bot_v0_time_list)
     rule_bot_v0_var = np.var(rule_bot_v0_time_list)
 
+    # Print the information of the games.
     print('num_simulations={}\n'.format(num_simulations))
     print('alphabeta_pruning_time_list={}\n'.format(alphabeta_pruning_time_list))
     print('alphabeta_pruning_mu={}, alphabeta_pruning_var={}\n'.format(alphabeta_pruning_mu, alphabeta_pruning_var))
@@ -133,18 +183,36 @@ def test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot(num_simulations=50):
 
 
 def test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
+    """
+    Overview:
+        A tictactoe game between alphabeta_bot and mcts_bot, where mcts_bot take the first move.
+    Arguments:
+        - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
+    """
+    cfg_tictactoe['bot_action_type'] = 'alpha_beta_pruning'
+
+    # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
     mcts_bot_time_list = []
     winner = []
 
+    # Repeat the game for 10 rounds.
     for i in range(10):
         print('-' * 10 + str(i) + '-' * 10)
+        # Initialize the game, where there are two players: player 1 and player 2.
         env = TicTacToeEnv(EasyDict(cfg_tictactoe))
-        env.reset()
+        # Reset the environment, set the board to a clean board and the  start player to be player 1.
+        env.reset(start_player_index=1)
         state = env.board
-        player = MCTSBot(TicTacToeEnv, cfg_tictactoe, 'a', num_simulations)  # player_index = 0, player = 1
+        player = MCTSBot(env, 'a', num_simulations)  # player_index = 0, player = 1
+        # Set player 2 to move first.
         player_index = 1
         while not env.get_done_reward()[0]:
+            """
+            Overview:
+                The two players take turns to make moves, and the time required for each decision is recorded.
+            """
+            # Set mcts_bot to be player 1.
             if player_index == 0:
                 t1 = time.time()
                 # action = env.rule_bot_v0()
@@ -155,6 +223,7 @@ def test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
                 # rule_bot_v0_time_list.append(t2 - t1)
 
                 player_index = 1
+            # Set alpha_beta_bot to be player 2.
             else:
                 t1 = time.time()
                 action = env.bot_action_alpha_beta_pruning()
@@ -165,17 +234,22 @@ def test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
                 player_index = 0
             env.step(action)
             state = env.board
+            print(state)
+            print(action)
             if env.get_done_reward()[0]:
                 print(state)
 
+        # Record the winner.
         winner.append(env.get_done_winner()[1])
 
+    # Calculate the variance and mean of decision times.
     alphabeta_pruning_mu = np.mean(alphabeta_pruning_time_list)
     alphabeta_pruning_var = np.var(alphabeta_pruning_time_list)
 
     mcts_bot_mu = np.mean(mcts_bot_time_list)
     mcts_bot_var = np.var(mcts_bot_time_list)
 
+    # Print the information of the games.
     print('num_simulations={}\n'.format(num_simulations))
     print('alphabeta_pruning_time_list={}\n'.format(alphabeta_pruning_time_list))
     print('alphabeta_pruning_mu={}, alphabeta_pruning_var={}\n'.format(alphabeta_pruning_mu, alphabeta_pruning_var))
@@ -191,18 +265,36 @@ def test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=50):
 
 
 def test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
+    """
+    Overview:
+        A tictactoe game between rule_bot and alphabeta_bot, where rule_bot take the first move.
+    Arguments:
+        - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
+    """
+    cfg_tictactoe['bot_action_type'] = 'alpha_beta_pruning'
+
+    # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
     rule_bot_v0_time_list = []
     winner = []
 
+    # Repeat the game for 10 rounds.
     for i in range(10):
         print('-' * 10 + str(i) + '-' * 10)
+        # Initialize the game, where there are two players: player 1 and player 2.
         env = TicTacToeEnv(EasyDict(cfg_tictactoe))
+        # Reset the environment, set the board to a clean board and the  start player to be player 1.
         env.reset()
         state = env.board
-        player = MCTSBot(TicTacToeEnv, cfg_tictactoe, 'a', num_simulations)  # player_index = 0, player = 1
+        player = MCTSBot(env, 'a', num_simulations)  # player_index = 0, player = 1
+        # Set player 1 to move first.
         player_index = 0
         while not env.get_done_reward()[0]:
+            """
+            Overview:
+                The two players take turns to make moves, and the time required for each decision is recorded.
+            """
+            # Set rule_bot to be player 1.
             if player_index == 0:
                 t1 = time.time()
                 action = env.rule_bot_v0()
@@ -213,6 +305,7 @@ def test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
                 rule_bot_v0_time_list.append(t2 - t1)
 
                 player_index = 1
+            # Set alpha_beta_bot to be player 2.
             else:
                 t1 = time.time()
                 action = env.bot_action_alpha_beta_pruning()
@@ -226,14 +319,17 @@ def test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
             if env.get_done_reward()[0]:
                 print(state)
 
+        # Record the winner.
         winner.append(env.get_done_winner()[1])
 
+    # Calculate the variance and mean of decision times.
     alphabeta_pruning_mu = np.mean(alphabeta_pruning_time_list)
     alphabeta_pruning_var = np.var(alphabeta_pruning_time_list)
 
     rule_bot_v0_mu = np.mean(rule_bot_v0_time_list)
     rule_bot_v0_var = np.var(rule_bot_v0_time_list)
 
+    # Print the information of the games.
     print('num_simulations={}\n'.format(num_simulations))
     print('alphabeta_pruning_time_list={}\n'.format(alphabeta_pruning_time_list))
     print('alphabeta_pruning_mu={}, alphabeta_pruning_var={}\n'.format(alphabeta_pruning_mu, alphabeta_pruning_var))
@@ -249,28 +345,48 @@ def test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot(num_simulations=50):
 
 
 def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
+    """
+    Overview:
+        A tictactoe game between mcts_bot and alphabeta_bot, where mcts_bot take the first move.
+    Arguments:
+        - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
+    """
+    cfg_tictactoe['bot_action_type'] = 'alpha_beta_pruning'
+
+    # List to record the time required for each decision round and the winner.
     alphabeta_pruning_time_list = []
     mcts_bot_time_list = []
     winner = []
 
+    # Repeat the game for 10 rounds.
     for i in range(10):
         print('-' * 10 + str(i) + '-' * 10)
+        # Initialize the game, where there are two players: player 1 and player 2.
         env = TicTacToeEnv(EasyDict(cfg_tictactoe))
+        # Reset the environment, set the board  to a clean board and the  start player to be player 1.
         env.reset()
         state = env.board
-        player = MCTSBot(TicTacToeEnv, cfg_tictactoe, 'a', num_simulations)  # player_index = 0, player = 1
+        player = MCTSBot(env, 'a', num_simulations)  # player_index = 0, player = 1
+        # Set player 1 to move first.
         player_index = 0
         while not env.get_done_reward()[0]:
+            """
+            Overview:
+                The two players take turns to make moves, and the time required for each decision is recorded.
+            """
+            # Set mcts_bot to be player 1.
             if player_index == 0:
                 t1 = time.time()
                 # action = env.mcts_bot()
-                action = player.get_actions(state, player_index=player_index)
+                action = player.get_actions(state, player_index=player_index, best_action_type = "most_visit")
                 t2 = time.time()
                 # print("The time difference is :", t2-t1)
                 # mcts_bot_time_list.append(t2 - t1)
                 mcts_bot_time_list.append(t2 - t1)
 
                 player_index = 1
+
+            # Set alpha_beta_bot to be player 2.
             else:
                 t1 = time.time()
                 action = env.bot_action_alpha_beta_pruning()
@@ -281,17 +397,20 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
                 player_index = 0
             env.step(action)
             state = env.board
+            # Print the result of the game.
             if env.get_done_reward()[0]:
                 print(state)
-
+        # Record the winner.
         winner.append(env.get_done_winner()[1])
 
+    # Calculate the variance and mean of decision times.
     alphabeta_pruning_mu = np.mean(alphabeta_pruning_time_list)
     alphabeta_pruning_var = np.var(alphabeta_pruning_time_list)
 
     mcts_bot_mu = np.mean(mcts_bot_time_list)
     mcts_bot_var = np.var(mcts_bot_time_list)
 
+    # Print the information of the games.
     print('num_simulations={}\n'.format(num_simulations))
     print('alphabeta_pruning_time_list={}\n'.format(alphabeta_pruning_time_list))
     print('alphabeta_pruning_mu={}, alphabeta_pruning_var={}\n'.format(alphabeta_pruning_mu, alphabeta_pruning_var))
@@ -312,7 +431,7 @@ cfg_gomoku = dict(
     bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
     agent_vs_human=False,
     prob_random_agent=0,
-    channel_last=True,
+    channel_last=False,
     scale=True,
     prob_random_action_in_bot=0.,
     check_action_to_connect4_in_bot_v0=False,
@@ -320,18 +439,34 @@ cfg_gomoku = dict(
 
 
 def test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
+    """
+    Overview:
+        A tictactoe game between mcts_bot and rule_bot, where rule_bot take the first move.
+    Arguments:
+        - num_simulations (:obj:`int`): The number of the simulations required to find the best move.
+    """
+    # List to record the time required for each decision round and the winner.
     mcts_bot_time_list = []
     bot_action_time_list = []
     winner = []
 
+    # Repeat the game for 10 rounds.
     for i in range(10):
         print('-' * 10 + str(i) + '-' * 10)
+        # Initialize the game, where there are two players: player 1 and player 2.
         env = GomokuEnv(EasyDict(cfg_gomoku))
+        # Reset the environment, set the board to a clean board and the  start player to be player 1.
         env.reset()
         state = env.board
-        player = MCTSBot(GomokuEnv, cfg_gomoku, 'a', num_simulations)  # player_index = 0, player = 1
+        player = MCTSBot(env, 'a', num_simulations)  # player_index = 0, player = 1
+        # Set player 1 to move first.
         player_index = 0
         while not env.get_done_reward()[0]:
+            """
+            Overview:
+                The two players take turns to make moves, and the time required for each decision is recorded.
+            """
+            # Set rule_bot to be player 1.
             if player_index == 0:
                 t1 = time.time()
                 action = env.bot_action()
@@ -340,6 +475,8 @@ def test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
                 # print("The time difference is :", t2-t1)
                 mcts_bot_time_list.append(t2 - t1)
                 player_index = 1
+            
+            # Set mcts_bot to be player 2.
             else:
                 t1 = time.time()
                 # action = env.bot_action()
@@ -350,16 +487,21 @@ def test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
                 player_index = 0
             env.step(action)
             state = env.board
-            print(state)
+            # Print the result of the game.
+            if env.get_done_reward()[0]:
+                print(state)
 
+        # Record the winner.
         winner.append(env.get_done_winner()[1])
 
+    # Calculate the variance and mean of decision times.
     mcts_bot_mu = np.mean(mcts_bot_time_list)
     mcts_bot_var = np.var(mcts_bot_time_list)
 
     bot_action_mu = np.mean(bot_action_time_list)
     bot_action_var = np.var(bot_action_time_list)
 
+    # Print the information of the games.
     print('num_simulations={}\n'.format(num_simulations))
     print('mcts_bot_time_list={}\n'.format(mcts_bot_time_list))
     print('mcts_bot_mu={}, mcts_bot_var={}\n'.format(mcts_bot_mu, mcts_bot_var))
@@ -376,18 +518,21 @@ def test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50):
 
 if __name__ == '__main__':
     # ==============================================================
-    # test win rate between alphabeta_bot and rule_bot_v0/mcts_bot
+    # test win rate between alphabeta_bot and rule_bot_v0
     # ==============================================================
     # test_tictactoe_alphabeta_bot_vs_rule_bot_v0_bot()
     # test_tictactoe_rule_bot_v0_bot_vs_alphabeta_bot()
+    # ==============================================================
+    # test win rate between alphabeta_bot and mcts_bot
+    # ==============================================================
     # test_tictactoe_alphabeta_bot_vs_mcts_bot(num_simulations=2000)
-    test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=2000)
+    # test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=2000)
 
     # ==============================================================
     # test win rate between mcts_bot and rule_bot_v0
     # ==============================================================
-    # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50)
-    # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=100)
+    test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=50)
     # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=500)
     # test_tictactoe_mcts_bot_vs_rule_bot_v0_bot(num_simulations=1000)
+
     # test_gomoku_mcts_bot_vs_rule_bot_v0_bot(num_simulations=1000)

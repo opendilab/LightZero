@@ -80,14 +80,6 @@ class DownSample(nn.Module):
                 ) for _ in range(1)
             ]
         )
-        self.conv2 = nn.Conv2d(
-            out_channels // 2,
-            out_channels,
-            kernel_size=3,
-            stride=2,
-            padding=1,
-            bias=False,
-        )
         self.downsample_block = ResBlock(
             in_channels=out_channels // 2,
             out_channels=out_channels,

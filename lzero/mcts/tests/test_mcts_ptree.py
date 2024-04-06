@@ -76,6 +76,7 @@ policy_config = EasyDict(
             categorical_distribution=True,
             support_scale=300,
         ),
+        env_type='not_board_games',
     )
 )
 

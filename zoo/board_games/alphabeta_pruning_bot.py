@@ -17,7 +17,7 @@ class Node():
         super().__init__()
         self.env = env
         self.board = board
-        self.legal_actions = legal_actions
+        self.legal_actions = copy.deepcopy(legal_actions)
         self.children = []
         self.parent = parent
         self.prev_action = prev_action
@@ -33,6 +33,8 @@ class Node():
         else:
             next_start_player_index = 0
         if self.is_terminal_node is False:
+            # Ensure self.legal_actions is valid before the loop
+            # self.legal_actions = self.env.get_legal_actions(self.board, self.start_player_index)
             while len(self.legal_actions) > 0:
                 action = self.legal_actions.pop(0)
                 board, legal_actions = self.env.simulate_action_v2(self.board, self.start_player_index, action)
@@ -151,7 +153,6 @@ class AlphaBetaPruningBot:
 
 if __name__ == "__main__":
     import time
-    """
     ##### TicTacToe #####
     from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
     cfg = dict(
@@ -160,6 +161,8 @@ if __name__ == "__main__":
         battle_mode='self_play_mode',
         agent_vs_human=False,
         bot_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
+        channel_last=False,
+        scale=True,
     )
     env = TicTacToeEnv(EasyDict(cfg))
     player_0 = AlphaBetaPruningBot(TicTacToeEnv, cfg, 'player 1')  # player_index = 0, player = 1
@@ -213,9 +216,11 @@ if __name__ == "__main__":
         prob_expert_agent=0,
         battle_mode='self_play_mode',
         scale=True,
-        channel_last=True,
+        channel_last=False,
         agent_vs_human=False,
         bot_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
+        prob_random_action_in_bot=0.,
+        check_action_to_connect4_in_bot_v0=False,
     )
     env = GomokuEnv(EasyDict(cfg))
     player_0 = AlphaBetaPruningBot(GomokuEnv, cfg, 'player 1')  # player_index = 0, player = 1
@@ -261,3 +266,5 @@ if __name__ == "__main__":
 
     assert env.get_done_winner()[0] is False, env.get_done_winner()[1] == -1
     # assert env.get_done_winner()[0] is True, env.get_done_winner()[1] == 2
+    """
+

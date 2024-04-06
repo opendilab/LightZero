@@ -7,7 +7,7 @@ Overview:
 __TITLE__ = "LightZero"
 
 #: Version of this project.
-__VERSION__ = "0.0.1"
+__VERSION__ = "0.0.3"
 
 #: Short description of the project, will be included in ``setup.py``.
 __DESCRIPTION__ = 'A lightweight and efficient MCTS/AlphaZero/MuZero algorithm toolkits.'

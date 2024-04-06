@@ -265,7 +265,7 @@ namespace tree{
         /*
         Overview:
             Find the current best trajectory starts from the current node.
-        Outputs:
+        Returns:
             - traj: a vector of node index, which is the current best trajectory from this node.
         */
         std::vector<int> traj;
@@ -287,7 +287,7 @@ namespace tree{
         /*
         Overview:
             Get the distribution of child nodes in the format of visit_count.
-        Outputs:
+        Returns:
             - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
         */
         std::vector<int> distribution;
@@ -311,7 +311,7 @@ namespace tree{
         /*
         Overview:
             Get the completed value of child nodes.
-        Outputs:
+        Returns:
             - discount_factor: the discount_factor of reward.
             - action_space_size: the size of action space.
         */
@@ -468,7 +468,7 @@ namespace tree{
         /*
         Overview:
             Find the current best trajectory starts from each root.
-        Outputs:
+        Returns:
             - traj: a vector of node index, which is the current best trajectory from each root.
         */
         std::vector<std::vector<int> > trajs;
@@ -486,7 +486,7 @@ namespace tree{
         /*
         Overview:
             Get the children distribution of each root.
-        Outputs:
+        Returns:
             - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
         */
         std::vector<std::vector<int> > distributions;
@@ -664,7 +664,7 @@ namespace tree{
             - disount_factor: the discount factor of reward.
             - mean_q: the mean q value of the parent node.
             - players: the number of players.
-        Outputs:
+        Returns:
             - action: the action to select.
         */
         float max_score = FLOAT_MIN;
@@ -708,7 +708,7 @@ namespace tree{
             - disount_factor: the discount factor of reward.
             - num_simulations: the upper limit number of simulations.
             - max_num_considered_actions: the maximum number of considered actions.
-        Outputs:
+        Returns:
             - action: the action to select.
         */
         std::vector<int> child_visit_count;
@@ -721,7 +721,7 @@ namespace tree{
         assert(child_visit_count.size()==child_prior.size());
 
         std::vector<float> completed_qvalues = qtransform_completed_by_mix_value(root, child_visit_count, child_prior, discount_factor);
-        std::vector<std::vector<int>> visit_table = get_table_of_considered_visits(max_num_considered_actions, num_simulations);
+        std::vector<std::vector<int> > visit_table = get_table_of_considered_visits(max_num_considered_actions, num_simulations);
         
         int num_valid_actions = root->legal_actions.size();
         int num_considered = std::min(max_num_considered_actions, num_simulations);
@@ -752,7 +752,7 @@ namespace tree{
         Arguments:
             - root: the roots to select the child node.
             - disount_factor: the discount factor of reward.
-        Outputs:
+        Returns:
             - action: the action to select.
         */
         std::vector<int> child_visit_count;
@@ -803,7 +803,7 @@ namespace tree{
             - pb_c_init: constants c1 in muzero.
             - disount_factor: the discount factor of reward.
             - players: the number of players.
-        Outputs:
+        Returns:
             - ucb_value: the ucb score of the child.
         */
         float pb_c = 0.0, prior_score = 0.0, value_score = 0.0;
@@ -942,7 +942,7 @@ namespace tree{
             - q_value: the q value of the current node.
             - child_visit: the visit counts of the child nodes.
             - child_prior: the prior of the child nodes.
-        Outputs:
+        Returns:
             - mixed Q value.
         */
         float visit_count_sum = 0.0;
@@ -1002,7 +1002,7 @@ namespace tree{
             - value_cale: the scale of value.
             - rescale_values: whether to rescale the values.
             - epsilon: the lower limit of gap in max-min normalization
-        Outputs:
+        Returns:
             - completed Q value.
         */
         assert (child_visit.size() == child_prior.size());
@@ -1047,7 +1047,7 @@ namespace tree{
         Arguments:
             - max_num_considered_actions: the maximum number of considered actions.
             - num_simulations: the upper limit number of simulations.
-        Outputs:
+        Returns:
             - the considered visit sequence.
         */
         std::vector<int> visit_seq;
@@ -1076,7 +1076,7 @@ namespace tree{
         return visit_seq_slice;
     }
 
-    std::vector<std::vector<int>> get_table_of_considered_visits(int max_num_considered_actions, int num_simulations)
+    std::vector<std::vector<int> > get_table_of_considered_visits(int max_num_considered_actions, int num_simulations)
     {
         /*
         Overview:
@@ -1084,10 +1084,10 @@ namespace tree{
         Arguments:
             - max_num_considered_actions: the maximum number of considered actions.
             - num_simulations: the upper limit number of simulations.
-        Outputs:
+        Returns:
             - the table of considered visits.
         */
-        std::vector<std::vector<int>> table;
+        std::vector<std::vector<int> > table;
         for (int m=0;m < max_num_considered_actions+1;m++){
             table.push_back(get_sequence_of_considered_visits(m, num_simulations));
         }
@@ -1105,7 +1105,7 @@ namespace tree{
             - logits: the logits vector of child nodes.
             - normalized_qvalues: the normalized Q values of child nodes.
             - visit_counts: the visit counts of child nodes.
-        Outputs:
+        Returns:
             - the score of nodes to be considered.
         */
         float low_logit = -1e9;
@@ -1139,10 +1139,10 @@ namespace tree{
             - gumbel_scale: the scale of gumbel.
             - gumbel_rng: the seed to generate gumbel.
             - shape: the shape of gumbel vectors to be generated
-        Outputs:
+        Returns:
             - gumbel vectors.
         */
-        std::mt19937 gen{gumbel_rng};
+        std::mt19937 gen(static_cast<unsigned int>(gumbel_rng));
         std::extreme_value_distribution<float> d(0, 1);
 
         std::vector<float> gumbel;

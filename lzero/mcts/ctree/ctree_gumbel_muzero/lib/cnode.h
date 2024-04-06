@@ -101,7 +101,7 @@ namespace tree {
         std::vector<float> & child_prior, float discount= 0.99, float maxvisit_init = 50.0, float value_scale = 0.1, \
         bool rescale_values = true, float epsilon = 1e-8);
     std::vector<int> get_sequence_of_considered_visits(int max_num_considered_actions, int num_simulations);
-    std::vector<std::vector<int>> get_table_of_considered_visits(int max_num_considered_actions, int num_simulations);
+    std::vector<std::vector<int> > get_table_of_considered_visits(int max_num_considered_actions, int num_simulations);
     std::vector<float> score_considered(int considered_visit, std::vector<float> gumbel, std::vector<float> logits, std::vector<float> normalized_qvalues, std::vector<int> visit_counts);
     std::vector<float> generate_gumbel(float gumbel_scale, float gumbel_rng, int shape);
 }

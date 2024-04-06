@@ -1,6 +1,6 @@
 """
 NOTE: the pendulum_cont_disc in file name means we use the Pendulum-v1 continuous env
-with manually discretitze action space. That is to say, the final action space is discrete.
+with manually discretized action space. That is to say, the final action space is discrete.
 """
 from easydict import EasyDict
 
@@ -22,7 +22,7 @@ reanalyze_ratio = 0
 pendulum_disc_muzero_config = dict(
     exp_name=f'data_ez_ctree/pendulum_disc_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
-        env_name='Pendulum-v1',
+        env_id='Pendulum-v1',
         continuous=False,
         manually_discretization=True,
         each_dim_disc_size=11,
@@ -72,10 +72,6 @@ pendulum_disc_muzero_create_config = dict(
         type='muzero',
         import_names=['lzero.policy.muzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 pendulum_disc_muzero_create_config = EasyDict(pendulum_disc_muzero_create_config)
 create_config = pendulum_disc_muzero_create_config

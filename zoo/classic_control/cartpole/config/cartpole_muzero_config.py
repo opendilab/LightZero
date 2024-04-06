@@ -18,7 +18,7 @@ reanalyze_ratio = 0
 cartpole_muzero_config = dict(
     exp_name=f'data_mz_ctree/cartpole_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
-        env_name='CartPole-v0',
+        env_id='CartPole-v0',
         continuous=False,
         manually_discretization=False,
         collector_env_num=collector_env_num,
@@ -39,6 +39,7 @@ cartpole_muzero_config = dict(
         ),
         cuda=True,
         env_type='not_board_games',
+        action_type='varied_action_space',
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
@@ -69,10 +70,6 @@ cartpole_muzero_create_config = dict(
         type='muzero',
         import_names=['lzero.policy.muzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 cartpole_muzero_create_config = EasyDict(cartpole_muzero_create_config)
 create_config = cartpole_muzero_create_config

@@ -8,12 +8,18 @@ from zoo.box2d.lunarlander.envs import LunarLanderEnv
 @pytest.mark.parametrize(
     'cfg', [
         EasyDict({
-            'env_name': 'LunarLander-v2',
-            'act_scale': False
+            'env_id': 'LunarLander-v2',
+            'act_scale': False,
+            'replay_path': None,
+            'replay_path_gif': None,
+            'save_replay_gif': False,
         }),
         EasyDict({
-            'env_name': 'LunarLanderContinuous-v2',
-            'act_scale': True
+            'env_id': 'LunarLanderContinuous-v2',
+            'act_scale': True,
+            'replay_path': None,
+            'replay_path_gif': None,
+            'save_replay_gif': False,
         })
     ]
 )

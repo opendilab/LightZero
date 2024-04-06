@@ -19,7 +19,7 @@ pendulum_disc_efficientzero_config = dict(
     exp_name=
     f'data_ez_ctree/pendulum_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
-        env_name='Pendulum-v1',
+        env_id='Pendulum-v1',
         continuous=False,
         manually_discretization=True,
         each_dim_disc_size=11,
@@ -67,10 +67,6 @@ pendulum_disc_efficientzero_create_config = dict(
         type='efficientzero',
         import_names=['lzero.policy.efficientzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 pendulum_disc_efficientzero_create_config = EasyDict(pendulum_disc_efficientzero_create_config)
 create_config = pendulum_disc_efficientzero_create_config

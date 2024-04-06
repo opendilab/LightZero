@@ -6,6 +6,35 @@ import numpy as np
 from graphviz import Digraph
 
 
+def generate_random_actions_discrete(num_actions: int, action_space_size: int, num_of_sampled_actions: int,
+                                     reshape=False):
+    """
+    Overview:
+        Generate a list of random actions.
+    Arguments:
+        - num_actions (:obj:`int`): The number of actions to generate.
+        - action_space_size (:obj:`int`): The size of the action space.
+        - num_of_sampled_actions (:obj:`int`): The number of sampled actions.
+        - reshape (:obj:`bool`): Whether to reshape the actions.
+    Returns:
+        A list of random actions.
+    """
+    actions = [
+        np.random.randint(0, action_space_size, num_of_sampled_actions).reshape(-1)
+        for _ in range(num_actions)
+    ]
+
+    # If num_of_sampled_actions == 1, flatten the actions to a list of numbers
+    if num_of_sampled_actions == 1:
+        actions = [action[0] for action in actions]
+
+    # Reshape actions if needed
+    if reshape and num_of_sampled_actions > 1:
+        actions = [action.reshape(num_of_sampled_actions, 1) for action in actions]
+
+    return actions
+
+
 @dataclass
 class BufferedData:
     data: Any
@@ -51,52 +80,42 @@ def get_augmented_data(board_size, play_data):
 
 def prepare_observation(observation_list, model_type='conv'):
     """
-    Overview:
-        Prepare the observations to satisfy the input format of model.
-        if model_type='conv':
-            [B, S, W, H, C] -> [B, S x C, W, H]
-            where B is batch size, S is stack num, W is width, H is height, and C is the number of channels
-        if model_type='mlp':
-            [B, S, O] -> [B, S x O]
-            where B is batch size, S is stack num, O is obs shape.
+    Prepare the observations to satisfy the input format of the model.
+
+    For model_type='conv':
+        [B, S, C, W, H] -> [B, S x C, W, H]
+        where B is batch size, S is stack num, W is width, H is height, and C is the number of channels.
+
+    For model_type='mlp':
+        [B, S, O] -> [B, S x O]
+        where B is batch size, S is stack num, O is obs shape.
+
     Arguments:
-        - observation_list (:obj:`List`): list of observations.
-        - model_type (:obj:`str`): type of the model. (default is 'conv')
+        - observation_list (List): list of observations.
+        - model_type (str): type of the model. (default is 'conv')
+
+    Returns:
+        - np.ndarray: Reshaped array of observations.
     """
-    assert model_type in ['conv', 'mlp']
+    assert model_type in ['conv', 'mlp'], "model_type must be either 'conv' or 'mlp'"
     observation_array = np.array(observation_list)
+    batch_size = observation_array.shape[0]
 
     if model_type == 'conv':
-        # for 3-dimensional image obs
-        if len(observation_array.shape) == 3:
-            # for vector obs input, e.g. classical control and box2d environments
-            # to be compatible with LightZero model/policy,
-            # observation_array: [B, S, O], where O is original obs shape
-            # [B, S, O] -> [B, S, O, 1]
-            observation_array = observation_array.reshape(
-                observation_array.shape[0], observation_array.shape[1], observation_array.shape[2], 1
-            )
-
-        elif len(observation_array.shape) == 5:
-            # image obs input, e.g. atari environments
-            # observation_array: [B, S, W, H, C]
-
-            # 1, 4, 8, 1, 1 -> 1, 4, 1, 8, 1
-            #   [B, S, W, H, C] -> [B, S, C, W, H]
-            observation_array = np.transpose(observation_array, (0, 1, 4, 2, 3))
-
-            shape = observation_array.shape
-            # 1, 4, 1, 8, 1 -> 1, 4*1, 8, 1
-            #  [B, S, C, W, H] -> [B, S*C, W, H]
-            observation_array = observation_array.reshape((shape[0], -1, shape[-2], shape[-1]))
+        if observation_array.ndim == 3:
+            # Add a channel dimension if it's missing
+            observation_array = observation_array[..., np.newaxis]
+        elif observation_array.ndim == 5:
+            # Reshape to [B, S*C, W, H]
+            _, stack_num, channels, width, height = observation_array.shape
+            observation_array = observation_array.reshape(batch_size, stack_num * channels, width, height)
 
     elif model_type == 'mlp':
-        # for 1-dimensional vector obs
-        # observation_array: [B, S, O], where O is original obs shape
-        # [B, S, O] -> [B, S*O]
-        # print(observation_array.shape)
-        observation_array = observation_array.reshape(observation_array.shape[0], -1)
-        # print(observation_array.shape)
+        if observation_array.ndim == 3:
+            # Flatten the last two dimensions
+            observation_array = observation_array.reshape(batch_size, -1)
+        else:
+            raise ValueError("For 'mlp' model_type, the observation must have 3 dimensions [B, S, O]")
 
     return observation_array
 
