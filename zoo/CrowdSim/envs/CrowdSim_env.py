@@ -10,7 +10,7 @@ from ding.envs import ObsPlusPrevActRewWrapper
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
 
-import CrowdSim.envs as envs
+import zoo.CrowdSim.envs.Crowdsim.env
 
 
 @ENV_REGISTRY.register('crowdsim_lightzero')
@@ -38,16 +38,7 @@ class CrowdSimEnv(BaseEnv):
 
     def reset(self) -> np.ndarray:
         if not self._init_flag:
-            self._env = gym.make('CrowdSim-v0')
-            # if self._replay_path is not None:
-            #     self._env = gym.wrappers.RecordVideo(
-            #         self._env,
-            #         video_folder=self._replay_path,
-            #         episode_trigger=lambda episode_id: True,
-            #         name_prefix='rl-video-{}'.format(id(self))
-            #     )
-            # if hasattr(self._cfg, 'obs_plus_prev_action_reward') and self._cfg.obs_plus_prev_action_reward:
-            #     self._env = ObsPlusPrevActRewWrapper(self._env)
+            self._env = gym.make('CrowdSim-v0', dataset = self._cfg.dataset, custom_config = self._cfg)
             self._init_flag = True
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
@@ -59,7 +50,7 @@ class CrowdSimEnv(BaseEnv):
         self._eval_episode_return = 0
         # process obs
         raw_obs = self._env.reset()
-        obs_list = to_ndarray(raw_obs.to_tensor())
+        obs_list = raw_obs.to_array()
         # human_obs, robot_obs = obs_list
         obs = np.concatenate(obs_list,axis=0).flatten() # for 1 dim e.g.(244,)
         assert len(obs)==(self._robot_num+self._human_num)*4
