@@ -3,7 +3,7 @@ from __future__ import annotations
 import gc
 from typing import Any
 
-import attrs
+from dataclasses import dataclass, asdict
 import numpy as np
 from ding.envs import BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
@@ -56,7 +56,7 @@ def calc_reward(state: State) -> float:
     return 0.0
 
 
-@attrs.define
+@dataclass
 class SumToThreeImageGym(PoolToolGym):
     renderer: PygameRenderer
 
@@ -180,7 +180,7 @@ class SumToThreeImageGym(PoolToolGym):
         )
 
 
-@attrs.define
+@dataclass
 class EpisodicTrackedStats:
     eval_episode_length: int = 0
     eval_episode_return: float = 0.0
@@ -256,7 +256,7 @@ class SumToThreeImageEnv(PoolToolEnv):
 
         done = self._tracked_stats.eval_episode_length == self.cfg["episode_length"]
 
-        info = attrs.asdict(self._tracked_stats) if done else {}
+        info = asdict(self._tracked_stats) if done else {}
 
         return BaseEnvTimestep(
             obs=self._env.observation(),

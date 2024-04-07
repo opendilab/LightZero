@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Callable, List, Tuple
 
-import attrs
+from dataclasses import dataclass, field
 import matplotlib.pyplot as plt
 import numba
 import numpy as np
@@ -45,14 +45,14 @@ def array_to_grayscale(raw_data, weights):
     return grayscale_data
 
 
-@attrs.define
+@dataclass
 class RenderPlane:
-    ball_ids: List[str] = attrs.field(factory=list)
-    cushion_ids: List[str] = attrs.field(factory=list)
-    ball_ball_lines: List[Tuple[str, str]] = attrs.field(factory=list)
+    ball_ids: List[str] = field(default_factory=list)
+    cushion_ids: List[str] = field(default_factory=list)
+    ball_ball_lines: List[Tuple[str, str]] = field(default_factory=list)
 
 
-@attrs.define
+@dataclass
 class RenderConfig:
     planes: List[RenderPlane]
     line_width: int
@@ -259,7 +259,7 @@ class PygameRenderer:
         return cls(CoordinateManager.build(table, px), render_config)
 
 
-@attrs.define
+@dataclass
 class CoordinateManager:
     width: int
     height: int

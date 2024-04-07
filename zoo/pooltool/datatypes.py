@@ -4,7 +4,7 @@ import copy
 import random
 from typing import Any, Dict, List
 
-import attrs
+from dataclasses import dataclass
 import numpy as np
 from ding.envs import BaseEnv
 from easydict import EasyDict
@@ -16,13 +16,34 @@ import pooltool as pt
 ObservationDict = Dict[str, Any]
 
 
-@attrs.define
+@dataclass
 class State:
+    """A full representation of the game state
+
+    Attributes:
+        system:
+            Holds the billiard system objects (balls, cue, and table) and
+            their histories (e.g. ball trajectories). For details see FIXME.
+        game:
+            Holds the game status (e.g. the score, whose turn it is). For details see
+            FIXME.
+    """
     system: pt.System
     game: pt.ruleset.Ruleset
 
     @classmethod
     def example(cls, game_type: pt.GameType = pt.GameType.SUMTOTHREE) -> State:
+        """Returns an example state object
+
+        Args:
+            game_type:
+                The game type the state is built from.
+
+        Returns:
+            State:
+                An unsimulated state. It is the first player's turn, and the balls are
+                positioned in the game-starting configuration.
+        """
         game = pt.get_ruleset(game_type)()
         game.players = [pt.Player("Player")]
         table = pt.Table.from_game_type(game_type)
@@ -38,14 +59,16 @@ class State:
         return cls(system, game)
 
 
-@attrs.define
+@dataclass
 class Spaces:
+    """Holds definitions for the observation, action, and reward spaces"""
     observation: spaces.Space
     action: spaces.Space
     reward: spaces.Space
 
     @classmethod
     def dummy(cls) -> Spaces:
+        """An example object"""
         return cls(
             observation=spaces.Box(
                 low=np.array([0.0] * 4, dtype=np.float32),
@@ -68,7 +91,8 @@ class Spaces:
         )
 
 
-@attrs.define
+# FIXME can it be an ABC?
+@dataclass
 class PoolToolGym(State):
     spaces: Spaces
 
