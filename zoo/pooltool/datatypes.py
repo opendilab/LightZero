@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 import copy
 import random
 from typing import Any, Dict, List
@@ -18,31 +19,29 @@ ObservationDict = Dict[str, Any]
 
 @dataclass
 class State:
-    """A full representation of the game state
-
+    """
+    Overview:
+        A full representation of the game state.
     Attributes:
-        system:
-            Holds the billiard system objects (balls, cue, and table) and
-            their histories (e.g. ball trajectories). For details see FIXME.
-        game:
-            Holds the game status (e.g. the score, whose turn it is). For details see
-            FIXME.
+        - system (:obj:`pooltool.System`): Holds the billiard system objects (balls, \
+            cue, and table) and their histories (e.g. ball trajectories). For details \
+            see FIXME.
+        - game (:obj:`pooltool.ruleset.Ruleset`): Holds the game status (e.g. the \
+            score, whose turn it is). For details see FIXME.
     """
     system: pt.System
     game: pt.ruleset.Ruleset
 
     @classmethod
     def example(cls, game_type: pt.GameType = pt.GameType.SUMTOTHREE) -> State:
-        """Returns an example state object
-
-        Args:
-            game_type:
-                The game type the state is built from.
-
+        """
+        Overview:
+            Returns an example state object.
+        Arguments:
+            - game_type (:obj:`pooltool.GameType`): The game type the state is built from.
         Returns:
-            State:
-                An unsimulated state. It is the first player's turn, and the balls are
-                positioned in the game-starting configuration.
+            - state (:obj:`State`): An unsimulated state. It is the first player's turn, \
+              and the balls are positioned in the game-starting configuration.
         """
         game = pt.get_ruleset(game_type)()
         game.players = [pt.Player("Player")]
@@ -61,42 +60,52 @@ class State:
 
 @dataclass
 class Spaces:
-    """Holds definitions for the observation, action, and reward spaces"""
+    """
+    Overview:
+        Holds definitions for the observation, action, and reward spaces.
+    Attributes:
+        - observation (:obj:`spaces.Space`): The observation space.
+        - action (:obj:`spaces.Space`): The action space.
+        - reward (:obj:`spaces.Space`): The reward space.
+    """
     observation: spaces.Space
     action: spaces.Space
     reward: spaces.Space
 
-    @classmethod
-    def dummy(cls) -> Spaces:
-        """An example object"""
-        return cls(
-            observation=spaces.Box(
-                low=np.array([0.0] * 4, dtype=np.float32),
-                high=np.array([1.0] * 4, dtype=np.float32),
-                shape=(4,),
-                dtype=np.float32,
-            ),
-            action=spaces.Box(
-                low=np.array([-0.3, 70], dtype=np.float32),
-                high=np.array([-0.3, 70], dtype=np.float32),
-                shape=(2,),
-                dtype=np.float32,
-            ),
-            reward=spaces.Box(
-                low=0.0,
-                high=1.0,
-                shape=(1,),
-                dtype=np.float32,
-            ),
-        )
 
-
-# FIXME can it be an ABC?
 @dataclass
-class PoolToolGym(State):
+class PoolToolSimulator(ABC):
+    """
+    Overview:
+        The abstract base class that all pooltool simulators must inherit from. This \
+        class has the following functionalities baked in: setting actions, running \
+        simulations, and making observations. However functionality requires inheriting \
+        classes to define how actions are set and what observations look like. This is \
+        accomplished by implementing the methods ``self.observation_array`` and \
+        ``self.set_action``, respectively.
+    Attributes:
+        - state (:obj:`State`): The complete billiards state. It holds the system \
+            objects and the game state.
+        - spaces (:obj:`Spaces`): The observation, action, and reward spaces.
+    """
+    state: State
     spaces: Spaces
 
+    @abstractmethod
+    def observation_array(self) -> Any:
+        pass
+
+    @abstractmethod
+    def set_action(self, rescaled_action: NDArray[np.float32]) -> None:
+        pass
+
     def observation(self) -> ObservationDict:
+        """
+        Overview:
+            Returns an observation dictionary (an observation, an action mask, and whose turn it is)
+        Returns:
+            - observation_dict (:obj:`Dict[str, Any]`): Keys are ``observation``, ``action_mask``, and ``to_play``.
+        """
         return dict(
             observation=self.observation_array(),
             action_mask=None,
@@ -104,7 +113,13 @@ class PoolToolGym(State):
         )
 
     def scale_action(self, action: NDArray[np.float32]) -> NDArray[np.float32]:
-        """Scale the action from [-1, 1] to the given range [low, high]"""
+        """
+        Overview:
+            Scales a normalized action (each dimension normalized from ``[-1, 1]``) to \
+            the simulator's defined action space.
+        Returns:
+            scaled_action (:obj:`NDArray[np.float32]`) - The properly scaled action.
+        """
         low = self.spaces.action.low  # type: ignore
         high = self.spaces.action.high  # type: ignore
         assert np.all(action >= -1) and np.all(action <= 1), f"{action=}"
@@ -112,32 +127,28 @@ class PoolToolGym(State):
         return np.clip(scaled_action, low, high)
 
     def simulate(self) -> None:
-        """Simulate the system"""
-        pt.simulate(self.system, inplace=True, max_events=200)
-        self.game.process_shot(self.system)
-        self.game.advance(self.system)
+        """
+        Overview:
+            Simulates the system
+        """
+        # In very (very) rare cases, pooltool can become stuck in an infinite loop of
+        # event calculation. By setting ``max_events=200``, we intercept those cases and
+        # end the simulation prematurely (leading to a partially simulated system)
+        pt.simulate(self.state.system, inplace=True, max_events=200)
+        self.state.game.process_shot(self.state.system)
+        self.state.game.advance(self.state.system)
 
     def seed(self, seed_value: int) -> None:
         random.seed(seed_value)
         np.random.seed(seed_value)
 
-    def observation_array(self) -> Any:
-        raise NotImplementedError("Inheriting classes must define this")
-
-    def set_action(self, rescaled_action: NDArray[np.float32]) -> None:
-        raise NotImplementedError("Inheriting classes must define this")
-
-    @classmethod
-    def dummy(cls) -> PoolToolGym:
-        state = State.example()
-        return cls(
-            state.system,
-            state.game,
-            Spaces.dummy(),
-        )
-
 
 class PoolToolEnv(BaseEnv):
+    """
+    Overview:
+        The base pooltool environment. The purpose of this class is to move shared \
+        boilerplate code into a centralized location.
+    """
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
         self._seed = seed
         self._dynamic_seed = dynamic_seed

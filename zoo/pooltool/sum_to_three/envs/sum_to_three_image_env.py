@@ -13,7 +13,7 @@ from numpy.typing import NDArray
 from zoo.pooltool.datatypes import (
     ObservationDict,
     PoolToolEnv,
-    PoolToolGym,
+    PoolToolSimulator,
     Spaces,
     State,
 )
@@ -57,7 +57,7 @@ def calc_reward(state: State) -> float:
 
 
 @dataclass
-class SumToThreeImageGym(PoolToolGym):
+class SumToThreeImageGym(PoolToolSimulator):
     renderer: PygameRenderer
 
     def observation_array(self) -> NDArray[np.float32]:

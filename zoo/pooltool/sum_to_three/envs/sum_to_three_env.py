@@ -13,7 +13,7 @@ from numpy.typing import NDArray
 from zoo.pooltool.datatypes import (
     ObservationDict,
     PoolToolEnv,
-    PoolToolGym,
+    PoolToolSimulator,
     Spaces,
     State,
 )
@@ -115,7 +115,7 @@ def create_initial_state(random_pos: bool) -> State:
 
 
 @dataclass
-class SumToThreeGym(PoolToolGym):
+class SumToThreeGym(PoolToolSimulator):
     def _slice(self, ball_idx: int) -> slice:
         return slice(ball_idx * BALL_DIM, (ball_idx + 1) * BALL_DIM)
 
