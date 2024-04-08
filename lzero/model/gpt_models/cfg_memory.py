@@ -12,7 +12,6 @@ cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',
                          'out_ch': 3, 'dropout': 0.0}}  # TODO：for atari debug
 cfg['world_model'] = {
     'tokens_per_block': 2,
-    "device": 'cuda:2',
 
     # 'max_blocks': 16,
     # "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
@@ -57,11 +56,13 @@ cfg['world_model'] = {
     'embed_dim': 96,  # TODO：for memory # same as <Transformer shine in RL> paper
     'group_size': 8,  # NOTE
 
+    "device": 'cuda:4',
     'attention': 'causal',
-    'num_layers': 2,
-    'num_heads': 2,  # same as <Transformer shine in RL> paper
-    # 'num_layers': 4,
-    # 'num_heads': 8,
+    # 'num_layers': 1,
+    'num_layers': 2,  # same as <Transformer shine in RL> paper
+    'num_layers': 4,
+    'num_layers': 6,
+    'num_heads': 8,
     'gru_gating': False,
 
     'embed_pdrop': 0.1,
@@ -86,7 +87,9 @@ cfg['world_model'] = {
     # 'predict_latent_loss_type': 'mse',
 
     'obs_type': 'image_memory',  # 'vector', 'image'
-     'gamma': 1, # 0.5, 0.9, 0.99, 0.999
+    #  'gamma': 1, # 0.5, 0.9, 0.99, 0.999
+     'gamma': 1.2, # 0.5, 0.9, 0.99, 0.999
+
 
 }
 from easydict import EasyDict

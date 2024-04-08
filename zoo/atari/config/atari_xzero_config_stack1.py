@@ -1,6 +1,5 @@
 from easydict import EasyDict
-import torch
-torch.cuda.set_device(3)
+
 
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 
@@ -69,13 +68,15 @@ eps_greedy_exploration_in_collect = True # for breakout, qbert, boxing
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
+import torch
+torch.cuda.set_device(3)
 
 atari_xzero_config = dict(
     # TODO: 
     # mcts_ctree
     # muzero_collector/evaluator: empty_cache
-    # exp_name=f'data_xzero_atari_0408/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nh8_grugating-false_latent-groupkl_conleninit{6}-conlenrecur{6}clear-gamma1_nlayer1-steplosslog_seed0',
-    exp_name=f'data_xzero_atari_0407/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nh8_grugating-false_latent-groupkl_conleninit{20}-conlenrecur{20}clear-gamma1_nlayer1-steplosslog_seed0',
+    exp_name=f'data_xzero_atari_0408/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nh8_grugating-false_latent-groupkl_conleninit{6}-conlenrecur{6}clear-gamma1_nlayer1-steplosslog_seed0',
+    # exp_name=f'data_xzero_atari_0407/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nh8_grugating-false_latent-groupkl_conleninit{20}-conlenrecur{20}clear-gamma1.5_nlayer5-steplosslog_seed0',
 
     # exp_name=f'data_xzero_atari_0407/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nlayer1-nh8_grugating-false_latent-groupkl_conleninit{8}-conlenrecur{8}clear-fixposemb_seed0',
     # exp_name=f'data_xzero_atari_0407/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nlayer1-nh8_grugating-false_latent-groupkl_conleninit{20}-conlenrecur{20}clear-onlyinitreset_seed0',

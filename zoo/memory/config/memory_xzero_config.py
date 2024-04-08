@@ -1,7 +1,6 @@
 from easydict import EasyDict
 import torch
 
-torch.cuda.set_device(2)
 
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 # env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
@@ -51,18 +50,11 @@ eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-
+torch.cuda.set_device(4)
 memory_xzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
-        exp_name=f'data_memory_{env_id}_0404/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
-        f'_eps-20k'
-        f'_seed{seed}_eval{evaluator_env_num}_nl2-nh2_emd96_train-with-episode_conleninit{32}-conlenrecur{32}clear-fixposemb',
-    # exp_name=f'data_memory_{env_id}_0404/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
-    #     f'_eps-20k_temp-final-steps-{threshold_training_steps_for_final_temperature}'
-    #     f'_seed{seed}_eval{evaluator_env_num}_nl2-nh2_emd96_train-with-episode_conleninit{32}-conlenrecur{32}clear-fixposemb',
-    # exp_name=f'data_memory_{env_id}_0404/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
-    #         f'_eps-20k_temp-final-steps-{threshold_training_steps_for_final_temperature}'
-    #         f'_pelw1e-4_quan15_groupkl_seed{seed}_eval{evaluator_env_num}_nl2-nh2_soft005_reclw005_emd96_train-with-episode_conleninit{16}-conlenrecur{16}-clear-alwayslateset',
+    exp_name=f'data_memory_{env_id}_0408/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
+        f'_eps-20k_seed{seed}_eval{evaluator_env_num}_train-with-episode_conleninit{32}-conlenrecur{32}clear_gamma1.2_nl2-nh8_emd96',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,

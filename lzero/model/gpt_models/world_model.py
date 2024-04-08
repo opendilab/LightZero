@@ -918,7 +918,7 @@ class WorldModel(nn.Module):
         last_step_losses = {}
         #  batch['mask_padding'] 为后面H步的mask情况，如果mask为False则把对应的loss从统计中去掉，以维持平均统计值的准确性
         # 对每个损失项进行分组计算
-        for loss_name, loss_value in zip(
+        for loss_name, loss_tmp in zip(
             ['loss_obs', 'loss_rewards', 'loss_value', 'loss_policy', 'orig_policy_loss', 'policy_entropy'],
             [loss_obs, loss_rewards, loss_value, loss_policy, orig_policy_loss, policy_entropy]
         ):
@@ -932,20 +932,20 @@ class WorldModel(nn.Module):
                 mask_padding = batch['mask_padding'][:, :seq_len]
             
             # 将损失调整为 (batch_size, seq_len) 的形状
-            loss_value = loss_value.view(-1, seq_len)
+            loss_tmp = loss_tmp.view(-1, seq_len)
             
             # 第一步的损失
             first_step_mask = mask_padding[:, 0]
-            first_step_losses[loss_name] = loss_value[:, 0][first_step_mask].mean()
+            first_step_losses[loss_name] = loss_tmp[:, 0][first_step_mask].mean()
             
             # 中间步的损失
             middle_step_index = seq_len // 2
             middle_step_mask = mask_padding[:, middle_step_index]
-            middle_step_losses[loss_name] = loss_value[:, middle_step_index][middle_step_mask].mean()
+            middle_step_losses[loss_name] = loss_tmp[:, middle_step_index][middle_step_mask].mean()
             
             # 最后一步的损失
             last_step_mask = mask_padding[:, -1]
-            last_step_losses[loss_name] = loss_value[:, -1][last_step_mask].mean()
+            last_step_losses[loss_name] = loss_tmp[:, -1][last_step_mask].mean()
 
         # 对重构损失和感知损失进行折扣
         discounted_latent_recon_loss = latent_recon_loss
