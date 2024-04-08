@@ -62,8 +62,8 @@ reanalyze_ratio = 0.
 batch_size = 6
 
 # num_unroll_steps = 6
-# num_unroll_steps = 5
-num_unroll_steps = 8
+num_unroll_steps = 5
+# num_unroll_steps = 8
 # num_unroll_steps = 10 # TODO
 
 threshold_training_steps_for_final_temperature = int(5e4)  # train_iter 50k 1->0.5->0.25

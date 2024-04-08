@@ -54,9 +54,12 @@ eps_greedy_exploration_in_collect = True
 
 memory_xzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
-    exp_name=f'data_memory_{env_id}_0404/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
-        f'_eps-20k_temp-final-steps-{threshold_training_steps_for_final_temperature}'
-        f'_seed{seed}_eval{evaluator_env_num}_nl2-nh2_emd96_train-with-episode_conleninit{16}-conlenrecur{16}clear-fixposemb',
+        exp_name=f'data_memory_{env_id}_0404/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
+        f'_eps-20k'
+        f'_seed{seed}_eval{evaluator_env_num}_nl2-nh2_emd96_train-with-episode_conleninit{32}-conlenrecur{32}clear-fixposemb',
+    # exp_name=f'data_memory_{env_id}_0404/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
+    #     f'_eps-20k_temp-final-steps-{threshold_training_steps_for_final_temperature}'
+    #     f'_seed{seed}_eval{evaluator_env_num}_nl2-nh2_emd96_train-with-episode_conleninit{32}-conlenrecur{32}clear-fixposemb',
     # exp_name=f'data_memory_{env_id}_0404/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
     #         f'_eps-20k_temp-final-steps-{threshold_training_steps_for_final_temperature}'
     #         f'_pelw1e-4_quan15_groupkl_seed{seed}_eval{evaluator_env_num}_nl2-nh2_soft005_reclw005_emd96_train-with-episode_conleninit{16}-conlenrecur{16}-clear-alwayslateset',
@@ -115,7 +118,6 @@ memory_xzero_config = dict(
         ),
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            # decay=int(2e5),  # NOTE: TODO
             decay=int(2e4),  # NOTE: 20k env steps
             # decay=int(5e4),  # NOTE: 50k env steps
         ),
@@ -123,8 +125,8 @@ memory_xzero_config = dict(
         use_augmentation=False,  # NOTE
         td_steps=td_steps,
 
-        manual_temperature_decay=True,
-        threshold_training_steps_for_final_temperature=threshold_training_steps_for_final_temperature,
+        # manual_temperature_decay=True,
+        # threshold_training_steps_for_final_temperature=threshold_training_steps_for_final_temperature,
 
         cuda=True,
         env_type='not_board_games',

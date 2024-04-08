@@ -907,51 +907,16 @@ class WorldModel(nn.Module):
         #     orig_policy_loss=orig_policy_loss.mean(),
         #     policy_entropy=policy_entropy.mean()
         # )
+
         # 计算时间步
         timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
         # 计算每个时间步的折扣系数
         discounts = self.gamma ** timesteps
 
-        # 将损失分为第一步、中间步和最后一步
-        first_step_losses = {}
-        middle_step_losses = {}
-        last_step_losses = {}
-        #  batch['mask_padding'] 为后面H步的mask情况，如果mask为False则把对应的loss从统计中去掉，以维持平均统计值的准确性
-        # 对每个损失项进行分组计算
-        for loss_name, loss_value in zip(
-            ['loss_obs', 'loss_rewards', 'loss_value', 'loss_policy', 'orig_policy_loss', 'policy_entropy'],
-            [loss_obs, loss_rewards, loss_value, loss_policy, orig_policy_loss, policy_entropy]
-        ):
-            if loss_name == 'loss_obs':
-                seq_len = batch['actions'].shape[1] - 1
-                # 获取对应的 mask_padding
-                mask_padding = batch['mask_padding'][:, 1:seq_len]
-            else:
-                seq_len = batch['actions'].shape[1]
-                # 获取对应的 mask_padding
-                mask_padding = batch['mask_padding'][:, :seq_len]
-            
-            # 将损失调整为 (batch_size, seq_len) 的形状
-            loss_value = loss_value.view(-1, seq_len)
-            
-            # 第一步的损失
-            first_step_mask = mask_padding[:, 0]
-            first_step_losses[loss_name] = loss_value[:, 0][first_step_mask].mean()
-            
-            # 中间步的损失
-            middle_step_index = seq_len // 2
-            middle_step_mask = mask_padding[:, middle_step_index]
-            middle_step_losses[loss_name] = loss_value[:, middle_step_index][middle_step_mask].mean()
-            
-            # 最后一步的损失
-            last_step_mask = mask_padding[:, -1]
-            last_step_losses[loss_name] = loss_value[:, -1][last_step_mask].mean()
-
-        # 对重构损失和感知损失进行折扣
+        # 将折扣系数应用到每个损失项
         discounted_latent_recon_loss = latent_recon_loss
         discounted_perceptual_loss = perceptual_loss
 
-        # 计算整体的折扣损失
         discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).mean()
         discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).mean()
         discounted_loss_value = (loss_value.view(-1, batch['actions'].shape[1]) * discounts).mean()
@@ -969,10 +934,7 @@ class WorldModel(nn.Module):
             latent_recon_loss=discounted_latent_recon_loss,
             perceptual_loss=discounted_perceptual_loss,
             orig_policy_loss=discounted_orig_policy_loss,
-            policy_entropy=discounted_policy_entropy,
-            first_step_losses=first_step_losses,
-            middle_step_losses=middle_step_losses,
-            last_step_losses=last_step_losses
+            policy_entropy=discounted_policy_entropy
         )
 
 

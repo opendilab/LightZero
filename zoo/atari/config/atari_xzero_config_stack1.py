@@ -1,17 +1,17 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(4)
+torch.cuda.set_device(3)
 
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_name = 'PongNoFrameskip-v4'
+# env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
 # env_name = 'QbertNoFrameskip-v4'
 # env_name = 'SeaquestNoFrameskip-v4'
 # env_name = 'BoxingNoFrameskip-v4'
 # env_name = 'FrostbiteNoFrameskip-v4'
-# env_name = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
+env_name = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
 
 
 if env_name == 'PongNoFrameskip-v4':
@@ -48,19 +48,20 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 
-model_update_ratio = 0.25
-# model_update_ratio = 0.5
+# model_update_ratio = 0.25
+model_update_ratio = 0.5
 num_simulations = 50
-max_env_step = int(1e6)
+# max_env_step = int(1e6)
+max_env_step = int(5e5)
+
 
 reanalyze_ratio = 0. 
 # reanalyze_ratio = 0.05 # TODO
 
 batch_size = 64
 # num_unroll_steps = 6
-# num_unroll_steps = 5
-num_unroll_steps = 8
-# num_unroll_steps = 4 # TODO
+num_unroll_steps = 10
+# num_unroll_steps = 20 # TODO
 
 threshold_training_steps_for_final_temperature = int(5e4)  # train_iter 50k 1->0.5->0.25
 eps_greedy_exploration_in_collect = True # for breakout, qbert, boxing
@@ -73,7 +74,11 @@ atari_xzero_config = dict(
     # TODO: 
     # mcts_ctree
     # muzero_collector/evaluator: empty_cache
-    exp_name=f'data_xzero_atari_0404/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nlayer1-nh8_grugating-false_latent-groupkl_conleninit{6}-conlenrecur{6}clear-fixposemb_seed0',
+    # exp_name=f'data_xzero_atari_0408/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nh8_grugating-false_latent-groupkl_conleninit{6}-conlenrecur{6}clear-gamma1_nlayer1-steplosslog_seed0',
+    exp_name=f'data_xzero_atari_0407/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nh8_grugating-false_latent-groupkl_conleninit{20}-conlenrecur{20}clear-gamma1_nlayer1-steplosslog_seed0',
+
+    # exp_name=f'data_xzero_atari_0407/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nlayer1-nh8_grugating-false_latent-groupkl_conleninit{8}-conlenrecur{8}clear-fixposemb_seed0',
+    # exp_name=f'data_xzero_atari_0407/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nlayer1-nh8_grugating-false_latent-groupkl_conleninit{20}-conlenrecur{20}clear-onlyinitreset_seed0',
 
     # exp_name=f'data_xzero_atari_0404/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nlayer1-nh8_grugating-false_latent-groupkl_conleninit{6}-conlenrecur{6}clear-reset_seed0',
 

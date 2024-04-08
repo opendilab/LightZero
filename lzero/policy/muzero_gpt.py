@@ -438,6 +438,9 @@ class MuZeroGPTPolicy(Policy):
         perceptual_loss = self.intermediate_losses['perceptual_loss']
         orig_policy_loss = self.intermediate_losses['orig_policy_loss']
         policy_entropy = self.intermediate_losses['policy_entropy']
+        first_step_losses = self.intermediate_losses['first_step_losses']
+        middle_step_losses = self.intermediate_losses['middle_step_losses']
+        last_step_losses = self.intermediate_losses['last_step_losses']
 
 
         # ==============================================================
@@ -489,6 +492,21 @@ class MuZeroGPTPolicy(Policy):
             max_memory_allocated_gb = 0.
 
         return_loss_dict = {
+            'first_step_loss_value':first_step_losses['loss_value'].item(),
+            'first_step_loss_policy':first_step_losses['loss_policy'].item(),
+            'first_step_loss_rewards':first_step_losses['loss_rewards'].item(),
+            'first_step_loss_obs':first_step_losses['loss_obs'].item(),
+
+            'middle_step_loss_value':middle_step_losses['loss_value'].item(),
+            'middle_step_loss_policy':middle_step_losses['loss_policy'].item(),
+            'middle_step_loss_rewards':middle_step_losses['loss_rewards'].item(),
+            'middle_step_loss_obs':middle_step_losses['loss_obs'].item(),
+
+            'last_step_loss_value':last_step_losses['loss_value'].item(),
+            'last_step_loss_policy':last_step_losses['loss_policy'].item(),
+            'last_step_loss_rewards':last_step_losses['loss_rewards'].item(),
+            'last_step_loss_obs':last_step_losses['loss_obs'].item(),
+
             'Current_GPU': current_memory_allocated_gb,
             'Max_GPU': max_memory_allocated_gb,
             'collect_mcts_temperature': self._collect_mcts_temperature,
@@ -810,6 +828,21 @@ class MuZeroGPTPolicy(Policy):
             tensorboard according to the return value ``_forward_learn``.
         """
         return [
+            'first_step_loss_value',
+            'first_step_loss_policy',
+            'first_step_loss_rewards',
+            'first_step_loss_obs',
+
+            'middle_step_loss_value',
+            'middle_step_loss_policy',
+            'middle_step_loss_rewards',
+            'middle_step_loss_obs',
+
+            'last_step_loss_value',
+            'last_step_loss_policy',
+            'last_step_loss_rewards',
+            'last_step_loss_obs',
+
             'Current_GPU',
             'Max_GPU',
             'collect_epsilon',
