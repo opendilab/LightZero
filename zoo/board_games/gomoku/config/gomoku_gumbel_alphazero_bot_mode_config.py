@@ -4,21 +4,23 @@ from easydict import EasyDict
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 board_size = 6  # default_size is 15
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
+collector_env_num = 32
+n_episode = 32
+evaluator_env_num = 5
 num_simulations = 50
-update_per_collect = 50
+update_per_collect = 100
 batch_size = 256
 max_env_step = int(5e5)
 prob_random_action_in_bot = 0.5
-mcts_ctree = False
+mcts_ctree = True
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-gomoku_alphazero_config = dict(
-    exp_name=f'data_az/gomoku_alphazero_bot-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
+gomoku_gumbel_alphazero_config = dict(
+    exp_name=f'data_gaz_ctree/gomoku_gumbel_alphazero_bot-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
+        stop_value=2,
         board_size=board_size,
         battle_mode='play_with_bot_mode',
         bot_action_type='v1',
@@ -42,6 +44,8 @@ gomoku_alphazero_config = dict(
     ),
     policy=dict(
         mcts_ctree=mcts_ctree,
+        env_type='board_games',
+        action_type='varied_action_space',
         # ==============================================================
         # for the creation of simulation env
         simulation_env_id='gomoku',
@@ -74,8 +78,8 @@ gomoku_alphazero_config = dict(
     ),
 )
 
-gomoku_alphazero_config = EasyDict(gomoku_alphazero_config)
-main_config = gomoku_alphazero_config
+gomoku_gumbel_alphazero_config = EasyDict(gomoku_gumbel_alphazero_config)
+main_config = gomoku_gumbel_alphazero_config
 
 gomoku_alphazero_create_config = dict(
     env=dict(
@@ -84,11 +88,12 @@ gomoku_alphazero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='alphazero',
-        import_names=['lzero.policy.alphazero'],
+        type='gumbel_alphazero',
+        import_names=['lzero.policy.gumbel_alphazero'],
     ),
     collector=dict(
         type='episode_alphazero',
+        get_train_sample=False,
         import_names=['lzero.worker.alphazero_collector'],
     ),
     evaluator=dict(

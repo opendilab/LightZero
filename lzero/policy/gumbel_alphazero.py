@@ -11,19 +11,25 @@ from ding.torch_utils import to_device
 from ding.utils import POLICY_REGISTRY
 from ding.utils.data import default_collate
 from easydict import EasyDict
+from torch.nn import KLDivLoss
 
 from lzero.policy import configure_optimizers
 
 
-@POLICY_REGISTRY.register('alphazero')
-class AlphaZeroPolicy(Policy):
+@POLICY_REGISTRY.register('gumbel_alphazero')
+class GumbelAlphaZeroPolicy(Policy):
     """
     Overview:
-        The policy class for AlphaZero.
+        The policy class for GumbelAlphaZero.
     """
 
     # The default_config for AlphaZero policy.
     config = dict(
+        # (str) The type of policy, as the key of the policy registry.
+        type='gumbel_alphazero',
+        # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled AlphaZero)
+        # this variable is used in ``collector``.
+        sampled_algo=False,
         # (bool) Whether to use torch.compile method to speed up our model, which required torch>=2.0.
         torch_compile=False,
         # (bool) Whether to use TF32 for our model.
@@ -36,13 +42,8 @@ class AlphaZeroPolicy(Policy):
             # (int) The number of channels of hidden states in AlphaZero model.
             num_channels=32,
         ),
-        # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
-        # this variable is used in ``collector``.
-        sampled_algo=False,
-        # (bool) Whether to enable the gumbel-based algorithm (e.g. Gumbel Muzero)
-        gumbel_algo=False,
-        # (bool) Whether to use multi-gpu training.
-        multi_gpu=False,
+        # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
+        mcts_ctree=True,
         # (bool) Whether to use cuda for network.
         cuda=False,
         # (int) How many updates(iterations) to train after collector's one collection.
@@ -98,6 +99,24 @@ class AlphaZeroPolicy(Policy):
             pb_c_base=19652,
             # (float) The initialization constant used in the PUCT formula for balancing exploration and exploitation during tree search.
             pb_c_init=1.25,
+            #
+            legal_actions=None,
+            # (int) The action space size.
+            action_space_size=9,
+            # (int) The number of sampled actions for each state.
+            num_of_sampled_actions=2,
+            #
+            continuous_action_space=False,
+            #
+            maxvisit_init=50,
+            #
+            value_scale=0.1,
+            #
+            gumbel_scale=10.0,
+            #
+            gumbel_rng=0.0,
+            #
+            max_num_considered_actions=6,
         ),
         other=dict(replay_buffer=dict(
             replay_buffer_size=int(1e6),
@@ -140,7 +159,9 @@ class AlphaZeroPolicy(Policy):
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
             # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
-            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
+            # lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
+            lr_lambda = lambda step: 1 if step < max_step * 0.33 else (0.1 if step < max_step * 0.66 else 0.01)  # noqa
+
             self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
 
         # Algorithm config
@@ -148,6 +169,7 @@ class AlphaZeroPolicy(Policy):
         self._entropy_weight = self._cfg.entropy_weight
         # Main and target models
         self._learn_model = self._model
+        self.kl_loss = KLDivLoss(reduction='none')
 
         # TODO(pu): test the effect of torch 2.0
         if self._cfg.torch_compile:
@@ -161,23 +183,26 @@ class AlphaZeroPolicy(Policy):
 
         state_batch = inputs['obs']['observation']
         mcts_probs = inputs['probs']
+        improved_probs = inputs['improved_probs']
         reward = inputs['reward']
 
         state_batch = state_batch.to(device=self._device, dtype=torch.float)
         mcts_probs = mcts_probs.to(device=self._device, dtype=torch.float)
+        improved_probs = improved_probs.to(device=self._device, dtype=torch.float)
         reward = reward.to(device=self._device, dtype=torch.float)
 
         action_probs, values = self._learn_model.compute_policy_value(state_batch)
-        policy_log_probs = torch.log(action_probs)
+        epsilon = 1e-10
+        policy_log_probs = torch.log(action_probs + epsilon)
 
         # calculate policy entropy, for monitoring only
         entropy = torch.mean(-torch.sum(action_probs * policy_log_probs, 1))
         entropy_loss = -entropy
 
-        # ============
+        # ==============================================================
         # policy loss
-        # ============
-        policy_loss = -torch.mean(torch.sum(mcts_probs * policy_log_probs, 1))
+        # ==============================================================
+        policy_loss = F.kl_div(policy_log_probs, improved_probs.detach(), reduction='batchmean')
 
         # ============
         # value loss
@@ -190,12 +215,15 @@ class AlphaZeroPolicy(Policy):
 
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
+
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
-            list(self._model.parameters()),
+            self._learn_model.parameters(),
             max_norm=self._cfg.grad_clip_value,
         )
+
         self._optimizer.step()
-        if self._cfg.lr_piecewise_constant_decay is True:
+
+        if self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()
 
         # =============
@@ -217,16 +245,21 @@ class AlphaZeroPolicy(Policy):
             Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
         self._get_simulation_env()
+
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
             import sys
-            sys.path.append('/Users/your_user_name/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
-            sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
-            import mcts_alphazero
-            self._collect_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves, self._cfg.mcts.num_simulations,
-                                                     self._cfg.mcts.pb_c_base,
-                                                     self._cfg.mcts.pb_c_init, self._cfg.mcts.root_dirichlet_alpha,
-                                                     self._cfg.mcts.root_noise_weight, self.simulate_env)
+            sys.path.append('/Users/your_user_name/code/LightZero/lzero/mcts/ctree/ctree_gumbel_alphazero/build')  # TODO: change this path to your own path
+            import mcts_gumbel_alphazero
+            self._collect_mcts = mcts_gumbel_alphazero.MCTS(self._cfg.mcts.max_moves, self._cfg.mcts.num_simulations,
+                                                            self._cfg.mcts.pb_c_base,
+                                                            self._cfg.mcts.pb_c_init,
+                                                            self._cfg.mcts.root_dirichlet_alpha,
+                                                            self._cfg.mcts.root_noise_weight,
+                                                            self._cfg.mcts.maxvisit_init, self._cfg.mcts.value_scale,
+                                                            self._cfg.mcts.gumbel_scale, self._cfg.mcts.gumbel_rng,
+                                                            self._cfg.mcts.max_num_considered_actions,
+                                                            self.simulate_env)
         else:
             if self._cfg.sampled_algo:
                 from lzero.mcts.ptree.ptree_az_sampled import MCTS
@@ -238,6 +271,7 @@ class AlphaZeroPolicy(Policy):
 
     @torch.no_grad()
     def _forward_collect(self, obs: Dict, temperature: float = 1) -> Dict[str, torch.Tensor]:
+
         """
         Overview:
             The forward function for collecting data in collect mode. Use real env to execute MCTS search.
@@ -260,16 +294,23 @@ class AlphaZeroPolicy(Policy):
         output = {}
         self._policy_model = self._collect_model
         for env_id in ready_env_id:
-            state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
-                                                                  init_state=init_state[env_id],
-                                                                  katago_policy_init=False,
-                                                                  katago_game_state=katago_game_state[env_id]))
-            action, mcts_probs = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self.collect_mcts_temperature, True)
+            state_config_for_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
+                                                       init_state=init_state[env_id],
+                                                       katago_policy_init=True,
+                                                       katago_game_state=katago_game_state[env_id]))
 
+            action, mcts_probs, improved_probs = self._collect_mcts.get_next_action(
+                state_config_for_env_reset,
+                self._policy_value_fn,
+                self.collect_mcts_temperature,
+                True,
+            )
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,
+                'improved_probs': improved_probs,
             }
+
         return output
 
     def _init_eval(self) -> None:
@@ -278,30 +319,32 @@ class AlphaZeroPolicy(Policy):
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
         self._get_simulation_env()
+        # TODO(pu): use double num_simulations for evaluation
         if self._cfg.mcts_ctree:
             import sys
-            sys.path.append('/Users/your_user_name/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
-            sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
-            import mcts_alphazero
-            # TODO(pu): how to set proper num_simulations for evaluation
-            self._eval_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves,
-                                                  min(800, self._cfg.mcts.num_simulations * 4),
-                                                  self._cfg.mcts.pb_c_base,
-                                                  self._cfg.mcts.pb_c_init, self._cfg.mcts.root_dirichlet_alpha,
-                                                  self._cfg.mcts.root_noise_weight, self.simulate_env)
+            sys.path.append('/Users/your_user_name/code/LightZero/lzero/mcts/ctree/ctree_gumbel_alphazero/build')  # TODO: change this path to your own path
+            import mcts_gumbel_alphazero
+            self._eval_mcts = mcts_gumbel_alphazero.MCTS(self._cfg.mcts.max_moves, 2 * self._cfg.mcts.num_simulations,
+                                                         self._cfg.mcts.pb_c_base,
+                                                         self._cfg.mcts.pb_c_init, self._cfg.mcts.root_dirichlet_alpha,
+                                                         self._cfg.mcts.root_noise_weight,
+                                                         self._cfg.mcts.maxvisit_init, self._cfg.mcts.value_scale,
+                                                         self._cfg.mcts.gumbel_scale, self._cfg.mcts.gumbel_rng,
+                                                         self._cfg.mcts.max_num_considered_actions, self.simulate_env)
         else:
             if self._cfg.sampled_algo:
                 from lzero.mcts.ptree.ptree_az_sampled import MCTS
             else:
                 from lzero.mcts.ptree.ptree_az import MCTS
             mcts_eval_config = copy.deepcopy(self._cfg.mcts)
-            # TODO(pu): how to set proper num_simulations for evaluation
-            mcts_eval_config.num_simulations = min(800, mcts_eval_config.num_simulations * 4)
+            mcts_eval_config.num_simulations = mcts_eval_config.num_simulations * 2
+
             self._eval_mcts = MCTS(mcts_eval_config, self.simulate_env)
 
         self._eval_model = self._model
 
     def _forward_eval(self, obs: Dict) -> Dict[str, torch.Tensor]:
+
         """
         Overview:
             The forward function for evaluating the current policy in eval mode, similar to ``self._forward_collect``.
@@ -322,13 +365,13 @@ class AlphaZeroPolicy(Policy):
         output = {}
         self._policy_model = self._eval_model
         for env_id in ready_env_id:
-            state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
-                                                                  init_state=init_state[env_id],
-                                                                  katago_policy_init=False,
-                                                                  katago_game_state=katago_game_state[env_id]))
-            action, mcts_probs = self._eval_mcts.get_next_action(
-                state_config_for_simulation_env_reset, self._policy_value_fn, 1.0, False
-            )
+            state_config_for_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
+                                                       init_state=init_state[env_id],
+                                                       katago_policy_init=False,
+                                                       katago_game_state=katago_game_state[env_id]))
+
+            action, mcts_probs, improved_probs = self._eval_mcts.get_next_action(
+                state_config_for_env_reset, self._policy_value_fn, 1.0, False)
             output[env_id] = {
                 'action': action,
                 'probs': mcts_probs,
@@ -339,33 +382,33 @@ class AlphaZeroPolicy(Policy):
         if self._cfg.simulation_env_id == 'tictactoe':
             from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
             if self._cfg.simulation_env_config_type == 'play_with_bot':
-                from zoo.board_games.tictactoe.config.tictactoe_alphazero_bot_mode_config import \
-                    tictactoe_alphazero_config
+                from zoo.board_games.tictactoe.config.tictactoe_gumbel_alphazero_bot_mode_config import \
+                    tictactoe_gumbel_alphazero_config
             elif self._cfg.simulation_env_config_type == 'self_play':
-                from zoo.board_games.tictactoe.config.tictactoe_alphazero_sp_mode_config import \
-                    tictactoe_alphazero_config
+                from zoo.board_games.tictactoe.config.tictactoe_gumbel_alphazero_sp_mode_config import \
+                    tictactoe_gumbel_alphazero_config
             else:
                 raise NotImplementedError
-            self.simulate_env = TicTacToeEnv(tictactoe_alphazero_config.env)
+            self.simulate_env = TicTacToeEnv(tictactoe_gumbel_alphazero_config.env)
 
         elif self._cfg.simulation_env_id == 'gomoku':
             from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
             if self._cfg.simulation_env_config_type == 'play_with_bot':
-                from zoo.board_games.gomoku.config.gomoku_alphazero_bot_mode_config import gomoku_alphazero_config
+                from zoo.board_games.gomoku.config.gomoku_gumbel_alphazero_bot_mode_config import gomoku_gumbel_alphazero_config
             elif self._cfg.simulation_env_config_type == 'self_play':
-                from zoo.board_games.gomoku.config.gomoku_alphazero_sp_mode_config import gomoku_alphazero_config
+                from zoo.board_games.gomoku.config.gomoku_gumbel_alphazero_sp_mode_config import gomoku_gumbel_alphazero_config
             else:
                 raise NotImplementedError
-            self.simulate_env = GomokuEnv(gomoku_alphazero_config.env)
+            self.simulate_env = GomokuEnv(gomoku_gumbel_alphazero_config.env)
         elif self._cfg.simulation_env_id == 'connect4':
             from zoo.board_games.connect4.envs.connect4_env import Connect4Env
             if self._cfg.simulation_env_config_type == 'play_with_bot':
-                from zoo.board_games.connect4.config.connect4_alphazero_bot_mode_config import connect4_alphazero_config
+                from zoo.board_games.connect4.config.connect4_gumbel_alphazero_bot_mode_config import connect4_gumbel_alphazero_config
             elif self._cfg.simulation_env_config_type == 'self_play':
-                from zoo.board_games.connect4.config.connect4_alphazero_sp_mode_config import connect4_alphazero_config
+                from zoo.board_games.connect4.config.connect4_gumbel_alphazero_sp_mode_config import connect4_gumbel_alphazero_config
             else:
                 raise NotImplementedError
-            self.simulate_env = Connect4Env(connect4_alphazero_config.env)
+            self.simulate_env = Connect4Env(connect4_gumbel_alphazero_config.env)
         else:
             raise NotImplementedError
 
@@ -378,8 +421,9 @@ class AlphaZeroPolicy(Policy):
         ).unsqueeze(0)
         with torch.no_grad():
             action_probs, value = self._policy_model.compute_policy_value(current_state_scale)
-        action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
-        return action_probs_dict, value.item()
+        legal_action_probs_dict = dict(
+            zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
+        return legal_action_probs_dict, value.item()
 
     def _monitor_vars_learn(self) -> List[str]:
         """
@@ -402,6 +446,7 @@ class AlphaZeroPolicy(Policy):
             'next_obs': timestep.obs,
             'action': model_output['action'],
             'probs': model_output['probs'],
+            'improved_probs': model_output['improved_probs'],
             'reward': timestep.reward,
             'done': timestep.done,
         }
