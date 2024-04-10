@@ -14,8 +14,7 @@ find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 # This is necessary because the current project depends on pybind11
 # Specify the source directory and build directory of pybind11
 add_subdirectory(
-    /Users/puyuan/code/LightZero/lzero/mcts/ctree/ctree_alphazero/pybind11 # TODO: Change this to the path of your pybind11 source directory
-    #/Users/<your_user_name>/code/LightZero/lzero/mcts/ctree/ctree_alphazero/pybind11 # TODO: Change this to the path of your pybind11 source directory
+    /Users/<your_user_name>/code/LightZero/lzero/mcts/ctree/ctree_alphazero/pybind11 # TODO: Change this to the path of your pybind11 source directory
     ${CMAKE_CURRENT_BINARY_DIR}/pybind11_build
 )
 # Add the .cpp file to the mcts_gumbel_alphazero module
