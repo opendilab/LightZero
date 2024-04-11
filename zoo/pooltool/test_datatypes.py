@@ -11,7 +11,7 @@ class DummySimulator(PoolToolSimulator):
     def observation_array(self):
         pass
 
-    def set_action(self, rescaled_action):
+    def set_action(self, action):
         pass
 
     @classmethod

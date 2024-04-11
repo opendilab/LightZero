@@ -122,10 +122,10 @@ class SumToThreeGym(PoolToolSimulator):
     def _null_obs(self) -> NDArray[np.float32]:
         return np.empty(len(self.system.balls) * BALL_DIM, dtype=np.float32)
 
-    def set_action(self, rescaled_action: NDArray[np.float32]) -> None:
+    def set_action(self, action: NDArray[np.float32]) -> None:
         self.system.cue.set_state(
-            V0=rescaled_action[0],
-            phi=pt.aim.at_ball(self.system, "object", cut=rescaled_action[1]),
+            V0=action[0],
+            phi=pt.aim.at_ball(self.system, "object", cut=action[1]),
         )
 
     def observation_array(self) -> NDArray[np.float32]:

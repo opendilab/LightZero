@@ -64,10 +64,10 @@ class SumToThreeImageGym(PoolToolSimulator):
         """Return the system state as an image array"""
         return self.renderer.observation()
 
-    def set_action(self, scaled_action: NDArray[np.float32]) -> None:
+    def set_action(self, action: NDArray[np.float32]) -> None:
         self.system.cue.set_state(
-            V0=scaled_action[0],
-            phi=pt.aim.at_ball(self.system, "object", cut=scaled_action[1]),
+            V0=action[0],
+            phi=pt.aim.at_ball(self.system, "object", cut=action[1]),
         )
 
     def reset(self) -> None:

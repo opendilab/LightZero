@@ -25,9 +25,10 @@ class State:
     Attributes:
         - system (:obj:`pooltool.System`): Holds the billiard system objects (balls, \
             cue, and table) and their histories (e.g. ball trajectories). For details \
-            see FIXME.
+            see https://pooltool.readthedocs.io/en/latest/autoapi/pooltool/index.html#pooltool.System.
         - game (:obj:`pooltool.ruleset.Ruleset`): Holds the game status (e.g. the \
-            score, whose turn it is). For details see FIXME.
+            score, whose turn it is). For details see
+            https://pooltool.readthedocs.io/en/latest/autoapi/pooltool/ruleset/index.html#pooltool.ruleset.Ruleset.
     """
     system: pt.System
     game: pt.ruleset.Ruleset
@@ -41,7 +42,7 @@ class State:
             - game_type (:obj:`pooltool.GameType`): The game type the state is built from.
         Returns:
             - state (:obj:`State`): An unsimulated state. It is the first player's turn, \
-              and the balls are positioned in the game-starting configuration.
+                and the balls are positioned in the game-starting configuration.
         """
         game = pt.get_ruleset(game_type)()
         game.players = [pt.Player("Player")]
@@ -92,17 +93,30 @@ class PoolToolSimulator(ABC):
     spaces: Spaces
 
     @abstractmethod
-    def observation_array(self) -> Any:
+    def observation_array(self) -> NDArray[np.float32]:
+        """
+        Overview:
+            The implemented method should return an observation of the current state.
+        Returns:
+            - observation (:obj:`NDArray[np.float32]`): A 32-bit float observation array \
+                that matches the dimension and domain defined by ``self.spaces.observation``.
+        """
         pass
 
     @abstractmethod
-    def set_action(self, rescaled_action: NDArray[np.float32]) -> None:
+    def set_action(self, action: NDArray[np.float32]) -> None:
+        """
+        Overview:
+            The implemented method should set the cue stick state by interpreting the \
+            passed action. The action should match the action space defined by \
+            ``self.spaces.action``.
+        """
         pass
 
     def observation(self) -> ObservationDict:
         """
         Overview:
-            Returns an observation dictionary (an observation, an action mask, and whose turn it is)
+            Returns an observation dictionary (an observation array, an action mask, and whose turn it is)
         Returns:
             - observation_dict (:obj:`Dict[str, Any]`): Keys are ``observation``, ``action_mask``, and ``to_play``.
         """
@@ -116,9 +130,9 @@ class PoolToolSimulator(ABC):
         """
         Overview:
             Scales a normalized action (each dimension normalized from ``[-1, 1]``) to \
-            the simulator's defined action space.
+            the defined action space (``self.spaces.action``).
         Returns:
-            scaled_action (:obj:`NDArray[np.float32]`) - The properly scaled action.
+            - scaled_action (:obj:`NDArray[np.float32]`): The properly scaled action.
         """
         low = self.spaces.action.low  # type: ignore
         high = self.spaces.action.high  # type: ignore
@@ -129,11 +143,15 @@ class PoolToolSimulator(ABC):
     def simulate(self) -> None:
         """
         Overview:
-            Simulates the system
+            Simulates the system based on the (already) applied action, then updates the \
+            game state to reflect the outcome of the shot (e.g. if the shot scored a \
+            point, the player's point score is updated)
+        Note:
+            - The action should be applied before calling this method  with ``self.set_action``.
         """
         # In very (very) rare cases, pooltool can become stuck in an infinite loop of
         # event calculation. By setting ``max_events=200``, we intercept those cases and
-        # end the simulation prematurely (leading to a partially simulated system)
+        # end the simulation prematurely
         pt.simulate(self.state.system, inplace=True, max_events=200)
         self.state.game.process_shot(self.state.system)
         self.state.game.advance(self.state.system)
@@ -146,8 +164,8 @@ class PoolToolSimulator(ABC):
 class PoolToolEnv(BaseEnv):
     """
     Overview:
-        The base pooltool environment. The purpose of this class is to move shared \
-        boilerplate code into a centralized location.
+        The base pooltool environment. The purpose of this class is to hold shared \
+        boilerplate code, reducing repetition.
     """
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
         self._seed = seed

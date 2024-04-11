@@ -166,7 +166,7 @@ def test_set_action(st3: SumToThreeGym):
     test_action = np.array([1.5, -30], dtype=np.float32)  # Example values
 
     # Set the action
-    st3.set_action(rescaled_action=test_action)
+    st3.set_action(action=test_action)
 
     # Check if the action was set correctly
     assert math.isclose(st3.system.cue.V0, test_action[0], rel_tol=1e-3)
@@ -220,7 +220,7 @@ def test_reset_single_player_env(st3: SumToThreeGym):
     assert matches_initial(st3)
 
     # Simulate a shot
-    st3.set_action(rescaled_action=np.array([1.5, -30], dtype=np.float32))
+    st3.set_action(action=np.array([1.5, -30], dtype=np.float32))
     pt.simulate(st3.system, inplace=True)
 
     assert not matches_initial(st3)
