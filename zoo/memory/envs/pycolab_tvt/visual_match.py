@@ -60,7 +60,7 @@ REWARD_GRID = [
 ]
 
 # MAX_FRAMES_PER_PHASE = {"explore": 15, "distractor": 30, "reward": 15}
-MAX_FRAMES_PER_PHASE = {"explore": 2, "distractor": 1, "reward": 15}
+MAX_FRAMES_PER_PHASE = {"explore": 2, "distractor": 0, "reward": 15}
 
 
 class Game(game.AbstractGame):
@@ -76,7 +76,6 @@ class Game(game.AbstractGame):
         final_reward=10.0,
         respawn_every=common.DEFAULT_APPLE_RESPAWN_TIME,
         crop=True,
-        # crop=False,
         max_frames=MAX_FRAMES_PER_PHASE,
         EXPLORE_GRID=PASSIVE_EXPLORE_GRID,
     ):
@@ -92,10 +91,12 @@ class Game(game.AbstractGame):
         self._episode_length = sum(self._max_frames.values())
         self._num_actions = common.NUM_ACTIONS
         self._colours = common.FIXED_COLOURS.copy()
+        shuffled_symbol_colour_map = common.get_shuffled_symbol_colour_map(rng, SYMBOLS_TO_SHUFFLE) # TODO：b c e （分别对应左 中 右位置） 的颜色随机
+        # shuffled_symbol_colour_map = {'b': (0, 0, 1000), 'c': (1000, 0, 0), 'e': (0, 1000, 0)}   # TODO：phase3-fixed-colormap-bce b c e （分别对应左 中 右位置） 的颜色固定为：蓝色 红色 绿色
+        print(f'shuffled_symbol_colour_map: {shuffled_symbol_colour_map}')
         self._colours.update(
-            common.get_shuffled_symbol_colour_map(rng, SYMBOLS_TO_SHUFFLE)
+            shuffled_symbol_colour_map
         )
-
         self._extra_observation_fields = ["chapter_reward_as_string"]
 
     @property
@@ -181,7 +182,11 @@ class Game(game.AbstractGame):
             croppers = common.get_cropper()
         else:
             croppers = None
-        target_char = self._rng.choice(SYMBOLS_TO_SHUFFLE)
+        target_char = self._rng.choice(SYMBOLS_TO_SHUFFLE)  # TODO：随机目标颜色
+        # target_char = 'b'  # TODO：固定目标颜色为左上角位置的颜色
+        print(f"self._rng: {self._rng}")
+        print(f"symbols_to_shuffle: {SYMBOLS_TO_SHUFFLE}")
+        print(f"target_char: {target_char}")
         return storytelling.Story(
             [
                 lambda: self._make_explore_phase(target_char),

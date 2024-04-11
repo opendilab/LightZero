@@ -44,8 +44,8 @@ cfg['world_model'] = {
                       "max_tokens": 2 * 10,  # TODO： horizon:8
                       # "context_length": 20,
                       # "context_length_for_recurrent": 20,
-                      "context_length": 6, # TODO
-                      "context_length_for_recurrent": 6,
+                      "context_length": 8, # TODO
+                      "context_length_for_recurrent": 8,
                       "recurrent_keep_deepth": 100,
                       "gru_gating": False,
                       # "gru_gating": True,
@@ -59,23 +59,44 @@ cfg['world_model'] = {
                     #   "gru_gating": False,
                     #   # "gru_gating": True,
 
-
-                      # 'embed_dim':512, # TODO：for atari
-                      # 'embed_dim':256, # TODO：for atari
-                      # 'embed_dim':1024, # TODO：for atari
-                      'embed_dim': 768, # TODO：for atari
-                      'group_size': 8,  # NOTE
-
-                      'attention': 'causal',
+                      # 'action_shape': 18, # TODO：for multi-task
 
                       "device": 'cuda:3',
+                      # 'action_shape': 6, # TODO：for pong qbert 
+                      # 'action_shape': 9,# TODO：for mspacman
+                      # 'action_shape': 18,# TODO：for Seaquest boxing Frostbite
+                      'action_shape': 4,# TODO：for breakout
 
-                      'num_layers': 1, # TODO：for atari debug
+                      # 'embed_dim':512, # TODO：for atari
+                      # 'embed_dim':1024, # TODO：for atari
+                      'group_size': 8,  # NOTE
+                      'attention': 'causal',
+
+
+                      # 'num_layers': 1, # TODO：for atari debug
                       # 'num_layers': 2, # TODO：for atari debug
                       # 'num_layers': 4, # TODO：for atari debug
-                      # 'num_layers': 6, # TODO：for atari debug
-                      # 'num_layers': 12, # TODO：for atari debug
+                      'num_layers': 6, # TODO：for atari debug
+
+                      # 'num_layers': 8, # TODO：for atari debug
                       'num_heads': 8,
+                      'embed_dim': 768, # TODO：for atari
+
+                      # 'num_layers': 12, # TODO：Gpt2 Base
+                      # 'num_heads': 12, # TODO：Gpt2 Base
+                      # 'embed_dim': 768, # TODO：Gpt2 Base
+
+                      # 'num_layers': 12, # TODO：Gato Medium
+                      # 'num_heads': 12, # TODO：Gato Medium
+                      # 'embed_dim': 1536, # TODO：Gato Medium
+
+                      # 'num_layers': 8, # TODO：Gato Base
+                      # 'num_heads': 24, # TODO：Gato Base
+                      # 'embed_dim': 768, # TODO：Gato Base
+
+                      # 'num_layers': 24, # TODO：Gato Large
+                      # 'num_heads': 16, # TODO：Gato Large
+                      # 'embed_dim': 2048, # TODO：Gato  Large
 
                       'embed_pdrop': 0.1,
                       'resid_pdrop': 0.1,
@@ -84,12 +105,7 @@ cfg['world_model'] = {
                       # 'support_size': 601,
                       'support_size': 101,  # TODO
 
-                      # 'action_shape': 18, # TODO：for multi-task
 
-                      # 'action_shape': 6, # TODO：for pong qbert 
-                      # 'action_shape': 9,# TODO：for mspacman
-                      # 'action_shape': 18,# TODO：for Seaquest boxing Frostbite
-                      'action_shape': 4,# TODO：for breakout
 
                       'max_cache_size':5000,
                       # 'max_cache_size':50000,

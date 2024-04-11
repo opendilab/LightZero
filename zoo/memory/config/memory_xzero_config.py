@@ -10,7 +10,9 @@ memory_length = 0
 # key_to_door [2, 60, 120, 250, 500]
 
 # max_env_step = int(3e6)
-max_env_step = int(1e6)
+# max_env_step = int(1e6)
+max_env_step = int(5e5)
+
 
 # ==== NOTE: 需要设置cfg_memory中的action_shape =====
 # ==== NOTE: 需要设置cfg_memory中的policy_entropy_weight =====
@@ -50,11 +52,13 @@ eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-torch.cuda.set_device(4)
+torch.cuda.set_device(5)
 memory_xzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
-    exp_name=f'data_memory_{env_id}_0408/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
-        f'_eps-20k_seed{seed}_eval{evaluator_env_num}_train-with-episode_conleninit{32}-conlenrecur{32}clear_gamma1.2_nl2-nh8_emd96',
+    exp_name=f'data_memory_{env_id}_0410/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
+    f'_eps-20k_seed{seed}_eval{evaluator_env_num}_train-with-episode_conleninit{32}-conlenrecur{32}clear_gamma1_nl6-nh8-emd768_phase3-random-colormap-bce_phase1-fixed-target-pos_random-target-color',
+    # exp_name=f'data_memory_{env_id}_0410/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_bs{batch_size}'
+    # f'_eps-20k_seed{seed}_eval{evaluator_env_num}_train-with-episode_conleninit{32}-conlenrecur{32}clear_gamma1_nl6-nh8-emd96-true_fixed-colormap-bce_fixed-target-b',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,

@@ -53,16 +53,28 @@ cfg['world_model'] = {
 
 
     # 'embed_dim': 64,  # TODO：for memory # same as <Transformer shine in RL> paper
-    'embed_dim': 96,  # TODO：for memory # same as <Transformer shine in RL> paper
+    # 'embed_dim': 96,  # TODO：for memory # same as <Transformer shine in RL> paper
     'group_size': 8,  # NOTE
 
-    "device": 'cuda:4',
+    "device": 'cuda:5',
     'attention': 'causal',
     # 'num_layers': 1,
-    'num_layers': 2,  # same as <Transformer shine in RL> paper
-    'num_layers': 4,
+    # 'num_layers': 2,  # same as <Transformer shine in RL> paper
+    # 'num_layers': 4,
     'num_layers': 6,
     'num_heads': 8,
+    # 'embed_dim': 96, # TODO：
+    'embed_dim': 768, # TODO：Gpt2 Base
+
+
+    # 'num_layers': 8, # TODO：for atari debug
+    # 'num_heads': 8,
+    # 'embed_dim': 768, # TODO：for atari
+
+    # 'num_layers': 12, # TODO：Gpt2 Base
+    # 'num_heads': 12, # TODO：Gpt2 Base
+    # 'embed_dim': 768, # TODO：Gpt2 Base
+
     'gru_gating': False,
 
     'embed_pdrop': 0.1,
@@ -87,8 +99,8 @@ cfg['world_model'] = {
     # 'predict_latent_loss_type': 'mse',
 
     'obs_type': 'image_memory',  # 'vector', 'image'
-    #  'gamma': 1, # 0.5, 0.9, 0.99, 0.999
-     'gamma': 1.2, # 0.5, 0.9, 0.99, 0.999
+     'gamma': 1, # 0.5, 0.9, 0.99, 0.999
+    #  'gamma': 1.2, # 0.5, 0.9, 0.99, 0.999
 
 
 }
