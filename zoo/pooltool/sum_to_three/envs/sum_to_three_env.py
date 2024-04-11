@@ -11,6 +11,7 @@ from easydict import EasyDict
 from gym import spaces
 from numpy.typing import NDArray
 from zoo.pooltool.datatypes import (
+    Bounds,
     ObservationDict,
     PoolToolEnv,
     PoolToolSimulator,
@@ -19,41 +20,15 @@ from zoo.pooltool.datatypes import (
 )
 
 import pooltool as pt
-import pooltool.constants as const
+from zoo.pooltool.sum_to_three.reward import get_reward_function
 
 
-@dataclass
-class Bounds:
-    low: float
-    high: float
-
-
-V0_INIT = 0.0
 V0_BOUNDS = Bounds(0.3, 3.0)
 ANGLE_BOUNDS = Bounds(-70, 70)
+V0_INIT = 0.0
 BALL_DIM = 2
 
-
-def calc_reward(state: State) -> float:
-    """Calculate the reward
-
-    A point is scored when both:
-
-        (1) The player contacts the object ball with the cue ball
-        (2) The sum of contacted rails by either balls is 3
-
-    This reward is designed to offer a small reward for contacting the object ball, and
-    a larger reward for scoring a point.
-    """
-    if not state.game.shot_info.turn_over:
-        return 1.0
-
-    if len(pt.events.filter_type(state.system.events, pt.EventType.BALL_BALL)):
-        return 0.1
-
-    return 0.0
-
-
+    
 def get_obs_space(balls: Dict[str, pt.Ball], table: pt.Table) -> spaces.Box:
     table_length = table.l
     table_width = table.w
@@ -115,76 +90,74 @@ def create_initial_state(random_pos: bool) -> State:
 
 
 @dataclass
-class SumToThreeGym(PoolToolSimulator):
+class SumToThreeSimulator(PoolToolSimulator):
     def _slice(self, ball_idx: int) -> slice:
         return slice(ball_idx * BALL_DIM, (ball_idx + 1) * BALL_DIM)
 
     def _null_obs(self) -> NDArray[np.float32]:
-        return np.empty(len(self.system.balls) * BALL_DIM, dtype=np.float32)
+        return np.empty(len(self.state.system.balls) * BALL_DIM, dtype=np.float32)
 
     def set_action(self, action: NDArray[np.float32]) -> None:
-        self.system.cue.set_state(
+        self.state.system.cue.set_state(
             V0=action[0],
-            phi=pt.aim.at_ball(self.system, "object", cut=action[1]),
+            phi=pt.aim.at_ball(self.state.system, "object", cut=action[1]),
         )
 
     def observation_array(self) -> NDArray[np.float32]:
         """Return the system state as a 1D array of ball coordinates"""
         obs = self._null_obs()
-        for ball_idx, ball_id in enumerate(self.system.balls.keys()):
-            obs[self._slice(ball_idx)] = self.system.balls[ball_id].state.rvw[
-                0, :BALL_DIM
-            ]
+        for ball_idx, ball_id in enumerate(self.state.system.balls.keys()):
+            coords = self.state.system.balls[ball_id].state.rvw[0, :BALL_DIM]
+            obs[self._slice(ball_idx)] = coords
 
         return obs
 
     def reset(self) -> None:
-        if len(self.game.players) == 1:
+        if len(self.state.game.players) == 1:
             self.reset_single_player_env()
         else:
             raise NotImplementedError()
 
     def reset_single_player_env(self) -> None:
         """Reset things to an initial state"""
-        del self.game
-        self.game = pt.get_ruleset(pt.GameType.SUMTOTHREE)(
+        del self.state.game
+        self.state.game = pt.get_ruleset(pt.GameType.SUMTOTHREE)(
             players=[pt.Player("Player 1")],
             win_condition=-1,  # type: ignore
         )
 
-        R = self.system.balls["cue"].params.R
+        R = self.state.system.balls["cue"].params.R
 
         cue_pos = (
-            self.system.table.w / 2,
-            self.system.table.l / 4,
+            self.state.system.table.w / 2,
+            self.state.system.table.l / 4,
             R,
         )
 
         object_pos = (
-            self.system.table.w / 2,
-            self.system.table.l * 3 / 4,
+            self.state.system.table.w / 2,
+            self.state.system.table.l * 3 / 4,
             R,
         )
 
-        self.system.reset_history()
-        self.system.stop_balls()
+        self.state.system.reset_history()
+        self.state.system.stop_balls()
 
-        self.system.balls["cue"].state.rvw[0] = cue_pos
-        self.system.balls["object"].state.rvw[0] = object_pos
+        self.state.system.balls["cue"].state.rvw[0] = cue_pos
+        self.state.system.balls["object"].state.rvw[0] = object_pos
 
-        self.system.cue.set_state(V0=V0_INIT)
+        self.state.system.cue.set_state(V0=V0_INIT)
 
-        assert self.system.balls["cue"].state.s == const.stationary
-        assert self.system.balls["object"].state.s == const.stationary
-        assert not np.isnan(self.system.balls["cue"].state.rvw).any()
-        assert not np.isnan(self.system.balls["object"].state.rvw).any()
+        assert self.state.system.balls["cue"].state.s == pt.constants.stationary
+        assert self.state.system.balls["object"].state.s == pt.constants.stationary
+        assert not np.isnan(self.state.system.balls["cue"].state.rvw).any()
+        assert not np.isnan(self.state.system.balls["object"].state.rvw).any()
 
     @classmethod
-    def from_state(cls, state: State) -> SumToThreeGym:
+    def from_state(cls, state: State) -> SumToThreeSimulator:
         """Create a SumToThree environment from a State"""
         return cls(
-            system=state.system,
-            game=state.game,
+            state,
             spaces=Spaces(
                 observation=get_obs_space(
                     state.system.balls,
@@ -201,7 +174,7 @@ class SumToThreeGym(PoolToolSimulator):
         )
 
     @classmethod
-    def single_player_env(cls, random_pos: bool = False) -> SumToThreeGym:
+    def single_player_env(cls, random_pos: bool = False) -> SumToThreeSimulator:
         """Create a 1 player environment (for training, evaluation, etc)"""
         return cls.from_state(create_initial_state(random_pos))
 
@@ -217,35 +190,37 @@ class SumToThreeEnv(PoolToolEnv):
         env_name="PoolTool-SumToThree",
         env_type="not_board_games",
         episode_length=10,
+        reward_algorithm="simple",
     )
 
     def __init__(self, cfg: EasyDict) -> None:
         self.cfg = cfg
+        self.calc_reward = get_reward_function(self.cfg.reward_algorithm)
+
         self._init_flag = False
         self._tracked_stats = EpisodicTrackedStats()
-
-        self._env: SumToThreeGym
+        self._env: SumToThreeSimulator
 
     def __repr__(self) -> str:
         return "SumToThreeEnv"
 
     def close(self) -> None:
         # Probably not necessary
-        for ball in self._env.system.balls.values():
+        for ball in self._env.state.system.balls.values():
             del ball.state
             del ball.history
             del ball.history_cts
             del ball
-        for pocket in self._env.system.table.pockets.values():
+        for pocket in self._env.state.system.table.pockets.values():
             del pocket
-        for cushion in self._env.system.table.cushion_segments.linear.values():
+        for cushion in self._env.state.system.table.cushion_segments.linear.values():
             del cushion
-        for cushion in self._env.system.table.cushion_segments.circular.values():
+        for cushion in self._env.state.system.table.cushion_segments.circular.values():
             del cushion
-        del self._env.system.table
-        del self._env.system.cue
-        del self._env.system
-        del self._env.game
+        del self._env.state.system.table
+        del self._env.state.system.cue
+        del self._env.state.system
+        del self._env.state.game
         del self._env
         gc.collect()
 
@@ -253,7 +228,7 @@ class SumToThreeEnv(PoolToolEnv):
 
     def reset(self) -> ObservationDict:
         if not self._init_flag:
-            self._env = SumToThreeGym.single_player_env()
+            self._env = SumToThreeSimulator.single_player_env()
             self._init_flag = True
         else:
             self._env.reset()
@@ -271,12 +246,12 @@ class SumToThreeEnv(PoolToolEnv):
         self._env.set_action(self._env.scale_action(action))
         self._env.simulate()
 
-        rew = calc_reward(self._env)
+        rew = self.calc_reward(self._env.state)
 
         self._tracked_stats.eval_episode_length += 1
         self._tracked_stats.eval_episode_return += rew
 
-        done = self._tracked_stats.eval_episode_length == self.cfg["episode_length"]
+        done = self._tracked_stats.eval_episode_length == self.cfg.episode_length
 
         info = asdict(self._tracked_stats) if done else {}
 

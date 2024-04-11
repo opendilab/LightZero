@@ -10,6 +10,7 @@ from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
 from gym import spaces
 from numpy.typing import NDArray
+from zoo.pooltool.sum_to_three.reward import get_reward_function
 from zoo.pooltool.datatypes import (
     ObservationDict,
     PoolToolEnv,
@@ -36,28 +37,8 @@ RENDER_CONFIG = RenderConfig(
 )
 
 
-def calc_reward(state: State) -> float:
-    """Calculate the reward
-
-    A point is scored when both:
-
-        (1) The player contacts the object ball with the cue ball
-        (2) The sum of contacted rails by either balls is 3
-
-    This reward is designed to offer a small reward for contacting the object ball, and
-    a larger reward for scoring a point.
-    """
-    if not state.game.shot_info.turn_over:
-        return 1.0
-
-    if len(pt.events.filter_type(state.system.events, pt.EventType.BALL_BALL)):
-        return 0.1
-
-    return 0.0
-
-
 @dataclass
-class SumToThreeImageGym(PoolToolSimulator):
+class SumToThreeImageSimulator(PoolToolSimulator):
     renderer: PygameRenderer
 
     def observation_array(self) -> NDArray[np.float32]:
@@ -65,61 +46,60 @@ class SumToThreeImageGym(PoolToolSimulator):
         return self.renderer.observation()
 
     def set_action(self, action: NDArray[np.float32]) -> None:
-        self.system.cue.set_state(
+        self.state.system.cue.set_state(
             V0=action[0],
-            phi=pt.aim.at_ball(self.system, "object", cut=action[1]),
+            phi=pt.aim.at_ball(self.state.system, "object", cut=action[1]),
         )
 
     def reset(self) -> None:
-        if len(self.game.players) == 1:
+        if len(self.state.game.players) == 1:
             self.reset_single_player_env()
         else:
             raise NotImplementedError()
 
     def reset_single_player_env(self) -> None:
         """Return the passed environment, resetting things to an initial state"""
-        del self.game
-        self.game = pt.get_ruleset(pt.GameType.SUMTOTHREE)(
+        del self.state.game
+        self.state.game = pt.get_ruleset(pt.GameType.SUMTOTHREE)(
             players=[pt.Player("Player 1")],
             win_condition=-1,  # type: ignore
         )
 
-        R = self.system.balls["cue"].params.R
+        R = self.state.system.balls["cue"].params.R
 
         cue_pos = (
-            self.system.table.w / 2,
-            self.system.table.l / 4,
+            self.state.system.table.w / 2,
+            self.state.system.table.l / 4,
             R,
         )
 
         object_pos = (
-            self.system.table.w / 2,
-            self.system.table.l * 3 / 4,
+            self.state.system.table.w / 2,
+            self.state.system.table.l * 3 / 4,
             R,
         )
 
-        self.system.reset_history()
-        self.system.stop_balls()
+        self.state.system.reset_history()
+        self.state.system.stop_balls()
 
-        self.system.balls["cue"].state.rvw[0] = cue_pos
-        self.system.balls["object"].state.rvw[0] = object_pos
+        self.state.system.balls["cue"].state.rvw[0] = cue_pos
+        self.state.system.balls["object"].state.rvw[0] = object_pos
 
-        assert self.system.balls["cue"].state.s == const.stationary
-        assert self.system.balls["object"].state.s == const.stationary
-        assert not np.isnan(self.system.balls["cue"].state.rvw).any()
-        assert not np.isnan(self.system.balls["object"].state.rvw).any()
+        assert self.state.system.balls["cue"].state.s == const.stationary
+        assert self.state.system.balls["object"].state.s == const.stationary
+        assert not np.isnan(self.state.system.balls["cue"].state.rvw).any()
+        assert not np.isnan(self.state.system.balls["object"].state.rvw).any()
 
     @classmethod
-    def from_state(cls, state: State, px: int) -> SumToThreeImageGym:
+    def from_state(cls, state: State, px: int) -> SumToThreeImageSimulator:
         """Create a SumToThree environment from a State"""
         renderer = PygameRenderer.build(state.system.table, px, RENDER_CONFIG)
         renderer.init()
 
         env = cls(
-            system=state.system,
-            game=state.game,
+            state=state,
             spaces=Spaces(
-                observation=SumToThreeImageGym.get_obs_space(renderer),
+                observation=SumToThreeImageSimulator.get_obs_space(renderer),
                 action=spaces.Box(
                     low=np.array([0.3, -70], dtype=np.float32),
                     high=np.array([3.0, +70], dtype=np.float32),
@@ -136,11 +116,11 @@ class SumToThreeImageGym(PoolToolSimulator):
             renderer=renderer,
         )
 
-        env.renderer.set_state(env)
+        env.renderer.set_state(env.state)
         return env
 
     @classmethod
-    def single_player_env(cls, px: int, random_pos: bool = False) -> SumToThreeImageGym:
+    def single_player_env(cls, px: int, random_pos: bool = False) -> SumToThreeImageSimulator:
         """Create a 1 player environment (for training, evaluation, etc)"""
         gametype = pt.GameType.SUMTOTHREE
         game = pt.get_ruleset(gametype)(
@@ -193,14 +173,16 @@ class SumToThreeImageEnv(PoolToolEnv):
         env_type="not_board_games",
         px=20,
         episode_length=10,
+        reward_algorithm="simple",
     )
 
     def __init__(self, cfg: EasyDict) -> None:
         self.cfg = cfg
+        self.calc_reward = get_reward_function(self.cfg.reward_algorithm)
+
         self._init_flag = False
         self._tracked_stats = EpisodicTrackedStats()
-
-        self._env: SumToThreeImageGym
+        self._env: SumToThreeImageSimulator
 
     def __repr__(self) -> str:
         return "SumToThreeEnvImage"
@@ -209,21 +191,21 @@ class SumToThreeImageEnv(PoolToolEnv):
         self._env.renderer.close()
 
         # Probably not necessary
-        for ball in self._env.system.balls.values():
+        for ball in self._env.state.system.balls.values():
             del ball.state
             del ball.history
             del ball.history_cts
             del ball
-        for pocket in self._env.system.table.pockets.values():
+        for pocket in self._env.state.system.table.pockets.values():
             del pocket
-        for cushion in self._env.system.table.cushion_segments.linear.values():
+        for cushion in self._env.state.system.table.cushion_segments.linear.values():
             del cushion
-        for cushion in self._env.system.table.cushion_segments.circular.values():
+        for cushion in self._env.state.system.table.cushion_segments.circular.values():
             del cushion
-        del self._env.system.table
-        del self._env.system.cue
-        del self._env.system
-        del self._env.game
+        del self._env.state.system.table
+        del self._env.state.system.cue
+        del self._env.state.system
+        del self._env.state.game
         del self._env
         gc.collect()
 
@@ -231,7 +213,7 @@ class SumToThreeImageEnv(PoolToolEnv):
 
     def reset(self) -> ObservationDict:
         if not self._init_flag:
-            self._env = SumToThreeImageGym.single_player_env(self.cfg.px)
+            self._env = SumToThreeImageSimulator.single_player_env(self.cfg.px)
             self._init_flag = True
         else:
             self._env.reset()
@@ -249,7 +231,7 @@ class SumToThreeImageEnv(PoolToolEnv):
         self._env.set_action(self._env.scale_action(action))
         self._env.simulate()
 
-        rew = calc_reward(self._env)
+        rew = self.calc_reward(self._env.state)
 
         self._tracked_stats.eval_episode_length += 1
         self._tracked_stats.eval_episode_return += rew

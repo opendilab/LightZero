@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections import namedtuple
 import copy
 import random
 from typing import Any, Dict, List
@@ -15,6 +16,8 @@ from numpy.typing import NDArray
 import pooltool as pt
 
 ObservationDict = Dict[str, Any]
+
+Bounds = namedtuple("Bounds", ["low", "high"])
 
 
 @dataclass
