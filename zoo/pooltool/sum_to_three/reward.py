@@ -47,5 +47,5 @@ _reward_functions: Dict[str, Tuple[RewardFunction, Bounds]] = {
 def get_reward_function(algorithm: str) -> RewardFunction:
     return _reward_functions[algorithm][0]
 
-def get_reward_space(algorithm: str) -> RewardFunction:
+def get_reward_bounds(algorithm: str) -> Bounds:
     return _reward_functions[algorithm][1]

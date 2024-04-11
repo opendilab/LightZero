@@ -20,15 +20,12 @@ from zoo.pooltool.datatypes import (
 )
 
 import pooltool as pt
-from zoo.pooltool.sum_to_three.reward import get_reward_function
+from zoo.pooltool.sum_to_three.reward import get_reward_bounds, get_reward_function
 
-
-V0_BOUNDS = Bounds(0.3, 3.0)
-ANGLE_BOUNDS = Bounds(-70, 70)
-V0_INIT = 0.0
+# Use x and y coordinates of ball only
 BALL_DIM = 2
 
-    
+
 def get_obs_space(balls: Dict[str, pt.Ball], table: pt.Table) -> spaces.Box:
     table_length = table.l
     table_width = table.w
@@ -45,13 +42,21 @@ def get_obs_space(balls: Dict[str, pt.Ball], table: pt.Table) -> spaces.Box:
     )
 
 
-def get_action_space(
-    V0: Bounds = V0_BOUNDS, angle: Bounds = ANGLE_BOUNDS
-) -> spaces.Box:
+def get_action_space(V0: Bounds, angle: Bounds) -> spaces.Box:
     return spaces.Box(
         low=np.array([V0.low, angle.low], dtype=np.float32),
         high=np.array([V0.high, angle.high], dtype=np.float32),
         shape=(2,),
+        dtype=np.float32,
+    )
+
+
+def get_reward_space(algorithm: str) -> spaces.Box:
+    bounds = get_reward_bounds(algorithm)
+    return spaces.Box(
+        low=bounds.low,
+        high=bounds.high,
+        shape=(1,),
         dtype=np.float32,
     )
 
@@ -71,7 +76,7 @@ def create_initial_state(random_pos: bool) -> State:
         balls=pt.get_rack(gametype, table),
     )
 
-    system.cue.set_state(V0=V0_INIT)
+    system.cue.set_state(V0=0.0)
 
     if random_pos:
         get_pos = lambda table, ball: (
@@ -79,12 +84,8 @@ def create_initial_state(random_pos: bool) -> State:
             (table.l - 2 * ball.params.R) * np.random.rand() + ball.params.R,
             ball.params.R,
         )
-        system.balls["cue"].state.rvw[0] = get_pos(
-            system.table, system.balls["cue"]
-        )
-        system.balls["object"].state.rvw[0] = get_pos(
-            system.table, system.balls["object"]
-        )
+        system.balls["cue"].state.rvw[0] = get_pos(system.table, system.balls["cue"])
+        system.balls["object"].state.rvw[0] = get_pos(system.table, system.balls["object"])
 
     return State(system, game)
 
@@ -104,7 +105,6 @@ class SumToThreeSimulator(PoolToolSimulator):
         )
 
     def observation_array(self) -> NDArray[np.float32]:
-        """Return the system state as a 1D array of ball coordinates"""
         obs = self._null_obs()
         for ball_idx, ball_id in enumerate(self.state.system.balls.keys()):
             coords = self.state.system.balls[ball_id].state.rvw[0, :BALL_DIM]
@@ -146,37 +146,13 @@ class SumToThreeSimulator(PoolToolSimulator):
         self.state.system.balls["cue"].state.rvw[0] = cue_pos
         self.state.system.balls["object"].state.rvw[0] = object_pos
 
-        self.state.system.cue.set_state(V0=V0_INIT)
+        self.state.system.cue.set_state(V0=0.0)
 
         assert self.state.system.balls["cue"].state.s == pt.constants.stationary
         assert self.state.system.balls["object"].state.s == pt.constants.stationary
         assert not np.isnan(self.state.system.balls["cue"].state.rvw).any()
         assert not np.isnan(self.state.system.balls["object"].state.rvw).any()
 
-    @classmethod
-    def from_state(cls, state: State) -> SumToThreeSimulator:
-        """Create a SumToThree environment from a State"""
-        return cls(
-            state,
-            spaces=Spaces(
-                observation=get_obs_space(
-                    state.system.balls,
-                    state.system.table,
-                ),
-                action=get_action_space(),
-                reward=spaces.Box(
-                    low=0.0,
-                    high=1.0,
-                    shape=(1,),
-                    dtype=np.float32,
-                ),
-            ),
-        )
-
-    @classmethod
-    def single_player_env(cls, random_pos: bool = False) -> SumToThreeSimulator:
-        """Create a 1 player environment (for training, evaluation, etc)"""
-        return cls.from_state(create_initial_state(random_pos))
 
 @dataclass
 class EpisodicTrackedStats:
@@ -190,19 +166,37 @@ class SumToThreeEnv(PoolToolEnv):
         env_name="PoolTool-SumToThree",
         env_type="not_board_games",
         episode_length=10,
-        reward_algorithm="simple",
+        reward_algorithm="binary",
+        action_V0_low=0.3,
+        action_V0_high=3.0,
+        action_angle_low=-70,
+        action_angle_high=70,
     )
+
+    def __repr__(self) -> str:
+        return "SumToThreeEnv"
 
     def __init__(self, cfg: EasyDict) -> None:
         self.cfg = cfg
+
+        # Get the reward function from the config keyword
         self.calc_reward = get_reward_function(self.cfg.reward_algorithm)
+
+        # Structure the action bounds
+        self.action_bounds = {
+            "V0": Bounds(
+                low=self.cfg.action_V0_low,
+                high=self.cfg.action_V0_high,
+            ),
+            "angle": Bounds(
+                low=self.cfg.action_angle_low,
+                high=self.cfg.action_angle_high,
+            ),
+        }
 
         self._init_flag = False
         self._tracked_stats = EpisodicTrackedStats()
         self._env: SumToThreeSimulator
-
-    def __repr__(self) -> str:
-        return "SumToThreeEnv"
 
     def close(self) -> None:
         # Probably not necessary
@@ -226,9 +220,25 @@ class SumToThreeEnv(PoolToolEnv):
 
         self._init_flag = False
 
+    def get_spaces(self, state: State) -> Spaces:
+        return Spaces(
+            observation=get_obs_space(
+                state.system.balls,
+                state.system.table,
+            ),
+            action=get_action_space(
+                self.action_bounds["V0"],
+                self.action_bounds["angle"],
+            ),
+            reward=get_reward_bounds(
+                self.cfg.reward_algorithm,
+            ),
+        )    
+
     def reset(self) -> ObservationDict:
         if not self._init_flag:
-            self._env = SumToThreeSimulator.single_player_env()
+            state = create_initial_state(random_pos=False)
+            self._env = SumToThreeSimulator(state, self.get_spaces(state))
             self._init_flag = True
         else:
             self._env.reset()
