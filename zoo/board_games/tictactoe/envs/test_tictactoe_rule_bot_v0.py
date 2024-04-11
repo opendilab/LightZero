@@ -5,7 +5,7 @@ import pytest
 from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
 
 cfg = EasyDict(
-    channel_last=True,
+    channel_last=False,
     scale=False,
     prob_random_agent=0,
     prob_expert_agent=0,

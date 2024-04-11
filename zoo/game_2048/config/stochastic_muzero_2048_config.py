@@ -4,7 +4,7 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-env_name = 'game_2048'
+env_id = 'game_2048'
 action_space_size = 4
 use_ture_chance_label_in_chance_encoder = True
 collector_env_num = 8
@@ -25,7 +25,7 @@ game_2048_stochastic_muzero_config = dict(
     exp_name=f'data_stochastic_mz_ctree/game_2048_npct-{num_of_possible_chance_tile}_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_chance-{use_ture_chance_label_in_chance_encoder}_sslw2_seed0',
     env=dict(
         stop_value=int(1e6),
-        env_name=env_name,
+        env_id=env_id,
         obs_shape=(16, 4, 4),
         obs_type='dict_encoded_board',
         num_of_possible_chance_tile=num_of_possible_chance_tile,

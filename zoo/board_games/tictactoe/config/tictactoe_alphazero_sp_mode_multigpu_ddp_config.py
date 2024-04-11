@@ -36,7 +36,7 @@ tictactoe_alphazero_config = dict(
     policy=dict(
         # ==============================================================
         # for the creation of simulation env
-        simulation_env_name='tictactoe',
+        simulation_env_id='tictactoe',
         simulation_env_config_type='self_play',
         # ==============================================================
         model=dict(

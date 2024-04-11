@@ -7,7 +7,7 @@ from zoo.game_2048.envs.game_2048_env import Game2048Env
 
 # Define game configuration
 config = EasyDict(dict(
-    env_name="game_2048",
+    env_id="game_2048",
     # (str) The render mode. Options are 'None', 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.
     # If None, then the game will not be rendered.
     render_mode='image_realtime_mode',
@@ -15,7 +15,7 @@ config = EasyDict(dict(
     replay_name_suffix='bot',
     replay_path=None,
     act_scale=True,
-    channel_last=True,
+    channel_last=False,
     obs_type='raw_board',  # options=['raw_board', 'raw_encoded_board', 'dict_encoded_board']
     reward_type='raw',  # options=['raw', 'merged_tiles_plus_log_max_tile_num']
     reward_normalize=False,

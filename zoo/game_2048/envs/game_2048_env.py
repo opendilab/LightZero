@@ -89,7 +89,7 @@ class Game2048Env(gym.Env):
     # The default_config for game 2048 env.
     config = dict(
         # (str) The name of the environment registered in the environment registry.
-        env_name="game_2048",
+        env_id="game_2048",
         # (str) The render mode. Options are 'None', 'state_realtime_mode', 'image_realtime_mode' or 'image_savefile_mode'.
         # If None, then the game will not be rendered.
         render_mode=None,
@@ -103,7 +103,7 @@ class Game2048Env(gym.Env):
         act_scale=True,
         # (bool) Whether to use the 'channel last' format for the observation space.
         # If False, 'channel first' format is used.
-        channel_last=True,
+        channel_last=False,
         # (str) The type of observation to use. Options are 'raw_board', 'raw_encoded_board', and 'dict_encoded_board'.
         obs_type='dict_encoded_board',
         # (bool) Whether to normalize rewards. If True, rewards are divided by the maximum possible reward.
@@ -143,7 +143,7 @@ class Game2048Env(gym.Env):
     def __init__(self, cfg: dict) -> None:
         self._cfg = cfg
         self._init_flag = False
-        self._env_name = cfg.env_name
+        self._env_id = cfg.env_id
         self.replay_format = cfg.replay_format
         self.replay_name_suffix = cfg.replay_name_suffix
         self.replay_path = cfg.replay_path

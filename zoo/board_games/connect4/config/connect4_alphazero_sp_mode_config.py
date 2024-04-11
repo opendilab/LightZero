@@ -43,7 +43,7 @@ connect4_alphazero_config = dict(
         mcts_ctree=mcts_ctree,
         # ==============================================================
         # for the creation of simulation env
-        simulation_env_name='connect4',
+        simulation_env_id='connect4',
         simulation_env_config_type='self_play',
         # ==============================================================
         model=dict(

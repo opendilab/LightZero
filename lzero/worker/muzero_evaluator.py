@@ -1,7 +1,7 @@
 import copy
 import time
 from collections import namedtuple
-from typing import Optional, Callable, Tuple
+from typing import Optional, Callable, Tuple, Dict, Any
 
 import numpy as np
 import torch
@@ -19,10 +19,10 @@ from lzero.mcts.utils import prepare_observation
 class MuZeroEvaluator(ISerialEvaluator):
     """
     Overview:
-        The Evaluator for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.
+        The Evaluator class for MCTS+RL algorithms, such as MuZero, EfficientZero, and Sampled EfficientZero.
     Interfaces:
         __init__, reset, reset_policy, reset_env, close, should_eval, eval
-    Property:
+    Properties:
         env, policy
     """
 
@@ -30,10 +30,10 @@ class MuZeroEvaluator(ISerialEvaluator):
     def default_config(cls: type) -> EasyDict:
         """
         Overview:
-            Get evaluator's default config. We merge evaluator's default config with other default configs\
-                and user's config to get the final config.
-        Return:
-            cfg (:obj:`EasyDict`): evaluator's default config
+            Retrieve the default configuration for the evaluator by merging evaluator-specific defaults with other
+            defaults and any user-provided configuration.
+        Returns:
+            - cfg (:obj:`EasyDict`): The default configuration for the evaluator.
         """
         cfg = EasyDict(copy.deepcopy(cls.config))
         cfg.cfg_type = cls.__name__ + 'Dict'
@@ -58,17 +58,17 @@ class MuZeroEvaluator(ISerialEvaluator):
     ) -> None:
         """
         Overview:
-            Init method. Load config and use ``self._cfg`` setting to build common serial evaluator components,
-            e.g. logger helper, timer.
+            Initialize the evaluator with configuration settings for various components such as logger helper and timer.
         Arguments:
-            - eval_freq (:obj:`int`): evaluation frequency in terms of training steps.
-            - n_evaluator_episode (:obj:`int`): the number of episodes to eval in total.
-            - env (:obj:`BaseEnvManager`): the subclass of vectorized env_manager(BaseEnvManager)
-            - policy (:obj:`namedtuple`): the api namedtuple of collect_mode policy
-            - tb_logger (:obj:`SummaryWriter`): tensorboard handle
-            - exp_name (:obj:`str`): Experiment name, which is used to indicate output directory.
-            - instance_name (:obj:`Optional[str]`): Name of this instance.
-            - policy_config: Config of game.
+            - eval_freq (:obj:`int`): Evaluation frequency in terms of training steps.
+            - n_evaluator_episode (:obj:`int`): Number of episodes to evaluate in total.
+            - stop_value (:obj:`float`): A reward threshold above which the training is considered converged.
+            - env (:obj:`Optional[BaseEnvManager]`): An optional instance of a subclass of BaseEnvManager.
+            - policy (:obj:`Optional[namedtuple]`): An optional API namedtuple defining the policy for evaluation.
+            - tb_logger (:obj:`Optional[SummaryWriter]`): Optional TensorBoard logger instance.
+            - exp_name (:obj:`str`): Name of the experiment, used to determine output directory.
+            - instance_name (:obj:`str`): Name of this evaluator instance.
+            - policy_config (:obj:`Optional[dict]`): Optional configuration for the game policy.
         """
         self._eval_freq = eval_freq
         self._exp_name = exp_name
@@ -103,14 +103,11 @@ class MuZeroEvaluator(ISerialEvaluator):
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
         """
         Overview:
-            Reset evaluator's environment. In some case, we need evaluator use the same policy in different \
-                environments. We can use reset_env to reset the environment.
-            If _env is None, reset the old environment.
-            If _env is not None, replace the old environment in the evaluator with the \
-                new passed in environment and launch.
+            Reset the environment for the evaluator, optionally replacing it with a new environment.
+            If _env is None, reset the old environment. If _env is not None, replace the old environment
+            in the evaluator with the new passed in environment and launch.
         Arguments:
-            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-                env_manager(BaseEnvManager)
+            - _env (:obj:`Optional[BaseEnvManager]`): An optional new environment instance to replace the existing one.
         """
         if _env is not None:
             self._env = _env
@@ -122,12 +119,11 @@ class MuZeroEvaluator(ISerialEvaluator):
     def reset_policy(self, _policy: Optional[namedtuple] = None) -> None:
         """
         Overview:
-            Reset evaluator's policy. In some case, we need evaluator work in this same environment but use\
-                different policy. We can use reset_policy to reset the policy.
+            Reset the policy for the evaluator, optionally replacing it with a new policy.
             If _policy is None, reset the old policy.
             If _policy is not None, replace the old policy in the evaluator with the new passed in policy.
         Arguments:
-            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of eval_mode policy
+            - _policy (:obj:`Optional[namedtuple]`): An optional new policy namedtuple to replace the existing one.
         """
         assert hasattr(self, '_env'), "please set env first"
         if _policy is not None:
@@ -137,16 +133,15 @@ class MuZeroEvaluator(ISerialEvaluator):
     def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
         """
         Overview:
-            Reset evaluator's policy and environment. Use new policy and environment to collect data.
+            Reset both the policy and environment for the evaluator, optionally replacing them.
             If _env is None, reset the old environment.
             If _env is not None, replace the old environment in the evaluator with the new passed in \
                 environment and launch.
             If _policy is None, reset the old policy.
             If _policy is not None, replace the old policy in the evaluator with the new passed in policy.
         Arguments:
-            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of eval_mode policy
-            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \
-                env_manager(BaseEnvManager)
+            - _policy (:obj:`Optional[namedtuple]`): An optional new policy namedtuple to replace the existing one.
+            - _env (:obj:`Optional[BaseEnvManager]`): An optional new environment instance to replace the existing one.
         """
         if _env is not None:
             self.reset_env(_env)
@@ -159,8 +154,7 @@ class MuZeroEvaluator(ISerialEvaluator):
     def close(self) -> None:
         """
         Overview:
-            Close the evaluator. If end_flag is False, close the environment, flush the tb_logger\
-                and close the tb_logger.
+            Close the evaluator, the environment, flush and close the TensorBoard logger if applicable.
         """
         if self._end_flag:
             return
@@ -181,10 +175,11 @@ class MuZeroEvaluator(ISerialEvaluator):
     def should_eval(self, train_iter: int) -> bool:
         """
         Overview:
-            Determine whether you need to start the evaluation mode, if the number of training has reached\
-                the maximum number of times to start the evaluator, return True
+            Determine whether to initiate evaluation based on the training iteration count and evaluation frequency.
         Arguments:
-            - train_iter (:obj:`int`): Current training iteration.
+            - train_iter (:obj:`int`): The current count of training iterations.
+        Returns:
+            - (:obj:`bool`): `True` if evaluation should be initiated, otherwise `False`.
         """
         if train_iter == self._last_eval_iter:
             return False
@@ -199,20 +194,22 @@ class MuZeroEvaluator(ISerialEvaluator):
             train_iter: int = -1,
             envstep: int = -1,
             n_episode: Optional[int] = None,
+            return_trajectory: bool = False,
     ) -> Tuple[bool, float]:
         """
         Overview:
-            Evaluate policy and store the best policy based on whether it reaches the highest historical reward.
+            Evaluate the current policy, storing the best policy if it achieves the highest historical reward.
         Arguments:
-            - save_ckpt_fn (:obj:`Callable`): Saving ckpt function, which will be triggered by getting the best reward.
-            - train_iter (:obj:`int`): Current training iteration.
-            - envstep (:obj:`int`): Current env interaction step.
-            - n_episode (:obj:`int`): Number of evaluation episodes.
+            - save_ckpt_fn (:obj:`Optional[Callable]`): Optional function to save a checkpoint when a new best reward is achieved.
+            - train_iter (:obj:`int`): The current training iteration count.
+            - envstep (:obj:`int`): The current environment step count.
+            - n_episode (:obj:`Optional[int]`): Optional number of evaluation episodes; defaults to the evaluator's setting.
+            - return_trajectory (:obj:`bool`): Return the evaluated trajectory `game_segments` in `episode_info` if True.
         Returns:
-            - stop_flag (:obj:`bool`): Whether this training program can be ended.
-            - episode_info (:obj:`Dict[str, List]`): Current evaluation episode information.
+            - stop_flag (:obj:`bool`): Indicates whether the training can be stopped based on the stop value.
+            - episode_info (:obj:`Dict[str, Any]`): A dictionary containing information about the evaluation episodes.
         """
-        # evaluator only work on rank0
+        # the evaluator only works on rank0
         episode_info = None
         stop_flag = False
         if get_rank() == 0:
@@ -231,7 +228,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
             retry_waiting_time = 0.001
             while len(init_obs.keys()) != self._env_num:
-                # In order to be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
+                # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
                 # len(self._env.ready_obs), especially in tictactoe env.
                 self._logger.info('The current init_obs.keys() is {}'.format(init_obs.keys()))
                 self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
@@ -455,4 +452,6 @@ class MuZeroEvaluator(ISerialEvaluator):
             stop_flag, episode_info = objects
 
         episode_info = to_item(episode_info)
+        if return_trajectory:
+            episode_info['trajectory'] = game_segments
         return stop_flag, episode_info

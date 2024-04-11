@@ -1,20 +1,20 @@
 from easydict import EasyDict
 
 # options={'memory_len/0', 'memory_len/9', 'memory_len/17', 'memory_len/20', 'memory_len/22', 'memory_size/0', 'bsuite_swingup/0', 'bandit_noise/0'}
-env_name = 'memory_len/9'
+env_id = 'memory_len/9'
 
 
-if env_name in ['memory_len/0', 'memory_len/9', 'memory_len/17', 'memory_len/20', 'memory_len/22']:
+if env_id in ['memory_len/0', 'memory_len/9', 'memory_len/17', 'memory_len/20', 'memory_len/22']:
     # the memory_length of above envs is 1, 10, 50, 80, 100, respectively.
     action_space_size = 2
     observation_shape = 3
-elif env_name in ['bsuite_swingup/0']:
+elif env_id in ['bsuite_swingup/0']:
     action_space_size = 3
     observation_shape = 8
-elif env_name == 'bandit_noise/0':
+elif env_id == 'bandit_noise/0':
     action_space_size = 11
     observation_shape = 1
-elif env_name in ['memory_size/0']:
+elif env_id in ['memory_size/0']:
     action_space_size = 2
     observation_shape = 3
 else:
@@ -42,7 +42,7 @@ bsuite_sampled_efficientzero_config = dict(
     exp_name=
     f'data_sez_ctree/bsuite_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
     env=dict(
-        env_name=env_name,
+        env_id=env_id,
         stop_value=int(1e6),
         continuous=False,
         manually_discretization=False,

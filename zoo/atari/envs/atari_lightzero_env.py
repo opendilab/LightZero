@@ -13,10 +13,10 @@ from zoo.atari.envs.atari_wrappers import wrap_lightzero
 
 
 @ENV_REGISTRY.register('atari_lightzero')
-class AtariLightZeroEnv(BaseEnv):
+class AtariEnvLightZero(BaseEnv):
     """
     Overview:
-        AtariLightZeroEnv is a derived class from BaseEnv and represents the environment for the Atari LightZero game.
+        AtariEnvLightZero is a derived class from BaseEnv and represents the environment for the Atari LightZero game.
         This class provides the necessary interfaces to interact with the environment, including reset, step, seed,
         close, etc. and manages the environment's properties such as observation_space, action_space, and reward_space.
     Properties:
@@ -31,7 +31,7 @@ class AtariLightZeroEnv(BaseEnv):
         # (int) The number of episodes to evaluate during each evaluation period.
         n_evaluator_episode=3,
         # (str) The name of the Atari game environment.
-        env_name='PongNoFrameskip-v4',
+        # env_id='PongNoFrameskip-v4',
         # (str) The type of the environment, here it's Atari.
         env_type='Atari',
         # (tuple) The shape of the observation space, which is a stacked frame of 4 images each of 96x96 pixels.
@@ -56,7 +56,8 @@ class AtariLightZeroEnv(BaseEnv):
         # (bool) If True, the rewards are clipped to a certain range, usually between -1 and 1, to reduce variance.
         clip_rewards=True,
         # (bool) If True, the channels of the observation images are placed last (e.g., height, width, channels).
-        channel_last=True,
+        # Default is False, which means the channels are placed first (e.g., channels, height, width).
+        channel_last=False,
         # (bool) If True, the pixel values of the game frames are scaled down to the range [0, 1].
         scale=True,
         # (bool) If True, the game frames are preprocessed by cropping irrelevant parts and resizing to a smaller resolution.
@@ -78,7 +79,7 @@ class AtariLightZeroEnv(BaseEnv):
         Overview:
             Return the default configuration for the Atari LightZero environment.
         Arguments:
-            - cls (:obj:`type`): The class AtariLightZeroEnv.
+            - cls (:obj:`type`): The class AtariEnvLightZero.
         Returns:
             - cfg (:obj:`EasyDict`): The default configuration dictionary.
         """
@@ -211,7 +212,7 @@ class AtariLightZeroEnv(BaseEnv):
         return self._reward_space
 
     def __repr__(self) -> str:
-        return "LightZero Atari Env({})".format(self.cfg.env_name)
+        return "LightZero Atari Env({})".format(self.cfg.env_id)
 
     @staticmethod
     def create_collector_env_cfg(cfg: dict) -> List[dict]:

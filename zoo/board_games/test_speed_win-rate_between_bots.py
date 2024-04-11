@@ -20,7 +20,7 @@ cfg_tictactoe = dict(
     bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
     prob_random_agent=0,
     prob_expert_agent=0,
-    channel_last=True,
+    channel_last=False,
     scale=True,
     prob_random_action_in_bot=0.,
 )
@@ -431,7 +431,7 @@ cfg_gomoku = dict(
     bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
     agent_vs_human=False,
     prob_random_agent=0,
-    channel_last=True,
+    channel_last=False,
     scale=True,
     prob_random_action_in_bot=0.,
     check_action_to_connect4_in_bot_v0=False,

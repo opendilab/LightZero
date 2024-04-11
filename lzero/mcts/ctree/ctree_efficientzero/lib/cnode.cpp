@@ -211,11 +211,6 @@ namespace tree
         return mean_q;
     }
 
-    void CNode::print_out()
-    {
-        return;
-    }
-
     int CNode::expanded()
     {
         /*
@@ -248,7 +243,7 @@ namespace tree
         /*
         Overview:
             Find the current best trajectory starts from the current node.
-        Outputs:
+        Returns:
             - traj: a vector of node index, which is the current best trajectory from this node.
         */
         std::vector<int> traj;
@@ -270,7 +265,7 @@ namespace tree
         /*
         Overview:
             Get the distribution of child nodes in the format of visit_count.
-        Outputs:
+        Returns:
             - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
         */
         std::vector<int> distribution;
@@ -378,7 +373,7 @@ namespace tree
         /*
         Overview:
             Find the current best trajectory starts from each root.
-        Outputs:
+        Returns:
             - traj: a vector of node index, which is the current best trajectory from each root.
         */
         std::vector<std::vector<int> > trajs;
@@ -396,7 +391,7 @@ namespace tree
         /*
         Overview:
             Get the children distribution of each root.
-        Outputs:
+        Returns:
             - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
         */
         std::vector<std::vector<int> > distributions;
@@ -618,7 +613,7 @@ namespace tree
             - disount_factor: the discount factor of reward.
             - mean_q: the mean q value of the parent node.
             - players: the number of players.
-        Outputs:
+        Returns:
             - action: the action to select.
         */
         float max_score = FLOAT_MIN;
@@ -667,7 +662,7 @@ namespace tree
             - pb_c_init: constants c1 in muzero.
             - disount_factor: the discount factor of reward.
             - players: the number of players.
-        Outputs:
+        Returns:
             - ucb_value: the ucb score of the child.
         */
         float pb_c = 0.0, prior_score = 0.0, value_score = 0.0;
