@@ -1,7 +1,45 @@
+"""
+Overview:
+    Implementation of a learning environment for the simple billiards game, sum-to-three.
+    The game is played on a table with no pockets.
+    There are 2 balls: a cue ball and an object ball
+    The player must hit the object ball with the cue ball
+    The player scores a point if the number of times a ball hits a cushion is 3
+Mode:
+    - ``self_play_mode``: In ``self_play_mode``, there is only one player, who takes 10 \
+        shots. Their final score is the number of points they achieve.
+    - ``play_with_bot_mode``: (**NOT YET IMPLEMENTED**) In ``play_with_bot_mode`` there are two players, \
+        a learning agent and a bot. The game ends when either player achieves 5 points.
+Bot:
+    - MCTSBot: (**NOT YET IMPLEMENTED**) A bot which take action through a Monte Carlo Tree Search, which \
+        has a high performance.
+    - RuleBot: (**NOT YET IMPLEMENTED**) A bot which takes actions according to some simple heuristics, \
+        which has a low performance.
+Observation Space:
+    The observation in this environment is a dictionary with three elements.
+    - observation (:obj:`array`): A continuous 1D array holding the x- and y- coordinates of the cue ball \
+        and the object ball. It has the following entries: ``[x_cue, y_cue, x_obj, y_obj]``. ``x_cue`` and \
+        ``y_cue`` are the 2D coordinates of the cue ball, and ``x_obj`` and ``y_obj`` are 2D coordinates of \
+        the object ball. x-coordinates can be between ``R`` and ``w-R``, where ``R`` is the ball radius and \
+        ``w`` is the width of the table. Similarly, y-coordinates can be between ``R`` and ``l-R``, where \
+        ``l`` is the length of the table.
+    - action_mask (:obj:`None`): No actions are masked, so ``None`` is used here.
+    - to_play (:obj:`None`): (**NOT YET IMPLEMENTED**) For ``self_play_mode``, this is
+        set to -1. For ``play_with_bot_mode``, this indicates the player that needs to take an action in the \
+        current state.
+Action Space:
+    A continuous length-2 array. The first element is ``V0``, the speed of the cue stick. The second element \
+    is the ``cut_angle``, which is the angle that the cue ball hits the object ball with. A cut angle of 0 is \
+    a head-on collision, a cut angle of -89 is a very slight graze on the left side of the object ball, and a \
+    cut angle of 89 is a very slight graze on the right side of the object ball.
+Reward Space:
+    For the ``self_play_mode``, intermediate rewards of 1.0 are returned for each step where the player earns a point.
+    For the ``play_with_bot_mode``, (**NOT YET IMPLEMENTED**)...
+"""
+
 from __future__ import annotations
 
 import gc
-from typing import Dict
 
 from dataclasses import dataclass, asdict
 import numpy as np
