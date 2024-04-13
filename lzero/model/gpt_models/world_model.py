@@ -842,6 +842,21 @@ class WorldModel(nn.Module):
         elif self.obs_type == 'image_memory':
             # 从潜在状态表示重建观察
             reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+            
+            # import matplotlib.pyplot as plt
+            # import torch
+            # # 保存前三帧图像
+            # for i in range(17):
+            #     plt.imshow(reconstructed_images[i][0].permute(1, 2, 0).cpu().detach().numpy())  # 将通道从 (C, H, W) 转换为 (H, W, C)
+            #     plt.axis('off')  # 关闭坐标轴
+            #     plt.savefig(f'./render/image_frame_reconstructed_{i}.png')
+            #     plt.close()
+            # # 保存前三帧图像
+            # for i in range(3):
+            #     plt.imshow(batch['observations'][i][0].permute(1, 2, 0).cpu().detach().numpy())  # 将通道从 (C, H, W) 转换为 (H, W, C)
+            #     plt.axis('off')  # 关闭坐标轴
+            #     plt.savefig(f'./render/image_frame_orig_{i}.png')
+            #     plt.close()
 
             # 计算重建损失和感知损失
             latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 5, 5),

@@ -177,12 +177,35 @@ class MuZeroModelGPT(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.tokenizer.lpips')
             print('=='*20)
         elif cfg.world_model.obs_type == 'image_memory':
+            # self.representation_network = ImageEncoderMemory(
+            #     image_shape=(3, 5, 5),
+            #     embedding_size=cfg.world_model.embed_dim,
+            #     channels=[8, 16],
+            #     kernel_sizes=[2, 2],
+            #     strides=[1, 1],
+            #     activation= nn.LeakyReLU(negative_slope=0.01),  # TODO
+            #     group_size =cfg.world_model.group_size,
+            # )
+            # # Instantiate the decoder
+            # decoder_network = ImageDecoderMemory(
+            #     image_shape=(3, 5, 5),
+            #     embedding_size=cfg.world_model.embed_dim,
+            #     channels=[16, 8],
+            #     # kernel_sizes=[2, 2],
+            #     kernel_sizes=[1, 1],
+            #     strides=[1, 1],
+            #     activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
+            # )
+            # bigger encoder/decoder
             self.representation_network = ImageEncoderMemory(
                 image_shape=(3, 5, 5),
                 embedding_size=cfg.world_model.embed_dim,
-                channels=[8, 16],
-                kernel_sizes=[2, 2],
-                strides=[1, 1],
+                # channels=[16, 32, 64],
+                # kernel_sizes=[3, 3, 3],
+                # strides=[1, 1, 1],
+                channels=[16, 32, 64, 128],
+                kernel_sizes=[3, 3, 3, 3],
+                strides=[1, 1, 1, 1],
                 activation= nn.LeakyReLU(negative_slope=0.01),  # TODO
                 group_size =cfg.world_model.group_size,
             )
@@ -190,13 +213,14 @@ class MuZeroModelGPT(nn.Module):
             decoder_network = ImageDecoderMemory(
                 image_shape=(3, 5, 5),
                 embedding_size=cfg.world_model.embed_dim,
-                channels=[16, 8],
-                # kernel_sizes=[2, 2],
-                kernel_sizes=[1, 1],
-                strides=[1, 1],
+                # channels=[64, 32, 16],
+                # kernel_sizes=[3, 3, 3],
+                # strides=[1, 1, 1],
+                channels=[128, 64, 32, 16],
+                kernel_sizes=[3, 3, 3, 3],
+                strides=[1, 1, 1, 1],
                 activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
             )
-
             Encoder = Encoder(cfg.tokenizer.encoder)
             Decoder = Decoder(cfg.tokenizer.decoder)
             self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network,

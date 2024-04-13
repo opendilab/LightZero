@@ -617,9 +617,45 @@ class MuZeroGPTPolicy(Policy):
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
+            # from torch.nn.functional import pairwise_distance, cosine_similarity
+            # 假定 latent_state_roots 是一个 PyTorch tensor
+            # 计算 L2 距离
+            # l2_dist_01 = pairwise_distance(latent_state_roots[0], latent_state_roots[1])
+            # l2_dist_12 = pairwise_distance(latent_state_roots[1], latent_state_roots[2])
+            # l2_dist_02 = pairwise_distance(latent_state_roots[0], latent_state_roots[2])
+            # # 计算余弦相似度
+            # cos_sim_01 = cosine_similarity(latent_state_roots[0], latent_state_roots[1])
+            # cos_sim_12 = cosine_similarity(latent_state_roots[1], latent_state_roots[2])
+            # cos_sim_02 = cosine_similarity(latent_state_roots[0], latent_state_roots[2])
+            # print("L2 Distances:")
+            # print("Frame 0 to 1:", l2_dist_01.item())
+            # print("Frame 1 to 2:", l2_dist_12.item())
+            # print("Frame 0 to 2:", l2_dist_02.item())
+            # print("\nCosine Similarities:")
+            # print("Frame 0 to 1:", cos_sim_01.item())
+            # print("Frame 1 to 2:", cos_sim_12.item())
+            # print("Frame 0 to 2:", cos_sim_02.item())
+
+            # 假设latent_state_roots是一个tensor
+            # l1_norms = torch.norm(latent_state_roots, p=1, dim=2)  # 计算L1范数
+            l2_norms = torch.norm(latent_state_roots, p=2, dim=2)  # 计算L2范数
+            # print("L1 Norms:", l1_norms)
+            print("L2 Norms:", l2_norms)
+
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
+
+            # import matplotlib.pyplot as plt
+            # import torch
+            # # 假定 obs_batch 是一个 PyTorch tensor
+            # # obs_batch = torch.randn(8, 3, 5, 5)  # 示例数据
+            # # 保存前三帧图像
+            # for i in range(3):
+            #     plt.imshow(data[i].permute(1, 2, 0).cpu().numpy())  # 将通道从 (C, H, W) 转换为 (H, W, C)
+            #     plt.axis('off')  # 关闭坐标轴
+            #     plt.savefig(f'./render/image_frame_{i}.png')
+            #     plt.close()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
             # the only difference between collect and eval is the dirichlet noise

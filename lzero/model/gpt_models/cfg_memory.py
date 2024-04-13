@@ -55,8 +55,10 @@ cfg['world_model'] = {
     # 'embed_dim': 64,  # TODO：for memory # same as <Transformer shine in RL> paper
     # 'embed_dim': 96,  # TODO：for memory # same as <Transformer shine in RL> paper
     'group_size': 8,  # NOTE
+    # 'group_size': 768,  # NOTE
 
-    "device": 'cuda:5',
+
+    "device": 'cuda:1',
     'attention': 'causal',
     # 'num_layers': 1,
     # 'num_layers': 2,  # same as <Transformer shine in RL> paper
@@ -64,7 +66,8 @@ cfg['world_model'] = {
     'num_layers': 6,
     'num_heads': 8,
     # 'embed_dim': 96, # TODO：
-    'embed_dim': 768, # TODO：Gpt2 Base
+    # 'embed_dim': 768, # TODO：Gpt2 Base
+    'embed_dim': 256, # TODO：
 
 
     # 'num_layers': 8, # TODO：for atari debug
@@ -89,7 +92,7 @@ cfg['world_model'] = {
 
     'latent_recon_loss_weight': 0.05,
     # 'latent_recon_loss_weight':0.5,
-    # 'latent_recon_loss_weight':1,
+    # 'latent_recon_loss_weight':10,
 
     'perceptual_loss_weight': 0.,
     'policy_entropy_weight': 1e-4,  # NOTE：for key_to_door

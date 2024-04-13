@@ -91,8 +91,8 @@ class Game(game.AbstractGame):
         self._episode_length = sum(self._max_frames.values())
         self._num_actions = common.NUM_ACTIONS
         self._colours = common.FIXED_COLOURS.copy()
-        shuffled_symbol_colour_map = common.get_shuffled_symbol_colour_map(rng, SYMBOLS_TO_SHUFFLE) # TODO：b c e （分别对应左 中 右位置） 的颜色随机
-        # shuffled_symbol_colour_map = {'b': (0, 0, 1000), 'c': (1000, 0, 0), 'e': (0, 1000, 0)}   # TODO：phase3-fixed-colormap-bce b c e （分别对应左 中 右位置） 的颜色固定为：蓝色 红色 绿色
+        # shuffled_symbol_colour_map = common.get_shuffled_symbol_colour_map(rng, SYMBOLS_TO_SHUFFLE) # TODO：b c e （分别对应左 中 右位置） 的颜色随机
+        shuffled_symbol_colour_map = {'b': (0, 0, 1000), 'c': (1000, 0, 0), 'e': (0, 1000, 0)}   # TODO：phase3-fixed-colormap-bce b c e （分别对应左 中 右位置） 的颜色固定为：蓝色 红色 绿色
         print(f'shuffled_symbol_colour_map: {shuffled_symbol_colour_map}')
         self._colours.update(
             shuffled_symbol_colour_map

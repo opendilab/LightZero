@@ -375,12 +375,12 @@ class ImageEncoderMemory(nn.Module):
             self,
             image_shape=(3, 5, 5),
             embedding_size=100,
-            channels=[16, 32, 64],  # 增加通道数
-            kernel_sizes=[3, 3, 3],  # 调整卷积核大小
-            strides=[1, 1, 1], 
-            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),
-            # normalize_pixel=True,  # 归一化输入
-            normalize_pixel=False,  # 归一化输入
+            channels=[8, 16],
+            kernel_sizes=[2, 2],
+            strides=[1, 1],
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),  # TODO
+            from_flattened=False,
+            normalize_pixel=False,
             group_size: int = 8,
             **kwargs,
     ):
@@ -389,34 +389,47 @@ class ImageEncoderMemory(nn.Module):
         self.channels = [image_shape[0]] + list(channels)
 
         layers = []
+        h_w = self.shape[-2:]
+
         for i in range(len(self.channels) - 1):
             layers.append(
                 nn.Conv2d(
-                    self.channels[i], self.channels[i + 1], kernel_sizes[i], strides[i], 
-                    padding=kernel_sizes[i]//2  # 保持特征图大小
+                    self.channels[i], self.channels[i + 1], kernel_sizes[i], strides[i]
                 )
             )
-            layers.append(nn.BatchNorm2d(self.channels[i + 1]))  # 加入BN稳定训练
             layers.append(activation)
-        
-        layers.append(nn.AdaptiveAvgPool2d(1))  # 替代Reshape操作
-        
+            h_w = conv_output_shape(h_w, kernel_sizes[i], strides[i])
+
         self.cnn = nn.Sequential(*layers)
-        self.linear = nn.Sequential(
-            nn.Linear(self.channels[-1], embedding_size),
-            # nn.LayerNorm(embedding_size)  # 归一化embedding  # TODO
-        )
+
+        self.linear = nn.Linear(
+            h_w[0] * h_w[1] * self.channels[-1], embedding_size
+        )  # dreamer does not use it
+
+        self.from_flattened = from_flattened
         self.normalize_pixel = normalize_pixel
+        self.embedding_size = embedding_size
         self.sim_norm = SimNorm(simnorm_dim=group_size)
 
     def forward(self, image):
+        # return embedding of shape [N, embedding_size]
+        if self.from_flattened:
+            # image of size (T, B, C*H*W)
+            batch_size = image.shape[:-1]
+            img_shape = [np.prod(batch_size)] + list(self.shape)  # (T*B, C, H, W)
+            image = torch.reshape(image, img_shape)
+        else:  # image of size (N, C, H, W)
+            batch_size = [image.shape[0]]
+
         if self.normalize_pixel:
             image = image / 255.0
-        x = self.cnn(image.float())  # (B, C, 1, 1)
-        x = torch.flatten(x, start_dim=1)  # (B, C)
-        x = self.linear(x)  # (B, embedding_size)
+
+        embed = self.cnn(image.float())  # (T*B, C, H, W)
+        embed = torch.reshape(embed, list(batch_size) + [-1])  # (T, B, C*H*W)
+        embed = self.linear(embed)  # (T, B, embedding_size)
         # TODO:
-        x = self.sim_norm(x)
+        # x = embed
+        x = self.sim_norm(embed)
         return x
 
 
@@ -425,9 +438,10 @@ class ImageDecoderMemory(nn.Module):
             self,
             image_shape=(3, 5, 5),
             embedding_size=100,
-            channels=[64, 32, 16],
-            kernel_sizes=[3, 3, 3],
-            strides=[1, 1, 1],
+            channels=[16, 8],
+            kernel_sizes=[2, 2],
+            # kernel_sizes=[1, 1], # NOTE: for memory env
+            strides=[1, 1],
             activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),
             **kwargs,
     ):
@@ -435,29 +449,36 @@ class ImageDecoderMemory(nn.Module):
         self.shape = image_shape
         self.channels = list(channels) + [image_shape[0]]
 
-        self.linear = nn.Linear(embedding_size, channels[0])
-        
+        self.linear = nn.Linear(embedding_size, image_shape[-2] * image_shape[-1] * channels[0])
+
         layers = []
+        h_w = (image_shape[-2], image_shape[-1])
+
         for i in range(len(self.channels) - 1):
             layers.append(
                 nn.ConvTranspose2d(
-                    self.channels[i], self.channels[i + 1], kernel_sizes[i], strides[i],
-                    padding=kernel_sizes[i]//2, output_padding=strides[i]-1
+                    self.channels[i], self.channels[i + 1], kernel_sizes[i], strides[i]
                 )
             )
             if i < len(self.channels) - 2:
-                layers.append(nn.BatchNorm2d(self.channels[i + 1]))
                 layers.append(activation)
             else:
-                layers.append(nn.Sigmoid())
+                layers.append(nn.Sigmoid())  # TODO NOTE: for memory env
+            h_w = conv_transpose_output_shape(h_w, kernel_sizes[i], strides[i])
 
         self.deconv = nn.Sequential(*layers)
+        self.embedding_size = embedding_size
 
     def forward(self, embedding):
+        # Decode the embedding into an image
+        batch_size = embedding.shape[:-1]
+        embedding = embedding.view(np.prod(batch_size), self.embedding_size)
         x = self.linear(embedding)
-        x = x.view(-1, self.channels[0], 1, 1)  
-        x = self.deconv(x)  # (B, C, H, W)
+        x = x.view(np.prod(batch_size), self.channels[0], self.shape[-2], self.shape[-1])
+        x = self.deconv(x)
+        x = x.view(*batch_size, *self.shape)
         return x
+
 
 def conv_transpose_output_shape(h_w, kernel_size, stride, pad=0, out_pad=0):
     """
