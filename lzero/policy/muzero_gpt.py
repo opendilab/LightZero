@@ -424,7 +424,9 @@ class MuZeroGPTPolicy(Policy):
         # ==============================================================
         # update world model
         # ==============================================================
-        losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer) 
+        # losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer) 
+        losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle) # for debugging
+
 
         weighted_total_loss = losses.loss_total
         for loss_name, loss_value in losses.intermediate_losses.items():
@@ -638,9 +640,9 @@ class MuZeroGPTPolicy(Policy):
 
             # 假设latent_state_roots是一个tensor
             # l1_norms = torch.norm(latent_state_roots, p=1, dim=2)  # 计算L1范数
-            l2_norms = torch.norm(latent_state_roots, p=2, dim=2)  # 计算L2范数
-            # print("L1 Norms:", l1_norms)
-            print("L2 Norms:", l2_norms)
+            # l2_norms = torch.norm(latent_state_roots, p=2, dim=2)  # 计算L2范数
+            # print("L1 Norms:", l1_norms) #固定值
+            # print("L2 Norms:", l2_norms)
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()

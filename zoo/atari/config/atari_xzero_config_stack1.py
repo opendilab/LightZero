@@ -1,17 +1,17 @@
 from easydict import EasyDict
 
 import torch
-torch.cuda.set_device(3)
+torch.cuda.set_device(2)
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-# env_name = 'PongNoFrameskip-v4'
+env_name = 'PongNoFrameskip-v4'
 # env_name = 'MsPacmanNoFrameskip-v4'
 # env_name = 'QbertNoFrameskip-v4'
 # env_name = 'SeaquestNoFrameskip-v4'
 # env_name = 'BoxingNoFrameskip-v4'
 # env_name = 'FrostbiteNoFrameskip-v4'
-env_name = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
+# env_name = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
 
 
 if env_name == 'PongNoFrameskip-v4':
@@ -75,7 +75,7 @@ atari_xzero_config = dict(
     # TODO: 
     # mcts_ctree
     # muzero_collector/evaluator: empty_cache
-    exp_name=f'data_xzero_atari_0410/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_lsd768-nh8_grugating-false_latent-groupkl_conleninit{8}-conlenrecur{8}clear-true_gamma1_nlayer6-steplosslog_seed0',
+    exp_name=f'data_xzero_atari_0413/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_grugating-false_latent-groupkl_conleninit{40}-conlenrecur{40}clear_lsd768-nlayer6-nh8_seed0',
     # exp_name=f'data_xzero_atari_0407/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_grugating-false_latent-groupkl_conleninit{20}-conlenrecur{20}clear-gamma1_lsd1536-nlayer12-nh12_steplosslog_seed0',
 
     env=dict(

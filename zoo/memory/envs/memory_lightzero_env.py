@@ -39,7 +39,8 @@ class MemoryEnvLightZero(BaseEnv):
         # apple_reward=(1, 1),  # Range of rewards for collecting an apple
         apple_reward=(0, 0),  # Range of rewards for collecting an apple
         fix_apple_reward_in_episode=False,  # Whether to fix apple reward (DEFAULT_APPLE_REWARD) within an episode
-        final_reward=10.0,  # Reward for choosing the correct door in the final phase
+        # final_reward=10.0,  # Reward for choosing the correct door in the final phase
+        final_reward=1.0,  # Reward for choosing the correct door in the final phase TODO
         respawn_every=300,  # Respawn interval for apples
         crop=True,  # Whether to crop the observation
         max_frames={
@@ -179,7 +180,39 @@ class MemoryEnvLightZero(BaseEnv):
         if self.flatten_observation:
             observation = observation.flatten()
 
+        epsilon = 1e-3
+        values = observation[:, 3, 3]  # 提取 (3, 3) 的值，这是一个 (3,) 形状的数组
+        target_colors = np.array([
+            [0, 0, 0.90980392],
+            [0, 0.90980392, 0],
+            [0.90980392, 0, 0]
+        ])
+        # 我们需要对 values 进行 reshape 操作，使其变为 (3, 1) 形状
+        values = values.reshape(-1, 1)
+        # 现在我们可以计算两者之间的差异
+        diff = np.abs(values - target_colors)
+        # 检查 diff 中的每个元素是否小于 epsilon
+        condition = diff < epsilon
+        # 对每行使用 all 操作，检查是否所有元素都满足条件
+        all_match = condition.all(axis=0)
+        # 创建一个新的 channel，初始值为 0
+        new_channel = np.zeros([1, 5, 5])
+        # 检查每个颜色是否匹配，如果匹配则设置对应的值
+        if all_match[0]:
+            new_channel[:, :, :] = 1/3
+        elif all_match[1]:
+            new_channel[:, :, :] = 2/3
+        elif all_match[2]:
+            new_channel[:, :, :] = 1
+        # 合并原始 observation 和新 channel
+        new_observation = np.concatenate([observation, new_channel], axis=0)
+        # 输出新的 observation 结构和内容
+        # print("New observation shape:", new_observation.shape)# TODO
+        # print("New observation data:\n", new_observation)
+
+        # observation = {'observation': new_observation, 'action_mask': action_mask, 'to_play': -1}# TODO:channel4
         observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1}
+
 
         return observation
 
@@ -211,6 +244,8 @@ class MemoryEnvLightZero(BaseEnv):
             info['success'] = 1 if self._eval_episode_return == self._cfg.final_reward else 0
             info['eval_episode_return'] = info['success']
             print(f'episode seed:{self._seed} done! self.episode_reward_list is: {self.episode_reward_list}')
+            print(f"Step: {self._current_step}, Action: {action}, Reward: {reward}, Observation: {observation}, Done: {done}, Info: {info}")  # TODO
+
 
         # print(f"Step: {self._current_step}, Action: {action}, Reward: {reward}, Observation: {observation}, Done: {done}, Info: {info}")  # TODO
         observation = to_ndarray(observation, dtype=np.float32)
@@ -247,6 +282,7 @@ class MemoryEnvLightZero(BaseEnv):
             # self.display_frames_as_gif(self._gif_images_numpy, gif_file)
             print(f'saved replay to {gif_file}')
 
+
         if not self.rgb_img_observation and self.scale_entity_observation:
             observation = observation / self.entity_obs_max_scale
         if self.rgb_img_observation:
@@ -256,6 +292,37 @@ class MemoryEnvLightZero(BaseEnv):
         if self.flatten_observation:
             observation = observation.flatten()
 
+        epsilon = 1e-3
+        values = observation[:, 3, 3]  # 提取 (3, 3) 的值，这是一个 (3,) 形状的数组
+        target_colors = np.array([
+            [0, 0, 0.90980392],
+            [0, 0.90980392, 0],
+            [0.90980392, 0, 0]
+        ])
+        # 我们需要对 values 进行 reshape 操作，使其变为 (3, 1) 形状
+        values = values.reshape(-1, 1)
+        # 现在我们可以计算两者之间的差异
+        diff = np.abs(values - target_colors)
+        # 检查 diff 中的每个元素是否小于 epsilon
+        condition = diff < epsilon
+        # 对每行使用 all 操作，检查是否所有元素都满足条件
+        all_match = condition.all(axis=0)
+        # 创建一个新的 channel，初始值为 0
+        new_channel = np.zeros([1, 5, 5])
+        # 检查每个颜色是否匹配，如果匹配则设置对应的值
+        if all_match[0]:
+            new_channel[:, :, :] = 1/3
+        elif all_match[1]:
+            new_channel[:, :, :] = 2/3
+        elif all_match[2]:
+            new_channel[:, :, :] = 1
+        # 合并原始 observation 和新 channel
+        new_observation = np.concatenate([observation, new_channel], axis=0)
+        # 输出新的 observation 结构和内容
+        # print("New observation shape:", new_observation.shape)# TODO
+        # print("New observation data:\n", new_observation)
+
+        # observation = {'observation': new_observation, 'action_mask': action_mask, 'to_play': -1}# TODO:channel4
         observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1}
 
         return BaseEnvTimestep(observation, reward, done, info)

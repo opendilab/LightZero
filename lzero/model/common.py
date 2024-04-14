@@ -402,12 +402,18 @@ class ImageEncoderMemory(nn.Module):
         layers.append(nn.AdaptiveAvgPool2d(1))  # 替代Reshape操作
         
         self.cnn = nn.Sequential(*layers)
+        # self.linear = nn.Sequential(
+        #     nn.Linear(self.channels[-1], embedding_size),
+        # )
         self.linear = nn.Sequential(
-            nn.Linear(self.channels[-1], embedding_size),
+            nn.Linear(self.channels[-1], embedding_size, bias=False),
             # nn.LayerNorm(embedding_size)  # 归一化embedding  # TODO
         )
+        init.kaiming_normal_(self.linear[0].weight, mode='fan_out', nonlinearity='relu')
+
         self.normalize_pixel = normalize_pixel
         self.sim_norm = SimNorm(simnorm_dim=group_size)
+
 
     def forward(self, image):
         if self.normalize_pixel:
@@ -424,7 +430,7 @@ class ImageDecoderMemory(nn.Module):
     def __init__(
             self,
             image_shape=(3, 5, 5),
-            embedding_size=100,
+            embedding_size=256,  # 修改为与输入 embedding 的大小匹配
             channels=[64, 32, 16],
             kernel_sizes=[3, 3, 3],
             strides=[1, 1, 1],
@@ -435,7 +441,7 @@ class ImageDecoderMemory(nn.Module):
         self.shape = image_shape
         self.channels = list(channels) + [image_shape[0]]
 
-        self.linear = nn.Linear(embedding_size, channels[0])
+        self.linear = nn.Linear(embedding_size, channels[0] * image_shape[1] * image_shape[2])
         
         layers = []
         for i in range(len(self.channels) - 1):
@@ -455,9 +461,10 @@ class ImageDecoderMemory(nn.Module):
 
     def forward(self, embedding):
         x = self.linear(embedding)
-        x = x.view(-1, self.channels[0], 1, 1)  
+        x = x.view(-1, self.channels[0], self.shape[1], self.shape[2])  # 修改 view 操作
         x = self.deconv(x)  # (B, C, H, W)
         return x
+
 
 def conv_transpose_output_shape(h_w, kernel_size, stride, pad=0, out_pad=0):
     """

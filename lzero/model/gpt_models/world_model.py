@@ -13,7 +13,6 @@ import gym
 from joblib import hash
 import numpy as np
 import torch
-import torch
 from torch.distributions.categorical import Categorical
 import torch.nn as nn
 import torch.nn.functional as F
@@ -29,6 +28,10 @@ from ding.torch_utils import to_device
 
 from line_profiler import line_profiler
 import hashlib
+import numpy as np
+from PIL import Image
+import torchvision
+import matplotlib.pyplot as plt
 
 class SimNorm(nn.Module):
     """
@@ -810,7 +813,7 @@ class WorldModel(nn.Module):
         total_memory_gb = total_memory_bytes / (1024 ** 3)
         return total_memory_gb
 
-    def compute_loss(self, batch, target_tokenizer: Tokenizer=None, **kwargs: Any) -> LossWithIntermediateLosses:
+    def compute_loss(self, batch, target_tokenizer: Tokenizer=None, inverse_scalar_transform_handle=None, **kwargs: Any) -> LossWithIntermediateLosses:
         # 将观察编码为潜在状态表示
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False)
         
@@ -842,11 +845,25 @@ class WorldModel(nn.Module):
         elif self.obs_type == 'image_memory':
             # 从潜在状态表示重建观察
             reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+            original_images, reconstructed_images = batch['observations'], reconstructed_images
+
+            #  ========== for debugging ==========
+            # batch['observations'].shape torch.Size([2, 17, 3, 5, 5]) 
+            # reconstructed_images.shape torch.Size([34, 3, 5, 5])
+            # self.visualize_reconstruction_v1(original_images, reconstructed_images)
+
+            #  ========== for debugging ==========
+            # batch['target_policy'].shape torch.Size([2, 17, 4])
+            # batch['target_value'].shape torch.Size([2, 17, 101])
+            # batch['rewards'].shape torch.Size([2, 17, 101])
+            target_policy = batch['target_policy']
+            target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1,101)).reshape(batch['observations'].shape[0],batch['observations'].shape[1],1) # torch.Size([2, 17, 1])
+            true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1,101)).reshape(batch['observations'].shape[0],batch['observations'].shape[1],1) # torch.Size([2, 17, 1])
+
             
             # import matplotlib.pyplot as plt
-            # import torch
-            # # 保存前三帧图像
-            # for i in range(17):
+            # # # 保存前三帧图像
+            # for i in range(1):
             #     plt.imshow(reconstructed_images[i][0].permute(1, 2, 0).cpu().detach().numpy())  # 将通道从 (C, H, W) 转换为 (H, W, C)
             #     plt.axis('off')  # 关闭坐标轴
             #     plt.savefig(f'./render/image_frame_reconstructed_{i}.png')
@@ -859,8 +876,8 @@ class WorldModel(nn.Module):
             #     plt.close()
 
             # 计算重建损失和感知损失
-            latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 5, 5),
-                                                                   reconstructed_images)  # NOTE: for stack=1
+            latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 5, 5), reconstructed_images)  # NOTE: for stack=1 TODO
+            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 5, 5), reconstructed_images)  # NOTE: for stack=1
             # latent_recon_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
             perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
 
@@ -870,6 +887,19 @@ class WorldModel(nn.Module):
         # 前向传播,得到预测的观察、奖励和策略等
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)})
         
+
+        #  ========== for debugging ==========
+        # outputs.logits_policy.shape torch.Size([2, 17, 4])
+        # outputs.logits_value.shape torch.Size([2, 17, 101])
+        # outputs.logits_rewards.shape torch.Size([2, 17, 101])
+        # predict_policy = outputs.logits_policy
+        # 使用 softmax 对最后一个维度（dim=-1）进行处理
+        predict_policy = F.softmax(outputs.logits_policy, dim=-1)
+        predict_value = inverse_scalar_transform_handle(outputs.logits_value.reshape(-1,101)).reshape(batch['observations'].shape[0],batch['observations'].shape[1],1) # predict_value: torch.Size([2, 17, 1])
+        predict_rewards = inverse_scalar_transform_handle(outputs.logits_rewards.reshape(-1,101)).reshape(batch['observations'].shape[0],batch['observations'].shape[1],1) # predict_rewards: torch.Size([2, 17, 1])
+        self.visualize_reconstruction_v2(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy) # TODO
+
+
         # 为了训练稳定性,使用target_tokenizer计算真实的下一个潜在状态表示
         with torch.no_grad():
             traget_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False)
@@ -1048,6 +1078,172 @@ class WorldModel(nn.Module):
         labels_value = target_value.masked_fill(mask_fill_value, -100)
         return labels_policy.reshape(-1, self.action_shape), labels_value.reshape(-1, self.support_size)  # TODO(pu)
 
+    def visualize_reconstruction_v1(self, original_images, reconstructed_images, suffix='pong', width=64):
+        # 确保输入张量的维度匹配
+        assert original_images.shape[0] == reconstructed_images.shape[0] // original_images.shape[1]
+        assert original_images.shape[1] == reconstructed_images.shape[0] // original_images.shape[0]
+        assert original_images.shape[2:] == reconstructed_images.shape[1:]
+
+        batch_size = original_images.shape[0]
+        num_timesteps = original_images.shape[1]
+
+        for batch_idx in range(batch_size):
+            # 创建一个白色背景的大图像
+            big_image = torch.ones(3, (width + 1) * 2 + 1, (width + 1) * num_timesteps + 1)
+
+            # 将原始图像和重建图像复制到大图像中
+            for i in range(num_timesteps):
+                original_image = original_images[batch_idx, i, :, :, :]
+                reconstructed_image = reconstructed_images[i * batch_size + batch_idx, :, :, :]
+
+                big_image[:, 1:1+width, (width + 1) * i + 1:(width + 1) * (i + 1)] = original_image
+                big_image[:, 2+width:2+2*width, (width + 1) * i + 1:(width + 1) * (i + 1)] = reconstructed_image
+
+            # 转换张量为PIL图像
+            image = torchvision.transforms.ToPILImage()(big_image)
+
+            # 绘制图像
+            plt.figure(figsize=(20, 4))
+            plt.imshow(image)
+            plt.axis('off')
+
+            # 添加时间步标签
+            for i in range(num_timesteps):
+                plt.text((width + 1) * i + width/2, -10, str(i + 1), ha='center', va='top', fontsize=12)
+
+            # 添加行标签
+            plt.text(-0.5, 3, 'Original', ha='right', va='center', fontsize=12)
+            plt.text(-0.5, 3+width+1, 'Reconstructed', ha='right', va='center', fontsize=12)
+
+            plt.tight_layout()
+            # plt.savefig(f'./render/{suffix}/reconstruction_visualization_batch_{batch_idx}_v1.png')
+            plt.savefig(f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}/reconstruction_visualization_batch_{batch_idx}_v1.png')
+            plt.close()
+
+    def visualize_reconstruction_v2(self, original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, suffix='pong', width=64):
+        # 确保输入张量的维度匹配
+        assert original_images.shape[0] == reconstructed_images.shape[0] // original_images.shape[1]
+        assert original_images.shape[1] == reconstructed_images.shape[0] // original_images.shape[0]
+        assert original_images.shape[2:] == reconstructed_images.shape[1:]
+
+        batch_size = original_images.shape[0]
+        num_timesteps = original_images.shape[1]
+        num_actions = predict_policy.shape[2]
+
+        # 根据动作空间大小自适应颜色
+        colors = plt.cm.viridis(np.linspace(0, 1, num_actions))
+        # colors = ['r', 'g', 'b', 'y']
+
+        for batch_idx in range(batch_size):
+            fig, ax = plt.subplots(5, 1, figsize=(20, 15), gridspec_kw={'height_ratios': [1, 1, 1, 1, 1]})
+
+            # 绘制rewards和value的折线图
+            timesteps = range(1, num_timesteps + 1)
+            ax[0].plot(timesteps, true_rewards[batch_idx, :, 0].cpu().detach().numpy(), 'g-', label='True Rewards')
+            ax[0].plot(timesteps, predict_rewards[batch_idx, :, 0].cpu().detach().numpy(), 'g--', label='Predict Rewards')
+            ax[0].set_xticks(timesteps)
+            ax[0].set_xticklabels([])
+            ax[0].legend(loc='upper left')
+            ax[0].set_ylabel('Rewards')
+
+            ax0_twin = ax[0].twinx()
+            ax0_twin.plot(timesteps, target_predict_value[batch_idx, :, 0].cpu().detach().numpy(), 'b-', label='Target Predict Value')
+            ax0_twin.plot(timesteps, predict_value[batch_idx, :, 0].cpu().detach().numpy(), 'b--', label='Predict Value')
+            ax0_twin.legend(loc='upper right')
+            ax0_twin.set_ylabel('Value')
+
+            # 绘制原始图像和重建图像
+            image_width = 1.0
+            image_height = original_images.shape[3] / original_images.shape[4] * image_width
+            gap_width = 0.2
+            for i in range(num_timesteps):
+                original_image = original_images[batch_idx, i, :, :, :]
+                reconstructed_image = reconstructed_images[i * batch_size + batch_idx, :, :, :]
+
+                left = i * (image_width + gap_width)
+                right = left + image_width
+                bottom = 0.5 - image_height / 2
+                top = 0.5 + image_height / 2
+
+                ax[1].imshow(torchvision.transforms.ToPILImage()(original_image), extent=[left, right, bottom, top], aspect='auto')
+                ax[2].imshow(torchvision.transforms.ToPILImage()(reconstructed_image), extent=[left, right, bottom, top], aspect='auto')
+
+            ax[1].set_xlim(0, num_timesteps * (image_width + gap_width) - gap_width)
+            ax[1].set_xticks([(i + 0.5) * (image_width + gap_width) for i in range(num_timesteps)])
+            ax[1].set_xticklabels([])
+            ax[1].set_yticks([])
+            ax[1].set_ylabel('Original', rotation=0, labelpad=30)
+
+            ax[2].set_xlim(0, num_timesteps * (image_width + gap_width) - gap_width)
+            ax[2].set_xticks([(i + 0.5) * (image_width + gap_width) for i in range(num_timesteps)])
+            ax[2].set_xticklabels([])
+            ax[2].set_yticks([])
+            ax[2].set_ylabel('Reconstructed', rotation=0, labelpad=30)
+
+            # 绘制predict_policy和target_policy的概率分布柱状图
+            bar_width = 8/num_actions # TODO：action_space而变化
+            for i in range(num_timesteps):
+                for j in range(num_actions):
+                    ax[3].bar(i + j * bar_width - (num_actions - 1) * bar_width / 2, predict_policy[batch_idx, i, j].item(), width=bar_width, color=colors[j], alpha=0.5)
+                    ax[4].bar(i + j * bar_width - (num_actions - 1) * bar_width / 2, target_policy[batch_idx, i, j].item(), width=bar_width, color=colors[j], alpha=0.5)
+
+            ax[3].set_xticks(timesteps)
+            ax[3].set_xticklabels([])
+            ax[3].set_ylim(0, 1)
+            ax[3].set_ylabel('Predict Policy')
+
+            ax[4].set_xticks(timesteps)
+            ax[4].set_xticklabels(timesteps)
+            ax[4].set_ylim(0, 1)
+            ax[4].set_ylabel('Target Policy')
+            ax[4].set_xlabel('Timestep')
+
+            # 添加图例
+            handles = [plt.Rectangle((0, 0), 1, 1, color=colors[i], alpha=0.5) for i in range(num_actions)]
+            labels = [f'Action {i}' for i in range(num_actions)]
+            ax[4].legend(handles, labels, loc='upper right', ncol=num_actions)
+
+            plt.tight_layout()
+            plt.savefig(f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}/reconstruction_visualization_batch_{batch_idx}_v2.png')
+            # plt.savefig(f'./render/{suffix}/reconstruction_visualization_batch_{batch_idx}_v2.png')
+            plt.close()
+
+
+    def save_as_image(self, batch_tensor):
+        # batch_tensor 的形状应该是 [batch_size, sequence_length, channels, height, width]
+        # 在这里 channels = 4, height = 5, width = 5
+        batch_size, sequence_length, channels, height, width = batch_tensor.shape
+
+        # 为了将所有帧组合成一张图，我们设置每行显示 sequence_length 个图像
+        rows = batch_size
+        cols = sequence_length
+
+        # 创建一个足够大的空白图像来容纳所有的帧
+        # 每个RGB图像的大小是 height x width，总图像的大小是 (rows * height) x (cols * width)
+        final_image = Image.new('RGB', (cols * width, rows * height))
+
+        # 遍历每一帧，将其转换为PIL图像，并粘贴到正确的位置
+        for i in range(rows):
+            for j in range(cols):
+                # 提取当前帧的前三个通道（假设前三个通道是RGB）
+                frame = batch_tensor[i, j, :3, :, :]
+                # 转换为numpy数组，并调整数据范围为0-255
+                frame = frame.mul(255).byte().cpu().detach().numpy().transpose(1, 2, 0)
+                # 创建一个PIL图像
+                img = Image.fromarray(frame)
+                # 粘贴到最终图像的相应位置
+                final_image.paste(img, (j * width, i * height))
+
+        # 保存图像
+        final_image.save('batch_image.png')
+
+    # # 假设 batch['observations'] 是一个满足条件的tensor
+    # # 示例tensor，实际使用中应替换为实际的tensor数据
+    # batch = {'observations': torch.randn(3, 16, 4, 5, 5)}
+
+    # # 调用函数
+    # save_as_image(batch['observations'])
+
     def render_img(self, obs: int, rec_img: int):
         import torch
         from PIL import Image
@@ -1082,7 +1278,7 @@ class WorldModel(nn.Module):
 
             # 拼接每一帧及分隔条
             for j in range(N):
-                frame = frames[j].permute(1, 2, 0).cpu().numpy()  # 转换为(H, W, C)
+                frame = frames[j].permute(1, 2, 0).cpu().detach().numpy()  # 转换为(H, W, C)
                 frame_image = Image.fromarray((frame * 255).astype('uint8'), 'RGB')
 
                 # 计算当前帧在拼接图像中的位置
@@ -1096,7 +1292,9 @@ class WorldModel(nn.Module):
             plt.show()
 
             # 保存图像到文件
-            concat_image.save(f'sample_{i+1}.png')
+            concat_image.save(f'render/sample_{i+1}.png')
+
+
 
     def __repr__(self) -> str:
         return "world_model"

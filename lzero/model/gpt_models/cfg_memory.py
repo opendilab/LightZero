@@ -18,10 +18,16 @@ cfg['world_model'] = {
     # "context_length": 2 * 16,
     # "context_length_for_recurrent": 2 * 16,
 
-    'max_blocks': 16,
-    "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
-    "context_length": 2 * 16,
-    "context_length_for_recurrent": 2 * 16,
+    # 'max_blocks': 16,
+    # "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
+    # "context_length": 2 * 16,
+    # "context_length_for_recurrent": 2 * 16,
+    # "recurrent_keep_deepth": 100,
+
+    'max_blocks': 17, # TODO
+    "max_tokens": 2 * 17,  # 1+0+15 memory_length = 0
+    "context_length": 2 * 17,
+    "context_length_for_recurrent": 2 * 17,
     "recurrent_keep_deepth": 100,
 
     # 'max_blocks': 30,
@@ -63,20 +69,29 @@ cfg['world_model'] = {
     # 'num_layers': 1,
     # 'num_layers': 2,  # same as <Transformer shine in RL> paper
     # 'num_layers': 4,
-    'num_layers': 6,
+
+    'num_layers': 8,
     'num_heads': 8,
-    # 'embed_dim': 96, # TODO：
+    # # 'embed_dim': 96, # TODO：
     # 'embed_dim': 768, # TODO：Gpt2 Base
     'embed_dim': 256, # TODO：
 
 
-    # 'num_layers': 8, # TODO：for atari debug
-    # 'num_heads': 8,
-    # 'embed_dim': 768, # TODO：for atari
-
     # 'num_layers': 12, # TODO：Gpt2 Base
     # 'num_heads': 12, # TODO：Gpt2 Base
     # 'embed_dim': 768, # TODO：Gpt2 Base
+
+    # 'num_layers': 12, # TODO：Gato Medium
+    # 'num_heads': 12, # TODO：Gato Medium
+    # 'embed_dim': 1536, # TODO：Gato Medium
+
+    # 'num_layers': 8, # TODO：Gato Base
+    # 'num_heads': 24, # TODO：Gato Base
+    # 'embed_dim': 768, # TODO：Gato Base
+
+    # 'num_layers': 24, # TODO：Gato Large
+    # 'num_heads': 16, # TODO：Gato Large
+    # 'embed_dim': 2048, # TODO：Gato  Large
 
     'gru_gating': False,
 
@@ -84,13 +99,14 @@ cfg['world_model'] = {
     'resid_pdrop': 0.1,
     'attn_pdrop': 0.1,
 
-    'support_size': 21,
+    'support_size': 101, # TODO
     'action_shape': 4,  # NOTE：for memory
     'max_cache_size': 5000,
     "env_num": 8,
     #   "env_num": 20,
 
     'latent_recon_loss_weight': 0.05,
+    # 'latent_recon_loss_weight': 0.0,
     # 'latent_recon_loss_weight':0.5,
     # 'latent_recon_loss_weight':10,
 

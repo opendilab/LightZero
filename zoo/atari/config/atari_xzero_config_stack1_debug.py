@@ -1,7 +1,7 @@
 from easydict import EasyDict
+
 import torch
 torch.cuda.set_device(0)
-
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
@@ -44,42 +44,47 @@ elif env_name == 'FrostbiteNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+collector_env_num = 3
+n_episode = 3
 evaluator_env_num = 3
 
 model_update_ratio = 0.25
 # model_update_ratio = 0.5
 num_simulations = 50
-
+batch_size = 64
 
 max_env_step = int(1e6)
-
+# max_env_step = int(5e5)
 reanalyze_ratio = 0. 
 # reanalyze_ratio = 0.05 # TODO
 
-# batch_size = 64
-batch_size = 6
+
+batch_size = 3 # TODO
+num_simulations = 50
+
 
 # num_unroll_steps = 6
-num_unroll_steps = 5
-# num_unroll_steps = 8
-# num_unroll_steps = 10 # TODO
+num_unroll_steps = 10
+# num_unroll_steps = 20 # TODO
 
 threshold_training_steps_for_final_temperature = int(5e4)  # train_iter 50k 1->0.5->0.25
 eps_greedy_exploration_in_collect = True # for breakout, qbert, boxing
-
-num_simulations = 5
-update_per_collect = 10  # for debug
+# eps_greedy_exploration_in_collect = False 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
+
 
 atari_xzero_config = dict(
     # TODO: 
     # mcts_ctree
     # muzero_collector/evaluator: empty_cache
-    exp_name=f'data_xzero_atari_debug/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nlayer1-nh8_grugating-false_simnorm_latentw10_pew1e-4_latent-groupkl_soft005_eps20k_nogradscale_gcv5_contextlength10_fix-init-recur_seed0',
+    exp_name=f'data_xzero_atari_debug/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_grugating-false_latent-groupkl_conleninit{40}-conlenrecur{40}clear_lsd768-nlayer6-nh8_seed0',
+    # exp_name=f'data_xzero_atari_0407/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_grugating-false_latent-groupkl_conleninit{20}-conlenrecur{20}clear-gamma1_lsd1536-nlayer12-nh12_steplosslog_seed0',
+
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -90,14 +95,14 @@ atari_xzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        collect_max_episode_steps=int(50),
-        eval_max_episode_steps=int(50),
+        # collect_max_episode_steps=int(50),
+        # eval_max_episode_steps=int(50),
         # TODO: for breakout
         # collect_max_episode_steps=int(5e3), # for breakout
         # eval_max_episode_steps=int(5e3), # for breakout
         # TODO: for others
-        # collect_max_episode_steps=int(2e4), 
-        # eval_max_episode_steps=int(1e4),
+        collect_max_episode_steps=int(2e4), 
+        eval_max_episode_steps=int(1e4),
         clip_rewards=True,
     ),
     policy=dict(
@@ -111,8 +116,8 @@ atari_xzero_config = dict(
                 ),
             ),
         ),
-
-        model_path=None,
+        # model_path=None,
+        model_path='/mnt/afs/niuyazhe/code/LightZero/data_xzero_atari_0404/Pong_xzero_envnum8_ns50_upc1000-mur0.25_rr0.0_H10_bs64_stack1_lsd768-nlayer1-nh8_grugating-false_latent-groupkl_conleninit6-conlenrecur6clear-fixposemb_seed0/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_xzero_atari_0330/Pong_xzero_envnum8_ns50_upc1000-mur0.25_rr0.0_H8_bs64_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_nlayer2_soft005_gcv05_noeps_gamma1_nogradscale_seed0/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_xzero_stack1_0226/Pong_xzero_envnum8_ns50_upc1000-mur0.25_new-rr0.0_H5_bs64_stack1_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh4_collect-clear200_train-clear20_noeval_search-toplay-nodeepcopy_seed0/ckpt/iteration_220000.pth.tar',
         tokenizer_start_after_envsteps=int(0),
