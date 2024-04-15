@@ -16,12 +16,11 @@ max_env_step = int(5e5)
 # ==============================================================
 
 connect4_muzero_config = dict(
-    exp_name=
-    f'data_mz_ctree/connect4_botmode_rulebot_seed0',
+    exp_name=f'data_mz_ctree/connect4_play-with-bot-mode_seed0',
     env=dict(
         battle_mode='play_with_bot_mode',
         bot_action_type='rule',
-        channel_last=True,
+        channel_last=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,

@@ -24,7 +24,7 @@ class BipedalWalkerEnv(CartPoleEnv):
 
     config = dict(
         # (str) The gym environment name.
-        env_name="BipedalWalker-v3",
+        env_id="BipedalWalker-v3",
         # (str) The type of the environment. Options: {'normal', 'hardcore'}
         env_type='normal',
         # (bool) If True, save the replay as a gif file.
@@ -61,11 +61,11 @@ class BipedalWalkerEnv(CartPoleEnv):
         Overview:
             Initialize the BipedalWalker environment.
         Arguments:
-            - cfg (:obj:`dict`): Configuration dict. The dict should include keys like 'env_name', 'replay_path', etc.
+            - cfg (:obj:`dict`): Configuration dict. The dict should include keys like 'env_id', 'replay_path', etc.
         """
         self._cfg = cfg
         self._init_flag = False
-        self._env_name = cfg.env_name
+        self._env_id = cfg.env_id
         self._act_scale = cfg.act_scale
         self._rew_clip = cfg.rew_clip
         self._replay_path = cfg.replay_path
@@ -155,7 +155,7 @@ class BipedalWalkerEnv(CartPoleEnv):
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 path = os.path.join(
                     self._replay_path_gif,
-                    '{}_episode_{}_seed{}_{}.gif'.format(self._env_name, self._save_replay_count, self._seed, timestamp)
+                    '{}_episode_{}_seed{}_{}.gif'.format(self._env_id, self._save_replay_count, self._seed, timestamp)
                 )
                 self.display_frames_as_gif(self._frames, path)
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')

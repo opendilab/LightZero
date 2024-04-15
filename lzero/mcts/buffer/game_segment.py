@@ -57,9 +57,7 @@ class GameSegment:
             self.zero_obs_shape = config.model.observation_shape
         elif len(config.model.observation_shape) == 3:
             # image obs input, e.g. atari environments
-            self.zero_obs_shape = (
-                config.model.observation_shape[-2], config.model.observation_shape[-1], config.model.image_channel
-            )
+            self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape[-2], config.model.observation_shape[-1])
 
         self.obs_segment = []
         self.action_segment = []
@@ -81,7 +79,6 @@ class GameSegment:
             self.root_sampled_actions = []
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = []
-
 
     def get_unroll_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
         """

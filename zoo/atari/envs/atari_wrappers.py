@@ -91,15 +91,12 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
         - env (:obj:`gym.Env`): The wrapped Atari environment with the given configurations.
     """
     if config.render_mode_human:
-        env = gym.make(config.env_name, render_mode='human')
+        env = gymnasium.make(config.env_id, render_mode='human')
     else:
-        env = gym.make(config.env_name, render_mode='rgb_array')
-    # if config.render_mode_human:
-    #     env = gymnasium.make(config.env_name, render_mode='human')
-    # else:
-    #     env = gymnasium.make(config.env_name, render_mode='rgb_array')
+        env = gymnasium.make(config.env_id, render_mode='rgb_array')
     assert 'NoFrameskip' in env.spec.id
-    if config.save_replay:
+    if hasattr(config, 'save_replay') and config.save_replay \
+            and hasattr(config, 'replay_path') and config.replay_path is not None:
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         video_name = f'{env.spec.id}-video-{timestamp}'
         env = RecordVideo(

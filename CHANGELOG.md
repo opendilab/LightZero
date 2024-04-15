@@ -1,3 +1,36 @@
+2024.04.12 (v0.0.5)
+- env: MemoryEnv (#197)
+- env: mountain_car (#181)
+- algo: Gumbel AlphaZero in ctree (#212)
+- feature: add ZeroPal and discord link (#209)
+- feature: add eval_offline option (#188)
+- feature: save the updated searched policy and value to the buffer during reanalyze (#190)
+- feature: add muzero visualization (#181)
+- feature: add efficientzero tictactoe configs (#204)
+- feature: add 2 mcts related iclr2024 papers
+- polish: add load pretrained model option in test_game_segment (#194)
+- polish: polish _forward_learn() and some data process operations (#191)
+- polish: add customization documentation section in readme
+- fix: fix sync_gradients and log in DDP settings (#200)
+- fix: fix channel_last bug
+- fix: fix total_episode_count bug in collector
+- fix: fix memory_lightzero_env return bug
+- fix: fix obs_max_scale bug in memory_env
+- style: add unittest for game_buffer_muzero (#186)
+
+2024.02.08 (v0.0.4)
+- polish: add agent configurations & polish replay video saving method (#184)
+- polish: polish comments in worker files
+- polish: polish comments in tree search files (#185)
+- polish: rename mcts_mode to battle_mode_in_simulation_env, add sampled alphazero config for tictactoe (#179)
+- polish: polish redundant data squeeze operations (#177)
+- polish: polish the continuous action process in sez model
+- polish: polish bipedalwalker env
+- fix: fix completed value inf bug when zero exists in action_mask in gumbel muzero (#178)
+- fix: fix render settings when using gymnasium (#173)
+- fix: fix lstm_hidden_size in sampled_efficientzero_model.py
+- fix: fix action_mask in bipedalwalker_cont_disc_env, fix device bug in sampled efficientzero (#168)
+
 2023.12.07 (v0.0.3)
 - env: MiniGrid env (#110)
 - env: Bsuite env (#110)

@@ -40,18 +40,16 @@ def _get_done_winner_func_lru(board_tuple):
 class TicTacToeEnv(BaseEnv):
 
     config = dict(
-        # env_name (str): The name of the environment.
-        env_name="TicTacToe",
+        # env_id (str): The name of the environment.
+        env_id="TicTacToe",
         # battle_mode (str): The mode of the battle. Choices are 'self_play_mode' or 'alpha_beta_pruning'.
         battle_mode='self_play_mode',
         # battle_mode_in_simulation_env (str): The mode of Monte Carlo Tree Search. This is only used in AlphaZero.
         battle_mode_in_simulation_env='self_play_mode',
         # bot_action_type (str): The type of action the bot should take. Choices are 'v0' or 'alpha_beta_pruning'.
         bot_action_type='v0',
-        # save_replay_gif (bool): If True, the replay will be saved as a gif file.
-        save_replay_gif=False,
-        # replay_path_gif (str): The path to save the replay gif.
-        replay_path_gif='./replay_gif',
+        # replay_path (str): The folder path where replay video saved, if None, will not save replay video.
+        replay_path=None,
         # agent_vs_human (bool): If True, the agent will play against a human.
         agent_vs_human=False,
         # prob_random_agent (int): The probability of the random agent.
@@ -59,7 +57,7 @@ class TicTacToeEnv(BaseEnv):
         # prob_expert_agent (int): The probability of the expert agent.
         prob_expert_agent=0,
         # channel_last (bool): If True, the channel will be the last dimension.
-        channel_last=True,
+        channel_last=False,
         # scale (bool): If True, the pixel values will be scaled.
         scale=True,
         # stop_value (int): The value to stop the game.
@@ -97,8 +95,7 @@ class TicTacToeEnv(BaseEnv):
         if 'alpha_beta_pruning' in self.bot_action_type:
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
         self.alphazero_mcts_ctree = cfg.alphazero_mcts_ctree
-        self._replay_path_gif = cfg.replay_path_gif
-        self._save_replay_gif = cfg.save_replay_gif
+        self._replay_path = cfg.replay_path if hasattr(cfg, "replay_path") and cfg.replay_path is not None else None
         self._save_replay_count = 0
 
     @property
@@ -192,7 +189,7 @@ class TicTacToeEnv(BaseEnv):
                 'current_player_index': self.start_player_index,
                 'to_play': self.current_player
             }
-        if self._save_replay_gif:
+        if self._replay_path is not None:
             self._frames = []
 
         return obs
@@ -254,7 +251,7 @@ class TicTacToeEnv(BaseEnv):
             # player 1 battle with expert player 2
 
             # player 1's turn
-            if self._save_replay_gif:
+            if self._replay_path is not None:
                 self._frames.append(self._env.render(mode='rgb_array'))
             timestep_player1 = self._player_step(action)
             # self.env.render()
@@ -263,16 +260,16 @@ class TicTacToeEnv(BaseEnv):
                 # And the to_play is used in MCTS.
                 timestep_player1.obs['to_play'] = -1
 
-                if self._save_replay_gif:
-                    if not os.path.exists(self._replay_path_gif):
-                        os.makedirs(self._replay_path_gif)
+                if self._replay_path is not None:
+                    if not os.path.exists(self._replay_path):
+                        os.makedirs(self._replay_path)
                     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                     path = os.path.join(
-                        self._replay_path_gif,
-                        'tictactoe_episode_{}_{}.gif'.format(self._save_replay_count, timestamp)
+                        self._replay_path,
+                        'tictactoe_{}_{}_{}.mp4'.format(os.getpid(), timestamp, self._save_replay_count)
                     )
-                    self.display_frames_as_gif(self._frames, path)
-                    print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
+                    self.display_frames_as_mp4(self._frames, path)
+                    print(f'replay {path} saved!')
                     self._save_replay_count += 1
 
                 return timestep_player1
@@ -283,10 +280,10 @@ class TicTacToeEnv(BaseEnv):
             else:
                 bot_action = self.bot_action()
             # print('player 2 (computer player): ' + self.action_to_string(bot_action))
-            if self._save_replay_gif:
+            if self._replay_path is not None:
                 self._frames.append(self._env.render(mode='rgb_array'))
             timestep_player2 = self._player_step(bot_action)
-            if self._save_replay_gif:
+            if self._replay_path is not None:
                 self._frames.append(self._env.render(mode='rgb_array'))
             # the eval_episode_return is calculated from Player 1's perspective
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
@@ -298,16 +295,16 @@ class TicTacToeEnv(BaseEnv):
             timestep.obs['to_play'] = -1
 
             if timestep_player2.done:
-                if self._save_replay_gif:
-                    if not os.path.exists(self._replay_path_gif):
-                        os.makedirs(self._replay_path_gif)
+                if self._replay_path is not None:
+                    if not os.path.exists(self._replay_path):
+                        os.makedirs(self._replay_path)
                     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                     path = os.path.join(
-                        self._replay_path_gif,
-                        'tictactoe_episode_{}_{}.gif'.format(self._save_replay_count, timestamp)
+                        self._replay_path,
+                        'tictactoe_{}_{}_{}.mp4'.format(os.getpid(), timestamp, self._save_replay_count)
                     )
-                    self.display_frames_as_gif(self._frames, path)
-                    print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
+                    self.display_frames_as_mp4(self._frames, path)
+                    print(f'replay {path} saved!')
                     self._save_replay_count += 1
 
             return timestep
@@ -702,6 +699,12 @@ class TicTacToeEnv(BaseEnv):
     def display_frames_as_gif(frames: list, path: str) -> None:
         import imageio
         imageio.mimsave(path, frames, fps=20)
+
+    @staticmethod
+    def display_frames_as_mp4(frames: list, path: str, fps=5) -> None:
+        assert path.endswith('.mp4'), f'path must end with .mp4, but got {path}'
+        import imageio
+        imageio.mimwrite(path, frames, fps=fps)
 
     def clone(self):
         return copy.deepcopy(self)

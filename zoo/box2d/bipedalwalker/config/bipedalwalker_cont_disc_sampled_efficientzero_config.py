@@ -24,7 +24,7 @@ bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
     f'data_sez_ctree/bipedalwalker_cont_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
-        env_name='BipedalWalker-v3',
+        env_id='BipedalWalker-v3',
         env_type='normal',
         continuous=True,
         manually_discretization=True,

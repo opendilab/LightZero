@@ -42,7 +42,7 @@ gomoku_sampled_alphazero_config = dict(
         prob_expert_agent=0,
         scale=True,
         check_action_to_connect4_in_bot_v0=False,
-        simulation_env_name="gomoku",
+        simulation_env_id="gomoku",
         screen_scaling=9,
         render_mode=None,
         replay_path=None,
@@ -52,7 +52,7 @@ gomoku_sampled_alphazero_config = dict(
     policy=dict(
         # ==============================================================
         # for the creation of simulation env
-        simulation_env_name='gomoku',
+        simulation_env_id='gomoku',
         simulation_env_config_type='sampled_play_with_bot',
         # ==============================================================
         torch_compile=False,

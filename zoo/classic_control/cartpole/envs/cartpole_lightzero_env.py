@@ -21,8 +21,8 @@ class CartPoleEnv(BaseEnv):
     """
 
     config = dict(
-        # env_name (str): The name of the environment.
-        env_name="CartPole-v0",
+        # env_id (str): The name of the environment.
+        env_id="CartPole-v0",
         # replay_path (str): The path to save the replay video. If None, the replay will not be saved.
         # Only effective when env_manager.type is 'base'.
         replay_path=None,

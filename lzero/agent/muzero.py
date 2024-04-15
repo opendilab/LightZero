@@ -31,9 +31,9 @@ class MuZeroAgent:
     Overview:
         Agent class for executing MuZero algorithms which include methods for training, deployment, and batch evaluation.
     Interfaces:
-        __init__, train, deploy, batch_evaluate
+        ``__init__``, ``train``, ``deploy``, ``batch_evaluate``
     Properties:
-        best
+        ``best``
 
     .. note::
         This agent class is tailored for use with the HuggingFace Model Zoo for LightZero
@@ -303,6 +303,7 @@ class MuZeroAgent:
                 self.exp_name, 'videos'
             )
             deply_configs[0]['replay_path'] = replay_save_path
+            deply_configs[0]['save_replay'] = True
 
         for seed in seed_list:
 
@@ -334,8 +335,10 @@ class MuZeroAgent:
             reward_list.extend(reward['eval_episode_return'])
 
         if enable_save_replay:
+            if not os.path.exists(replay_save_path):
+                os.makedirs(replay_save_path)
             files = os.listdir(replay_save_path)
-            files = [file for file in files if file.endswith('0.mp4')]
+            files = [file for file in files if file.endswith('.mp4')]
             files.sort()
             if concatenate_all_replay:
                 # create a file named 'files.txt' to store the names of all mp4 files

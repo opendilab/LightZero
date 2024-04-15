@@ -239,7 +239,7 @@ namespace tree
         /*
         Overview:
             Find the current best trajectory starts from the current node.
-        Outputs:
+        Returns:
             - traj: a vector of node index, which is the current best trajectory from this node.
         */
         std::vector<int> traj;
@@ -261,7 +261,7 @@ namespace tree
         /*
         Overview:
             Get the distribution of child nodes in the format of visit_count.
-        Outputs:
+        Returns:
             - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
         */
         std::vector<int> distribution;
@@ -371,7 +371,7 @@ namespace tree
         /*
         Overview:
             Find the current best trajectory starts from each root.
-        Outputs:
+        Returns:
             - traj: a vector of node index, which is the current best trajectory from each root.
         */
         std::vector<std::vector<int> > trajs;
@@ -389,7 +389,7 @@ namespace tree
         /*
         Overview:
             Get the children distribution of each root.
-        Outputs:
+        Returns:
             - distribution: a vector of distribution of child nodes in the format of visit count (i.e. [1,3,0,2,5]).
         */
         std::vector<std::vector<int> > distributions;
@@ -414,55 +414,6 @@ namespace tree
             values.push_back(this->roots[i].value());
         }
         return values;
-    }
-
-    //*********************************************************
-    //
-    void update_tree_q(CNode *root, tools::CMinMaxStats &min_max_stats, float discount_factor, int players)
-    {
-        /*
-        Overview:
-            Update the q value of the root and its child nodes.
-        Arguments:
-            - root: the root that update q value from.
-            - min_max_stats: a tool used to min-max normalize the q value.
-            - discount_factor: the discount factor of reward.
-            - players: the number of players.
-        */
-        std::stack<CNode *> node_stack;
-        node_stack.push(root);
-        while (node_stack.size() > 0)
-        {
-            CNode *node = node_stack.top();
-            node_stack.pop();
-
-            if (node != root)
-            {
-                //                # NOTE: in self-play-mode, value_prefix is not calculated according to the perspective of current player of node,
-                //                # but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
-                //                # true_reward = node.value_prefix - (- parent_value_prefix)
-                //                float true_reward = node->value_prefix - node->parent_value_prefix;
-                float true_reward = node->reward;
-
-                float qsa;
-                if (players == 1)
-                    qsa = true_reward + discount_factor * node->value();
-                else if (players == 2)
-                    // TODO(pu):
-                    qsa = true_reward + discount_factor * (-1) * node->value();
-
-                min_max_stats.update(qsa);
-            }
-
-            for (auto a : node->legal_actions)
-            {
-                CNode *child = node->get_child(a);
-                if (child->expanded())
-                {
-                    node_stack.push(child);
-                }
-            }
-        }
     }
 
     void cbackpropagate(std::vector<CNode *> &search_path, tools::CMinMaxStats &min_max_stats, int to_play, float value, float discount_factor)
@@ -527,7 +478,7 @@ namespace tree
         }
     }
 
-    void cbatch_backpropagate(int current_latent_state_index, float discount_factor, const std::vector<float> &value_prefixs, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &to_play_batch)
+    void cbatch_backpropagate(int current_latent_state_index, float discount_factor, const std::vector<float> &rewards, const std::vector<float> &values, const std::vector<std::vector<float> > &policies, tools::CMinMaxStatsList *min_max_stats_lst, CSearchResults &results, std::vector<int> &to_play_batch)
     {
         /*
         Overview:
@@ -535,7 +486,7 @@ namespace tree
         Arguments:
             - current_latent_state_index: The index of latent state of the leaf node in the search path.
             - discount_factor: the discount factor of reward.
-            - value_prefixs: the value prefixs of nodes along the search path.
+            - rewards: the rewards of nodes along the search path.
             - values: the values to propagate along the search path.
             - policies: the policy logits of nodes along the search path.
             - min_max_stats: a tool used to min-max normalize the q value.
@@ -544,7 +495,7 @@ namespace tree
         */
         for (int i = 0; i < results.num; ++i)
         {
-            results.nodes[i]->expand(to_play_batch[i], current_latent_state_index, i, value_prefixs[i], policies[i]);
+            results.nodes[i]->expand(to_play_batch[i], current_latent_state_index, i, rewards[i], policies[i]);
             cbackpropagate(results.search_paths[i], min_max_stats_lst->stats_lst[i], to_play_batch[i], values[i], discount_factor);
         }
     }
@@ -623,7 +574,7 @@ namespace tree
             - disount_factor: the discount factor of reward.
             - mean_q: the mean q value of the parent node.
             - players: the number of players.
-        Outputs:
+        Returns:
             - action: the action to select.
         */
         float max_score = FLOAT_MIN;
@@ -726,7 +677,7 @@ namespace tree
             - pb_c_init: constants c1 in muzero.
             - disount_factor: the discount factor of reward.
             - players: the number of players.
-        Outputs:
+        Returns:
             - ucb_value: the ucb score of the child.
         */
         float pb_c = 0.0, prior_score = 0.0, value_score = 0.0;

@@ -216,12 +216,12 @@ class LightZeroEnvWrapper(gym.Wrapper):
 具体使用时，使用下面的函数，将一个 gym 环境，通过 `LightZeroEnvWrapper` 包装成 LightZero 所需要的环境格式。 `get_wrappered_env` 会返回一个匿名函数，该匿名函数每次调用都会产生一个 `DingEnvWrapper` 实例，该实例会将 `LightZeroEnvWrapper` 作为匿名函数传入，并在实例内部将原始环境封装成 LightZero 所需的格式。
 
 ```Python
-def get_wrappered_env(wrapper_cfg: EasyDict, env_name: str):
+def get_wrappered_env(wrapper_cfg: EasyDict, env_id: str):
     # overview comments
     ...
     if wrapper_cfg.manually_discretization:
         return lambda: DingEnvWrapper(
-            gym.make(env_name),
+            gym.make(env_id),
             cfg={
                 'env_wrapper': [
                     lambda env: ActionDiscretizationEnvWrapper(env, wrapper_cfg), lambda env:
@@ -231,7 +231,7 @@ def get_wrappered_env(wrapper_cfg: EasyDict, env_name: str):
         )
     else:
         return lambda: DingEnvWrapper(
-            gym.make(env_name), cfg={'env_wrapper': [lambda env: LightZeroEnvWrapper(env, wrapper_cfg)]}
+            gym.make(env_id), cfg={'env_wrapper': [lambda env: LightZeroEnvWrapper(env, wrapper_cfg)]}
         )
 ```
 

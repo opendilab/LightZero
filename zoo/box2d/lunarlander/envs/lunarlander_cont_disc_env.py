@@ -39,7 +39,7 @@ class LunarLanderDiscEnv(LunarLanderEnv):
 
     config = dict(
         # (str) The gym environment name.
-        env_name="LunarLander-v2",
+        env_id="LunarLander-v2",
         # (int) The number of bins for each dimension of the action space.
         each_dim_disc_size=4,
         # (bool) If True, save the replay as a gif file.
@@ -65,13 +65,13 @@ class LunarLanderDiscEnv(LunarLanderEnv):
         """
         self._cfg = cfg
         self._init_flag = False
-        # env_name: LunarLander-v2, LunarLanderContinuous-v2
-        self._env_name = cfg.env_name
+        # env_id: LunarLander-v2, LunarLanderContinuous-v2
+        self._env_id = cfg.env_id
         self._replay_path = cfg.replay_path
         self._replay_path_gif = cfg.replay_path_gif
         self._save_replay_gif = cfg.save_replay_gif
         self._save_replay_count = 0
-        if 'Continuous' in self._env_name:
+        if 'Continuous' in self._env_id:
             self._act_scale = cfg.act_scale  # act_scale only works in continuous env
         else:
             self._act_scale = False
@@ -85,7 +85,7 @@ class LunarLanderDiscEnv(LunarLanderEnv):
             - info_dict (:obj:`Dict[str, Any]`): Including observation, action_mask, and to_play label.
         """
         if not self._init_flag:
-            self._env = gym.make(self._cfg.env_name, render_mode="rgb_array")
+            self._env = gym.make(self._cfg.env_id, render_mode="rgb_array")
             if self._replay_path is not None:
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 video_name = f'{self._env.spec.id}-video-{timestamp}'
@@ -163,7 +163,7 @@ class LunarLanderDiscEnv(LunarLanderEnv):
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 path = os.path.join(
                     self._replay_path_gif,
-                    '{}_episode_{}_seed{}_{}.gif'.format(self._env_name, self._save_replay_count, self._seed, timestamp)
+                    '{}_episode_{}_seed{}_{}.gif'.format(self._env_id, self._save_replay_count, self._seed, timestamp)
                 )
                 self.display_frames_as_gif(self._frames, path)
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')

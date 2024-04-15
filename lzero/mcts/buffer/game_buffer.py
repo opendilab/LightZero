@@ -37,7 +37,7 @@ class GameBuffer(ABC, object):
         # (bool) Whether to use the root value in the reanalyzing part. Please refer to EfficientZero paper for details.
         use_root_value=False,
         # (int) The number of samples required for mini inference.
-        mini_infer_size=256,
+        mini_infer_size=10240,
     )
 
     def __init__(self, cfg: dict):

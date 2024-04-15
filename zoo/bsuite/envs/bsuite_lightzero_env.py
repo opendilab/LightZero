@@ -26,7 +26,7 @@ class BSuiteEnv(BaseEnv):
     """
     config = dict(
         # (str) The gym environment name.
-        env_name='memory_len/9',
+        env_id='memory_len/9',
         # (bool) If True, save the replay as a gif file.
         # Due to the definition of the environment, rendering images of certain sub-environments are meaningless.
         save_replay_gif=False,
@@ -55,7 +55,7 @@ class BSuiteEnv(BaseEnv):
         """
         self._cfg = cfg
         self._init_flag = False
-        self._env_name = cfg.env_name
+        self._env_id = cfg.env_id
         self._replay_path = cfg.replay_path
         self._replay_path_gif = cfg.replay_path_gif
         self._save_replay_gif = cfg.save_replay_gif
@@ -67,7 +67,7 @@ class BSuiteEnv(BaseEnv):
         if necessary. Returns the first observation.
         """
         if not self._init_flag:
-            raw_env = bsuite.load_from_id(bsuite_id=self._env_name)
+            raw_env = bsuite.load_from_id(bsuite_id=self._env_id)
             self._env = gym_wrapper.GymFromDMEnv(raw_env)
             self._observation_space = self._env.observation_space
             self._action_space = self._env.action_space
@@ -151,7 +151,7 @@ class BSuiteEnv(BaseEnv):
         return BaseEnvTimestep(obs, rew, done, info)
 
     def config_info(self) -> dict:
-        config_info = sweep.SETTINGS[self._env_name]  # additional info that are specific to each env configuration
+        config_info = sweep.SETTINGS[self._env_id]  # additional info that are specific to each env configuration
         config_info['num_episodes'] = self._env.bsuite_num_episodes
         return config_info
     
@@ -237,4 +237,4 @@ class BSuiteEnv(BaseEnv):
         """
         String representation of the environment.
         """
-        return "LightZero BSuite Env({})".format(self._env_name)
+        return "LightZero BSuite Env({})".format(self._env_id)

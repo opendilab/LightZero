@@ -31,6 +31,7 @@ connect4_alphazero_config = dict(
         agent_vs_human=False,
         prob_random_agent=0,
         prob_expert_agent=0,
+        prob_random_action_in_bot=0,
         scale=True,
         screen_scaling=9,
         render_mode=None,
@@ -42,7 +43,7 @@ connect4_alphazero_config = dict(
         mcts_ctree=mcts_ctree,
         # ==============================================================
         # for the creation of simulation env
-        simulation_env_name='connect4',
+        simulation_env_id='connect4',
         simulation_env_config_type='play_with_bot',
         # ==============================================================
         model=dict(

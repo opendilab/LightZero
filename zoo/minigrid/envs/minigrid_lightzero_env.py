@@ -26,14 +26,14 @@ class MiniGridEnvLightZero(MiniGridEnv):
         config (dict): Configuration dict. Default configurations can be updated using this.
         _cfg (dict): Internal configuration dict that stores runtime configurations.
         _init_flag (bool): Flag to check if the environment is initialized.
-        _env_name (str): The name of the MiniGrid environment.
+        _env_id (str): The name of the MiniGrid environment.
         _flat_obs (bool): Flag to check if flat observations are returned.
         _save_replay (bool): Flag to check if replays are saved.
         _max_step (int): Maximum number of steps for the environment.
     """
     config = dict(
         # (str) The gym environment name.
-        env_name='MiniGrid-Empty-8x8-v0',
+        env_id='MiniGrid-Empty-8x8-v0',
         # (bool) If True, save the replay as a gif file.
         save_replay_gif=False,
         # (str or None) The path to save the replay gif. If None, the replay gif will not be saved.
@@ -65,7 +65,7 @@ class MiniGridEnvLightZero(MiniGridEnv):
         """
         self._cfg = cfg
         self._init_flag = False
-        self._env_name = cfg.env_name
+        self._env_id = cfg.env_id
         self._flat_obs = cfg.flat_obs
         self._save_replay_gif = cfg.save_replay_gif
         self._replay_path_gif = cfg.replay_path_gif
@@ -81,17 +81,17 @@ class MiniGridEnvLightZero(MiniGridEnv):
         """
         if not self._init_flag:
             if self._save_replay_gif:
-                self._env = gym.make(self._env_name, render_mode="rgb_array")
+                self._env = gym.make(self._env_id, render_mode="rgb_array")
             else:
-                self._env = gym.make(self._env_name)
+                self._env = gym.make(self._env_id)
             # NOTE: customize the max step of the env
             self._env.max_steps = self._max_step
 
-            if self._env_name in ['MiniGrid-AKTDT-13x13-v0' or 'MiniGrid-AKTDT-13x13-1-v0']:
+            if self._env_id in ['MiniGrid-AKTDT-13x13-v0' or 'MiniGrid-AKTDT-13x13-1-v0']:
                 # customize the agent field of view size, note this must be an odd number
                 # This also related to the observation space, see gym_minigrid.wrappers for more details
                 self._env = ViewSizeWrapper(self._env, agent_view_size=5)
-            if self._env_name == 'MiniGrid-AKTDT-7x7-1-v0':
+            if self._env_id == 'MiniGrid-AKTDT-7x7-1-v0':
                 self._env = ViewSizeWrapper(self._env, agent_view_size=3)
             if self._flat_obs:
                 self._env = FlatObsWrapper(self._env)
@@ -188,7 +188,7 @@ class MiniGridEnvLightZero(MiniGridEnv):
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 path = os.path.join(
                     self._replay_path_gif,
-                    '{}_episode_{}_seed{}_{}.gif'.format(self._env_name, self._save_replay_count, self._seed, timestamp)
+                    '{}_episode_{}_seed{}_{}.gif'.format(self._env_id, self._save_replay_count, self._seed, timestamp)
                 )
                 self.display_frames_as_gif(self._frames, path)
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
@@ -269,4 +269,4 @@ class MiniGridEnvLightZero(MiniGridEnv):
         """
         String representation of the environment.
         """
-        return "LightZero MiniGrid Env({})".format(self._cfg.env_name)
+        return "LightZero MiniGrid Env({})".format(self._cfg.env_id)

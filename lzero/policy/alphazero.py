@@ -168,16 +168,16 @@ class AlphaZeroPolicy(Policy):
         reward = reward.to(device=self._device, dtype=torch.float)
 
         action_probs, values = self._learn_model.compute_policy_value(state_batch)
-        log_probs = torch.log(action_probs)
+        policy_log_probs = torch.log(action_probs)
 
         # calculate policy entropy, for monitoring only
-        entropy = torch.mean(-torch.sum(action_probs * log_probs, 1))
+        entropy = torch.mean(-torch.sum(action_probs * policy_log_probs, 1))
         entropy_loss = -entropy
 
         # ============
         # policy loss
         # ============
-        policy_loss = -torch.mean(torch.sum(mcts_probs * log_probs, 1))
+        policy_loss = -torch.mean(torch.sum(mcts_probs * policy_log_probs, 1))
 
         # ============
         # value loss
@@ -208,7 +208,7 @@ class AlphaZeroPolicy(Policy):
             'value_loss': value_loss.item(),
             'entropy_loss': entropy_loss.item(),
             'total_grad_norm_before_clip': total_grad_norm_before_clip.item(),
-            'collect_mcts_temperature': self._collect_mcts_temperature,
+            'collect_mcts_temperature': self.collect_mcts_temperature,
         }
 
     def _init_collect(self) -> None:
@@ -248,7 +248,7 @@ class AlphaZeroPolicy(Policy):
             - output (:obj:`Dict[str, torch.Tensor]`): The dict of output, the key is env_id and the value is the \
                 the corresponding policy output in this timestep, including action, probs and so on.
         """
-        self._collect_mcts_temperature = temperature
+        self.collect_mcts_temperature = temperature
         ready_env_id = list(obs.keys())
         init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
         # If 'katago_game_state' is in the observation of the given environment ID, it's value is used.
@@ -263,7 +263,7 @@ class AlphaZeroPolicy(Policy):
                                                                   init_state=init_state[env_id],
                                                                   katago_policy_init=False,
                                                                   katago_game_state=katago_game_state[env_id]))
-            action, mcts_probs = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self._collect_mcts_temperature, True)
+            action, mcts_probs = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self.collect_mcts_temperature, True)
 
             output[env_id] = {
                 'action': action,
@@ -334,7 +334,7 @@ class AlphaZeroPolicy(Policy):
         return output
 
     def _get_simulation_env(self):
-        if self._cfg.simulation_env_name == 'tictactoe':
+        if self._cfg.simulation_env_id == 'tictactoe':
             from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
             if self._cfg.simulation_env_config_type == 'play_with_bot':
                 from zoo.board_games.tictactoe.config.tictactoe_alphazero_bot_mode_config import \
@@ -346,7 +346,7 @@ class AlphaZeroPolicy(Policy):
                 raise NotImplementedError
             self.simulate_env = TicTacToeEnv(tictactoe_alphazero_config.env)
 
-        elif self._cfg.simulation_env_name == 'gomoku':
+        elif self._cfg.simulation_env_id == 'gomoku':
             from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
             if self._cfg.simulation_env_config_type == 'play_with_bot':
                 from zoo.board_games.gomoku.config.gomoku_alphazero_bot_mode_config import gomoku_alphazero_config
@@ -355,7 +355,7 @@ class AlphaZeroPolicy(Policy):
             else:
                 raise NotImplementedError
             self.simulate_env = GomokuEnv(gomoku_alphazero_config.env)
-        elif self._cfg.simulation_env_name == 'connect4':
+        elif self._cfg.simulation_env_id == 'connect4':
             from zoo.board_games.connect4.envs.connect4_env import Connect4Env
             if self._cfg.simulation_env_config_type == 'play_with_bot':
                 from zoo.board_games.connect4.config.connect4_alphazero_bot_mode_config import connect4_alphazero_config
