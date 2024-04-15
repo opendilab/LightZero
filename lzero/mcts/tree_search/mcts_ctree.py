@@ -241,10 +241,17 @@ class MuZeroMCTSCtree(object):
                 MCTS stage 1: Selection
                     Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
                 """
-                latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse_with_reuse(
-                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
-                    copy.deepcopy(to_play_batch), true_action_list, reuse_value_list
-                )
+                if self._cfg.env_type == 'not_board_games':
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse_with_reuse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        to_play_batch, true_action_list, reuse_value_list
+                    )
+                else:
+                    # the ``to_play_batch`` is only used in board games, here we need to deepcopy it to avoid changing the original data.
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse_with_reuse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        copy.deepcopy(to_play_batch), true_action_list, reuse_value_list
+                    )
 
                 # obtain the latent state for leaf node
                 for count, (ix, iy) in enumerate(zip(latent_state_index_in_search_path, latent_state_index_in_batch)):
@@ -258,7 +265,7 @@ class MuZeroMCTSCtree(object):
 
                 length = len(temp_actions)
                 # print(f"temp actions are {temp_actions}, the length is {len(temp_actions)}, the length of states is {len(latent_states)}")
-                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
+                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
                 # .long() is only for discrete action
                 # 需要改变last_actions使其只包含需要推断的节点对应的动作！！！！！！！！！！！！！
                 # 在batch_traverse时就不将非推理节点对应的动作加入last_action的列表！！！！！！！！！！！！！！！！！！！
@@ -586,10 +593,16 @@ class EfficientZeroMCTSCtree(object):
                 MCTS stage 1: Selection
                     Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
                 """
-                latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse_with_reuse(
-                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
-                    copy.deepcopy(to_play_batch), true_action_list, reuse_value_list
-                )
+                if self._cfg.env_type == 'not_board_games':
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse_with_reuse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        to_play_batch, true_action_list, reuse_value_list
+                    )
+                else:
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse_with_reuse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        copy.deepcopy(to_play_batch), true_action_list, reuse_value_list
+                    )
                 # obtain the search horizon for leaf nodes
                 search_lens = results.get_search_len()
 
@@ -607,7 +620,7 @@ class EfficientZeroMCTSCtree(object):
                         reuse_lst.append(count)
 
                 length = len(temp_actions)
-                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
+                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
                 hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(self._cfg.device
                                                                                                  ).unsqueeze(0)
                 hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(self._cfg.device
