@@ -9,42 +9,67 @@ from ding.torch_utils.data_helper import to_ndarray
 from ding.utils.default_helper import deep_merge_dicts
 from ding.utils import ENV_REGISTRY
 
-# 记得换import!!!!!!!!!!!!!!!!!!!!!!!!!!!
 from zoo.metadrive.env.drive_env import MetaDrive
-# from dizoo.metadrive.env.drive_utils import BaseDriveEnv
-# from zoo.metadrive.env.drive_utils import BaseDriveEnv
 
 def draw_multi_channels_top_down_observation(obs, show_time=0.5):
+    """
+    Overview:
+        Displays a multi-channel top-down observation from an autonomous vehicle.
+    Auguments:
+    - obs (:obj:`numpy.ndarray`): A 3D NumPy array of shape (height, width, 5) representing the observation data,
+                    where the last dimension corresponds to the five distinct channels.
+    - show_time (:obj:`float`): The duration in seconds for which the observation image will be displayed. Defaults to 0.5 seconds.
+    """
+    # Validate that there are exactly five channels in the observation data.
     num_channels = obs.shape[-1]
-    assert num_channels == 5
+    assert num_channels == 5, "The observation data must have exactly 5 channels."
+    
+    # Define the names for each of the five channels.
     channel_names = [
         "Road and navigation", "Ego now and previous pos", "Neighbor at step t", "Neighbor at step t-1",
         "Neighbor at step t-2"
     ]
+    
+    # Create a figure with a subplot for each channel.
     fig, axs = plt.subplots(1, num_channels, figsize=(15, 4), dpi=80)
+    
+    # Initialize a counter to track the current channel index.
     count = 0
-
+    
+    # Define a callback function to close the figure after the specified show_time.
     def close_event():
-        plt.close()
-
+        plt.close(fig)  # Explicitly close the figure referenced by 'fig'.
+    
+    # Create a timer that triggers the close_event after the specified duration.
     timer = fig.canvas.new_timer(interval=show_time * 1000)
     timer.add_callback(close_event)
+    
+    # Iterate over each channel and display its observation data.
     for i, name in enumerate(channel_names):
         count += 1
-        ax = axs[i]
-        ax.imshow(obs[..., i], cmap="bone")
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_title(name)
-    fig.suptitle("Multi-channels Top-down Observation")
+        ax = axs[i]  # Retrieve the subplot for the current channel.
+        ax.imshow(obs[..., i], cmap="bone")  # Display the observation data using a bone colormap.
+        ax.set_xticks([])  # Hide the x-axis ticks.
+        ax.set_yticks([])  # Hide the y-axis ticks.
+        ax.set_title(name)  # Set the title for the subplot based on the channel name.
+    
+    # Set a title for the entire figure that summarizes the content.
+    fig.suptitle("Multi-channels Top-down Observation", fontsize='large')
+
+    # Start the timer to initiate the automatic closing of the figure.
     timer.start()
+    
+    # Display the figure with the multi-channel observation data.
     plt.show()
-    plt.close()
+    
+    # Close the figure after it has been displayed for the specified duration.
+    plt.close()  # Explicitly close the figure to ensure it is properly closed.
 
 @ENV_REGISTRY.register('metadrive_lightzero')
 class MetaDriveEnv(BaseEnv):
     """
-    MetaDrive environment in LightZero.
+    Overview:
+        MetaDrive environment in LightZero.
     """
     config = dict(
         # (bool) Whether to use continuous action space
@@ -64,16 +89,15 @@ class MetaDriveEnv(BaseEnv):
     
     def __init__(self, cfg: dict = {}) -> None:
         """
-        Initialize the environment with a configuration dictionary. Sets up spaces for observations, actions, and rewards.
+        Overview:
+            Initialize the environment with a configuration dictionary. Set up spaces for observations, actions, and rewards.
+        Arguments:
+            - cfg (:obj:`dict`): Configuration dict.
         """
         # Initialize a raw env
         self._cfg = cfg
         self._env = MetaDrive(self._cfg)
         self._init_flag = True
-
-        # Initialize the spaces
-        #!!!!!!!!!!!!!!!!!!!!!这个if能不能删掉啊
-        # if not hasattr(self._env, 'reward_space'):
         self._reward_space = gym.spaces.Box(low=-float('inf'), high=float('inf'), shape=(1, ))
         self._action_space = self._env.action_space
         self._observation_space = self._env.observation_space
@@ -84,10 +108,9 @@ class MetaDriveEnv(BaseEnv):
     def reset(self, *args, **kwargs) -> Any:
         """
         Overview:
-            Wrapper of ``reset`` method in env. The observations are converted to ``np.ndarray`` and final reward
-            are recorded.
+            Reset the environment and return the initial observation.
         Returns:
-            - Any: Observations from environment
+            - metadrive_obs (:obj:`dict`): An observation dict for the MetaDrive env which includes ``observation``, ``action_mask``, ``to_play``.
         """
         obs = self._env.reset(*args, **kwargs)
         obs = to_ndarray(obs, dtype=np.float32)
@@ -105,22 +128,22 @@ class MetaDriveEnv(BaseEnv):
         
         metadrive_obs = {}
         metadrive_obs['observation'] = obs 
-        # !!!!!!!!!!!!!!!!!!这边传none会不会有问题啊 
         metadrive_obs['action_mask'] = None 
         metadrive_obs['to_play'] = -1 
         return metadrive_obs
     
-    def step(self, action: Any = None) -> BaseEnvTimestep:
+    def step(self, action: np.ndarray = None) -> BaseEnvTimestep:
         """
         Overview:
             Wrapper of ``step`` method in env. This aims to convert the returns of ``gym.Env`` step method into
             that of ``ding.envs.BaseEnv``, from ``(obs, reward, done, info)`` tuple to a ``BaseEnvTimestep``
             namedtuple defined in DI-engine. It will also convert actions, observations and reward into
-            ``np.ndarray``, and check legality if action contains control signal.
+            ``np.ndarray``. In origin MetaDrive setting the action can be None, but in our pipeline an action is always performed to the environment.
         Arguments:
-            - action (Any, optional): Actions sent to env. Defaults to None.
+            - action (:obj:`np.ndarray`): The action to be performed in the environment. 
         Returns:
-            - BaseEnvTimestep: DI-engine format of env step returns.
+            - timestep (:obj:`BaseEnvTimestep`): An object containing the new observation, reward, done flag,
+              and info dictionary.
         """
         action = to_ndarray(action)
         obs, rew, done, info = self._env.step(action)

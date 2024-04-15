@@ -17,9 +17,9 @@ reanalyze_ratio = 0.
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-metadrive_muzero_config = dict(
+metadrive_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/muzero_metadrive_old{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_sez_ctree/sez_metadrive_old{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='MetaDrive',
         continuous=True,
@@ -76,10 +76,10 @@ metadrive_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
     ),
 )
-metadrive_muzero_config = EasyDict(metadrive_muzero_config)
-main_config = metadrive_muzero_config
+metadrive_sampled_efficientzero_config = EasyDict(metadrive_sampled_efficientzero_config)
+main_config = metadrive_sampled_efficientzero_config
 
-metadrive_muzero_create_config = dict(
+metadrive_sampled_efficientzero_create_config = dict(
     env=dict(
         type='metadrive_lightzero',
         import_names=['zoo.metadrive.env.metadrive_env'],
@@ -95,8 +95,8 @@ metadrive_muzero_create_config = dict(
         import_names=['lzero.worker.muzero_collector'],
     )
 )
-metadrive_muzero_create_config = EasyDict(metadrive_muzero_create_config)
-create_config = metadrive_muzero_create_config
+metadrive_sampled_efficientzero_create_config = EasyDict(metadrive_sampled_efficientzero_create_config)
+create_config = metadrive_sampled_efficientzero_create_config
 if __name__ == "__main__":
 
     from lzero.entry import train_muzero
