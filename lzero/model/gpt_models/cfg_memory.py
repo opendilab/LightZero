@@ -22,13 +22,15 @@ cfg['world_model'] = {
     # "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
     # "context_length": 2 * 16,
     # "context_length_for_recurrent": 2 * 16,
+    # # "context_length": 6,
+    # # "context_length_for_recurrent": 6,
     # "recurrent_keep_deepth": 100,
 
-    'max_blocks': 17, # TODO
-    "max_tokens": 2 * 17,  # 1+0+15 memory_length = 0
-    "context_length": 2 * 17,
-    "context_length_for_recurrent": 2 * 17,
-    "recurrent_keep_deepth": 100,
+    # 'max_blocks': 17, # TODO
+    # "max_tokens": 2 * 17,  # 1+0+15 memory_length = 0
+    # "context_length": 2 * 17,
+    # "context_length_for_recurrent": 2 * 17,
+    # "recurrent_keep_deepth": 100,
 
     # 'max_blocks': 30,
     # "max_tokens": 2 * 30,  # 15+0+15 memory_length = 0
@@ -36,8 +38,11 @@ cfg['world_model'] = {
     # 'max_blocks': 32,
     # "max_tokens": 2 * 32,  # 15+2+15 memory_length = 2
 
-    # 'max_blocks': 60, 
-    # "max_tokens": 2 * 60, # 15+30+15 memory_length = 30
+    'max_blocks': 76, 
+    "max_tokens": 2 * 76, # 1+60+15=76 memory_length = 60
+    "context_length": 2 * 76,
+    "context_length_for_recurrent": 2 * 76,
+    "recurrent_keep_deepth": 100,
 
     # 'max_blocks': 80, # memory_length = 50
     # "max_tokens": 2 * 80,
@@ -57,14 +62,10 @@ cfg['world_model'] = {
     #    'max_blocks': 530, #  memory_length = 500
     #   "max_tokens": 2 * 530,
 
+    "device": 'cuda:3',
 
-    # 'embed_dim': 64,  # TODO：for memory # same as <Transformer shine in RL> paper
-    # 'embed_dim': 96,  # TODO：for memory # same as <Transformer shine in RL> paper
     'group_size': 8,  # NOTE
     # 'group_size': 768,  # NOTE
-
-
-    "device": 'cuda:0',
     'attention': 'causal',
     # 'num_layers': 1,
     # 'num_layers': 2,  # same as <Transformer shine in RL> paper
@@ -72,7 +73,7 @@ cfg['world_model'] = {
 
     'num_layers': 8,
     'num_heads': 8,
-    # # 'embed_dim': 96, # TODO：
+    # 'embed_dim': 96,  # TODO：for memory # same as <Transformer shine in RL> paper
     # 'embed_dim': 768, # TODO：Gpt2 Base
     'embed_dim': 256, # TODO：
 

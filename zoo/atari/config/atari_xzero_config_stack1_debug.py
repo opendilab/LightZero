@@ -53,7 +53,10 @@ evaluator_env_num = 3
 
 model_update_ratio = 0.25
 # model_update_ratio = 0.5
-num_simulations = 50
+num_simulations = 5
+# num_simulations = 50
+
+
 batch_size = 64
 
 max_env_step = int(1e6)
@@ -95,14 +98,14 @@ atari_xzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        # collect_max_episode_steps=int(50),
-        # eval_max_episode_steps=int(50),
+        collect_max_episode_steps=int(50),
+        eval_max_episode_steps=int(50),
         # TODO: for breakout
         # collect_max_episode_steps=int(5e3), # for breakout
         # eval_max_episode_steps=int(5e3), # for breakout
         # TODO: for others
-        collect_max_episode_steps=int(2e4), 
-        eval_max_episode_steps=int(1e4),
+        # collect_max_episode_steps=int(2e4), 
+        # eval_max_episode_steps=int(1e4),
         clip_rewards=True,
     ),
     policy=dict(

@@ -61,7 +61,7 @@ cfg['world_model'] = {
 
                       # 'action_shape': 18, # TODO：for multi-task
 
-                      "device": 'cuda:1',
+                      "device": 'cuda:0',
                       'action_shape': 6, # TODO：for pong qbert 
                       # 'action_shape': 9,# TODO：for mspacman
                       # 'action_shape': 18,# TODO：for Seaquest boxing Frostbite
