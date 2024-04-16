@@ -22,6 +22,8 @@ max_env_step = int(5e5)
 seed = 0
 collector_env_num = 8
 n_episode = 8
+# collector_env_num = 1
+# n_episode = 1
 evaluator_env_num = 8
 num_simulations = 50
 update_per_collect = None  # for others
@@ -61,8 +63,8 @@ memory_xzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
     # exp_name=f'data_memory_{env_id}_0413_debug/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_bs{batch_size}'
     # f'_seed{seed}_eval{evaluator_env_num}_nl12-nh12-emd1536_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer4_obschannel4_reclw0',
-    exp_name=f'data_memory_{env_id}_debug/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_bs{batch_size}'
-    f'_seed{seed}_eval{evaluator_env_num}_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer3_obschannel3_valuesize101',
+    exp_name=f'data_memory_{env_id}_0416/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_bs{batch_size}'
+    f'_seed{seed}_eval{evaluator_env_num}_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer3_obschannel3_valuesize101_collectenv{collector_env_num}_bacth-kvmaxsize',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -94,14 +96,16 @@ memory_xzero_config = dict(
         ),
         # sample_type='transition',
         sample_type='episode',  # NOTE: very important for memory env
-        # model_path=None,
-        model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0415/visual_match_memlen-0_xzero_H17_bs64_seed0_eval8_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer3_obschannel3_valuesize101_240415_165207/ckpt/ckpt_best.pth.tar',
+        model_path=None,
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0415/visual_match_memlen-0_xzero_H17_bs64_seed0_eval8_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer3_obschannel3_valuesize101_240415_165207/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0413/visual_match_memlen-0_xzero_H16_bs64_seed0_eval8_nl8-nh8-emd768_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer4_obschannel4_240414_172713/ckpt/ckpt_best.pth.tar',
         transformer_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,
         update_per_collect_tokenizer=update_per_collect,
         num_unroll_steps=num_unroll_steps,
         model=dict(
+            env_name='memory',
+
             # observation_shape=25,
             # observation_shape=75,
 

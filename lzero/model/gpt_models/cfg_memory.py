@@ -64,7 +64,7 @@ cfg['world_model'] = {
     # 'group_size': 768,  # NOTE
 
 
-    "device": 'cuda:1',
+    "device": 'cuda:0',
     'attention': 'causal',
     # 'num_layers': 1,
     # 'num_layers': 2,  # same as <Transformer shine in RL> paper

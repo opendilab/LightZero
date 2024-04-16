@@ -269,15 +269,14 @@ class WorldModel(nn.Module):
             self.pos_emb_diff_k.append(layer_pos_emb_diff_k)
             self.pos_emb_diff_v.append(layer_pos_emb_diff_v)
 
-    def forward(self, obs_embeddings_or_act_tokens, past_keys_values: Optional[KeysValues] = None, kvcache_independent=False, is_init_infer=True, valid_context_lengths=None) -> WorldModelOutput:
+    def forward(self, obs_embeddings_or_act_tokens, past_keys_values: Optional[KeysValues] = None, kvcache_independent=False) -> WorldModelOutput:
         if kvcache_independent:
             # 根据past_keys_values获取每个样本的步骤数
             prev_steps = 0 if past_keys_values is None else [past_kv.size for past_kv in past_keys_values]
             prev_steps = torch.tensor(prev_steps, device=self.device)
         else:
             prev_steps = 0 if past_keys_values is None else past_keys_values.size
-        if is_init_infer: # TODO
-            valid_context_lengths=None
+
         if 'obs_embeddings' in obs_embeddings_or_act_tokens.keys():
             obs_embeddings = obs_embeddings_or_act_tokens['obs_embeddings']
             if len(obs_embeddings.shape) == 2:
@@ -293,14 +292,7 @@ class WorldModel(nn.Module):
                 # 将位置嵌入加到obs_embeddings上
                 sequences = obs_embeddings + position_embeddings
             else:
-                if is_init_infer:
-                    sequences = obs_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device))
-                else:
-                    # 获取每个样本的有效长度
-                    valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)  # NOTE
-                    # NOTE: 根据有效长度获取位置编码
-                    position_embeddings = self.pos_emb(valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
-                    sequences = obs_embeddings + position_embeddings
+                sequences = obs_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device))
         elif 'act_tokens' in obs_embeddings_or_act_tokens.keys():
             act_tokens = obs_embeddings_or_act_tokens['act_tokens']
             if len(act_tokens.shape) == 3:
@@ -318,16 +310,8 @@ class WorldModel(nn.Module):
                 # 将位置嵌入加到obs_embeddings上  
                 sequences = act_embeddings + position_embeddings
             else:
-                if is_init_infer:
-                    sequences = act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=act_tokens.device))
-                else:
-                    # 获取每个样本的有效长度
-                    valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)
-                    # NOTE: 根据有效长度获取位置编码
-                    position_embeddings = self.pos_emb(valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
-                    sequences = act_embeddings + position_embeddings
+                sequences = act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=act_tokens.device))
         else:
-            # ============== for learn ==============
             obs_embeddings_and_act_tokens = obs_embeddings_or_act_tokens['obs_embeddings_and_act_tokens']
             # obs_embeddings: (B, L, K=16, E), act_tokens: (B, L, 1)
             obs_embeddings, act_tokens = obs_embeddings_and_act_tokens
@@ -361,17 +345,14 @@ class WorldModel(nn.Module):
 
             # 添加位置嵌入  
             sequences = obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device))
-            
 
         if kvcache_independent:
             x = []
             for k, past_kv in enumerate(past_keys_values):
-                # x.append(self.transformer(sequences[k].unsqueeze(0), past_kv))
-                x.append(self.transformer(sequences[k].unsqueeze(0), past_kv, valid_context_lengths=valid_context_lengths[k].unsqueeze(0)))
+                x.append(self.transformer(sequences[k].unsqueeze(0), past_kv))
             x = torch.cat(x, dim=0)
         else:
-            # x = self.transformer(sequences, past_keys_values)
-            x = self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths)
+            x = self.transformer(sequences, past_keys_values)
 
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
         logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
@@ -547,6 +528,16 @@ class WorldModel(nn.Module):
         latest_state, action = state_action_history[-1]
         # print(f'action:{action}')
 
+        # for i, latent_state_index in enumerate(latent_state_index_in_search_path):
+        #     self.latent_state_index_in_search_path[i].append(latent_state_index)
+        #     # 如果是第一次计算,则初始化self.next_latent_state_depth[i]
+        #     if simulation_index == 0:
+        #         self.next_latent_state_depth[i] = self.convert_to_depth(self.latent_state_index_in_search_path[i], self.depth_map[i], [])
+        #     else:
+        #         # 否则,在上一次计算得到的self.next_latent_state_depth[i]的基础上,只计算新加入的元素的深度
+        #         self.next_latent_state_depth[i] = self.convert_to_depth(self.latent_state_index_in_search_path[i], self.depth_map[i], self.next_latent_state_depth[i])
+        # print(f'next_latent_state_depth:{self.next_latent_state_depth}')
+
         # 假设 latest_state 是新的 latent_state,包含 ready_env_num 个环境的信息
         ready_env_num = latest_state.shape[0]
         self.keys_values_wm_list = []
@@ -575,8 +566,8 @@ class WorldModel(nn.Module):
             print('recurrent largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
 
         # 输入self.keys_values_wm_list,输出为self.keys_values_wm
-        self.keys_values_wm_size_list = self.trim_and_pad_kv_cache(is_init_infer=False)
-        self.keys_values_wm_size_list_current = self.keys_values_wm_size_list
+        self.trim_and_pad_kv_cache(is_init_infer=False)
+
         for k in range(2):  # 假设每次只有一个动作token。
             # action_token obs_token, ..., obs_token  1+1
             if k == 0:
@@ -584,8 +575,8 @@ class WorldModel(nn.Module):
             else:
                 obs_embeddings_or_act_tokens = {'obs_embeddings': token}
 
-            outputs_wm = self.forward(obs_embeddings_or_act_tokens, past_keys_values=self.keys_values_wm, kvcache_independent=False, is_init_infer=False)
-            self.keys_values_wm_size_list_current = [i+1 for i in self.keys_values_wm_size_list_current] # NOTE: +1 ===============
+            outputs_wm = self.forward(obs_embeddings_or_act_tokens, past_keys_values=self.keys_values_wm, kvcache_independent=False)
+
             if k == 0:
                 # 如果k==0,token是action_token,outputs_wm.logits_rewards 是有值的
                 reward = outputs_wm.logits_rewards  # (B,)
@@ -597,7 +588,7 @@ class WorldModel(nn.Module):
                     token = token.unsqueeze(1)  # (8,1024) -> (8,1,1024)
                 latent_state_list.append(token)
 
-        # 删除旧的self.latent_state以释放内存 ===========
+        # 删除旧的self.latent_state以释放内存
         del self.latent_state
         self.latent_state = torch.cat(latent_state_list, dim=1)  # (B, K)
 
@@ -607,15 +598,17 @@ class WorldModel(nn.Module):
         return outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value
 
     def trim_and_pad_kv_cache(self, is_init_infer=True):
-        # =========== TODO： is_init_infer=True 在episode快结束时，batch里面不同env的context的处理=========
+        """
+        This method trims and pads the key and value caches of the attention mechanism
+        to a consistent size across all items in the batch, determined by the smallest cache size.
+        """
         if is_init_infer:
             print('='*20)
-            print(f'self.keys_values_wm_size_list: {self.keys_values_wm_size_list}')
-        # print(f'is_init_infer: {is_init_infer}')
-        # print(f'self.keys_values_wm_size_list: {self.keys_values_wm_size_list}')
-        # NOTE: self.keys_values_wm_size_list会传递到world_model.forward()中
-        # 找到所有key-value尺寸中的最大尺寸,用于填充
-        max_size = max(self.keys_values_wm_size_list)
+        print(f'is_init_infer: {is_init_infer}')
+        print(f'self.keys_values_wm_size_list: {self.keys_values_wm_size_list}')
+        
+        # 找到所有key-value尺寸中的最小尺寸,用于填充/修剪
+        min_size = min(self.keys_values_wm_size_list)
 
         # 遍历transformer的每一层
         for layer in range(self.num_layers):
@@ -631,88 +624,33 @@ class WorldModel(nn.Module):
 
                 # 获取当前缓存的有效尺寸
                 effective_size = self.keys_values_wm_size_list[idx]
-                # 计算需要填充的尺寸差异
-                pad_size = max_size - effective_size if effective_size < max_size else 0
+                # 计算需要修剪的尺寸差异
+                trim_size = effective_size - min_size if effective_size > min_size else 0
 
-                # 如果需要填充,在缓存的开头添加'pad_size'个零
-                if pad_size > 0:
-                    # NOTE: 先去掉后面pad_size个无效kv, 注意位置编码的正确性
-                    k_cache_trimmed = k_cache[:, :, :-pad_size, :]
-                    v_cache_trimmed = v_cache[:, :, :-pad_size, :]
-                    k_cache_padded = F.pad(k_cache_trimmed, (0, 0, pad_size, 0), "constant", 0)
-                    v_cache_padded = F.pad(v_cache_trimmed, (0, 0, pad_size, 0), "constant", 0)
+                # 如果需要修剪,从缓存的开头移除'trim_size'
+                if trim_size > 0:
+                    k_cache_trimmed = k_cache[:, :, trim_size:, :]
+                    v_cache_trimmed = v_cache[:, :, trim_size:, :]
+                    # 在第三维上用零填充修剪后的缓存
+                    k_cache_padded = F.pad(k_cache_trimmed, (0, 0, trim_size, 0), "constant", 0)
+                    v_cache_padded = F.pad(v_cache_trimmed, (0, 0, trim_size, 0), "constant", 0)
                 else:
-                    k_cache_padded = k_cache  
+                    k_cache_padded = k_cache
                     v_cache_padded = v_cache
 
-                # 将处理后的缓存添加到列表中 
+                # 将处理后的缓存添加到列表中
                 kv_cache_k_list.append(k_cache_padded)
                 kv_cache_v_list.append(v_cache_padded)
 
             # 沿新维度堆叠缓存,并用squeeze()移除额外维度
-            self.keys_values_wm._keys_values[layer]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1) 
+            self.keys_values_wm._keys_values[layer]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
             self.keys_values_wm._keys_values[layer]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
 
-            # 填充后,将缓存尺寸更新为最大尺寸
-            self.keys_values_wm._keys_values[layer]._k_cache._size = max_size
-            self.keys_values_wm._keys_values[layer]._v_cache._size = max_size
-        
-        return self.keys_values_wm_size_list
+            # 修剪和填充后,将缓存尺寸更新为最小尺寸
+            self.keys_values_wm._keys_values[layer]._k_cache._size = min_size
+            self.keys_values_wm._keys_values[layer]._v_cache._size = min_size
 
-    # def trim_and_pad_kv_cache(self, is_init_infer=True):
-    #     """
-    #     This method trims and pads the key and value caches of the attention mechanism
-    #     to a consistent size across all items in the batch, determined by the smallest cache size.
-    #     """
-    #     if is_init_infer:
-    #         print('='*20)
-    #     print(f'is_init_infer: {is_init_infer}')
-    #     print(f'self.keys_values_wm_size_list: {self.keys_values_wm_size_list}')
-        
-    #     # 找到所有key-value尺寸中的最小尺寸,用于填充/修剪
-    #     min_size = min(self.keys_values_wm_size_list)
-
-    #     # 遍历transformer的每一层
-    #     for layer in range(self.num_layers):
-    #         # 初始化列表来存储修剪和填充后的k和v缓存
-    #         kv_cache_k_list = []
-    #         kv_cache_v_list = []
-
-    #         # 枚举key-value对列表
-    #         for idx, keys_values in enumerate(self.keys_values_wm_list):
-    #             # 检索当前层的key和value缓存
-    #             k_cache = keys_values[layer]._k_cache._cache
-    #             v_cache = keys_values[layer]._v_cache._cache
-
-    #             # 获取当前缓存的有效尺寸
-    #             effective_size = self.keys_values_wm_size_list[idx]
-    #             # 计算需要修剪的尺寸差异
-    #             trim_size = effective_size - min_size if effective_size > min_size else 0
-
-    #             # 如果需要修剪,从缓存的开头移除'trim_size'
-    #             if trim_size > 0:
-    #                 k_cache_trimmed = k_cache[:, :, trim_size:, :]
-    #                 v_cache_trimmed = v_cache[:, :, trim_size:, :]
-    #                 # 在第三维上用零填充修剪后的缓存
-    #                 k_cache_padded = F.pad(k_cache_trimmed, (0, 0, trim_size, 0), "constant", 0)
-    #                 v_cache_padded = F.pad(v_cache_trimmed, (0, 0, trim_size, 0), "constant", 0)
-    #             else:
-    #                 k_cache_padded = k_cache
-    #                 v_cache_padded = v_cache
-
-    #             # 将处理后的缓存添加到列表中
-    #             kv_cache_k_list.append(k_cache_padded)
-    #             kv_cache_v_list.append(v_cache_padded)
-
-    #         # 沿新维度堆叠缓存,并用squeeze()移除额外维度
-    #         self.keys_values_wm._keys_values[layer]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
-    #         self.keys_values_wm._keys_values[layer]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
-
-    #         # 修剪和填充后,将缓存尺寸更新为最小尺寸
-    #         self.keys_values_wm._keys_values[layer]._k_cache._size = min_size
-    #         self.keys_values_wm._keys_values[layer]._v_cache._size = min_size
-
-    def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0, latent_state_index_in_search_path=[], valid_context_lengths=None):
+    def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0, latent_state_index_in_search_path=[]):
         if self.context_length <= 2:
             # 即全部是单帧的，没有context
             return
@@ -725,32 +663,6 @@ class WorldModel(nn.Module):
                 context_length = self.context_length
             else:
                 context_length = self.context_length_for_recurrent
-
-
-            if not is_init_infer: # NOTE: check
-                current_max_context_length = max(self.keys_values_wm_size_list_current)
-                # 从全局缓存复制keys和values到单个环境缓存
-                for layer in range(self.num_layers):
-                    # 裁剪和填充逻辑
-                    # 假设cache的维度是 [batch_size, num_heads, sequence_length, features]
-                    k_cache_current = self.keys_values_wm._keys_values[layer]._k_cache._cache[i]
-                    v_cache_current = self.keys_values_wm._keys_values[layer]._v_cache._cache[i]
-                    
-                    trim_size = current_max_context_length-self.keys_values_wm_size_list_current[i]
-                    # 根据有效长度裁剪 TODO
-                    k_cache_trimmed = k_cache_current[:, trim_size:, :]
-                    v_cache_trimmed = v_cache_current[:, trim_size:, :]
-
-                    # k_cache_trimmed = k_cache_current[:, 2:context_length-1, :]
-                    # v_cache_trimmed = v_cache_current[:, 2:context_length-1, :]
-
-                    # 更新单环境cache
-                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = k_cache_trimmed.unsqueeze(0)
-                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = k_cache_trimmed.unsqueeze(0)
-                    
-                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm_size_list_current[i] # TODO
-                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm_size_list_current[i]
-
 
             # 从全局缓存复制keys和values到单个环境缓存
             for layer in range(self.num_layers):
@@ -798,6 +710,42 @@ class WorldModel(nn.Module):
             else:
                 self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
 
+
+            # if is_init_infer:
+            #     # init_infer: laten_state是encoder编码得到的，没有误差
+            #     # 比较并存储较大的缓存
+            #     if cache_key in self.past_keys_values_cache_init_infer:
+            #         existing_kvcache = self.past_keys_values_cache_init_infer[cache_key]
+            #         # 检查现有缓存和新缓存之间是否存在大小差异
+            #         # if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
+            #         if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.context_length-1:
+            #             # 仅在大小小于 max_tokens - 1 时存储,以避免重置
+            #             self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+            #     # elif self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
+            #     elif self.keys_values_wm_single_env.size < self.context_length-1:
+            #         # 仅在大小小于 max_tokens - 1 时存储,以避免重置
+            #         self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+            # else:
+            #     # recurrent_infer: laten_state是预测的，会有误差
+            #     # 比较并存储较大的缓存
+            #     if cache_key in self.past_keys_values_cache_recurrent_infer:
+            #         existing_kvcache = self.past_keys_values_cache_recurrent_infer[cache_key]
+            #         # 检查现有缓存和新缓存之间是否存在大小差异
+            #         # if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
+            #         if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.context_length_for_recurrent-1:
+            #             # 仅在大小小于 max_tokens - 1 时存储,以避免重置
+            #             # if latent_state_index_in_search_path[i] == 0:
+            #             if self.next_latent_state_depth[i][-1] <= self.recurrent_keep_deepth:
+            #                 # TODO: (root_latent_state, a, current_latent_state) kv_cache 即相当于只是在root下一层的预测state才存储kv_cache
+            #                 # print('save kv_cache of predicted latent state')
+            #                 self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+            #     # elif self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
+            #     elif self.keys_values_wm_single_env.size < self.context_length_for_recurrent-1:
+            #         # if latent_state_index_in_search_path[i] == 0: # bug: < self.action_shape**(self.recurrent_keep_deepth-1):
+            #         if self.next_latent_state_depth[i][-1] <= self.recurrent_keep_deepth:
+            #             # TODO: (root_latent_state, a, current_latent_state) kv_cache 即相当于只是在root下一层的预测state才存储kv_cache
+            #             # print('save kv_cache of predicted latent state')
+            #             self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
 
     def retrieve_or_generate_kvcache(self, latent_state, ready_env_num, simulation_index=0):
         """

@@ -4,7 +4,6 @@ Credits to https://github.com/karpathy/minGPT
 
 from dataclasses import dataclass
 import math
-import copy
 from typing import Optional
 
 from einops import rearrange
@@ -48,15 +47,34 @@ class Transformer(nn.Module):
         return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
         # return KeysValues(n, self.config.num_heads, 50, self.config.embed_dim, self.config.num_layers, device)
 
-    def forward(self, sequences: torch.Tensor, past_keys_values: Optional[KeysValues] = None, valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(self, sequences: torch.Tensor, past_keys_values: Optional[KeysValues] = None) -> torch.Tensor:
         assert past_keys_values is None or len(past_keys_values) == len(self.blocks)
         x = self.drop(sequences)
         for i, block in enumerate(self.blocks):
-            x = block(x, None if past_keys_values is None else past_keys_values[i], valid_context_lengths)
+            x = block(x, None if past_keys_values is None else past_keys_values[i])
 
         x = self.ln_f(x)
         return x
 
+
+# class Block(nn.Module):
+#     def __init__(self, config: TransformerConfig) -> None:
+#         super().__init__()
+#         self.ln1 = nn.LayerNorm(config.embed_dim)
+#         self.ln2 = nn.LayerNorm(config.embed_dim)
+#         self.attn = SelfAttention(config)
+#         self.mlp = nn.Sequential(
+#             nn.Linear(config.embed_dim, 4 * config.embed_dim),
+#             nn.GELU(),
+#             nn.Linear(4 * config.embed_dim, config.embed_dim),
+#             nn.Dropout(config.resid_pdrop),
+#         )
+
+#     def forward(self, x: torch.Tensor, past_keys_values: Optional[KeysValues] = None) -> torch.Tensor:
+#         x_attn = self.attn(self.ln1(x), past_keys_values)
+#         x = x + x_attn
+#         x = x + self.mlp(self.ln2(x))
+#         return x
 
 from ding.torch_utils.network import GRUGatingUnit
 
@@ -82,8 +100,8 @@ class Block(nn.Module):
             nn.Dropout(config.resid_pdrop),
         )
 
-    def forward(self, x: torch.Tensor, past_keys_values: Optional[KeysValues] = None, valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
-        x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths)
+    def forward(self, x: torch.Tensor, past_keys_values: Optional[KeysValues] = None) -> torch.Tensor:
+        x_attn = self.attn(self.ln1(x), past_keys_values)
         # x = x + x_attn
         x = self.gate1(x, x_attn) if self.gru_gating else x + x_attn
         # x = x + self.mlp(self.ln2(x))
@@ -104,6 +122,9 @@ class SelfAttention(nn.Module):
         self.query = nn.Linear(config.embed_dim, config.embed_dim)
         self.value = nn.Linear(config.embed_dim, config.embed_dim)
 
+        # key, query, value projections for all heads, but in a batch
+        # self.c_attn = nn.Linear(config.embed_dim, 3 * config.embed_dim)
+
         self.attn_drop = nn.Dropout(config.attn_pdrop)
         self.resid_drop = nn.Dropout(config.resid_pdrop)
         self.proj = nn.Linear(config.embed_dim, config.embed_dim)
@@ -113,13 +134,20 @@ class SelfAttention(nn.Module):
         self.register_buffer('mask', causal_mask if config.attention == 'causal' else block_causal_mask)
 
 
-    def forward(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None, valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
-        B, T, C = x.size()
+    #@profile
+    def forward(self, x: torch.Tensor, kv_cache: Optional[KVCache] = None) -> torch.Tensor:
+        B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
         if kv_cache is not None:
             b, nh, L, c = kv_cache.shape
             assert nh == self.num_heads and b == B and c * nh == C
         else:
             L = 0
+
+        # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+        # q, k, v  = self.c_attn(x).split(self.config.embed_dim, dim=2)
+        # k = k.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2) # (B, nh, T, hs)
+        # q = q.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2) # (B, nh, T, hs)
+        # v = v.view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2) # (B, nh, T, hs)
 
         q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)   # (B, nh, T, hs)
         k = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)     # (B, nh, T, hs)
@@ -129,45 +157,24 @@ class SelfAttention(nn.Module):
             kv_cache.update(k, v)
             k, v = kv_cache.get()
 
+        # method1: manual implementation of attention
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-
-        # # # # 处理mask
-        # if valid_context_lengths is not None:
-        #     # 最终得到的  mask.shape: (B, T, L + T)
-        #     # 其中L是context长度，T是当前输入的长度, valid_context_lengths是context中有效的长度，位于context的后面valid_context_lengths长的一段
-        #     mask = torch.ones(B, T, L + T, device=att.device)
-        #     # 对每个样本,根据其有效长度,将无效的部分设为0
-        #     for i in range(B):
-        #         mask[i] = copy.deepcopy(self.mask[L:L + T, :L + T])
-        #         if L - valid_context_lengths[i]>0:
-        #             mask[i, :, :(L - valid_context_lengths[i])] = 0
-        # else:
-        #     # mask.shape: (B, nh, T, L + T)
-        #     mask = self.mask[L:L + T, :L + T]
-        # # att.shape: (T, L + T)
-        # att = att.masked_fill(mask == 0, float('-inf'))
-
-        if valid_context_lengths is not None:
-            # 最终得到的  mask.shape: (B, T, L + T)
-            # 其中L是context长度，T是当前输入的长度, valid_context_lengths是context中有效的长度，位于context的后面valid_context_lengths长的一段
-            # mask = torch.ones(B, T, L + T, device=att.device)
-            mask = torch.zeros(B, T, L + T, device=att.device)
-            # 对每个样本,根据其有效长度,将无效的部分设为0
-            for i in range(B):
-                mask[i] = self.mask[L:L + T, :L + T].clone() # 不需要.clone()吗
-                # if L - valid_context_lengths[i]>0:
-                mask[i, :, :(L - valid_context_lengths[i])] = 0
-        else:
-            # mask.shape: (B, nh, T, L + T)
-            mask = self.mask[L:L + T, :L + T]
-        # att.shape: (T, L + T)
-        att = att.masked_fill(mask == 0, float('-inf'))
-
-
+        att = att.masked_fill(self.mask[L:L + T, :L + T] == 0, float('-inf'))
         att = F.softmax(att, dim=-1)
         att = self.attn_drop(att)
         y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
 
+        # TODO
+        # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+
+        # method2: efficient attention using Flash Attention CUDA kernels
+        # 手动实现的掩码区域
+        # manual_attn_mask = self.mask[L:L + T, :L + T]
+        # # # https://github.com/pytorch/pytorch/blob/main/torch/nn/functional.py#L5243
+        # manual_attn_mask = manual_attn_mask.masked_fill(manual_attn_mask == 0, float('-inf'))
+        # manual_attn_mask = manual_attn_mask.masked_fill(manual_attn_mask != 0, 0)
+        # y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=manual_attn_mask, dropout_p=self.config.attn_pdrop if self.training else 0, is_causal=False)
+        
         y = rearrange(y, 'b h t e -> b t (h e)')
         y = self.resid_drop(self.proj(y))
 

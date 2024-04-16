@@ -45,6 +45,7 @@ class MuZeroModelGPT(nn.Module):
         downsample: bool = False,
         norm_type: Optional[str] = 'BN',
         discrete_action_encoding_type: str = 'one_hot',
+        env_name='atari',
         *args,
         **kwargs
     ):
@@ -115,13 +116,17 @@ class MuZeroModelGPT(nn.Module):
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
         self.downsample = downsample
+        self.env_name = env_name
 
         from .gpt_models.world_model import WorldModel
         from .gpt_models.tokenizer.tokenizer import Tokenizer
         from .gpt_models.tokenizer.nets import Encoder, Decoder
-        # from .gpt_models.cfg_cartpole import cfg
-        # from .gpt_models.cfg_memory import cfg # NOTE: TODO
-        from .gpt_models.cfg_atari import cfg
+
+        if self.env_name == 'atari':
+            from .gpt_models.cfg_atari import cfg
+        elif self.env_name == 'memory':
+            # from .gpt_models.cfg_cartpole import cfg
+            from .gpt_models.cfg_memory import cfg # NOTE: TODO
 
         if cfg.world_model.obs_type == 'vector':
             self.representation_network = RepresentationNetworkMLP(

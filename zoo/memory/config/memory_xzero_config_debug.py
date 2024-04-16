@@ -106,6 +106,7 @@ memory_xzero_config = dict(
         update_per_collect_tokenizer=update_per_collect,
         num_unroll_steps=num_unroll_steps,
         model=dict(
+            env_name='memory',
             # observation_shape=25,
             # observation_shape=75,
 
