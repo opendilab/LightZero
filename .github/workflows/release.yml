@@ -95,7 +95,7 @@ jobs:
         env:
           CIBW_SKIP: "pp* *musllinux*"
           CIBW_ARCHS: ${{ matrix.architecture }}
-          CIBW_PROJECT_REQUIRES_PYTHON: "==${{ matrix.python }}.*"
+          CIBW_PROJECT_REQUIRES_PYTHON: ${{ matrix.python }}
       - name: Show the buildings
         shell: bash
         run: |
