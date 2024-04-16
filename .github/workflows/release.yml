@@ -3,6 +3,7 @@ name: Package Release
 on:
   release:
     types: [ published ]
+  workflow_dispatch:
 
 jobs:
   source_build:
@@ -54,11 +55,11 @@ jobs:
           - 'ubuntu-20.04'
           - 'macos-12'
         python:
-          - '3.7'
-          - '3.8'
-          - '3.9'
-          - '3.10'
-          - '3.11'
+          - '3.7.0'
+          - '3.8.0'
+          - '3.9.0'
+          - '3.10.0'
+          - '3.11.0'
         architecture:
           - x86_64
           - arm64
@@ -118,7 +119,7 @@ jobs:
       fail-fast: false
       matrix:
         python:
-          - '3.8.17'
+          - '3.8.0'
 
     steps:
       - name: Download packed files to artifacts
