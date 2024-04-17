@@ -575,7 +575,7 @@ class WorldModel(nn.Module):
             print('recurrent largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
 
         # 输入self.keys_values_wm_list,输出为self.keys_values_wm
-        self.keys_values_wm_size_list = self.trim_and_pad_kv_cache(is_init_infer=False)
+        self.keys_values_wm_size_list = self.trim_and_pad_kv_cache(is_init_infer=False) # 与上面self.retrieve_or_generate_kvcache返回的一致
         self.keys_values_wm_size_list_current = self.keys_values_wm_size_list
         for k in range(2):  # 假设每次只有一个动作token。
             # action_token obs_token, ..., obs_token  1+1
@@ -585,6 +585,7 @@ class WorldModel(nn.Module):
                 obs_embeddings_or_act_tokens = {'obs_embeddings': token}
 
             outputs_wm = self.forward(obs_embeddings_or_act_tokens, past_keys_values=self.keys_values_wm, kvcache_independent=False, is_init_infer=False)
+            print('keys_values_wm_size_list_current:', self.keys_values_wm_size_list_current)
             self.keys_values_wm_size_list_current = [i+1 for i in self.keys_values_wm_size_list_current] # NOTE: +1 ===============
             if k == 0:
                 # 如果k==0,token是action_token,outputs_wm.logits_rewards 是有值的
@@ -636,10 +637,10 @@ class WorldModel(nn.Module):
 
                 # 如果需要填充,在缓存的开头添加'pad_size'个零 ====================
                 if pad_size > 0:
-                    # NOTE: 先去掉后面pad_size个无效kv, 注意位置编码的正确性
+                    # NOTE: 先去掉后面pad_size个无效的零 kv, 再在缓存的开头添加'pad_size'个零 ，注意位置编码的正确性
                     k_cache_trimmed = k_cache[:, :, :-pad_size, :]
                     v_cache_trimmed = v_cache[:, :, :-pad_size, :]
-                    k_cache_padded = F.pad(k_cache_trimmed, (0, 0, pad_size, 0), "constant", 0)
+                    k_cache_padded = F.pad(k_cache_trimmed, (0, 0, pad_size, 0), "constant", 0)  # 在缓存的开头添加'pad_size'个零 
                     v_cache_padded = F.pad(v_cache_trimmed, (0, 0, pad_size, 0), "constant", 0)
                 else:
                     k_cache_padded = k_cache  
@@ -659,58 +660,6 @@ class WorldModel(nn.Module):
         
         return self.keys_values_wm_size_list
 
-    # def trim_and_pad_kv_cache(self, is_init_infer=True):
-    #     """
-    #     This method trims and pads the key and value caches of the attention mechanism
-    #     to a consistent size across all items in the batch, determined by the smallest cache size.
-    #     """
-    #     if is_init_infer:
-    #         print('='*20)
-    #     print(f'is_init_infer: {is_init_infer}')
-    #     print(f'self.keys_values_wm_size_list: {self.keys_values_wm_size_list}')
-        
-    #     # 找到所有key-value尺寸中的最小尺寸,用于填充/修剪
-    #     min_size = min(self.keys_values_wm_size_list)
-
-    #     # 遍历transformer的每一层
-    #     for layer in range(self.num_layers):
-    #         # 初始化列表来存储修剪和填充后的k和v缓存
-    #         kv_cache_k_list = []
-    #         kv_cache_v_list = []
-
-    #         # 枚举key-value对列表
-    #         for idx, keys_values in enumerate(self.keys_values_wm_list):
-    #             # 检索当前层的key和value缓存
-    #             k_cache = keys_values[layer]._k_cache._cache
-    #             v_cache = keys_values[layer]._v_cache._cache
-
-    #             # 获取当前缓存的有效尺寸
-    #             effective_size = self.keys_values_wm_size_list[idx]
-    #             # 计算需要修剪的尺寸差异
-    #             trim_size = effective_size - min_size if effective_size > min_size else 0
-
-    #             # 如果需要修剪,从缓存的开头移除'trim_size'
-    #             if trim_size > 0:
-    #                 k_cache_trimmed = k_cache[:, :, trim_size:, :]
-    #                 v_cache_trimmed = v_cache[:, :, trim_size:, :]
-    #                 # 在第三维上用零填充修剪后的缓存
-    #                 k_cache_padded = F.pad(k_cache_trimmed, (0, 0, trim_size, 0), "constant", 0)
-    #                 v_cache_padded = F.pad(v_cache_trimmed, (0, 0, trim_size, 0), "constant", 0)
-    #             else:
-    #                 k_cache_padded = k_cache
-    #                 v_cache_padded = v_cache
-
-    #             # 将处理后的缓存添加到列表中
-    #             kv_cache_k_list.append(k_cache_padded)
-    #             kv_cache_v_list.append(v_cache_padded)
-
-    #         # 沿新维度堆叠缓存,并用squeeze()移除额外维度
-    #         self.keys_values_wm._keys_values[layer]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
-    #         self.keys_values_wm._keys_values[layer]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
-
-    #         # 修剪和填充后,将缓存尺寸更新为最小尺寸
-    #         self.keys_values_wm._keys_values[layer]._k_cache._size = min_size
-    #         self.keys_values_wm._keys_values[layer]._v_cache._size = min_size
 
     def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0, latent_state_index_in_search_path=[], valid_context_lengths=None):
         if self.context_length <= 2:
@@ -738,14 +687,14 @@ class WorldModel(nn.Module):
                     
                     trim_size = current_max_context_length-self.keys_values_wm_size_list_current[i]
                     # 根据有效长度裁剪 TODO=======================================
+                    # NOTE: 先去掉前面pad_size/trim_size个无效kv, 注意位置编码的正确性
                     k_cache_trimmed = k_cache_current[:, trim_size:, :]
                     v_cache_trimmed = v_cache_current[:, trim_size:, :]
 
                     # 如果有效长度<current_max_context_length, 需要在缓存的后面补充'trim_size'个零 ====================
                     if trim_size > 0:
-                        # NOTE: 先去掉后面pad_size个无效kv, 注意位置编码的正确性
-                        k_cache_padded = F.pad(k_cache_trimmed, (0, 0, trim_size, 0), "constant", 0)
-                        v_cache_padded = F.pad(v_cache_trimmed, (0, 0, trim_size, 0), "constant", 0)
+                        k_cache_padded = F.pad(k_cache_trimmed, (0, 0, 0, trim_size), "constant", 0)  # 在缓存的后面补充'trim_size'个零 
+                        v_cache_padded = F.pad(v_cache_trimmed, (0, 0, 0, trim_size), "constant", 0)
                     else:
                         k_cache_padded = k_cache_trimmed  
                         v_cache_padded = v_cache_trimmed
@@ -758,7 +707,9 @@ class WorldModel(nn.Module):
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm_size_list_current[i]
 
                     # NOTE: check 非常重要 ============
-                    if self.keys_values_wm_single_env._keys_values[layer]._k_cache._size >= context_length-1:  # 固定只保留最近5个timestep的context
+                    if self.keys_values_wm_single_env._keys_values[layer]._k_cache._size >= context_length-1: 
+                        # 固定只保留最近self.context_length-3个timestep的context 
+                        # ===============对于memory环境，训练时是H步，recurrent_inference时可能超出H步 =================
                         # print(f'self.keys_values_wm_size_list_current[i]:{self.keys_values_wm_size_list_current[i]}')
                         # 需要对self.keys_values_wm_single_env进行处理，而不是self.keys_values_wm
                         # 裁剪和填充逻辑
@@ -777,8 +728,8 @@ class WorldModel(nn.Module):
                         k_cache_trimmed += pos_emb_diff_k.squeeze(0)
                         v_cache_trimmed += pos_emb_diff_v.squeeze(0)
 
-                        # 沿第3维，用0填充后2步
-                        padding_size = (0, 0, 0, 3)  # F.pad的参数(0, 0, 0, 2)指定了在每个维度上的填充量。这些参数是按(左, 右, 上, 下)的顺序给出的,对于三维张量来说,分别对应于(维度2左侧, 维度2右侧, 维度1左侧, 维度1右侧)的填充。
+                        # 沿第3维，用0填充后3步
+                        padding_size = (0, 0, 0, 3)  # F.pad的参数(0, 0, 0, 3)指定了在每个维度上的填充量。这些参数是按(左, 右, 上, 下)的顺序给出的,对于三维张量来说,分别对应于(维度2左侧, 维度2右侧, 维度1左侧, 维度1右侧)的填充。
                         k_cache_padded = F.pad(k_cache_trimmed, padding_size, 'constant', 0)
                         v_cache_padded = F.pad(v_cache_trimmed, padding_size, 'constant', 0)
                         # 更新单环境cache
@@ -819,8 +770,8 @@ class WorldModel(nn.Module):
                         k_cache_trimmed += pos_emb_diff_k.squeeze(0)
                         v_cache_trimmed += pos_emb_diff_v.squeeze(0)
 
-                        # 沿第3维，用0填充后2步
-                        padding_size = (0, 0, 0, 3)  # F.pad的参数(0, 0, 0, 2)指定了在每个维度上的填充量。这些参数是按(左, 右, 上, 下)的顺序给出的,对于三维张量来说,分别对应于(维度2左侧, 维度2右侧, 维度1左侧, 维度1右侧)的填充。
+                        # 沿第3维，用0填充后3步
+                        padding_size = (0, 0, 0, 3)  # F.pad的参数(0, 0, 0, 3)指定了在每个维度上的填充量。这些参数是按(左, 右, 上, 下)的顺序给出的,对于三维张量来说,分别对应于(维度2左侧, 维度2右侧, 维度1左侧, 维度1右侧)的填充。
                         k_cache_padded = F.pad(k_cache_trimmed, padding_size, 'constant', 0)
                         v_cache_padded = F.pad(v_cache_trimmed, padding_size, 'constant', 0)
                         # 更新单环境cache

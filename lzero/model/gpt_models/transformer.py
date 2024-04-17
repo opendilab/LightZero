@@ -155,7 +155,7 @@ class SelfAttention(nn.Module):
             # 对每个样本,根据其有效长度,将无效的部分设为0
             for i in range(B):
                 mask[i] = self.mask[L:L + T, :L + T].clone() # 不需要.clone()吗
-                mask[i, :, :(L - valid_context_lengths[i])] = 0
+                mask[i, :, :(L - valid_context_lengths[i])] = 0  # 无效的部分设为0
             # 将mask的维度调整为与att的后两个维度相同
             # (B, T, L + T) -> (B, nh, T, L + T)
             mask = mask.unsqueeze(1).expand(-1, att.size(1), -1, -1)

@@ -39,11 +39,11 @@ num_simulations = 5  # TODO
 # game_segment_length=30+memory_length # TODO: for "explore": 15
 
 # for visual_match
-# num_unroll_steps = 16 + memory_length
-# game_segment_length = 16 + memory_length  # TODO: for "explore": 1
+num_unroll_steps = 16 + memory_length
+game_segment_length = 16 + memory_length  # TODO: for "explore": 1
 
-num_unroll_steps = 17 + memory_length
-game_segment_length = 17 + memory_length  # TODO: for "explore": 2
+# num_unroll_steps = 17 + memory_length
+# game_segment_length = 17 + memory_length  # TODO: for "explore": 2
 
 # num_unroll_steps = 9 + memory_length
 # game_segment_length = 9 + memory_length  # TODO: for "explore": 1
@@ -75,7 +75,7 @@ memory_xzero_config = dict(
         flatten_observation=False,  # Whether to flatten the observation
         max_frames={
             # "explore": 15, # for key_to_door
-            "explore": 2,  # for visual_match
+            "explore": 1,  # for visual_match
             "distractor": memory_length,
             "reward": 15
             # "reward": 8  # debug
@@ -98,8 +98,8 @@ memory_xzero_config = dict(
         ),
         # sample_type='transition',
         sample_type='episode',  # NOTE: very important for memory env
-        # model_path=None,
-        model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0415/visual_match_memlen-0_xzero_H17_bs64_seed0_eval8_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer3_obschannel3_valuesize101_240415_165207/ckpt/ckpt_best.pth.tar',
+        model_path=None,
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0415/visual_match_memlen-0_xzero_H17_bs64_seed0_eval8_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer3_obschannel3_valuesize101_240415_165207/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0413/visual_match_memlen-0_xzero_H16_bs64_seed0_eval8_nl8-nh8-emd768_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer4_obschannel4_240414_172713/ckpt/ckpt_best.pth.tar',
         transformer_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,

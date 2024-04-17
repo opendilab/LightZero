@@ -13,17 +13,17 @@ cfg['tokenizer'] = {'_target_': 'models.tokenizer.Tokenizer',
 cfg['world_model'] = {
     'tokens_per_block': 2,
 
-    # 'max_blocks': 16,
-    # "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
-    # "context_length": 2 * 16,
-    # "context_length_for_recurrent": 2 * 16,
 
-    # 'max_blocks': 16,
-    # "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
-    # "context_length": 2 * 16,
-    # "context_length_for_recurrent": 2 * 16,
-    # # "context_length": 6,
-    # # "context_length_for_recurrent": 6,
+    'max_blocks': 16,
+    "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
+    "context_length": 2 * 16,
+    "context_length_for_recurrent": 2 * 16,
+    "recurrent_keep_deepth": 100,
+
+    # 'max_blocks': 21,
+    # "max_tokens": 2 * 21,  # 1+0+15 memory_length = 0
+    # "context_length": 2 * 21,
+    # "context_length_for_recurrent": 2 * 21,
     # "recurrent_keep_deepth": 100,
 
     # 'max_blocks': 17, # TODO
@@ -32,17 +32,18 @@ cfg['world_model'] = {
     # "context_length_for_recurrent": 2 * 17,
     # "recurrent_keep_deepth": 100,
 
-    # 'max_blocks': 30,
-    # "max_tokens": 2 * 30,  # 15+0+15 memory_length = 0
 
-    # 'max_blocks': 32,
-    # "max_tokens": 2 * 32,  # 15+2+15 memory_length = 2
+    # 'max_blocks': 46, 
+    # "max_tokens": 2 * 46, # 1+30+15=76 memory_length = 30
+    # "context_length": 2 * 46,
+    # "context_length_for_recurrent": 2 * 46,
+    # "recurrent_keep_deepth": 100,
 
-    'max_blocks': 76, 
-    "max_tokens": 2 * 76, # 1+60+15=76 memory_length = 60
-    "context_length": 2 * 76,
-    "context_length_for_recurrent": 2 * 76,
-    "recurrent_keep_deepth": 100,
+    # 'max_blocks': 76, 
+    # "max_tokens": 2 * 76, # 1+60+15=76 memory_length = 60
+    # "context_length": 2 * 76,
+    # "context_length_for_recurrent": 2 * 76,
+    # "recurrent_keep_deepth": 100,
 
     # 'max_blocks': 80, # memory_length = 50
     # "max_tokens": 2 * 80,
@@ -62,7 +63,7 @@ cfg['world_model'] = {
     #    'max_blocks': 530, #  memory_length = 500
     #   "max_tokens": 2 * 530,
 
-    "device": 'cuda:3',
+    "device": 'cuda:7',
 
     'group_size': 8,  # NOTE
     # 'group_size': 768,  # NOTE
