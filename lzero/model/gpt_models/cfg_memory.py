@@ -14,11 +14,16 @@ cfg['world_model'] = {
     'tokens_per_block': 2,
 
 
-    'max_blocks': 16,
-    "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
-    "context_length": 2 * 16,
-    "context_length_for_recurrent": 2 * 16,
-    "recurrent_keep_deepth": 100,
+    # 'max_blocks': 16,
+    # "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
+    # "context_length": 2 * 16,
+    # "context_length_for_recurrent": 2 * 16,
+
+    'max_blocks': 16+5, # for memory env 我们必须保存第一帧的obs, 而在最后一帧进行MCTS时肯定会超出epidoe_length，因此设置context_length比训练的更长以保证不会把第一帧去掉。
+    "max_tokens": 2 * (16+5),  # 1+0+15 memory_length = 0
+    "context_length": 2 * (16+5),
+    "context_length_for_recurrent": 2 * (16+5),
+
 
     # 'max_blocks': 21,
     # "max_tokens": 2 * 21,  # 1+0+15 memory_length = 0
@@ -39,10 +44,16 @@ cfg['world_model'] = {
     # "context_length_for_recurrent": 2 * 46,
     # "recurrent_keep_deepth": 100,
 
-    # 'max_blocks': 76, 
-    # "max_tokens": 2 * 76, # 1+60+15=76 memory_length = 60
-    # "context_length": 2 * 76,
-    # "context_length_for_recurrent": 2 * 76,
+    'max_blocks': 76+5, 
+    "max_tokens": 2 * (76+5), # 1+60+15=76 memory_length = 60
+    "context_length": 2 * (76+5),
+    "context_length_for_recurrent": 2 * (76+5),
+    "recurrent_keep_deepth": 100,
+
+    #     'max_blocks': 116, 
+    # "max_tokens": 2 * 116, # 1+100+15=116 memory_length = 100
+    # "context_length": 2 * 116,
+    # "context_length_for_recurrent": 2 * 116,
     # "recurrent_keep_deepth": 100,
 
     # 'max_blocks': 80, # memory_length = 50
@@ -63,7 +74,7 @@ cfg['world_model'] = {
     #    'max_blocks': 530, #  memory_length = 500
     #   "max_tokens": 2 * 530,
 
-    "device": 'cuda:7',
+    "device": 'cuda:1',
 
     'group_size': 8,  # NOTE
     # 'group_size': 768,  # NOTE
@@ -77,7 +88,6 @@ cfg['world_model'] = {
     # 'embed_dim': 96,  # TODO：for memory # same as <Transformer shine in RL> paper
     # 'embed_dim': 768, # TODO：Gpt2 Base
     'embed_dim': 256, # TODO：
-
 
     # 'num_layers': 12, # TODO：Gpt2 Base
     # 'num_heads': 12, # TODO：Gpt2 Base

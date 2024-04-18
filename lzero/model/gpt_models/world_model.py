@@ -127,7 +127,7 @@ class WorldModel(nn.Module):
         self.env_num = config.env_num
         self.num_layers = config.num_layers
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
-        self.recurrent_keep_deepth = config.recurrent_keep_deepth
+        # self.recurrent_keep_deepth = config.recurrent_keep_deepth
 
         all_but_last_latent_state_pattern = torch.ones(config.tokens_per_block)
         all_but_last_latent_state_pattern[-2] = 0  # 1,...,0,1
