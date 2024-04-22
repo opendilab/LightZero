@@ -221,8 +221,8 @@ class MuZeroModel(nn.Module):
                 latent state, W_ is the width of latent state.
          """
         batch_size = obs.size(0)
-        latent_state = self._representation(obs)
-        policy_logits, value = self._prediction(latent_state)
+        self.latent_state = self._representation(obs)
+        policy_logits, value = self._prediction(self.latent_state)
         return MZNetworkOutput(
             value,
             [0. for _ in range(batch_size)],

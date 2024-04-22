@@ -5,8 +5,8 @@ import torch
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 # env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
 
-# memory_length = 100
-memory_length = 60
+memory_length = 250
+# memory_length = 60
 
 # visual_match [2, 60, 100, 250, 500]
 # key_to_door [2, 60, 120, 250, 500]
@@ -45,33 +45,24 @@ game_segment_length = 16 + memory_length  # TODO: for "explore": 1
 # num_unroll_steps = 21 + memory_length
 # game_segment_length = 21 + memory_length  # TODO: for "explore": 1
 
-# num_unroll_steps = 17 + memory_length
-# game_segment_length = 17 + memory_length  # TODO: for "explore": 2
-
-# num_unroll_steps = 30 + memory_length
-# game_segment_length = 30 + memory_length  # TODO: for "explore": 1
-
 
 reanalyze_ratio = 0
 td_steps = 5
 
-# threshold_training_steps_for_final_temperature = int(1e5)  # TODO: 100k train iter
 ute_lothreshold_training_steps_for_final_temperature = int(5e4)  # TODO: 100k train iter
-# eps_greedy_exploration_in_collect = False
 eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-torch.cuda.set_device(1)
+torch.cuda.set_device(4)
 memory_xzero_config = dict(
-    # (4,5,5) config, world_model, muzero_gpt_model, memory env
+    # TODO: collector clear
+    # (3,5,5) config, world_model, unizero_model, memory env
     # mcts_ctree.py muzero_collector muzero_evaluator
     exp_name=f'data_memory_{env_id}_0418/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_bs{batch_size}'
-    f'_seed{seed}_evalenv{evaluator_env_num}_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH+5',
-    #     exp_name=f'data_memory_{env_id}_0416/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_bs{batch_size}'
-    # f'_seed{seed}_eval{evaluator_env_num}_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer3_obschannel3_valuesize101_collectenv{collector_env_num}_bacth-kvmaxsize-fix0417',
-    # exp_name=f'data_memory_{env_id}_0413_debug/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_bs{batch_size}'
-    # f'_seed{seed}_eval{evaluator_env_num}_nl12-nh12-emd1536_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer4_obschannel4_reclw0',
+    f'_seed{seed}_eval{evaluator_env_num}_reclw005_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color_collect/evalnotclear',
+    # f'_seed{seed}_eval{evaluator_env_num}_reclw005_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_nl8-nh8-emd256_phase3-random-colormap-bce_phase1-random-target-pos_random-target-color',
+    # f'_seed{seed}_evalenv{evaluator_env_num}_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH_kvcache-init-envs',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -167,7 +158,8 @@ memory_xzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         # eval_freq=int(1e4),
-        eval_freq=int(5e3),  # TODO
+        # eval_freq=int(5e3),  # TODO
+        eval_freq=int(4e3),  # TODO
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -184,8 +176,8 @@ memory_xzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_gpt',
-        import_names=['lzero.policy.muzero_gpt'],
+        type='unizero',
+        import_names=['lzero.policy.unizero'],
     ),
     collector=dict(
         type='episode_muzero',
@@ -196,7 +188,7 @@ memory_xzero_create_config = EasyDict(memory_xzero_create_config)
 create_config = memory_xzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_gpt
+    from lzero.entry import train_unizero
 
-    train_muzero_gpt([main_config, create_config], seed=0, model_path=main_config.policy.model_path,
+    train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path,
                      max_env_step=max_env_step)

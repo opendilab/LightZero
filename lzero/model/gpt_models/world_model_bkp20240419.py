@@ -220,8 +220,6 @@ class WorldModel(nn.Module):
         # 使用collections.OrderedDict作为缓存结构，可以维持插入顺序
         self.past_keys_values_cache_recurrent_infer = collections.OrderedDict()
         self.past_keys_values_cache_init_infer = collections.OrderedDict()
-        self.past_keys_values_cache_init_infer_envs = [collections.OrderedDict() for _ in range(self.env_num )]
-
 
         self.keys_values_wm_list = []
         self.keys_values_wm_size_list = []
@@ -424,22 +422,20 @@ class WorldModel(nn.Module):
                         state_single_env = latent_state[i]  # 获取单个环境的 latent state
                         quantized_state = state_single_env.detach().cpu().numpy()
                         cache_key = quantize_state(quantized_state)  # 使用量化后的状态计算哈希值
-                        # matched_value = self.past_keys_values_cache_init_infer.get(cache_key)  # 检索缓存值
-                        matched_value = self.past_keys_values_cache_init_infer_envs[i].get(cache_key)  # 检索缓存值
-
+                        matched_value = self.past_keys_values_cache_init_infer.get(cache_key)  # 检索缓存值
                         self.root_total_query_cnt += 1
                         if matched_value is not None:
                             # 如果找到匹配的值，将其添加到列表中
                             self.root_hit_cnt += 1
-                            # if self.root_total_query_cnt > 0 and self.root_total_query_cnt % 1000 == 0:
-                            #     root_hit_ratio = self.root_hit_cnt / self.root_total_query_cnt
-                            #     print('root_total_query_cnt:', self.root_total_query_cnt)
-                            #     print(f'root_hit_ratio:{root_hit_ratio}')
-                            #     print(f'root_hit find size {self.past_keys_values_cache_init_infer_envs[i][cache_key].size}') # TODO env
-                            #     if self.past_keys_values_cache_init_infer[cache_key].size >= self.config.max_tokens - 3:
-                            #         print(f'==' * 20)
-                            #         print(f'NOTE: root_hit find size >= self.config.max_tokens - 3')
-                            #         print(f'==' * 20)
+                            if self.root_total_query_cnt > 0 and self.root_total_query_cnt % 1000 == 0:
+                                root_hit_ratio = self.root_hit_cnt / self.root_total_query_cnt
+                                print('root_total_query_cnt:', self.root_total_query_cnt)
+                                print(f'root_hit_ratio:{root_hit_ratio}')
+                                print(f'root_hit find size {self.past_keys_values_cache_init_infer[cache_key].size}')
+                                if self.past_keys_values_cache_init_infer[cache_key].size >= self.config.max_tokens - 3:
+                                    print(f'==' * 20)
+                                    print(f'NOTE: root_hit find size >= self.config.max_tokens - 3')
+                                    print(f'==' * 20)
                             # 这里需要deepcopy因为在transformer的forward中会原地修改matched_value
                             self.keys_values_wm_list.append(copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
                             self.keys_values_wm_size_list.append(matched_value.size)
@@ -501,7 +497,6 @@ class WorldModel(nn.Module):
 
     @torch.no_grad()
     def forward_initial_inference(self, obs_act_dict):
-        # self.past_keys_values_cache_init_infer_envs[i]
         outputs_wm, latent_state = self.reset_from_initial_observations(obs_act_dict)  # root节点也有context
         # self.past_keys_values_cache_recurrent_infer
         # TODO: 每次search后清空，可以保证存储的 kv_cache_recurrent 都是从根节点的最长context来的
@@ -786,9 +781,7 @@ class WorldModel(nn.Module):
 
             if is_init_infer:
                 # TODO：每次都存储最新的    
-                # self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-                self.past_keys_values_cache_init_infer_envs[i][cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-            
+                self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
             else:
                 self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
 
@@ -805,9 +798,7 @@ class WorldModel(nn.Module):
             cache_key = quantize_state(state_single_env)  # 使用量化后的状态计算哈希值
             # 如果存在,检索缓存值
             # 先在self.past_keys_values_cache_init_infer中寻找
-            # matched_value = self.past_keys_values_cache_init_infer.get(cache_key)
-            matched_value = self.past_keys_values_cache_init_infer_envs[i].get(cache_key)
-
+            matched_value = self.past_keys_values_cache_init_infer.get(cache_key)
             # 再在self.past_keys_values_cache中寻找 TODO
             if matched_value is None:
                 matched_value = self.past_keys_values_cache_recurrent_infer.get(cache_key)

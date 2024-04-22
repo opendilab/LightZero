@@ -14,16 +14,34 @@ cfg['world_model'] = {
     'tokens_per_block': 2,
 
 
-    # 'max_blocks': 16,
+    # ===================
+    # for memory env 我们必须保存第一帧的obs, 而在最后一帧进行MCTS时肯定会超出epidoe_length，因此设置context_length比训练的更长以保证不会把第一帧去掉。
+    # ===================
+    
+    # 'max_blocks': 16+5, 
+    # "max_tokens": 2 * (16+5),  # 1+0+15 memory_length = 0
+    # "context_length": 2 * (16+5),
+    # "context_length_for_recurrent": 2 * (16+5),
+
+    # 'max_blocks': 76+5, 
+    # "max_tokens": 2 * (76+5),  # 1+60+15 memory_length = 60
+    # "context_length": 2 * (76+5),
+    # "context_length_for_recurrent": 2 * (76+5),
+
+    # 'max_blocks': 116+5, 
+    # "max_tokens": 2 * (116+5),  # 1+100+15 memory_length = 100
+    # "context_length": 2 * (116+5),
+    # "context_length_for_recurrent": 2 * (116+5),
+
+    'max_blocks': 266+5, 
+    "max_tokens": 2 * (266+5),  # 1+250+15 memory_length = 250
+    "context_length": 2 * (266+5),
+    "context_length_for_recurrent": 2 * (266+5),
+
+    # 'max_blocks': 16, 
     # "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
     # "context_length": 2 * 16,
     # "context_length_for_recurrent": 2 * 16,
-
-    'max_blocks': 16+5, # for memory env 我们必须保存第一帧的obs, 而在最后一帧进行MCTS时肯定会超出epidoe_length，因此设置context_length比训练的更长以保证不会把第一帧去掉。
-    "max_tokens": 2 * (16+5),  # 1+0+15 memory_length = 0
-    "context_length": 2 * (16+5),
-    "context_length_for_recurrent": 2 * (16+5),
-
 
     # 'max_blocks': 21,
     # "max_tokens": 2 * 21,  # 1+0+15 memory_length = 0
@@ -37,44 +55,15 @@ cfg['world_model'] = {
     # "context_length_for_recurrent": 2 * 17,
     # "recurrent_keep_deepth": 100,
 
-
     # 'max_blocks': 46, 
     # "max_tokens": 2 * 46, # 1+30+15=76 memory_length = 30
     # "context_length": 2 * 46,
     # "context_length_for_recurrent": 2 * 46,
     # "recurrent_keep_deepth": 100,
 
-    'max_blocks': 76+5, 
-    "max_tokens": 2 * (76+5), # 1+60+15=76 memory_length = 60
-    "context_length": 2 * (76+5),
-    "context_length_for_recurrent": 2 * (76+5),
-    "recurrent_keep_deepth": 100,
 
-    #     'max_blocks': 116, 
-    # "max_tokens": 2 * 116, # 1+100+15=116 memory_length = 100
-    # "context_length": 2 * 116,
-    # "context_length_for_recurrent": 2 * 116,
-    # "recurrent_keep_deepth": 100,
 
-    # 'max_blocks': 80, # memory_length = 50
-    # "max_tokens": 2 * 80,
-
-    #   'max_blocks': 90, 
-    # "max_tokens": 2 * 90, # 15+60+15 memory_length = 60
-
-    #   'max_blocks': 130,
-    # "max_tokens": 2 * 130, # 15+100+15 memory_length = 100
-
-    #   'max_blocks': 150, 
-    # "max_tokens": 2 * 150,  # 15+120+15 memory_length = 120
-
-    #   'max_blocks': 280, 
-    # "max_tokens": 2 * 280, # 15+250+15 memory_length = 250
-
-    #    'max_blocks': 530, #  memory_length = 500
-    #   "max_tokens": 2 * 530,
-
-    "device": 'cuda:1',
+    "device": 'cuda:4',
 
     'group_size': 8,  # NOTE
     # 'group_size': 768,  # NOTE
@@ -82,7 +71,6 @@ cfg['world_model'] = {
     # 'num_layers': 1,
     # 'num_layers': 2,  # same as <Transformer shine in RL> paper
     # 'num_layers': 4,
-
     'num_layers': 8,
     'num_heads': 8,
     # 'embed_dim': 96,  # TODO：for memory # same as <Transformer shine in RL> paper
@@ -131,9 +119,6 @@ cfg['world_model'] = {
 
     'obs_type': 'image_memory',  # 'vector', 'image'
      'gamma': 1, # 0.5, 0.9, 0.99, 0.999
-    #  'gamma': 1.2, # 0.5, 0.9, 0.99, 0.999
-
-
 }
 from easydict import EasyDict
 

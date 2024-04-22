@@ -95,7 +95,7 @@ atari_muzero_config = dict(
     policy=dict(
         task_id=0,
         model_path=None,
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree_0113_k1/Pong_muzero_gpt_envnum8_ns50_upc1000-mur0.25_rr0_H5_bs32_stack1_contembdings_lsd1024_lr1e-4-gcv10-reconslossw005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_seed0/ckpt/iteration_167000.pth.tar',
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree_0113_k1/Pong_unizero_envnum8_ns50_upc1000-mur0.25_rr0_H5_bs32_stack1_contembdings_lsd1024_lr1e-4-gcv10-reconslossw005-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_seed0/ckpt/iteration_167000.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_ctree/Pong_muzero_ns50_upc1000_rr0.0_46464_seed0_240110_140819/ckpt/iteration_60000.pth.tar',
         # tokenizer_start_after_envsteps=int(9e9), # not train tokenizer
         tokenizer_start_after_envsteps=int(0),
@@ -203,15 +203,15 @@ atari_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_gpt_multi_task',
-        import_names=['lzero.policy.muzero_gpt_multi_task'],
+        type='unizero_multi_task',
+        import_names=['lzero.policy.unizero_multi_task'],
     ),
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_gpt_multi_task
+    from lzero.entry import train_unizero_multi_task
     import copy
     [main_config_2, main_config_3] = [copy.deepcopy(main_config) for _ in range(2)]
     [create_config_2, create_config_3] = [copy.deepcopy(create_config) for _ in range(2)]
@@ -227,4 +227,4 @@ if __name__ == "__main__":
     main_config_2.policy.task_id = 1
     main_config_3.policy.task_id = 2
 
-    train_muzero_gpt_multi_task([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]]], seed=0, max_env_step=max_env_step)
+    train_unizero_multi_task([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]]], seed=0, max_env_step=max_env_step)

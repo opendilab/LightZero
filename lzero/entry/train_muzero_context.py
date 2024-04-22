@@ -20,8 +20,18 @@ from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 
+def initialize_zeros_batch(observation_shape, batch_size, device):
+    """Initialize a zeros tensor for batch observations based on the shape."""
+    if isinstance(observation_shape, list):
+        shape = [batch_size, *observation_shape]
+    elif isinstance(observation_shape, int):
+        shape = [batch_size, observation_shape]
+    else:
+        raise TypeError("observation_shape must be either an int or a list")
+    
+    return torch.zeros(shape).to(device)
 
-def train_unizero(
+def train_muzero_context(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -47,10 +57,10 @@ def train_unizero(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'unizero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
-        "train_unizero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'"
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'muzero_context','sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
+        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'"
 
-    if create_cfg.policy.type == 'unizero':
+    if create_cfg.policy.type in ['muzero', 'muzero_context']:
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
@@ -76,6 +86,9 @@ def train_unizero(
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
+
+    if cfg.policy.eval_offline:
+        cfg.policy.learn.learner.hook.save_ckpt_after_iter = cfg.policy.eval_freq
 
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
@@ -117,7 +130,7 @@ def train_unizero(
     # ==============================================================
     # Learner's before_run hook.
     learner.call_hook('before_run')
-    
+
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
 
@@ -126,6 +139,23 @@ def train_unizero(
     # Comparison: By observing the agent's performance during random action-taking, we can establish a baseline to evaluate the effectiveness of reinforcement learning algorithms.
     if cfg.policy.random_collect_episode_num > 0:
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
+    if cfg.policy.eval_offline:
+        eval_train_iter_list = []
+        eval_train_envstep_list = []
+
+    import copy
+    num_unroll_steps = copy.deepcopy(replay_buffer._cfg.num_unroll_steps)
+    collect_cnt = -1
+    # Usage
+    policy.last_batch_obs = initialize_zeros_batch(
+        cfg.policy.model.observation_shape,
+        len(evaluator_env_cfg),
+        cfg.policy.device
+    )
+    policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
+    # TODO: comment if debugging
+    # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+
 
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
@@ -152,10 +182,26 @@ def train_unizero(
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
-            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-            if stop:
-                break
+            policy.last_batch_obs = initialize_zeros_batch(
+                cfg.policy.model.observation_shape,
+                len(evaluator_env_cfg),
+                cfg.policy.device
+            )
+            policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
+            if cfg.policy.eval_offline:
+                eval_train_iter_list.append(learner.train_iter)
+                eval_train_envstep_list.append(collector.envstep)
+            else:
+                stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+                if stop:
+                    break
 
+        policy.last_batch_obs = initialize_zeros_batch(
+            cfg.policy.model.observation_shape,
+            len(collector_env_cfg),
+            cfg.policy.device
+        )
+        policy.last_batch_action = [-1 for _ in range(len(collector_env_cfg))]
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         if cfg.policy.update_per_collect is None:
@@ -167,32 +213,41 @@ def train_unizero(
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
+        if replay_buffer.get_num_of_transitions() > 2000:
+            # Learn policy from collected data.
+            for i in range(update_per_collect):
+                # Learner will train ``update_per_collect`` times in one iteration.
+                if replay_buffer.get_num_of_transitions() > batch_size:
+                    train_data = replay_buffer.sample(batch_size, policy)
+                else:
+                    logging.warning(
+                        f'The data in replay_buffer is not sufficient to sample a mini-batch: '
+                        f'batch_size: {batch_size}, '
+                        f'{replay_buffer} '
+                        f'continue to collect now ....'
+                    )
+                    break
 
-        # Learn policy from collected data.
-        for i in range(update_per_collect):
-            # Learner will train ``update_per_collect`` times in one iteration.
-            if replay_buffer.get_num_of_transitions() > batch_size:
-                train_data = replay_buffer.sample(batch_size, policy)
-            else:
-                logging.warning(
-                    f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                    f'batch_size: {batch_size}, '
-                    f'{replay_buffer} '
-                    f'continue to collect now ....'
-                )
-                break
+                # The core train steps for MCTS+RL algorithms.
+                log_vars = learner.train(train_data, collector.envstep)
 
-            # The core train steps for MCTS+RL algorithms.
-            log_vars = learner.train(train_data, collector.envstep)
-
-            if cfg.policy.use_priority:
-                replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
-        
-        # NOTE: TODO
-        # TODO: for batch world model ,to improve kv reuse, we could donot reset
-        policy._learn_model.world_model.past_keys_values_cache.clear()
+                if cfg.policy.use_priority:
+                    replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
+            if cfg.policy.eval_offline:
+                logging.info(f'eval offline beginning...')
+                ckpt_dirname = './{}/ckpt'.format(learner.exp_name)
+                # Evaluate the performance of the pretrained model.
+                for train_iter, collector_envstep in zip(eval_train_iter_list, eval_train_envstep_list):
+                    ckpt_name = 'iteration_{}.pth.tar'.format(train_iter)
+                    ckpt_path = os.path.join(ckpt_dirname, ckpt_name)
+                    # load the ckpt of pretrained model
+                    policy.learn_mode.load_state_dict(torch.load(ckpt_path, map_location=cfg.policy.device))
+                    stop, reward = evaluator.eval(learner.save_checkpoint, train_iter, collector_envstep)
+                    logging.info(
+                        f'eval offline at train_iter: {train_iter}, collector_envstep: {collector_envstep}, reward: {reward}')
+                logging.info(f'eval offline finished!')
             break
 
     # Learner's after_run hook.

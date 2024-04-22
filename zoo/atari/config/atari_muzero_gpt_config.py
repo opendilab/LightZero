@@ -63,27 +63,27 @@ eps_greedy_exploration_in_collect = False
 atari_muzero_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer.py: lpips loss
-    exp_name=f'data_mz_gpt_ctree_0105/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs1000_contembdings_mz-repenet-lastlinear-lsd1024_obsmseloss_rep-no-avgl1norm_obsloss2_10kthenfixed-false_kll01-noseclatstd01_rep-sigmoid_seed0',
-    # exp_name=f'data_mz_gpt_ctree_0105/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs1000_contembdings_mz-repenet-lastlinear-lsd256_obsmseloss_rep-avgl1norm_obsloss2_10kthenfixed_kll01-seclatstd01_seed0',
+    exp_name=f'data_mz_gpt_ctree_0105/{env_name[:-14]}_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs1000_contembdings_mz-repenet-lastlinear-lsd1024_obsmseloss_rep-no-avgl1norm_obsloss2_10kthenfixed-false_kll01-noseclatstd01_rep-sigmoid_seed0',
+    # exp_name=f'data_mz_gpt_ctree_0105/{env_name[:-14]}_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_mcs1000_contembdings_mz-repenet-lastlinear-lsd256_obsmseloss_rep-avgl1norm_obsloss2_10kthenfixed_kll01-seclatstd01_seed0',
 
-    # exp_name=f'data_mz_gpt_ctree_1226/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_per-obs-emd-dim-128_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok1e-4-tra3e-3_temp025_mcs1000_contembdings_ez-ssl-loss_lsd1024_seed0',
-    # exp_name=f'data_mz_gpt_ctree_1226/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_per-obs-emd-dim-128_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok1e-4-tra3e-3_temp025_mcs1000_contembdings_mz-repenet_obsmseloss-lastlinear_lsd1024_trans-obs-emb-init0_rep-robustscaling-norm_prior-false_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1226/{env_name[:-14]}_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_per-obs-emd-dim-128_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok1e-4-tra3e-3_temp025_mcs1000_contembdings_ez-ssl-loss_lsd1024_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1226/{env_name[:-14]}_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_per-obs-emd-dim-128_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok1e-4-tra3e-3_temp025_mcs1000_contembdings_mz-repenet_obsmseloss-lastlinear_lsd1024_trans-obs-emb-init0_rep-robustscaling-norm_prior-false_seed0',
 
 
-    # exp_name=f'data_mz_gpt_ctree_1220/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok1e-4-tra3e-3_tokenizer-joint-train-100kfixed-upcr1_eps-false-ftemp50k_mcs1000_policy-value-leakyrelu_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1220/{env_name[:-14]}_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok1e-4-tra3e-3_tokenizer-joint-train-100kfixed-upcr1_eps-false-ftemp50k_mcs1000_policy-value-leakyrelu_seed0',
 
-    # exp_name=f'data_mz_gpt_ctree_1220/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok1e-4-tra3e-3_tokenizer-joint-train-delay%3-upcr1_eps-false-ftemp50k_mcs1000_policy-leakyrelu_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1220/{env_name[:-14]}_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok1e-4-tra3e-3_tokenizer-joint-train-delay%3-upcr1_eps-false-ftemp50k_mcs1000_policy-leakyrelu_seed0',
 
-    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd64-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll{num_unroll_steps}_mcs500_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd64-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll{num_unroll_steps}_mcs500_seed0',
 
-    # exp_name=f'data_mz_gpt_ctree_1220/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok3e-3-tra3e-3_tokenizer-wd0_tokenizer-upcr1-joint-train_delay%4_obsw2_eps-false-ftemp50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
-    # exp_name=f'data_mz_gpt_ctree_1220/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd256-nh4_batch8_bs{batch_size}_tok3e-3-tra3e-3_tokenizer-wd0_tokenizer-upcr1-joint-train_delay%1_obsw2_eps-false-ftemp50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1220/{env_name[:-14]}_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_tok3e-3-tra3e-3_tokenizer-wd0_tokenizer-upcr1-joint-train_delay%4_obsw2_eps-false-ftemp50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1220/{env_name[:-14]}_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd256-nh4_batch8_bs{batch_size}_tok3e-3-tra3e-3_tokenizer-wd0_tokenizer-upcr1-joint-train_delay%1_obsw2_eps-false-ftemp50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
 
-    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs5000_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs5000_seed0',
 
-    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
-    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-0.5upc-not-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
-    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-0.5upc-not-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
+    # exp_name=f'data_mz_gpt_ctree_1219/{env_name[:-14]}_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_orignet_tran-nlayers2-emd128-nh2_batch8_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_pretrained-tokenizer-0.5upc-joint-train_obsw2_eps50k_multistep_initinfer-targetv-unroll5_mcs500_seed0',
     env=dict(
         stop_value=int(1e6),
         env_name=env_name,
@@ -108,7 +108,7 @@ atari_muzero_config = dict(
     ),
     policy=dict(
         model_path=None,
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_muzero_gpt_ns5_upcNone-mur0.5_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs16_lr1e-4_tokenizer-wd0_perl_tokenizer-only_seed0/ckpt/iteration_150000.pth.tar',
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_mz_gpt_ctree/Pong_unizero_ns5_upcNone-mur0.5_rr0_H5_orignet_tran-nlayers2-emd128-nh2_mcs500_batch8_bs16_lr1e-4_tokenizer-wd0_perl_tokenizer-only_seed0/ckpt/iteration_150000.pth.tar',
         # tokenizer_start_after_envsteps=int(9e9), # not train tokenizer
         tokenizer_start_after_envsteps=int(0),
         transformer_start_after_envsteps=int(0),
@@ -199,21 +199,21 @@ atari_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_gpt',
-        import_names=['lzero.policy.muzero_gpt'],
+        type='unizero',
+        import_names=['lzero.policy.unizero'],
     ),
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_gpt
-    # train_muzero_gpt([main_config, create_config], seed=0, max_env_step=max_env_step)
-    train_muzero_gpt([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    from lzero.entry import train_unizero
+    # train_unizero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
     # 下面为cprofile的代码
-    # from lzero.entry import train_muzero_gpt
+    # from lzero.entry import train_unizero
     # def run(max_env_step: int):
-    #     train_muzero_gpt([main_config, create_config], seed=0, max_env_step=max_env_step)
+    #     train_unizero([main_config, create_config], seed=0, max_env_step=max_env_step)
     # import cProfile
-    # cProfile.run(f"run({2000})", filename="pong_muzero_gpt_ctree_cprofile_2k_envstep", sort="cumulative")
+    # cProfile.run(f"run({2000})", filename="pong_unizero_ctree_cprofile_2k_envstep", sort="cumulative")

@@ -83,14 +83,7 @@ class DownSample(nn.Module):
                 ) for _ in range(1)
             ]
         )
-        # self.conv2 = nn.Conv2d(
-        #     out_channels // 2,
-        #     out_channels,
-        #     kernel_size=3,
-        #     stride=2,
-        #     padding=1,
-        #     bias=False,
-        # )
+
         self.downsample_block = ResBlock(
             in_channels=out_channels // 2,
             out_channels=out_channels,
@@ -282,7 +275,7 @@ class RepresentationNetworkGPT(nn.Module):
 
         # print('cont embedings before last_linear', x.max(), x.min(), x.mean())
 
-        # NOTE: very important. for muzero_gpt atari 64,8,8 = 4096 -> 1024
+        # NOTE: very important. for unizero atari 64,8,8 = 4096 -> 1024
         # x = self.last_linear(x.contiguous().view(-1, 64*8*8))
         x = self.last_linear(x.reshape(-1, 64 * 8 * 8))  # TODO
 
@@ -831,6 +824,9 @@ class RepresentationNetwork(nn.Module):
             downsample: bool = True,
             activation: nn.Module = nn.ReLU(inplace=True),
             norm_type: str = 'BN',
+            embedding_dim: int = 256,
+            group_size: int = 8,
+            use_sim_norm: bool = False,
     ) -> None:
         """
         Overview:
@@ -879,6 +875,15 @@ class RepresentationNetwork(nn.Module):
         )
         self.activation = activation
 
+        self.use_sim_norm = use_sim_norm
+
+        if self.use_sim_norm:
+            self.embedding_dim = embedding_dim
+            self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
+            # Initialize weights using He initialization
+            init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
+            self.sim_norm = SimNorm(simnorm_dim=group_size)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
@@ -896,6 +901,13 @@ class RepresentationNetwork(nn.Module):
 
         for block in self.resblocks:
             x = block(x)
+        
+        if self.use_sim_norm:
+            # NOTE: very important. for unizero atari 64,8,8 = 4096 -> 768
+            # x = self.last_linear(x.reshape(-1, 64 * 8 * 8))  # TODO
+            # x = x.view(-1, self.embedding_dim)  # TODO
+            x = self.sim_norm(x)
+
         return x
 
     def get_param_mean(self) -> float:

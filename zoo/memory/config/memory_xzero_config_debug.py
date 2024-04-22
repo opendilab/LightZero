@@ -61,7 +61,7 @@ eps_greedy_exploration_in_collect = True
 # ==============================================================
 torch.cuda.set_device(0)
 memory_xzero_config = dict(
-    # (4,5,5) config, world_model, muzero_gpt_model, memory env
+    # (4,5,5) config, world_model, unizero_model, memory env
     # mcts_ctree.py muzero_collector muzero_evaluator
     # exp_name=f'data_memory_{env_id}_0413_debug/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_bs{batch_size}'
     # f'_seed{seed}_eval{evaluator_env_num}_nl12-nh12-emd1536_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer4_obschannel4_reclw0',
@@ -177,8 +177,8 @@ memory_xzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_gpt',
-        import_names=['lzero.policy.muzero_gpt'],
+        type='unizero',
+        import_names=['lzero.policy.unizero'],
     ),
     collector=dict(
         type='episode_muzero',
@@ -189,7 +189,7 @@ memory_xzero_create_config = EasyDict(memory_xzero_create_config)
 create_config = memory_xzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_gpt
+    from lzero.entry import train_unizero
 
-    train_muzero_gpt([main_config, create_config], seed=0, model_path=main_config.policy.model_path,
+    train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path,
                      max_env_step=max_env_step)

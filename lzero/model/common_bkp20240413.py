@@ -282,7 +282,7 @@ class RepresentationNetworkGPT(nn.Module):
 
         # print('cont embedings before last_linear', x.max(), x.min(), x.mean())
 
-        # NOTE: very important. for muzero_gpt atari 64,8,8 = 4096 -> 1024
+        # NOTE: very important. for unizero atari 64,8,8 = 4096 -> 1024
         # x = self.last_linear(x.contiguous().view(-1, 64*8*8))
         x = self.last_linear(x.reshape(-1, 64 * 8 * 8))  # TODO
 

@@ -195,8 +195,8 @@ def keep_n_characters_in_grid(grid, character, n, backdrop_char=BACKGROUND):
     num_empty_positions = char_positions.shape[0] - n
     if num_empty_positions < 0:
         raise ValueError("Not enough characters `{}` in grid.".format(character))
-    # empty_pos = np.random.permutation(char_positions)[:num_empty_positions]
-    empty_pos = char_positions[:num_empty_positions]  # TODO: phase1-fixed-target-pos 在1.(exploration phase) target_color 使用固定的位置
+    empty_pos = np.random.permutation(char_positions)[:num_empty_positions]
+    # empty_pos = char_positions[:num_empty_positions]  # TODO: phase1-fixed-target-pos 在1.(exploration phase) target_color 使用固定的位置
 
     # Remove characters.
     grid = [list(row) for row in grid]

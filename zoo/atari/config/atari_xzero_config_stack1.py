@@ -165,7 +165,8 @@ atari_xzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         # eval_freq=int(9e9),
-        eval_freq=int(1e4),
+        # eval_freq=int(1e4),
+        eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -181,8 +182,8 @@ atari_xzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_gpt',
-        import_names=['lzero.policy.muzero_gpt'],
+        type='unizero',
+        import_names=['lzero.policy.unizero'],
     ),
 )
 atari_xzero_create_config = EasyDict(atari_xzero_create_config)
@@ -190,15 +191,15 @@ create_config = atari_xzero_create_config
 
 if __name__ == "__main__":
     # max_env_step = 10000
-    from lzero.entry import train_muzero_gpt
-    train_muzero_gpt([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    from lzero.entry import train_unizero
+    train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
 
     # 下面为cprofile的代码
-    # from lzero.entry import train_muzero_gpt
+    # from lzero.entry import train_unizero
     # def run(max_env_step: int):
-    #     train_muzero_gpt([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    #     train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
     # import cProfile
     # cProfile.run(f"run({100000})", filename="pong_xzero_cprofile_100k_envstep", sort="cumulative")
 

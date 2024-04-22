@@ -157,7 +157,7 @@ class SelfAttention(nn.Module):
                 mask[i] = self.mask[L:L + T, :L + T].clone() # 不需要.clone()吗
                 mask[i, :, :(L - valid_context_lengths[i])] = 0  # 无效的部分设为0
             # 将mask的维度调整为与att的后两个维度相同
-            # (B, T, L + T) -> (B, nh, T, L + T)
+            # (B, T, L + T) -> (B, 1, T, L + T) -> (B, nh, T, L + T)
             mask = mask.unsqueeze(1).expand(-1, att.size(1), -1, -1)
         else:
             # mask.shape: (T, L + T) 

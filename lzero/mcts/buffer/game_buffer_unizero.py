@@ -14,8 +14,8 @@ if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
 
 
-@BUFFER_REGISTRY.register('game_buffer_muzero_gpt')
-class MuZeroGameBufferGPT(GameBuffer):
+@BUFFER_REGISTRY.register('game_buffer_unizero')
+class UniZeroGameBuffer(GameBuffer):
     """
     Overview:
         The specific game buffer for MuZero policy.

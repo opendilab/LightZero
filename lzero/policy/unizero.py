@@ -12,8 +12,8 @@ from ding.utils import POLICY_REGISTRY
 from torch.distributions import Categorical
 from torch.nn import L1Loss
 import inspect
-from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
-from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
+from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
+from lzero.mcts import UniZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
@@ -50,8 +50,8 @@ def configure_optimizers(model, weight_decay, learning_rate, betas, device_type)
 
     return optimizer
 
-@POLICY_REGISTRY.register('muzero_gpt')
-class MuZeroGPTPolicy(Policy):
+@POLICY_REGISTRY.register('unizero')
+class UniZeroPolicy(Policy):
     """
     Overview:
         The policy class for MuZero.
@@ -240,14 +240,13 @@ class MuZeroGPTPolicy(Policy):
                 - import_names (:obj:`List[str]`): The model class path list used in this algorithm.
         .. note::
             The user can define and use customized network model but must obey the same interface definition indicated \
-            by import_names path. For MuZero, ``lzero.model.muzero_gpt_model.MuZeroModel``
+            by import_names path. For MuZero, ``lzero.model.unizero_model.MuZeroModel``
         """
         if self._cfg.model.model_type == "conv":
-            # return 'MuZeroModel', ['lzero.model.muzero_gpt_model']
-            return 'MuZeroModelGPT', ['lzero.model.muzero_gpt_model']
+            return 'UniZeroModel', ['lzero.model.unizero_model']
         elif self._cfg.model.model_type == "mlp":
-            # return 'MuZeroModelGPT', ['lzero.model.muzero_gpt_model_vector_obs']
-            return 'MuZeroModelGPT', ['lzero.model.muzero_gpt_model']
+            # return 'UniZeroModel', ['lzero.model.unizero_model_vector_obs']  # TODO
+            return 'UniZeroModel', ['lzero.model.unizero_model']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 

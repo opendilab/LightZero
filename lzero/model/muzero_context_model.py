@@ -10,14 +10,16 @@ import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
+import numpy as np
 
-from .common import MZNetworkOutput, RepresentationNetworkGPT, RepresentationNetworkMLP, PredictionNetwork, LatentDecoder, VectorDecoderMemory, ImageEncoderMemory, ImageDecoderMemory
+from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, PredictionNetworkMLP
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
-
+import torch.nn.init as init
+import torch.nn.functional as F
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
-@MODEL_REGISTRY.register('MuZeroModelGPT')
-class MuZeroModelGPT(nn.Module):
+@MODEL_REGISTRY.register('MuZeroContextModel')
+class MuZeroContextModel(nn.Module):
 
     def __init__(
         self,
@@ -45,7 +47,8 @@ class MuZeroModelGPT(nn.Module):
         downsample: bool = False,
         norm_type: Optional[str] = 'BN',
         discrete_action_encoding_type: str = 'one_hot',
-        env_name='atari',
+        context_length: int = 5,
+        use_sim_norm: bool = False,
         *args,
         **kwargs
     ):
@@ -86,11 +89,11 @@ class MuZeroModelGPT(nn.Module):
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
         """
-        super(MuZeroModelGPT, self).__init__()
-        # if isinstance(observation_shape, int) or len(observation_shape) == 1:
-        #     # for vector obs input, e.g. classical control and box2d environments
-        #     # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
-        #     observation_shape = [1, observation_shape, 1]
+        super(MuZeroContextModel, self).__init__()
+        if isinstance(observation_shape, int) or len(observation_shape) == 1:
+            # for vector obs input, e.g. classical control and box2d environments
+            # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
+            observation_shape = [1, observation_shape, 1]
 
         self.categorical_distribution = categorical_distribution
         if self.categorical_distribution:
@@ -116,134 +119,96 @@ class MuZeroModelGPT(nn.Module):
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
         self.downsample = downsample
-        self.env_name = env_name
 
-        from .gpt_models.world_model import WorldModel
-        from .gpt_models.tokenizer.tokenizer import Tokenizer
-        from .gpt_models.tokenizer.nets import Encoder, Decoder
+        flatten_output_size_for_reward_head = (
+            (reward_head_channels * math.ceil(observation_shape[1] / 16) *
+             math.ceil(observation_shape[2] / 16)) if downsample else
+            (reward_head_channels * observation_shape[1] * observation_shape[2])
+        )
+        flatten_output_size_for_value_head = (
+            (value_head_channels * math.ceil(observation_shape[1] / 16) *
+             math.ceil(observation_shape[2] / 16)) if downsample else
+            (value_head_channels * observation_shape[1] * observation_shape[2])
+        )
+        flatten_output_size_for_policy_head = (
+            (policy_head_channels * math.ceil(observation_shape[1] / 16) *
+             math.ceil(observation_shape[2] / 16)) if downsample else
+            (policy_head_channels * observation_shape[1] * observation_shape[2])
+        )
 
-        if self.env_name == 'atari':
-            from .gpt_models.cfg_atari import cfg
-        elif self.env_name == 'memory':
-            # from .gpt_models.cfg_cartpole import cfg
-            from .gpt_models.cfg_memory import cfg # NOTE: TODO
+        self.representation_network = RepresentationNetwork(
+            observation_shape,
+            num_res_blocks,
+            num_channels,
+            downsample,
+            activation=activation,
+            norm_type=norm_type,
+            embedding_dim=768,
+            group_size=8,
+            use_sim_norm=use_sim_norm, # TODO
+        )
+        self.dynamics_network = DynamicsNetwork(
+            observation_shape,
+            self.action_encoding_dim,
+            num_res_blocks,
+            num_channels + self.action_encoding_dim,
+            reward_head_channels,
+            fc_reward_layers,
+            self.reward_support_size,
+            flatten_output_size_for_reward_head,
+            downsample,
+            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            activation=activation,
+            norm_type=norm_type,
+            embedding_dim=768,
+            group_size=8,
+            use_sim_norm=use_sim_norm,# TODO
+        )
+        self.prediction_network = PredictionNetwork(
+            observation_shape,
+            action_space_size,
+            num_res_blocks,
+            num_channels,
+            value_head_channels,
+            policy_head_channels,
+            fc_value_layers,
+            fc_policy_layers,
+            self.value_support_size,
+            flatten_output_size_for_value_head,
+            flatten_output_size_for_policy_head,
+            downsample,
+            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            activation=activation,
+            norm_type=norm_type
+        )
 
-        if cfg.world_model.obs_type == 'vector':
-            self.representation_network = RepresentationNetworkMLP(
-                observation_shape,
-                hidden_channels= cfg.world_model.embed_dim,
-                layer_num = 2, # NOTE
-                activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
-                # activation=nn.GELU(),
-                group_size=cfg.world_model.group_size,
+        if self.self_supervised_learning_loss:
+            # projection used in EfficientZero
+            if self.downsample:
+                # In Atari, if the observation_shape is set to (12, 96, 96), which indicates the original shape of
+                # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
+                # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
+                # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
+                ceil_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
+                # self.projection_input_dim = num_channels * ceil_size
+                self.projection_input_dim = 4096 # TODO
+
+            else:
+                self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
+
+            self.projection = nn.Sequential(
+                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
             )
-            # decoder_network=None
-            decoder_network = VectorDecoderMemory(embedding_dim=cfg.world_model.embed_dim, output_shape=25) # TODO: For memory
-
-            Encoder = Encoder(cfg.tokenizer.encoder)
-            self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, None, with_lpips=False, representation_network=self.representation_network,
-                                decoder_network=decoder_network)
-            self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
-                                        config=cfg.world_model, tokenizer=self.tokenizer)
-            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-            print('=='*20)
-            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
-            print(f'{sum(p.numel() for p in self.tokenizer.representation_network.parameters())} parameters in agent.tokenizer.representation_network')
-            print('=='*20)
-        elif cfg.world_model.obs_type == 'image':
-            self.representation_network = RepresentationNetworkGPT(
-                observation_shape,
-                num_res_blocks,
-                num_channels,
-                downsample,
-                activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
-                # activation=nn.GELU(),
-                norm_type=norm_type,
-                embedding_dim=cfg.world_model.embed_dim,
-                group_size=cfg.world_model.group_size,
+            self.prediction_head = nn.Sequential(
+                nn.Linear(self.proj_out, self.pred_hid),
+                nn.BatchNorm1d(self.pred_hid),
+                activation,
+                nn.Linear(self.pred_hid, self.pred_out),
             )
-            # Instantiate the decoder
-            # decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(4, 64, 64)) # TODO: For K=4
-            decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(3, 64, 64)) # TODO: For K=1
-
-            Encoder = Encoder(cfg.tokenizer.encoder)
-            Decoder = Decoder(cfg.tokenizer.decoder)
-            self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network,
-                                decoder_network=decoder_network)
-            self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
-                                        config=cfg.world_model, tokenizer=self.tokenizer)
-            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-            print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters())-sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
-
-            print('=='*20)
-            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
-            print(f'{sum(p.numel() for p in self.tokenizer.representation_network.parameters())} parameters in agent.tokenizer.representation_network')
-            print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
-            print(f'{sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.tokenizer.lpips')
-            print('=='*20)
-        elif cfg.world_model.obs_type == 'image_memory':
-            # self.representation_network = ImageEncoderMemory(
-            #     image_shape=(3, 5, 5),
-            #     embedding_size=cfg.world_model.embed_dim,
-            #     channels=[8, 16],
-            #     kernel_sizes=[2, 2],
-            #     strides=[1, 1],
-            #     activation= nn.LeakyReLU(negative_slope=0.01),  # TODO
-            #     group_size =cfg.world_model.group_size,
-            # )
-            # # Instantiate the decoder
-            # decoder_network = ImageDecoderMemory(
-            #     image_shape=(3, 5, 5),
-            #     embedding_size=cfg.world_model.embed_dim,
-            #     channels=[16, 8],
-            #     # kernel_sizes=[2, 2],
-            #     kernel_sizes=[1, 1],
-            #     strides=[1, 1],
-            #     activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
-            # )
-            # bigger encoder/decoder
-            self.representation_network = ImageEncoderMemory(
-                image_shape=(3, 5, 5),
-                # image_shape=(4, 5, 5), # TODO
-                embedding_size=cfg.world_model.embed_dim,
-                channels=[16, 32, 64],
-                kernel_sizes=[3, 3, 3],
-                strides=[1, 1, 1],
-                # channels=[16, 32, 64, 128], # bug
-                # kernel_sizes=[3, 3, 3, 3],
-                # strides=[1, 1, 1, 1],
-                activation= nn.LeakyReLU(negative_slope=0.01),  # TODO
-                group_size =cfg.world_model.group_size,
-            )
-            # Instantiate the decoder
-            decoder_network = ImageDecoderMemory(
-                image_shape=(3, 5, 5),
-                # image_shape=(4, 5, 5), # TODO
-                embedding_size=cfg.world_model.embed_dim,
-                channels=[64, 32, 16],
-                kernel_sizes=[3, 3, 3],
-                strides=[1, 1, 1],
-                # channels=[128, 64, 32, 16], # bug
-                # kernel_sizes=[3, 3, 3, 3],
-                # strides=[1, 1, 1, 1],
-                activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
-            )
-            Encoder = Encoder(cfg.tokenizer.encoder)
-            Decoder = Decoder(cfg.tokenizer.decoder)
-            self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network,
-                                decoder_network=decoder_network)
-            self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
-                                        config=cfg.world_model, tokenizer=self.tokenizer)
-            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-            print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters())-sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
-
-            print('=='*20)
-            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
-            print(f'{sum(p.numel() for p in self.tokenizer.representation_network.parameters())} parameters in agent.tokenizer.representation_network')
-            print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
-            print(f'{sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.tokenizer.lpips')
-            print('=='*20)
-
+        self.timestep = 0
+        self.context_length = context_length  # TODO
 
     def initial_inference(self, obs: torch.Tensor, action_batch=None, current_obs_batch=None) -> MZNetworkOutput:
         """
@@ -268,41 +233,33 @@ class MuZeroModelGPT(nn.Module):
                 latent state, W_ is the width of latent state.
          """
         batch_size = obs.size(0)
-        # latent_state = self._representation(obs)
-        # policy_logits, value = self._prediction(latent_state)
-        # return MZNetworkOutput(
-        #     value,
-        #     [0. for _ in range(batch_size)],
-        #     policy_logits,
-        #     latent_state,
-        # )
+        # obs_act_dict = {'obs':obs, 'action':action_batch, 'current_obs':current_obs_batch}
 
-        obs_act_dict = {'obs':obs, 'action':action_batch, 'current_obs':current_obs_batch}
-        x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
-            obs_act_dict)
-        # x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
-        #     obs, action_batch)
-        reward, policy_logits, value = logits_rewards, logits_policy, logits_value
-
-        # obs discrete distribution to one_hot latent state?
-        # torch.Size([8, 16, 512]) -> torch.Size([8, 16])
-        # latent_state = torch.argmax(logits_observations, dim=2, keepdim=False)
-        latent_state = obs_token
-
-        # torch.Size([8, 1, 2]) - > torch.Size([8, 2])
-        policy_logits = policy_logits.squeeze(1)
-        # torch.Size([8, 1, 601]) - > torch.Size([8, 601])
-        value = value.squeeze(1)
-
+        if self.training or action_batch is None:
+            self.latent_state = self._representation(obs)
+        else:
+            if action_batch is not None and max(action_batch) == -1:  # 一集的第一步
+                self.latent_state = self._representation(current_obs_batch)
+            else:
+                action_batch = torch.from_numpy(np.array(action_batch)).to(self.latent_state.device)
+                self.recurrent_inference(self.latent_state, action_batch) # 更新self.latent_state
+                if self.timestep % self.context_length == 0:
+                    # print(f'self.timestep:{self.timestep}, reset latent_state')
+                    # context reset method TODO: context recent method
+                    self.latent_state = self._representation(current_obs_batch)
+        # try:
+        policy_logits, value = self._prediction(self.latent_state)
+        # except Exception:
+        #     print('debug')
+        self.timestep += 1
         return MZNetworkOutput(
             value,
             [0. for _ in range(batch_size)],
             policy_logits,
-            latent_state,
+            self.latent_state,
         )
 
-    # def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
-    def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index=0, latent_state_index_in_search_path=[]) -> MZNetworkOutput:
+    def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
         """
         Overview:
             Recurrent inference of MuZero model, which is the rollout step of the MuZero model.
@@ -330,28 +287,9 @@ class MuZeroModelGPT(nn.Module):
             - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
                 latent state, W_ is the width of latent state.
          """
-        # next_latent_state, reward = self._dynamics(latent_state, action)
-        #
-        # policy_logits, value = self._prediction(next_latent_state)
-        # return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
-
-        x, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
-            state_action_history, simulation_index, latent_state_index_in_search_path)
-        logits_observations, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
-
-        # obs discrete distribution to one_hot latent state?
-        # torch.Size([8, 16])
-        next_latent_state = logits_observations
-
-        # torch.Size([8, 1, 2]) - > torch.Size([8, 2])
-        policy_logits = policy_logits.squeeze(1)
-        # torch.Size([8, 1, 601]) - > torch.Size([8, 601])
-        value = value.squeeze(1)
-
-        # torch.Size([8,]) - > torch.Size([8, 1])
-        # reward = torch.tensor(reward).unsqueeze(-1) # TODO(pu)
-        reward = reward.squeeze(1)
-
+        next_latent_state, reward = self._dynamics(latent_state, action)
+        policy_logits, value = self._prediction(next_latent_state)
+        self.latent_state = next_latent_state
         return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
 
     def _representation(self, observation: torch.Tensor) -> torch.Tensor:
@@ -498,6 +436,28 @@ class MuZeroModelGPT(nn.Module):
     def get_params_mean(self) -> float:
         return get_params_mean(self)
 
+class SimNorm(nn.Module):
+    """
+    Simplicial normalization.
+    Adapted from https://arxiv.org/abs/2204.00616.
+    """
+
+    def __init__(self, simnorm_dim):
+        super().__init__()
+        self.dim = simnorm_dim
+
+    def forward(self, x):
+        shp = x.shape
+        # Ensure that there is at least one simplex to normalize across.
+        if shp[1] != 0:
+            x = x.view(*shp[:-1], -1, self.dim)
+            x = F.softmax(x, dim=-1)
+            return x.view(*shp)
+        else:
+            return x
+
+    def __repr__(self):
+        return f"SimNorm(dim={self.dim})"
 
 class DynamicsNetwork(nn.Module):
 
@@ -515,6 +475,9 @@ class DynamicsNetwork(nn.Module):
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
         norm_type: Optional[str] = 'BN',
+        embedding_dim: int = 256,
+        group_size: int = 8,
+        use_sim_norm: bool = False,
     ):
         """
         Overview:
@@ -543,6 +506,9 @@ class DynamicsNetwork(nn.Module):
 
         self.num_channels = num_channels
         self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
+        self.flatten_output_size_for_reward_head = 16*8*8 # TODO: only for obs (4,64,64)
+
+
         self.action_encoding_dim = action_encoding_dim
 
         self.conv = nn.Conv2d(num_channels, num_channels - self.action_encoding_dim, kernel_size=3, stride=1, padding=1, bias=False)
@@ -585,6 +551,13 @@ class DynamicsNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.activation = activation
+        self.use_sim_norm  = use_sim_norm
+        if self.use_sim_norm:
+            self.embedding_dim = embedding_dim
+            self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
+            # Initialize weights using He initialization
+            init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
+            self.sim_norm = SimNorm(simnorm_dim=group_size)
 
     def forward(self, state_action_encoding: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -618,6 +591,12 @@ class DynamicsNetwork(nn.Module):
 
         # use the fully connected layer to predict reward
         reward = self.fc_reward_head(x)
+
+        if self.use_sim_norm:
+            # NOTE: very important. for unizero atari 64,8,8 = 4096 -> 768
+            # x = self.last_linear(x.reshape(-1, 64 * 8 * 8))  # TODO
+            # x = x.view(-1, self.embedding_dim)  # TODO
+            next_latent_state = self.sim_norm(next_latent_state)
 
         return next_latent_state, reward
 

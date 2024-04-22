@@ -57,7 +57,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     # TODO: 
-    # muzero_gpt_model.py world_model.py stack (4,64,64)
+    # unizero_model.py world_model.py stack (4,64,64)
     # muzero: mcts_ctree, muzero_collector: empty_cache
     exp_name=f'data_xzero_0307/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh8_fixroot_simnorm_latentw10_pew0_seed0',
 
@@ -66,7 +66,7 @@ atari_muzero_config = dict(
 
     # exp_name=f'data_xzero_stack1_0219/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kv81-fix3_collect-clear200_noeval_search-toplay-nodeepcopy_seed0',
 
-    # exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024-nl1-nh1_lr1e-4-gcv10-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_sdpa_seed0',
+    # exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_unizero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024-nl1-nh1_lr1e-4-gcv10-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_sdpa_seed0',
 
     env=dict(
         stop_value=int(1e6),
@@ -210,8 +210,8 @@ atari_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_gpt',
-        import_names=['lzero.policy.muzero_gpt'],
+        type='unizero',
+        import_names=['lzero.policy.unizero'],
     ),
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)
@@ -219,14 +219,14 @@ create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     # max_env_step = 10000
-    from lzero.entry import train_muzero_gpt
-    train_muzero_gpt([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    from lzero.entry import train_unizero
+    train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
 
     # 下面为cprofile的代码
-    # from lzero.entry import train_muzero_gpt
+    # from lzero.entry import train_unizero
     # def run(max_env_step: int):
-    #     train_muzero_gpt([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    #     train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
     # import cProfile
-    # cProfile.run(f"run({10000})", filename="pong_muzero_gpt_ctree_cprofile_10k_envstep", sort="cumulative")
+    # cProfile.run(f"run({10000})", filename="pong_unizero_ctree_cprofile_10k_envstep", sort="cumulative")
