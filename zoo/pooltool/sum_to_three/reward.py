@@ -36,6 +36,10 @@ def binary(state: State) -> float:
 
 
 class RewardFunction(Protocol):
+    """
+    Overview:
+        Protocol defining what a reward function call signature should be.
+    """
     def __call__(self, state: State) -> float: ...
 
 
@@ -44,8 +48,32 @@ _reward_functions: Dict[str, Tuple[RewardFunction, Bounds]] = {
 }
 
 
+def _assert_exists(algorithm: str) -> None:
+    if algorithm not in _reward_functions:
+        raise AssertionError(
+            f"algorithm {algorithm} is unknown. Available algorithms: {_reward_functions.keys()}"
+        )
+
 def get_reward_function(algorithm: str) -> RewardFunction:
+    """
+    Overview:
+        Returns a reward function.
+    Arguments:
+        - algorithm (:obj:`str`): The name of a reward algorithm.
+    Returns:
+        - reward_fn (:obj:`RewardFunction`): A function that accepts a :obj:`State` and returns a reward.
+    """
+    _assert_exists(algorithm)
     return _reward_functions[algorithm][0]
 
 def get_reward_bounds(algorithm: str) -> Bounds:
+    """
+    Overview:
+        Returns the bounds of a reward function.
+    Arguments:
+        - algorithm (:obj:`str`): The name of a reward algorithm.
+    Returns:
+        - bounds (:obj:`Bounds`): The upper and lower bounds of the reward space.
+    """
+    _assert_exists(algorithm)
     return _reward_functions[algorithm][1]
