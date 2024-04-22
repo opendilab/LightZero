@@ -19,27 +19,28 @@ import pooltool.constants as const
 
 Color = Tuple[int, int, int]
 WHITE: Color = (255, 255, 255)
+
 GRAYSCALE_CONVERSION_WEIGHTS = np.array([0.299, 0.587, 0.114], dtype=np.float64)
 
-
-def to_grayscale(color: Color) -> Color:
-    """Convert a color to grayscale."""
-    grayscale_intensity = int(np.dot(np.array(color), GRAYSCALE_CONVERSION_WEIGHTS))
-    return (grayscale_intensity, grayscale_intensity, grayscale_intensity)
-
-
-@numba.jit(nopython=True, cache=True)
-def array_to_grayscale(raw_data, weights):
-    """Convert image array to grayscale."""
+@numba.jit(nopython=True)
+def array_to_grayscale(raw_data):
+    """
+    Overview:
+        Convert image array to grayscale for RGB conversion.
+    Arguments:
+        - color (:obj:`Color`): A color represented as a thruple of unsigned 8-bit integers.
+    Returns:
+        - grayscale (:obj:`Color`): The corresponding grayscale color.
+    """
     height, width, _ = raw_data.shape
     grayscale_data = np.empty((height, width), dtype=np.uint8)
 
     for i in range(height):
         for j in range(width):
             grayscale_data[i, j] = int(
-                raw_data[i, j, 0] * weights[0]
-                + raw_data[i, j, 1] * weights[1]
-                + raw_data[i, j, 2] * weights[2]
+                raw_data[i, j, 0] * GRAYSCALE_CONVERSION_WEIGHTS[0]
+                + raw_data[i, j, 1] * GRAYSCALE_CONVERSION_WEIGHTS[1]
+                + raw_data[i, j, 2] * GRAYSCALE_CONVERSION_WEIGHTS[2]
             )
 
     return grayscale_data
@@ -47,6 +48,17 @@ def array_to_grayscale(raw_data, weights):
 
 @dataclass
 class RenderPlane:
+    """
+    Overview:
+        Specifies the IDs of renderings for a feature plane.
+    Attributes:
+        - ball_ids (:obj:`List[str]`): A list of ball ids that should be rendered in the
+            feature plane. Balls are rendered as filled circles.
+        - cushion_ids (:obj:`List[str]`): A list of cushion ids that should be rendered
+            in the feature plane. Cushions are rendered as lines.
+        - ball_ball_lines (:obj:`List[Tuple[str, str]]`): A list of two-ples specifying
+            ball-ball pairs that lines should be drawn between.
+    """
     ball_ids: List[str] = field(default_factory=list)
     cushion_ids: List[str] = field(default_factory=list)
     ball_ball_lines: List[Tuple[str, str]] = field(default_factory=list)
@@ -54,6 +66,16 @@ class RenderPlane:
 
 @dataclass
 class RenderConfig:
+    """
+    Overview:
+        Dataclass that holds definitions of the feature planes and render settings.
+    Attributes:
+        - planes (:obj:`List[RenderPlane]`): A list of feature plane definitions. The
+            order defines the observation array.
+        - line_width (:obj:`int`): The width (in pixels) of lines drawn.
+        - antialias_circle (:obj:`int`): Whether circles should be antialiased.
+        - antialias_line (:obj:`int`): Whether lines should be antialiased.
+    """
     planes: List[RenderPlane]
     line_width: int
     antialias_circle: bool
