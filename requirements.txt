@@ -8,3 +8,4 @@ minigrid
 moviepy
 pycolab
 pytest
+pooltool-billiards>=0.3.1
