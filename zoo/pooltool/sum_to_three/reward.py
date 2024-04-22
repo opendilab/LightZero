@@ -1,3 +1,7 @@
+"""
+Overview:
+    A module for housing different reward functions for the sum-to-three game.
+"""
 from typing import Dict, Protocol, Tuple
 import pooltool as pt
 from zoo.pooltool.datatypes import State, Bounds
