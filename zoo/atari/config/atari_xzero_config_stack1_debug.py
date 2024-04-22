@@ -53,7 +53,7 @@ evaluator_env_num = 3
 
 model_update_ratio = 0.25
 # model_update_ratio = 0.5
-num_simulations = 5
+num_simulations = 6
 # num_simulations = 50
 
 
@@ -65,12 +65,12 @@ reanalyze_ratio = 0.
 # reanalyze_ratio = 0.05 # TODO
 
 
-batch_size = 3 # TODO
+batch_size = 2 # TODO
 num_simulations = 50
 
 
-# num_unroll_steps = 6
-num_unroll_steps = 10
+num_unroll_steps = 5
+# num_unroll_steps = 10
 # num_unroll_steps = 20 # TODO
 
 threshold_training_steps_for_final_temperature = int(5e4)  # train_iter 50k 1->0.5->0.25
@@ -98,6 +98,8 @@ atari_xzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
+        # collect_max_episode_steps=int(20),
+        # eval_max_episode_steps=int(20),
         collect_max_episode_steps=int(50),
         eval_max_episode_steps=int(50),
         # TODO: for breakout

@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(3)
+torch.cuda.set_device(0)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
@@ -43,37 +43,36 @@ elif env_id == 'FrostbiteNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
-num_simulations = 50
-model_update_ratio = 0.25
-batch_size = 256
-# max_env_step = int(5e5)
-max_env_step = int(1e6)
-reanalyze_ratio = 0.
-eps_greedy_exploration_in_collect = True
-num_unroll_steps = 40
-
-# for debug ===========
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# num_simulations = 2
-# update_per_collect = 2
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+# num_simulations = 50
 # model_update_ratio = 0.25
-# batch_size = 2
-# max_env_step = int(5e5)
+# batch_size = 256
+# # max_env_step = int(5e5)
+# max_env_step = int(1e6)
 # reanalyze_ratio = 0.
 # eps_greedy_exploration_in_collect = True
 # num_unroll_steps = 5
+
+# for debug ===========
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 2
+update_per_collect = 2
+model_update_ratio = 0.25
+batch_size = 2
+max_env_step = int(5e5)
+reanalyze_ratio = 0.
+eps_greedy_exploration_in_collect = True
+num_unroll_steps = 5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_paper_learn-dynamics_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_simnorm-cossim_adamw1e-4_seed0',
-    # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_simnorm-cossim_adamw1e-4_seed0',
+    exp_name=f'data_paper_muzero_variants_debug/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_simnorm-cossim_adamw1e-4_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_simnorm-cossim_adamw1e-4_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_sslw2-cossim_adamw1e-4_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_sslw2-cossim_sgd02_seed0',
@@ -88,8 +87,8 @@ atari_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        # collect_max_episode_steps=int(100),
-        # eval_max_episode_steps=int(100),
+        collect_max_episode_steps=int(20),
+        eval_max_episode_steps=int(20),
     ),
     policy=dict(
         model=dict(
@@ -131,7 +130,7 @@ atari_muzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         dormant_threshold=0.025,
-
+        
         # optim_type='SGD', # for collector orig
         # lr_piecewise_constant_decay=True,
         # learning_rate=0.2,

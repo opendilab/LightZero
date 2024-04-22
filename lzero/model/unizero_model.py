@@ -11,7 +11,7 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
-from .common import MZNetworkOutput, RepresentationNetworkGPT, RepresentationNetworkMLP, PredictionNetwork, LatentDecoder, VectorDecoderMemory, ImageEncoderMemory, ImageDecoderMemory
+from .common import MZNetworkOutput, RepresentationNetworkGPT, RepresentationNetworkMLP, PredictionNetwork, LatentDecoder, VectorDecoderMemory, ImageEncoderMemory, ImageDecoderMemory, FeatureAndGradientHook
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -168,6 +168,12 @@ class UniZeroModel(nn.Module):
 
             Encoder = Encoder(cfg.tokenizer.encoder)
             Decoder = Decoder(cfg.tokenizer.decoder)
+
+            # ====== for analysis ======
+            self.encoder_hook = FeatureAndGradientHook()
+            self.encoder_hook.setup_hooks(self.representation_network)
+
+
             self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network,
                                 decoder_network=decoder_network)
             self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
@@ -243,6 +249,8 @@ class UniZeroModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
             print(f'{sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.tokenizer.lpips')
             print('=='*20)
+
+
 
 
     def initial_inference(self, obs: torch.Tensor, action_batch=None, current_obs_batch=None) -> MZNetworkOutput:

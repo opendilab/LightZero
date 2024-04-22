@@ -18,6 +18,7 @@ from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
     prepare_obs, configure_optimizers
+from lzero.model.utils import cal_dormant_ratio
 
 
 @POLICY_REGISTRY.register('muzero_context')
@@ -356,6 +357,12 @@ class MuZeroContextPolicy(Policy):
         # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
         latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
+        # ========= logging for analysis =========
+        # calculate dormant ratio of encoder
+        dormant_ratio_encoder = cal_dormant_ratio(self._learn_model.representation_network, obs_batch.detach(), percentage=self._cfg.dormant_threshold)
+        latent_state_l2_norms = torch.norm(latent_state, p=2, dim=2).mean()  # 计算L2范数
+        # ========= logging for analysis ===============
+
         # transform the scaled value or its categorical representation to its original value,
         # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
         original_value = self.inverse_scalar_transform_handle(value)
@@ -387,12 +394,34 @@ class MuZeroContextPolicy(Policy):
         # ==============================================================
         # the core recurrent_inference in MuZero policy.
         # ==============================================================
+        avg_dormant_ratio_dynamics = 0
         for step_k in range(self._cfg.num_unroll_steps):
             # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
             # given current ``latent_state`` and ``action``.
             # And then predict policy_logits and value with the prediction function.
             network_output = self._learn_model.recurrent_inference(latent_state, action_batch[:, step_k])
             latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
+
+            # ========= logging for analysis ===============
+            # calculate dormant ratio of encoder
+
+            action_tmp = action_batch[:, step_k]
+            if len(action_tmp.shape) == 1:
+                action = action.unsqueeze(-1)
+            # transform action to one-hot encoding.
+            # action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)
+            action_one_hot = torch.zeros(action_tmp.shape[0], policy_logits.shape[-1], device=action_tmp.device)
+            # transform action to torch.int64
+            action_tmp = action_tmp.long()
+            action_one_hot.scatter_(1, action_tmp, 1)
+            action_encoding_tmp = action_one_hot.unsqueeze(-1).unsqueeze(-1)
+            action_encoding = action_encoding_tmp.expand(
+                latent_state.shape[0], policy_logits.shape[-1], latent_state.shape[2], latent_state.shape[3]
+            )
+            state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
+            dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network, state_action_encoding.detach(), percentage=self._cfg.dormant_threshold)
+            avg_dormant_ratio_dynamics += dormant_ratio_dynamics
+            # ========= logging for analysis ===============
 
             # transform the scaled value or its categorical representation to its original value,
             # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -464,6 +493,10 @@ class MuZeroContextPolicy(Policy):
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
+
+        # ============= for analysis =============
+        l2_norm_before, l2_norm_after, grad_norm_before, grad_norm_after = self._learn_model.encoder_hook.analyze()
+
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(self._learn_model.parameters(), self._cfg.grad_clip_value)
@@ -505,6 +538,14 @@ class MuZeroContextPolicy(Policy):
             # ==============================================================
             'value_priority_orig': value_priority,
             'value_priority': value_priority.mean().item(),
+
+            'analysis/dormant_ratio_encoder':dormant_ratio_encoder,
+            'analysis/dormant_ratio_dynamics': avg_dormant_ratio_dynamics / self._cfg.num_unroll_steps,
+            'analysis/latent_state_l2_norms': latent_state_l2_norms,
+            'analysis/l2_norm_before': l2_norm_before, 
+            'analysis/l2_norm_after': l2_norm_after, 
+            'analysis/grad_norm_before':grad_norm_before, 
+            'analysis/grad_norm_after':grad_norm_after, 
         }
 
     def _init_collect(self) -> None:
@@ -769,6 +810,14 @@ class MuZeroContextPolicy(Policy):
             tensorboard according to the return value ``_forward_learn``.
         """
         return [
+            'analysis/dormant_ratio_encoder',
+            'analysis/dormant_ratio_dynamics',
+            'analysis/latent_state_l2_norms',
+            'analysis/l2_norm_before', 
+            'analysis/l2_norm_after', 
+            'analysis/grad_norm_before', 
+            'analysis/grad_norm_after', 
+
             'collect_mcts_temperature',
             'cur_lr',
             'weighted_total_loss',

@@ -24,6 +24,7 @@ from .slicer import Embedder, Head, ActEmbedder
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
+from lzero.model.utils import cal_dormant_ratio
 from ding.torch_utils import to_device
 
 from line_profiler import line_profiler
@@ -110,9 +111,10 @@ class WorldModel(nn.Module):
         self.num_heads = config.num_heads
         self.gamma = config.gamma
         self.context_length = config.context_length  # TODO config.context_length
-        self.context_length_for_recurrent = config.context_length_for_recurrent
+        # self.context_length_for_recurrent = config.context_length_for_recurrent
         # self.context_length = self.config.max_tokens  # TODO
         # self.context_length_for_recurrent = self.config.max_tokens  # TODO
+        self.dormant_threshold = config.dormant_threshold
 
         self.transformer = Transformer(config)
         self.num_observations_tokens = config.tokens_per_block - 1
@@ -614,9 +616,9 @@ class WorldModel(nn.Module):
 
     def trim_and_pad_kv_cache(self, is_init_infer=True):
         # =========== TODO： is_init_infer=True 在episode快结束时，batch里面不同env的context的处理=========
-        if is_init_infer:
-            print('='*20)
-            print(f'self.keys_values_wm_size_list: {self.keys_values_wm_size_list}')
+        # if is_init_infer:
+        #     print('='*20)
+        #     print(f'self.keys_values_wm_size_list: {self.keys_values_wm_size_list}')
         # print(f'is_init_infer: {is_init_infer}')
         # print(f'self.keys_values_wm_size_list: {self.keys_values_wm_size_list}')
         # NOTE: self.keys_values_wm_size_list会传递到world_model.forward()中
@@ -675,10 +677,12 @@ class WorldModel(nn.Module):
             quantized_state = state_single_env.detach().cpu().numpy()  # 分离并将状态移至CPU
             cache_key = quantize_state(quantized_state)  # 量化状态并将其哈希值计算为缓存键
 
-            if is_init_infer:
-                context_length = self.context_length
-            else:
-                context_length = self.context_length_for_recurrent
+            context_length = self.context_length
+
+            # if is_init_infer:
+            #     context_length = self.context_length
+            # else:
+            #     context_length = self.context_length_for_recurrent
 
             if not is_init_infer: # NOTE: check 在recurrent_inference时去掉前面填充的0 ============
                 # 从全局缓存复制keys和values到单个环境缓存
@@ -871,8 +875,14 @@ class WorldModel(nn.Module):
     def compute_loss(self, batch, target_tokenizer: Tokenizer=None, inverse_scalar_transform_handle=None, **kwargs: Any) -> LossWithIntermediateLosses:
         # 将观察编码为潜在状态表示
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False)
+        
+        # ========= logging for analysis =========
+        # calculate dormant ratio of encoder
+        shape = batch['observations'].shape  # (..., C, H, W)
+        inputs = batch['observations'].contiguous().view(-1, *shape[-3:]) # (32,5,3,64,64) -> (160,3,64,64)
+        dormant_ratio_encoder = cal_dormant_ratio(self.tokenizer.representation_network, inputs.detach(), percentage=self.dormant_threshold)
         # 假设latent_state_roots是一个tensor
-        # latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2)  # 计算L2范数
+        latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()  # 计算L2范数
         # print("L2 Norms:", l2_norms)
 
         # 注册梯度钩子,用于梯度缩放。这里的作用是将梯度缩小为原来的1/5,有助于训练的稳定性。
@@ -942,9 +952,12 @@ class WorldModel(nn.Module):
         # 动作tokens
         act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
 
+
         # 前向传播,得到预测的观察、奖励和策略等
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)})
-        
+        # ========= logging for analysis =========
+        # calculate dormant ratio of world_model
+        dormant_ratio_world_model = cal_dormant_ratio(self, {'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())}, percentage=self.dormant_threshold)
 
         #  ========== for debugging ==========
         # outputs.logits_policy.shape torch.Size([2, 17, 4])
@@ -1075,7 +1088,10 @@ class WorldModel(nn.Module):
             policy_entropy=discounted_policy_entropy,
             first_step_losses=first_step_losses,
             middle_step_losses=middle_step_losses,
-            last_step_losses=last_step_losses
+            last_step_losses=last_step_losses,
+            dormant_ratio_encoder=dormant_ratio_encoder,
+            dormant_ratio_world_model=dormant_ratio_world_model,
+            latent_state_l2_norms=latent_state_l2_norms,
         )
 
 

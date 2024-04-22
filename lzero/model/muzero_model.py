@@ -11,7 +11,7 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
-from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork
+from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, FeatureAndGradientHook
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -140,6 +140,11 @@ class MuZeroModel(nn.Module):
             activation=activation,
             norm_type=norm_type
         )
+        
+        # ====== for analysis ======
+        self.encoder_hook = FeatureAndGradientHook()
+        self.encoder_hook.setup_hooks(self.representation_network)
+
         self.dynamics_network = DynamicsNetwork(
             observation_shape,
             self.action_encoding_dim,

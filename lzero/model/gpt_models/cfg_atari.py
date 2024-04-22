@@ -15,11 +15,10 @@ cfg['world_model'] = {
                       # 'tokens_per_block': 2,
                       # 'max_blocks': 5,
                       # "max_tokens": 2 * 5,  # TODO： horizon:4
-                      # "context_length": 2 * 5,
-                      # "context_length_for_recurrent":2 * 5,
-                      # # "context_length": 2 * 3,
-                      # # "context_length_for_recurrent":2 * 3,
-                      # "recurrent_keep_deepth": 100,
+                      # # "context_length": 2 * 5,
+                      # # "context_length_for_recurrent":2 * 5,
+                      # "context_length": 2 * 4,
+                      # "context_length_for_recurrent":2 * 4,
                       # "gru_gating": False,
                       # # "gru_gating": True,
 
@@ -29,13 +28,8 @@ cfg['world_model'] = {
                       # "max_tokens": 2 * 8,  # TODO： horizon:8
                       # # "context_length": 2 * 8,
                       # # "context_length_for_recurrent":2 * 8,
-                      # "context_length": 20,
-                      # "context_length_for_recurrent":20,
-                      # # "context_length": 10,
-                      # # "context_length_for_recurrent": 10,
-                      # "recurrent_keep_deepth": 100,
-                      # # "context_length": 4,
-                      # # "context_length_for_recurrent":4,
+                      # "context_length": 2 * 4,
+                      # "context_length_for_recurrent":2 * 4,
                       # "gru_gating": False,
                       # # "gru_gating": True,
 
@@ -44,8 +38,8 @@ cfg['world_model'] = {
                       "max_tokens": 2 * 10,  # TODO： horizon:8
                       # "context_length": 20,
                       # "context_length_for_recurrent": 20,
-                      "context_length": 8, # TODO
-                      "context_length_for_recurrent": 8,
+                      "context_length": 2 * 4, # TODO
+                      "context_length_for_recurrent": 2 * 4,
                       "recurrent_keep_deepth": 100,
                       "gru_gating": False,
                       # "gru_gating": True,
@@ -53,15 +47,37 @@ cfg['world_model'] = {
                     #  'tokens_per_block': 2,
                     #   'max_blocks': 20,
                     #   "max_tokens": 2 * 20,  # TODO： horizon:8
-                    #   "context_length": 2*20,
-                    #   "context_length_for_recurrent": 2*20,
+                    #   # "context_length": 2*20,
+                    #   # "context_length_for_recurrent": 2*20,
+                    #   "context_length": 2 * 4, # TODO
+                    #   "context_length_for_recurrent": 2 * 4,
                     #   "recurrent_keep_deepth": 100,
                     #   "gru_gating": False,
-                      # "gru_gating": True,
+
+                      # 'tokens_per_block': 2,
+                      # 'max_blocks': 30,
+                      # "max_tokens": 2 * 30,  # TODO： horizon:8
+                      # # "context_length": 2*20,
+                      # # "context_length_for_recurrent": 2*20,
+                      # "context_length": 2 * 4, # TODO
+                      # "context_length_for_recurrent": 2 * 4,
+                      # "recurrent_keep_deepth": 100,
+                      # "gru_gating": False,
+
+                      # 'tokens_per_block': 2,
+                      # 'max_blocks': 40,
+                      # "max_tokens": 2 * 40,  # TODO： horizon:8
+                      # # "context_length": 2*20,
+                      # # "context_length_for_recurrent": 2*20,
+                      # "context_length": 2 * 4, # TODO
+                      # "context_length_for_recurrent": 2 * 4,
+                      # "recurrent_keep_deepth": 100,
+                      # "gru_gating": False,
+
 
                       # 'action_shape': 18, # TODO：for multi-task
 
-                      "device": 'cuda:4',
+                      "device": 'cuda:7',
                       'action_shape': 6, # TODO：for pong qbert 
                       # 'action_shape': 9,# TODO：for mspacman
                       # 'action_shape': 18,# TODO：for Seaquest boxing Frostbite
@@ -71,7 +87,6 @@ cfg['world_model'] = {
                       # 'embed_dim':1024, # TODO：for atari
                       'group_size': 8,  # NOTE
                       'attention': 'causal',
-
 
                       'num_layers': 1, # TODO：for atari debug
                       # 'num_layers': 2, # TODO：for atari debug
@@ -105,7 +120,6 @@ cfg['world_model'] = {
                       'support_size': 101,  # TODO
 
 
-
                       'max_cache_size':5000,
                       # 'max_cache_size':50000,
                       # 'max_cache_size':500,
@@ -129,7 +143,7 @@ cfg['world_model'] = {
 
                       # 'gamma': 1.5, # 0.5, 0.9, 0.99, 0.999
                       'gamma': 1, # 0.5, 0.9, 0.99, 0.999
-
+                      'dormant_threshold': 0.025,
                       }
 from easydict import EasyDict
 cfg = EasyDict(cfg)

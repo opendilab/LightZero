@@ -177,6 +177,48 @@ def AvgL1Norm(x, eps=1e-8):
     return x / x.abs().mean(-1, keepdim=True).clamp(min=eps)
 
 
+import torch
+
+class FeatureAndGradientHook:
+    def __init__(self):
+        self.features_before = []
+        self.features_after = []
+        self.grads_before = []
+        self.grads_after = []
+
+    def setup_hooks(self, model):
+        # Hook to capture features before and after SimNorm
+        model.sim_norm.register_forward_hook(self.forward_hook)
+        model.sim_norm.register_full_backward_hook(self.backward_hook)
+
+    def forward_hook(self, module, input, output):
+        # input[0] is the input to SimNorm, output is the output of SimNorm
+        self.features_before.append(input[0].detach())
+        self.features_after.append(output.detach())
+
+    def backward_hook(self, module, grad_input, grad_output):
+        # grad_input[0] is the gradient at the input to SimNorm
+        # grad_output[0] is the gradient at the output of SimNorm
+        self.grads_before.append(grad_input[0].detach())
+        self.grads_after.append(grad_output[0].detach())
+
+    def analyze(self):
+        # Calculate L2 norms of features
+        l2_norm_before = torch.mean(torch.stack([torch.norm(f, p=2, dim=1).mean() for f in self.features_before]))
+        l2_norm_after = torch.mean(torch.stack([torch.norm(f, p=2, dim=1).mean() for f in self.features_after]))
+
+        # Calculate norms of gradients
+        grad_norm_before = torch.mean(torch.stack([torch.norm(g, p=2, dim=1).mean() for g in self.grads_before]))
+        grad_norm_after = torch.mean(torch.stack([torch.norm(g, p=2, dim=1).mean() for g in self.grads_after]))
+
+        # print(f"L2 Norm of features before SimNorm: {l2_norm_before}")
+        # print(f"L2 Norm of features after SimNorm: {l2_norm_after}")
+        # print(f"Gradient Norm before SimNorm: {grad_norm_before}")
+        # print(f"Gradient Norm after SimNorm: {grad_norm_after}")
+        return l2_norm_before, l2_norm_after, grad_norm_before, grad_norm_after
+
+
+
 class RepresentationNetworkGPT(nn.Module):
 
     def __init__(

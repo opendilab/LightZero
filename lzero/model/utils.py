@@ -8,6 +8,49 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+class LinearOutputHook:
+    def __init__(self):
+        self.outputs = []
+
+    def __call__(self, module, module_in, module_out):
+        self.outputs.append(module_out)
+
+def cal_dormant_ratio(model, *inputs, percentage=0.025):
+    hooks = []
+    hook_handlers = []
+    total_neurons = 0
+    dormant_neurons = 0
+
+    for _, module in model.named_modules():
+        # if isinstance(module, nn.Linear):
+        if isinstance(module, nn.Linear) or isinstance(module, nn.Conv2d):
+            hook = LinearOutputHook()
+            hooks.append(hook)
+            hook_handlers.append(module.register_forward_hook(hook))
+
+    with torch.no_grad():
+        model(*inputs)
+
+    for module, hook in zip(
+        (module
+         for module in model.modules() if isinstance(module, nn.Linear)),
+            hooks):
+        with torch.no_grad():
+            for output_data in hook.outputs:
+                mean_output = output_data.abs().mean(0)
+                avg_neuron_output = mean_output.mean()
+                dormant_indices = (mean_output < avg_neuron_output *
+                                   percentage).nonzero(as_tuple=True)[0]
+                total_neurons += module.weight.shape[0]
+                dormant_neurons += len(dormant_indices)         
+
+    for hook in hooks:
+        hook.outputs.clear()
+
+    for hook_handler in hook_handlers:
+        hook_handler.remove()
+
+    return dormant_neurons / total_neurons
 
 def renormalize(inputs: torch.Tensor, first_dim: int = 1) -> torch.Tensor:
     """

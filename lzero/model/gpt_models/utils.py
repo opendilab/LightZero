@@ -121,7 +121,11 @@ class LossWithIntermediateLosses:
             #     raise ValueError(f"Unknown loss type : {k}")
 
         # self.intermediate_losses = {k: v.item() for k, v in kwargs.items()}
-        self.intermediate_losses = {k: v if isinstance(v, dict) else v.item() for k, v in kwargs.items()}
+        # self.intermediate_losses = {k: v if isinstance(v, dict) elif isinstance(v, float) v else v.item() for k, v in kwargs.items()}
+        self.intermediate_losses = {
+            k: v if isinstance(v, dict) else (v if isinstance(v, float) else v.item())
+            for k, v in kwargs.items()
+        }
 
     def __truediv__(self, value):
         for k, v in self.intermediate_losses.items():

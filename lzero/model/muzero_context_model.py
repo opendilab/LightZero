@@ -12,7 +12,7 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 import numpy as np
 
-from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, PredictionNetworkMLP
+from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, PredictionNetworkMLP, FeatureAndGradientHook
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 import torch.nn.init as init
 import torch.nn.functional as F
@@ -147,6 +147,12 @@ class MuZeroContextModel(nn.Module):
             group_size=8,
             use_sim_norm=use_sim_norm, # TODO
         )
+
+        # ====== for analysis ======
+        self.encoder_hook = FeatureAndGradientHook()
+        self.encoder_hook.setup_hooks(self.representation_network)
+
+
         self.dynamics_network = DynamicsNetwork(
             observation_shape,
             self.action_encoding_dim,

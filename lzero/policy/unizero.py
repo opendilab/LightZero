@@ -13,7 +13,7 @@ from torch.distributions import Categorical
 from torch.nn import L1Loss
 import inspect
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
-from lzero.mcts import UniZeroMCTSPtree as MCTSPtree
+# from lzero.mcts import UniZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
@@ -442,6 +442,9 @@ class UniZeroPolicy(Policy):
         first_step_losses = self.intermediate_losses['first_step_losses']
         middle_step_losses = self.intermediate_losses['middle_step_losses']
         last_step_losses = self.intermediate_losses['last_step_losses']
+        dormant_ratio_encoder = self.intermediate_losses['dormant_ratio_encoder']
+        dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
+        latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
 
 
         # ==============================================================
@@ -457,6 +460,12 @@ class UniZeroPolicy(Policy):
         
         self._optimizer_world_model.zero_grad()
         weighted_total_loss.backward()
+        # ============= for analysis =============
+        l2_norm_before, l2_norm_after, grad_norm_before, grad_norm_after = self._learn_model.encoder_hook.analyze()
+        # l2_norm_before = 0.
+        # l2_norm_after= 0.
+        # grad_norm_before= 0.
+        # grad_norm_after= 0.
 
         # 在训练循环中使用
         # self.monitor_weights_and_grads(self._learn_model.tokenizer.representation_network)
@@ -493,20 +502,20 @@ class UniZeroPolicy(Policy):
             max_memory_allocated_gb = 0.
 
         return_loss_dict = {
-            'first_step_loss_value':first_step_losses['loss_value'].item(),
-            'first_step_loss_policy':first_step_losses['loss_policy'].item(),
-            'first_step_loss_rewards':first_step_losses['loss_rewards'].item(),
-            'first_step_loss_obs':first_step_losses['loss_obs'].item(),
+            'analysis/first_step_loss_value':first_step_losses['loss_value'].item(),
+            'analysis/first_step_loss_policy':first_step_losses['loss_policy'].item(),
+            'analysis/first_step_loss_rewards':first_step_losses['loss_rewards'].item(),
+            'analysis/first_step_loss_obs':first_step_losses['loss_obs'].item(),
 
-            'middle_step_loss_value':middle_step_losses['loss_value'].item(),
-            'middle_step_loss_policy':middle_step_losses['loss_policy'].item(),
-            'middle_step_loss_rewards':middle_step_losses['loss_rewards'].item(),
-            'middle_step_loss_obs':middle_step_losses['loss_obs'].item(),
+            'analysis/middle_step_loss_value':middle_step_losses['loss_value'].item(),
+            'analysis/middle_step_loss_policy':middle_step_losses['loss_policy'].item(),
+            'analysis/middle_step_loss_rewards':middle_step_losses['loss_rewards'].item(),
+            'analysis/middle_step_loss_obs':middle_step_losses['loss_obs'].item(),
 
-            'last_step_loss_value':last_step_losses['loss_value'].item(),
-            'last_step_loss_policy':last_step_losses['loss_policy'].item(),
-            'last_step_loss_rewards':last_step_losses['loss_rewards'].item(),
-            'last_step_loss_obs':last_step_losses['loss_obs'].item(),
+            'analysis/last_step_loss_value':last_step_losses['loss_value'].item(),
+            'analysis/last_step_loss_policy':last_step_losses['loss_policy'].item(),
+            'analysis/last_step_loss_rewards':last_step_losses['loss_rewards'].item(),
+            'analysis/last_step_loss_obs':last_step_losses['loss_obs'].item(),
 
             'Current_GPU': current_memory_allocated_gb,
             'Max_GPU': max_memory_allocated_gb,
@@ -542,6 +551,14 @@ class UniZeroPolicy(Policy):
             # 'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
             # 'total_grad_norm_before_clip_rep_net': total_grad_norm_before_clip_rep_net.item(),  
+
+            'analysis/dormant_ratio_encoder':dormant_ratio_encoder,
+            'analysis/dormant_ratio_world_model':dormant_ratio_world_model,
+            'analysis/latent_state_l2_norms':latent_state_l2_norms,
+            'analysis/l2_norm_before': l2_norm_before, 
+            'analysis/l2_norm_after': l2_norm_after, 
+            'analysis/grad_norm_before':grad_norm_before, 
+            'analysis/grad_norm_after':grad_norm_after, 
         }
 
         return return_loss_dict
@@ -865,20 +882,28 @@ class UniZeroPolicy(Policy):
             tensorboard according to the return value ``_forward_learn``.
         """
         return [
-            'first_step_loss_value',
-            'first_step_loss_policy',
-            'first_step_loss_rewards',
-            'first_step_loss_obs',
+            'analysis/dormant_ratio_encoder',
+            'analysis/dormant_ratio_world_model',
+            'analysis/latent_state_l2_norms',
+            'analysis/l2_norm_before', 
+            'analysis/l2_norm_after', 
+            'analysis/grad_norm_before', 
+            'analysis/grad_norm_after', 
 
-            'middle_step_loss_value',
-            'middle_step_loss_policy',
-            'middle_step_loss_rewards',
-            'middle_step_loss_obs',
+            'analysis/first_step_loss_value',
+            'analysis/first_step_loss_policy',
+            'analysis/first_step_loss_rewards',
+            'analysis/first_step_loss_obs',
 
-            'last_step_loss_value',
-            'last_step_loss_policy',
-            'last_step_loss_rewards',
-            'last_step_loss_obs',
+            'analysis/middle_step_loss_value',
+            'analysis/middle_step_loss_policy',
+            'analysis/middle_step_loss_rewards',
+            'analysis/middle_step_loss_obs',
+
+            'analysis/last_step_loss_value',
+            'analysis/last_step_loss_policy',
+            'analysis/last_step_loss_rewards',
+            'analysis/last_step_loss_obs',
 
             'Current_GPU',
             'Max_GPU',
