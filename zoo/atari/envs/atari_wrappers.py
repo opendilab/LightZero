@@ -94,9 +94,9 @@ def wrap_lightzero(config, episode_life, clip_rewards):
     full_action_space=False
 
     if config.render_mode_human:
-        env = gym.make(config.env_name, render_mode='human', full_action_space=full_action_space)
+        env = gym.make(config.env_id, render_mode='human', full_action_space=full_action_space)
     else:
-        env = gym.make(config.env_name, full_action_space=full_action_space)
+        env = gym.make(config.env_id, full_action_space=full_action_space)
     assert 'NoFrameskip' in env.spec.id
     env = NoopResetWrapper(env, noop_max=30)
     env = MaxAndSkipWrapper(env, skip=config.frame_skip)

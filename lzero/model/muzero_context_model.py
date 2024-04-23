@@ -104,7 +104,7 @@ class MuZeroContextModel(nn.Module):
             self.value_support_size = 1
 
         self.action_space_size = action_space_size
-
+        print('action_space_size:', action_space_size)
         assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
         self.discrete_action_encoding_type = discrete_action_encoding_type
         if self.discrete_action_encoding_type == 'one_hot':

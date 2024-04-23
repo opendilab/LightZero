@@ -18,7 +18,7 @@ class AtariLightZeroEnv(BaseEnv):
         collector_env_num=8,
         evaluator_env_num=3,
         n_evaluator_episode=3,
-        env_name='PongNoFrameskip-v4',
+        env_id='PongNoFrameskip-v4',
         env_type='Atari',
         observation_shape=(4, 96, 96),
         collect_max_episode_steps=int(1.08e5),
@@ -165,7 +165,7 @@ class AtariLightZeroEnv(BaseEnv):
         return self._reward_space
 
     def __repr__(self) -> str:
-        return "LightZero Atari Env({})".format(self.cfg.env_name)
+        return "LightZero Atari Env({})".format(self.cfg.env_id)
 
     @staticmethod
     def create_collector_env_cfg(cfg: dict) -> List[dict]:
