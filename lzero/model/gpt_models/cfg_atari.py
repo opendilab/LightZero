@@ -33,26 +33,26 @@ cfg['world_model'] = {
                       # "gru_gating": False,
                       # # "gru_gating": True,
 
-                      'tokens_per_block': 2,
-                      'max_blocks': 10,
-                      "max_tokens": 2 * 10,  # TODO： horizon:8
-                      # "context_length": 20,
-                      # "context_length_for_recurrent": 20,
+                      # 'tokens_per_block': 2,
+                      # 'max_blocks': 10,
+                      # "max_tokens": 2 * 10,  # TODO： horizon:8
+                      # # "context_length": 20,
+                      # # "context_length_for_recurrent": 20,
+                      # "context_length": 2 * 4, # TODO
+                      # "context_length_for_recurrent": 2 * 4,
+                      # "recurrent_keep_deepth": 100,
+                      # "gru_gating": False,
+                      # # "gru_gating": True,
+
+                     'tokens_per_block': 2,
+                      'max_blocks': 20,
+                      "max_tokens": 2 * 20,  # TODO： horizon:8
+                      # "context_length": 2*20,
+                      # "context_length_for_recurrent": 2*20,
                       "context_length": 2 * 4, # TODO
                       "context_length_for_recurrent": 2 * 4,
                       "recurrent_keep_deepth": 100,
                       "gru_gating": False,
-                      # "gru_gating": True,
-
-                    #  'tokens_per_block': 2,
-                    #   'max_blocks': 20,
-                    #   "max_tokens": 2 * 20,  # TODO： horizon:8
-                    #   # "context_length": 2*20,
-                    #   # "context_length_for_recurrent": 2*20,
-                    #   "context_length": 2 * 4, # TODO
-                    #   "context_length_for_recurrent": 2 * 4,
-                    #   "recurrent_keep_deepth": 100,
-                    #   "gru_gating": False,
 
                       # 'tokens_per_block': 2,
                       # 'max_blocks': 30,

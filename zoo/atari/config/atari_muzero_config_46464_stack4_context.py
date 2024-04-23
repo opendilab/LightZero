@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(3)
+torch.cuda.set_device(1)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
@@ -53,8 +53,8 @@ batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = True
-num_unroll_steps = 40
-
+num_unroll_steps = 20
+context_length_init = 20
 # for debug ===========
 # collector_env_num = 1
 # n_episode = 1
@@ -72,7 +72,7 @@ num_unroll_steps = 40
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_paper_learn-dynamics_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_simnorm-cossim_adamw1e-4_seed0',
+    exp_name=f'data_paper_learn-dynamics_0423/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_adamw1e-4_analysis_dratio0025_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_simnorm-cossim_adamw1e-4_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_simnorm-cossim_adamw1e-4_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_sslw2-cossim_adamw1e-4_seed0',
@@ -105,7 +105,7 @@ atari_muzero_config = dict(
             reward_support_size=101,
             value_support_size=101,
             support_scale=50,
-            context_length=1,  # NOTE:TODO num_unroll_steps
+            context_length_init=context_length_init,  # NOTE:TODO num_unroll_steps
             use_sim_norm=True,
             # use_sim_norm_kl_loss=True,  # TODO
             use_sim_norm_kl_loss=False,  # TODO

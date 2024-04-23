@@ -250,6 +250,10 @@ def train_muzero_context(
                 logging.info(f'eval offline finished!')
             break
 
+    # 训练结束后移除钩子
+    policy._collect_model.encoder_hook.remove_hooks()
+    policy._target_model.encoder_hook.remove_hooks()
+
     # Learner's after_run hook.
     learner.call_hook('after_run')
     return policy

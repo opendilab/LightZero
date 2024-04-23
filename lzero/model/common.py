@@ -187,20 +187,19 @@ class FeatureAndGradientHook:
         self.grads_after = []
 
     def setup_hooks(self, model):
-        # Hook to capture features before and after SimNorm
-        model.sim_norm.register_forward_hook(self.forward_hook)
-        model.sim_norm.register_full_backward_hook(self.backward_hook)
+        # Hooks to capture features and gradients at SimNorm
+        self.forward_handler = model.sim_norm.register_forward_hook(self.forward_hook)
+        self.backward_handler = model.sim_norm.register_full_backward_hook(self.backward_hook)
 
     def forward_hook(self, module, input, output):
-        # input[0] is the input to SimNorm, output is the output of SimNorm
-        self.features_before.append(input[0].detach())
-        self.features_after.append(output.detach())
+        with torch.no_grad():
+            self.features_before.append(input[0])
+            self.features_after.append(output)
 
     def backward_hook(self, module, grad_input, grad_output):
-        # grad_input[0] is the gradient at the input to SimNorm
-        # grad_output[0] is the gradient at the output of SimNorm
-        self.grads_before.append(grad_input[0].detach())
-        self.grads_after.append(grad_output[0].detach())
+        with torch.no_grad():
+            self.grads_before.append(grad_input[0] if grad_input[0] is not None else None)
+            self.grads_after.append(grad_output[0] if grad_output[0] is not None else None)
 
     def analyze(self):
         # Calculate L2 norms of features
@@ -208,14 +207,28 @@ class FeatureAndGradientHook:
         l2_norm_after = torch.mean(torch.stack([torch.norm(f, p=2, dim=1).mean() for f in self.features_after]))
 
         # Calculate norms of gradients
-        grad_norm_before = torch.mean(torch.stack([torch.norm(g, p=2, dim=1).mean() for g in self.grads_before]))
-        grad_norm_after = torch.mean(torch.stack([torch.norm(g, p=2, dim=1).mean() for g in self.grads_after]))
+        grad_norm_before = torch.mean(torch.stack([torch.norm(g, p=2, dim=1).mean() for g in self.grads_before if g is not None]))
+        grad_norm_after = torch.mean(torch.stack([torch.norm(g, p=2, dim=1).mean() for g in self.grads_after if g is not None]))
 
-        # print(f"L2 Norm of features before SimNorm: {l2_norm_before}")
-        # print(f"L2 Norm of features after SimNorm: {l2_norm_after}")
-        # print(f"Gradient Norm before SimNorm: {grad_norm_before}")
-        # print(f"Gradient Norm after SimNorm: {grad_norm_after}")
+        # Clear stored data and delete tensors to free memory
+        self.clear_data()
+
+        # Optionally clear CUDA cache
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
         return l2_norm_before, l2_norm_after, grad_norm_before, grad_norm_after
+
+    def clear_data(self):
+        del self.features_before[:]
+        del self.features_after[:]
+        del self.grads_before[:]
+        del self.grads_after[:]
+
+    def remove_hooks(self):
+        self.forward_handler.remove()
+        self.backward_handler.remove()
+
 
 
 

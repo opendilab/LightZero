@@ -299,6 +299,10 @@ class UniZeroPolicy(Policy):
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
         self.intermediate_losses = defaultdict(float)
+        self.l2_norm_before = 0.
+        self.l2_norm_after= 0.
+        self.grad_norm_before= 0.
+        self.grad_norm_after= 0.
 
     #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -460,12 +464,15 @@ class UniZeroPolicy(Policy):
         
         self._optimizer_world_model.zero_grad()
         weighted_total_loss.backward()
+
         # ============= for analysis =============
-        l2_norm_before, l2_norm_after, grad_norm_before, grad_norm_after = self._learn_model.encoder_hook.analyze()
-        # l2_norm_before = 0.
-        # l2_norm_after= 0.
-        # grad_norm_before= 0.
-        # grad_norm_after= 0.
+        del self.l2_norm_before
+        del self.l2_norm_after
+        del self.grad_norm_before
+        del self.grad_norm_after
+        self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
+        self._target_model.encoder_hook.clear_data()  # 非常非常重要!!!
+        # ============= for analysis =============
 
         # 在训练循环中使用
         # self.monitor_weights_and_grads(self._learn_model.tokenizer.representation_network)
@@ -555,10 +562,10 @@ class UniZeroPolicy(Policy):
             'analysis/dormant_ratio_encoder':dormant_ratio_encoder,
             'analysis/dormant_ratio_world_model':dormant_ratio_world_model,
             'analysis/latent_state_l2_norms':latent_state_l2_norms,
-            'analysis/l2_norm_before': l2_norm_before, 
-            'analysis/l2_norm_after': l2_norm_after, 
-            'analysis/grad_norm_before':grad_norm_before, 
-            'analysis/grad_norm_after':grad_norm_after, 
+            'analysis/l2_norm_before': self.l2_norm_before, 
+            'analysis/l2_norm_after': self.l2_norm_after, 
+            'analysis/grad_norm_before':self.grad_norm_before, 
+            'analysis/grad_norm_after':self.grad_norm_after, 
         }
 
         return return_loss_dict

@@ -592,7 +592,7 @@ class WorldModel(nn.Module):
                 obs_embeddings_or_act_tokens = {'obs_embeddings': token}
             # self.keys_values_wm 会被原地改动 ===============
             outputs_wm = self.forward(obs_embeddings_or_act_tokens, past_keys_values=self.keys_values_wm, kvcache_independent=False, is_init_infer=False)
-            print('keys_values_wm_size_list_current:', self.keys_values_wm_size_list_current)
+            # print('keys_values_wm_size_list_current:', self.keys_values_wm_size_list_current)
             self.keys_values_wm_size_list_current = [i+1 for i in self.keys_values_wm_size_list_current] # NOTE: +1 ===============
             if k == 0:
                 # 如果k==0,token是action_token,outputs_wm.logits_rewards 是有值的
@@ -881,6 +881,10 @@ class WorldModel(nn.Module):
         shape = batch['observations'].shape  # (..., C, H, W)
         inputs = batch['observations'].contiguous().view(-1, *shape[-3:]) # (32,5,3,64,64) -> (160,3,64,64)
         dormant_ratio_encoder = cal_dormant_ratio(self.tokenizer.representation_network, inputs.detach(), percentage=self.dormant_threshold)
+        self.past_keys_values_cache_init_infer.clear()
+        self.past_keys_values_cache_recurrent_infer.clear()
+        self.keys_values_wm_list.clear()
+        torch.cuda.empty_cache()
         # 假设latent_state_roots是一个tensor
         latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()  # 计算L2范数
         # print("L2 Norms:", l2_norms)
@@ -958,7 +962,10 @@ class WorldModel(nn.Module):
         # ========= logging for analysis =========
         # calculate dormant ratio of world_model
         dormant_ratio_world_model = cal_dormant_ratio(self, {'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())}, percentage=self.dormant_threshold)
-
+        self.past_keys_values_cache_init_infer.clear()
+        self.past_keys_values_cache_recurrent_infer.clear()
+        self.keys_values_wm_list.clear()
+        torch.cuda.empty_cache()
         #  ========== for debugging ==========
         # outputs.logits_policy.shape torch.Size([2, 17, 4])
         # outputs.logits_value.shape torch.Size([2, 17, 101])

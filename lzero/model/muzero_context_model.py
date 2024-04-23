@@ -47,7 +47,7 @@ class MuZeroContextModel(nn.Module):
         downsample: bool = False,
         norm_type: Optional[str] = 'BN',
         discrete_action_encoding_type: str = 'one_hot',
-        context_length: int = 5,
+        context_length_init: int = 5,
         use_sim_norm: bool = False,
         *args,
         **kwargs
@@ -152,7 +152,6 @@ class MuZeroContextModel(nn.Module):
         self.encoder_hook = FeatureAndGradientHook()
         self.encoder_hook.setup_hooks(self.representation_network)
 
-
         self.dynamics_network = DynamicsNetwork(
             observation_shape,
             self.action_encoding_dim,
@@ -214,7 +213,7 @@ class MuZeroContextModel(nn.Module):
                 nn.Linear(self.pred_hid, self.pred_out),
             )
         self.timestep = 0
-        self.context_length = context_length  # TODO
+        self.context_length_init = context_length_init  # TODO
 
     def initial_inference(self, obs: torch.Tensor, action_batch=None, current_obs_batch=None) -> MZNetworkOutput:
         """
@@ -242,14 +241,17 @@ class MuZeroContextModel(nn.Module):
         # obs_act_dict = {'obs':obs, 'action':action_batch, 'current_obs':current_obs_batch}
 
         if self.training or action_batch is None:
+            # 训练
             self.latent_state = self._representation(obs)
+            self.timestep = 0
         else:
+            # collect/eval
             if action_batch is not None and max(action_batch) == -1:  # 一集的第一步
                 self.latent_state = self._representation(current_obs_batch)
             else:
                 action_batch = torch.from_numpy(np.array(action_batch)).to(self.latent_state.device)
                 self.recurrent_inference(self.latent_state, action_batch) # 更新self.latent_state
-                if self.timestep % self.context_length == 0:
+                if self.timestep % self.context_length_init == 0:
                     # print(f'self.timestep:{self.timestep}, reset latent_state')
                     # context reset method TODO: context recent method
                     self.latent_state = self._representation(current_obs_batch)

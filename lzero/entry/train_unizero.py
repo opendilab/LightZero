@@ -262,6 +262,7 @@ def train_unizero(
         policy._collect_model.world_model.past_keys_values_cache_recurrent_infer.clear() # very important
         policy._collect_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
         torch.cuda.empty_cache() # TODO: NOTE
+        
 
 
         # if collector.envstep > 0:
@@ -273,6 +274,10 @@ def train_unizero(
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break
 
+    # 训练结束后移除钩子
+    policy._collect_model.encoder_hook.remove_hooks()
+    policy._target_model.encoder_hook.remove_hooks()
+    
     # Learner's after_run hook.
     learner.call_hook('after_run')
     return policy

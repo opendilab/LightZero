@@ -292,6 +292,10 @@ class MuZeroContextPolicy(Policy):
                     update_type='momentum',
                     update_kwargs={'theta': self._cfg.target_update_theta_for_intrinsic_reward}
                 )
+        self.l2_norm_before = 0.
+        self.l2_norm_after= 0.
+        self.grad_norm_before= 0.
+        self.grad_norm_after= 0.
 
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -360,7 +364,7 @@ class MuZeroContextPolicy(Policy):
         # ========= logging for analysis =========
         # calculate dormant ratio of encoder
         dormant_ratio_encoder = cal_dormant_ratio(self._learn_model.representation_network, obs_batch.detach(), percentage=self._cfg.dormant_threshold)
-        latent_state_l2_norms = torch.norm(latent_state, p=2, dim=2).mean()  # 计算L2范数
+        latent_state_l2_norms = torch.norm(latent_state.view(latent_state.shape[0], -1), p=2, dim=1).mean()  # 计算L2范数
         # ========= logging for analysis ===============
 
         # transform the scaled value or its categorical representation to its original value,
@@ -394,7 +398,6 @@ class MuZeroContextPolicy(Policy):
         # ==============================================================
         # the core recurrent_inference in MuZero policy.
         # ==============================================================
-        avg_dormant_ratio_dynamics = 0
         for step_k in range(self._cfg.num_unroll_steps):
             # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
             # given current ``latent_state`` and ``action``.
@@ -403,24 +406,23 @@ class MuZeroContextPolicy(Policy):
             latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
             # ========= logging for analysis ===============
-            # calculate dormant ratio of encoder
-
-            action_tmp = action_batch[:, step_k]
-            if len(action_tmp.shape) == 1:
-                action = action.unsqueeze(-1)
-            # transform action to one-hot encoding.
-            # action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)
-            action_one_hot = torch.zeros(action_tmp.shape[0], policy_logits.shape[-1], device=action_tmp.device)
-            # transform action to torch.int64
-            action_tmp = action_tmp.long()
-            action_one_hot.scatter_(1, action_tmp, 1)
-            action_encoding_tmp = action_one_hot.unsqueeze(-1).unsqueeze(-1)
-            action_encoding = action_encoding_tmp.expand(
-                latent_state.shape[0], policy_logits.shape[-1], latent_state.shape[2], latent_state.shape[3]
-            )
-            state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
-            dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network, state_action_encoding.detach(), percentage=self._cfg.dormant_threshold)
-            avg_dormant_ratio_dynamics += dormant_ratio_dynamics
+            if step_k == self._cfg.num_unroll_steps -1:
+                # calculate dormant ratio of encoder
+                action_tmp = action_batch[:, step_k]
+                if len(action_tmp.shape) == 1:
+                    action = action.unsqueeze(-1)
+                # transform action to one-hot encoding.
+                # action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)
+                action_one_hot = torch.zeros(action_tmp.shape[0], policy_logits.shape[-1], device=action_tmp.device)
+                # transform action to torch.int64
+                action_tmp = action_tmp.long()
+                action_one_hot.scatter_(1, action_tmp, 1)
+                action_encoding_tmp = action_one_hot.unsqueeze(-1).unsqueeze(-1)
+                action_encoding = action_encoding_tmp.expand(
+                    latent_state.shape[0], policy_logits.shape[-1], latent_state.shape[2], latent_state.shape[3]
+                )
+                state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
+                dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network, state_action_encoding.detach(), percentage=self._cfg.dormant_threshold)
             # ========= logging for analysis ===============
 
             # transform the scaled value or its categorical representation to its original value,
@@ -495,7 +497,15 @@ class MuZeroContextPolicy(Policy):
         weighted_total_loss.backward()
 
         # ============= for analysis =============
-        l2_norm_before, l2_norm_after, grad_norm_before, grad_norm_after = self._learn_model.encoder_hook.analyze()
+        # 处理完后，显式删除这些变量
+        del self.l2_norm_before
+        del self.l2_norm_after
+        del self.grad_norm_before
+        del self.grad_norm_after
+        self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
+        # print(l2_norm_before, l2_norm_after, grad_norm_before, grad_norm_after)
+        self._target_model.encoder_hook.clear_data()  # 非常非常重要!!!
+        # ============= for analysis =============
 
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
@@ -540,12 +550,12 @@ class MuZeroContextPolicy(Policy):
             'value_priority': value_priority.mean().item(),
 
             'analysis/dormant_ratio_encoder':dormant_ratio_encoder,
-            'analysis/dormant_ratio_dynamics': avg_dormant_ratio_dynamics / self._cfg.num_unroll_steps,
+            'analysis/dormant_ratio_dynamics': dormant_ratio_dynamics,
             'analysis/latent_state_l2_norms': latent_state_l2_norms,
-            'analysis/l2_norm_before': l2_norm_before, 
-            'analysis/l2_norm_after': l2_norm_after, 
-            'analysis/grad_norm_before':grad_norm_before, 
-            'analysis/grad_norm_after':grad_norm_after, 
+            'analysis/l2_norm_before': self.l2_norm_before, 
+            'analysis/l2_norm_after': self.l2_norm_after, 
+            'analysis/grad_norm_before':self.grad_norm_before, 
+            'analysis/grad_norm_after':self.grad_norm_after, 
         }
 
     def _init_collect(self) -> None:

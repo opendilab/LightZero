@@ -51,17 +51,16 @@ evaluator_env_num = 3
 model_update_ratio = 0.25
 # model_update_ratio = 0.5
 num_simulations = 50
-# max_env_step = int(1e6)
-max_env_step = int(5e5)
-
+max_env_step = int(1e6)
+# max_env_step = int(5e5)
 
 reanalyze_ratio = 0. 
 # reanalyze_ratio = 0.05 # TODO
 
 batch_size = 64
 # num_unroll_steps = 5
-num_unroll_steps = 10
-# num_unroll_steps = 20 # TODO
+# num_unroll_steps = 10
+num_unroll_steps = 20 # TODO
 # num_unroll_steps = 30 # TODO
 # num_unroll_steps = 40 # TODO
 
@@ -77,7 +76,7 @@ atari_unizero_config = dict(
     # TODO: 
     # mcts_ctree
     # muzero_collector/evaluator: empty_cache
-    exp_name=f'data_paper_learn-dynamics_0422/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_analysis_dratio0025_seed0',
+    exp_name=f'data_paper_learn-dynamics_0423/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_analysis_dratio0025_seed0',
     # exp_name=f'data_paper_learn-dynamics_0422/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_seed0',
     # exp_name=f'data_paper_learn-dynamics_0422/{env_name[:-14]}_unizero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_grugating-false_latent-groupkl_conleninit{8}-conlenrecur{8}clear_lsd768-nlayer1-nh8_bacth-kvmaxsize-fix0417_seed0',
 

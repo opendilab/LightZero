@@ -166,8 +166,8 @@ class MuZeroRNNModel(nn.Module):
             norm_type=norm_type,
             embedding_dim=768,
             group_size=8,
-            use_sim_norm=use_sim_norm,# TODO
-            res_connection_in_dynamics=True,# TODO
+            use_sim_norm=use_sim_norm, # TODO
+            res_connection_in_dynamics=True, # TODO
         )
         # ====== for analysis ======
         self.encoder_hook = FeatureAndGradientHook()

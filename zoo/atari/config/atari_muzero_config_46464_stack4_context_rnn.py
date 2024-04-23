@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(3)
+torch.cuda.set_device(2)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
@@ -55,7 +55,6 @@ reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = True
 num_unroll_steps = 20
 context_length_init = 20 # 5
-context_length_in_search = 20
 
 # for debug ===========
 # collector_env_num = 1
@@ -74,7 +73,7 @@ context_length_in_search = 20
 # ==============================================================
 
 atari_muzero_rnn_config = dict(
-    exp_name=f'data_paper_learn-dynamics_0422/{env_id[:-14]}_muzero_rnn_stack4_H{num_unroll_steps}_initconlen{context_length_init}-recuconlen{context_length_in_search}_simnorm-cossim_adamw1e-4_seed0_analysis',
+    exp_name=f'data_paper_learn-dynamics_0423/{env_id[:-14]}_muzero_rnn_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_adamw1e-4_seed0_analysis',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_rnn_stack4_H{num_unroll_steps}_initconlen{context_length_init}-recuconlen{context_length_in_search}_simnorm-cossim_adamw1e-4_seed0',
     env=dict(
         stop_value=int(1e6),
@@ -109,7 +108,7 @@ atari_muzero_rnn_config = dict(
             # use_sim_norm_kl_loss=True,  # TODO
             use_sim_norm_kl_loss=False,  # TODO
         ),
-        context_length_in_search=context_length_in_search, # TODO
+        # context_length_in_search=context_length_in_search, # TODO
         cuda=True,
         env_type='not_board_games',
         game_segment_length=400, # for collector orig

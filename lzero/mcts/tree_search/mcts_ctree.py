@@ -551,11 +551,10 @@ class MuZeroRNNMCTSCtree(object):
                 reward_latent_state_batch = network_output.reward_hidden_state
                 # reset the hidden states in LSTM every ``lstm_horizon_len`` steps in one search.
                 # which enable the model only need to predict the value prefix in a range (e.g.: [s0,...,s5])
-                # assert self._cfg.context_length_in_search > 0
-                reset_idx = (np.array(search_lens) % self._cfg.context_length_in_search == 0)
-                assert len(reset_idx) == batch_size
-                reward_latent_state_batch[0][:, reset_idx, :] = 0
-                reward_latent_state_batch[1][:, reset_idx, :] = 0
+                # reset_idx = ( (model.timestep + np.array(search_lens)) % self._cfg.context_length_in_search == 0)
+                # # reset_idx = (np.array(search_lens) % self._cfg.context_length_in_search == 0)
+                # reward_latent_state_batch[0][:, reset_idx, :] = 0
+                # reward_latent_state_batch[1][:, reset_idx, :] = 0
                 # is_reset_list = reset_idx.astype(np.int32).tolist()
                 reward_hidden_state_c_batch.append(reward_latent_state_batch[0])
                 reward_hidden_state_h_batch.append(reward_latent_state_batch[1])
