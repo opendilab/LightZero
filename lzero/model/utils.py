@@ -7,6 +7,30 @@ from typing import List, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
+class SimNorm(nn.Module):
+    """
+    Simplicial normalization.
+    Adapted from https://arxiv.org/abs/2204.00616.
+    """
+
+    def __init__(self, simnorm_dim):
+        super().__init__()
+        self.dim = simnorm_dim
+
+    def forward(self, x):
+        shp = x.shape
+        # Ensure that there is at least one simplex to normalize across.
+        if shp[1] != 0:
+            x = x.view(*shp[:-1], -1, self.dim)
+            x = F.softmax(x, dim=-1)
+            return x.view(*shp)
+        else:
+            return x
+
+    def __repr__(self):
+        return f"SimNorm(dim={self.dim})"
 
 class LinearOutputHook:
     def __init__(self):

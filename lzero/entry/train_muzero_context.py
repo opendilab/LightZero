@@ -57,10 +57,10 @@ def train_muzero_context(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'muzero_context','sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'muzero_context','muzero_rnn', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
         "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'"
 
-    if create_cfg.policy.type in ['muzero', 'muzero_context']:
+    if create_cfg.policy.type in ['muzero', 'muzero_context', 'muzero_rnn']:
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
@@ -213,26 +213,26 @@ def train_muzero_context(
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
-        if replay_buffer.get_num_of_transitions() > 2000:
-            # Learn policy from collected data.
-            for i in range(update_per_collect):
-                # Learner will train ``update_per_collect`` times in one iteration.
-                if replay_buffer.get_num_of_transitions() > batch_size:
-                    train_data = replay_buffer.sample(batch_size, policy)
-                else:
-                    logging.warning(
-                        f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                        f'batch_size: {batch_size}, '
-                        f'{replay_buffer} '
-                        f'continue to collect now ....'
-                    )
-                    break
+        # if replay_buffer.get_num_of_transitions() > 2000: # TODO
+        # Learn policy from collected data.
+        for i in range(update_per_collect):
+            # Learner will train ``update_per_collect`` times in one iteration.
+            if replay_buffer.get_num_of_transitions() > batch_size:
+                train_data = replay_buffer.sample(batch_size, policy)
+            else:
+                logging.warning(
+                    f'The data in replay_buffer is not sufficient to sample a mini-batch: '
+                    f'batch_size: {batch_size}, '
+                    f'{replay_buffer} '
+                    f'continue to collect now ....'
+                )
+                break
 
-                # The core train steps for MCTS+RL algorithms.
-                log_vars = learner.train(train_data, collector.envstep)
+            # The core train steps for MCTS+RL algorithms.
+            log_vars = learner.train(train_data, collector.envstep)
 
-                if cfg.policy.use_priority:
-                    replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+            if cfg.policy.use_priority:
+                replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             if cfg.policy.eval_offline:
