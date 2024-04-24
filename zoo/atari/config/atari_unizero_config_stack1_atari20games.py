@@ -1,6 +1,9 @@
 from easydict import EasyDict
+
 import torch
-torch.cuda.set_device(6)
+torch.cuda.set_device(3)
+# ==== NOTE: 需要设置cfg_atari中的action_shape =====
+
 
 # env_id = 'AlienNoFrameskip-v4'
 # env_id = 'AmidarNoFrameskip-v4'
@@ -17,15 +20,25 @@ torch.cuda.set_device(6)
 # env_id = 'FrostbiteNoFrameskip-v4'
 # env_id = 'GopherNoFrameskip-v4'
 
-# env_id = 'HeroNoFrameskip-v4'
-# env_id = 'JamesbondNoFrameskip-v4'
-# env_id = 'KangarooNoFrameskip-v4'
-# env_id = 'KrullNoFrameskip-v4'
+# env_id = 'HeroNoFrameskip-v4' # 18
+# env_id = 'JamesbondNoFrameskip-v4' # 18
+# env_id = 'KangarooNoFrameskip-v4' # 18
+# env_id = 'KrullNoFrameskip-v4' # 18
 
-# env_id = 'KungFuMasterNoFrameskip-v4'
-# env_id = 'PrivateEyeNoFrameskip-v4'
-# env_id = 'RoadRunnerNoFrameskip-v4'
-env_id = 'UpNdownNoFrameskip-v4'
+# env_id = 'KungFuMasterNoFrameskip-v4' # 14
+# env_id = 'PrivateEyeNoFrameskip-v4' # 18
+# env_id = 'RoadRunnerNoFrameskip-v4' # 18
+# env_id = 'UpNdownNoFrameskip-v4' # 6
+
+
+# env_id = 'PongNoFrameskip-v4'
+# env_id = 'MsPacmanNoFrameskip-v4'
+# env_id = 'QbertNoFrameskip-v4'
+# env_id = 'SeaquestNoFrameskip-v4'
+
+env_id = 'BoxingNoFrameskip-v4'
+# env_id = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
+
 
 update_per_collect = None # for others
 model_update_ratio = 1.
@@ -74,6 +87,21 @@ elif env_id == 'RoadRunnerNoFrameskip-v4':
     action_space_size = 18
 elif env_id == 'UpNdownNoFrameskip-v4':
     action_space_size = 6
+elif env_id == 'PongNoFrameskip-v4':
+    action_space_size = 6
+    # update_per_collect = 1000  # for pong boxing
+    model_update_ratio = 0.25
+elif env_id == 'MsPacmanNoFrameskip-v4':
+    action_space_size = 9
+elif env_id == 'QbertNoFrameskip-v4':
+    action_space_size = 6
+elif env_id == 'SeaquestNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'BoxingNoFrameskip-v4':
+    action_space_size = 18
+    model_update_ratio = 0.25
+elif env_id == 'BreakoutNoFrameskip-v4':
+    action_space_size = 4
 
 
 # ==============================================================
@@ -83,48 +111,49 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-batch_size = 256
 max_env_step = int(1e6)
-reanalyze_ratio = 0.
-eps_greedy_exploration_in_collect = True
-num_unroll_steps = 5
-context_length_init = 1
-# for debug ===========
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# num_simulations = 2
-# update_per_collect = 2
-# model_update_ratio = 0.25
-# batch_size = 2
 # max_env_step = int(5e5)
-# reanalyze_ratio = 0.
-# eps_greedy_exploration_in_collect = True
-# num_unroll_steps = 5
-# context_length_init = 1
+reanalyze_ratio = 0. 
+# reanalyze_ratio = 0.05 # TODO
+
+batch_size = 64
+num_unroll_steps = 10
+# num_unroll_steps = 20 # TODO
+# num_unroll_steps = 30 # TODO
+# num_unroll_steps = 40 # TODO
+
+
+threshold_training_steps_for_final_temperature = int(5e4)  # train_iter 50k 1->0.5->0.25
+eps_greedy_exploration_in_collect = True # for breakout, qbert, boxing
+# eps_greedy_exploration_in_collect = False 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-atari_muzero_config = dict(
-    exp_name=f'data_paper_learn-dynamics_atari-20-games_0424/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_analysis_dratio0025_seed0',
-    # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_simnorm-cossim_adamw1e-4_seed0',
-    # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_simnorm-cossim_adamw1e-4_seed0',
-    # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_sslw2-cossim_adamw1e-4_seed0',
-    # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_sslw2-cossim_sgd02_seed0',
+atari_unizero_config = dict(
+    # TODO: 
+    # mcts_ctree
+    # muzero_collector/evaluator: empty_cache
+    exp_name=f'data_paper_learn-dynamics_0423/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_analysis_dratio0025_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
-        observation_shape=(4, 64, 64),
-        frame_stack_num=4,
-        gray_scale=True,
+        observation_shape=(3, 64, 64),
+        gray_scale=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        # collect_max_episode_steps=int(20),
-        # eval_max_episode_steps=int(20),
+        # collect_max_episode_steps=int(50),
+        # eval_max_episode_steps=int(50),
+        # TODO: for breakout
+        # collect_max_episode_steps=int(5e3), # for breakout
+        # eval_max_episode_steps=int(5e3), # for breakout
+        # TODO: for others
+        collect_max_episode_steps=int(2e4), 
+        eval_max_episode_steps=int(1e4),
+        clip_rewards=True,
     ),
     policy=dict(
         learn=dict(
@@ -137,28 +166,35 @@ atari_muzero_config = dict(
                 ),
             ),
         ),
+        model_path=None,
+        tokenizer_start_after_envsteps=int(0),
+        transformer_start_after_envsteps=int(0),
+        update_per_collect_transformer=update_per_collect,
+        update_per_collect_tokenizer=update_per_collect,
+        num_unroll_steps=num_unroll_steps,
         model=dict(
-            observation_shape=(4, 64, 64),
-            image_channel=1,
-            frame_stack_num=4,
-            gray_scale=True,
+            observation_shape=(3, 64, 64),
+            image_channel=3,
+            frame_stack_num=1,
+            gray_scale=False,
             action_space_size=action_space_size,
             downsample=True,
             self_supervised_learning_loss=True,  # default is False
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
+            # reward_support_size=601,
+            # value_support_size=601,
+            # support_scale=300,
             reward_support_size=101,
             value_support_size=101,
             support_scale=50,
-            context_length_init=context_length_init,  # NOTE:TODO num_unroll_steps
-            use_sim_norm=True,
-            # use_sim_norm_kl_loss=True,  # TODO
-            use_sim_norm_kl_loss=False,  # TODO
         ),
+        use_priority=False, # TODO
+        use_augmentation=False,  # TODO
+        # use_augmentation=True,  # NOTE: only for image-based atari
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=400, # for collector orig
-        # game_segment_length=50, # for collector game_segment
+        game_segment_length=400,
         random_collect_episode_num=0,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
@@ -169,26 +205,18 @@ atari_muzero_config = dict(
             end=0.01,
             decay=int(2e4),  # TODO: 20k
         ),
-        use_augmentation=True,  # TODO
-        # use_augmentation=False,
-        use_priority=False,
-        model_update_ratio = model_update_ratio,
         update_per_collect=update_per_collect,
+        model_update_ratio = model_update_ratio,
         batch_size=batch_size,
-        dormant_threshold=0.025,
-
-        optim_type='SGD', # for collector orig
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,
-
-        # optim_type='AdamW', # for collector game_segment
-        # lr_piecewise_constant_decay=False,
-        # learning_rate=1e-4,
-
+        # manual_temperature_decay=True,
+        # threshold_training_steps_for_final_temperature=threshold_training_steps_for_final_temperature,
+        optim_type='AdamW',
+        lr_piecewise_constant_decay=False,
+        learning_rate=0.0001,
         target_update_freq=100,
+        grad_clip_value = 5, # TODO: 1
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
@@ -196,31 +224,34 @@ atari_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
     ),
 )
-atari_muzero_config = EasyDict(atari_muzero_config)
-main_config = atari_muzero_config
+atari_unizero_config = EasyDict(atari_unizero_config)
+main_config = atari_unizero_config
 
-atari_muzero_create_config = dict(
+atari_unizero_create_config = dict(
     env=dict(
         type='atari_lightzero',
         import_names=['zoo.atari.envs.atari_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_context',
-        import_names=['lzero.policy.muzero_context'],
+        type='unizero',
+        import_names=['lzero.policy.unizero'],
     ),
 )
-atari_muzero_create_config = EasyDict(atari_muzero_create_config)
-create_config = atari_muzero_create_config
+atari_unizero_create_config = EasyDict(atari_unizero_create_config)
+create_config = atari_unizero_create_config
 
 if __name__ == "__main__":
-    # from lzero.entry import train_muzero_context
-    # train_muzero_context([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # max_env_step = 10000
+    # from lzero.entry import train_unizero
+    # train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+
 
     # Define a list of seeds for multiple runs
     seeds = [0,1,2]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed TODO
-        main_config.exp_name=f'data_paper_learn-dynamics_atari-20-games_0424/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_analysis_dratio0025_seed{seed}'
-        from lzero.entry import train_muzero_context
-        train_muzero_context([main_config, create_config], seed=seed, max_env_step=max_env_step)
+        main_config.exp_name=f'data_paper_unizero_atari-20-games_0424/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_seed{seed}'
+
+        from lzero.entry import train_unizero
+        train_unizero([main_config, create_config], seed=seed, max_env_step=max_env_step)

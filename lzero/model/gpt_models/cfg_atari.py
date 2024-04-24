@@ -33,26 +33,26 @@ cfg['world_model'] = {
                       # "gru_gating": False,
                       # # "gru_gating": True,
 
-                      # 'tokens_per_block': 2,
-                      # 'max_blocks': 10,
-                      # "max_tokens": 2 * 10,  # TODO： horizon:8
-                      # # "context_length": 20,
-                      # # "context_length_for_recurrent": 20,
-                      # "context_length": 2 * 4, # TODO
-                      # "context_length_for_recurrent": 2 * 4,
-                      # "recurrent_keep_deepth": 100,
-                      # "gru_gating": False,
-                      # # "gru_gating": True,
-
-                     'tokens_per_block': 2,
-                      'max_blocks': 20,
-                      "max_tokens": 2 * 20,  # TODO： horizon:8
-                      # "context_length": 2*20,
-                      # "context_length_for_recurrent": 2*20,
+                      'tokens_per_block': 2,
+                      'max_blocks': 10,
+                      "max_tokens": 2 * 10,  # TODO： horizon:8
+                      # "context_length": 20,
+                      # "context_length_for_recurrent": 20,
                       "context_length": 2 * 4, # TODO
                       "context_length_for_recurrent": 2 * 4,
                       "recurrent_keep_deepth": 100,
                       "gru_gating": False,
+                      # "gru_gating": True,
+
+                    #  'tokens_per_block': 2,
+                    #   'max_blocks': 20,
+                    #   "max_tokens": 2 * 20,  # TODO： horizon:8
+                    #   # "context_length": 2*20,
+                    #   # "context_length_for_recurrent": 2*20,
+                    #   "context_length": 2 * 4, # TODO
+                    #   "context_length_for_recurrent": 2 * 4,
+                    #   "recurrent_keep_deepth": 100,
+                    #   "gru_gating": False,
 
                       # 'tokens_per_block': 2,
                       # 'max_blocks': 30,
@@ -75,12 +75,12 @@ cfg['world_model'] = {
                       # "gru_gating": False,
 
 
-                      # 'action_shape': 18, # TODO：for multi-task
+                      "device": 'cuda:3',
 
-                      "device": 'cuda:7',
-                      'action_shape': 6, # TODO：for pong qbert 
+                      # 'action_shape': 18, # TODO：for multi-task
+                      # 'action_shape': 6, # TODO：for pong qbert 
                       # 'action_shape': 9,# TODO：for mspacman
-                      # 'action_shape': 18,# TODO：for Seaquest boxing Frostbite
+                      'action_shape': 18,# TODO：for Seaquest boxing Frostbite
                       # 'action_shape': 4,# TODO：for breakout
 
                       # 'embed_dim':512, # TODO：for atari

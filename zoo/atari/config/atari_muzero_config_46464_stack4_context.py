@@ -91,6 +91,16 @@ atari_muzero_config = dict(
         # eval_max_episode_steps=int(100),
     ),
     policy=dict(
+        learn=dict(
+            learner=dict(
+                hook=dict(
+                    load_ckpt_before_run='',
+                    log_show_after_iter=100,
+                    save_ckpt_after_iter=100000,  # default is 1000
+                    save_ckpt_after_run=True,
+                ),
+            ),
+        ),
         model=dict(
             observation_shape=(4, 64, 64),
             image_channel=1,
