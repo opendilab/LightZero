@@ -76,7 +76,9 @@ cfg['world_model'] = {
 
 
                       "device": 'cuda:3',
-
+                      'analysis_sim_norm': False,
+                      'analysis_dormant_ratio': False,
+                      
                       # 'action_shape': 18, # TODO：for multi-task
                       # 'action_shape': 6, # TODO：for pong qbert 
                       # 'action_shape': 9,# TODO：for mspacman

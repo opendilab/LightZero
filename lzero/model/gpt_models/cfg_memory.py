@@ -18,10 +18,10 @@ cfg['world_model'] = {
     # for memory env 我们必须保存第一帧的obs, 而在最后一帧进行MCTS时肯定会超出epidoe_length，因此设置context_length比训练的更长以保证不会把第一帧去掉。
     # ===================
     
-    # 'max_blocks': 16+5, 
-    # "max_tokens": 2 * (16+5),  # 1+0+15 memory_length = 0
-    # "context_length": 2 * (16+5),
-    # "context_length_for_recurrent": 2 * (16+5),
+    'max_blocks': 16+5, 
+    "max_tokens": 2 * (16+5),  # 1+0+15 memory_length = 0
+    "context_length": 2 * (16+5),
+    "context_length_for_recurrent": 2 * (16+5),
 
     # 'max_blocks': 76+5, 
     # "max_tokens": 2 * (76+5),  # 1+60+15 memory_length = 60
@@ -33,10 +33,10 @@ cfg['world_model'] = {
     # "context_length": 2 * (116+5),
     # "context_length_for_recurrent": 2 * (116+5),
 
-    'max_blocks': 266+5, 
-    "max_tokens": 2 * (266+5),  # 1+250+15 memory_length = 250
-    "context_length": 2 * (266+5),
-    "context_length_for_recurrent": 2 * (266+5),
+    # 'max_blocks': 266+5, 
+    # "max_tokens": 2 * (266+5),  # 1+250+15 memory_length = 250
+    # "context_length": 2 * (266+5),
+    # "context_length_for_recurrent": 2 * (266+5),
 
     # 'max_blocks': 16, 
     # "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
@@ -63,7 +63,9 @@ cfg['world_model'] = {
 
 
 
-    "device": 'cuda:4',
+    "device": 'cuda:0',
+    'analysis_sim_norm': False,
+    'analysis_dormant_ratio': False,
 
     'group_size': 8,  # NOTE
     # 'group_size': 768,  # NOTE
@@ -71,11 +73,18 @@ cfg['world_model'] = {
     # 'num_layers': 1,
     # 'num_layers': 2,  # same as <Transformer shine in RL> paper
     # 'num_layers': 4,
+    # 'num_layers': 8,
+    # 'num_heads': 8,
+    # # 'embed_dim': 96,  # TODO：for memory # same as <Transformer shine in RL> paper
+    # # 'embed_dim': 768, # TODO：Gpt2 Base
+    # 'embed_dim': 256, # TODO：
+
+
     'num_layers': 8,
     'num_heads': 8,
-    # 'embed_dim': 96,  # TODO：for memory # same as <Transformer shine in RL> paper
-    # 'embed_dim': 768, # TODO：Gpt2 Base
+    # 'embed_dim': 128, # TODO： for memlen=250/500
     'embed_dim': 256, # TODO：
+
 
     # 'num_layers': 12, # TODO：Gpt2 Base
     # 'num_heads': 12, # TODO：Gpt2 Base
@@ -119,6 +128,7 @@ cfg['world_model'] = {
 
     'obs_type': 'image_memory',  # 'vector', 'image'
      'gamma': 1, # 0.5, 0.9, 0.99, 0.999
+     'dormant_threshold': 0.025,
 }
 from easydict import EasyDict
 

@@ -174,3 +174,46 @@ class SelfAttention(nn.Module):
         y = self.resid_drop(self.proj(y))
 
         return y
+
+    @torch.no_grad()
+    def get_attention_map(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None, valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        获取attention map
+        
+        参数:
+            x: 输入的序列,shape为(B, T, C)
+            kv_cache: 缓存的keys和values,用于支持长序列的推断
+            valid_context_lengths: 有效的上下文长度,用于处理变长上下文
+            
+        返回:
+            attention_map: shape为(B, nh, T, L + T)的tensor,表示attention的分布
+        """
+        B, T, C = x.size()
+        if kv_cache is not None:
+            b, nh, L, c = kv_cache.shape
+            assert nh == self.num_heads and b == B and c * nh == C
+        else:
+            L = 0
+
+        q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)   # (B, nh, T, hs)
+        k = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)     # (B, nh, T, hs)
+
+        if kv_cache is not None:
+            kv_cache.update(k, None)  # 这里只需要更新keys,不需要更新values
+            k, _ = kv_cache.get()
+
+        att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+
+        if valid_context_lengths is not None:
+            mask = torch.zeros(B, T, L + T, device=att.device)
+            for i in range(B):
+                mask[i] = self.mask[L:L + T, :L + T].clone()
+                mask[i, :, :(L - valid_context_lengths[i])] = 0
+            mask = mask.unsqueeze(1).expand(-1, att.size(1), -1, -1)
+        else:
+            mask = self.mask[L:L + T, :L + T]
+
+        att = att.masked_fill(mask == 0, float('-inf'))
+        att = F.softmax(att, dim=-1)
+        
+        return att

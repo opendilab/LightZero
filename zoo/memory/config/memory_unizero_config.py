@@ -12,8 +12,8 @@ memory_length = 250
 # key_to_door [2, 60, 120, 250, 500]
 
 # max_env_step = int(3e6)
-# max_env_step = int(1e6)
-max_env_step = int(5e5)
+max_env_step = int(1e6)
+# max_env_step = int(5e5)
 
 
 # ==== NOTE: 需要设置cfg_memory中的action_shape =====
@@ -26,7 +26,8 @@ collector_env_num = 8
 n_episode = 8
 # collector_env_num = 1
 # n_episode = 1
-evaluator_env_num = 8
+evaluator_env_num = 20
+
 num_simulations = 50
 update_per_collect = None  # for others
 model_update_ratio = 0.25
@@ -54,15 +55,15 @@ eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-torch.cuda.set_device(4)
+torch.cuda.set_device(6)
 memory_xzero_config = dict(
     # TODO: collector clear
     # (3,5,5) config, world_model, unizero_model, memory env
     # mcts_ctree.py muzero_collector muzero_evaluator
-    exp_name=f'data_memory_{env_id}_0418/{env_id}_memlen-{memory_length}_xzero_H{num_unroll_steps}_bs{batch_size}'
-    f'_seed{seed}_eval{evaluator_env_num}_reclw005_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color_collect/evalnotclear',
-    # f'_seed{seed}_eval{evaluator_env_num}_reclw005_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_nl8-nh8-emd256_phase3-random-colormap-bce_phase1-random-target-pos_random-target-color',
-    # f'_seed{seed}_evalenv{evaluator_env_num}_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH_kvcache-init-envs',
+    exp_name=f'data_paper_{env_id}_0424/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}'
+    f'_reclw005_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color_collect-evalnotclear_eval{evaluator_env_num}_nl8-nh8-emd128_seed{seed}',
+    # exp_name=f'data_paper_{env_id}_0424/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}'
+    # f'_seed{seed}_eval{evaluator_env_num}_reclw005_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color_collect-evalnotclear',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -83,12 +84,13 @@ memory_xzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        analysis_sim_norm=False, # TODO
         learn=dict(
             learner=dict(
                 hook=dict(
                     load_ckpt_before_run='',
                     log_show_after_iter=100,
-                    save_ckpt_after_iter=20000,  # default is 10000
+                    save_ckpt_after_iter=100000,  # default is 10000
                     save_ckpt_after_run=True,
                 ),
             ),
@@ -131,8 +133,8 @@ memory_xzero_config = dict(
         ),
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            decay=int(2e3),  # NOTE: 2k env steps
-            # decay=int(2e4),  # NOTE: 20k env steps
+            # decay=int(2e3),  # NOTE: 2k env steps
+            decay=int(2e4),  # NOTE: 20k env steps
             # decay=int(5e4),  # NOTE: 50k env steps
         ),
         use_priority=False,

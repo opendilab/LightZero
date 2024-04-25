@@ -325,8 +325,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                         eps_steps_lst[env_id] += 1
 
                         if hasattr(self._policy.get_attribute('collect_model'), 'world_model'):
-                            # if eps_steps_lst[env_id] % 250 == 0:  # TODO: NOTE for memory
-                            if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE for atari
+                            if eps_steps_lst[env_id] % 500 == 0:  # TODO: NOTE for memory
+                            # if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE for atari
                             # if eps_steps_lst[env_id] % 32 == 0:  # TODO: NOTE
                             # if eps_steps_lst[env_id] % 90 == 0:
                             # if eps_steps_lst[env_id] % 130 == 0:

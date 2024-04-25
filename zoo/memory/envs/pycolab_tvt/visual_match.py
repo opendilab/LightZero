@@ -184,7 +184,10 @@ class Game(game.AbstractGame):
             croppers = None
         target_char = self._rng.choice(SYMBOLS_TO_SHUFFLE)  # TODO：随机目标颜色
         # target_char = 'b'  # TODO：固定目标颜色为左上角位置的颜色
-        print(f"self._rng: {self._rng}")
+        try:
+            print(f"self._rng.seed: {self._rng.seed}")
+        except Exception as e:
+            print(f"self._rng: {self._rng}")
         print(f"symbols_to_shuffle: {SYMBOLS_TO_SHUFFLE}")
         print(f"target_char: {target_char}")
         return storytelling.Story(

@@ -169,9 +169,10 @@ class UniZeroModel(nn.Module):
             Encoder = Encoder(cfg.tokenizer.encoder)
             Decoder = Decoder(cfg.tokenizer.decoder)
 
-            # ====== for analysis ======
-            self.encoder_hook = FeatureAndGradientHook()
-            self.encoder_hook.setup_hooks(self.representation_network)
+            if cfg.world_model.analysis_sim_norm:
+                # ====== for analysis ======
+                self.encoder_hook = FeatureAndGradientHook()
+                self.encoder_hook.setup_hooks(self.representation_network)
 
 
             self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network,

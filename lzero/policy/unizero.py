@@ -465,13 +465,14 @@ class UniZeroPolicy(Policy):
         self._optimizer_world_model.zero_grad()
         weighted_total_loss.backward()
 
-        # ============= for analysis =============
-        del self.l2_norm_before
-        del self.l2_norm_after
-        del self.grad_norm_before
-        del self.grad_norm_after
-        self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
-        self._target_model.encoder_hook.clear_data()  # 非常非常重要!!!
+        # ============= for analysis ============= TODO
+        if self._cfg.analysis_sim_norm:
+            del self.l2_norm_before
+            del self.l2_norm_after
+            del self.grad_norm_before
+            del self.grad_norm_after
+            self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
+            self._target_model.encoder_hook.clear_data()  # 非常非常重要!!! 
         # ============= for analysis =============
 
         # 在训练循环中使用
@@ -723,8 +724,12 @@ class UniZeroPolicy(Policy):
                     # normal collect
                     # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                     # the index within the legal action set, rather than the index in the entire action set.
+                    # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                    #     distributions, temperature=self._collect_mcts_temperature, deterministic=False
+                    # )
+                    # only for visualize
                     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self._collect_mcts_temperature, deterministic=False
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=True
                     )
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]

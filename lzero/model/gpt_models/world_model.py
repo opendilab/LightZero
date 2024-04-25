@@ -10,6 +10,7 @@ from PIL import Image
 from einops import rearrange
 from einops import rearrange
 import gym
+import os
 from joblib import hash
 import numpy as np
 import torch
@@ -115,6 +116,7 @@ class WorldModel(nn.Module):
         # self.context_length = self.config.max_tokens  # TODO
         # self.context_length_for_recurrent = self.config.max_tokens  # TODO
         self.dormant_threshold = config.dormant_threshold
+        self.analysis_dormant_ratio =  config.analysis_dormant_ratio
 
         self.transformer = Transformer(config)
         self.num_observations_tokens = config.tokens_per_block - 1
@@ -376,7 +378,15 @@ class WorldModel(nn.Module):
         else:
             # x = self.transformer(sequences, past_keys_values)
             x = self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths)
-
+            # ============ visualize_attention_map ================= TODO
+            from lzero.model.gpt_models.attention_map import visualize_attention_map
+            for layer_id in range(8):
+                for head_id in range(8):
+                    visualize_attention_map(self.transformer, sequences, past_keys_values, valid_context_lengths, layer_id=layer_id, head_id=head_id)
+            import sys
+            sys.exit(0)
+            # ========== for visualize ==========
+        
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
         logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
 
@@ -877,14 +887,17 @@ class WorldModel(nn.Module):
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False)
         
         # ========= logging for analysis =========
-        # calculate dormant ratio of encoder
-        shape = batch['observations'].shape  # (..., C, H, W)
-        inputs = batch['observations'].contiguous().view(-1, *shape[-3:]) # (32,5,3,64,64) -> (160,3,64,64)
-        dormant_ratio_encoder = cal_dormant_ratio(self.tokenizer.representation_network, inputs.detach(), percentage=self.dormant_threshold)
-        self.past_keys_values_cache_init_infer.clear()
-        self.past_keys_values_cache_recurrent_infer.clear()
-        self.keys_values_wm_list.clear()
-        torch.cuda.empty_cache()
+        if self.analysis_dormant_ratio:
+            # calculate dormant ratio of encoder
+            shape = batch['observations'].shape  # (..., C, H, W)
+            inputs = batch['observations'].contiguous().view(-1, *shape[-3:]) # (32,5,3,64,64) -> (160,3,64,64)
+            dormant_ratio_encoder = cal_dormant_ratio(self.tokenizer.representation_network, inputs.detach(), percentage=self.dormant_threshold)
+            self.past_keys_values_cache_init_infer.clear()
+            self.past_keys_values_cache_recurrent_infer.clear()
+            self.keys_values_wm_list.clear()
+            torch.cuda.empty_cache()
+        else:
+            dormant_ratio_encoder = 0
         # 假设latent_state_roots是一个tensor
         latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()  # 计算L2范数
         # print("L2 Norms:", l2_norms)
@@ -924,28 +937,15 @@ class WorldModel(nn.Module):
             # reconstructed_images.shape torch.Size([34, 3, 5, 5])
             # self.visualize_reconstruction_v1(original_images, reconstructed_images)
 
-            #  ========== for debugging ==========
+            #  ========== for visualize ==========
             # batch['target_policy'].shape torch.Size([2, 17, 4])
             # batch['target_value'].shape torch.Size([2, 17, 101])
             # batch['rewards'].shape torch.Size([2, 17, 101])
+
             # target_policy = batch['target_policy']
             # target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1,101)).reshape(batch['observations'].shape[0],batch['observations'].shape[1],1) # torch.Size([2, 17, 1])
             # true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1,101)).reshape(batch['observations'].shape[0],batch['observations'].shape[1],1) # torch.Size([2, 17, 1])
 
-            
-            # import matplotlib.pyplot as plt
-            # # # 保存前三帧图像
-            # for i in range(1):
-            #     plt.imshow(reconstructed_images[i][0].permute(1, 2, 0).cpu().detach().numpy())  # 将通道从 (C, H, W) 转换为 (H, W, C)
-            #     plt.axis('off')  # 关闭坐标轴
-            #     plt.savefig(f'./render/image_frame_reconstructed_{i}.png')
-            #     plt.close()
-            # # 保存前三帧图像
-            # for i in range(3):
-            #     plt.imshow(batch['observations'][i][0].permute(1, 2, 0).cpu().detach().numpy())  # 将通道从 (C, H, W) 转换为 (H, W, C)
-            #     plt.axis('off')  # 关闭坐标轴
-            #     plt.savefig(f'./render/image_frame_orig_{i}.png')
-            #     plt.close()
 
             # 计算重建损失和感知损失
             latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 5, 5), reconstructed_images)  # NOTE: for stack=1 TODO
@@ -959,24 +959,33 @@ class WorldModel(nn.Module):
 
         # 前向传播,得到预测的观察、奖励和策略等
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)})
+
         # ========= logging for analysis =========
-        # calculate dormant ratio of world_model
-        dormant_ratio_world_model = cal_dormant_ratio(self, {'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())}, percentage=self.dormant_threshold)
-        self.past_keys_values_cache_init_infer.clear()
-        self.past_keys_values_cache_recurrent_infer.clear()
-        self.keys_values_wm_list.clear()
-        torch.cuda.empty_cache()
-        #  ========== for debugging ==========
+        if self.analysis_dormant_ratio:
+            # calculate dormant ratio of world_model
+            dormant_ratio_world_model = cal_dormant_ratio(self, {'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())}, percentage=self.dormant_threshold)
+            self.past_keys_values_cache_init_infer.clear()
+            self.past_keys_values_cache_recurrent_infer.clear()
+            self.keys_values_wm_list.clear()
+            torch.cuda.empty_cache()
+        else:
+            dormant_ratio_world_model = 0
+        
+        #  ========== for visualize ==========
         # outputs.logits_policy.shape torch.Size([2, 17, 4])
         # outputs.logits_value.shape torch.Size([2, 17, 101])
         # outputs.logits_rewards.shape torch.Size([2, 17, 101])
+
         # predict_policy = outputs.logits_policy
-        # 使用 softmax 对最后一个维度（dim=-1）进行处理
+        # # 使用 softmax 对最后一个维度（dim=-1）进行处理
         # predict_policy = F.softmax(outputs.logits_policy, dim=-1)
         # predict_value = inverse_scalar_transform_handle(outputs.logits_value.reshape(-1,101)).reshape(batch['observations'].shape[0],batch['observations'].shape[1],1) # predict_value: torch.Size([2, 17, 1])
         # predict_rewards = inverse_scalar_transform_handle(outputs.logits_rewards.reshape(-1,101)).reshape(batch['observations'].shape[0],batch['observations'].shape[1],1) # predict_rewards: torch.Size([2, 17, 1])
-        # self.visualize_reconstruction_v2(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy) # TODO
-
+        # # import pdb; pdb_set_trace()
+        # self.visualize_reconstruction_v2(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, suffix='visual_match_memlen1-0-15_v2') # TODO
+        # import sys
+        # sys.exit(0)
+        #  ========== for visualize ==========
 
         # 为了训练稳定性,使用target_tokenizer计算真实的下一个潜在状态表示
         with torch.no_grad():
@@ -1228,7 +1237,7 @@ class WorldModel(nn.Module):
             ax[0].set_ylabel('Rewards')
 
             ax0_twin = ax[0].twinx()
-            ax0_twin.plot(timesteps, target_predict_value[batch_idx, :, 0].cpu().detach().numpy(), 'b-', label='Target Predict Value')
+            # ax0_twin.plot(timesteps, target_predict_value[batch_idx, :, 0].cpu().detach().numpy(), 'b-', label='Target Predict Value')
             ax0_twin.plot(timesteps, predict_value[batch_idx, :, 0].cpu().detach().numpy(), 'b--', label='Predict Value')
             ax0_twin.legend(loc='upper right')
             ax0_twin.set_ylabel('Value')
@@ -1261,31 +1270,31 @@ class WorldModel(nn.Module):
             ax[2].set_yticks([])
             ax[2].set_ylabel('Reconstructed', rotation=0, labelpad=30)
 
+            # # 绘制predict_policy和target_policy的概率分布柱状图
+            # 计算柱状图的宽度和偏移量，确保它们不会重叠
+            bar_width = 0.8 / num_actions
+            offset = np.linspace(-0.4 + bar_width / 2, 0.4 - bar_width / 2, num_actions)
             # 绘制predict_policy和target_policy的概率分布柱状图
-            bar_width = 8/num_actions # TODO：action_space而变化
             for i in range(num_timesteps):
                 for j in range(num_actions):
-                    ax[3].bar(i + j * bar_width - (num_actions - 1) * bar_width / 2, predict_policy[batch_idx, i, j].item(), width=bar_width, color=colors[j], alpha=0.5)
-                    ax[4].bar(i + j * bar_width - (num_actions - 1) * bar_width / 2, target_policy[batch_idx, i, j].item(), width=bar_width, color=colors[j], alpha=0.5)
-
+                    ax[3].bar(i + offset[j], predict_policy[batch_idx, i, j].item(), width=bar_width, color=colors[j], alpha=0.5)
+                    ax[4].bar(i + offset[j], target_policy[batch_idx, i, j].item(), width=bar_width, color=colors[j], alpha=0.5)
             ax[3].set_xticks(timesteps)
-            ax[3].set_xticklabels([])
-            ax[3].set_ylim(0, 1)
             ax[3].set_ylabel('Predict Policy')
-
             ax[4].set_xticks(timesteps)
-            ax[4].set_xticklabels(timesteps)
-            ax[4].set_ylim(0, 1)
-            ax[4].set_ylabel('Target Policy')
             ax[4].set_xlabel('Timestep')
-
+            ax[4].set_ylabel('Target Policy')
             # 添加图例
             handles = [plt.Rectangle((0, 0), 1, 1, color=colors[i], alpha=0.5) for i in range(num_actions)]
             labels = [f'Action {i}' for i in range(num_actions)]
             ax[4].legend(handles, labels, loc='upper right', ncol=num_actions)
 
             plt.tight_layout()
-            plt.savefig(f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}/reconstruction_visualization_batch_{batch_idx}_v2.png')
+            directory = f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}'
+            # 检查路径是否存在，不存在则创建
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+            plt.savefig(f'{directory}/reconstruction_visualization_batch_{batch_idx}_v3.png')
             # plt.savefig(f'./render/{suffix}/reconstruction_visualization_batch_{batch_idx}_v2.png')
             plt.close()
 

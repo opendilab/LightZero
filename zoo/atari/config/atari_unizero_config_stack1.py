@@ -101,6 +101,7 @@ atari_unizero_config = dict(
         clip_rewards=True,
     ),
     policy=dict(
+        analysis_sim_norm=False, # TODO
         learn=dict(
             learner=dict(
                 hook=dict(
