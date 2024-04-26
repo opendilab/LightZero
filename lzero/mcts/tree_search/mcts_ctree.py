@@ -225,8 +225,9 @@ class MuZeroMCTSCtree(object):
                 # In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.
 
                 latent_states = []
-                # 用于记录所有需要推断的节点对应的action!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                # actions for the nodes which need to expand.
                 temp_actions = []
+                # the nodes which do not need to expand.
                 no_inference_lst = []
                 reuse_lst = []
 
@@ -267,8 +268,6 @@ class MuZeroMCTSCtree(object):
                 # print(f"temp actions are {temp_actions}, the length is {len(temp_actions)}, the length of states is {len(latent_states)}")
                 latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
                 # .long() is only for discrete action
-                # 需要改变last_actions使其只包含需要推断的节点对应的动作！！！！！！！！！！！！！
-                # 在batch_traverse时就不将非推理节点对应的动作加入last_action的列表！！！！！！！！！！！！！！！！！！！
                 temp_actions = torch.from_numpy(np.asarray(temp_actions)).to(self._cfg.device).long()
                 """
                 MCTS stage 2: Expansion
@@ -277,9 +276,6 @@ class MuZeroMCTSCtree(object):
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
-                #这边或许可以选择只对需要进入次态的节点进行推断！！！！！！！！！！！！！！！！！！！！！！！
-                #即latent states的个数不再等于batch_size!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                # 在for ix iy这个环节如果ix=-1则iy存储的是相应的batch_size序号，加入一个lst中，记录所有不用展开的node(即已知arm)
                 if length != 0:
                     network_output = model.recurrent_inference(latent_states, temp_actions)
 
@@ -291,7 +287,6 @@ class MuZeroMCTSCtree(object):
                     latent_state_batch_in_search_path.append(network_output.latent_state)
                     # tolist() is to be compatible with cpp datatype.
                     reward_batch = network_output.reward.reshape(-1).tolist()
-                    # 需要将可复用位置的value换成reuse value!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                     value_batch = network_output.value.reshape(-1).tolist()
                     policy_logits_batch = network_output.policy_logits.tolist()
                 else:
@@ -300,7 +295,6 @@ class MuZeroMCTSCtree(object):
                     latent_state_batch_in_search_path.append([])
                     # tolist() is to be compatible with cpp datatype.
                     reward_batch = []
-                    # 需要将可复用位置的value换成reuse value!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                     value_batch = []
                     policy_logits_batch = []
 
@@ -310,16 +304,9 @@ class MuZeroMCTSCtree(object):
 
                 # NOTE: simulation_index + 1 is very important, which is the depth of the current leaf node.
                 current_latent_state_index = simulation_index + 1
-                # 现在reward_batch等的size都是缩减过的，但是在需要推断的节点中保持了先后顺序！！！！！！！！！！！！！！！！！！！！！！！
-                # 将
-                # if no_inference_lst == []:
-                #     no_inference_lst = [-1,-1, -1, -1, -1]
-                # print(f"the reuse value lst is {reuse_value_list}")
-                # 补空，防止c代码中访问到长度以外的元素导致程序崩溃！！！！！！！！！！！！！！！！！！！！
+                # Add values ​​at the end of the list to prevent accessing elements beyond the length in the C++ code
                 no_inference_lst.append(-1)
                 reuse_lst.append(-1)
-                # print(f"the no inference lst is {no_inference_lst}")
-                # print(f"the reuse lst is {reuse_lst}")
                 tree_muzero.batch_backpropagate_with_reuse(
                     current_latent_state_index, discount_factor, reward_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, virtual_to_play_batch, no_inference_lst, reuse_lst, reuse_value_list

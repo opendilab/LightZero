@@ -15,7 +15,7 @@ from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
 
 
-@SERIAL_COLLECTOR_REGISTRY.register('episode_ma')
+@SERIAL_COLLECTOR_REGISTRY.register('episode_policy')
 class MACollector(ISerialCollector):
     """
     Overview:

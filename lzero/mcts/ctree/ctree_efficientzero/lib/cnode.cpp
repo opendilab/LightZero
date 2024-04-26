@@ -614,74 +614,38 @@ namespace tree
             - min_max_stats: a tool used to min-max normalize the q value.
             - results: the search results.
             - to_play_batch: the batch of which player is playing on this node.
+            - no_inference_lst: the list of the nodes which does not need to expand.
+            - reuse_lst: the list of the nodes which should use reuse-value to backpropagate.
+            - reuse_value_lst: the list of the reuse-value.
         */
         int count_a = 0;
         int count_b = 0;
         int count_c = 0;
         float value_propagate = 0;
-        // printf("back with reuse begin");
-        // printf("hhh");
-        // int test = no_inference_lst[0];
-        // printf("first element in noinferlst is %d\n", test);
-
-
-
-        // printf("no_inference_lst is:");
-        // printf(no_inference_lst);
-        // printf("reuse lst is");
-        // printf(reuse_lst);
-        // printf("reuse value lst is");
-        // printf(reuse_value_lst);
-        // 也许可以再传一个复用lst和reuse_value lst进来，然后判断下属不属于复用，以此确定value的值
-        // printf("check1\n");
         for (int i = 0; i < results.num; ++i)
         {
-            // 判断一下是不是需要展开的节点!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            // 对于要展开的节点进行展开，不要展开的就跳过！！！！！！！！！！！！！！！！！！！！！！！！！1
-            // printf("i is %d\n",i);
             if (i == no_inference_lst[count_a])
             {
-                // printf("i is %d\n",i);
-                // printf("0000000000000000000000");
                 count_a = count_a + 1;
                 value_propagate = reuse_value_lst[i];
-                // printf("count_a is %d\n", count_a);
-                // printf("i is %d\n",i);
-                // printf("111111111111111111111111111");
-                
-                // results.nodes[i]->expand(to_play_batch[i], current_latent_state_index, i, value_prefixs[i], policies[i]);
             }
             else
             {
-                // printf("i is %d\n",i);
-                // printf("3333333333333333333333333333333");
                 results.nodes[i]->expand(to_play_batch[i], current_latent_state_index, count_b, value_prefixs[count_b], policies[count_b]);
                 if (i == reuse_lst[count_c])
                 {
-                    // printf("i is %d\n",i);
-                    // printf("444444444444444444444444444");
                     value_propagate = reuse_value_lst[i];
-                    // printf("i is %d\n",i);
-                    // printf("555555555555555555555555555555");
                     count_c = count_c + 1;
-                    // printf("count_c is %d\n", count_c);
                 }
                 else
                 {
                     value_propagate = values[count_b];
                 }
                 count_b = count_b + 1;
-                // printf("count_b is %d\n", count_b);
             }
-            // printf("i is %d\n",i);
-            // printf("6666666666666666666666666666666666666");
             results.nodes[i]->is_reset = is_reset_list[i];
-            // printf("i is %d\n",i);
-            // printf("7777777777777777777777777777777777777");
             cbackpropagate(results.search_paths[i], min_max_stats_lst->stats_lst[i], to_play_batch[i], value_propagate, discount_factor);
-            // printf("propagated\n");
         }
-        // printf("back with reuse ends");
     }
 
     int cselect_child(CNode *root, tools::CMinMaxStats &min_max_stats, int pb_c_base, float pb_c_init, float discount_factor, float mean_q, int players)
@@ -743,10 +707,11 @@ namespace tree
             - disount_factor: the discount factor of reward.
             - mean_q: the mean q value of the parent node.
             - players: the number of players.
-        Outputs:
+            - true_action: the action chosen in the trajectory.
+            - reuse_value: the value obtained from the search of the next state in the trajectory.
+        Returns:
             - action: the action to select.
         */
-        // printf("select root child is triggered");
 
         float max_score = FLOAT_MIN;
         const float epsilon = 0.000001;
@@ -864,10 +829,9 @@ namespace tree
             - pb_c_init: constants c1 in muzero.
             - disount_factor: the discount factor of reward.
             - players: the number of players.
-        Outputs:
+        Returns:
             - ucb_value: the ucb score of the child.
         */
-        // printf("carmscore begin");
         float pb_c = 0.0, prior_score = 0.0, value_score = 0.0;
         pb_c = log((total_children_visit_counts + pb_c_base + 1) / pb_c_base) + pb_c_init;
         pb_c *= (sqrt(total_children_visit_counts) / (child->visit_count + 1));
@@ -1011,10 +975,11 @@ namespace tree
             - min_max_stats: a tool used to min-max normalize the score.
             - results: the search results.
             - virtual_to_play_batch: the batch of which player is playing on this node.
+            - true_action: the action chosen in the trajectory.
+            - reuse_value: the value obtained from the search of the next state in the trajectory.
         */
         // set seed
         get_time_and_set_rand_seed();
-        // printf("batch traverse begins");
 
         int last_action = -1;
         float parent_q = 0.0;
@@ -1076,7 +1041,6 @@ namespace tree
                 if(is_root && action == true_action[i])
                 {
                     break;
-                    // printf("break is triggered");
                 }
 
                 is_root = 0;
@@ -1105,6 +1069,5 @@ namespace tree
                 results.virtual_to_play_batchs.push_back(virtual_to_play_batch[i]);
             }
         }
-        // printf("traverse ends");
     }
 }

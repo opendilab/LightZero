@@ -24,7 +24,7 @@ num_simulations = 50
 update_per_collect = None
 batch_size = 256
 model_update_ratio = 0.25
-max_env_step = int(5e5)
+max_env_step = int(3e5)
 reanalyze_ratio = 0.99
 
 
@@ -38,7 +38,7 @@ atari_efficientzero_config = dict(
     exp_name=
     f'data_ez_ctree/{env_name[:-14]}/0325seed0',
     env=dict(
-        env_name=env_name,
+        env_id=env_name,
         obs_shape=(4, 96, 96),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -106,5 +106,11 @@ atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
 create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # from lzero.entry import train_muzero
+    # train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+
+    for ratio in [0.99, 0.5, 0]:
+        main_config.exp_name = f'data_ez_ctree/0423_{env_name[:-14]}_rr{ratio}_seed0'
+        main_config.policy.reanalyze_ratio = ratio
+        from lzero.entry import train_muzero
+        train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

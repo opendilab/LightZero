@@ -11,7 +11,7 @@ from ding.envs import NoopResetWrapper, MaxAndSkipWrapper, EpisodicLifeWrapper, 
     ClipRewardWrapper, FrameStackWrapper
 from ding.utils.compression_helper import jpeg_data_compressor
 from easydict import EasyDict
-from gymnasium.wrappers import RecordVideo
+from gym.wrappers import RecordVideo
 
 
 # only for reference now
@@ -90,10 +90,14 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
     Return:
         - env (:obj:`gym.Env`): The wrapped Atari environment with the given configurations.
     """
+    # if config.render_mode_human:
+    #     env = gymnasium.make(config.env_id, render_mode='human')
+    # else:
+    #     env = gymnasium.make(config.env_id, render_mode='rgb_array')
     if config.render_mode_human:
-        env = gymnasium.make(config.env_id, render_mode='human')
+        env = gym.make(config.env_id, render_mode='human')
     else:
-        env = gymnasium.make(config.env_id, render_mode='rgb_array')
+        env = gym.make(config.env_id, render_mode='rgb_array')
     assert 'NoFrameskip' in env.spec.id
     if hasattr(config, 'save_replay') and config.save_replay \
             and hasattr(config, 'replay_path') and config.replay_path is not None:

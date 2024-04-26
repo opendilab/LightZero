@@ -16,7 +16,7 @@ from tensorboardX import SummaryWriter
 from lzero.entry.utils import log_buffer_memory_usage, log_buffer_run_time
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
-from lzero.worker import MuZeroCollector as Collector
+# from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 
@@ -67,6 +67,12 @@ def train_muzero(
         cfg.policy.device = 'cpu'
 
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
+
+    if cfg.policy.mcts_collect == True:
+        from lzero.worker import MuZeroCollector as Collector
+    else:
+        from lzero.worker import MACollector as Collector
+
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
 
@@ -136,13 +142,6 @@ def train_muzero(
     # Evaluate the random agent
     stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
-    import time
-    import logging
-    # 其他必要的导入
-    # 初始化时间和迭代次数统计变量
-    total_time = 0
-    num_iterations = 0
-
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         log_buffer_run_time(learner.train_iter, replay_buffer, tb_logger)
@@ -188,8 +187,6 @@ def train_muzero(
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
-        # replay_buffer.reanalyze_buffer(replay_buffer.get_num_of_transitions(), policy)
-
         # Learn policy from collected data.
         for i in range(update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
@@ -204,29 +201,11 @@ def train_muzero(
                 )
                 break
 
-            # 记录当前时间
-            start_time = time.time()
-
             # The core train steps for MCTS+RL algorithms.
             log_vars = learner.train(train_data, collector.envstep)
 
-            # 记录结束时间
-            end_time = time.time()
-            
-            # 计算本次迭代的时间并累加到总时间
-            # iteration_time = end_time - start_time
-            # total_time += iteration_time
-            # num_iterations += 1
-            # print(f'iteration {i}: {iteration_time} seconds')
-
-
             if cfg.policy.use_priority:
-                # replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
-                # priority 是一个数组里面对应着traindata里每个单个样本的priority
-                # p = log_vars[0]['loss_priority']
-                # print(f'priority is loss {p}')
-
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             if cfg.policy.eval_offline:
@@ -243,16 +222,6 @@ def train_muzero(
                         f'eval offline at train_iter: {train_iter}, collector_envstep: {collector_envstep}, reward: {reward}')
                 logging.info(f'eval offline finished!')
             break
-
-        if num_iterations>200:
-            break
-
-    # 循环结束，计算平均时间
-    if num_iterations > 0:
-        average_time = total_time / num_iterations
-        print(f'Average time per training iteration: {average_time} seconds')
-    else:
-        print('No iterations were completed.')
 
     # Learner's after_run hook.
     learner.call_hook('after_run')
