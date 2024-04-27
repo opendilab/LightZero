@@ -237,6 +237,11 @@ class UniZeroModel(nn.Module):
             )
             Encoder = Encoder(cfg.tokenizer.encoder)
             Decoder = Decoder(cfg.tokenizer.decoder)
+            if cfg.world_model.analysis_sim_norm:
+                # ====== for analysis ======
+                self.encoder_hook = FeatureAndGradientHook()
+                self.encoder_hook.setup_hooks(self.representation_network)
+
             self.tokenizer = Tokenizer(cfg.tokenizer.vocab_size, cfg.tokenizer.embed_dim, Encoder, Decoder, with_lpips=True, representation_network=self.representation_network,
                                 decoder_network=decoder_network)
             self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,

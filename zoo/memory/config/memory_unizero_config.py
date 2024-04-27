@@ -5,15 +5,17 @@ import torch
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 # env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
 
-memory_length = 250
+memory_length = 1000
+# memory_length = 500
+# memory_length = 250
 # memory_length = 60
 
 # visual_match [2, 60, 100, 250, 500]
 # key_to_door [2, 60, 120, 250, 500]
 
 # max_env_step = int(3e6)
-max_env_step = int(1e6)
-# max_env_step = int(5e5)
+max_env_step = int(2e6)  # for visual_match [250, 500, 1000]
+# max_env_step = int(1e6)  # for visual_match [2, 60, 100, 250, 500]
 
 
 # ==== NOTE: 需要设置cfg_memory中的action_shape =====
@@ -55,13 +57,13 @@ eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-torch.cuda.set_device(6)
+torch.cuda.set_device(0)
 memory_xzero_config = dict(
     # TODO: collector clear
     # (3,5,5) config, world_model, unizero_model, memory env
     # mcts_ctree.py muzero_collector muzero_evaluator
     exp_name=f'data_paper_{env_id}_0424/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}'
-    f'_reclw005_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color_collect-evalnotclear_eval{evaluator_env_num}_nl8-nh8-emd128_seed{seed}',
+    f'_reclw005_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color_collect-evalnotclear_eval{evaluator_env_num}_nl8-nh8-emd256_seed{seed}',
     # exp_name=f'data_paper_{env_id}_0424/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}'
     # f'_seed{seed}_eval{evaluator_env_num}_reclw005_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color_collect-evalnotclear',
     env=dict(

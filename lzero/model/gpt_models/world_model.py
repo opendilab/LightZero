@@ -375,17 +375,22 @@ class WorldModel(nn.Module):
                 # x.append(self.transformer(sequences[k].unsqueeze(0), past_kv))
                 x.append(self.transformer(sequences[k].unsqueeze(0), past_kv, valid_context_lengths=valid_context_lengths[k].unsqueeze(0)))
             x = torch.cat(x, dim=0)
-        else:
+        else: #
             # x = self.transformer(sequences, past_keys_values)
             x = self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths)
-            # ============ visualize_attention_map ================= TODO
-            from lzero.model.gpt_models.attention_map import visualize_attention_map
-            for layer_id in range(8):
-                for head_id in range(8):
-                    visualize_attention_map(self.transformer, sequences, past_keys_values, valid_context_lengths, layer_id=layer_id, head_id=head_id)
-            import sys
-            sys.exit(0)
-            # ========== for visualize ==========
+            # ============ visualize_attention_map ================= 
+            # TODO: only in train
+            # if 'obs_embeddings_and_act_tokens' in obs_embeddings_or_act_tokens.keys():
+
+            #     from lzero.model.gpt_models.attention_map import visualize_attention_map, visualize_attention_maps
+            #     visualize_attention_maps(self.transformer, sequences, past_keys_values, valid_context_lengths)
+            #     # past_keys_values = None
+            #     # for layer_id in range(8):
+            #     #     for head_id in range(8):
+            #     #         visualize_attention_map(self.transformer, sequences, past_keys_values, valid_context_lengths, layer_id=layer_id, head_id=head_id)
+            #     # import sys
+            #     # sys.exit(0)
+                # ========== for visualize ==========
         
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
         logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
@@ -897,7 +902,8 @@ class WorldModel(nn.Module):
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
         else:
-            dormant_ratio_encoder = 0
+            dormant_ratio_encoder = torch.tensor(0.)
+            
         # 假设latent_state_roots是一个tensor
         latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()  # 计算L2范数
         # print("L2 Norms:", l2_norms)
@@ -969,7 +975,7 @@ class WorldModel(nn.Module):
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
         else:
-            dormant_ratio_world_model = 0
+            dormant_ratio_world_model =  torch.tensor(0.)
         
         #  ========== for visualize ==========
         # outputs.logits_policy.shape torch.Size([2, 17, 4])

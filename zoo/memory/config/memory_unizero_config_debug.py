@@ -22,14 +22,14 @@ max_env_step = int(5e5)
 seed = 0
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 8
+evaluator_env_num = 20
 num_simulations = 50
 update_per_collect = None  # for others
 model_update_ratio = 0.25
 
 # batch_size = 64 
-batch_size = 8  # TODO
-# num_simulations = 5  # TODO
+batch_size = 20  # TODO
+num_simulations = 2  # TODO
 
 
 
@@ -100,10 +100,8 @@ memory_xzero_config = dict(
         ),
         # sample_type='transition',
         sample_type='episode',  # NOTE: very important for memory env
-        # model_path=None,
-        model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0418/visual_match_memlen-0_xzero_H16_bs64_seed0_eval8_reclw005_collectenv8_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color/ckpt/ckpt_best.pth.tar',
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0415/visual_match_memlen-0_xzero_H17_bs64_seed0_eval8_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer3_obschannel3_valuesize101_240415_165207/ckpt/ckpt_best.pth.tar',
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0413/visual_match_memlen-0_xzero_H16_bs64_seed0_eval8_nl8-nh8-emd768_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer4_obschannel4_240414_172713/ckpt/ckpt_best.pth.tar',
+        model_path=None,
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0418/visual_match_memlen-0_xzero_H16_bs64_seed0_eval8_reclw005_collectenv8_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color/ckpt/ckpt_best.pth.tar',
         transformer_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,
         update_per_collect_tokenizer=update_per_collect,

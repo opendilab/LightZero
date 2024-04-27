@@ -18,10 +18,10 @@ cfg['world_model'] = {
     # for memory env 我们必须保存第一帧的obs, 而在最后一帧进行MCTS时肯定会超出epidoe_length，因此设置context_length比训练的更长以保证不会把第一帧去掉。
     # ===================
     
-    'max_blocks': 16+5, 
-    "max_tokens": 2 * (16+5),  # 1+0+15 memory_length = 0
-    "context_length": 2 * (16+5),
-    "context_length_for_recurrent": 2 * (16+5),
+    # 'max_blocks': 16+5, 
+    # "max_tokens": 2 * (16+5),  # 1+0+15 memory_length = 0
+    # "context_length": 2 * (16+5),
+    # "context_length_for_recurrent": 2 * (16+5),
 
     # 'max_blocks': 76+5, 
     # "max_tokens": 2 * (76+5),  # 1+60+15 memory_length = 60
@@ -37,6 +37,16 @@ cfg['world_model'] = {
     # "max_tokens": 2 * (266+5),  # 1+250+15 memory_length = 250
     # "context_length": 2 * (266+5),
     # "context_length_for_recurrent": 2 * (266+5),
+
+    # 'max_blocks': 516+5, 
+    # "max_tokens": 2 * (516+5),  # 1+500+15 memory_length = 500
+    # "context_length": 2 * (516+5),
+    # "context_length_for_recurrent": 2 * (516+5),
+
+    'max_blocks': 1016+5, 
+    "max_tokens": 2 * (1016+5),  # 1+1000+15 memory_length = 1000
+    "context_length": 2 * (1016+5),
+    "context_length_for_recurrent": 2 * (1016+5),
 
     # 'max_blocks': 16, 
     # "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
@@ -70,20 +80,13 @@ cfg['world_model'] = {
     'group_size': 8,  # NOTE
     # 'group_size': 768,  # NOTE
     'attention': 'causal',
-    # 'num_layers': 1,
-    # 'num_layers': 2,  # same as <Transformer shine in RL> paper
-    # 'num_layers': 4,
-    # 'num_layers': 8,
-    # 'num_heads': 8,
-    # # 'embed_dim': 96,  # TODO：for memory # same as <Transformer shine in RL> paper
-    # # 'embed_dim': 768, # TODO：Gpt2 Base
-    # 'embed_dim': 256, # TODO：
-
 
     'num_layers': 8,
     'num_heads': 8,
-    # 'embed_dim': 128, # TODO： for memlen=250/500
-    'embed_dim': 256, # TODO：
+    'embed_dim': 32, # TODO： for memlen=1000
+    # 'embed_dim': 64, # TODO： for memlen=500
+    # 'embed_dim': 128, # TODO： for memlen=250
+    # 'embed_dim': 256, # TODO：for memlen=0/60/100
 
 
     # 'num_layers': 12, # TODO：Gpt2 Base
@@ -111,8 +114,8 @@ cfg['world_model'] = {
     'support_size': 101, # TODO
     'action_shape': 4,  # NOTE：for memory
     'max_cache_size': 5000,
-    "env_num": 8,
-    #   "env_num": 20,
+    # "env_num": 8,
+      "env_num": 20,
 
     'latent_recon_loss_weight': 0.05,
     # 'latent_recon_loss_weight': 0.0,

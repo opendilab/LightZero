@@ -197,10 +197,13 @@ class SelfAttention(nn.Module):
 
         q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)   # (B, nh, T, hs)
         k = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)     # (B, nh, T, hs)
+        v = self.value(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)   # (B, nh, T, hs)
 
         if kv_cache is not None:
-            kv_cache.update(k, None)  # 这里只需要更新keys,不需要更新values
-            k, _ = kv_cache.get()
+            # kv_cache.update(k, None)  # 这里只需要更新keys,不需要更新values
+            # k, _ = kv_cache.get()
+            kv_cache.update(k, v)
+            k, v = kv_cache.get()
 
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
 
