@@ -32,7 +32,7 @@
 > LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库。
 > 有关 LightZero 的任何疑问，您都可以咨询基于 RAG 技术的问答助手：[ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal)。
 
-[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [论文链接](https://arxiv.org/pdf/2310.08348.pdf) | 
+[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [LightZero 论文](https://arxiv.org/pdf/2310.08348.pdf) | [ReZero 论文](https://arxiv.org/abs/2404.16364)
 
 
 ## 背景
@@ -526,13 +526,19 @@ and internal state transition dynamics,
 ## 引用
 
 ```latex
-@misc{lightzero,
-      title={LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios},
-      author={Yazhe Niu and Yuan Pu and Zhenjie Yang and Xueyan Li and Tong Zhou and Jiyuan Ren and Shuai Hu and Hongsheng Li and Yu Liu},
-      year={2023},
-      eprint={2310.08348},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG}
+@article{niu2024lightzero,
+  title={LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios},
+  author={Niu, Yazhe and Pu, Yuan and Yang, Zhenjie and Li, Xueyan and Zhou, Tong and Ren, Jiyuan and Hu, Shuai and Li, Hongsheng and Liu, Yu},
+  journal={Advances in Neural Information Processing Systems},
+  volume={36},
+  year={2024}
+}
+
+@article{xuan2024rezero,
+  title={ReZero: Boosting MCTS-based Algorithms by Just-in-Time and Speedy Reanalyze},
+  author={Xuan, Chunyu and Niu, Yazhe and Pu, Yuan and Hu, Shuai and Yang, Jing},
+  journal={arXiv preprint arXiv:2404.16364},
+  year={2024}
 }
 ```
 
