@@ -224,7 +224,7 @@ def configure_optimizers(
     # separate out all parameters to those that will and won't experience regularizing weight decay
     decay = set()
     no_decay = set()
-    whitelist_weight_modules = (torch.nn.Linear, torch.nn.LSTM, nn.Conv2d)
+    whitelist_weight_modules = (torch.nn.Linear, torch.nn.LSTM,  torch.nn.GRU, nn.Conv2d)
     blacklist_weight_modules = (
         torch.nn.LayerNorm, LayerNorm, torch.nn.Embedding, torch.nn.BatchNorm1d, torch.nn.BatchNorm2d
     )
@@ -234,7 +234,7 @@ def configure_optimizers(
             # random note: because named_modules and named_parameters are recursive
             # we will see the same tensors p many many times. but doing it this way
             # allows us to know which parent module any tensor p belongs to...
-            if pn.endswith('bias') or pn.endswith('lstm.bias_ih_l0') or pn.endswith('lstm.bias_hh_l0'):
+            if pn.endswith('bias') or pn.endswith('lstm.bias_ih_l0') or pn.endswith('lstm.bias_hh_l0') or pn.endswith('gru.bias_ih_l0') or pn.endswith('gru.bias_hh_l0'):
                 # all biases will not be decayed
                 no_decay.add(fpn)
             elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):

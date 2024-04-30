@@ -75,14 +75,14 @@ cfg['world_model'] = {
                       # "gru_gating": False,
 
 
-                      "device": 'cuda:3',
+                      "device": 'cuda:7',
                       'analysis_sim_norm': False,
                       'analysis_dormant_ratio': False,
                       
                       # 'action_shape': 18, # TODO：for multi-task
-                      # 'action_shape': 6, # TODO：for pong qbert 
+                      'action_shape': 6, # TODO：for pong qbert 
                       # 'action_shape': 9,# TODO：for mspacman
-                      'action_shape': 18,# TODO：for Seaquest boxing Frostbite
+                      # 'action_shape': 18,# TODO：for Seaquest boxing Frostbite
                       # 'action_shape': 4,# TODO：for breakout
 
                       # 'embed_dim':512, # TODO：for atari
@@ -90,11 +90,12 @@ cfg['world_model'] = {
                       'group_size': 8,  # NOTE
                       'attention': 'causal',
 
-                      'num_layers': 1, # TODO：for atari debug
+                      # 'num_layers': 1, # TODO：for atari debug
                       # 'num_layers': 2, # TODO：for atari debug
-                      # 'num_layers': 4, # TODO：for atari debug
+                      'num_layers': 4, # TODO：for atari debug
                       # 'num_layers': 6, # TODO：for atari debug
                       # 'num_layers': 8, # TODO：for atari debug
+                      # 'num_layers': 12, # TODO：for atari debug
                       'num_heads': 8,
                       'embed_dim': 768, # TODO：for atari
 

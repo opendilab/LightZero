@@ -1,6 +1,5 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(2)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
@@ -53,8 +52,12 @@ batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = True
+
+torch.cuda.set_device(4)
+
+ssl_loss_weight = 2
 num_unroll_steps = 20
-context_length_init = 20 # 5
+context_length_init = 4  # 1
 
 # for debug ===========
 # collector_env_num = 1
@@ -73,8 +76,8 @@ context_length_init = 20 # 5
 # ==============================================================
 
 atari_muzero_rnn_config = dict(
-    exp_name=f'data_paper_learn-dynamics_0423/{env_id[:-14]}_muzero_rnn_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_adamw1e-4_seed0_analysis',
-    # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_rnn_stack4_H{num_unroll_steps}_initconlen{context_length_init}-recuconlen{context_length_in_search}_simnorm-cossim_adamw1e-4_seed0',
+    # exp_name=f'data_paper_learn-dynamics_0423/{env_id[:-14]}_muzero_rnn_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_adamw1e-4_seed0_analysis',
+    exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_rnn-true_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_adamw1e-4_sslw{ssl_loss_weight}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -100,7 +103,10 @@ atari_muzero_rnn_config = dict(
                 ),
             ),
         ),
+        analysis_sim_norm=False, # TODO
+        cal_dormant_ratio=False, # TODO
         model=dict(
+            analysis_sim_norm = False,
             observation_shape=(4, 64, 64),
             image_channel=1,
             frame_stack_num=4,
@@ -152,7 +158,7 @@ atari_muzero_rnn_config = dict(
         target_update_freq=100,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=2,  # default is 0
+        ssl_loss_weight=ssl_loss_weight,  # default is 0
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
@@ -170,8 +176,8 @@ atari_muzero_rnn_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_context',
-        import_names=['lzero.policy.muzero_context'],
+        type='muzero_rnn',
+        import_names=['lzero.policy.muzero_rnn'],
     ),
 )
 atari_muzero_rnn_create_config = EasyDict(atari_muzero_rnn_create_config)

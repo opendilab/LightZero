@@ -643,6 +643,152 @@ class RepresentationNetworkMLP(nn.Module):
         return x
 
 
+
+class PredictionHiddenNetwork(nn.Module):
+
+    def __init__(
+            self,
+            observation_shape: SequenceType,
+            action_space_size: int,
+            num_res_blocks: int,
+            num_channels: int,
+            value_head_channels: int,
+            policy_head_channels: int,
+            fc_value_layers: int,
+            fc_policy_layers: int,
+            output_support_size: int,
+            flatten_output_size_for_value_head: int,
+            flatten_output_size_for_policy_head: int,
+            downsample: bool = False,
+            last_linear_layer_init_zero: bool = True,
+            activation: nn.Module = nn.ReLU(inplace=True),
+            norm_type: Optional[str] = 'BN',
+            gru_hidden_size: int = 512,
+    ) -> None:
+        """
+        Overview:
+            The definition of policy and value prediction network, which is used to predict value and policy by the
+            given latent state.
+        Arguments:
+            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. (C, H, W) for image.
+            - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
+            - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
+            - num_channels (:obj:`int`): The channels of hidden states.
+            - value_head_channels (:obj:`int`): The channels of value head.
+            - policy_head_channels (:obj:`int`): The channels of policy head.
+            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - output_support_size (:obj:`int`): The size of categorical value output.
+            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \
+            - flatten_output_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+                of the value head.
+            - flatten_output_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+                of the policy head.
+            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
+                dynamics/prediction mlp, default sets it to True.
+            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
+                operation to speedup, e.g. ReLU(inplace=True).
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+        """
+        super(PredictionHiddenNetwork, self).__init__()
+        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+
+        self.gru_hidden_size = gru_hidden_size
+        self.resblocks = nn.ModuleList(
+            [
+                ResBlock(
+                    in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
+                ) for _ in range(num_res_blocks)
+            ]
+        )
+
+        self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
+        self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
+
+        if norm_type == 'BN':
+            self.norm_value = nn.BatchNorm2d(value_head_channels)
+            self.norm_policy = nn.BatchNorm2d(policy_head_channels)
+        elif norm_type == 'LN':
+            if downsample:
+                self.norm_value = nn.LayerNorm(
+                    [value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16),
+                                                 math.ceil(observation_shape[-1] / 16)])
+            else:
+                self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]])
+                self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]])
+
+        self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
+        self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
+
+        self.flatten_output_size_for_value_head = 16 * 8 * 8  # TODO: only for obs (4,64,64)
+        self.flatten_output_size_for_policy_head = 16 * 8 * 8  # TODO: only for obs (4,64,64)
+
+        self.activation = activation
+
+        self.fc_value = MLP(
+            in_channels=self.flatten_output_size_for_value_head+self.gru_hidden_size,
+            hidden_channels=fc_value_layers[0],
+            out_channels=output_support_size,
+            layer_num=len(fc_value_layers) + 1,
+            activation=self.activation,
+            norm_type=norm_type,
+            output_activation=False,
+            output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
+        self.fc_policy = MLP(
+            in_channels=self.flatten_output_size_for_policy_head+self.gru_hidden_size,
+            hidden_channels=fc_policy_layers[0],
+            out_channels=action_space_size,
+            layer_num=len(fc_policy_layers) + 1,
+            activation=self.activation,
+            norm_type=norm_type,
+            output_activation=False,
+            output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
+
+    def forward(self, latent_state: torch.Tensor, world_model_hidden_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Overview:
+            Forward computation of the prediction network.
+        Arguments:
+            - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, latent_state_dim).
+        Returns:
+            - policy (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).
+            - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
+        """
+        for res_block in self.resblocks:
+            latent_state = res_block(latent_state)
+
+
+        value = self.conv1x1_value(latent_state)
+        value = self.norm_value(value)
+        value = self.activation(value)
+
+        policy = self.conv1x1_policy(latent_state)
+        policy = self.norm_policy(policy)
+        policy = self.activation(policy)
+
+        latent_state_value = value.reshape(-1, self.flatten_output_size_for_value_head)
+        latent_state_policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
+
+        # try:
+        latent_history_value =  torch.cat([latent_state_value, world_model_hidden_state.squeeze(0)], dim=1) # TODO: world_model_hidden_state.squeeze(0) 隐状态的形状为: (num_layers * num_directions, batch_size, hidden_size) ->  ( batch_size, hidden_size)
+        latent_history_policy =  torch.cat([latent_state_policy, world_model_hidden_state.squeeze(0)], dim=1) # TODO
+        # except Exception as e:
+        #     print(e)
+        value = self.fc_value(latent_history_value)
+        policy = self.fc_policy(latent_history_policy)
+        return policy, value
+
+
+
+
 class PredictionNetwork(nn.Module):
 
     def __init__(

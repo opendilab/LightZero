@@ -1,6 +1,5 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(7)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
@@ -49,11 +48,16 @@ evaluator_env_num = 3
 num_simulations = 50
 model_update_ratio = 0.25
 batch_size = 256
-max_env_step = int(5e5)
+# max_env_step = int(5e5)
+max_env_step = int(1e6)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = True
-# num_unroll_steps = 5
+
+torch.cuda.set_device(1)
+
 num_unroll_steps = 10
+context_length_init = 4  # 1
+ssl_loss_weight = 2
 
 
 # for debug ===========
@@ -73,10 +77,7 @@ num_unroll_steps = 10
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack1_H{num_unroll_steps}_conlen{num_unroll_steps}_simnorm-cossim_adamw1e-4_seed0',
-    # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_csonlen1_simnorm-cossim_adamw1e-4_seed0',
-    # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_sslw2-cossim_adamw1e-4_seed0',
-    # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_sslw2-cossim_sgd02_seed0',
+    exp_name=f'data_paper_muzero_variants_0429/{env_id[:-14]}_muzero_stack1_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_sslw{ssl_loss_weight}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -92,7 +93,20 @@ atari_muzero_config = dict(
         # eval_max_episode_steps=int(100),
     ),
     policy=dict(
+        learn=dict(
+            learner=dict(
+                hook=dict(
+                    load_ckpt_before_run='',
+                    log_show_after_iter=100,
+                    save_ckpt_after_iter=100000,  # default is 1000
+                    save_ckpt_after_run=True,
+                ),
+            ),
+        ),
+        analysis_sim_norm=False, # TODO
+        cal_dormant_ratio=False, # TODO
         model=dict(
+            analysis_sim_norm = False,
             image_channel=3,
             observation_shape=(3, 64, 64),
             frame_stack_num=1,
@@ -106,8 +120,7 @@ atari_muzero_config = dict(
             value_support_size=101,
             support_scale=50,
             # context_length=5,  # NOTE:TODO num_unroll_steps
-            context_length=10,  # NOTE:TODO num_unroll_steps
-
+            context_length=context_length_init,  # NOTE:TODO num_unroll_steps
             use_sim_norm=True,
             # use_sim_norm_kl_loss=True,  # TODO
             use_sim_norm_kl_loss=False,  # TODO
@@ -133,18 +146,20 @@ atari_muzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
 
-        # optim_type='SGD', # for collector orig
-        # lr_piecewise_constant_decay=True,
-        # learning_rate=0.2,
+        optim_type='SGD', # for collector orig
+        lr_piecewise_constant_decay=True,
+        learning_rate=0.2,
 
-        optim_type='AdamW', # for collector game_segment
-        lr_piecewise_constant_decay=False,
-        learning_rate=1e-4,
+        # optim_type='AdamW', # for collector game_segment
+        # lr_piecewise_constant_decay=False,
+        # learning_rate=1e-4,
 
         target_update_freq=100,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=2,  # default is 0
+        # ssl_loss_weight=2,  # default is 0
+        ssl_loss_weight=ssl_loss_weight,  # default is 0
+
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.

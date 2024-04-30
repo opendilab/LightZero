@@ -281,7 +281,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     # policy forward
                     # ==============================================================
-                    policy_output = self._policy.forward(stack_obs, action_mask, to_play)
+                    # policy_output = self._policy.forward(stack_obs, action_mask, to_play)
+                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id)
+
 
                     actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                     distributions_dict_no_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
@@ -325,8 +327,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                         eps_steps_lst[env_id] += 1
 
                         if hasattr(self._policy.get_attribute('collect_model'), 'world_model'):
-                            if eps_steps_lst[env_id] % 500 == 0:  # TODO: NOTE for memory
-                            # if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE for atari
+                            # if eps_steps_lst[env_id] % 2000 == 0:  # TODO: NOTE for memory
+                            if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE for atari  unizero
                             # if eps_steps_lst[env_id] % 32 == 0:  # TODO: NOTE
                             # if eps_steps_lst[env_id] % 90 == 0:
                             # if eps_steps_lst[env_id] % 130 == 0:

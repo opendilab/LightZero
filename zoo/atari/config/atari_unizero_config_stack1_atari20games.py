@@ -1,7 +1,6 @@
 from easydict import EasyDict
 
-import torch
-torch.cuda.set_device(3)
+
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 
 
@@ -28,20 +27,22 @@ torch.cuda.set_device(3)
 # env_id = 'KungFuMasterNoFrameskip-v4' # 14
 # env_id = 'PrivateEyeNoFrameskip-v4' # 18
 # env_id = 'RoadRunnerNoFrameskip-v4' # 18
-# env_id = 'UpNdownNoFrameskip-v4' # 6
+# env_id = 'UpNDownNoFrameskip-v4' # 6
 
 
-# env_id = 'PongNoFrameskip-v4'
+env_id = 'PongNoFrameskip-v4'
 # env_id = 'MsPacmanNoFrameskip-v4'
 # env_id = 'QbertNoFrameskip-v4'
 # env_id = 'SeaquestNoFrameskip-v4'
 
-env_id = 'BoxingNoFrameskip-v4'
+# env_id = 'BoxingNoFrameskip-v4'
 # env_id = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
 
 
 update_per_collect = None # for others
-model_update_ratio = 1.
+# model_update_ratio = 1.
+model_update_ratio = 0.5
+
 
 if env_id == 'AlienNoFrameskip-v4':
     action_space_size = 18
@@ -85,7 +86,7 @@ elif env_id == 'PrivateEyeNoFrameskip-v4':
     model_update_ratio = 0.25
 elif env_id == 'RoadRunnerNoFrameskip-v4':
     action_space_size = 18
-elif env_id == 'UpNdownNoFrameskip-v4':
+elif env_id == 'UpNDownNoFrameskip-v4':
     action_space_size = 6
 elif env_id == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -109,17 +110,22 @@ elif env_id == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 collector_env_num = 8
 n_episode = 8
+# collector_env_num = 1 # TODO
+# n_episode = 1
+
 evaluator_env_num = 3
 num_simulations = 50
-max_env_step = int(1e6)
-# max_env_step = int(5e5)
+# max_env_step = int(1e6)
+max_env_step = int(5e5)
 reanalyze_ratio = 0. 
 # reanalyze_ratio = 0.05 # TODO
 
 batch_size = 64
-num_unroll_steps = 10
+
+# num_unroll_steps = 5
+# num_unroll_steps = 8
+num_unroll_steps = 10 # 默认的
 # num_unroll_steps = 20 # TODO
-# num_unroll_steps = 30 # TODO
 # num_unroll_steps = 40 # TODO
 
 
@@ -134,7 +140,7 @@ atari_unizero_config = dict(
     # TODO: 
     # mcts_ctree
     # muzero_collector/evaluator: empty_cache
-    exp_name=f'data_paper_learn-dynamics_0423/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_analysis_dratio0025_seed0',
+    # exp_name=f'data_paper_learn-dynamics_0423/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_analysis_dratio0025_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -156,6 +162,8 @@ atari_unizero_config = dict(
         clip_rewards=True,
     ),
     policy=dict(
+        analysis_sim_norm=False, # TODO
+        cal_dormant_ratio=False, # TODO
         learn=dict(
             learner=dict(
                 hook=dict(
@@ -173,6 +181,7 @@ atari_unizero_config = dict(
         update_per_collect_tokenizer=update_per_collect,
         num_unroll_steps=num_unroll_steps,
         model=dict(
+            analysis_sim_norm = False,
             observation_shape=(3, 64, 64),
             image_channel=3,
             frame_stack_num=1,
@@ -245,13 +254,15 @@ if __name__ == "__main__":
     # max_env_step = 10000
     # from lzero.entry import train_unizero
     # train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
-
+    import torch
+    torch.cuda.set_device(7)
 
     # Define a list of seeds for multiple runs
     seeds = [0,1,2]  # You can add more seed values here
+    # seeds = [0]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed TODO
-        main_config.exp_name=f'data_paper_unizero_atari-20-games_0424/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_seed{seed}'
+        main_config.exp_name=f'data_paper_unizero_ablation_0429/{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv{collector_env_num}_seed{seed}'
 
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, max_env_step=max_env_step)

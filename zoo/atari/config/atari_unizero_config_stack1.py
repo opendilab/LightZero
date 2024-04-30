@@ -59,8 +59,8 @@ reanalyze_ratio = 0.
 
 batch_size = 64
 # num_unroll_steps = 5
-# num_unroll_steps = 10
-num_unroll_steps = 20 # TODO
+num_unroll_steps = 10
+# num_unroll_steps = 20 # TODO
 # num_unroll_steps = 30 # TODO
 # num_unroll_steps = 40 # TODO
 
@@ -76,7 +76,8 @@ atari_unizero_config = dict(
     # TODO: 
     # mcts_ctree
     # muzero_collector/evaluator: empty_cache
-    exp_name=f'data_paper_learn-dynamics_0423/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_analysis_dratio0025_seed0',
+    exp_name=f'data_paper_ablation_0429/{env_name[:-14]}/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_seed0',
+    # exp_name=f'data_paper_learn-dynamics_0423/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_analysis_dratio0025_seed0',
     # exp_name=f'data_paper_learn-dynamics_0422/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_seed0',
     # exp_name=f'data_paper_learn-dynamics_0422/{env_name[:-14]}_unizero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_grugating-false_latent-groupkl_conleninit{8}-conlenrecur{8}clear_lsd768-nlayer1-nh8_bacth-kvmaxsize-fix0417_seed0',
 
@@ -102,6 +103,7 @@ atari_unizero_config = dict(
     ),
     policy=dict(
         analysis_sim_norm=False, # TODO
+        cal_dormant_ratio=False, # TODO
         learn=dict(
             learner=dict(
                 hook=dict(
@@ -121,6 +123,7 @@ atari_unizero_config = dict(
         update_per_collect_tokenizer=update_per_collect,
         num_unroll_steps=num_unroll_steps,
         model=dict(
+            analysis_sim_norm = False,
             observation_shape=(3, 64, 64),
             image_channel=3,
             frame_stack_num=1,

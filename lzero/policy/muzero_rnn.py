@@ -282,6 +282,8 @@ class MuZeroRNNPolicy(MuZeroPolicy):
         self.l2_norm_after= 0.
         self.grad_norm_before= 0.
         self.grad_norm_after= 0.
+        self.dormant_ratio_encoder = 0.
+        self.dormant_ratio_dynamics = 0.
 
     def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
         """
@@ -341,10 +343,11 @@ class MuZeroRNNPolicy(MuZeroPolicy):
         # reward shape: (batch_size, 10), the ``reward`` at the first step is zero padding.
         latent_state, reward, reward_hidden_state, value, policy_logits = ez_network_output_unpack(network_output)
 
-        # ========= logging for analysis =========
-        # calculate dormant ratio of encoder
-        dormant_ratio_encoder = cal_dormant_ratio(self._learn_model.representation_network, obs_batch.detach(), percentage=self._cfg.dormant_threshold)
-        latent_state_l2_norms = torch.norm(latent_state.view(latent_state.shape[0], -1), p=2, dim=1).mean()  # 计算L2范数
+        if self._cfg.cal_dormant_ratio:
+            # ========= logging for analysis =========
+            # calculate dormant ratio of encoder
+            self.dormant_ratio_encoder = cal_dormant_ratio(self._learn_model.representation_network, obs_batch.detach(), percentage=self._cfg.dormant_threshold)
+        self.latent_state_l2_norms = torch.norm(latent_state.view(latent_state.shape[0], -1), p=2, dim=1).mean()  # 计算L2范数
         # ========= logging for analysis ===============
 
         # transform the scaled value or its categorical representation to its original value,
@@ -405,7 +408,7 @@ class MuZeroRNNPolicy(MuZeroPolicy):
             )
             
             # ========= logging for analysis ===============
-            if step_k == self._cfg.num_unroll_steps -1:
+            if step_k == self._cfg.num_unroll_steps -1 and self._cfg.cal_dormant_ratio:
                 # calculate dormant ratio of encoder
                 action_tmp = action_batch[:, step_k]
                 if len(action_tmp.shape) == 1:
@@ -421,7 +424,7 @@ class MuZeroRNNPolicy(MuZeroPolicy):
                     latent_state.shape[0], policy_logits.shape[-1], latent_state.shape[2], latent_state.shape[3]
                 )
                 state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
-                dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network, [state_action_encoding.detach(),reward_hidden_state], percentage=self._cfg.dormant_threshold)
+                self.dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network, [state_action_encoding.detach(),reward_hidden_state], percentage=self._cfg.dormant_threshold)
             # ========= logging for analysis ===============
 
 
@@ -508,12 +511,13 @@ class MuZeroRNNPolicy(MuZeroPolicy):
         weighted_total_loss.backward()
 
         # ============= for analysis =============
-        del self.l2_norm_before
-        del self.l2_norm_after
-        del self.grad_norm_before
-        del self.grad_norm_after
-        self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
-        self._target_model.encoder_hook.clear_data()  # 非常非常重要!!!
+        if self._cfg.analysis_sim_norm:
+            del self.l2_norm_before
+            del self.l2_norm_after
+            del self.grad_norm_before
+            del self.grad_norm_after
+            self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
+            self._target_model.encoder_hook.clear_data()  # 非常非常重要!!!
         # ============= for analysis =============
 
         if self._cfg.multi_gpu:
@@ -559,9 +563,9 @@ class MuZeroRNNPolicy(MuZeroPolicy):
             'value_priority': value_priority.mean().item(),
             'value_priority_orig': value_priority,
 
-            'analysis/dormant_ratio_encoder':dormant_ratio_encoder,
-            'analysis/dormant_ratio_dynamics': dormant_ratio_dynamics,
-            'analysis/latent_state_l2_norms': latent_state_l2_norms,
+            'analysis/dormant_ratio_encoder':self.dormant_ratio_encoder,
+            'analysis/dormant_ratio_dynamics': self.dormant_ratio_dynamics,
+            'analysis/latent_state_l2_norms': self.latent_state_l2_norms,
             'analysis/l2_norm_before': self.l2_norm_before, 
             'analysis/l2_norm_after': self.l2_norm_after, 
             'analysis/grad_norm_before':self.grad_norm_before, 

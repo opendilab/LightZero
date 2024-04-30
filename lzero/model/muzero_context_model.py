@@ -49,6 +49,7 @@ class MuZeroContextModel(nn.Module):
         discrete_action_encoding_type: str = 'one_hot',
         context_length_init: int = 5,
         use_sim_norm: bool = False,
+        analysis_sim_norm: bool = False,
         *args,
         **kwargs
     ):
@@ -119,6 +120,7 @@ class MuZeroContextModel(nn.Module):
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
         self.downsample = downsample
+        self.analysis_sim_norm=analysis_sim_norm
 
         flatten_output_size_for_reward_head = (
             (reward_head_channels * math.ceil(observation_shape[1] / 16) *
@@ -148,9 +150,10 @@ class MuZeroContextModel(nn.Module):
             use_sim_norm=use_sim_norm, # TODO
         )
 
-        # ====== for analysis ======
-        self.encoder_hook = FeatureAndGradientHook()
-        self.encoder_hook.setup_hooks(self.representation_network)
+        if self.analysis_sim_norm:
+            # ====== for analysis ======
+            self.encoder_hook = FeatureAndGradientHook()
+            self.encoder_hook.setup_hooks(self.representation_network)
 
         self.dynamics_network = DynamicsNetwork(
             observation_shape,
@@ -297,7 +300,7 @@ class MuZeroContextModel(nn.Module):
          """
         next_latent_state, reward = self._dynamics(latent_state, action)
         policy_logits, value = self._prediction(next_latent_state)
-        self.latent_state = next_latent_state
+        self.latent_state = next_latent_state  # TODO
         return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
 
     def _representation(self, observation: torch.Tensor) -> torch.Tensor:

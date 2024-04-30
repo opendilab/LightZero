@@ -57,10 +57,10 @@ def train_muzero_context(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'muzero_context','muzero_rnn', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'muzero_context','muzero_rnn', 'muzero_rnn_full_obs', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
         "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'"
 
-    if create_cfg.policy.type in ['muzero', 'muzero_context', 'muzero_rnn']:
+    if create_cfg.policy.type in ['muzero', 'muzero_context', 'muzero_rnn', 'muzero_rnn_full_obs']:
         from lzero.mcts import MuZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'efficientzero':
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
@@ -251,8 +251,9 @@ def train_muzero_context(
             break
 
     # 训练结束后移除钩子
-    policy._collect_model.encoder_hook.remove_hooks()
-    policy._target_model.encoder_hook.remove_hooks()
+    if cfg.policy.model.analysis_sim_norm:
+        policy._collect_model.encoder_hook.remove_hooks()
+        policy._target_model.encoder_hook.remove_hooks()
 
     # Learner's after_run hook.
     learner.call_hook('after_run')

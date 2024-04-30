@@ -12,20 +12,20 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 import numpy as np
 
-from .common import EZNetworkOutput, RepresentationNetwork, PredictionNetwork, FeatureAndGradientHook
+from .common import EZNetworkOutput, RepresentationNetwork, PredictionHiddenNetwork, FeatureAndGradientHook
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean, SimNorm
 import torch.nn.init as init
 
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
-@MODEL_REGISTRY.register('MuZeroRNNModel')
-class MuZeroRNNModel(nn.Module):
+@MODEL_REGISTRY.register('MuZeroRNNFullobsModel')
+class MuZeroRNNFullobsModel(nn.Module):
 
     def __init__(
             self,
             observation_shape: SequenceType = (12, 96, 96),
             action_space_size: int = 6,
-            lstm_hidden_size: int = 512,
+            rnn_hidden_size: int = 512,
             num_res_blocks: int = 1,
             num_channels: int = 64,
             reward_head_channels: int = 16,
@@ -62,7 +62,7 @@ class MuZeroRNNModel(nn.Module):
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96] for Atari.
             - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
-            - lstm_hidden_size (:obj:`int`): The hidden size of LSTM in dynamics network to predict reward.
+            - rnn_hidden_size (:obj:`int`): The hidden size of LSTM in dynamics network to predict reward.
             - num_res_blocks (:obj:`int`): The number of res blocks in EfficientZero model.
             - num_channels (:obj:`int`): The channels of hidden states.
             - reward_head_channels (:obj:`int`): The channels of reward head.
@@ -91,7 +91,7 @@ class MuZeroRNNModel(nn.Module):
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. 
                 options = {'one_hot', 'not_one_hot'}
         """
-        super(MuZeroRNNModel, self).__init__()
+        super(MuZeroRNNFullobsModel, self).__init__()
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
             # for vector obs input, e.g. classical control and box2d environments
             # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
@@ -110,7 +110,7 @@ class MuZeroRNNModel(nn.Module):
             self.action_encoding_dim = action_space_size
         elif self.discrete_action_encoding_type == 'not_one_hot':
             self.action_encoding_dim = 1
-        self.lstm_hidden_size = lstm_hidden_size
+        self.rnn_hidden_size = rnn_hidden_size
         self.proj_hid = proj_hid
         self.proj_out = proj_out
         self.pred_hid = pred_hid
@@ -162,7 +162,7 @@ class MuZeroRNNModel(nn.Module):
             self.reward_support_size,
             flatten_output_size_for_reward_head,
             downsample,
-            lstm_hidden_size,
+            rnn_hidden_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             activation=activation,
             norm_type=norm_type,
@@ -176,7 +176,7 @@ class MuZeroRNNModel(nn.Module):
             self.encoder_hook = FeatureAndGradientHook()
             self.encoder_hook.setup_hooks(self.representation_network)
 
-        self.prediction_network = PredictionNetwork(
+        self.prediction_network = PredictionHiddenNetwork(
             observation_shape,
             action_space_size,
             num_res_blocks,
@@ -192,6 +192,7 @@ class MuZeroRNNModel(nn.Module):
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             activation=self.activation,
             norm_type=self.norm_type,
+            gru_hidden_size=self.rnn_hidden_size 
 
         )
 
@@ -227,13 +228,13 @@ class MuZeroRNNModel(nn.Module):
 
 
 
-    def initial_inference(self, obs: torch.Tensor, action_batch=None, current_obs_batch=None) -> EZNetworkOutput:
+    def initial_inference(self, obs: torch.Tensor, action_batch=None, current_obs_batch=None, ready_env_id=None) -> EZNetworkOutput:
         """
         Overview:
             Initial inference of EfficientZero model, which is the first step of the EfficientZero model.
             To perform the initial inference, we first use the representation network to obtain the ``latent_state``.
             Then we use the prediction network to predict ``value`` and ``policy_logits`` of the ``latent_state``, and
-            also prepare the zeros-like ``reward_hidden_state`` for the next step of the EfficientZero model.
+            also prepare the zeros-like ``world_model_hidden_state`` for the next step of the EfficientZero model.
         Arguments:
             - obs (:obj:`torch.Tensor`): The 2D image observation data.
         Returns (EZNetworkOutput):
@@ -242,7 +243,7 @@ class MuZeroRNNModel(nn.Module):
                 In initial inference, we set it to zero vector.
             - policy_logits (:obj:`torch.Tensor`): The output logit to select discrete action.
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The hidden state of LSTM about reward. In initial inference, \
+            - world_model_hidden_state (:obj:`Tuple[torch.Tensor]`): The hidden state of LSTM about reward. In initial inference, \
                 we set it to the zeros-like hidden state (H and C).
         Shapes:
             - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.
@@ -251,62 +252,68 @@ class MuZeroRNNModel(nn.Module):
             - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
             - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
                 latent state, W_ is the width of latent state.
-            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The shape of each element is :math:`(1, B, lstm_hidden_size)`, where B is batch_size.
+            - world_model_hidden_state (:obj:`Tuple[torch.Tensor]`): The shape of each element is :math:`(1, B, rnn_hidden_size)`, where B is batch_size.
         """
-        batch_size = obs.size(0)
+        if current_obs_batch is None:
+            # 训练阶段
+            batch_size = obs.shape[0]
+        else:
+            batch_size = current_obs_batch.shape[0]
         if self.training or action_batch is None:
             # 训练阶段
             self.timestep = 0
             self.latent_state = self._representation(obs)
             # 在训练时的起始步
-            self.reward_hidden_state = [
-                    torch.zeros(1, batch_size,
-                                self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
-                                                                                self.lstm_hidden_size).to(obs.device)
-                    ]
+            # 初始化隐状态
+            # 隐状态的形状为: (num_layers * num_directions, batch_size, hidden_size)
+            self.world_model_hidden_state =  torch.zeros(1, batch_size, self.rnn_hidden_size).to(obs.device)
         else:
             # collect/eval阶段
             if action_batch is not None and max(action_batch) == -1:  
                 # 一局的第一步
                 self.latent_state = self._representation(current_obs_batch)
                 # zero initialization for reward hidden states
-                # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
-                self.reward_hidden_state = [
-                    torch.zeros(1, batch_size,
-                                self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
-                                                                                self.lstm_hidden_size).to(obs.device)
-                ]
+                # (hn, cn), each element shape is (layer_num=1, batch_size, rnn_hidden_size)
+                self.world_model_hidden_state =  torch.zeros(1, batch_size, self.rnn_hidden_size).to(obs.device)
+                self.last_latent_state  = self.latent_state
             else:
-                action_batch = torch.from_numpy(np.array(action_batch)).to(self.latent_state.device)
-                self.recurrent_inference(self.latent_state, self.reward_hidden_state, action_batch) # 更新self.latent_state
+                # action_batch = torch.from_numpy(np.array(action_batch)).to(self.latent_state.device)
+                self.latent_state = self._representation(current_obs_batch)
+                # self.recurrent_inference(self.latent_state, self.world_model_hidden_state, action_batch, next_latent_state) # 更新self.latent_state
                 if self.timestep % self.context_length_init == 0:
                     # context reset method 
                     # TODO: context recent method
-                    self.latent_state = self._representation(current_obs_batch)
-                    self.reward_hidden_state = [
-                        torch.zeros(1, batch_size,
-                                    self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
-                                                                                    self.lstm_hidden_size).to(obs.device)
-                    ]
-        # try:
-        policy_logits, value = self._prediction(self.latent_state)
-        # except Exception:
-        #     print('debug')
+                    # self.latent_state = self._representation(current_obs_batch)
+                    self.world_model_hidden_state =  torch.zeros(1, batch_size, self.rnn_hidden_size).to(obs.device)
+        try:
+            # collect/env ready env 是env_num
+            policy_logits, value = self._prediction(self.latent_state, self.world_model_hidden_state)
+            selected_world_model_hidden_state = self.world_model_hidden_state
+        except:
+            # collect/env ready env 变化了
+            index_list = list(ready_env_id)
+            # 将列表转换为 PyTorch 张量
+            index_tensor = torch.tensor(index_list)
+            # 使用索引选择操作
+            selected_world_model_hidden_state = self.world_model_hidden_state[:, index_tensor, :]
+            # TODO: 更新 self.world_model_hidden_state
+            policy_logits, value = self._prediction(self.latent_state, selected_world_model_hidden_state)
+
         self.timestep += 1
-        return EZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, self.latent_state, self.reward_hidden_state)
+        return EZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, self.latent_state, selected_world_model_hidden_state)
 
     def recurrent_inference(
-            self, latent_state: torch.Tensor, reward_hidden_state: Tuple[torch.Tensor], action: torch.Tensor
+            self, latent_state: torch.Tensor, world_model_hidden_state: Tuple[torch.Tensor], action: torch.Tensor, next_latent_state: Tuple[torch.Tensor] = None, ready_env_id=None
     ) -> EZNetworkOutput:
         """
         Overview:
             Recurrent inference of EfficientZero model, which is the rollout step of the EfficientZero model.
             To perform the recurrent inference, we first use the dynamics network to predict ``next_latent_state``,
-            ``reward_hidden_state``, ``reward`` by the given current ``latent_state`` and ``action``.
+            ``world_model_hidden_state``, ``reward`` by the given current ``latent_state`` and ``action``.
              We then use the prediction network to predict the ``value`` and ``policy_logits``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The input hidden state of LSTM about reward.
+            - world_model_hidden_state (:obj:`Tuple[torch.Tensor]`): The input hidden state of LSTM about reward.
             - action (:obj:`torch.Tensor`): The predicted action to rollout.
         Returns (EZNetworkOutput):
             - value (:obj:`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
@@ -314,7 +321,7 @@ class MuZeroRNNModel(nn.Module):
             - policy_logits (:obj:`torch.Tensor`): The output logit to select discrete action.
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
             - next_latent_state (:obj:`torch.Tensor`): The predicted next latent state.
-            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The output hidden state of LSTM about reward.
+            - world_model_hidden_state (:obj:`Tuple[torch.Tensor]`): The output hidden state of LSTM about reward.
         Shapes:
             - action (:obj:`torch.Tensor`): :math:`(B, )`, where B is batch_size.
             - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.
@@ -324,13 +331,36 @@ class MuZeroRNNModel(nn.Module):
                 latent state, W_ is the width of latent state.
             - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
                 latent state, W_ is the width of latent state.
-            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): :math:`(1, B, lstm_hidden_size)`, where B is batch_size.
+            - world_model_hidden_state (:obj:`Tuple[torch.Tensor]`): :math:`(1, B, rnn_hidden_size)`, where B is batch_size.
          """
-        next_latent_state, reward_hidden_state, reward = self._dynamics(latent_state, reward_hidden_state, action)
-        policy_logits, value = self._prediction(next_latent_state)
-        self.latent_state = next_latent_state
-        self.reward_hidden_state = reward_hidden_state
-        return EZNetworkOutput(value, reward, policy_logits, next_latent_state, reward_hidden_state)
+        # try:
+        # collect/env ready env 是env_num
+        # predict_next_latent_state, world_model_hidden_state_output, reward = self._dynamics(latent_state, world_model_hidden_state, action)
+        # world_model_hidden_state = world_model_hidden_state_output
+        # except:
+        #     # collect/env ready env 变化了 TODO
+        #     index_list = list(ready_env_id)
+        #     # 将列表转换为 PyTorch 张量
+        #     index_tensor = torch.tensor(index_list)
+        #     # 使用索引选择操作
+        #     selected_state = world_model_hidden_state[:, index_tensor, :]
+        #     predict_next_latent_state, world_model_hidden_state_output, reward = self._dynamics(latent_state, selected_state, action)
+        #     world_model_hidden_state[:, index_tensor, :] = world_model_hidden_state_output
+
+        predict_next_latent_state, world_model_hidden_state, reward = self._dynamics(latent_state, world_model_hidden_state, action)
+
+        if next_latent_state is not None:
+            policy_logits, value = self._prediction(next_latent_state, world_model_hidden_state)
+        else:
+            policy_logits, value = self._prediction(predict_next_latent_state, world_model_hidden_state)
+
+        # self.world_model_hidden_state = world_model_hidden_state
+        if next_latent_state is not None:
+            # training
+            return EZNetworkOutput(value, reward, policy_logits, next_latent_state, world_model_hidden_state)
+        else:
+            # collect/eval
+            return EZNetworkOutput(value, reward, policy_logits, predict_next_latent_state, world_model_hidden_state)
 
     def _representation(self, observation: torch.Tensor) -> torch.Tensor:
         """
@@ -350,7 +380,7 @@ class MuZeroRNNModel(nn.Module):
             latent_state = renormalize(latent_state)
         return latent_state
 
-    def _prediction(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _prediction(self, latent_state: torch.Tensor, world_model_hidden_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
              use the prediction network to predict the "value" and "policy_logits" of the "latent_state".
@@ -365,21 +395,25 @@ class MuZeroRNNModel(nn.Module):
             - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
             - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.
         """
-        return self.prediction_network(latent_state)
+        # return self.prediction_network(latent_state)
+        # TODO
+        return self.prediction_network(latent_state, world_model_hidden_state)
+        # return self.prediction_network(latent_state + world_model_hidden_state)
 
-    def _dynamics(self, latent_state: torch.Tensor, reward_hidden_state: Tuple[torch.Tensor],
+
+    def _dynamics(self, latent_state: torch.Tensor, world_model_hidden_state: Tuple[torch.Tensor],
                   action: torch.Tensor) -> Tuple[torch.Tensor, Tuple[torch.Tensor], torch.Tensor]:
         """
         Overview:
             Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state``
-            ``reward`` and ``next_reward_hidden_state``.
+            ``reward`` and ``next_world_model_hidden_state``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The input hidden state of LSTM about reward.
+            - world_model_hidden_state (:obj:`Tuple[torch.Tensor]`): The input hidden state of LSTM about reward.
             - action (:obj:`torch.Tensor`): The predicted action to rollout.
         Returns:
             - next_latent_state (:obj:`torch.Tensor`): The predicted latent state of the next timestep.
-            - next_reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The output hidden state of LSTM about reward.
+            - next_world_model_hidden_state (:obj:`Tuple[torch.Tensor]`): The output hidden state of LSTM about reward.
             - reward (:obj:`torch.Tensor`): The predicted prefix sum of value for input state.
         Shapes:
             - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
@@ -433,13 +467,13 @@ class MuZeroRNNModel(nn.Module):
         state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
 
         # NOTE: the key difference between EfficientZero and MuZero
-        next_latent_state, next_reward_hidden_state, reward = self.dynamics_network(
-            state_action_encoding, reward_hidden_state
+        next_latent_state, next_world_model_hidden_state, reward = self.dynamics_network(
+            state_action_encoding, world_model_hidden_state
         )
 
         if self.state_norm:
             next_latent_state = renormalize(next_latent_state)
-        return next_latent_state, next_reward_hidden_state, reward
+        return next_latent_state, next_world_model_hidden_state, reward
 
     def project(self, latent_state: torch.Tensor, with_grad: bool = True) -> torch.Tensor:
         """
@@ -495,7 +529,7 @@ class DynamicsNetwork(nn.Module):
         output_support_size: int = 601,
         flatten_output_size_for_reward_head: int = 64,
         downsample: bool = False,
-        lstm_hidden_size: int = 512,
+        rnn_hidden_size: int = 512,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
         norm_type: Optional[str] = 'BN',
@@ -517,7 +551,7 @@ class DynamicsNetwork(nn.Module):
             - output_support_size (int): 分类奖励输出的大小。
             - flatten_output_size_for_reward_head (int): 奖励头的扁平化输出大小,即奖励头的输入大小。
             - downsample (bool): 是否对输入观测进行下采样,默认设置为False。
-            - lstm_hidden_size (int): 动态网络中 LSTM 的隐藏层大小。
+            - rnn_hidden_size (int): 动态网络中 LSTM 的隐藏层大小。
             - last_linear_layer_init_zero (bool): 是否对奖励 MLP 的最后一层使用零初始化,默认设置为 True。
             - activation (Optional[nn.Module]): 网络中使用的激活函数,通常使用就地操作以加快速度,例如 ReLU(inplace=True)。
             - norm_type (str): 网络中归一化的类型。默认设置为 'BN'。
@@ -528,7 +562,7 @@ class DynamicsNetwork(nn.Module):
 
         self.action_encoding_dim = action_encoding_dim
         self.num_channels = num_channels
-        self.lstm_hidden_size = lstm_hidden_size
+        self.rnn_hidden_size = rnn_hidden_size
         self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
 
         # 潜在状态的通道数 = 总通道数 - 动作编码维度
@@ -596,7 +630,7 @@ class DynamicsNetwork(nn.Module):
 
         # 奖励头的 MLP
         self.fc_reward_head = MLP(
-            self.lstm_hidden_size,
+            self.rnn_hidden_size,
             hidden_channels=fc_reward_layers[0],
             layer_num=len(fc_reward_layers) + 1,
             out_channels=output_support_size,
@@ -610,7 +644,10 @@ class DynamicsNetwork(nn.Module):
         self.latent_state_dim = self.flatten_output_size_for_reward_head
 
         # LSTM
-        self.lstm = nn.LSTM(input_size=self.latent_state_dim, hidden_size=self.lstm_hidden_size)
+        # self.lstm = nn.LSTM(input_size=self.latent_state_dim, hidden_size=self.rnn_hidden_size)
+
+        self.gru = nn.GRU(input_size=self.latent_state_dim, hidden_size=self.rnn_hidden_size, num_layers=1, batch_first=True)
+
 
         # 根据是否下采样计算输出维度和形状
         if downsample:
@@ -633,8 +670,8 @@ class DynamicsNetwork(nn.Module):
 
         # 动态头的 MLP
         self.fc_dynamics_head = MLP(
-            self.lstm_hidden_size,
-            hidden_channels=self.lstm_hidden_size,
+            self.rnn_hidden_size,
+            hidden_channels=self.rnn_hidden_size,
             layer_num=2,
             out_channels=self.latent_state_flatten_dim,
             activation=activation,
@@ -667,11 +704,11 @@ class DynamicsNetwork(nn.Module):
 
         参数:
             - state_action_encoding (torch.Tensor): 状态-动作编码,是潜在状态和动作编码的拼接,形状为 (batch_size, num_channels, height, width)。
-            - reward_hidden_state (Tuple[torch.Tensor, torch.Tensor]): 关于奖励的 LSTM 的输入隐藏状态。
+            - world_model_hidden_state (Tuple[torch.Tensor, torch.Tensor]): 关于奖励的 LSTM 的输入隐藏状态。
 
         返回:
             - next_latent_state (torch.Tensor): 下一个潜在状态,形状为 (batch_size, num_channels, height, width)。
-            - next_reward_hidden_state (torch.Tensor): 关于奖励的 LSTM 的输入隐藏状态。
+            - next_world_model_hidden_state (torch.Tensor): 关于奖励的 LSTM 的输入隐藏状态。
             - reward (torch.Tensor): 预测的输入状态的价值前缀和。
         """
         # 提取状态编码,state_action_encoding[:, -self.action_encoding_dim:, :, :] 是动作编码
@@ -689,16 +726,25 @@ class DynamicsNetwork(nn.Module):
             x = block(x)
 
         x = self.linear_common(x.reshape(-1, self.latent_state_flatten_dim))
-        x = self.activation(x).unsqueeze(0)
+        x = self.activation(x).unsqueeze(1)
 
         # LSTM
-        lstm_output, next_dynamics_hidden_state = self.lstm(x, dynamics_hidden_state)
+        # lstm_output, next_dynamics_hidden_state = self.lstm(x, dynamics_hidden_state)
         
+        # 输入数据的形状为: (batch_size, seq_length, input_size) # 隐状态的形状为: (num_layers * num_directions, batch_size, hidden_size)
+        try:
+            gru_outputs, next_dynamics_hidden_state = self.gru(x, dynamics_hidden_state)
+        except Exception as e:
+            print('e')
+
         # 奖励预测
-        reward = self.fc_reward_head(lstm_output.squeeze(0))
+        # reward = self.fc_reward_head(lstm_output.squeeze(0))
+        reward = self.fc_reward_head(gru_outputs.squeeze(1))
 
         # 下一个潜在状态预测
-        next_latent_state_encoding = self.fc_dynamics_head(lstm_output.squeeze(0))
+        # next_latent_state_encoding = self.fc_dynamics_head(lstm_output.squeeze(0))
+        next_latent_state_encoding = self.fc_dynamics_head(gru_outputs.squeeze(1))
+
 
         # 残差连接:将潜在状态添加到状态-动作编码
         if self.res_connection_in_dynamics:

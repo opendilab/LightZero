@@ -25,7 +25,7 @@ torch.cuda.set_device(6)
 # env_id = 'KungFuMasterNoFrameskip-v4'
 # env_id = 'PrivateEyeNoFrameskip-v4'
 # env_id = 'RoadRunnerNoFrameskip-v4'
-env_id = 'UpNdownNoFrameskip-v4'
+env_id = 'UpNDownNoFrameskip-v4'
 
 update_per_collect = None # for others
 model_update_ratio = 1.
@@ -72,7 +72,7 @@ elif env_id == 'PrivateEyeNoFrameskip-v4':
     model_update_ratio = 0.25
 elif env_id == 'RoadRunnerNoFrameskip-v4':
     action_space_size = 18
-elif env_id == 'UpNdownNoFrameskip-v4':
+elif env_id == 'UpNDownNoFrameskip-v4':
     action_space_size = 6
 
 
@@ -127,6 +127,7 @@ atari_muzero_config = dict(
         # eval_max_episode_steps=int(20),
     ),
     policy=dict(
+
         learn=dict(
             learner=dict(
                 hook=dict(
@@ -137,7 +138,10 @@ atari_muzero_config = dict(
                 ),
             ),
         ),
+        cal_dormant_ratio=False, # TODO
+        analysis_sim_norm=False, # TODO
         model=dict(
+            analysis_sim_norm=False, # TODO
             observation_shape=(4, 64, 64),
             image_channel=1,
             frame_stack_num=4,

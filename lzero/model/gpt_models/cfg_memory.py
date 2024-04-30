@@ -38,15 +38,15 @@ cfg['world_model'] = {
     # "context_length": 2 * (266+5),
     # "context_length_for_recurrent": 2 * (266+5),
 
-    # 'max_blocks': 516+5, 
-    # "max_tokens": 2 * (516+5),  # 1+500+15 memory_length = 500
-    # "context_length": 2 * (516+5),
-    # "context_length_for_recurrent": 2 * (516+5),
+    'max_blocks': 516+5, 
+    "max_tokens": 2 * (516+5),  # 1+500+15 memory_length = 500
+    "context_length": 2 * (516+5),
+    "context_length_for_recurrent": 2 * (516+5),
 
-    'max_blocks': 1016+5, 
-    "max_tokens": 2 * (1016+5),  # 1+1000+15 memory_length = 1000
-    "context_length": 2 * (1016+5),
-    "context_length_for_recurrent": 2 * (1016+5),
+    # 'max_blocks': 1016+5, 
+    # "max_tokens": 2 * (1016+5),  # 1+1000+15 memory_length = 1000
+    # "context_length": 2 * (1016+5),
+    # "context_length_for_recurrent": 2 * (1016+5),
 
     # 'max_blocks': 16, 
     # "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
@@ -73,7 +73,7 @@ cfg['world_model'] = {
 
 
 
-    "device": 'cuda:0',
+    "device": 'cuda:2',
     'analysis_sim_norm': False,
     'analysis_dormant_ratio': False,
 
@@ -81,10 +81,19 @@ cfg['world_model'] = {
     # 'group_size': 768,  # NOTE
     'attention': 'causal',
 
-    'num_layers': 8,
-    'num_heads': 8,
-    'embed_dim': 32, # TODO： for memlen=1000
-    # 'embed_dim': 64, # TODO： for memlen=500
+    'num_layers': 4,
+    'num_heads': 4,
+    'embed_dim': 32, # TODO： for memlen=500,1000
+
+    # 'embed_dim': 64, # TODO： for memlen=500,1000
+    # 'embed_dim': 96, # TODO： for memlen=500,1000
+    
+    # 'num_layers': 8,
+    # 'num_heads': 8,
+    # 'embed_dim': 64, # TODO： for memlen=500,1000
+
+    # 'num_layers': 8,
+    # 'num_heads': 8,
     # 'embed_dim': 128, # TODO： for memlen=250
     # 'embed_dim': 256, # TODO：for memlen=0/60/100
 

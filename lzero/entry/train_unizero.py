@@ -264,7 +264,6 @@ def train_unizero(
         torch.cuda.empty_cache() # TODO: NOTE
         
 
-
         # if collector.envstep > 0:
         #     # TODO: only for debug
         #     for param in policy._learn_model.world_model.tokenizer.parameters():
@@ -275,8 +274,9 @@ def train_unizero(
             break
 
     # 训练结束后移除钩子
-    policy._collect_model.encoder_hook.remove_hooks()
-    policy._target_model.encoder_hook.remove_hooks()
+    if cfg.policy.model.analysis_sim_norm:
+        policy._collect_model.encoder_hook.remove_hooks()
+        policy._target_model.encoder_hook.remove_hooks()
     
     # Learner's after_run hook.
     learner.call_hook('after_run')
