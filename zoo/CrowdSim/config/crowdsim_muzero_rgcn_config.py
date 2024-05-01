@@ -13,7 +13,7 @@ batch_size = 256
 max_env_step = int(3e5)
 reanalyze_ratio = 0.
 robot_num = 2
-human_num = 10  # purdue
+human_num = 59  # purdue
 # human_num = 33  # NCSU
 # human_num = 92  # KAIST
 one_uav_action_space = [[0, 0], [30, 0], [-30, 0], [0, 30], [0, -30]]
@@ -23,9 +23,11 @@ one_uav_action_space = [[0, 0], [30, 0], [-30, 0], [0, 30], [0, -30]]
 
 CrowdSim_muzero_config = dict(
     exp_name=
-    f'result/crowd_num_human/CrowdSim_muzero_ssl_step{max_env_step}_uav{robot_num}__human{human_num}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'result/CrowdSim_muzerogcn_ssl_step{max_env_step}_uav{robot_num}__human{human_num}_seed0',
     env=dict(
+        obs_mode='1-dim-array',
         env_name='CrowdSim-v0',
+        dataset = 'purdue',
         robot_num = robot_num,
         human_num = human_num, 
         one_uav_action_space = one_uav_action_space,
@@ -38,8 +40,14 @@ CrowdSim_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            robot_observation_shape=(robot_num, 4),
-            human_observation_shape=(human_num, 4),
+            # robot_observation_shape=(robot_num, 4),
+            # human_observation_shape=(human_num, 4),
+            observation_shape=(robot_num + human_num)*4,
+            obs_mode='1-dim-array',
+            robot_state_dim = 4,
+            human_state_dim = 4,
+            robot_num = robot_num,
+            human_num = human_num,
             action_space_size=(len(one_uav_action_space))**robot_num,
             model_type='rgcn', 
             lstm_hidden_size=256,
@@ -75,9 +83,9 @@ main_config = CrowdSim_muzero_config
 CrowdSim_muzero_create_config = dict(
     env=dict(
         type='crowdsim_lightzero',
-        import_names=['zoo.CrowdSim.envs.CrowdSim_env'],
+        import_names=['zoo.CrowdSim.envs.crowdsim_lightzero_env'],
     ),
-    env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
     policy=dict(
         type='muzero',
         import_names=['lzero.policy.muzero'],

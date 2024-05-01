@@ -3,10 +3,10 @@ import pandas as pd
 import logging
 import random
 import gym
-from shapely.geometry import Point
+# from shapely.geometry import Point
 import numpy as np
-import folium
-from folium.plugins import TimestampedGeoJson, AntPath
+# import folium
+# from folium.plugins import TimestampedGeoJson, AntPath
 
 from zoo.CrowdSim.envs.Crowdsim.env.model.utils import *
 from zoo.CrowdSim.envs.Crowdsim.env.model.mdp import HumanState, RobotState, JointState

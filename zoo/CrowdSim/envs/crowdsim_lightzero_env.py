@@ -44,6 +44,16 @@ class CrowdSimEnv(BaseEnv):
         self._action_space.seed(0)  # default seed
         self._reward_space = gym.spaces.Box(low=0.0, high=1.0, shape=(1, ), dtype=np.float32)
         self._continuous = False
+        # obs_mode 'dict': {'robot_state': robot_state, 'human_state': human_state}
+        # obs_mode '2-dim-array': np.concatenate((robot_state, human_state), axis=0)
+        # obs_mode '1-dim-array': np.concatenate((robot_state, human_state), axis=0).flatten()
+        self.obs_mode = self._cfg.get('obs_mode', '2-dim-array')
+        assert self.obs_mode in ['dict', '2-dim-array', '1-dim-array'], "obs_mode should be 'dict' or '2-dim-array' or '1-dim-array'!"
+        # action_mode 'combine': combine all robot actions into one action, action space size = one_uav_action_n**robot_num
+        # action_mode 'separate': separate robot actions, shape (robot_num,), for each robot action space size = one_uav_action_n
+        self.action_mode = self._cfg.get('action_mode', 'combine')
+        assert self.action_mode in ['combine', 'separate'], "action_mode should be 'combine' or 'separate'!"
+
 
     def reset(self) -> np.ndarray:
         if not self._init_flag:
@@ -60,7 +70,13 @@ class CrowdSimEnv(BaseEnv):
         # process obs
         raw_obs = self._env.reset()
         obs_list = list(raw_obs.to_tensor())
-        obs = {'robot_state': obs_list[0], 'human_state': obs_list[1]}
+        if self.obs_mode == 'dict':
+            obs = {'robot_state': obs_list[0], 'human_state': obs_list[1]}
+        elif self.obs_mode == '2-dim-array':
+            # robot_state: (robot_num, 4), human_state: (human_num, 4)
+            obs = np.concatenate((obs_list[0], obs_list[1]), axis=0)
+        elif self.obs_mode == '1-dim-array':
+            obs = np.concatenate((obs_list[0], obs_list[1]), axis=0).flatten()
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
@@ -77,13 +93,23 @@ class CrowdSimEnv(BaseEnv):
         np.random.seed(self._seed)
 
     def step(self, action: Union[int, np.ndarray]) -> BaseEnvTimestep:
-        if isinstance(action, np.ndarray) and action.shape == (1, ):
-            action = action.squeeze()  # 0-dim array
-        real_action = self.real_action_space[action]
+        if self.action_mode == 'combine':
+            if isinstance(action, np.ndarray) and action.shape == (1, ):
+                action = action.squeeze()
+            real_action = self.real_action_space[action]
+        elif self.action_mode == 'separate':
+            assert isinstance(action, np.ndarray) and action.shape == (self._robot_num, ), "illegal action!"
+            real_action = tuple([self._cfg.one_uav_action_space[action[i]] for i in range(self._robot_num)])
         assert isinstance(real_action, tuple) and len(real_action) == self._robot_num, "illegal action!"
         raw_obs, rew, done, info = self._env.step(real_action)
         obs_list = list(raw_obs.to_array())
-        obs = {'robot_state': obs_list[0], 'human_state': obs_list[1]}
+        if self.obs_mode == 'dict':
+            obs = {'robot_state': obs_list[0], 'human_state': obs_list[1]}
+        elif self.obs_mode == '2-dim-array':
+            # robot_state: (robot_num, 4), human_state: (human_num, 4)
+            obs = np.concatenate((obs_list[0], obs_list[1]), axis=0)
+        elif self.obs_mode == '1-dim-array':
+            obs = np.concatenate((obs_list[0], obs_list[1]), axis=0).flatten()
 
         self._eval_episode_return += rew
         if done:

@@ -414,7 +414,7 @@ class MuZeroCollector(ISerialCollector):
                 stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
 
                 # stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
-                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device)
+                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
 
                 # ==============================================================
                 # policy forward

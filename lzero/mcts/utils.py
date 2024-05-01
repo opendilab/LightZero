@@ -97,7 +97,7 @@ def prepare_observation(observation_list, model_type='conv'):
     Returns:
         - np.ndarray: Reshaped array of observations.
     """
-    assert model_type in ['conv', 'mlp'], "model_type must be either 'conv' or 'mlp'"
+    assert model_type in ['conv', 'mlp', 'rgcn'], "model_type must be either 'conv' or 'mlp'"
     observation_array = np.array(observation_list)
     batch_size = observation_array.shape[0]
 
@@ -116,6 +116,18 @@ def prepare_observation(observation_list, model_type='conv'):
             observation_array = observation_array.reshape(batch_size, -1)
         else:
             raise ValueError("For 'mlp' model_type, the observation must have 3 dimensions [B, S, O]")
+        
+    elif model_type == 'rgcn':
+        if observation_array.ndim == 4:
+            # TODO(rjy): strage process
+            # observation_array should be reshaped to [B, S*M, O], where M is the agent number
+            # now observation_array.shape = [B, S, M, O]
+            observation_array = observation_array.reshape(batch_size, -1, observation_array.shape[-1])
+        elif observation_array.ndim == 3:
+            # Flatten the last two dimensions
+            observation_array = observation_array.reshape(batch_size, -1)
+        else:
+            raise ValueError("For 'rgcn' model_type, the observation must have 3 dimensions [B, S, O] or 4 dimensions [B, S, M, O]")
 
     return observation_array
 

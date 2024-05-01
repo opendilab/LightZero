@@ -110,6 +110,9 @@ class MuZeroAgent:
             elif self.cfg.policy.model.model_type == 'conv':
                 from lzero.model.muzero_model import MuZeroModel
                 model = MuZeroModel(**self.cfg.policy.model)
+            elif self.cfg.policy.model.model_type == 'rgcn':
+                from lzero.model.muzero_model_gcn import MuZeroModelGCN
+                model = MuZeroModelGCN(**self.cfg.policy.model)
             else:
                 raise NotImplementedError
         if self.cfg.policy.cuda and torch.cuda.is_available():

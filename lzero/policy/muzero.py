@@ -222,6 +222,8 @@ class MuZeroPolicy(Policy):
             return 'MuZeroModel', ['lzero.model.muzero_model']
         elif self._cfg.model.model_type == "mlp":
             return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
+        elif self._cfg.model.model_type == "rgcn":
+            return 'MuZeroModelGCN', ['lzero.model.muzero_model_gcn']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
@@ -644,6 +646,9 @@ class MuZeroPolicy(Policy):
         elif self._cfg.model.model_type == 'mlp':
             beg_index = self._cfg.model.observation_shape * step
             end_index = self._cfg.model.observation_shape * (step + self._cfg.model.frame_stack_num)
+        elif self._cfg.model.model_type == 'rgcn':
+            beg_index = self._cfg.model.observation_shape * step
+            end_index = self._cfg.model.observation_shape * (step + self._cfg.model.frame_stack_num)
         return beg_index, end_index
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
@@ -670,7 +675,10 @@ class MuZeroPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._eval_model.eval()
-        active_eval_env_num = data.shape[0]
+        if type(data) is dict:
+            active_eval_env_num = data['robot_state'].shape[0]
+        else:
+            active_eval_env_num = data.shape[0]
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
