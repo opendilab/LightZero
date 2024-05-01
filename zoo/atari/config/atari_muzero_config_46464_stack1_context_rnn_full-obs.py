@@ -53,30 +53,30 @@ max_env_step = int(1e6)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = True
 
-torch.cuda.set_device(0)
+torch.cuda.set_device(2)
 
 ssl_loss_weight = 2
-context_length_init = 4 #4  # 1
+context_length_init =  1 #4  # 1
 num_unroll_steps = 10
-rnn_hidden_size = 768#4096 # 768
+rnn_hidden_size = 4096 #4096 # 768
 
 
 # for debug ===========
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-num_simulations = 2
-update_per_collect = 2
-model_update_ratio = 0.25
-batch_size = 3
-max_env_step = int(5e5)
-reanalyze_ratio = 0.
-eps_greedy_exploration_in_collect = True
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 2
+# num_simulations = 2
+# update_per_collect = 2
+# model_update_ratio = 0.25
+# batch_size = 3
+# max_env_step = int(5e5)
+# reanalyze_ratio = 0.
+# eps_greedy_exploration_in_collect = True
 
-ssl_loss_weight = 2
-context_length_init = 4  # 1
-num_unroll_steps = 10
-rnn_hidden_size = 4096 # 768
+# ssl_loss_weight = 2
+# context_length_init = 4  # 1
+# num_unroll_steps = 10
+# rnn_hidden_size = 4096 # 768
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -114,6 +114,8 @@ atari_muzero_config = dict(
         analysis_sim_norm=False, # TODO
         cal_dormant_ratio=False, # TODO
         model=dict(
+            collector_env_num=collector_env_num,
+            evaluator_env_num=evaluator_env_num,
             rnn_hidden_size=rnn_hidden_size,  # latent state shape: 64*8*8=4096  TODO
             
             # reward_head_channels= 16,

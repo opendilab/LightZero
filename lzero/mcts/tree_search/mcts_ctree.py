@@ -422,7 +422,7 @@ class MuZeroRNNFullobsMCTSCtree(object):
     # @profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any],
-            world_model_hidden_state_roots: List[Any], to_play_batch: Union[int, List[Any]], ready_env_id=None,
+            world_model_latent_history_roots: List[Any], to_play_batch: Union[int, List[Any]], ready_env_id=None,
     ) -> None:
         """
         Overview:
@@ -448,7 +448,7 @@ class MuZeroRNNFullobsMCTSCtree(object):
             # the data storage of latent states: storing the latent state of all the nodes in one search.
             latent_state_batch_in_search_path = [latent_state_roots]
             # the data storage of value prefix hidden states in LSTM
-            world_model_hidden_state_batch = [world_model_hidden_state_roots]
+            world_model_latent_history_batch = [world_model_latent_history_roots]
 
             # minimax value storage
             min_max_stats_lst = tree_muzero.MinMaxStatsList(batch_size)
@@ -465,7 +465,7 @@ class MuZeroRNNFullobsMCTSCtree(object):
                 # In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.
 
                 latent_states = []
-                world_model_hidden_state = []
+                world_model_latent_history = []
 
                 # prepare a result wrapper to transport results between python and c++ parts
                 results = tree_muzero.ResultsWrapper(num=batch_size)
@@ -495,10 +495,10 @@ class MuZeroRNNFullobsMCTSCtree(object):
                 # obtain the latent state for leaf node
                 for ix, iy in zip(latent_state_index_in_search_path, latent_state_index_in_batch):
                     latent_states.append(latent_state_batch_in_search_path[ix][iy])
-                    world_model_hidden_state.append(world_model_hidden_state_batch[ix][0][iy])
+                    world_model_latent_history.append(world_model_latent_history_batch[ix][0][iy])
 
                 latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
-                world_model_hidden_state = torch.from_numpy(np.asarray(world_model_hidden_state)).to(self._cfg.device).unsqueeze(0)
+                world_model_latent_history = torch.from_numpy(np.asarray(world_model_latent_history)).to(self._cfg.device).unsqueeze(0)
                 
                 # latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
                 # TODO: .long() is only for discrete action
@@ -519,19 +519,26 @@ class MuZeroRNNFullobsMCTSCtree(object):
                 """
                 ## MuZeroRNN full_obs ######################
                 if ready_env_id is None:
+                    # for train
                     network_output = model.recurrent_inference(
-                        latent_states, world_model_hidden_state, last_actions
+                        latent_states, world_model_latent_history, last_actions
                     )
                 else:
+                    # try:
                     network_output = model.recurrent_inference(
-                        latent_states, world_model_hidden_state, last_actions, ready_env_id=ready_env_id
+                        latent_states, world_model_latent_history, last_actions, ready_env_id=ready_env_id
                     )
+                    # except Exception as e:
+                    #     print(e)  
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
                 network_output.value = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value))
                 network_output.value_prefix = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value_prefix))
 
                 network_output.reward_hidden_state = network_output.reward_hidden_state.detach().cpu().numpy()
+
+                if network_output.reward_hidden_state.shape[1] != world_model_latent_history.shape[1]:
+                    print('debug')
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
 
@@ -543,7 +550,7 @@ class MuZeroRNNFullobsMCTSCtree(object):
                 value_batch = network_output.value.reshape(-1).tolist()
                 policy_logits_batch = network_output.policy_logits.tolist()
 
-                world_model_hidden_state = network_output.reward_hidden_state
+                world_model_latent_history = network_output.reward_hidden_state
                 # reset the hidden states in LSTM every ``lstm_horizon_len`` steps in one search.
                 # which enable the model only need to predict the value prefix in a range (e.g.: [s0,...,s5])
                 # reset_idx = ( (model.timestep + np.array(search_lens)) % self._cfg.context_length_in_search == 0)
@@ -551,7 +558,7 @@ class MuZeroRNNFullobsMCTSCtree(object):
                 # reward_latent_state_batch[0][:, reset_idx, :] = 0
                 # reward_latent_state_batch[1][:, reset_idx, :] = 0
                 # is_reset_list = reset_idx.astype(np.int32).tolist()
-                world_model_hidden_state_batch.append(world_model_hidden_state)
+                world_model_latent_history_batch.append(world_model_latent_history)
 
                 # In ``batch_backpropagate()``, we first expand the leaf node using ``the policy_logits`` and
                 # ``reward`` predicted by the model, then perform backpropagation along the search path to update the

@@ -342,7 +342,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         # ==============================================================
         network_output = self._learn_model.initial_inference(obs_batch)
         # reward shape: (batch_size, 10), the ``reward`` at the first step is zero padding.
-        current_latent_state, reward, world_model_hidden_state, value, policy_logits = ez_network_output_unpack(network_output)
+        current_latent_state, reward, world_model_latent_history, value, policy_logits = ez_network_output_unpack(network_output)
 
         if self._cfg.cal_dormant_ratio:
             # ========= logging for analysis =========
@@ -398,8 +398,8 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         # the core recurrent_inference in muzero_rnn policy.
         # ==============================================================
         for step_k in range(self._cfg.num_unroll_steps):
-            # unroll with the dynamics function: predict the next ``latent_state``, ``world_model_hidden_state``,
-            # `` reward`` given current ``latent_state`` ``world_model_hidden_state`` and ``action``.
+            # unroll with the dynamics function: predict the next ``latent_state``, ``world_model_latent_history``,
+            # `` reward`` given current ``latent_state`` ``world_model_latent_history`` and ``action``.
             # And then predict policy_logits and value  with the prediction function.
             
             # obtain the oracle latent states from representation function.
@@ -408,9 +408,9 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
             next_latent_state = to_tensor(self._learn_model._representation(next_obs_batch))
 
             network_output = self._learn_model.recurrent_inference(
-                current_latent_state, world_model_hidden_state, action_batch[:, step_k], next_latent_state
+                current_latent_state, world_model_latent_history, action_batch[:, step_k], next_latent_state
             )
-            new_current_latent_state, reward, world_model_hidden_state, value, policy_logits = ez_network_output_unpack(
+            new_current_latent_state, reward, world_model_latent_history, value, policy_logits = ez_network_output_unpack(
                 network_output
             )
 
@@ -431,7 +431,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
                     current_latent_state.shape[0], policy_logits.shape[-1], current_latent_state.shape[2], current_latent_state.shape[3]
                 )
                 state_action_encoding = torch.cat((current_latent_state, action_encoding), dim=1)
-                self.dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network, [state_action_encoding.detach(),world_model_hidden_state,next_latent_state], percentage=self._cfg.dormant_threshold)
+                self.dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network, [state_action_encoding.detach(),world_model_latent_history,next_latent_state], percentage=self._cfg.dormant_threshold)
             # ========= logging for analysis ===============
             current_latent_state = new_current_latent_state # =========== 很重要
 
@@ -491,7 +491,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
 
             # reset hidden states every ``lstm_horizon_len`` unroll steps.
             # if (step_k + 1) % self._cfg.lstm_horizon_len == 0:
-            #     world_model_hidden_state = (
+            #     world_model_latent_history = (
             #         torch.zeros(1, self._cfg.batch_size, self._cfg.model.rnn_hidden_size).to(self._cfg.device),
             #         torch.zeros(1, self._cfg.batch_size, self._cfg.model.rnn_hidden_size).to(self._cfg.device)
             #     )
@@ -600,7 +600,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         elif self._cfg.model.model_type == 'mlp':
             self.last_batch_obs = torch.zeros([8,self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(8)]
-
+        self.last_ready_env_id = None
 
     def _forward_collect(
         self,
@@ -634,26 +634,34 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
+        self._collect_model.env_num = self._cfg.model.collector_env_num
         self._collect_model.eval()
         self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
         if active_collect_env_num != len(ready_env_id):
             print('active_collect_env_num != len(ready_env_id)')
+        
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             # network_output = self._collect_model.initial_inference(data)
             # if data.shape[0] < 2:
             #     print('debug')
-            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, ready_env_id)
+            # if len(ready_env_id)<8:
+            #     print('debug')
+            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, ready_env_id, self.last_ready_env_id)
+            self.last_ready_env_id = copy.deepcopy(ready_env_id)
 
-            latent_state_roots, reward_roots, world_model_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
+            latent_state_roots, reward_roots, world_model_latent_history_roots, pred_values, policy_logits = ez_network_output_unpack(
                 network_output
             )
-
+            # try:
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
+            # except Exception as e:
+            #     print(e)
+                
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
-            world_model_hidden_state_roots = world_model_hidden_state_roots.detach().cpu().numpy()
+            world_model_latent_history_roots = world_model_latent_history_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
@@ -670,7 +678,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
             self._mcts_collect.search(
-                roots, self._collect_model, latent_state_roots, world_model_hidden_state_roots, to_play, ready_env_id
+                roots, self._collect_model, latent_state_roots, world_model_latent_history_roots, to_play, ready_env_id
             )
 
             roots_visit_count_distributions = roots.get_distributions()
@@ -744,6 +752,8 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         elif self._cfg.model.model_type == 'mlp':
             self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(3)]
+        self.last_ready_env_id_eval = None
+
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None,):
         """
@@ -767,6 +777,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
              - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                  ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
          """
+        self._eval_model.env_num = self._cfg.model.evaluator_env_num
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
         if active_eval_env_num != len(ready_env_id):
@@ -774,9 +785,10 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             # network_output = self._eval_model.initial_inference(data)
-            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, ready_env_id)
+            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, ready_env_id, self.last_ready_env_id_eval)
+            self.last_ready_env_id_eval = copy.deepcopy(ready_env_id)
 
-            latent_state_roots, reward_roots, world_model_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
+            latent_state_roots, reward_roots, world_model_latent_history_roots, pred_values, policy_logits = ez_network_output_unpack(
                 network_output
             )
 
@@ -784,7 +796,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
                 # if not in training, obtain the scalars of the value/reward
                 pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
                 latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                world_model_hidden_state_roots = world_model_hidden_state_roots.detach().cpu().numpy()
+                world_model_latent_history_roots = world_model_latent_history_roots.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
@@ -795,7 +807,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, world_model_hidden_state_roots, to_play, ready_env_id)
+            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, world_model_latent_history_roots, to_play, ready_env_id)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()

@@ -752,7 +752,7 @@ class PredictionHiddenNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
-    def forward(self, latent_state: torch.Tensor, world_model_hidden_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, latent_state: torch.Tensor, world_model_latent_history: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Overview:
             Forward computation of the prediction network.
@@ -778,8 +778,8 @@ class PredictionHiddenNetwork(nn.Module):
         latent_state_policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
 
         # try:
-        latent_history_value =  torch.cat([latent_state_value, world_model_hidden_state.squeeze(0)], dim=1) # TODO: world_model_hidden_state.squeeze(0) 隐状态的形状为: (num_layers * num_directions, batch_size, hidden_size) ->  ( batch_size, hidden_size)
-        latent_history_policy =  torch.cat([latent_state_policy, world_model_hidden_state.squeeze(0)], dim=1) # TODO
+        latent_history_value =  torch.cat([latent_state_value, world_model_latent_history.squeeze(0)], dim=1) # TODO: world_model_latent_history.squeeze(0) 隐状态的形状为: (num_layers * num_directions, batch_size, hidden_size) ->  ( batch_size, hidden_size)
+        latent_history_policy =  torch.cat([latent_state_policy, world_model_latent_history.squeeze(0)], dim=1) # TODO
         # except Exception as e:
         #     print(e)
         value = self.fc_value(latent_history_value)
