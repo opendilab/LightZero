@@ -285,6 +285,7 @@ class UniZeroPolicy(Policy):
             update_type='momentum',
             # update_kwargs={'theta': 0.01} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
             update_kwargs={'theta': 0.05} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
+            # update_kwargs={'theta': 1} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
         )
         self._learn_model = self._model
 
@@ -733,7 +734,7 @@ class UniZeroPolicy(Policy):
                     # )
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                output[env_id] = {
+                output[i] = {
                     'action': action,
                     'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
@@ -872,7 +873,7 @@ class UniZeroPolicy(Policy):
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
-                output[env_id] = {
+                output[i] = {
                     'action': action,
                     'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,

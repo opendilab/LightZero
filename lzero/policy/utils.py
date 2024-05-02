@@ -656,6 +656,22 @@ def to_detach_cpu_numpy(data_list: Union[torch.Tensor, List[torch.Tensor]]) -> U
         raise TypeError("The type of input must be torch.Tensor or List[torch.Tensor]")
 
 
+def mz_rnn_fullobs_network_output_unpack(network_output: Dict) -> Tuple:
+    """
+    Overview:
+        unpack the network output of efficientzero
+    Arguments:
+        - network_output (:obj:`Tuple`): the network output of efficientzero
+    """
+    predict_next_latent_state = network_output.predict_next_latent_state  # shape:（batch_size, lstm_hidden_size, num_unroll_steps+1, num_unroll_steps+1）
+    latent_state = network_output.latent_state  # shape:（batch_size, lstm_hidden_size, num_unroll_steps+1, num_unroll_steps+1）
+    value_prefix = network_output.value_prefix  # shape: (batch_size, support_support_size)
+    reward_hidden_state = network_output.reward_hidden_state  # shape: {tuple: 2} -> (1, batch_size, 512)
+    value = network_output.value  # shape: (batch_size, support_support_size)
+    policy_logits = network_output.policy_logits  # shape: (batch_size, action_space_size)
+
+    return predict_next_latent_state, latent_state, value_prefix, reward_hidden_state, value, policy_logits
+
 def ez_network_output_unpack(network_output: Dict) -> Tuple:
     """
     Overview:
@@ -669,7 +685,6 @@ def ez_network_output_unpack(network_output: Dict) -> Tuple:
     value = network_output.value  # shape: (batch_size, support_support_size)
     policy_logits = network_output.policy_logits  # shape: (batch_size, action_space_size)
     return latent_state, value_prefix, reward_hidden_state, value, policy_logits
-
 
 def mz_network_output_unpack(network_output: Dict) -> Tuple:
     """

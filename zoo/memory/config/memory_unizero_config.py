@@ -5,8 +5,8 @@ import torch
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 # env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
 
-# memory_length = 1000
-memory_length = 500
+memory_length = 1000
+# memory_length = 500
 # memory_length = 250
 # memory_length = 60
 
@@ -56,7 +56,7 @@ eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-torch.cuda.set_device(2)
+torch.cuda.set_device(0)
 memory_xzero_config = dict(
     # TODO: collector clear
     # (3,5,5) config, world_model, unizero_model, memory env
@@ -91,7 +91,7 @@ memory_xzero_config = dict(
                 hook=dict(
                     load_ckpt_before_run='',
                     log_show_after_iter=100,
-                    save_ckpt_after_iter=100000,  # default is 10000
+                    save_ckpt_after_iter=200000,  # default is 10000
                     save_ckpt_after_run=True,
                 ),
             ),

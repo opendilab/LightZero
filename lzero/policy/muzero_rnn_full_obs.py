@@ -14,7 +14,7 @@ from lzero.mcts import MuZeroRNNFullobsMCTSCtree as MCTSCtree
 # from lzero.mcts import MuZeroRNNMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, negative_cosine_similarity, \
+    DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, mz_rnn_fullobs_network_output_unpack, negative_cosine_similarity, \
     prepare_obs, \
     configure_optimizers
 from lzero.policy.muzero import MuZeroPolicy
@@ -410,7 +410,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
             network_output = self._learn_model.recurrent_inference(
                 current_latent_state, world_model_latent_history, action_batch[:, step_k], next_latent_state
             )
-            new_current_latent_state, reward, world_model_latent_history, value, policy_logits = ez_network_output_unpack(
+            predict_next_latent_state, _, reward, world_model_latent_history, value, policy_logits = mz_rnn_fullobs_network_output_unpack(
                 network_output
             )
 
@@ -433,7 +433,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
                 state_action_encoding = torch.cat((current_latent_state, action_encoding), dim=1)
                 self.dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network, [state_action_encoding.detach(),world_model_latent_history,next_latent_state], percentage=self._cfg.dormant_threshold)
             # ========= logging for analysis ===============
-            current_latent_state = new_current_latent_state # =========== 很重要
+            current_latent_state =  next_latent_state # =========== 很重要
 
             # transform the scaled value or its categorical representation to its original value,
             # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -444,18 +444,11 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
             # ==============================================================
             if self._cfg.ssl_loss_weight > 0:
                 # obtain the oracle latent states from representation function.
-                # beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
-                # network_output = self._learn_model.initial_inference(obs_target_batch[:, beg_index:end_index])
-
-                beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
-                next_obs_batch = obs_target_batch[:, beg_index:end_index]
-                next_latent_state_tmp = to_tensor(self._learn_model._representation(next_obs_batch))
-
-                representation_state = to_tensor(network_output.latent_state)
+                predict_next_latent_state = to_tensor(predict_next_latent_state)
 
                 # NOTE: no grad for the representation_state branch.
-                dynamic_proj = self._learn_model.project(next_latent_state_tmp, with_grad=True)
-                observation_proj = self._learn_model.project(representation_state, with_grad=False)
+                dynamic_proj = self._learn_model.project(predict_next_latent_state, with_grad=True)
+                observation_proj = self._learn_model.project(next_latent_state, with_grad=False)
                 temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_k]
 
                 consistency_loss += temp_loss

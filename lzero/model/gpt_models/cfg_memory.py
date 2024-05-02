@@ -38,15 +38,15 @@ cfg['world_model'] = {
     # "context_length": 2 * (266+5),
     # "context_length_for_recurrent": 2 * (266+5),
 
-    'max_blocks': 516+5, 
-    "max_tokens": 2 * (516+5),  # 1+500+15 memory_length = 500
-    "context_length": 2 * (516+5),
-    "context_length_for_recurrent": 2 * (516+5),
+    # 'max_blocks': 516+5, 
+    # "max_tokens": 2 * (516+5),  # 1+500+15 memory_length = 500
+    # "context_length": 2 * (516+5),
+    # "context_length_for_recurrent": 2 * (516+5),
 
-    # 'max_blocks': 1016+5, 
-    # "max_tokens": 2 * (1016+5),  # 1+1000+15 memory_length = 1000
-    # "context_length": 2 * (1016+5),
-    # "context_length_for_recurrent": 2 * (1016+5),
+    'max_blocks': 1016+5, 
+    "max_tokens": 2 * (1016+5),  # 1+1000+15 memory_length = 1000
+    "context_length": 2 * (1016+5),
+    "context_length_for_recurrent": 2 * (1016+5),
 
     # 'max_blocks': 16, 
     # "max_tokens": 2 * 16,  # 1+0+15 memory_length = 0
@@ -73,7 +73,7 @@ cfg['world_model'] = {
 
 
 
-    "device": 'cuda:2',
+    "device": 'cuda:0',
     'analysis_sim_norm': False,
     'analysis_dormant_ratio': False,
 
@@ -123,8 +123,8 @@ cfg['world_model'] = {
     'support_size': 101, # TODO
     'action_shape': 4,  # NOTE：for memory
     'max_cache_size': 5000,
-    # "env_num": 8,
-      "env_num": 20,
+    "env_num": 10, # for memeory_length=1000 TODO
+      # "env_num": 20,
 
     'latent_recon_loss_weight': 0.05,
     # 'latent_recon_loss_weight': 0.0,

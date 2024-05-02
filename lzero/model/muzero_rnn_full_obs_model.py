@@ -310,7 +310,7 @@ class MuZeroRNNFullobsModel(nn.Module):
             
 
         self.timestep += 1
-        return EZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, self.current_latent_state, selected_world_model_latent_history)
+        return EZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, self.current_latent_state, None, selected_world_model_latent_history)
 
     def recurrent_inference(
             self, latent_state: torch.Tensor, world_model_latent_history: Tuple[torch.Tensor], action: torch.Tensor, next_latent_state: Tuple[torch.Tensor] = None, ready_env_id=None
@@ -353,10 +353,10 @@ class MuZeroRNNFullobsModel(nn.Module):
         if next_latent_state is not None:
             # training: 使用真实的next_latent_state
             # collect/eval: 如果是在根节点之前，使用真实的next_latent_state
-            return EZNetworkOutput(value, reward, policy_logits, next_latent_state, world_model_latent_history)
+            return EZNetworkOutput(value, reward, policy_logits, next_latent_state, predict_next_latent_state, world_model_latent_history)
         else:
             # collect/eval: 如果是在search内部，使用预测的next_latent_state
-            return EZNetworkOutput(value, reward, policy_logits, predict_next_latent_state, world_model_latent_history)
+            return EZNetworkOutput(value, reward, policy_logits, None, predict_next_latent_state, world_model_latent_history)
 
     def _representation(self, observation: torch.Tensor) -> torch.Tensor:
         """

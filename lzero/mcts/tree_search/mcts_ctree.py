@@ -530,7 +530,7 @@ class MuZeroRNNFullobsMCTSCtree(object):
                     )
                     # except Exception as e:
                     #     print(e)  
-                network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
+                network_output.predict_next_latent_state = to_detach_cpu_numpy(network_output.predict_next_latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
                 network_output.value = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value))
                 network_output.value_prefix = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value_prefix))
@@ -540,7 +540,7 @@ class MuZeroRNNFullobsMCTSCtree(object):
                 if network_output.reward_hidden_state.shape[1] != world_model_latent_history.shape[1]:
                     print('debug')
 
-                latent_state_batch_in_search_path.append(network_output.latent_state)
+                latent_state_batch_in_search_path.append(network_output.predict_next_latent_state)
 
                 # TODO: 检查muzero_context/muzero_rnn hidden state
                 # last_latent_state = network_output.latent_state

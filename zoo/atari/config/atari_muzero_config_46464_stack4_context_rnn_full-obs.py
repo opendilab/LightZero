@@ -53,7 +53,7 @@ max_env_step = int(5e5)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = True
 
-torch.cuda.set_device(2)
+torch.cuda.set_device(1)
 
 ssl_loss_weight = 2
 context_length_init =  4 #4  # 1
@@ -82,16 +82,16 @@ rnn_hidden_size = 4096 #4096 # 768
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_paper_muzero_variants_0429/stack1/{env_id[:-14]}_muzero-rnn-fullobs_stack1_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_adamw1e-4_sslw{ssl_loss_weight}_rnn-hidden-size-{rnn_hidden_size}_seed0',
+    exp_name=f'data_paper_muzero_variants_0429/stack4/{env_id[:-14]}_muzero-rnn-fullobs_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_adamw1e-4_sslw{ssl_loss_weight}_rnn-hidden-size-{rnn_hidden_size}_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_csonlen1_simnorm-cossim_adamw1e-4_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_sslw2-cossim_adamw1e-4_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_sslw2-cossim_sgd02_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
-        observation_shape=(3, 64, 64),
-        frame_stack_num=1,
-        gray_scale=False,
+        observation_shape=(4, 64, 64),
+        frame_stack_num=4,
+        gray_scale=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -123,10 +123,10 @@ atari_muzero_config = dict(
             # policy_head_channels= 16,
 
             analysis_sim_norm = False,
-            image_channel=3,
-            observation_shape=(3, 64, 64),
-            frame_stack_num=1,
-            gray_scale=False,
+            observation_shape=(4, 64, 64),
+            image_channel=1,
+            frame_stack_num=4,
+            gray_scale=True,
             action_space_size=action_space_size,
             downsample=True,
             self_supervised_learning_loss=True,  # default is False

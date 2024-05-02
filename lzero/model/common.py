@@ -25,6 +25,7 @@ class EZNetworkOutput:
     value_prefix: torch.Tensor
     policy_logits: torch.Tensor
     latent_state: torch.Tensor
+    predict_next_latent_state: torch.Tensor
     reward_hidden_state: Tuple[torch.Tensor]
 
 
@@ -309,6 +310,7 @@ class RepresentationNetworkGPT(nn.Module):
         # init.zeros_(self.last_linear.bias)
 
         self.sim_norm = SimNorm(simnorm_dim=group_size)
+        # self.sim_norm = nn.Sigmoid() # only for ablation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -338,7 +340,7 @@ class RepresentationNetworkGPT(nn.Module):
 
         # print('cont embedings before renormalize', x.max(), x.min(), x.mean())
         # x = torch.softmax(x)
-        x = self.sim_norm(x)
+        x = self.sim_norm(x)  # only for ablation
         # print('after renormalize', x.max(), x.min(),x.mean())
 
         return x

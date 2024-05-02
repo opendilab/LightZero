@@ -175,7 +175,8 @@ class WorldModel(nn.Module):
                 nn.Linear(config.embed_dim, config.embed_dim),
                 nn.GELU(),
                 nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
-                self.sim_norm,
+                self.sim_norm, # TODO
+                # nn.Sigmoid(),  # only for ablation
             )
         )
         self.head_policy = Head(

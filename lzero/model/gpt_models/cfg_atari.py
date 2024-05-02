@@ -75,19 +75,22 @@ cfg['world_model'] = {
                       # "gru_gating": False,
 
 
-                      "device": 'cuda:7',
+                      "device": 'cuda:0',
                       'analysis_sim_norm': False,
                       'analysis_dormant_ratio': False,
                       
-                      # 'action_shape': 18, # TODO：for multi-task
-                      'action_shape': 6, # TODO：for pong qbert 
+                      'action_shape': 6, # TODO：for multi-task
+                      
+                      # 'action_shape': 6, # TODO：for pong qbert 
                       # 'action_shape': 9,# TODO：for mspacman
                       # 'action_shape': 18,# TODO：for Seaquest boxing Frostbite
                       # 'action_shape': 4,# TODO：for breakout
 
                       # 'embed_dim':512, # TODO：for atari
                       # 'embed_dim':1024, # TODO：for atari
-                      'group_size': 8,  # NOTE
+                      'group_size': 8,  # NOTE: sim_norm
+                      # 'group_size': 768,  # NOTE: softmax
+
                       'attention': 'causal',
 
                       # 'num_layers': 1, # TODO：for atari debug
@@ -132,7 +135,10 @@ cfg['world_model'] = {
 
                       'latent_recon_loss_weight': 0.05,
                       'perceptual_loss_weight': 0.05, # for stack1 rgb obs
-                      # 'perceptual_loss_weight':0., # for stack4 gray obs
+                      # # 'perceptual_loss_weight':0., # for stack4 gray obs
+
+                      # 'latent_recon_loss_weight': 0.,
+                      # 'perceptual_loss_weight': 0., # for stack1 rgb obs
 
                       # 'latent_recon_loss_weight':0.,
                       # 'perceptual_loss_weight':0.,

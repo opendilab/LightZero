@@ -1,7 +1,7 @@
 from easydict import EasyDict
 
 import torch
-torch.cuda.set_device(7)
+torch.cuda.set_device(0)
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
@@ -17,7 +17,7 @@ env_name = 'PongNoFrameskip-v4'
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
     # action_space_size = 18
-    update_per_collect = 1000  # for pong boxing
+    update_per_collect = None # for others
 elif env_name == 'QbertNoFrameskip-v4':
     action_space_size = 6
     update_per_collect = None # for others
@@ -35,7 +35,6 @@ elif env_name == 'SeaquestNoFrameskip-v4':
     update_per_collect = None # for others
 elif env_name == 'BoxingNoFrameskip-v4':
     action_space_size = 18
-    # update_per_collect = 1000  # for pong boxing
     update_per_collect = None # for others
 elif env_name == 'FrostbiteNoFrameskip-v4':
     action_space_size = 18
@@ -51,8 +50,8 @@ evaluator_env_num = 3
 model_update_ratio = 0.25
 # model_update_ratio = 0.5
 num_simulations = 50
-max_env_step = int(1e6)
-# max_env_step = int(5e5)
+# max_env_step = int(1e6)
+max_env_step = int(5e5)
 
 reanalyze_ratio = 0. 
 # reanalyze_ratio = 0.05 # TODO
@@ -76,7 +75,8 @@ atari_unizero_config = dict(
     # TODO: 
     # mcts_ctree
     # muzero_collector/evaluator: empty_cache
-    exp_name=f'data_paper_ablation_0429/{env_name[:-14]}/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_seed0',
+    exp_name=f'data_paper_unizero_atari_0502/{env_name[:-14]}/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_seed0',
+    # exp_name=f'data_paper_ablation_0429/{env_name[:-14]}/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_seed0',
     # exp_name=f'data_paper_learn-dynamics_0423/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_analysis_dratio0025_seed0',
     # exp_name=f'data_paper_learn-dynamics_0422/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_seed0',
     # exp_name=f'data_paper_learn-dynamics_0422/{env_name[:-14]}_unizero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_grugating-false_latent-groupkl_conleninit{8}-conlenrecur{8}clear_lsd768-nlayer1-nh8_bacth-kvmaxsize-fix0417_seed0',
@@ -109,7 +109,7 @@ atari_unizero_config = dict(
                 hook=dict(
                     load_ckpt_before_run='',
                     log_show_after_iter=100,
-                    save_ckpt_after_iter=100000,  # default is 1000
+                    save_ckpt_after_iter=200000,  # default is 1000
                     save_ckpt_after_run=True,
                 ),
             ),

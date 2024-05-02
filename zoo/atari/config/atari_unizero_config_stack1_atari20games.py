@@ -4,20 +4,21 @@ from easydict import EasyDict
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 
 
-# env_id = 'AlienNoFrameskip-v4'
-# env_id = 'AmidarNoFrameskip-v4'
-# env_id = 'AssaultNoFrameskip-v4'
-# env_id = 'AsterixNoFrameskip-v4'
+# env_id = 'AlienNoFrameskip-v4' # 18
 
-# env_id = 'BankHeistNoFrameskip-v4'
-# env_id = 'BattleZoneNoFrameskip-v4'
-# env_id = 'ChopperCommandNoFrameskip-v4'
-# env_id = 'CrazyClimberNoFrameskip-v4'
+# env_id = 'AmidarNoFrameskip-v4' # 10
+# env_id = 'AssaultNoFrameskip-v4' # 7
+# env_id = 'AsterixNoFrameskip-v4' # 9
 
-# env_id = 'DemonAttackNoFrameskip-v4'
-# env_id = 'FreewayNoFrameskip-v4'
-# env_id = 'FrostbiteNoFrameskip-v4'
-# env_id = 'GopherNoFrameskip-v4'
+# env_id = 'BankHeistNoFrameskip-v4' # 18
+# env_id = 'BattleZoneNoFrameskip-v4' # 18
+# env_id = 'ChopperCommandNoFrameskip-v4' # 18
+# env_id = 'CrazyClimberNoFrameskip-v4' # 9
+
+# env_id = 'DemonAttackNoFrameskip-v4' # 6
+# env_id = 'FreewayNoFrameskip-v4' # 3
+# env_id = 'FrostbiteNoFrameskip-v4' # 18
+# env_id = 'GopherNoFrameskip-v4' # 8
 
 # env_id = 'HeroNoFrameskip-v4' # 18
 # env_id = 'JamesbondNoFrameskip-v4' # 18
@@ -29,13 +30,12 @@ from easydict import EasyDict
 # env_id = 'RoadRunnerNoFrameskip-v4' # 18
 # env_id = 'UpNDownNoFrameskip-v4' # 6
 
-
 env_id = 'PongNoFrameskip-v4'
 # env_id = 'MsPacmanNoFrameskip-v4'
-# env_id = 'QbertNoFrameskip-v4'
+# env_id = 'QbertNoFrameskip-v4
 # env_id = 'SeaquestNoFrameskip-v4'
-
 # env_id = 'BoxingNoFrameskip-v4'
+
 # env_id = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
 
 
@@ -90,7 +90,6 @@ elif env_id == 'UpNDownNoFrameskip-v4':
     action_space_size = 6
 elif env_id == 'PongNoFrameskip-v4':
     action_space_size = 6
-    # update_per_collect = 1000  # for pong boxing
     model_update_ratio = 0.25
 elif env_id == 'MsPacmanNoFrameskip-v4':
     action_space_size = 9
@@ -169,7 +168,7 @@ atari_unizero_config = dict(
                 hook=dict(
                     load_ckpt_before_run='',
                     log_show_after_iter=100,
-                    save_ckpt_after_iter=100000,  # default is 1000
+                    save_ckpt_after_iter=200000,  # default is 1000
                     save_ckpt_after_run=True,
                 ),
             ),
@@ -255,14 +254,19 @@ if __name__ == "__main__":
     # from lzero.entry import train_unizero
     # train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
     import torch
-    torch.cuda.set_device(7)
+    torch.cuda.set_device(0)
 
     # Define a list of seeds for multiple runs
+    # seeds = [2,1,0]  # You can add more seed values here
     seeds = [0,1,2]  # You can add more seed values here
     # seeds = [0]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed TODO
-        main_config.exp_name=f'data_paper_unizero_ablation_0429/{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv{collector_env_num}_seed{seed}'
+        # main_config.exp_name=f'data_paper_unizero_ablation_0502/target_world_model_{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv{collector_env_num}_notarget-gamma1_seed{seed}'
+
+        # main_config.exp_name=f'data_paper_unizero_ablation_0502/regu_loss_{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv{collector_env_num}_reclw0_seed{seed}'
+        main_config.exp_name=f'data_paper_unizero_ablation_0502/latent_norm_{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv{collector_env_num}_latentsoftmax_seed{seed}'
+        # main_config.exp_name=f'data_paper_unizero_atari_0502/{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv{collector_env_num}_seed{seed}'
 
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, max_env_step=max_env_step)
