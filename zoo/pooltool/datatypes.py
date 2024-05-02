@@ -150,7 +150,7 @@ class PoolToolSimulator(ABC):
             game state to reflect the outcome of the shot (e.g. if the shot scored a \
             point, the player's point score is updated)
         Note:
-            - The action should be applied before calling this method  with ``self.set_action``.
+            - The action should be applied before calling this method with ``self.set_action``.
         """
         # In very (very) rare cases, pooltool can become stuck in an infinite loop of
         # event calculation. By setting ``max_events=200``, we intercept those cases and

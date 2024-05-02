@@ -1,3 +1,70 @@
+"""
+Overview:
+    This module provides helps render billiard games using pygame. It includes classes
+    and methods for setting up game a rendering system to visualize the game state on a
+    Pygame surface.
+Usage Example:
+    This example sets up a basic pool game simulation with SUMTOTHREE game type,
+    initializes the simulation environment, executes a cue strike, and renders the
+    results using a Pygame-based renderer.
+
+    ```python
+    import pooltool as pt
+    from zoo.pooltool.image_representation import RenderPlane, RenderConfig, PygameRenderer
+    from zoo.pooltool.datatypes import State
+
+    # Setting up game rules and players.
+    game_type = pt.GameType.SUMTOTHREE
+    game = pt.get_ruleset(game_type)()
+    game.players = [pt.Player("Player")]
+
+    # Setting up the table and balls based on the game type.
+    table = pt.Table.from_game_type(game_type)
+    balls = pt.get_rack(
+        game_type=game_type,
+        table=table,
+    )
+
+    # Preparing the cue for striking.
+    cue = pt.Cue(cue_ball_id=game.shot_constraints.cueball(balls))
+    system = pt.System(table=table, balls=balls, cue=cue)
+
+    # Executing a strike and simulating the game.
+    system.strike(V0=2, phi=30.0)
+    pt.simulate(system, inplace=True)
+
+    # Setting up rendering configurations.
+    config = RenderConfig(
+        planes=[
+            RenderPlane(ball_ids=["cue"]),  # Render just the cue ball.
+            RenderPlane(ball_ids=["object"]),  # Render object ball.
+            RenderPlane(ball_ids=["cue", "object"]),  # Render cue and object balls together.
+            RenderPlane(ball_ball_lines=[("cue", "object")]),  # Render line between cue and object balls.
+            RenderPlane(cushion_ids=["3", "12", "9", "18"]),  # Render the 4 cushions.
+        ],
+        line_width=1,
+        antialias_circle=True,
+        antialias_line=True,
+    )
+
+    # Building and initializing the renderer.
+    renderer = PygameRenderer.build(system.table, 100, config)
+    renderer.init()
+    renderer.set_state(State(system, game))
+
+    # Display the observation planes after each event
+    for i in range(len(system.events)):
+        for ball in system.balls.values():
+            ball.state = ball.history[i]  # Update each ball's state to the next historical state.
+        renderer.display_observation(renderer.observation())  # Render and display the updated state.
+
+        if i > 5:
+            break  # This example stops after the first five events.
+
+    renderer.close()  # Properly close the renderer to free resources.
+    ```
+"""
+
 from __future__ import annotations
 
 import os
@@ -21,6 +88,7 @@ Color = Tuple[int, int, int]
 WHITE: Color = (255, 255, 255)
 
 GRAYSCALE_CONVERSION_WEIGHTS = np.array([0.299, 0.587, 0.114], dtype=np.float64)
+
 
 @numba.jit(nopython=True)
 def array_to_grayscale(raw_data):
@@ -59,6 +127,7 @@ class RenderPlane:
         - ball_ball_lines (:obj:`List[Tuple[str, str]]`): A list of two-ples specifying
             ball-ball pairs that lines should be drawn between.
     """
+
     ball_ids: List[str] = field(default_factory=list)
     cushion_ids: List[str] = field(default_factory=list)
     ball_ball_lines: List[Tuple[str, str]] = field(default_factory=list)
@@ -76,6 +145,7 @@ class RenderConfig:
         - antialias_circle (:obj:`int`): Whether circles should be antialiased.
         - antialias_line (:obj:`int`): Whether lines should be antialiased.
     """
+
     planes: List[RenderPlane]
     line_width: int
     antialias_circle: bool
@@ -88,6 +158,17 @@ class PygameRenderer:
         coordinates: CoordinateManager,
         render_config: RenderConfig,
     ):
+        """
+        Overview:
+            Renders a pool or billiards simulation using the Pygame library. This renderer is
+            capable of rendering different elements of the simulation, such as balls, cushions,
+            and specific interactions between balls, on a Pygame display surface.
+        Attributes:
+            - coordinates (:obj:`CoordinateManager`): Manages the conversion of simulation coordinates
+                to pixel coordinates for rendering.
+            - render_config (:obj:`RenderConfig`): Contains rendering configurations like antialiasing
+                settings and line widths.
+        """
         self.coordinates: CoordinateManager = coordinates
         self.render_config: RenderConfig = render_config
 
@@ -96,6 +177,10 @@ class PygameRenderer:
         self.state: State
 
     def init(self) -> None:
+        """
+        Overview:
+            Initializes the Pygame environment for rendering, setting up the screen and clock.
+        """
         # For off-screen rendering
         os.environ["SDL_DRIVER"] = "dummy"
 
@@ -105,9 +190,21 @@ class PygameRenderer:
         pygame.init()
 
     def set_state(self, state: State) -> None:
+        """
+        Overview:
+            Sets the current state of the game or simulation to be rendered.
+        Arguments:
+            - state (:obj:`State`): The current state of the game.
+        """
         self.state = state
 
     def _draw_balls(self, ball_ids: List[str]) -> None:
+        """
+        Overview:
+            Renders balls specified by their IDs.
+        Arguments:
+            - ball_ids (:obj:`List[str]`): A list of ball IDs to be rendered.
+        """
         for ball_id in ball_ids:
             ball = self.state.system.balls.get(ball_id)
 
@@ -147,6 +244,12 @@ class PygameRenderer:
                 )
 
     def _draw_cushions(self, cushion_ids: List[str]) -> None:
+        """
+        Overview:
+            Renders cushion segments specified by their IDs.
+        Arguments:
+            - cushion_ids (:obj:`List[str]`): A list of cushion IDs to be rendered.
+        """
         for cushion_id in cushion_ids:
             cushion = self.state.system.table.cushion_segments.linear.get(cushion_id)
 
@@ -171,6 +274,13 @@ class PygameRenderer:
                 )
 
     def _draw_ball_to_ball_lines(self, ball_ball_lines: List[Tuple[str, str]]) -> None:
+        """
+        Overview:
+            Renders lines between specified pairs of balls.
+        Arguments:
+            - ball_ball_lines (:obj:`List[Tuple[str, str]]`): A list of tuples, each containing two ball IDs
+                between which a line will be drawn.
+        """
         for ball1_id, ball2_id in ball_ball_lines:
             ball1 = self.state.system.balls[ball1_id]
             ball2 = self.state.system.balls[ball2_id]
@@ -199,6 +309,12 @@ class PygameRenderer:
                 )
 
     def draw_plane(self, plane: RenderPlane) -> None:
+        """
+        Overview:
+            Renders a specific plane based on the provided RenderPlane configuration.
+        Arguments:
+            - plane (:obj:`RenderPlane`): The render plane configuration to use for drawing.
+        """
         self.screen.fill((0, 0, 0))
 
         self._draw_balls(plane.ball_ids)
@@ -206,6 +322,10 @@ class PygameRenderer:
         self._draw_ball_to_ball_lines(plane.ball_ball_lines)
 
     def draw_all(self) -> None:
+        """
+        Overview:
+            Renders all elements of the game using the current state configuration.
+        """
         all_balls = list(self.state.system.balls.keys())
         all_cushions = list(self.state.system.table.cushion_segments.linear.keys())
 
@@ -217,11 +337,13 @@ class PygameRenderer:
         )
 
     def screen_as_array(self) -> NDArray[np.float32]:
-        """Return the current screen as an array"""
-        array = array_to_grayscale(
-            pygame.surfarray.array3d(self.screen),
-            GRAYSCALE_CONVERSION_WEIGHTS,
-        )
+        """
+        Overview:
+            Converts the current screen to a numpy array representation.
+        Returns:
+            - screen_array (:obj:`NDArray[np.float32]`): The screen represented as a numpy array.
+        """
+        array = array_to_grayscale(pygame.surfarray.array3d(self.screen))
 
         # H, W, C
         array = array.transpose((1, 0))
@@ -232,7 +354,12 @@ class PygameRenderer:
         return array
 
     def observation(self) -> NDArray[np.float32]:
-        """Return the current screen as an array"""
+        """
+        Overview:
+            Returns the current screen as a multi-dimensional observation array.
+        Returns:
+            - observation (:obj:`NDArray[np.float32]`): A multi-channel array representing the current observation.
+        """
         array = np.zeros(
             (
                 self.coordinates.height,
@@ -249,6 +376,12 @@ class PygameRenderer:
         return array
 
     def display_observation(self, observation: NDArray[np.float32]):
+        """
+        Overview:
+            Displays the observation array in a grid format for visual inspection.
+        Arguments:
+            - observation (:obj:`NDArray[np.float32]`): The observation array to display.
+        """
         observation = self.observation()
         channels = observation.shape[-1]
 
@@ -272,17 +405,44 @@ class PygameRenderer:
         plt.show()
 
     def close(self) -> None:
+        """
+        Overview:
+            Properly shuts down the Pygame environment to clean up resources.
+        """
         pygame.quit()
 
     @classmethod
     def build(
         cls, table: pt.Table, px: int, render_config: RenderConfig
     ) -> PygameRenderer:
+        """
+        Overview:
+            Factory method to create a new instance of PygameRenderer.
+        Arguments:
+            - table (:obj:`pt.Table`): The billiard table for which to create coordinates.
+            - px (:obj:`int`): Pixel density for the rendering.
+            - render_config (:obj:`RenderConfig`): Rendering configurations to be applied.
+        Returns:
+            - instance (:obj:`PygameRenderer`): A newly created instance of PygameRenderer.
+        """
         return cls(CoordinateManager.build(table, px), render_config)
 
 
 @dataclass
 class CoordinateManager:
+    """
+    Overview:
+        Manages coordinate transformations and scaling from simulation space to pixel space
+        for rendering purposes.
+    Attributes:
+        - width (:obj:`int`): The width of the rendering screen in pixels.
+        - height (:obj:`int`): The height of the rendering screen in pixels.
+        - coords_to_px (:obj:`Callable[[float, float], Tuple[float, float]]`): A callable that
+          converts simulation coordinates (x, y) to pixel coordinates on the screen.
+        - scale_dist (:obj:`Callable[[float], float]`): A callable that scales a distance in
+          the simulation space to a pixel-equivalent distance in the rendering screen.
+    """
+
     width: int
     height: int
     coords_to_px: Callable[[float, float], Tuple[float, float]]
@@ -290,6 +450,19 @@ class CoordinateManager:
 
     @classmethod
     def build(cls, table: pt.Table, px: int) -> CoordinateManager:
+        """
+        Overview:
+            A factory method that creates an instance of CoordinateManager based on the dimensions
+            of a billiard table and a specified pixel density. This method calculates scaling factors
+            and offset adjustments needed for rendering of table components.
+        Arguments:
+            - table (:obj:`pt.Table`): A billiard table object which includes details about cushion segments and their coordinates.
+            - px (:obj:`int`): The desired pixel density for the height of the rendering. The width is automatically adjusted to maintain the aspect ratio.
+        Returns:
+            - (:obj:`CoordinateManager`): An instance of CoordinateManager configured for the provided billiard table and pixel density.
+        Raises:
+            - AssertionError: If the pixel density (`px`) is not even or if the table's dimensions do not conform to expected proportions.
+        """
         assert px % 2 == 0, "px should be even for symmetric table representation"
 
         xs = []
@@ -327,50 +500,3 @@ class CoordinateManager:
             return max(1.0, d * max(sy, sx))
 
         return CoordinateManager(int(px_x), int(px_y), coords_to_px, scale_dist)
-
-
-if __name__ == "__main__":
-    """Just to test things"""
-
-    game_type = pt.GameType.SUMTOTHREE
-
-    game = pt.get_ruleset(game_type)()
-    game.players = [pt.Player("Player")]
-    table = pt.Table.from_game_type(game_type)
-    balls = pt.get_rack(
-        game_type=game_type,
-        table=table,
-        ball_params=None,
-        ballset=None,
-        spacing_factor=1e-3,
-    )
-    cue = pt.Cue(cue_ball_id=game.shot_constraints.cueball(balls))
-    system = pt.System(table=table, balls=balls, cue=cue)
-    system.strike(V0=4, phi=89.9)
-    pt.simulate(system, inplace=True)
-
-    config = RenderConfig(
-        planes=[
-            RenderPlane(ball_ids=["cue"]),
-            RenderPlane(ball_ids=["object"]),
-            RenderPlane(ball_ids=["cue", "object"]),
-            RenderPlane(ball_ball_lines=[("cue", "object")]),
-            RenderPlane(cushion_ids=["3", "12", "9", "18"]),
-        ],
-        line_width=1,
-        antialias_circle=True,
-        antialias_line=True,
-    )
-
-    renderer = PygameRenderer.build(system.table, 100, config)
-
-    renderer.init()
-    renderer.set_state(State(system, game))
-
-    for i in range(len(system.events)):
-        for ball in system.balls.values():
-            ball.state = ball.history[i]
-        renderer.display_observation(renderer.observation())
-        break
-
-    renderer.close()
