@@ -224,6 +224,8 @@ class MuZeroPolicy(Policy):
             return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
         elif self._cfg.model.model_type == "rgcn":
             return 'MuZeroModelGCN', ['lzero.model.muzero_model_gcn']
+        elif self._cfg.model.model_type == "mlp_md":
+            return 'MuZeroModelMD', ['lzero.model.muzero_model_md']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
@@ -643,7 +645,7 @@ class MuZeroPolicy(Policy):
         if self._cfg.model.model_type == 'conv':
             beg_index = self._cfg.model.image_channel * step
             end_index = self._cfg.model.image_channel * (step + self._cfg.model.frame_stack_num)
-        elif self._cfg.model.model_type == 'mlp':
+        elif self._cfg.model.model_type == 'mlp' or self._cfg.model.model_type == 'mlp_md':
             beg_index = self._cfg.model.observation_shape * step
             end_index = self._cfg.model.observation_shape * (step + self._cfg.model.frame_stack_num)
         elif self._cfg.model.model_type == 'rgcn':

@@ -337,22 +337,22 @@ class MuZeroEvaluator(ISerialEvaluator):
                         action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                         to_play_dict[env_id] = to_ndarray(obs['to_play'])
 
-                    dones[env_id] = done
-                    if t.done:
-                        # Env reset is done by env_manager automatically.
-                        self._policy.reset([env_id])
-                        reward = t.info['eval_episode_return']
-                        # 'performance_info' and 'episode_info' only choose one 
-                        if 'performance_info' in t.info:
-                            eval_monitor.update_info(env_id, t.info['performance_info'])
-                        elif 'episode_info' in t.info:
-                            eval_monitor.update_info(env_id, t.info['episode_info'])
-                        eval_monitor.update_reward(env_id, reward)
-                        self._logger.info(
-                            "[EVALUATOR]env {} finish episode, final reward: {}, current episode: {}".format(
-                                env_id, eval_monitor.get_latest_reward(env_id), eval_monitor.get_current_episode()
+                        dones[env_id] = done
+                        if t.done:
+                            # Env reset is done by env_manager automatically.
+                            self._policy.reset([env_id])
+                            reward = t.info['eval_episode_return']
+                            # 'performance_info' and 'episode_info' only choose one 
+                            if 'performance_info' in t.info:
+                                eval_monitor.update_info(env_id, t.info['performance_info'])
+                            elif 'episode_info' in t.info:
+                                eval_monitor.update_info(env_id, t.info['episode_info'])
+                            eval_monitor.update_reward(env_id, reward)
+                            self._logger.info(
+                                "[EVALUATOR]env {} finish episode, final reward: {}, current episode: {}".format(
+                                    env_id, eval_monitor.get_latest_reward(env_id), eval_monitor.get_current_episode()
+                                )
                             )
-                        )
 
                             # reset the finished env and init game_segments
                             if n_episode > self._env_num:

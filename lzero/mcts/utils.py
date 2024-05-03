@@ -97,7 +97,7 @@ def prepare_observation(observation_list, model_type='conv'):
     Returns:
         - np.ndarray: Reshaped array of observations.
     """
-    assert model_type in ['conv', 'mlp', 'rgcn'], "model_type must be either 'conv' or 'mlp'"
+    assert model_type in ['conv', 'mlp', 'rgcn', 'mlp_md'], "model_type must be either 'conv', 'mlp', 'rgcn' or 'mlp_md'"
     observation_array = np.array(observation_list)
     batch_size = observation_array.shape[0]
 
@@ -110,7 +110,7 @@ def prepare_observation(observation_list, model_type='conv'):
             _, stack_num, channels, width, height = observation_array.shape
             observation_array = observation_array.reshape(batch_size, stack_num * channels, width, height)
 
-    elif model_type == 'mlp':
+    elif model_type == 'mlp' or model_type == 'mlp_md':
         if observation_array.ndim == 3:
             # Flatten the last two dimensions
             observation_array = observation_array.reshape(batch_size, -1)
