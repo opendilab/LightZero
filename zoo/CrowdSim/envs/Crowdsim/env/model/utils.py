@@ -65,7 +65,7 @@ def get_human_position_from_list(selected_timestep, human_id, selected_data, sel
 def judge_aoi_update(human_position, robot_position, config):
     """
     Overview:
-        Judge whether the AoI should be updated
+        Judge whether the AoI should be updated, i.e., the human is in the sensing range of the robot.
     Args:
         - human_position (:obj:`list`): The position of the human.
         - robot_position (:obj:`list`): The position of the robot.
