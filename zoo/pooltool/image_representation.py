@@ -358,7 +358,10 @@ class PygameRenderer:
         Overview:
             Returns the current screen as a multi-dimensional observation array.
         Returns:
-            - observation (:obj:`NDArray[np.float32]`): A multi-channel array representing the current observation.
+            - observation (:obj:`NDArray[np.float32]`): A multi-channel array
+              representing the current observation. Shape is ``(n_features, px, px//2)``,
+              where ``n_features`` is the number of feature planes, and ``px`` is the
+              number of pixels representing the length of the table.
         """
         array = np.zeros(
             (
@@ -372,6 +375,8 @@ class PygameRenderer:
         for plane_idx, plane in enumerate(self.render_config.planes):
             self.draw_plane(plane)
             array[..., plane_idx] = self.screen_as_array()
+
+        array = array.transpose(2, 0, 1)
 
         return array
 
@@ -457,7 +462,8 @@ class CoordinateManager:
             and offset adjustments needed for rendering of table components.
         Arguments:
             - table (:obj:`pt.Table`): A billiard table object which includes details about cushion segments and their coordinates.
-            - px (:obj:`int`): The desired pixel density for the height of the rendering. The width is automatically adjusted to maintain the aspect ratio.
+            - px (:obj:`int`): The desired pixel density for the height of the rendering. The width is automatically adjusted together
+                maintain the aspect ratio. The value corresponds to the length of the table, which is twice its width.
         Returns:
             - (:obj:`CoordinateManager`): An instance of CoordinateManager configured for the provided billiard table and pixel density.
         Raises:
