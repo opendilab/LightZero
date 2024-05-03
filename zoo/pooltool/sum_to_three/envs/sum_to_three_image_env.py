@@ -1,3 +1,46 @@
+"""
+Overview:
+    Implementation of a learning environment for the simple billiards game, sum-to-three.
+    The game is played on a table with no pockets.
+    There are 2 balls: a cue ball and an object ball
+    The player must hit the object ball with the cue ball
+    The player scores a point if the number of times a ball hits a cushion is 3
+Mode:
+    - ``self_play_mode``: In ``self_play_mode``, there is only one player, who takes 10 \
+        shots. Their final score is the number of points they achieve.
+    - ``play_with_bot_mode``: (**NOT YET IMPLEMENTED**) In ``play_with_bot_mode`` there are two players, \
+        a learning agent and a bot. The game ends when either player achieves 5 points.
+Bot:
+    - MCTSBot: (**NOT YET IMPLEMENTED**) A bot which take action through a Monte Carlo Tree Search, which \
+        has a high performance.
+    - RuleBot: (**NOT YET IMPLEMENTED**) A bot which takes actions according to some simple heuristics, \
+        which has a low performance.
+Observation Space:
+    The observation in this environment is a dictionary with three elements.
+    - observation (:obj:`array`): An nd-array with 5 feature planes. Each feature plane
+        is a grayscale (black/white) image of the table, with different features being
+        shown. The first plane is the cue ball, the second plane is the object ball, the
+        third plane is the object ball and the cue ball, the fourth plane is a line
+        drawn between the object ball and cue ball, and the fifth plane renders the
+        rails as straight lines. To visualize these planes, see the example in
+        ../../image_representation.py. The shape of this array is in general
+        ``(n_features, px, px//2)``, where ``n_features`` is the number of feature
+        planes, ``px`` is the number of pixels representing the length of the table, and
+        ``px//2`` is the width of the table..
+    - action_mask (:obj:`None`): No actions are masked, so ``None`` is used here.
+    - to_play (:obj:`None`): (**NOT YET IMPLEMENTED**) For ``self_play_mode``, this is
+        set to -1. For ``play_with_bot_mode``, this indicates the player that needs to take an action in the \
+        current state.
+Action Space:
+    A continuous length-2 array. The first element is ``V0``, the speed of the cue stick. The second element \
+    is the ``cut_angle``, which is the angle that the cue ball hits the object ball with. A cut angle of 0 is \
+    a head-on collision, a cut angle of -89 is a very slight graze on the left side of the object ball, and a \
+    cut angle of 89 is a very slight graze on the right side of the object ball.
+Reward Space:
+    For the ``self_play_mode``, intermediate rewards of 1.0 are returned for each step where the player earns a point.
+    For the ``play_with_bot_mode``, (**NOT YET IMPLEMENTED**)...
+"""
+
 from __future__ import annotations
 
 import gc
@@ -21,7 +64,6 @@ from zoo.pooltool.datatypes import (
 from zoo.pooltool.image_representation import PygameRenderer, RenderConfig, RenderPlane
 
 import pooltool as pt
-import pooltool.constants as const
 
 RENDER_CONFIG = RenderConfig(
     planes=[
@@ -85,8 +127,8 @@ class SumToThreeImageSimulator(PoolToolSimulator):
         self.state.system.balls["cue"].state.rvw[0] = cue_pos
         self.state.system.balls["object"].state.rvw[0] = object_pos
 
-        assert self.state.system.balls["cue"].state.s == const.stationary
-        assert self.state.system.balls["object"].state.s == const.stationary
+        assert self.state.system.balls["cue"].state.s == pt.constants.stationary
+        assert self.state.system.balls["object"].state.s == pt.constants.stationary
         assert not np.isnan(self.state.system.balls["cue"].state.rvw).any()
         assert not np.isnan(self.state.system.balls["object"].state.rvw).any()
 
@@ -173,7 +215,7 @@ class SumToThreeImageEnv(PoolToolEnv):
         env_type="not_board_games",
         px=20,
         episode_length=10,
-        reward_algorithm="simple",
+        reward_algorithm="binary",
     )
 
     def __init__(self, cfg: EasyDict) -> None:
