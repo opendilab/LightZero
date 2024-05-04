@@ -68,9 +68,11 @@ Usage Example:
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Callable, List, Tuple
 
-from dataclasses import dataclass, field
+import json
+from dataclasses import dataclass, field, asdict
 import matplotlib.pyplot as plt
 import numba
 import numpy as np
@@ -87,7 +89,7 @@ import pooltool.constants as const
 Color = Tuple[int, int, int]
 WHITE: Color = (255, 255, 255)
 
-GRAYSCALE_CONVERSION_WEIGHTS = np.array([0.299, 0.587, 0.114], dtype=np.float64)
+_GRAYSCALE_CONVERSION_WEIGHTS = np.array([0.299, 0.587, 0.114], dtype=np.float64)
 
 
 @numba.jit(nopython=True)
@@ -106,9 +108,9 @@ def array_to_grayscale(raw_data):
     for i in range(height):
         for j in range(width):
             grayscale_data[i, j] = int(
-                raw_data[i, j, 0] * GRAYSCALE_CONVERSION_WEIGHTS[0]
-                + raw_data[i, j, 1] * GRAYSCALE_CONVERSION_WEIGHTS[1]
-                + raw_data[i, j, 2] * GRAYSCALE_CONVERSION_WEIGHTS[2]
+                raw_data[i, j, 0] * _GRAYSCALE_CONVERSION_WEIGHTS[0]
+                + raw_data[i, j, 1] * _GRAYSCALE_CONVERSION_WEIGHTS[1]
+                + raw_data[i, j, 2] * _GRAYSCALE_CONVERSION_WEIGHTS[2]
             )
 
     return grayscale_data
@@ -150,6 +152,30 @@ class RenderConfig:
     line_width: int
     antialias_circle: bool
     antialias_line: bool
+
+    def to_json(self, file_path: Path) -> Path:
+        with open(file_path, "w") as file:
+            json.dump(asdict(self), file, indent=4)
+        return file_path
+
+    @staticmethod
+    def from_json(file_path: Path) -> RenderConfig:
+        with open(file_path, "r") as file:
+            config_data = json.load(file)
+            planes = [
+                RenderPlane(
+                    ball_ids=plane_data["ball_ids"],
+                    cushion_ids=plane_data["cushion_ids"],
+                    ball_ball_lines=[tuple(line) for line in plane_data["ball_ball_lines"]]
+                )
+                for plane_data in config_data["planes"]
+            ]
+            return RenderConfig(
+                planes=planes,
+                line_width=config_data["line_width"],
+                antialias_circle=config_data["antialias_circle"],
+                antialias_line=config_data["antialias_line"]
+            )
 
 
 class PygameRenderer:
