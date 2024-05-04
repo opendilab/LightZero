@@ -194,12 +194,14 @@ python3 -u zoo/atari/config/atari_muzero_config.py
 cd LightZero
 python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 ```
-## 定制化文档
+## 文档
 
-为希望定制环境和算法的用户，我们提供了全面的指南：
+为希望定制环境和算法的用户，我们提供了相应的指南：
 
-- **环境定制：** [定制环境](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/envs/customize_envs_zh.md)
-- **算法定制：** [定制算法](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/algos/customize_algos_zh.md)
+- [如何自定义环境?](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/envs/customize_envs_zh.md)
+- [如何自定义算法?](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/algos/customize_algos_zh.md)
+- [如何设置配置文件？](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/config/config_zh.md)
+- [日志系统](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/logs/logs_zh.md)
 
 如有任何疑问，欢迎随时联系我们寻求帮助。
 
