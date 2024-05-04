@@ -211,10 +211,12 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 
 ## Customization Documentation
 
-For those looking to tailor environments and algorithms, we offer comprehensive guides:
+For those interested in customizing environments and algorithms, we provide relevant guides:
 
-- **Environments:** [Customize Environments](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/envs/customize_envs.md)
-- **Algorithms:** [Customize Algorithms](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/algos/customize_algos.md)
+- [Customize Environments](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/envs/customize_envs.md)
+- [Customize Algorithms](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/algos/customize_algos.md)
+- [How to Set Configuration Files?](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/config/config.md)
+- [Logging and Monitoring System](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/logs/logs.md)
 
 Should you have any questions, feel free to contact us for support.
 
