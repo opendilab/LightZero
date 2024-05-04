@@ -30,7 +30,7 @@ Usage Example:
     system = pt.System(table=table, balls=balls, cue=cue)
 
     # Executing a strike and simulating the game.
-    system.strike(V0=2, phi=30.0)
+    system.cue.set_state(V0=1.7, phi=pt.aim.at_ball(system, "object", cut=17))
     pt.simulate(system, inplace=True)
 
     # Setting up rendering configurations.
@@ -53,21 +53,18 @@ Usage Example:
     renderer.init()
     renderer.set_state(State(system, game))
 
-    # Display the observation planes after each event
-    for i in range(len(system.events)):
-        for ball in system.balls.values():
-            ball.state = ball.history[i]  # Update each ball's state to the next historical state.
-        renderer.display_observation(renderer.observation())  # Render and display the updated state.
+    # Render the current state (the balls' final resting positions) as a panel of feature planes
+    renderer.display_observation(renderer.observation())
 
-        if i > 5:
-            break  # This example stops after the first five events.
-
-    renderer.close()  # Properly close the renderer to free resources.
+    # Render the entire shot (in 0.1 second intervals) with the feature planes
+    renderer.animate_observations()
+    renderer.close()
     ```
 """
 
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 from typing import Callable, List, Tuple
@@ -75,6 +72,7 @@ from typing import Callable, List, Tuple
 import json
 from dataclasses import dataclass, field, asdict
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 import numba
 import numpy as np
 import pygame
@@ -418,12 +416,14 @@ class PygameRenderer:
     def display_observation(self, observation: NDArray[np.float32]):
         """
         Overview:
-            Displays the observation array in a grid format for visual inspection.
+            Displays the observation array (as a series of feature planes) for the given system state.
         Arguments:
             - observation (:obj:`NDArray[np.float32]`): The observation array to display.
         """
         observation = self.observation()
-        channels = observation.shape[-1]
+        channels = observation.shape[0]
+
+        assert channels == self.render_config.channels
 
         ncols = int(np.ceil(np.sqrt(channels)))
         nrows = int(np.ceil(channels / ncols))
@@ -435,7 +435,7 @@ class PygameRenderer:
         for i in range(channels):
             row, col = divmod(i, ncols)
             ax = axes[row, col]
-            ax.imshow(observation[:, :, i], cmap="gray")
+            ax.imshow(observation[i, ...], cmap="gray")
             ax.axis("off")
             ax.set_title(f"Channel {i+1}")
 
@@ -443,6 +443,59 @@ class PygameRenderer:
             axes.flat[j].axis("off")
 
         plt.show()
+        plt.close()
+
+    def animate_observations(self) -> None:
+        """
+        Overview:
+            Animates the observation array (as a series of feature planes) for the entire shot animation. Just for visualization purposes.
+        Arguments:
+            - system: The pool or billiards system being simulated.
+        """
+
+        time_interval = 0.1
+        system = self.state.system
+        pt.continuize(system, dt=time_interval, inplace=True)
+
+        channels = self.render_config.channels
+        nrows = int(math.ceil(math.sqrt(channels)))
+        ncols = int(math.ceil(channels / nrows))
+
+        fig, axes = plt.subplots(
+            nrows, ncols, figsize=(12, 8), facecolor="gray"
+        )
+        axes = axes.flatten()  # Flatten to a 1D list of axes
+
+        plt.tight_layout()
+
+        ims = []
+        timepoints = len(list(system.balls.values())[0].history_cts)
+
+        for i in range(timepoints):
+            for ball in system.balls.values():
+                ball.state = ball.history_cts[i]
+            observation = self.observation()
+            frame_artists = []
+            for j in range(observation.shape[0]):
+                img = axes[j].imshow(observation[j, ...], cmap="gray", animated=True)
+                frame_artists.append(img)
+            ims.append(frame_artists)
+
+        # Turn off any unused axes
+        for j in range(observation.shape[0], len(axes)):
+            axes[j].axis("off")
+
+        _ = FuncAnimation(
+            fig,
+            lambda i: ims[i],
+            frames=timepoints,
+            interval=time_interval*1000,
+            blit=True,
+            repeat=True,
+        )
+
+        plt.show()
+        plt.close()
 
     def close(self) -> None:
         """
