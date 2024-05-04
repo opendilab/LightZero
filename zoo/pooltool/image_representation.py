@@ -208,9 +208,11 @@ class PygameRenderer:
             - render_config (:obj:`RenderConfig`): Contains rendering configurations like antialiasing
                 settings and line widths.
         """
+        assert render_config.observation_shape == (len(render_config.planes), coordinates.height, coordinates.width)
+
         self.coordinates: CoordinateManager = coordinates
         self.render_config: RenderConfig = render_config
-
+        
         self.screen: Surface
         self.clock: Clock
         self.state: State

@@ -10,10 +10,10 @@ render_config_path = Path(__file__).parent / "feature_plane_config.json"
 collector_env_num = 6
 n_episode = 6
 evaluator_env_num = 6
-K = 15  # num_of_sampled_actions
-num_simulations = 35
+K = 20  # num_of_sampled_actions
+num_simulations = 50
 update_per_collect = None
-batch_size = 128
+batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.0
 eval_freq = 1000
@@ -26,7 +26,7 @@ render_config = RenderConfig.from_json(render_config_path)
 sumtothree_cont_sampled_efficientzero_config = dict(
     exp_name=f"data_pooltool_ctree/sumtothree_image_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0",
     env=dict(
-        env_name="PoolTool-SumToThree-Image",
+        env_name="PoolTool-SumToThree",
         env_type="not_board_games",
         render_config_path=render_config_path,
         collector_env_num=collector_env_num,
@@ -83,11 +83,11 @@ sumtothree_cont_sampled_efficientzero_config = EasyDict(
 main_config = sumtothree_cont_sampled_efficientzero_config
 sumtothree_cont_sampled_efficientzero_create_config = dict(
     env=dict(
-        type="pooltool_sumtothree_image",
-        import_names=["zoo.pooltool.sum_to_three.envs.sum_to_three_image_env"],
+        type="pooltool_sumtothree",
+        import_names=["zoo.pooltool.sum_to_three.envs.sum_to_three_env"],
     ),
-    #env_manager=dict(type="subprocess"),
-    env_manager=dict(type="base"),
+    env_manager=dict(type="subprocess"),
+    #env_manager=dict(type="base"),
     policy=dict(
         type="sampled_efficientzero",
         import_names=["lzero.policy.sampled_efficientzero"],

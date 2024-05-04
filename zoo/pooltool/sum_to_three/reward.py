@@ -5,6 +5,8 @@ Overview:
 from typing import Dict, Protocol, Tuple
 import pooltool as pt
 from zoo.pooltool.datatypes import State, Bounds
+import numpy as np
+from gym import spaces
 
 
 def binary(state: State) -> float:
@@ -81,3 +83,21 @@ def get_reward_bounds(algorithm: str) -> Bounds:
     """
     _assert_exists(algorithm)
     return _reward_functions[algorithm][1]
+
+
+def get_reward_space(algorithm: str) -> spaces.Box:
+    """
+    Overview:
+        Determines the reward space based on the reward calculation algorithm.
+    Arguments:
+        - algorithm (:obj:`str`): The name of the algorithm used to calculate rewards.
+    Returns:
+        - space (:obj:`spaces.Box`): The reward space for the environment.
+    """
+    bounds = get_reward_bounds(algorithm)  # Assumes a function get_reward_bounds exists.
+    return spaces.Box(
+        low=np.array([bounds.low], dtype=np.float32),
+        high=np.array([bounds.high], dtype=np.float32),
+        shape=(1,),
+        dtype=np.float32,
+    )
