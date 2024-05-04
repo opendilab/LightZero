@@ -17,7 +17,6 @@ batch_size = 128
 max_env_step = int(5e6)
 reanalyze_ratio = 0.0
 eval_freq = 1000
-channels = 5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -39,7 +38,7 @@ sumtothree_cont_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            image_channel=channels,
+            image_channel=render_config.channels,
             observation_shape=render_config.observation_shape,
             downsample=True,
             action_space_size=2,
