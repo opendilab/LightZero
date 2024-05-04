@@ -35,6 +35,7 @@ Usage Example:
 
     # Setting up rendering configurations.
     config = RenderConfig(
+        px=100,
         planes=[
             RenderPlane(ball_ids=["cue"]),  # Render just the cue ball.
             RenderPlane(ball_ids=["object"]),  # Render object ball.
@@ -48,7 +49,7 @@ Usage Example:
     )
 
     # Building and initializing the renderer.
-    renderer = PygameRenderer.build(system.table, 100, config)
+    renderer = PygameRenderer.build(system.table, config)
     renderer.init()
     renderer.set_state(State(system, game))
 
@@ -146,12 +147,25 @@ class RenderConfig:
         - line_width (:obj:`int`): The width (in pixels) of lines drawn.
         - antialias_circle (:obj:`int`): Whether circles should be antialiased.
         - antialias_line (:obj:`int`): Whether lines should be antialiased.
+    Properties:
+        - channels (:obj:`int`): The number of feature planes
+        - observation_shape (:obj:`Tuple[int, int, int]`): The shape of the observations made with
+            this config.
     """
 
+    px: int
     planes: List[RenderPlane]
     line_width: int
     antialias_circle: bool
     antialias_line: bool
+
+    @property
+    def channels(self) -> int:
+        return len(self.planes)
+
+    @property
+    def observation_shape(self) -> Tuple[int, int, int]:
+        return (self.channels, self.px, self.px // 2)
 
     def to_json(self, file_path: Path) -> Path:
         with open(file_path, "w") as file:
@@ -171,6 +185,7 @@ class RenderConfig:
                 for plane_data in config_data["planes"]
             ]
             return RenderConfig(
+                px=config_data["px"],
                 planes=planes,
                 line_width=config_data["line_width"],
                 antialias_circle=config_data["antialias_circle"],
@@ -390,19 +405,13 @@ class PygameRenderer:
               number of pixels representing the length of the table.
         """
         array = np.zeros(
-            (
-                self.coordinates.height,
-                self.coordinates.width,
-                len(self.render_config.planes),
-            ),
+            self.render_config.observation_shape,
             dtype=np.float32,
         )
 
         for plane_idx, plane in enumerate(self.render_config.planes):
             self.draw_plane(plane)
-            array[..., plane_idx] = self.screen_as_array()
-
-        array = array.transpose(2, 0, 1)
+            array[plane_idx, ...] = self.screen_as_array()
 
         return array
 
@@ -444,19 +453,18 @@ class PygameRenderer:
 
     @classmethod
     def build(
-        cls, table: pt.Table, px: int, render_config: RenderConfig
+        cls, table: pt.Table, render_config: RenderConfig
     ) -> PygameRenderer:
         """
         Overview:
             Factory method to create a new instance of PygameRenderer.
         Arguments:
             - table (:obj:`pt.Table`): The billiard table for which to create coordinates.
-            - px (:obj:`int`): Pixel density for the rendering.
             - render_config (:obj:`RenderConfig`): Rendering configurations to be applied.
         Returns:
             - instance (:obj:`PygameRenderer`): A newly created instance of PygameRenderer.
         """
-        return cls(CoordinateManager.build(table, px), render_config)
+        return cls(CoordinateManager.build(table, render_config.px), render_config)
 
 
 @dataclass

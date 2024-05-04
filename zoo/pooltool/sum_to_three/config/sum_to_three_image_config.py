@@ -1,8 +1,12 @@
 from easydict import EasyDict
+from pathlib import Path
+
+from zoo.pooltool.image_representation import RenderConfig
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+render_config_path = Path(__file__).parent / "feature_plane_config.json"
 collector_env_num = 6
 n_episode = 6
 evaluator_env_num = 6
@@ -13,20 +17,19 @@ batch_size = 128
 max_env_step = int(5e6)
 reanalyze_ratio = 0.0
 eval_freq = 1000
-px = 100
 channels = 5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-assert (px % 2) == 0, "Choose an even px value"
+render_config = RenderConfig.from_json(render_config_path)
 
 sumtothree_cont_sampled_efficientzero_config = dict(
     exp_name=f"data_pooltool_ctree/sumtothree_image_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0",
     env=dict(
         env_name="PoolTool-SumToThree-Image",
         env_type="not_board_games",
-        px=px,
+        render_config_path=render_config_path,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -37,7 +40,7 @@ sumtothree_cont_sampled_efficientzero_config = dict(
     policy=dict(
         model=dict(
             image_channel=channels,
-            observation_shape=(channels, px, px // 2),
+            observation_shape=render_config.observation_shape,
             downsample=True,
             action_space_size=2,
             continuous_action_space=True,
