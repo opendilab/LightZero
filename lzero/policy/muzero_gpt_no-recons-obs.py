@@ -20,7 +20,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
     prepare_obs
 
 
-@POLICY_REGISTRY.register('muzero_gpt')
+@POLICY_REGISTRY.register('unizero')
 class MuZeroGPTPolicy(Policy):
     """
     Overview:
@@ -208,13 +208,13 @@ class MuZeroGPTPolicy(Policy):
                 - import_names (:obj:`List[str]`): The model class path list used in this algorithm.
         .. note::
             The user can define and use customized network model but must obey the same interface definition indicated \
-            by import_names path. For MuZero, ``lzero.model.muzero_gpt_model.MuZeroModel``
+            by import_names path. For MuZero, ``lzero.model.unizero_model.MuZeroModel``
         """
         if self._cfg.model.model_type == "conv":
-            # return 'MuZeroModel', ['lzero.model.muzero_gpt_model']
-            return 'MuZeroModelGPT', ['lzero.model.muzero_gpt_model']
+            # return 'MuZeroModel', ['lzero.model.unizero_model']
+            return 'UniZeroModel', ['lzero.model.unizero_model']
         elif self._cfg.model.model_type == "mlp":
-            return 'MuZeroModelGPT', ['lzero.model.muzero_gpt_model_vector_obs']
+            return 'UniZeroModel', ['lzero.model.unizero_model_vector_obs']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 

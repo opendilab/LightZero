@@ -224,7 +224,7 @@ def configure_optimizers(
     # separate out all parameters to those that will and won't experience regularizing weight decay
     decay = set()
     no_decay = set()
-    whitelist_weight_modules = (torch.nn.Linear, torch.nn.LSTM, nn.Conv2d)
+    whitelist_weight_modules = (torch.nn.Linear, torch.nn.LSTM,  torch.nn.GRU, nn.Conv2d)
     blacklist_weight_modules = (
         torch.nn.LayerNorm, LayerNorm, torch.nn.Embedding, torch.nn.BatchNorm1d, torch.nn.BatchNorm2d
     )
@@ -234,7 +234,7 @@ def configure_optimizers(
             # random note: because named_modules and named_parameters are recursive
             # we will see the same tensors p many many times. but doing it this way
             # allows us to know which parent module any tensor p belongs to...
-            if pn.endswith('bias') or pn.endswith('lstm.bias_ih_l0') or pn.endswith('lstm.bias_hh_l0'):
+            if pn.endswith('bias') or pn.endswith('lstm.bias_ih_l0') or pn.endswith('lstm.bias_hh_l0') or pn.endswith('gru.bias_ih_l0') or pn.endswith('gru.bias_hh_l0'):
                 # all biases will not be decayed
                 no_decay.add(fpn)
             elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
@@ -656,6 +656,22 @@ def to_detach_cpu_numpy(data_list: Union[torch.Tensor, List[torch.Tensor]]) -> U
         raise TypeError("The type of input must be torch.Tensor or List[torch.Tensor]")
 
 
+def mz_rnn_fullobs_network_output_unpack(network_output: Dict) -> Tuple:
+    """
+    Overview:
+        unpack the network output of efficientzero
+    Arguments:
+        - network_output (:obj:`Tuple`): the network output of efficientzero
+    """
+    predict_next_latent_state = network_output.predict_next_latent_state  # shape:（batch_size, lstm_hidden_size, num_unroll_steps+1, num_unroll_steps+1）
+    latent_state = network_output.latent_state  # shape:（batch_size, lstm_hidden_size, num_unroll_steps+1, num_unroll_steps+1）
+    value_prefix = network_output.value_prefix  # shape: (batch_size, support_support_size)
+    reward_hidden_state = network_output.reward_hidden_state  # shape: {tuple: 2} -> (1, batch_size, 512)
+    value = network_output.value  # shape: (batch_size, support_support_size)
+    policy_logits = network_output.policy_logits  # shape: (batch_size, action_space_size)
+
+    return predict_next_latent_state, latent_state, value_prefix, reward_hidden_state, value, policy_logits
+
 def ez_network_output_unpack(network_output: Dict) -> Tuple:
     """
     Overview:
@@ -669,7 +685,6 @@ def ez_network_output_unpack(network_output: Dict) -> Tuple:
     value = network_output.value  # shape: (batch_size, support_support_size)
     policy_logits = network_output.policy_logits  # shape: (batch_size, action_space_size)
     return latent_state, value_prefix, reward_hidden_state, value, policy_logits
-
 
 def mz_network_output_unpack(network_output: Dict) -> Tuple:
     """

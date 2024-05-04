@@ -58,7 +58,12 @@ def compute_lambda_returns(rewards, values, ends, gamma, lambda_):
 
 
 class LossWithIntermediateLosses:
-    def __init__(self, latent_recon_loss_weight=0, perceptual_loss_weight=0, **kwargs):
+    def __init__(self, latent_recon_loss_weight=0, perceptual_loss_weight=0, 
+                #  first_step_losses=None, middle_step_losses=None, last_step_losses=None, 
+                 **kwargs):
+        # self.first_step_losses = first_step_losses
+        # self.middle_step_losses = middle_step_losses
+        # self.last_step_losses = last_step_losses
         # self.loss_total = sum(kwargs.values())
 
         # Ensure that kwargs is not empty
@@ -77,14 +82,18 @@ class LossWithIntermediateLosses:
         # self.ends_loss_weight = 0.
 
         self.obs_loss_weight = 10
-        # self.obs_loss_weight = 2
-
-
+        # self.obs_loss_weight = 20
         self.reward_loss_weight = 1.
         self.value_loss_weight = 0.25
         self.policy_loss_weight = 1.
         # self.ends_loss_weight = 1.
         self.ends_loss_weight = 0.
+
+
+        # self.obs_loss_weight = 20
+        # self.reward_loss_weight = 0.1
+        # self.value_loss_weight = 0.1
+        # self.policy_loss_weight = 0.1
 
         self.latent_recon_loss_weight = latent_recon_loss_weight
         self.perceptual_loss_weight = perceptual_loss_weight
@@ -111,7 +120,12 @@ class LossWithIntermediateLosses:
             # else:
             #     raise ValueError(f"Unknown loss type : {k}")
 
-        self.intermediate_losses = {k: v.item() for k, v in kwargs.items()}
+        # self.intermediate_losses = {k: v.item() for k, v in kwargs.items()}
+        # self.intermediate_losses = {k: v if isinstance(v, dict) elif isinstance(v, float) v else v.item() for k, v in kwargs.items()}
+        self.intermediate_losses = {
+            k: v if isinstance(v, dict) else (v if isinstance(v, float) else v.item())
+            for k, v in kwargs.items()
+        }
 
     def __truediv__(self, value):
         for k, v in self.intermediate_losses.items():

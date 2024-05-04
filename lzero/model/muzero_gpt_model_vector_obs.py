@@ -9,8 +9,8 @@ from .common import MZNetworkOutput, RepresentationNetworkMLP, PredictionNetwork
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
-@MODEL_REGISTRY.register('MuZeroModelGPT')
-class MuZeroModelGPT(nn.Module):
+@MODEL_REGISTRY.register('UniZeroModel')
+class UniZeroModel(nn.Module):
 
     def __init__(
             self,
@@ -67,7 +67,7 @@ class MuZeroModelGPT(nn.Module):
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection for dynamics network, default set it to False.
         """
-        super(MuZeroModelGPT, self).__init__()
+        super(UniZeroModel, self).__init__()
         self.categorical_distribution = categorical_distribution
         if not self.categorical_distribution:
             self.reward_support_size = 1

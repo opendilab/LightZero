@@ -30,7 +30,7 @@ class Cache:
 
     def update(self, x: torch.Tensor) -> None:
         assert (x.ndim == self._cache.ndim) and all([x.size(i) == self._cache.size(i) for i in (0, 1, 3)])
-        assert self._size + x.size(2) <= self._cache.shape[2]
+        assert self._size + x.size(2) <= self._cache.shape[2]  # TODO
         self._cache = AssignWithoutInplaceCheck.apply(self._cache, x, 2, self._size, self._size + x.size(2))
         self._size += x.size(2)
 

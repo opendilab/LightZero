@@ -15,6 +15,8 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import SequenceType
 import torch.nn.init as init
 import torch.nn.functional as F
+
+
 # use dataclass to make the output of network more convenient to use
 @dataclass
 class EZNetworkOutput:
@@ -23,6 +25,7 @@ class EZNetworkOutput:
     value_prefix: torch.Tensor
     policy_logits: torch.Tensor
     latent_state: torch.Tensor
+    predict_next_latent_state: torch.Tensor
     reward_hidden_state: Tuple[torch.Tensor]
 
 
@@ -36,8 +39,9 @@ class MZNetworkOutput:
 
 
 class DownSample(nn.Module):
-            
-    def __init__(self, observation_shape: SequenceType, out_channels: int, activation: nn.Module = nn.ReLU(inplace=True),
+
+    def __init__(self, observation_shape: SequenceType, out_channels: int,
+                 activation: nn.Module = nn.ReLU(inplace=True),
                  norm_type: Optional[str] = 'BN',
                  ) -> None:
         """
@@ -80,14 +84,7 @@ class DownSample(nn.Module):
                 ) for _ in range(1)
             ]
         )
-        # self.conv2 = nn.Conv2d(
-        #     out_channels // 2,
-        #     out_channels,
-        #     kernel_size=3,
-        #     stride=2,
-        #     padding=1,
-        #     bias=False,
-        # )
+
         self.downsample_block = ResBlock(
             in_channels=out_channels // 2,
             out_channels=out_channels,
@@ -135,12 +132,12 @@ class DownSample(nn.Module):
         for block in self.resblocks3:
             x = block(x)
         # output = self.pooling2(x) 
-        output = x # TODO: for (4,64,64) obs
+        output = x  # TODO: for (4,64,64) obs
 
         return output
 
 
-def renormalize_min_max(x): # min-max
+def renormalize_min_max(x):  # min-max
     # x is a 2D tensor of shape (batch_size, num_features)
     # Compute the min and max for each feature across the batch
     x_min = torch.min(x, dim=0, keepdim=True).values
@@ -176,8 +173,65 @@ class SimNorm(nn.Module):
     def __repr__(self):
         return f"SimNorm(dim={self.dim})"
 
+
 def AvgL1Norm(x, eps=1e-8):
-	return x/x.abs().mean(-1,keepdim=True).clamp(min=eps)
+    return x / x.abs().mean(-1, keepdim=True).clamp(min=eps)
+
+
+import torch
+
+class FeatureAndGradientHook:
+    def __init__(self):
+        self.features_before = []
+        self.features_after = []
+        self.grads_before = []
+        self.grads_after = []
+
+    def setup_hooks(self, model):
+        # Hooks to capture features and gradients at SimNorm
+        self.forward_handler = model.sim_norm.register_forward_hook(self.forward_hook)
+        self.backward_handler = model.sim_norm.register_full_backward_hook(self.backward_hook)
+
+    def forward_hook(self, module, input, output):
+        with torch.no_grad():
+            self.features_before.append(input[0])
+            self.features_after.append(output)
+
+    def backward_hook(self, module, grad_input, grad_output):
+        with torch.no_grad():
+            self.grads_before.append(grad_input[0] if grad_input[0] is not None else None)
+            self.grads_after.append(grad_output[0] if grad_output[0] is not None else None)
+
+    def analyze(self):
+        # Calculate L2 norms of features
+        l2_norm_before = torch.mean(torch.stack([torch.norm(f, p=2, dim=1).mean() for f in self.features_before]))
+        l2_norm_after = torch.mean(torch.stack([torch.norm(f, p=2, dim=1).mean() for f in self.features_after]))
+
+        # Calculate norms of gradients
+        grad_norm_before = torch.mean(torch.stack([torch.norm(g, p=2, dim=1).mean() for g in self.grads_before if g is not None]))
+        grad_norm_after = torch.mean(torch.stack([torch.norm(g, p=2, dim=1).mean() for g in self.grads_after if g is not None]))
+
+        # Clear stored data and delete tensors to free memory
+        self.clear_data()
+
+        # Optionally clear CUDA cache
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        return l2_norm_before, l2_norm_after, grad_norm_before, grad_norm_after
+
+    def clear_data(self):
+        del self.features_before[:]
+        del self.features_after[:]
+        del self.grads_before[:]
+        del self.grads_after[:]
+
+    def remove_hooks(self):
+        self.forward_handler.remove()
+        self.backward_handler.remove()
+
+
+
 
 class RepresentationNetworkGPT(nn.Module):
 
@@ -188,7 +242,7 @@ class RepresentationNetworkGPT(nn.Module):
             num_channels: int = 64,
             downsample: bool = True,
             # activation: nn.Module = nn.ReLU(inplace=True),
-            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01), # TODO
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),  # TODO
             # activation: nn.Module = nn.GELU(), # TODO
             norm_type: str = 'BN',
             embedding_dim: int = 256,
@@ -227,10 +281,11 @@ class RepresentationNetworkGPT(nn.Module):
                 self.norm = nn.BatchNorm2d(num_channels)
             elif norm_type == 'LN':
                 if downsample:
-                    self.norm = nn.LayerNorm([num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                    self.norm = nn.LayerNorm(
+                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
                 else:
                     self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]])
-            
+
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
@@ -245,17 +300,17 @@ class RepresentationNetworkGPT(nn.Module):
 
         # self.last_linear = nn.Linear(64*4*4, 256)
         # self.last_linear = nn.Linear(64*8*8, self.embedding_dim)
-        self.last_linear = nn.Linear(64*8*8, self.embedding_dim, bias=False)
+        self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
 
         # TODO
         # Initialize weights using He initialization
         init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
-        
+
         # Initialize biases to zero
         # init.zeros_(self.last_linear.bias)
 
         self.sim_norm = SimNorm(simnorm_dim=group_size)
-
+        # self.sim_norm = nn.Sigmoid() # only for ablation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -277,18 +332,17 @@ class RepresentationNetworkGPT(nn.Module):
 
         # print('cont embedings before last_linear', x.max(), x.min(), x.mean())
 
-        # NOTE: very important. for muzero_gpt atari 64,8,8 = 4096 -> 1024
+        # NOTE: very important. for unizero atari 64,8,8 = 4096 -> 1024
         # x = self.last_linear(x.contiguous().view(-1, 64*8*8))
-        x = self.last_linear(x.reshape(-1, 64*8*8)) # TODO
+        x = self.last_linear(x.reshape(-1, 64 * 8 * 8))  # TODO
 
-        x = x.view(-1, self.embedding_dim) # TODO
+        x = x.view(-1, self.embedding_dim)  # TODO
 
         # print('cont embedings before renormalize', x.max(), x.min(), x.mean())
         # x = torch.softmax(x)
-        x = self.sim_norm(x)
+        x = self.sim_norm(x)  # only for ablation
         # print('after renormalize', x.max(), x.min(),x.mean())
 
-            
         return x
 
     def get_param_mean(self) -> float:
@@ -311,12 +365,13 @@ class LatentDecoder(nn.Module):
         self.embedding_dim = embedding_dim
         self.output_shape = output_shape  # (C, H, W)
         self.num_channels = num_channels
-        
+
         # Assuming that the output shape is (C, H, W) = (12, 96, 96) and embedding_dim is 256
         # We will reverse the process of the representation network
-        self.initial_size = (num_channels, output_shape[1] // 8, output_shape[2] // 8)  # This should match the last layer of the encoder
+        self.initial_size = (
+            num_channels, output_shape[1] // 8, output_shape[2] // 8)  # This should match the last layer of the encoder
         self.fc = nn.Linear(self.embedding_dim, np.prod(self.initial_size))
-        
+
         # Upsampling blocks
         self.conv_blocks = nn.ModuleList([
             # Block 1: (num_channels, H/8, W/8) -> (num_channels//2, H/4, W/4)
@@ -324,34 +379,171 @@ class LatentDecoder(nn.Module):
             nn.ReLU(),
             nn.BatchNorm2d(num_channels // 2),
             # Block 2: (num_channels//2, H/4, W/4) -> (num_channels//4, H/2, W/2)
-            nn.ConvTranspose2d(num_channels // 2, num_channels // 4, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ConvTranspose2d(num_channels // 2, num_channels // 4, kernel_size=3, stride=2, padding=1,
+                               output_padding=1),
             nn.ReLU(),
             nn.BatchNorm2d(num_channels // 4),
             # Block 3: (num_channels//4, H/2, W/2) -> (output_shape[0], H, W)
-            nn.ConvTranspose2d(num_channels // 4, output_shape[0], kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ConvTranspose2d(num_channels // 4, output_shape[0], kernel_size=3, stride=2, padding=1,
+                               output_padding=1),
         ])
-        
+        # TODO: last layer use sigmoid?
+
     def forward(self, embeddings: torch.Tensor) -> torch.Tensor:
         # Map embeddings back to the image space
         x = self.fc(embeddings)  # (B, embedding_dim) -> (B, C*H/8*W/8)
         x = x.view(-1, *self.initial_size)  # (B, C*H/8*W/8) -> (B, C, H/8, W/8)
-        
+
         # Apply conv blocks
         for block in self.conv_blocks:
             x = block(x)  # Upsample progressively
-        
+
         # The output x should have the shape of (B, output_shape[0], output_shape[1], output_shape[2])
         return x
 
-class LatentDecoderMemory(nn.Module):
+
+def conv_output_shape(h_w, kernel_size=1, stride=1, pad=0, dilation=1):
+    """
+    Utility function for computing output of convolutions
+    takes a tuple of (h,w) and returns a tuple of (h,w)
+    """
+    from math import floor
+
+    if type(kernel_size) is not tuple:
+        kernel_size = (kernel_size, kernel_size)
+    h = floor(
+        ((h_w[0] + (2 * pad) - (dilation * (kernel_size[0] - 1)) - 1) / stride) + 1
+    )
+    w = floor(
+        ((h_w[1] + (2 * pad) - (dilation * (kernel_size[1] - 1)) - 1) / stride) + 1
+    )
+    return h, w
+
+
+class ImageEncoderMemory(nn.Module):
+    def __init__(
+            self,
+            image_shape=(3, 5, 5),
+            embedding_size=100,
+            channels=[16, 32, 64],  # 增加通道数
+            kernel_sizes=[3, 3, 3],  # 调整卷积核大小
+            strides=[1, 1, 1], 
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),
+            # normalize_pixel=True,  # 归一化输入
+            normalize_pixel=False,  # 归一化输入
+            group_size: int = 8,
+            **kwargs,
+    ):
+        super(ImageEncoderMemory, self).__init__()
+        self.shape = image_shape
+        self.channels = [image_shape[0]] + list(channels)
+
+        layers = []
+        for i in range(len(self.channels) - 1):
+            layers.append(
+                nn.Conv2d(
+                    self.channels[i], self.channels[i + 1], kernel_sizes[i], strides[i], 
+                    padding=kernel_sizes[i]//2  # 保持特征图大小
+                )
+            )
+            layers.append(nn.BatchNorm2d(self.channels[i + 1]))  # 加入BN稳定训练
+            layers.append(activation)
+        
+        layers.append(nn.AdaptiveAvgPool2d(1))  # 替代Reshape操作
+        
+        self.cnn = nn.Sequential(*layers)
+        # self.linear = nn.Sequential(
+        #     nn.Linear(self.channels[-1], embedding_size),
+        # )
+        self.linear = nn.Sequential(
+            nn.Linear(self.channels[-1], embedding_size, bias=False),
+            # nn.LayerNorm(embedding_size)  # 归一化embedding  # TODO
+        )
+        init.kaiming_normal_(self.linear[0].weight, mode='fan_out', nonlinearity='relu')
+
+        self.normalize_pixel = normalize_pixel
+        self.sim_norm = SimNorm(simnorm_dim=group_size)
+
+
+    def forward(self, image):
+        if self.normalize_pixel:
+            image = image / 255.0
+        x = self.cnn(image.float())  # (B, C, 1, 1)
+        x = torch.flatten(x, start_dim=1)  # (B, C)
+        x = self.linear(x)  # (B, embedding_size)
+        # TODO:
+        x = self.sim_norm(x)
+        return x
+
+
+class ImageDecoderMemory(nn.Module):
+    def __init__(
+            self,
+            image_shape=(3, 5, 5),
+            embedding_size=256,  # 修改为与输入 embedding 的大小匹配
+            channels=[64, 32, 16],
+            kernel_sizes=[3, 3, 3],
+            strides=[1, 1, 1],
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),
+            **kwargs,
+    ):
+        super(ImageDecoderMemory, self).__init__()
+        self.shape = image_shape
+        self.channels = list(channels) + [image_shape[0]]
+
+        self.linear = nn.Linear(embedding_size, channels[0] * image_shape[1] * image_shape[2])
+        
+        layers = []
+        for i in range(len(self.channels) - 1):
+            layers.append(
+                nn.ConvTranspose2d(
+                    self.channels[i], self.channels[i + 1], kernel_sizes[i], strides[i],
+                    padding=kernel_sizes[i]//2, output_padding=strides[i]-1
+                )
+            )
+            if i < len(self.channels) - 2:
+                layers.append(nn.BatchNorm2d(self.channels[i + 1]))
+                layers.append(activation)
+            else:
+                layers.append(nn.Sigmoid())
+
+        self.deconv = nn.Sequential(*layers)
+
+    def forward(self, embedding):
+        x = self.linear(embedding)
+        x = x.view(-1, self.channels[0], self.shape[1], self.shape[2])  # 修改 view 操作
+        x = self.deconv(x)  # (B, C, H, W)
+        return x
+
+
+def conv_transpose_output_shape(h_w, kernel_size, stride, pad=0, out_pad=0):
+    """
+    Utility function for computing output of transposed convolutions
+    """
+    if isinstance(h_w, int):
+        h_w = (h_w, h_w)
+
+    if isinstance(kernel_size, int):
+        kernel_size = (kernel_size, kernel_size)
+
+    if isinstance(stride, int):
+        stride = (stride, stride)
+
+    h = (h_w[0] - 1) * stride[0] - 2 * pad + kernel_size[0] + out_pad
+    w = (h_w[1] - 1) * stride[1] - 2 * pad + kernel_size[1] + out_pad
+
+    return h, w
+
+
+class VectorDecoderMemory(nn.Module):
     # def __init__(self, embedding_dim: int, output_shape: SequenceType, hidden_size: int = 64):
     def __init__(
             self,
-            embedding_dim: int, 
+            embedding_dim: int,
             output_shape: SequenceType,
             hidden_channels: int = 64,
             layer_num: int = 2,
-            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01), # TODO
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),  # TODO
             norm_type: Optional[str] = 'BN',
     ) -> torch.Tensor:
         """
@@ -384,7 +576,6 @@ class LatentDecoderMemory(nn.Module):
             last_linear_layer_init_zero=True,
         )
 
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
@@ -394,6 +585,7 @@ class LatentDecoderMemory(nn.Module):
         x = self.fc_representation(x)
         return x
 
+
 class RepresentationNetworkMLP(nn.Module):
 
     def __init__(
@@ -402,7 +594,7 @@ class RepresentationNetworkMLP(nn.Module):
             hidden_channels: int = 64,
             layer_num: int = 2,
             # activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01), # TODO
+            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),  # TODO
             last_linear_layer_init_zero: bool = True,
             norm_type: Optional[str] = 'BN',
             group_size: int = 8,
@@ -440,7 +632,6 @@ class RepresentationNetworkMLP(nn.Module):
         )
         self.sim_norm = SimNorm(simnorm_dim=group_size)
 
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:
@@ -452,6 +643,152 @@ class RepresentationNetworkMLP(nn.Module):
         x = self.sim_norm(x)
 
         return x
+
+
+
+class PredictionHiddenNetwork(nn.Module):
+
+    def __init__(
+            self,
+            observation_shape: SequenceType,
+            action_space_size: int,
+            num_res_blocks: int,
+            num_channels: int,
+            value_head_channels: int,
+            policy_head_channels: int,
+            fc_value_layers: int,
+            fc_policy_layers: int,
+            output_support_size: int,
+            flatten_output_size_for_value_head: int,
+            flatten_output_size_for_policy_head: int,
+            downsample: bool = False,
+            last_linear_layer_init_zero: bool = True,
+            activation: nn.Module = nn.ReLU(inplace=True),
+            norm_type: Optional[str] = 'BN',
+            gru_hidden_size: int = 512,
+    ) -> None:
+        """
+        Overview:
+            The definition of policy and value prediction network, which is used to predict value and policy by the
+            given latent state.
+        Arguments:
+            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. (C, H, W) for image.
+            - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
+            - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.
+            - num_channels (:obj:`int`): The channels of hidden states.
+            - value_head_channels (:obj:`int`): The channels of value head.
+            - policy_head_channels (:obj:`int`): The channels of policy head.
+            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - output_support_size (:obj:`int`): The size of categorical value output.
+            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \
+            - flatten_output_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+                of the value head.
+            - flatten_output_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+                of the policy head.
+            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.
+            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
+                dynamics/prediction mlp, default sets it to True.
+            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
+                operation to speedup, e.g. ReLU(inplace=True).
+            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+        """
+        super(PredictionHiddenNetwork, self).__init__()
+        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+
+        self.gru_hidden_size = gru_hidden_size
+        self.resblocks = nn.ModuleList(
+            [
+                ResBlock(
+                    in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
+                ) for _ in range(num_res_blocks)
+            ]
+        )
+
+        self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
+        self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
+
+        if norm_type == 'BN':
+            self.norm_value = nn.BatchNorm2d(value_head_channels)
+            self.norm_policy = nn.BatchNorm2d(policy_head_channels)
+        elif norm_type == 'LN':
+            if downsample:
+                self.norm_value = nn.LayerNorm(
+                    [value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16),
+                                                 math.ceil(observation_shape[-1] / 16)])
+            else:
+                self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]])
+                self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]])
+
+        self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
+        self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
+
+        self.flatten_output_size_for_value_head = 16 * 8 * 8  # TODO: only for obs (4,64,64)
+        self.flatten_output_size_for_policy_head = 16 * 8 * 8  # TODO: only for obs (4,64,64)
+
+        self.activation = activation
+
+        self.fc_value = MLP(
+            in_channels=self.flatten_output_size_for_value_head+self.gru_hidden_size,
+            hidden_channels=fc_value_layers[0],
+            out_channels=output_support_size,
+            layer_num=len(fc_value_layers) + 1,
+            activation=self.activation,
+            norm_type=norm_type,
+            output_activation=False,
+            output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
+        self.fc_policy = MLP(
+            in_channels=self.flatten_output_size_for_policy_head+self.gru_hidden_size,
+            hidden_channels=fc_policy_layers[0],
+            out_channels=action_space_size,
+            layer_num=len(fc_policy_layers) + 1,
+            activation=self.activation,
+            norm_type=norm_type,
+            output_activation=False,
+            output_norm=False,
+            # last_linear_layer_init_zero=True is beneficial for convergence speed.
+            last_linear_layer_init_zero=last_linear_layer_init_zero
+        )
+
+    def forward(self, latent_state: torch.Tensor, world_model_latent_history: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Overview:
+            Forward computation of the prediction network.
+        Arguments:
+            - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, latent_state_dim).
+        Returns:
+            - policy (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).
+            - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).
+        """
+        for res_block in self.resblocks:
+            latent_state = res_block(latent_state)
+
+
+        value = self.conv1x1_value(latent_state)
+        value = self.norm_value(value)
+        value = self.activation(value)
+
+        policy = self.conv1x1_policy(latent_state)
+        policy = self.norm_policy(policy)
+        policy = self.activation(policy)
+
+        latent_state_value = value.reshape(-1, self.flatten_output_size_for_value_head)
+        latent_state_policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
+
+        # try:
+        latent_history_value =  torch.cat([latent_state_value, world_model_latent_history.squeeze(0)], dim=1) # TODO: world_model_latent_history.squeeze(0) 隐状态的形状为: (num_layers * num_directions, batch_size, hidden_size) ->  ( batch_size, hidden_size)
+        latent_history_policy =  torch.cat([latent_state_policy, world_model_latent_history.squeeze(0)], dim=1) # TODO
+        # except Exception as e:
+        #     print(e)
+        value = self.fc_value(latent_history_value)
+        policy = self.fc_policy(latent_history_policy)
+        return policy, value
+
+
 
 
 class PredictionNetwork(nn.Module):
@@ -513,23 +850,25 @@ class PredictionNetwork(nn.Module):
 
         self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
         self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
-        
+
         if norm_type == 'BN':
             self.norm_value = nn.BatchNorm2d(value_head_channels)
             self.norm_policy = nn.BatchNorm2d(policy_head_channels)
         elif norm_type == 'LN':
             if downsample:
-                self.norm_value = nn.LayerNorm([value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
-                self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                self.norm_value = nn.LayerNorm(
+                    [value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16),
+                                                 math.ceil(observation_shape[-1] / 16)])
             else:
                 self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]])
                 self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]])
-        
+
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
 
-        self.flatten_output_size_for_value_head = 16*8*8 # TODO: only for obs (4,64,64)
-        self.flatten_output_size_for_policy_head = 16*8*8 # TODO: only for obs (4,64,64)
+        self.flatten_output_size_for_value_head = 16 * 8 * 8  # TODO: only for obs (4,64,64)
+        self.flatten_output_size_for_policy_head = 16 * 8 * 8  # TODO: only for obs (4,64,64)
 
         self.activation = activation
 
@@ -677,6 +1016,7 @@ class PredictionNetworkMLP(nn.Module):
         policy = self.fc_policy_head(x_prediction_common)
         return policy, value
 
+
 class RepresentationNetwork(nn.Module):
 
     def __init__(
@@ -687,6 +1027,9 @@ class RepresentationNetwork(nn.Module):
             downsample: bool = True,
             activation: nn.Module = nn.ReLU(inplace=True),
             norm_type: str = 'BN',
+            embedding_dim: int = 256,
+            group_size: int = 8,
+            use_sim_norm: bool = False,
     ) -> None:
         """
         Overview:
@@ -721,10 +1064,11 @@ class RepresentationNetwork(nn.Module):
                 self.norm = nn.BatchNorm2d(num_channels)
             elif norm_type == 'LN':
                 if downsample:
-                    self.norm = nn.LayerNorm([num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                    self.norm = nn.LayerNorm(
+                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
                 else:
                     self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]])
-            
+
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
@@ -733,6 +1077,15 @@ class RepresentationNetwork(nn.Module):
             ]
         )
         self.activation = activation
+
+        self.use_sim_norm = use_sim_norm
+
+        if self.use_sim_norm:
+            self.embedding_dim = embedding_dim
+            self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
+            # Initialize weights using He initialization
+            init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
+            self.sim_norm = SimNorm(simnorm_dim=group_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -751,6 +1104,13 @@ class RepresentationNetwork(nn.Module):
 
         for block in self.resblocks:
             x = block(x)
+        
+        if self.use_sim_norm:
+            # NOTE: very important. for unizero atari 64,8,8 = 4096 -> 768
+            # x = self.last_linear(x.reshape(-1, 64 * 8 * 8))  # TODO
+            # x = x.view(-1, self.embedding_dim)  # TODO
+            x = self.sim_norm(x)
+
         return x
 
     def get_param_mean(self) -> float:

@@ -13,7 +13,7 @@ from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
 from lzero.worker import MuZeroEvaluator
-from lzero.entry.train_muzero_gpt import initialize_zeros_batch
+from lzero.entry.train_unizero import initialize_zeros_batch
 
 def eval_muzero(
         input_cfg: Tuple[dict, dict],
@@ -38,7 +38,7 @@ def eval_muzero(
         - policy (:obj:`Policy`): Converged policy.
     """
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'muzero_gpt', 'stochastic_muzero', 'gumbel_muzero', 'sampled_efficientzero'], \
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'unizero', 'stochastic_muzero', 'gumbel_muzero', 'sampled_efficientzero'], \
         "LightZero now only support the following algo.: 'efficientzero', 'muzero', 'stochastic_muzero', 'gumbel_muzero', 'sampled_efficientzero'"
 
     if cfg.policy.cuda and torch.cuda.is_available():

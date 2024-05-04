@@ -1,12 +1,14 @@
 from .train_alphazero import train_alphazero
 from .eval_alphazero import eval_alphazero
 from .train_muzero import train_muzero
+from .train_muzero_context import train_muzero_context
+
 from .train_muzero_multi_task import train_muzero_multi_task 
-from .train_muzero_multi_task_v2 import train_muzero_multi_task_v2
 
 from .train_muzero_gpt import train_muzero_gpt
 from .train_muzero_gpt_multi_task import train_muzero_gpt_multi_task 
-from .train_muzero_gpt_multi_task_v2 import train_muzero_gpt_multi_task_v2 
+from .train_unizero import train_unizero
+from .train_unizero_multi_task import train_unizero_multi_task 
 
 from .train_muzero_with_reward_model import train_muzero_with_reward_model
 from .eval_muzero import eval_muzero

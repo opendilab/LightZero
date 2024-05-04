@@ -7,7 +7,86 @@ from typing import List, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
+class SimNorm(nn.Module):
+    """
+    Simplicial normalization.
+    Adapted from https://arxiv.org/abs/2204.00616.
+    """
+
+    def __init__(self, simnorm_dim):
+        super().__init__()
+        self.dim = simnorm_dim
+
+    def forward(self, x):
+        shp = x.shape
+        # Ensure that there is at least one simplex to normalize across.
+        if shp[1] != 0:
+            x = x.view(*shp[:-1], -1, self.dim)
+            x = F.softmax(x, dim=-1)
+            return x.view(*shp)
+        else:
+            return x
+
+    def __repr__(self):
+        return f"SimNorm(dim={self.dim})"
+
+
+
+
+class LinearOutputHook:
+    def __init__(self):
+        self.outputs = []
+
+    def __call__(self, module, input, output):
+        self.outputs.append(output)
+
+def cal_dormant_ratio(model, *inputs, percentage=0.025):
+    hooks = []
+    hook_handlers = []
+    total_neurons = 0
+    dormant_neurons = 0
+
+    for _, module in model.named_modules():
+        if isinstance(module, (nn.Linear, nn.Conv2d, nn.LSTM)):
+            hook = LinearOutputHook()
+            hooks.append(hook)
+            hook_handlers.append(module.register_forward_hook(hook))
+
+    with torch.no_grad():
+        model(*inputs)
+
+    for module, hook in zip(
+        (module for module in model.modules() if isinstance(module, (nn.Linear, nn.Conv2d, nn.LSTM))), hooks):
+
+        with torch.no_grad():
+            for output_data in hook.outputs:
+                mean_output = output_data.abs().mean(0)
+                avg_neuron_output = mean_output.mean()
+                dormant_indices = (mean_output < avg_neuron_output * percentage).nonzero(as_tuple=True)[0]
+                if isinstance(module, nn.Linear):
+                    total_neurons += module.weight.shape[0] * output_data.shape[0]
+                    dormant_neurons += len(dormant_indices)
+                elif isinstance(module, nn.Conv2d):
+                    total_neurons += module.weight.shape[0] * output_data.shape[0] * output_data.shape[2] * output_data.shape[3]
+                    dormant_neurons += len(dormant_indices)
+                elif isinstance(module, nn.LSTM):
+                    total_neurons += module.hidden_size * module.num_layers * output_data.shape[0] * output_data.shape[1]
+                    dormant_neurons += len(dormant_indices)
+
+    for hook in hooks:
+        hook.outputs.clear()
+        del hook.outputs
+
+    for hook_handler in hook_handlers:
+        hook_handler.remove()
+        del hook_handler
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    return dormant_neurons / total_neurons
 
 def renormalize(inputs: torch.Tensor, first_dim: int = 1) -> torch.Tensor:
     """

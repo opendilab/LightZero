@@ -14,8 +14,8 @@ if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
 
 
-@BUFFER_REGISTRY.register('game_buffer_muzero_gpt')
-class MuZeroGameBufferGPT(GameBuffer):
+@BUFFER_REGISTRY.register('game_buffer_unizero')
+class UniZeroGameBuffer(GameBuffer):
     """
     Overview:
         The specific game buffer for MuZero policy.
@@ -48,7 +48,7 @@ class MuZeroGameBufferGPT(GameBuffer):
         self.game_pos_priorities = []
         self.game_segment_game_pos_look_up = []
         # self.task_id = self._cfg.task_id
-
+        self.sample_type = self._cfg.sample_type  # 'transition' or 'episode'
 
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
@@ -74,10 +74,11 @@ class MuZeroGameBufferGPT(GameBuffer):
 
         # target reward, target value
         batch_rewards, batch_target_values = self._compute_target_reward_value(
-            reward_value_context, policy._target_model, current_batch[1] # current_batch[1] is action_batch
+            reward_value_context, policy._target_model, current_batch[1]  # current_batch[1] is action_batch
         )
         # target policy
-        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1])
+        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model,
+                                                                          current_batch[1])
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
             policy_non_re_context, self._cfg.model.action_space_size
         )
@@ -112,7 +113,10 @@ class MuZeroGameBufferGPT(GameBuffer):
             - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch
         """
         # obtain the batch context from replay buffer
-        orig_data = self._sample_orig_data(batch_size)
+        if self.sample_type == 'transition':
+            orig_data = self._sample_orig_data(batch_size)
+        elif self.sample_type == 'episode':
+            orig_data = self._sample_orig_data_episode(batch_size)
         game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
         batch_size = len(batch_index_list)
         obs_list, action_list, mask_list = [], [], []
@@ -122,7 +126,7 @@ class MuZeroGameBufferGPT(GameBuffer):
             pos_in_game_segment = pos_in_game_segment_list[i]
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
-                                              self._cfg.num_unroll_steps].tolist()
+                                                                  self._cfg.num_unroll_steps].tolist()
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
             mask_tmp = [1. for i in range(len(actions_tmp))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
@@ -341,7 +345,8 @@ class MuZeroGameBufferGPT(GameBuffer):
         ]
         return policy_re_context
 
-    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, action_batch) -> Tuple[Any, Any]:
+    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, action_batch) -> Tuple[
+        Any, Any]:
         """
         Overview:
             prepare reward and value targets from the context of rewards and values.
@@ -353,7 +358,7 @@ class MuZeroGameBufferGPT(GameBuffer):
             - batch_target_values (:obj:'np.ndarray): batch of value estimation
         """
         value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
-        to_play_segment = reward_value_context  # noqa
+            to_play_segment = reward_value_context  # noqa
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
         transition_batch_size = len(value_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)
@@ -376,42 +381,14 @@ class MuZeroGameBufferGPT(GameBuffer):
         batch_target_values, batch_rewards = [], []
         with torch.no_grad():
             value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
-            # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
-            # slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
-            # network_output = []
-            # for i in range(slices):
-            #     beg_index = self._cfg.mini_infer_size * i
-            #     end_index = self._cfg.mini_infer_size * (i + 1)
-
-            #     m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
-
-            #     # calculate the target value
-            #     # action_batch.shape (5, 5)
-            #     # m_obs.shape torch.Size([32, 3, 64, 64])
-            #     m_output = model.initial_inference(m_obs, action_batch)
-
-            #     if not model.training:
-            #         # if not in training, obtain the scalars of the value/reward
-            #         [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-            #             [
-            #                 m_output.latent_state,
-            #                 inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
-            #                 m_output.policy_logits
-            #             ]
-            #         )
-            #     network_output.append(m_output)
-
             network_output = []
             m_obs = torch.from_numpy(value_obs_list).to(self._cfg.device)
 
             # calculate the target value
-            # action_batch.shape (32, 10)
             # m_obs.shape torch.Size([352, 3, 64, 64])
             # m_obs.shape torch.Size([352, 4])  32*11
-
             m_output = model.initial_inference(m_obs, action_batch)
             # m_output = model.initial_inference(m_obs, action_batch, self.task_id)
-
 
             if not model.training:
                 # if not in training, obtain the scalars of the value/reward
@@ -426,7 +403,7 @@ class MuZeroGameBufferGPT(GameBuffer):
 
             # concat the output slices after model inference
             if self._cfg.use_root_value:
-                # use the root values from MCTS, as in EfficiientZero
+                # use the root values from MCTS, as in EfficientZero
                 # the root values have limited improvement but require much more GPU actors;
                 _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
                     network_output, data_type='muzero'
@@ -462,13 +439,14 @@ class MuZeroGameBufferGPT(GameBuffer):
                 value_list = value_list.reshape(-1) * np.array(
                     [
                         self._cfg.discount_factor ** td_steps_list[i] if int(td_steps_list[i]) %
-                        2 == 0 else -self._cfg.discount_factor ** td_steps_list[i]
+                                                                         2 == 0 else -self._cfg.discount_factor **
+                                                                                      td_steps_list[i]
                         for i in range(transition_batch_size)
                     ]
                 )
             else:
                 value_list = value_list.reshape(-1) * (
-                    np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list
+                        np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list
                 )
 
             value_list = value_list * np.array(value_mask)
@@ -527,7 +505,7 @@ class MuZeroGameBufferGPT(GameBuffer):
 
         # for board games
         policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, game_segment_lens, action_mask_segment, \
-        to_play_segment = policy_re_context  # noqa
+            to_play_segment = policy_re_context  # noqa
         # transition_batch_size = game_segment_batch_size * (self._cfg.num_unroll_steps + 1)
         transition_batch_size = len(policy_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)
@@ -573,7 +551,7 @@ class MuZeroGameBufferGPT(GameBuffer):
 
             _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(network_output, data_type='muzero')
             reward_pool = reward_pool.squeeze().tolist()
-            policy_logits_pool = policy_logits_pool.tolist() 
+            policy_logits_pool = policy_logits_pool.tolist()
             noises = [
                 np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
                                     ).astype(np.float32).tolist() for _ in range(transition_batch_size)

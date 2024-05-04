@@ -26,9 +26,9 @@ num_unroll_steps = 5
 # ==============================================================
 
 lunarlander_muzero_config = dict(
-    exp_name=f'data_mz_gpt_ctree_0119_state-obs/lunarlander_muzero_gpt_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd256_lr1e-4-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_latent-softarget_mantrans_seed0',
-    # exp_name=f'data_mz_gpt_ctree_0105/lunarlander_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_rep-noavgl1norm-klloss0-noseclatstd01_seed0',
-    # exp_name=f'data_mz_gpt_ctree_0119_state-obs/lunarlander_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_rep-noavgl1norm-klloss0-noseclatstd01_susc300_seed0',
+    exp_name=f'data_mz_gpt_ctree_0119_state-obs/lunarlander_unizero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd256_lr1e-4-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_latent-softarget_mantrans_seed0',
+    # exp_name=f'data_mz_gpt_ctree_0105/lunarlander_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_rep-noavgl1norm-klloss0-noseclatstd01_seed0',
+    # exp_name=f'data_mz_gpt_ctree_0119_state-obs/lunarlander_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs500_bs{batch_size}_contembdings_lsd256_obsmseloss_rep-noavgl1norm-klloss0-noseclatstd01_susc300_seed0',
     env=dict(
         env_name='LunarLander-v2',
         continuous=False,
@@ -91,8 +91,8 @@ lunarlander_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_gpt',
-        import_names=['lzero.policy.muzero_gpt'],
+        type='unizero',
+        import_names=['lzero.policy.unizero'],
     ),
     collector=dict(
         type='episode_muzero',
@@ -104,5 +104,5 @@ lunarlander_muzero_create_config = EasyDict(lunarlander_muzero_create_config)
 create_config = lunarlander_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_gpt
-    train_muzero_gpt([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    from lzero.entry import train_unizero
+    train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

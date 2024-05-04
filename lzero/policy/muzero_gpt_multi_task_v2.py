@@ -59,8 +59,8 @@ def configure_optimizers(model, weight_decay, learning_rate, betas, device_type)
 
     return optimizer
 
-@POLICY_REGISTRY.register('muzero_gpt_multi_task_v2')
-class MuZeroGPTMTV2Policy(Policy):
+@POLICY_REGISTRY.register('unizero_multi_task')
+class MuZeroGPTMTPolicy(Policy):
     """
     Overview:
         The policy class for MuZero.
@@ -249,13 +249,13 @@ class MuZeroGPTMTV2Policy(Policy):
                 - import_names (:obj:`List[str]`): The model class path list used in this algorithm.
         .. note::
             The user can define and use customized network model but must obey the same interface definition indicated \
-            by import_names path. For MuZero, ``lzero.model.muzero_gpt_model.MuZeroModel``
+            by import_names path. For MuZero, ``lzero.model.unizero_model.MuZeroModel``
         """
         if self._cfg.model.model_type == "conv":
-            # return 'MuZeroModel', ['lzero.model.muzero_gpt_model']
-            return 'MuZeroModelGPTMT', ['lzero.model.muzero_gpt_model_multi_task']
+            # return 'MuZeroModel', ['lzero.model.unizero_model']
+            return 'UniZeroModelMT', ['lzero.model.unizero_model_multi_task']
         elif self._cfg.model.model_type == "mlp":
-            return 'MuZeroModelGPT', ['lzero.model.muzero_gpt_model_vector_obs']
+            return 'MuZeroModelGPT', ['lzero.model.unizero_model_vector_obs']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 

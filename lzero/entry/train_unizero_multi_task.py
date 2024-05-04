@@ -19,10 +19,10 @@ from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
-from lzero.mcts import MuZeroGameBufferGPT as GameBuffer
+from lzero.mcts import UniZeroGameBuffer as GameBuffer
 
 
-def train_muzero_gpt_multi_task(
+def train_unizero_multi_task(
         input_cfg_list: List[Tuple[dict, dict]],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,

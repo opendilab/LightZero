@@ -420,7 +420,9 @@ class MuZeroCollector(ISerialCollector):
                 # ==============================================================
                 # policy forward
                 # ==============================================================
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, task_id=self.task_id)
+                # policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon)
+                # print(f'ready_env_id:{ready_env_id}')
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id, task_id=self.task_id)
 
                 actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                 distributions_dict_no_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
@@ -524,12 +526,42 @@ class MuZeroCollector(ISerialCollector):
 
                     eps_steps_lst[env_id] += 1
 
+<<<<<<< HEAD
                     if eps_steps_lst[env_id] % 200 == 0:
                         self._policy.get_attribute('collect_model').world_model.past_keys_values_cache.clear()
                         self._policy.get_attribute('collect_model').world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
                         torch.cuda.empty_cache()
                         print('collector: collect_model clear()')
                         print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
+=======
+                    # if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE
+                    #     # TODO: 是否需要clear
+                    #     self._policy.get_attribute('collect_model').world_model.past_keys_values_cache.clear()
+                    #     self._policy.get_attribute('collect_model').world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
+                        
+                    #     torch.cuda.empty_cache()
+                    #     print('collector: collect_model clear()')
+                    #     print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
+
+                    if hasattr(self._policy.get_attribute('collect_model'), 'world_model'):
+                        # if eps_steps_lst[env_id] % 2000 == 0:  # TODO: NOTE for memory
+                        if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE for atari unizero
+                        # if eps_steps_lst[env_id] % 32 == 0:  # TODO: NOTE
+                        # if eps_steps_lst[env_id] % 90 == 0:
+                        # if eps_steps_lst[env_id] % 130 == 0:
+                        # if eps_steps_lst[env_id] % 150 == 0:
+                        # if eps_steps_lst[env_id] % 280 == 0:
+                            # TODO: 是否需要clear
+                            self._policy.get_attribute('collect_model').world_model.past_keys_values_cache_init_infer.clear()
+                            for kv_cache_dict_env in self._policy.get_attribute('collect_model').world_model.past_keys_values_cache_init_infer_envs:
+                                kv_cache_dict_env.clear() 
+                            self._policy.get_attribute('collect_model').world_model.past_keys_values_cache_recurrent_infer.clear()
+                            self._policy.get_attribute('collect_model').world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
+                            
+                            torch.cuda.empty_cache()
+                            print('collector: collect_model clear()')
+                            print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
+>>>>>>> 959959ec1036f3d51b757c9ddfa03d617f08e903
 
                     total_transitions += 1
 
@@ -579,7 +611,6 @@ class MuZeroCollector(ISerialCollector):
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
-                    self._total_episode_count += 1
                     reward = timestep.info['eval_episode_return']
                     info = {
                         'reward': reward,

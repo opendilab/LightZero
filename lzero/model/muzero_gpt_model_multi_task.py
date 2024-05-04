@@ -16,8 +16,8 @@ from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_me
 
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
-@MODEL_REGISTRY.register('MuZeroModelGPTMT')
-class MuZeroModelGPTMT(nn.Module):
+@MODEL_REGISTRY.register('UniZeroModelMT')
+class UniZeroModelMT(nn.Module):
 
     def __init__(
         self,
@@ -85,7 +85,7 @@ class MuZeroModelGPTMT(nn.Module):
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
         """
-        super(MuZeroModelGPTMT, self).__init__()
+        super(UniZeroModelMT, self).__init__()
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
             # for vector obs input, e.g. classical control and box2d environments
             # to be compatible with LightZero model/policy, transform to shape: [C, W, H]

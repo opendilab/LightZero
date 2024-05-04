@@ -37,10 +37,10 @@ num_unroll_steps = 5
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-cartpole_muzero_gpt_config = dict(
+cartpole_unizero_config = dict(
     # TODO: world_model.py decode_obs_tokens
     # TODO: tokenizer: lpips loss
-    exp_name=f'data_debug/cartpole_muzero_gpt_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs5000_batch8_obs-token-lw2_recons-obs_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_multistep__fix-init-infer_seed0',
+    exp_name=f'data_debug/cartpole_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_nlayers2_emd64_smallnet_bs{batch_size}_mcs5000_batch8_obs-token-lw2_recons-obs_bs{batch_size}_lr1e-4-3e-3_tokenizer-wd0_multistep__fix-init-infer_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -86,30 +86,30 @@ cartpole_muzero_gpt_config = dict(
     ),
 )
 
-cartpole_muzero_gpt_config = EasyDict(cartpole_muzero_gpt_config)
-main_config = cartpole_muzero_gpt_config
+cartpole_unizero_config = EasyDict(cartpole_unizero_config)
+main_config = cartpole_unizero_config
 
-cartpole_muzero_gpt_create_config = dict(
+cartpole_unizero_create_config = dict(
     env=dict(
         type='cartpole_lightzero',
         import_names=['zoo.classic_control.cartpole.envs.cartpole_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_gpt',
-        import_names=['lzero.policy.muzero_gpt'],
+        type='unizero',
+        import_names=['lzero.policy.unizero'],
     ),
 )
-cartpole_muzero_gpt_create_config = EasyDict(cartpole_muzero_gpt_create_config)
-create_config = cartpole_muzero_gpt_create_config
+cartpole_unizero_create_config = EasyDict(cartpole_unizero_create_config)
+create_config = cartpole_unizero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_gpt
-    train_muzero_gpt([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    from lzero.entry import train_unizero
+    train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
     # 下面为cprofile的代码
-    # from lzero.entry import train_muzero_gpt
+    # from lzero.entry import train_unizero
     # def run(max_env_step: int):
-    #     train_muzero_gpt([main_config, create_config], seed=0, max_env_step=max_env_step)
+    #     train_unizero([main_config, create_config], seed=0, max_env_step=max_env_step)
     # import cProfile
-    # cProfile.run(f"run({10000})", filename="cartpole_muzero_gpt_ctree_cprofile_10k_envstep", sort="cumulative")
+    # cProfile.run(f"run({10000})", filename="cartpole_unizero_ctree_cprofile_10k_envstep", sort="cumulative")
