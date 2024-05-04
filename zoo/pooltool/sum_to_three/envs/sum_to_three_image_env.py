@@ -52,16 +52,21 @@ from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
 from gym import spaces
 from numpy.typing import NDArray
-from zoo.pooltool.sum_to_three.reward import get_reward_bounds, get_reward_function
+from zoo.pooltool.sum_to_three.reward import get_reward_function
 from zoo.pooltool.datatypes import (
     Bounds,
     ObservationDict,
     PoolToolEnv,
     PoolToolSimulator,
     Spaces,
-    State,
 )
 from zoo.pooltool.image_representation import PygameRenderer, RenderConfig
+from zoo.pooltool.sum_to_three.envs.sum_to_three_env import (
+    get_action_space,
+    get_reward_space,
+    create_initial_state,
+    EpisodicTrackedStats,
+)
 
 import pooltool as pt
 
@@ -82,90 +87,26 @@ def get_obs_space(renderer: PygameRenderer) -> spaces.Box:
         dtype=np.float32,
     )
 
-def get_action_space(V0: Bounds, angle: Bounds) -> spaces.Box:
-    """
-    Overview:
-        Create an action space from specified bounds for the velocity and angle.
-    Arguments:
-        - V0 (:obj:`Bounds`): The bounds for the velocity of the cue.
-        - angle (:obj:`Bounds`): The bounds for the angle of the cue.
-    Returns:
-        - space (:obj:`spaces.Box`): The action space for the environment.
-    """
-    return spaces.Box(
-        low=np.array([V0.low, angle.low], dtype=np.float32),
-        high=np.array([V0.high, angle.high], dtype=np.float32),
-        shape=(2,),
-        dtype=np.float32,
-    )
-
-def get_reward_space(algorithm: str) -> spaces.Box:
-    """
-    Overview:
-        Determines the reward space based on the reward calculation algorithm.
-    Arguments:
-        - algorithm (:obj:`str`): The name of the algorithm used to calculate rewards.
-    Returns:
-        - space (:obj:`spaces.Box`): The reward space for the environment.
-    """
-    bounds = get_reward_bounds(algorithm)  # Assumes a function get_reward_bounds exists.
-    return spaces.Box(
-        low=np.array([bounds.low], dtype=np.float32),
-        high=np.array([bounds.high], dtype=np.float32),
-        shape=(1,),
-        dtype=np.float32,
-    )
-
-def create_initial_state(random_pos: bool) -> State:
-    """
-    Overview:
-        Creates a ready-to-play state.
-    Arguments:
-        - random_pos: If ``False``, initial ball positions are set to the starting \
-            configuration of the game (with the cue ball on one side of the table and the \
-            object ball on the other side). If ``True``, the ball positions are randomized.
-    Returns:
-        - state (:obj:`State`): The ready-to-play state. The game is setup to be single \
-            player with perpetual play (no win condition). The cue stick parameters have not \
-            yet been set.
-    """
-    gametype = pt.GameType.SUMTOTHREE
-    players = [pt.Player("Player 1")]
-
-    game = pt.get_ruleset(gametype)(
-        players=players,
-        win_condition=-1,  # type: ignore
-    )
-
-    system = pt.System(
-        cue=pt.Cue.default(),
-        table=(table := pt.Table.from_game_type(gametype)),
-        balls=pt.get_rack(gametype, table),
-    )
-
-    system.cue.set_state(V0=0.0)
-
-    if random_pos:
-        get_pos = lambda table, ball: (
-            (table.w - 2 * ball.params.R) * np.random.rand() + ball.params.R,
-            (table.l - 2 * ball.params.R) * np.random.rand() + ball.params.R,
-            ball.params.R,
-        )
-        system.balls["cue"].state.rvw[0] = get_pos(system.table, system.balls["cue"])
-        system.balls["object"].state.rvw[0] = get_pos(
-            system.table, system.balls["object"]
-        )
-
-    return State(system, game)
-
 @dataclass
 class SumToThreeImageSimulator(PoolToolSimulator):
     renderer: PygameRenderer
 
     def set_action(self, action: NDArray[np.float32]) -> None:
+        """
+        Overview:
+            Sets the cue stick state for a 2-parameter action.
+        Arguments:
+            - action (:obj:`NDArray[np.float32]`): A length-2 array, where the first \
+                parameter is the speed of the cue stick (in m/s), and the second is \
+                the cut angle (i.e., the angle that the cue ball hits the object \
+                ball with) (in degrees). Spin and strike elevation are set to 0.
+        """
         self.state.system.cue.set_state(
             V0=action[0],
             phi=pt.aim.at_ball(self.state.system, "object", cut=action[1]),
+            theta=0.0,
+            a=0.0,
+            b=0.0,
         )
 
     def observation_array(self) -> NDArray[np.float32]:
@@ -173,6 +114,7 @@ class SumToThreeImageSimulator(PoolToolSimulator):
         return self.renderer.observation()
 
     def reset(self) -> None:
+        # IDENTICAL
         if len(self.state.game.players) == 1:
             self.reset_single_player_env()
         else:
@@ -180,6 +122,7 @@ class SumToThreeImageSimulator(PoolToolSimulator):
 
     def reset_single_player_env(self) -> None:
         """Return the passed environment, resetting things to an initial state"""
+        # IDENTICAL
         del self.state.game
         self.state.game = pt.get_ruleset(pt.GameType.SUMTOTHREE)(
             players=[pt.Player("Player 1")],
@@ -206,20 +149,17 @@ class SumToThreeImageSimulator(PoolToolSimulator):
         self.state.system.balls["cue"].state.rvw[0] = cue_pos
         self.state.system.balls["object"].state.rvw[0] = object_pos
 
+        self.state.system.cue.set_state(V0=0.0)
+
         assert self.state.system.balls["cue"].state.s == pt.constants.stationary
         assert self.state.system.balls["object"].state.s == pt.constants.stationary
         assert not np.isnan(self.state.system.balls["cue"].state.rvw).any()
         assert not np.isnan(self.state.system.balls["object"].state.rvw).any()
 
 
-@dataclass
-class EpisodicTrackedStats:
-    eval_episode_length: int = 0
-    eval_episode_return: float = 0.0
-
-
 @ENV_REGISTRY.register("pooltool_sumtothree_image")
 class SumToThreeImageEnv(PoolToolEnv):
+    # IDENTICAL
     config = dict(
         env_name="PoolTool-SumToThree-Image",
         env_type="not_board_games",
@@ -235,6 +175,7 @@ class SumToThreeImageEnv(PoolToolEnv):
         return "SumToThreeEnvImage"
 
     def __init__(self, cfg: EasyDict) -> None:
+        # IDENTICAL
         self.cfg = cfg
 
         # Get the reward function
@@ -318,6 +259,7 @@ class SumToThreeImageEnv(PoolToolEnv):
         return self._env.observation()
 
     def step(self, action: NDArray[np.float32]) -> BaseEnvTimestep:
+        # IDENTICAL
         self._env.set_action(self._env.scale_action(action))
         self._env.simulate()
 

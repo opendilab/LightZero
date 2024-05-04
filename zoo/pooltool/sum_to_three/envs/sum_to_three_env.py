@@ -42,6 +42,7 @@ from __future__ import annotations
 import gc
 
 from dataclasses import dataclass, asdict
+from typing import Optional
 import numpy as np
 from ding.envs import BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
@@ -58,10 +59,8 @@ from zoo.pooltool.datatypes import (
 )
 
 import pooltool as pt
+from zoo.pooltool.image_representation import PygameRenderer
 from zoo.pooltool.sum_to_three.reward import get_reward_bounds, get_reward_function
-
-# Only use x- and y-coordinates for ball positions
-BALL_DIM = 2
 
 
 def get_obs_space(system: pt.System) -> spaces.Box:
@@ -100,12 +99,16 @@ def get_action_space(V0: Bounds, angle: Bounds) -> spaces.Box:
 def get_reward_space(algorithm: str) -> spaces.Box:
     """
     Overview:
-        Given the name of the reward algorithm, return the reward space.
+        Determines the reward space based on the reward calculation algorithm.
+    Arguments:
+        - algorithm (:obj:`str`): The name of the algorithm used to calculate rewards.
+    Returns:
+        - space (:obj:`spaces.Box`): The reward space for the environment.
     """
-    bounds = get_reward_bounds(algorithm)
+    bounds = get_reward_bounds(algorithm)  # Assumes a function get_reward_bounds exists.
     return spaces.Box(
-        low=bounds.low,
-        high=bounds.high,
+        low=np.array([bounds.low], dtype=np.float32),
+        high=np.array([bounds.high], dtype=np.float32),
         shape=(1,),
         dtype=np.float32,
     )
@@ -154,6 +157,35 @@ def create_initial_state(random_pos: bool) -> State:
     return State(system, game)
 
 
+BALL_DIM = 2
+
+def _slice(ball_idx: int) -> slice:
+    return slice(ball_idx * BALL_DIM, (ball_idx + 1) * BALL_DIM)
+
+def _null_obs(num_balls: int) -> NDArray[np.float32]:
+    return np.empty(num_balls * BALL_DIM, dtype=np.float32)
+
+def vector_coordinate_observation_array(state: State) -> NDArray[np.float32]:
+    """
+    Overview:
+        Returns an observation array of the current state.
+    Returns:
+        - observation (:obj:`NDArray[np.float32]`): A continuous 1D array holding \
+            the x- and y- coordinates of the cue ball and the object ball. It has \
+            the following entries: ``[x_cue, y_cue, x_obj, y_obj]``. \
+            ``x_cue`` and ``y_cue`` are the 2D coordinates of the cue ball, and \
+            ``x_obj`` and ``y_obj`` are 2D coordinates of the object ball. The \
+            coordinate system is defined by ``self.spaces.observation`` (see \
+            :obj:`get_obs_space`).
+    """
+    obs = _null_obs(len(state.system.balls))
+    for ball_idx, ball_id in enumerate(state.system.balls.keys()):
+        coords = state.system.balls[ball_id].state.rvw[0, :BALL_DIM]
+        obs[_slice(ball_idx)] = coords
+
+    return obs
+
+
 @dataclass
 class SumToThreeSimulator(PoolToolSimulator):
     """
@@ -161,12 +193,7 @@ class SumToThreeSimulator(PoolToolSimulator):
         Manages the simulation state for simulating actions and retrieving subsequent \
         observations.
     """
-
-    def _slice(self, ball_idx: int) -> slice:
-        return slice(ball_idx * BALL_DIM, (ball_idx + 1) * BALL_DIM)
-
-    def _null_obs(self) -> NDArray[np.float32]:
-        return np.empty(len(self.state.system.balls) * BALL_DIM, dtype=np.float32)
+    renderer: Optional[PygameRenderer] = None
 
     def set_action(self, action: NDArray[np.float32]) -> None:
         """
@@ -191,20 +218,11 @@ class SumToThreeSimulator(PoolToolSimulator):
         Overview:
             Returns an observation array of the current state.
         Returns:
-            - observation (:obj:`NDArray[np.float32]`): A continuous 1D array holding \
-                the x- and y- coordinates of the cue ball and the object ball. It has \
-                the following entries: ``[x_cue, y_cue, x_obj, y_obj]``. \
-                ``x_cue`` and ``y_cue`` are the 2D coordinates of the cue ball, and \
-                ``x_obj`` and ``y_obj`` are 2D coordinates of the object ball. The \
-                coordinate system is defined by ``self.spaces.observation`` (see \
-                :obj:`get_obs_space`).
+            - observation (:obj:`NDArray[np.float32]`): The observation array. For
+                details, see the docstrings of the delegate functions.
         """
-        obs = self._null_obs()
-        for ball_idx, ball_id in enumerate(self.state.system.balls.keys()):
-            coords = self.state.system.balls[ball_id].state.rvw[0, :BALL_DIM]
-            obs[self._slice(ball_idx)] = coords
-
-        return obs
+        if True:
+            return vector_coordinate_observation_array(self.state)
 
     def reset(self) -> None:
         if len(self.state.game.players) == 1:
@@ -213,6 +231,7 @@ class SumToThreeSimulator(PoolToolSimulator):
             raise NotImplementedError()
 
     def reset_single_player_env(self) -> None:
+        """Return the passed environment, resetting things to an initial state"""
         del self.state.game
         self.state.game = pt.get_ruleset(pt.GameType.SUMTOTHREE)(
             players=[pt.Player("Player 1")],
@@ -264,6 +283,7 @@ class SumToThreeEnv(PoolToolEnv):
         action_V0_high=3.0,
         action_angle_low=-70,
         action_angle_high=70,
+        observation_space="coordinate",
     )
 
     def __repr__(self) -> str:
