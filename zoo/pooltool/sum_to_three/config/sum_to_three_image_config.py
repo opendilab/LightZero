@@ -29,6 +29,7 @@ sumtothree_cont_sampled_efficientzero_config = dict(
         env_name="PoolTool-SumToThree",
         env_type="not_board_games",
         render_config_path=render_config_path,
+        observation_type="image",
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,

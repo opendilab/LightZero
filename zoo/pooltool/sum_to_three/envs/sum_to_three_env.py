@@ -224,7 +224,6 @@ class SumToThreeEnv(PoolToolEnv):
         action_V0_high=3.0,
         action_angle_low=-70,
         action_angle_high=70,
-        observation_type="coordinate",
     )
 
     def __repr__(self) -> str:
@@ -250,6 +249,9 @@ class SumToThreeEnv(PoolToolEnv):
 
         try:
             self.observation_type = ObservationType(self.cfg.observation_type)
+        except AttributeError:
+            available = [member.value for member in ObservationType.__members__.values()]
+            raise ValueError(f"Must set 'observation_type' to one of {available}.")
         except ValueError:
             available = [member.value for member in ObservationType.__members__.values()]
             raise ValueError(f"'observation_type' must be one of {available}.")
@@ -290,7 +292,7 @@ class SumToThreeEnv(PoolToolEnv):
 
             if self.observation_type == ObservationType.COORDINATE:
                 observation_space = get_coordinate_obs_space(state.system)
-            elif self.observation_type == ObservationType.COORDINATE:
+            elif self.observation_type == ObservationType.IMAGE:
                 # setup renderer
                 render_config = RenderConfig.from_json(self.cfg.render_config_path)
                 observation_space = get_image_obs_space(render_config)
