@@ -10,9 +10,9 @@ from PIL import Image
 from einops import rearrange
 from einops import rearrange
 import gym
+import os
 from joblib import hash
 import numpy as np
-import torch
 import torch
 from torch.distributions.categorical import Categorical
 import torch.nn as nn
@@ -25,10 +25,15 @@ from .slicer import Embedder, Head, ActEmbedder
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
+from lzero.model.utils import cal_dormant_ratio
 from ding.torch_utils import to_device
 
 from line_profiler import line_profiler
 import hashlib
+import numpy as np
+from PIL import Image
+import torchvision
+import matplotlib.pyplot as plt
 
 class SimNorm(nn.Module):
     """
@@ -53,8 +58,20 @@ class SimNorm(nn.Module):
     def __repr__(self):
         return f"SimNorm(dim={self.dim})"
 
-def quantize_state(state, num_buckets=15): # for atari
-# def quantize_state(state, num_buckets=100): # for memory NOTE:TODO
+# 使用LRU缓存替换原有的字典缓存
+from functools import lru_cache
+
+@lru_cache(maxsize=5000)
+# @lru_cache(maxsize=config.max_cache_size)
+def quantize_state_with_lru_cache(state, num_buckets=15):
+    quantized_state = np.digitize(state, bins=np.linspace(0, 1, num=num_buckets))
+    return tuple(quantized_state)
+
+# 在retrieve_or_generate_kvcache方法中使用优化后的缓存函数
+# cache_key = quantize_state_with_lru_cache(state_single_env)
+
+# def quantize_state(state, num_buckets=15): # for atari
+def quantize_state(state, num_buckets=100): # for memory NOTE:TODO
     """
     量化状态向量。
     参数:
@@ -92,6 +109,14 @@ class WorldModelMT(nn.Module):
         self.num_groups = config.embed_dim // config.group_size
         self.obs_type = config.obs_type
         self.embed_dim = config.embed_dim 
+        self.num_heads = config.num_heads
+        self.gamma = config.gamma
+        self.context_length = config.context_length  # TODO config.context_length
+        # self.context_length_for_recurrent = config.context_length_for_recurrent
+        # self.context_length = self.config.max_tokens  # TODO
+        # self.context_length_for_recurrent = self.config.max_tokens  # TODO
+        self.dormant_threshold = config.dormant_threshold
+        self.analysis_dormant_ratio =  config.analysis_dormant_ratio
 
         self.transformer = Transformer(config)
         self.num_observations_tokens = config.tokens_per_block - 1
@@ -106,7 +131,7 @@ class WorldModelMT(nn.Module):
         self.env_num = config.env_num
         self.num_layers = config.num_layers
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
-
+        # self.recurrent_keep_deepth = config.recurrent_keep_deepth
 
         all_but_last_latent_state_pattern = torch.ones(config.tokens_per_block)
         all_but_last_latent_state_pattern[-2] = 0  # 1,...,0,1
@@ -120,28 +145,31 @@ class WorldModelMT(nn.Module):
         value_policy_tokens_pattern[-2] = 1  # [0,...,1,0]
 
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim)
+        self.task_emb = nn.Embedding(2, config.embed_dim)  # TODO
 
-        self.embedder = Embedder(
-            max_blocks=config.max_blocks,
-            block_masks=[act_tokens_pattern, latent_state_pattern],
-            embedding_tables=nn.ModuleList([nn.Embedding(act_vocab_size, config.embed_dim), nn.Embedding(obs_vocab_size, config.embed_dim)])
-        )
+
+        # 预先计算位置编码矩阵，只用于collect/eval 的推理阶段，不用于训练阶段
+        # self.positional_embedding_k = [self.transformer.blocks[layer].attn.key(self.pos_emb.weight).view(1, config.max_tokens, self.num_heads, self.embed_dim // self.num_heads).transpose(1, 2).cuda().detach() for layer in range(config.num_layers)]  # (B, nh, T, hs)
+        # self.positional_embedding_v = [self.transformer.blocks[layer].attn.value(self.pos_emb.weight).view(1, config.max_tokens, self.num_heads, self.embed_dim // self.num_heads).transpose(1, 2).cuda().detach() for layer in range(config.num_layers)]  # (B, nh, T, hs)
+            
+        # 预先计算位置编码矩阵，只用于collect/eval 的推理阶段，不用于训练阶段
+        self.precompute_pos_emb_diff_kv()
 
         self.act_embedding_table = nn.Embedding(act_vocab_size, config.embed_dim)
-         # NOTE: 对于离散动作，使用fixed_act_embedding，可能前期效率更高, 注意需要self.act_embedding_table.weight不是全零初始化的 ####
+         # NOTE: 对于离散动作，使用fixed_act_embedding，可能前期效率更高,但后期性能较差, 注意需要self.act_embedding_table.weight不是全零初始化的 ####
         # self.act_embedding_table.weight.requires_grad = False
 
         self.obs_per_embdding_dim = config.embed_dim  # 16*64=1024
-
-        self.head_rewards = Head(
-            max_blocks=config.max_blocks,
-            block_mask=act_tokens_pattern,  # 0,...,0,1
-            head_module=nn.Sequential(
-                nn.Linear(config.embed_dim, config.embed_dim),
-                nn.ReLU(),
-                nn.Linear(config.embed_dim, self.support_size)
-            )
-        )
+        # self.head_rewards = Head(
+        #     max_blocks=config.max_blocks,
+        #     block_mask=act_tokens_pattern,  # 0,...,0,1
+        #     head_module=nn.Sequential(
+        #         nn.Linear(config.embed_dim, config.embed_dim),
+        #         # nn.ReLU(),
+        #         nn.GELU(),
+        #         nn.Linear(config.embed_dim, self.support_size)
+        #     )
+        # )
         self.head_observations = Head(  # TODO  
             max_blocks=config.max_blocks,
             block_mask=all_but_last_latent_state_pattern,  # 1,...,0,1 # https://github.com/eloialonso/iris/issues/19
@@ -152,29 +180,31 @@ class WorldModelMT(nn.Module):
                 self.sim_norm,
             )
         )
-        self.head_policy = Head(
-            max_blocks=config.max_blocks, 
-            block_mask=value_policy_tokens_pattern,  # [0,...,1,0]
-            head_module=nn.Sequential(  # （8, 5, 128）
-                nn.Linear(config.embed_dim, config.embed_dim),
-                nn.GELU(),
-                nn.Linear(config.embed_dim, self.action_shape)  # TODO(pu); action shape
-            )
-        )
-        self.head_value = Head(
-            max_blocks=config.max_blocks,
-            block_mask=value_policy_tokens_pattern,
-            head_module=nn.Sequential(
-                nn.Linear(config.embed_dim, config.embed_dim),  
-                nn.GELU(),
-                nn.Linear(config.embed_dim, self.support_size)  # TODO(pu): action shape
-            )
-        )
+        # self.head_policy = Head(
+        #     max_blocks=config.max_blocks, 
+        #     block_mask=value_policy_tokens_pattern,  # [0,...,1,0]
+        #     head_module=nn.Sequential(  # （8, 5, 128）
+        #         nn.Linear(config.embed_dim, config.embed_dim),
+        #         nn.GELU(),
+        #         nn.Linear(config.embed_dim, self.action_shape)  # TODO(pu); action shape
+        #     )
+        # )
+        # self.head_value = Head(
+        #     max_blocks=config.max_blocks,
+        #     block_mask=value_policy_tokens_pattern,
+        #     head_module=nn.Sequential(
+        #         nn.Linear(config.embed_dim, config.embed_dim),  
+        #         nn.GELU(),
+        #         nn.Linear(config.embed_dim, self.support_size)  # TODO(pu): action shape
+        #     )
+        # )
         
         self.head_policy_multi_task = nn.ModuleList()
         self.head_value_multi_task = nn.ModuleList()
+        self.head_rewards_multi_task = nn.ModuleList()
+
         # for task_id in range(3):
-        for task_id in range(2):
+        for task_id in range(2):  # TODO
             action_space_size=18
             self.head_policy = Head(
                 max_blocks=config.max_blocks,
@@ -186,6 +216,7 @@ class WorldModelMT(nn.Module):
                 )
             )
             self.head_policy_multi_task.append(self.head_policy)
+
             self.head_value = Head(
                 max_blocks=config.max_blocks,
                 block_mask=value_policy_tokens_pattern,
@@ -197,36 +228,48 @@ class WorldModelMT(nn.Module):
             )
             self.head_value_multi_task.append(self.head_value)
 
+            self.head_rewards = Head(
+                max_blocks=config.max_blocks,
+                block_mask=act_tokens_pattern,  # 0,...,0,1
+                head_module=nn.Sequential(
+                    nn.Linear(config.embed_dim, config.embed_dim),
+                    nn.GELU(),
+                    nn.Linear(config.embed_dim, self.support_size)
+                )
+            )
+            self.head_rewards_multi_task.append(self.head_rewards)
+
 
         self.apply(init_weights)
 
         last_linear_layer_init_zero = True  # TODO: 有利于收敛速度。
         if last_linear_layer_init_zero:
-            # 将头部模块的最后一个线性层的权重和偏置初始化为零
-            for _, layer in enumerate(reversed(self.head_value.head_module)):
-                if isinstance(layer, nn.Linear):
-                    nn.init.zeros_(layer.weight)
-                    if layer.bias is not None:
-                        nn.init.zeros_(layer.bias)
-                    break
-            for _, layer in enumerate(reversed(self.head_rewards.head_module)):
-                if isinstance(layer, nn.Linear):
-                    nn.init.zeros_(layer.weight)
-                    if layer.bias is not None:
-                        nn.init.zeros_(layer.bias)
-                    break  
-            for _, layer in enumerate(reversed(self.head_observations.head_module)):
-                if isinstance(layer, nn.Linear):
-                    nn.init.zeros_(layer.weight)
-                    if layer.bias is not None:
-                        nn.init.zeros_(layer.bias)
-                    break
+            for head in self.head_policy_multi_task + self.head_value_multi_task + self.head_rewards_multi_task:
+                # 将头部模块的最后一个线性层的权重和偏置初始化为零
+                for _, layer in enumerate(reversed(head.head_module)):
+                    if isinstance(layer, nn.Linear):
+                        nn.init.zeros_(layer.weight)
+                        if layer.bias is not None:
+                            nn.init.zeros_(layer.bias)
+                        break
+            # for _, layer in enumerate(reversed(self.head_rewards.head_module)):
+            #     if isinstance(layer, nn.Linear):
+            #         nn.init.zeros_(layer.weight)
+            #         if layer.bias is not None:
+            #             nn.init.zeros_(layer.bias)
+            #         break  
+            # for _, layer in enumerate(reversed(self.head_observations.head_module)):
+            #     if isinstance(layer, nn.Linear):
+            #         nn.init.zeros_(layer.weight)
+            #         if layer.bias is not None:
+            #             nn.init.zeros_(layer.bias)
+            #         break
 
         # 使用collections.OrderedDict作为缓存结构，可以维持插入顺序
-        self.past_keys_values_cache = collections.OrderedDict()
+        self.past_keys_values_cache_recurrent_infer = collections.OrderedDict()
+        self.past_keys_values_cache_init_infer = collections.OrderedDict()
+        self.past_keys_values_cache_init_infer_envs = [collections.OrderedDict() for _ in range(self.env_num )]
 
-        # TODO: Transformer更新后应该清除缓存 
-        self.keys_values_wm = self.transformer.generate_empty_keys_values(n=self.env_num, max_tokens=self.config.max_tokens)
 
         self.keys_values_wm_list = []
         self.keys_values_wm_size_list = []
@@ -242,16 +285,52 @@ class WorldModelMT(nn.Module):
         self.length_largethan_maxminus7_context_cnt = 0
         self.root_hit_cnt = 0
         self.root_total_query_cnt = 0
-        self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
 
-    def forward(self, obs_embeddings_or_act_tokens, past_keys_values: Optional[KeysValues] = None, kvcache_independent=False, task_id=0) -> WorldModelOutput:
+        self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
+        # TODO: Transformer更新后应该清除缓存 
+        self.keys_values_wm = self.transformer.generate_empty_keys_values(n=self.env_num, max_tokens=self.context_length)
+
+    def precompute_pos_emb_diff_kv(self):
+        if self.context_length <= 2:
+            # 即全部是单帧的，没有context
+            return
+        # 预先计算位置编码矩阵,只用于collect/eval的推理阶段,不用于训练阶段
+        self.positional_embedding_k = [self.transformer.blocks[layer].attn.key(self.pos_emb.weight).view(1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads).transpose(1, 2).cuda().detach() for layer in range(self.config.num_layers)]  # (B, nh, T, hs)
+        self.positional_embedding_v = [self.transformer.blocks[layer].attn.value(self.pos_emb.weight).view(1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads).transpose(1, 2).cuda().detach() for layer in range(self.config.num_layers)]  # (B, nh, T, hs)
+        
+        # 预先计算所有可能的位置编码差值
+        self.pos_emb_diff_k = []
+        self.pos_emb_diff_v = []
+        for layer in range(self.config.num_layers):
+            layer_pos_emb_diff_k = {}
+            layer_pos_emb_diff_v = {}
+            # for start in range(self.config.max_tokens):
+            #     for end in range(start+1, self.config.max_tokens):
+            for start in [2]:
+                for end in [self.context_length-1]:
+                    original_pos_emb_k = self.positional_embedding_k[layer][:,:, start:end, :]
+                    new_pos_emb_k = self.positional_embedding_k[layer][:,:, :end-start, :]
+                    layer_pos_emb_diff_k[(start, end)] = new_pos_emb_k - original_pos_emb_k
+                    
+                    original_pos_emb_v = self.positional_embedding_v[layer][:,:, start:end, :]
+                    new_pos_emb_v = self.positional_embedding_v[layer][:,:, :end-start, :]
+                    layer_pos_emb_diff_v[(start, end)] = new_pos_emb_v - original_pos_emb_v
+            self.pos_emb_diff_k.append(layer_pos_emb_diff_k)
+            self.pos_emb_diff_v.append(layer_pos_emb_diff_v)
+
+
+    def forward(self, obs_embeddings_or_act_tokens, past_keys_values: Optional[KeysValues] = None, kvcache_independent=False, is_init_infer=True, valid_context_lengths=None, task_id=0) -> WorldModelOutput:
+        task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE:TODO
+        # task_embeddings = torch.zeros(768, device=self.device) # NOTE:TODO
+
         if kvcache_independent:
             # 根据past_keys_values获取每个样本的步骤数
             prev_steps = 0 if past_keys_values is None else [past_kv.size for past_kv in past_keys_values]
             prev_steps = torch.tensor(prev_steps, device=self.device)
         else:
             prev_steps = 0 if past_keys_values is None else past_keys_values.size
-
+        if is_init_infer: # TODO ===================
+            valid_context_lengths=None
         if 'obs_embeddings' in obs_embeddings_or_act_tokens.keys():
             obs_embeddings = obs_embeddings_or_act_tokens['obs_embeddings']
             if len(obs_embeddings.shape) == 2:
@@ -265,9 +344,16 @@ class WorldModelMT(nn.Module):
                 # 将位置嵌入reshape回(batch_size, num_steps, embedding_dim)
                 position_embeddings = position_embeddings.view(-1, num_steps, position_embeddings.shape[-1])
                 # 将位置嵌入加到obs_embeddings上
-                sequences = obs_embeddings + position_embeddings
+                sequences = obs_embeddings + position_embeddings + task_embeddings
             else:
-                sequences = obs_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device))
+                if is_init_infer:
+                    sequences = obs_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device)) + task_embeddings
+                else:
+                    # 获取每个样本的有效长度
+                    valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)  # NOTE
+                    # NOTE: 根据有效长度获取位置编码
+                    position_embeddings = self.pos_emb(valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
+                    sequences = obs_embeddings + position_embeddings + task_embeddings
         elif 'act_tokens' in obs_embeddings_or_act_tokens.keys():
             act_tokens = obs_embeddings_or_act_tokens['act_tokens']
             if len(act_tokens.shape) == 3:
@@ -283,10 +369,18 @@ class WorldModelMT(nn.Module):
                 # 将位置嵌入reshape回(batch_size, num_steps, embedding_dim)
                 position_embeddings = position_embeddings.view(-1, num_steps, position_embeddings.shape[-1])
                 # 将位置嵌入加到obs_embeddings上  
-                sequences = act_embeddings + position_embeddings
+                sequences = act_embeddings + position_embeddings + task_embeddings
             else:
-                sequences = act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=act_tokens.device))
+                if is_init_infer:
+                    sequences = act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=act_tokens.device)) + task_embeddings
+                else:
+                    # 获取每个样本的有效长度
+                    valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)
+                    # NOTE: 根据有效长度获取位置编码
+                    position_embeddings = self.pos_emb(valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
+                    sequences = act_embeddings + position_embeddings + task_embeddings
         else:
+            # ============== for learn ==============
             obs_embeddings_and_act_tokens = obs_embeddings_or_act_tokens['obs_embeddings_and_act_tokens']
             # obs_embeddings: (B, L, K=16, E), act_tokens: (B, L, 1)
             obs_embeddings, act_tokens = obs_embeddings_and_act_tokens
@@ -319,29 +413,47 @@ class WorldModelMT(nn.Module):
                 obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
 
             # 添加位置嵌入  
-            sequences = obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device))
+            sequences = obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device)) + task_embeddings
+            
 
         if kvcache_independent:
             x = []
             for k, past_kv in enumerate(past_keys_values):
-                x.append(self.transformer(sequences[k].unsqueeze(0), past_kv))
+                # x.append(self.transformer(sequences[k].unsqueeze(0), past_kv))
+                x.append(self.transformer(sequences[k].unsqueeze(0), past_kv, valid_context_lengths=valid_context_lengths[k].unsqueeze(0)))
             x = torch.cat(x, dim=0)
-        else:
-            x = self.transformer(sequences, past_keys_values)
+        else: #
+            # x = self.transformer(sequences, past_keys_values)
+            x = self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths)
+            # ============ visualize_attention_map ================= 
+            # TODO: only in train
+            # if 'obs_embeddings_and_act_tokens' in obs_embeddings_or_act_tokens.keys():
 
+            #     from lzero.model.gpt_models.attention_map import visualize_attention_map, visualize_attention_maps
+            #     visualize_attention_maps(self.transformer, sequences, past_keys_values, valid_context_lengths)
+            #     # past_keys_values = None
+            #     # for layer_id in range(8):
+            #     #     for head_id in range(8):
+            #     #         visualize_attention_map(self.transformer, sequences, past_keys_values, valid_context_lengths, layer_id=layer_id, head_id=head_id)
+            #     # import sys
+            #     # sys.exit(0)
+                # ========== for visualize ==========
+        
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
         logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
 
         logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
-        
-        logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
 
-        # logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
 
         # TODO: root reward value
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)
+
+
 
     @torch.no_grad()
     def reset_from_initial_observations(self, obs_act_dict: torch.FloatTensor, task_id=0) -> torch.FloatTensor:
@@ -349,10 +461,6 @@ class WorldModelMT(nn.Module):
             observations = obs_act_dict['obs']
             buffer_action = obs_act_dict['action']
             current_obs = obs_act_dict['current_obs']
-        else:
-            observations = obs_act_dict
-            buffer_action = None
-            current_obs = None
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(observations, should_preprocess=True)  # (B, C, H, W) -> (B, K, E)
 
         if current_obs is not None:
@@ -369,46 +477,14 @@ class WorldModelMT(nn.Module):
     def refresh_keys_values_with_initial_latent_state_for_init_infer(self, latent_state: torch.LongTensor, buffer_action=None, current_obs_embeddings=None, task_id=0) -> torch.FloatTensor:
         n, num_observations_tokens, _ = latent_state.shape
         if n <= self.env_num:
-            if buffer_action is None:
-                # MCTS root节点: 需要准确的估计 value, policy_logits, 或许需要结合context的kv_cache进行更准确的估计，而不是当前的从0开始推理
-                self.keys_values_wm = self.transformer.generate_empty_keys_values(n, max_tokens=self.config.max_tokens)
-                outputs_wm = self.forward({'obs_embeddings': latent_state}, past_keys_values=self.keys_values_wm, kvcache_independent=False, task_id=task_id)
-                self.keys_values_wm_size_list = [1 for i in range(n)]
-
-                # 复制单个环境对应的 keys_values_wm 并存储
-                self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
-                for i in range(latent_state.size(0)):  # 遍历每个环境
-                    state_single_env = latent_state[i]  # 获取单个环境的 latent state
-                    quantized_state = state_single_env.detach().cpu().numpy()
-                    cache_key = quantize_state(quantized_state)  # 使用量化后的状态计算哈希值
-                    for layer in range(self.num_layers):
-                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = self.keys_values_wm._keys_values[layer]._k_cache._cache[i].unsqueeze(0)  # shape torch.Size([2, 100, 512])
-                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = self.keys_values_wm._keys_values[layer]._v_cache._cache[i].unsqueeze(0)
-                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm._keys_values[layer]._k_cache._size
-                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm._keys_values[layer]._v_cache._size
-                    self.root_total_query_cnt += 1
-                    if cache_key not in self.past_keys_values_cache:
-                        self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-                    else:
-                        self.root_hit_cnt += 1
-                        root_hit_ratio = self.root_hit_cnt / self.root_total_query_cnt
-                        print('root_total_query_cnt:', self.root_total_query_cnt)
-                        print(f'root_hit_ratio:{root_hit_ratio}')
-                        print(f'root_hit_cnt:{self.root_hit_cnt}')
-                        print(f'root_hit find size {self.past_keys_values_cache[cache_key].size}')
-                        if self.past_keys_values_cache[cache_key].size > 1:
-                            print(f'==' * 20)
-                            print(f'NOTE: root_hit find size > 1')
-                            print(f'==' * 20)
-            elif current_obs_embeddings is not None:
-
+            if current_obs_embeddings is not None:
                 if max(buffer_action) == -1:
                     # 一集的第一步
-                    self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
-                    outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings}, past_keys_values=self.keys_values_wm, task_id=task_id)
+                    self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.context_length)
+                    outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings}, past_keys_values=self.keys_values_wm, is_init_infer=True, task_id=task_id)
 
                     # 复制单个环境对应的 keys_values_wm 并存储
-                    self.update_cache(current_obs_embeddings)
+                    self.update_cache_context(current_obs_embeddings, is_init_infer=True) # TODO
                 else:
                     # 假设 latest_state 是新的 latent_state，包含 ready_env_num 个环境的信息
                     ready_env_num = current_obs_embeddings.shape[0]
@@ -418,49 +494,50 @@ class WorldModelMT(nn.Module):
                         state_single_env = latent_state[i]  # 获取单个环境的 latent state
                         quantized_state = state_single_env.detach().cpu().numpy()
                         cache_key = quantize_state(quantized_state)  # 使用量化后的状态计算哈希值
-                        matched_value = self.past_keys_values_cache.get(cache_key)  # 检索缓存值
+                        # matched_value = self.past_keys_values_cache_init_infer.get(cache_key)  # 检索缓存值
+                        matched_value = self.past_keys_values_cache_init_infer_envs[i].get(cache_key)  # 检索缓存值
+
                         self.root_total_query_cnt += 1
                         if matched_value is not None:
                             # 如果找到匹配的值，将其添加到列表中
                             self.root_hit_cnt += 1
-                            if self.root_total_query_cnt > 0 and self.root_total_query_cnt % 1000 == 0:
-                                root_hit_ratio = self.root_hit_cnt / self.root_total_query_cnt
-                                print('root_total_query_cnt:', self.root_total_query_cnt)
-                                print(f'root_hit_ratio:{root_hit_ratio}')
-                                print(f'root_hit find size {self.past_keys_values_cache[cache_key].size}')
-                                if self.past_keys_values_cache[cache_key].size >= self.config.max_tokens - 5:
-                                    print(f'==' * 20)
-                                    print(f'NOTE: root_hit find size >= self.config.max_tokens - 5')
-                                    print(f'==' * 20)
+                            # if self.root_total_query_cnt > 0 and self.root_total_query_cnt % 1000 == 0:
+                            #     root_hit_ratio = self.root_hit_cnt / self.root_total_query_cnt
+                            #     print('root_total_query_cnt:', self.root_total_query_cnt)
+                            #     print(f'root_hit_ratio:{root_hit_ratio}')
+                            #     print(f'root_hit find size {self.past_keys_values_cache_init_infer_envs[i][cache_key].size}') # TODO env
+                            #     if self.past_keys_values_cache_init_infer[cache_key].size >= self.config.max_tokens - 3:
+                            #         print(f'==' * 20)
+                            #         print(f'NOTE: root_hit find size >= self.config.max_tokens - 3')
+                            #         print(f'==' * 20)
                             # 这里需要deepcopy因为在transformer的forward中会原地修改matched_value
                             self.keys_values_wm_list.append(copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
                             # 使用零值重置
-                            self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
-                            outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)}, past_keys_values=self.keys_values_wm_single_env, task_id=task_id)
+                            self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
+                            outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)}, past_keys_values=self.keys_values_wm_single_env, is_init_infer=True, task_id=task_id)
                             self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                             self.keys_values_wm_size_list.append(1)
 
                     # 输入self.keys_values_wm_list，输出为self.keys_values_wm
-                    self.trim_and_pad_kv_cache()
+                    self.keys_values_wm_size_list_current = self.trim_and_pad_kv_cache(is_init_infer=True)
 
                     buffer_action = buffer_action[:ready_env_num]
+                    # if ready_env_num<self.env_num:
+                    #     print(f'init inference ready_env_num: {ready_env_num} < env_num: {self.env_num}')
                     buffer_action = torch.from_numpy(np.array(buffer_action)).to(latent_state.device)
                     act_tokens = buffer_action.unsqueeze(-1)
-                    outputs_wm = self.forward({'act_tokens': act_tokens}, past_keys_values=self.keys_values_wm, task_id=task_id)
+                    outputs_wm = self.forward({'act_tokens': act_tokens}, past_keys_values=self.keys_values_wm, is_init_infer=True, task_id=task_id)
 
-                    outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings}, past_keys_values=self.keys_values_wm, task_id=task_id)
+                    outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings}, past_keys_values=self.keys_values_wm, is_init_infer=True, task_id=task_id)
 
                     # 复制单个环境对应的 keys_values_wm 并存储
-                    self.update_cache(current_obs_embeddings)
+                    self.update_cache_context(current_obs_embeddings, is_init_infer=True) # TODO
 
-        elif n == int(256):
-            # TODO: n=256 表示训练 tokenizer, 不需要计算target value
-            self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.config.max_tokens)
-            outputs_wm = self.forward({'obs_embeddings': latent_state}, past_keys_values=self.keys_values_wm, task_id=task_id)
-        elif n > self.env_num and n != int(256) and buffer_action is not None:
-            # 训练时计算 target value
+
+        elif n > self.env_num and buffer_action is not None:
+            # 训练时计算 target value/
             # [192, 16, 64] -> [32, 6, 16, 64]
             latent_state = latent_state.contiguous().view(buffer_action.shape[0], -1, num_observations_tokens, self.obs_per_embdding_dim)  # (BL, K) for unroll_step=1
 
@@ -469,7 +546,8 @@ class WorldModelMT(nn.Module):
             act_tokens = rearrange(buffer_action, 'b l -> b l 1')
 
             # 选择每个样本的最后一步
-            last_steps = act_tokens[:, -1:, :]  # 这将选择最后一列并保持维度不变, 最后一步的target policy/value本身就没有用到
+            ###### 这将选择最后一列并保持维度不变, 最后一步的target policy/value本身就没有用到 ######
+            last_steps = act_tokens[:, -1:, :]  
             # 使用torch.cat在第二个维度上连接原始act_tokens和last_steps
             act_tokens = torch.cat((act_tokens, last_steps), dim=1)
 
@@ -503,7 +581,8 @@ class WorldModelMT(nn.Module):
     """
 
     @torch.no_grad()
-    def forward_recurrent_inference(self, state_action_history, task_id=0):
+    # def forward_recurrent_inference(self, state_action_history, task_id=0):
+    def forward_recurrent_inference(self, state_action_history, simulation_index=0, latent_state_index_in_search_path=[], task_id=0):
         # 一般来讲,在一次 MCTS search中,我们需要维护H长度的context来使用transformer进行推理。
         # 由于在一次search里面。agent最多访问sim个不同的节点,因此我们只需维护一个 {(state:kv_cache)}的列表。
         # 但如果假设环境是MDP的话,然后根据当前的 latest_state s_t 在这个列表中查找即可
@@ -515,7 +594,7 @@ class WorldModelMT(nn.Module):
         ready_env_num = latest_state.shape[0]
         self.keys_values_wm_list = []
         self.keys_values_wm_size_list = []
-        self.retrieve_or_generate_kvcache(latest_state, ready_env_num)  
+        self.keys_values_wm_size_list = self.retrieve_or_generate_kvcache(latest_state, ready_env_num, simulation_index)  
 
         latent_state_list = []
         token = action.reshape(-1, 1)
@@ -532,24 +611,25 @@ class WorldModelMT(nn.Module):
             print('total_query_count:', self.total_query_count)
             # 如果总查询次数大于0,计算并打印cnt的比率
             length_largethan_maxminus5_context_cnt_ratio = self.length_largethan_maxminus5_context_cnt / self.total_query_count
-            print('largethan_maxminus5_context:', self.length_largethan_maxminus5_context_cnt)
-            print('largethan_maxminus5_context_ratio:', length_largethan_maxminus5_context_cnt_ratio)
+            print('recurrent largethan_maxminus5_context:', self.length_largethan_maxminus5_context_cnt)
+            print('recurrent largethan_maxminus5_context_ratio:', length_largethan_maxminus5_context_cnt_ratio)
             length_largethan_maxminus7_context_cnt_ratio = self.length_largethan_maxminus7_context_cnt / self.total_query_count
-            print('largethan_maxminus7_context_ratio:', length_largethan_maxminus7_context_cnt_ratio)
-            print('largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
+            print('recurrent largethan_maxminus7_context_ratio:', length_largethan_maxminus7_context_cnt_ratio)
+            print('recurrent largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
 
         # 输入self.keys_values_wm_list,输出为self.keys_values_wm
-        self.trim_and_pad_kv_cache()
-
+        self.keys_values_wm_size_list = self.trim_and_pad_kv_cache(is_init_infer=False) # 与上面self.retrieve_or_generate_kvcache返回的一致
+        self.keys_values_wm_size_list_current = self.keys_values_wm_size_list
         for k in range(2):  # 假设每次只有一个动作token。
             # action_token obs_token, ..., obs_token  1+1
             if k == 0:
                 obs_embeddings_or_act_tokens = {'act_tokens': token}
             else:
                 obs_embeddings_or_act_tokens = {'obs_embeddings': token}
-
-            outputs_wm = self.forward(obs_embeddings_or_act_tokens, past_keys_values=self.keys_values_wm, kvcache_independent=False, task_id=task_id)
-
+            # self.keys_values_wm 会被原地改动 ===============
+            outputs_wm = self.forward(obs_embeddings_or_act_tokens, past_keys_values=self.keys_values_wm, kvcache_independent=False, is_init_infer=False, task_id=task_id)
+            # print('keys_values_wm_size_list_current:', self.keys_values_wm_size_list_current)
+            self.keys_values_wm_size_list_current = [i+1 for i in self.keys_values_wm_size_list_current] # NOTE: +1 ===============
             if k == 0:
                 # 如果k==0,token是action_token,outputs_wm.logits_rewards 是有值的
                 reward = outputs_wm.logits_rewards  # (B,)
@@ -561,22 +641,25 @@ class WorldModelMT(nn.Module):
                     token = token.unsqueeze(1)  # (8,1024) -> (8,1,1024)
                 latent_state_list.append(token)
 
-        # 删除旧的self.latent_state以释放内存
+        # 删除旧的self.latent_state以释放内存 ===========
         del self.latent_state
         self.latent_state = torch.cat(latent_state_list, dim=1)  # (B, K)
 
-        self.update_cache(self.latent_state)
+        self.update_cache_context(self.latent_state, is_init_infer=False, simulation_index=simulation_index, latent_state_index_in_search_path=latent_state_index_in_search_path) # TODO
 
         return outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value
 
-    def trim_and_pad_kv_cache(self):
-        """
-        This method trims and pads the key and value caches of the attention mechanism
-        to a consistent size across all items in the batch, determined by the smallest cache size.
-        """
 
-        # 找到所有key-value尺寸中的最小尺寸,用于填充/修剪
-        min_size = min(self.keys_values_wm_size_list)
+    def trim_and_pad_kv_cache(self, is_init_infer=True):
+        # =========== TODO： is_init_infer=True 在episode快结束时，batch里面不同env的context的处理=========
+        # if is_init_infer:
+        #     print('='*20)
+        #     print(f'self.keys_values_wm_size_list: {self.keys_values_wm_size_list}')
+        # print(f'is_init_infer: {is_init_infer}')
+        # print(f'self.keys_values_wm_size_list: {self.keys_values_wm_size_list}')
+        # NOTE: self.keys_values_wm_size_list会传递到world_model.forward()中
+        # 找到所有key-value尺寸中的最大尺寸,用于填充
+        max_size = max(self.keys_values_wm_size_list)
 
         # 遍历transformer的每一层
         for layer in range(self.num_layers):
@@ -592,88 +675,183 @@ class WorldModelMT(nn.Module):
 
                 # 获取当前缓存的有效尺寸
                 effective_size = self.keys_values_wm_size_list[idx]
-                # 计算需要修剪的尺寸差异
-                trim_size = effective_size - min_size if effective_size > min_size else 0
+                # 计算需要填充的尺寸差异
+                pad_size = max_size - effective_size
 
-                # 如果需要修剪,从缓存的开头移除'trim_size'
-                if trim_size > 0:
-                    k_cache_trimmed = k_cache[:, :, trim_size:, :]
-                    v_cache_trimmed = v_cache[:, :, trim_size:, :]
-                    # 在第三维上用零填充修剪后的缓存
-                    k_cache_padded = F.pad(k_cache_trimmed, (0, 0, trim_size, 0), "constant", 0)
-                    v_cache_padded = F.pad(v_cache_trimmed, (0, 0, trim_size, 0), "constant", 0)
+                # 如果需要填充,在缓存的开头添加'pad_size'个零 ====================
+                if pad_size > 0:
+                    # NOTE: 先去掉后面pad_size个无效的零 kv, 再在缓存的开头添加'pad_size'个零 ，注意位置编码的正确性
+                    k_cache_trimmed = k_cache[:, :, :-pad_size, :]
+                    v_cache_trimmed = v_cache[:, :, :-pad_size, :]
+                    k_cache_padded = F.pad(k_cache_trimmed, (0, 0, pad_size, 0), "constant", 0)  # 在缓存的开头添加'pad_size'个零 
+                    v_cache_padded = F.pad(v_cache_trimmed, (0, 0, pad_size, 0), "constant", 0)
                 else:
-                    k_cache_padded = k_cache
+                    k_cache_padded = k_cache  
                     v_cache_padded = v_cache
 
-                # 将处理后的缓存添加到列表中
+                # 将处理后的缓存添加到列表中 
                 kv_cache_k_list.append(k_cache_padded)
                 kv_cache_v_list.append(v_cache_padded)
 
             # 沿新维度堆叠缓存,并用squeeze()移除额外维度
-            self.keys_values_wm._keys_values[layer]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1)
+            self.keys_values_wm._keys_values[layer]._k_cache._cache = torch.stack(kv_cache_k_list, dim=0).squeeze(1) 
             self.keys_values_wm._keys_values[layer]._v_cache._cache = torch.stack(kv_cache_v_list, dim=0).squeeze(1)
 
-            # 修剪和填充后,将缓存尺寸更新为最小尺寸
-            self.keys_values_wm._keys_values[layer]._k_cache._size = min_size
-            self.keys_values_wm._keys_values[layer]._v_cache._size = min_size
+            # 填充后,将缓存尺寸更新为最大尺寸
+            self.keys_values_wm._keys_values[layer]._k_cache._size = max_size
+            self.keys_values_wm._keys_values[layer]._v_cache._size = max_size
+        
+        return self.keys_values_wm_size_list
 
-    def update_cache(self, latent_state):
+
+
+    def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0, latent_state_index_in_search_path=[], valid_context_lengths=None):
+        if self.context_length <= 2:
+            # 即全部是单帧的，没有context
+            return
         for i in range(latent_state.size(0)):  # 遍历每个环境
             state_single_env = latent_state[i]  # 获取单个环境的潜在状态
             quantized_state = state_single_env.detach().cpu().numpy()  # 分离并将状态移至CPU
             cache_key = quantize_state(quantized_state)  # 量化状态并将其哈希值计算为缓存键
 
-            # 从全局缓存复制keys和values到单个环境缓存
-            for layer in range(self.num_layers):
-                if self.keys_values_wm._keys_values[layer]._k_cache._size < self.config.max_tokens - 1:
-                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = self.keys_values_wm._keys_values[layer]._k_cache._cache[i].unsqueeze(0)  # Shape torch.Size([2, 100, 512])
-                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = self.keys_values_wm._keys_values[layer]._v_cache._cache[i].unsqueeze(0)
-                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm._keys_values[layer]._k_cache._size
-                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm._keys_values[layer]._v_cache._size
-                elif self.keys_values_wm._keys_values[layer]._k_cache._size == self.config.max_tokens - 1:
+            context_length = self.context_length
+
+            # if is_init_infer:
+            #     context_length = self.context_length
+            # else:
+            #     context_length = self.context_length_for_recurrent
+
+            if not is_init_infer: # NOTE: check 在recurrent_inference时去掉前面填充的0 ============
+                # 从全局缓存复制keys和values到单个环境缓存
+                current_max_context_length = max(self.keys_values_wm_size_list_current)
+                trim_size = current_max_context_length - self.keys_values_wm_size_list_current[i]
+                for layer in range(self.num_layers):
                     # 裁剪和填充逻辑
                     # 假设cache的维度是 [batch_size, num_heads, sequence_length, features]
-                    k_cache_current = self.keys_values_wm._keys_values[layer]._k_cache._cache[i]
+                    k_cache_current = self.keys_values_wm._keys_values[layer]._k_cache._cache[i] # [num_heads, sequence_length, features]
                     v_cache_current = self.keys_values_wm._keys_values[layer]._v_cache._cache[i]
-                    
-                    # 移除前2步并保留最近的max_tokens - 3步
-                    k_cache_trimmed = k_cache_current[:, 2:self.config.max_tokens - 1, :]
-                    v_cache_trimmed = v_cache_current[:, 2:self.config.max_tokens - 1, :]
-                    
-                    # 沿第3维填充后2步
-                    padding_size = (0, 0, 0, 3)  # F.pad的参数(0, 0, 0, 2)指定了在每个维度上的填充量。这些参数是按(左, 右, 上, 下)的顺序给出的,对于三维张量来说,分别对应于(维度2左侧, 维度2右侧, 维度1左侧, 维度1右侧)的填充。
-                    k_cache_padded = F.pad(k_cache_trimmed, padding_size, 'constant', 0)
-                    v_cache_padded = F.pad(v_cache_trimmed, padding_size, 'constant', 0)
+
+                    if trim_size > 0:
+                        # 根据有效长度裁剪 TODO=======================================
+                        # NOTE: 先去掉前面pad_size/trim_size个无效的零kv, 注意位置编码的正确性
+                        k_cache_trimmed = k_cache_current[:, trim_size:, :]
+                        v_cache_trimmed = v_cache_current[:, trim_size:, :]
+                        # 如果有效长度<current_max_context_length, 需要在缓存的后面补充'trim_size'个零 ====================
+                        k_cache_padded = F.pad(k_cache_trimmed, (0, 0, 0, trim_size), "constant", 0)  # 在缓存的后面补充'trim_size'个零 
+                        v_cache_padded = F.pad(v_cache_trimmed, (0, 0, 0, trim_size), "constant", 0)
+                    else:
+                        k_cache_padded = k_cache_current  
+                        v_cache_padded = v_cache_current
+
                     # 更新单环境cache
                     self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = k_cache_padded.unsqueeze(0)
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = v_cache_padded.unsqueeze(0)
                     
-                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.config.max_tokens - 3
-                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.config.max_tokens - 3
+                    self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm_size_list_current[i] # TODO
+                    self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm_size_list_current[i]
 
-            # 比较并存储较大的缓存
-            if cache_key in self.past_keys_values_cache:
-                existing_kvcache = self.past_keys_values_cache[cache_key]
-                # 检查现有缓存和新缓存之间是否存在大小差异
-                if self.keys_values_wm_single_env.size > existing_kvcache.size and self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
-                    # 仅在大小小于 max_tokens - 1 时存储,以避免重置
-                    self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-            elif self.keys_values_wm_single_env.size < self.config.max_tokens - 1:
-                # 仅在大小小于 max_tokens - 1 时存储,以避免重置
-                self.past_keys_values_cache[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                    # NOTE: check 非常重要 ============
+                    if self.keys_values_wm_single_env._keys_values[layer]._k_cache._size >= context_length-1: 
+                        # 固定只保留最近self.context_length-3个timestep的context 
+                        # ===============对于memory环境，训练时是H步，recurrent_inference时可能超出H步 =================
+                        # print(f'self.keys_values_wm_size_list_current[i]:{self.keys_values_wm_size_list_current[i]}')
+                        # 需要对self.keys_values_wm_single_env进行处理，而不是self.keys_values_wm
+                        # 裁剪和填充逻辑
+                        # 假设cache的维度是 [batch_size, num_heads, sequence_length, features]
+                        k_cache_current = self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache
+                        v_cache_current = self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache
+                        
+                        # 移除前2步并保留最近的self.context_length-3步
+                        k_cache_trimmed = k_cache_current[:, :, 2:context_length-1, :].squeeze(0)
+                        v_cache_trimmed = v_cache_current[:, :, 2:context_length-1, :].squeeze(0)
+                        
+                        # 索引预先计算的位置编码差值
+                        pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length-1)]
+                        pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length-1)]
+                        #=========== 对k和v应用位置编码矫正 ==================
+                        k_cache_trimmed += pos_emb_diff_k.squeeze(0)
+                        v_cache_trimmed += pos_emb_diff_v.squeeze(0)
 
-    def retrieve_or_generate_kvcache(self, latent_state, ready_env_num):
+                        # 沿第3维，用0填充后3步
+                        padding_size = (0, 0, 0, 3)  # F.pad的参数(0, 0, 0, 3)指定了在每个维度上的填充量。这些参数是按(左, 右, 上, 下)的顺序给出的,对于三维张量来说,分别对应于(维度2左侧, 维度2右侧, 维度1左侧, 维度1右侧)的填充。
+                        k_cache_padded = F.pad(k_cache_trimmed, padding_size, 'constant', 0)
+                        v_cache_padded = F.pad(v_cache_trimmed, padding_size, 'constant', 0)
+                        # 更新单环境cache
+                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = k_cache_padded.unsqueeze(0)
+                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = v_cache_padded.unsqueeze(0)
+                        
+                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = context_length-3
+                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = context_length-3
+
+
+            else: # init_inference
+                # 从全局缓存复制keys和values到单个环境缓存
+                for layer in range(self.num_layers):
+                    if self.keys_values_wm._keys_values[layer]._k_cache._size < context_length-1:  # 固定只保留最近5个timestep的context
+                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = self.keys_values_wm._keys_values[layer]._k_cache._cache[i].unsqueeze(0)  # Shape torch.Size([2, 100, 512])
+                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = self.keys_values_wm._keys_values[layer]._v_cache._cache[i].unsqueeze(0)
+                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm._keys_values[layer]._k_cache._size
+                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm._keys_values[layer]._v_cache._size
+                    else:
+                        # if is_init_infer:
+                            # return # TODO: reset kv_cache。如果上下文信息是滑动窗口（Sliding Window），需要修复position_embedding的kv_cache，增加了计算开销。
+                        # else:
+                        # 裁剪和填充逻辑
+                        # 假设cache的维度是 [batch_size, num_heads, sequence_length, features]
+                        k_cache_current = self.keys_values_wm._keys_values[layer]._k_cache._cache[i]
+                        v_cache_current = self.keys_values_wm._keys_values[layer]._v_cache._cache[i]
+                        
+                        # 移除前2步并保留最近的self.context_length-3步
+                        # k_cache_trimmed = k_cache_current[:, 2:self.config.max_tokens - 1, :]
+                        # v_cache_trimmed = v_cache_current[:, 2:self.config.max_tokens - 1, :]
+                        k_cache_trimmed = k_cache_current[:, 2:context_length-1, :]
+                        v_cache_trimmed = v_cache_current[:, 2:context_length-1, :]
+                        
+                        # 索引预先计算的位置编码差值
+                        pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length-1)]
+                        pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length-1)]
+                        #=========== 对k和v应用位置编码矫正 ==================
+                        k_cache_trimmed += pos_emb_diff_k.squeeze(0)
+                        v_cache_trimmed += pos_emb_diff_v.squeeze(0)
+
+                        # 沿第3维，用0填充后3步
+                        padding_size = (0, 0, 0, 3)  # F.pad的参数(0, 0, 0, 3)指定了在每个维度上的填充量。这些参数是按(左, 右, 上, 下)的顺序给出的,对于三维张量来说,分别对应于(维度2左侧, 维度2右侧, 维度1左侧, 维度1右侧)的填充。
+                        k_cache_padded = F.pad(k_cache_trimmed, padding_size, 'constant', 0)
+                        v_cache_padded = F.pad(v_cache_trimmed, padding_size, 'constant', 0)
+                        # 更新单环境cache
+                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = k_cache_padded.unsqueeze(0)
+                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = v_cache_padded.unsqueeze(0)
+                        
+                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = context_length-3
+                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = context_length-3
+
+            if is_init_infer:
+                # TODO：每次都存储最新的    
+                # self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                self.past_keys_values_cache_init_infer_envs[i][cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+            
+            else:
+                self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+
+
+    def retrieve_or_generate_kvcache(self, latent_state, ready_env_num, simulation_index=0):
         """
         This method iterates over the environments, retrieves a matching cache if available,
         or generates a new one otherwise. It updates the lists with the keys_values caches and their sizes.
         """
+        # self.root_latent_state = [False for i in range(ready_env_num)]
         for i in range(ready_env_num):
             self.total_query_count += 1
             state_single_env = latent_state[i]  # 获取单个环境的潜在状态
             cache_key = quantize_state(state_single_env)  # 使用量化后的状态计算哈希值
             # 如果存在,检索缓存值
-            matched_value = self.past_keys_values_cache.get(cache_key)
+            # 先在self.past_keys_values_cache_init_infer中寻找
+            # matched_value = self.past_keys_values_cache_init_infer.get(cache_key)
+            matched_value = self.past_keys_values_cache_init_infer_envs[i].get(cache_key)
+
+            # 再在self.past_keys_values_cache中寻找 TODO
+            if matched_value is None:
+                matched_value = self.past_keys_values_cache_recurrent_infer.get(cache_key)
             if matched_value is not None:
                 # 如果找到匹配值,将其添加到列表中
                 self.hit_count += 1
@@ -682,10 +860,12 @@ class WorldModelMT(nn.Module):
                 self.keys_values_wm_size_list.append(matched_value.size)
             else:
                 # 如果没有找到匹配值,使用零重置
-                self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.config.max_tokens)
-                self.forward({'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)}, past_keys_values=self.keys_values_wm_single_env, task_id=task_id)
+                self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
+                self.forward({'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)}, past_keys_values=self.keys_values_wm_single_env, is_init_infer=True)
                 self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                 self.keys_values_wm_size_list.append(1)
+        return self.keys_values_wm_size_list
+
 
     def to_device_for_kvcache(self, keys_values: KeysValues, device: str) -> KeysValues:
         """
@@ -760,7 +940,6 @@ class WorldModelMT(nn.Module):
             # 计算重建损失
             latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 25), reconstructed_images) # NOTE: for stack=1
             
-
 
         # 动作tokens
         act_tokens = rearrange(batch['actions'], 'b l -> b l 1')

@@ -164,7 +164,8 @@ class WorldModel(nn.Module):
             block_mask=act_tokens_pattern,  # 0,...,0,1
             head_module=nn.Sequential(
                 nn.Linear(config.embed_dim, config.embed_dim),
-                nn.ReLU(),
+                # nn.ReLU(),
+                nn.GELU(),
                 nn.Linear(config.embed_dim, self.support_size)
             )
         )
@@ -402,6 +403,7 @@ class WorldModel(nn.Module):
 
         # TODO: root reward value
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)
+
 
     @torch.no_grad()
     def reset_from_initial_observations(self, obs_act_dict: torch.FloatTensor) -> torch.FloatTensor:
@@ -844,6 +846,7 @@ class WorldModel(nn.Module):
                 self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                 self.keys_values_wm_size_list.append(1)
         return self.keys_values_wm_size_list
+
 
     def to_device_for_kvcache(self, keys_values: KeysValues, device: str) -> KeysValues:
         """

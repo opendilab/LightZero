@@ -12,8 +12,8 @@ from ding.utils import POLICY_REGISTRY
 from torch.distributions import Categorical
 from torch.nn import L1Loss
 import inspect
-from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
-from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
+from lzero.mcts import UniZeroMTMCTSCtree as MCTSCtree
+# from lzero.mcts import UniZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
@@ -519,7 +519,6 @@ class MuZeroGPTMTPolicy(Policy):
         # 使用SummaryWriter记录当前和最大显存使用量
 
 
-
         # 然后，在您的代码中，使用这个函数来构建损失字典：
         return_loss_dict = {
             'Current_GPU': current_memory_allocated_gb,
@@ -552,40 +551,6 @@ class MuZeroGPTMTPolicy(Policy):
 
         # 返回最终的损失字典
         return return_loss_dict
-
-        # return_loss_dict = {
-        #     'Current_GPU': current_memory_allocated_gb,
-        #     'Max_GPU': max_memory_allocated_gb,
-        #     'collect_mcts_temperature': self._collect_mcts_temperature,
-        #     'collect_epsilon': self.collect_epsilon,
-        #     'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
-
-        #     'weighted_total_loss': weighted_total_loss.item(),
-        #     # 'obs_loss': mean(obs_loss_multi_task),
-        #     'obs_loss': obs_loss,  # TODO: 多个任务各自的统计量，目前是最后一个任务的统计量
-        #     'latent_recon_loss': latent_recon_loss,
-        #     'perceptual_loss':perceptual_loss,
-        #     'policy_loss': policy_loss,
-        #     'orig_policy_loss': orig_policy_loss,
-        #     'policy_entropy': policy_entropy,
-        #     'target_policy_entropy': average_target_policy_entropy,
-        #     'reward_loss': reward_loss,
-        #     'value_loss': value_loss,
-
-        #     # ==============================================================
-        #     # priority related
-        #     # ==============================================================
-        #     # 'value_priority_orig': value_priority,
-        #     'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
-        #     # 'value_priority': value_priority.mean().item(),
-        #     'target_reward': target_reward.mean().item(),
-        #     'target_value': target_value.mean().item(),
-        #     'transformed_target_reward': transformed_target_reward.mean().item(),
-        #     'transformed_target_value': transformed_target_value.mean().item(),
-        #     'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
-        # }
-
-        # return return_loss_dict
 
 
     def _init_collect(self) -> None:
@@ -678,7 +643,7 @@ class MuZeroGPTMTPolicy(Policy):
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, task_id)
+            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, task_id=task_id)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
@@ -710,7 +675,7 @@ class MuZeroGPTMTPolicy(Policy):
                     )
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                output[env_id] = {
+                output[i] = {
                     'action': action,
                     'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
@@ -815,7 +780,7 @@ class MuZeroGPTMTPolicy(Policy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, task_id)
+            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, task_id=task_id)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
@@ -849,7 +814,7 @@ class MuZeroGPTMTPolicy(Policy):
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
-                output[env_id] = {
+                output[i] = {
                     'action': action,
                     'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,

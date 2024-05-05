@@ -3,19 +3,19 @@ import torch
 torch.cuda.set_device(0)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_name = 'PongNoFrameskip-v4'
-# env_name = 'MsPacmanNoFrameskip-v4'
-# env_name = 'SpaceInvadersNoFrameskip-v4'
+env_id = 'PongNoFrameskip-v4'
+# env_id = 'MsPacmanNoFrameskip-v4'
+# env_id = 'SpaceInvadersNoFrameskip-v4'
 
-if env_name == 'PongNoFrameskip-v4':
+if env_id == 'PongNoFrameskip-v4':
     action_space_size = 6
-elif env_name == 'QbertNoFrameskip-v4':
+elif env_id == 'QbertNoFrameskip-v4':
     action_space_size = 6
-elif env_name == 'MsPacmanNoFrameskip-v4':
+elif env_id == 'MsPacmanNoFrameskip-v4':
     action_space_size = 9
-elif env_name == 'SpaceInvadersNoFrameskip-v4':
+elif env_id == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
-elif env_name == 'BreakoutNoFrameskip-v4':
+elif env_id == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
 
 # ==============================================================
@@ -59,18 +59,18 @@ atari_muzero_config = dict(
     # TODO: 
     # unizero_model.py world_model.py stack (4,64,64)
     # muzero: mcts_ctree, muzero_collector: empty_cache
-    exp_name=f'data_xzero_0307/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh8_fixroot_simnorm_latentw10_pew0_seed0',
+    exp_name=f'data_xzero_0307/{env_id[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh8_fixroot_simnorm_latentw10_pew0_seed0',
 
-    # exp_name=f'data_xzero_0307/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh4_fixroot_head-2-layer_mantrans-nobatch_seed0',
+    # exp_name=f'data_xzero_0307/{env_id[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh4_fixroot_head-2-layer_mantrans-nobatch_seed0',
 
 
-    # exp_name=f'data_xzero_stack1_0219/{env_name[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kv81-fix3_collect-clear200_noeval_search-toplay-nodeepcopy_seed0',
+    # exp_name=f'data_xzero_stack1_0219/{env_id[:-14]}_xzero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_new-rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_stack4_mcts-kv-reset-5-kv81-fix3_collect-clear200_noeval_search-toplay-nodeepcopy_seed0',
 
-    # exp_name=f'data_mz_gpt_ctree_0117/{env_name[:-14]}_unizero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024-nl1-nh1_lr1e-4-gcv10-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_sdpa_seed0',
+    # exp_name=f'data_mz_gpt_ctree_0117/{env_id[:-14]}_unizero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd1024-nl1-nh1_lr1e-4-gcv10-reconslossw0-minmax-iter60k-fixed_stack4_mcs5e2_collectper200-clear_sdpa_seed0',
 
     env=dict(
         stop_value=int(1e6),
-        env_name=env_name,
+        env_id=env_id,
         # obs_shape=(4, 96, 96),
         # obs_shape=(1, 96, 96),
         # observation_shape=(3, 64, 64),

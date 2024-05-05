@@ -226,7 +226,9 @@ class UniZeroModelMT(nn.Module):
         )
 
     # def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
-    def recurrent_inference(self, state_action_history: torch.Tensor, task_id) -> MZNetworkOutput:
+    # def recurrent_inference(self, state_action_history: torch.Tensor, task_id) -> MZNetworkOutput:
+    def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index=0, latent_state_index_in_search_path=[], task_id=0) -> MZNetworkOutput:
+    
         """
         Overview:
             Recurrent inference of MuZero model, which is the rollout step of the MuZero model.
@@ -259,8 +261,10 @@ class UniZeroModelMT(nn.Module):
         # policy_logits, value = self._prediction(next_latent_state)
         # return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
 
+        # x, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
+        #     state_action_history, task_id=task_id)
         x, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
-            state_action_history, task_id=task_id)
+            state_action_history, simulation_index, latent_state_index_in_search_path, task_id=task_id)
         logits_observations, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
 
         # obs discrete distribution to one_hot latent state?

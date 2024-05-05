@@ -52,6 +52,7 @@ class AtariLightZeroEnv(BaseEnv):
         self.episode_life = cfg.episode_life
 
     def _make_env(self):
+        print(f"make env {self.cfg.env_id}")
         return wrap_lightzero(self.cfg, episode_life=self.cfg.episode_life, clip_rewards=self.cfg.clip_rewards)
 
     def reset(self):

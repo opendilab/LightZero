@@ -121,7 +121,7 @@ def train_unizero_multi_task(
     # Main loop
     learner.call_hook('before_run')
 
-
+    # 每个task独立执行 collect/train/eval 的过程
     while True:
         for task_id, (cfg, collector, replay_buffer) in enumerate(zip(cfgs, collectors, game_buffers)):
             # Perform task-specific collection, evaluation, and training as needed

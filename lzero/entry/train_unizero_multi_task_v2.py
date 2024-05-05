@@ -19,7 +19,8 @@ from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
-from lzero.mcts import MuZeroGameBufferGPT as GameBuffer
+from lzero.mcts import UniZeroGameBuffer as GameBuffer
+
 
 def initialize_zeros_batch(observation_shape, batch_size, device):
     """Initialize a zeros tensor for batch observations based on the shape."""
@@ -32,7 +33,7 @@ def initialize_zeros_batch(observation_shape, batch_size, device):
     
     return torch.zeros(shape).to(device)
 
-def train_muzero_gpt_multi_task_v2(
+def train_unizero_multi_task_v2(
         input_cfg_list: List[Tuple[dict, dict]],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -249,10 +250,22 @@ def train_muzero_gpt_multi_task_v2(
                 # if cfg.policy.use_priority:
                 #     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
-        policy._target_model.world_model.past_keys_values_cache.clear()
+        # 预先计算位置编码矩阵，只用于 collect/eval 的推理阶段，不用于训练阶段
+        policy._collect_model.world_model.precompute_pos_emb_diff_kv() # 非常重要，kv更新后需要重新计算
+        policy._target_model.world_model.precompute_pos_emb_diff_kv() # 非常重要，kv更新后需要重新计算
+
+        policy._target_model.world_model.past_keys_values_cache_init_infer.clear()
+        for kv_cache_dict_env in policy._target_model.world_model.past_keys_values_cache_init_infer_envs:
+            kv_cache_dict_env.clear() 
+
+        policy._target_model.world_model.past_keys_values_cache_recurrent_infer.clear()
         policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad
         print('sample target_model past_keys_values_cache.clear()')
-        policy._collect_model.world_model.past_keys_values_cache.clear() # very important
+
+        policy._collect_model.world_model.past_keys_values_cache_init_infer.clear() # very important
+        for kv_cache_dict_env in policy._collect_model.world_model.past_keys_values_cache_init_infer_envs:
+            kv_cache_dict_env.clear() 
+        policy._collect_model.world_model.past_keys_values_cache_recurrent_infer.clear() # very important
         policy._collect_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
         torch.cuda.empty_cache() # TODO: NOTE
 
