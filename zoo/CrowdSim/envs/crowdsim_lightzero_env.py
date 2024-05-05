@@ -79,6 +79,8 @@ class CrowdSimEnv(BaseEnv):
             obs = np.concatenate((obs_list[0], obs_list[1]), axis=0).flatten()
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+        if self._replay_path is not None:
+            self._frame = []
 
         return obs
 
@@ -119,6 +121,11 @@ class CrowdSimEnv(BaseEnv):
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
         rew = to_ndarray([rew]).astype(np.float32)
+        if self._replay_path is not None:
+            self._frame.append(self._env.render())
+            if done:
+                import imageio
+                imageio.mimsave(self._replay_path + '/replay.gif', self._frame)
         return BaseEnvTimestep(obs, rew, done, info)
 
     def enable_save_replay(self, replay_path: Optional[str] = None) -> None:

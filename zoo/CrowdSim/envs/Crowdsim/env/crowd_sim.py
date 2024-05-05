@@ -43,7 +43,7 @@ class CrowdSim(gym.Env):
         self.observation_space = gym.spaces.Box(low=float("-inf"), high=float("inf"), shape=(self.robot_num+self.human_num, 4), dtype=np.float32)
 
         # load_dataset
-        self.transmit_v = 5  # 5*0.3Mb/s
+        self.transmit_v = 20  # 5*0.3Mb/s
         self.nlon = self.config.nlon
         self.nlat = self.config.nlat
         self.lower_left = self.config.lower_left
@@ -110,7 +110,7 @@ class CrowdSim(gym.Env):
             (self.human_df.id == human_id) & (self.human_df.timestamp == current_timestamp)].index
         # self.human_df.loc[current_index, "aoi"] = aoi   # slower
         self.human_df.iat[current_index.values[0], 9] = aoi # faster
-        # self.human_df.iat[current_index.values[0], 10] = data_amount
+        self.human_df.iat[current_index.values[0], 10] = data_amount
 
     def reset(self, phase='test', test_case=None):
         self.current_timestep = 0
@@ -249,11 +249,52 @@ class CrowdSim(gym.Env):
 
         return next_state, reward, done, info
 
-    def render(self, mode='traj', output_file=None, plot_loop=False, moving_line=False):
-        # -------------------------------------------------------------------
-        if mode == 'html':
-            pass
-        elif mode == 'traj':
-            pass
-        else:
-            raise NotImplementedError
+    def render(self):
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as patches
+        import io
+        import imageio
+
+        map_max_x = self.config.nlon
+        map_max_y = self.config.nlat
+        # 创建一个新的图形
+        fig, ax = plt.subplots(figsize=(8, 6))
+
+        # 绘制机器人的历史轨迹
+        for timestep in range(len(self.robot_x_timelist)):
+            for robot_id in range(len(self.robot_x_timelist[timestep])):
+                ax.plot(self.robot_x_timelist[timestep][robot_id], self.robot_y_timelist[timestep][robot_id], color='gray', alpha=0.5)
+
+        # 绘制机器人的位置
+        for robot in self.robots:
+            ax.plot(robot.px, robot.py, marker='o', markersize=5, color='blue')
+        
+        # 绘制机器人的感知范围
+        for robot in self.robots:
+            robot_x, robot_y = robot.px, robot.py
+            circle = patches.Circle((robot_x, robot_y), self.config.sensing_range, edgecolor='blue', facecolor='none')
+            ax.add_patch(circle)
+        
+        # 绘制人类的位置和AOI变化
+        for human in self.humans:
+            human_x, human_y, aoi = human.px, human.py, human.aoi
+            ax.plot(human_x, human_y, marker='x', markersize=5, color='red')
+            ax.text(human_x, human_y, str(aoi), fontsize=8, color='black')
+
+        # 设置图形标题和坐标轴标签
+        # ax.set_xlim(0, map_max_x)
+        # ax.set_ylim(0, map_max_y)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+
+        # 在地图之外留出一些空白区域
+        ax.margins(x=0.1, y=0.1)
+        ax.set_title('Crowd Simulation Visualization')
+
+        # 显示图形
+        fig.canvas.draw()
+        image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+        image = image.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+        plt.close()
+
+        return image

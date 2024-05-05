@@ -57,15 +57,25 @@ class TestCrowdSimEnv:
         mcfg['obs_mode'] = '1-dim-array'
         env = CrowdSimEnv(mcfg)
         env.seed(314)
+        env.enable_save_replay('/home/nighoodRen/LightZero/result/test_replay')
         assert env._seed == 314
         obs = env.reset()
         assert obs['observation'].shape == (244, )
-        for i in range(10):
+        while True:
             random_action = env.random_action()
             timestep = env.step(random_action)
             print(timestep)
             assert timestep.obs['observation'].shape == (244, )
             assert isinstance(timestep.done, bool)
             assert timestep.reward.shape == (1, )
+            if timestep.done:
+                break
         print(env.observation_space, env.action_space, env.reward_space)
         env.close()
+
+
+if __name__ == '__main__':
+    test = TestCrowdSimEnv()
+    # test.test_obs_dict()
+    # test.test_obs_2_dim_array()
+    test.test_obs_1_dim_array()
