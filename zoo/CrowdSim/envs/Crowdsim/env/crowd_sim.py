@@ -207,6 +207,7 @@ class CrowdSim(gym.Env):
                 human_transmit_data_list[human_id] = 0
                 human.update(next_px, next_py, next_theta, transmitted_data=0)
 
+            self.cur_data_amount_timelist[human_id] = human.data_amount
             self.current_human_aoi_list[human_id] = human.aoi
             self.sync_human_df(human_id, self.current_timestep + 1, human.aoi, human.data_amount)
 

@@ -573,8 +573,9 @@ class MuZeroCollector(ISerialCollector):
                     reward = timestep.info['eval_episode_return']
                     if timestep.info.get('performance_info') is not None:
                         mean_aoi = timestep.info['performance_info']['mean_aoi']
+                        mean_transmit_data = timestep.info['performance_info']['mean_transmit_data']
                         mean_energy_consumption = timestep.info['performance_info']['mean_energy_consumption']
-                        collected_data_amount = timestep.info['performance_info']['collected_data_amount']
+                        transmitted_data_ratio = timestep.info['performance_info']['transmitted_data_ratio']
                         human_coverage = timestep.info['performance_info']['human_coverage']
                         info = {
                             'reward': reward,
@@ -582,8 +583,9 @@ class MuZeroCollector(ISerialCollector):
                             'step': self._env_info[env_id]['step'],
                             'visit_entropy': visit_entropies_lst[env_id] / eps_steps_lst[env_id],
                             'mean_aoi': mean_aoi,
+                            'mean_transmit_data': mean_transmit_data,
                             'mean_energy_consumption': mean_energy_consumption,
-                            'collected_data_amount': collected_data_amount,
+                            'transmitted_data_ratio': transmitted_data_ratio,
                             'human_coverage': human_coverage,
                         }
                     else:
@@ -730,8 +732,9 @@ class MuZeroCollector(ISerialCollector):
             if self._episode_info[0].get('mean_aoi') is not None:
                 episode_aoi = [d['mean_aoi'] for d in self._episode_info]
                 episode_energy_consumption = [d['mean_energy_consumption'] for d in self._episode_info]
-                episode_collected_data_amount = [d['collected_data_amount'] for d in self._episode_info]
+                episode_transmitted_data_ratio = [d['transmitted_data_ratio'] for d in self._episode_info]
                 episode_human_coverage = [d['human_coverage'] for d in self._episode_info]
+                mean_transmit_data = [d['mean_transmit_data'] for d in self._episode_info]
                 info = {
                     'episode_count': episode_count,
                     'envstep_count': envstep_count,
@@ -748,8 +751,9 @@ class MuZeroCollector(ISerialCollector):
                     'total_duration': self._total_duration,
                     'visit_entropy': np.mean(visit_entropy),
                     'episode_mean_aoi': np.mean(episode_aoi),
+                    'episode_mean_transmit_data': np.mean(mean_transmit_data),
                     'episode_mean_energy_consumption': np.mean(episode_energy_consumption),
-                    'episode_mean_collected_data_amount': np.mean(episode_collected_data_amount),
+                    'episode_mean_transmitted_data_ratio': np.mean(episode_transmitted_data_ratio),
                     'episode_mean_human_coverage': np.mean(episode_human_coverage),
                 }
             else:
