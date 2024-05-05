@@ -13,6 +13,7 @@
 ![PyPI - Python Version](https://img.shields.io/pypi/pyversions/LightZero)
 ![Loc](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/HansBug/e002642132ec758e99264118c66778a4/raw/loc.json)
 ![Comments](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/HansBug/e002642132ec758e99264118c66778a4/raw/comments.json)
+[![discord badge](https://dcbadge.vercel.app/api/server/dkZS2JF56X?style=flat)](https://discord.gg/dkZS2JF56X)
 
 [![Code Test](https://github.com/opendilab/LightZero/workflows/Code%20Test/badge.svg)](https://github.com/opendilab/LightZero/actions?query=workflow%3A%22Code+Test%22)
 [![Badge Creation](https://github.com/opendilab/LightZero/workflows/Badge%20Creation/badge.svg)](https://github.com/opendilab/LightZero/actions?query=workflow%3A%22Badge+Creation%22)
@@ -26,6 +27,7 @@
 [![GitHub pulls](https://img.shields.io/github/issues-pr/opendilab/LightZero)](https://github.com/opendilab/LightZero/pulls)
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
+
 
 Updated on 2024.04.12 LightZero-v0.0.5
 
@@ -520,7 +522,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 - [File an issue](https://github.com/opendilab/LightZero/issues/new/choose) on Github
 - Open or participate in our [discussion forum](https://github.com/opendilab/LightZero/discussions)
-- Discuss on LightZero [discord server](https://discord.gg/qZTQTycu)
+- Discuss on LightZero [discord server](https://discord.gg/dkZS2JF56X)
 - Contact our email (opendilab@pjlab.org.cn)
 
 - We appreciate all the feedback and contributions to improve LightZero, both algorithms and system designs. 
