@@ -34,19 +34,7 @@ Usage Example:
     pt.simulate(system, inplace=True)
 
     # Setting up rendering configurations.
-    config = RenderConfig(
-        px=100,
-        planes=[
-            RenderPlane(ball_ids=["cue"]),  # Render just the cue ball.
-            RenderPlane(ball_ids=["object"]),  # Render object ball.
-            RenderPlane(ball_ids=["cue", "object"]),  # Render cue and object balls together.
-            RenderPlane(ball_ball_lines=[("cue", "object")]),  # Render line between cue and object balls.
-            RenderPlane(cushion_ids=["3", "12", "9", "18"]),  # Render the 4 cushions.
-        ],
-        line_width=1,
-        antialias_circle=True,
-        antialias_line=True,
-    )
+    config = RenderConfig.default()
 
     # Building and initializing the renderer.
     renderer = PygameRenderer.build(system.table, config)
@@ -189,6 +177,27 @@ class RenderConfig:
                 antialias_circle=config_data["antialias_circle"],
                 antialias_line=config_data["antialias_line"]
             )
+
+    @classmethod
+    def default(cls) -> RenderConfig:
+        return cls(
+            px=100,
+            planes=[
+                # Render the cue ball.
+                RenderPlane(ball_ids=["cue"]),
+                # Render object ball.
+                RenderPlane(ball_ids=["object"]),
+                # Render cue and object balls together.
+                RenderPlane(ball_ids=["cue", "object"]),
+                # Render line between cue and object balls.
+                RenderPlane(ball_ball_lines=[("cue", "object")]),
+                # Render the 4 cushions.
+                RenderPlane(cushion_ids=["3", "12", "9", "18"]),  
+            ],
+            line_width=1,
+            antialias_circle=True,
+            antialias_line=True,
+        )
 
 
 class PygameRenderer:
