@@ -26,6 +26,7 @@
 [![GitHub pulls](https://img.shields.io/github/issues-pr/opendilab/LightZero)](https://github.com/opendilab/LightZero/pulls)
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
+[![discord badge](https://dcbadge.vercel.app/api/server/dkZS2JF56X?style=flat)](https://discord.gg/dkZS2JF56X)
 
 Updated on 2024.04.12 LightZero-v0.0.5
 
@@ -520,7 +521,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 - [File an issue](https://github.com/opendilab/LightZero/issues/new/choose) on Github
 - Open or participate in our [discussion forum](https://github.com/opendilab/LightZero/discussions)
-- Discuss on LightZero [discord server](https://discord.gg/qZTQTycu)
+- Discuss on LightZero [discord server](https://discord.gg/dkZS2JF56X)
 - Contact our email (opendilab@pjlab.org.cn)
 
 - We appreciate all the feedback and contributions to improve LightZero, both algorithms and system designs. 
