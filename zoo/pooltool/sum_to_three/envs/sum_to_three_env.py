@@ -271,6 +271,12 @@ class SumToThreeEnv(PoolToolEnv):
             available = [member.value for member in ObservationType.__members__.values()]
             raise ValueError(f"'observation_type' must be one of {available}.")
 
+        if self.observation_type == ObservationType.IMAGE:
+            if "render_config_path" in self.cfg:
+                self.render_config = RenderConfig.from_json(self.cfg.render_config_path)
+            else:
+                self.render_config = RenderConfig.default()
+
         self._init_flag = False
         self._tracked_stats = EpisodicTrackedStats()
         self._env: SumToThreeSimulator
@@ -309,9 +315,8 @@ class SumToThreeEnv(PoolToolEnv):
                 observation_space = get_coordinate_obs_space(state.system)
             elif self.observation_type == ObservationType.IMAGE:
                 # setup renderer
-                render_config = RenderConfig.from_json(self.cfg.render_config_path)
-                observation_space = get_image_obs_space(render_config)
-                renderer = PygameRenderer.build(state.system.table, render_config)
+                observation_space = get_image_obs_space(self.render_config)
+                renderer = PygameRenderer.build(state.system.table, self.render_config)
                 renderer.set_state(state)
                 renderer.init()
             else:
