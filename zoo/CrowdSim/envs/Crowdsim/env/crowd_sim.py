@@ -29,6 +29,7 @@ class CrowdSim(gym.Env):
         self.config = get_selected_config(dataset)
         self.config.update(custom_config)
 
+        self.env_mode = self.config.env_mode    # 'easy' or 'hard'
         self.human_num = self.config.human_num
         self.robot_num = self.config.robot_num
         self.num_timestep = self.config.num_timestep    # max timestep
@@ -67,6 +68,7 @@ class CrowdSim(gym.Env):
         self.human_df['aoi'] = -1  # 加入aoi记录aoi
         self.human_df['data_amount'] = -1    # record the remaining data amount of each human
         self.human_df['energy'] = -1  # 加入energy记录energy
+        logging.info('Env mode:', self.env_mode)
         logging.info('human number: {}'.format(self.human_num))
         logging.info('Robot number: {}'.format(self.robot_num))
 
@@ -195,17 +197,36 @@ class CrowdSim(gym.Env):
             next_px, next_py, next_theta = get_human_position_from_list(self.current_timestep + 1, human_id,
                                                                         selected_data, selected_next_data, self.config)
             should_reset = judge_aoi_update([next_px, next_py], new_robot_position, self.config)
-            if should_reset:
-                # if the human is in the range of the robot, then part of human's data will be transmitted
-                last_data_amount = human.data_amount
-                human.update(next_px, next_py, next_theta, transmitted_data=self.transmit_v)
-                human_transmit_data_list[human_id] = min(last_data_amount, self.transmit_v)
-                num_updated_human += 1
+            if self.env_mode == 'easy':
+                if should_reset:
+                    # if the human is in the range of the robot, then part of human's data will be transmitted
+                    if human.aoi > 1:
+                        human_transmit_data_list[human_id] = human.aoi
+                    else:
+                        human_transmit_data_list[human_id] = 1
+
+                    human.set(next_px, next_py, next_theta, aoi=1, data_amount=human.aoi)
+                    num_updated_human += 1
+                else:
+                    # if the human is not in the range of the robot, then update the aoi of the human
+                    human_transmit_data_list[human_id] = 0
+                    new_aoi = human.aoi + 1
+                    human.set(next_px, next_py, next_theta, aoi=new_aoi, data_amount=human.aoi)
+                    
+            elif self.env_mode == 'hard':
+                if should_reset:
+                    # if the human is in the range of the robot, then part of human's data will be transmitted
+                    last_data_amount = human.data_amount
+                    human.update(next_px, next_py, next_theta, transmitted_data=self.transmit_v)
+                    human_transmit_data_list[human_id] = min(last_data_amount, self.transmit_v)
+                    num_updated_human += 1
+                else:
+                    # if the human is not in the range of the robot, then no data will be transmitted, \
+                    # and update aoi and caculate new collected data amount
+                    human_transmit_data_list[human_id] = 0
+                    human.update(next_px, next_py, next_theta, transmitted_data=0)
             else:
-                # if the human is not in the range of the robot, then no data will be transmitted, \
-                # and update aoi and caculate new collected data amount
-                human_transmit_data_list[human_id] = 0
-                human.update(next_px, next_py, next_theta, transmitted_data=0)
+                raise ValueError("env_mode should be 'easy' or 'hard'")
 
             self.cur_data_amount_timelist[human_id] = human.data_amount
             self.current_human_aoi_list[human_id] = human.aoi
@@ -215,7 +236,12 @@ class CrowdSim(gym.Env):
         self.update_human_timelist[self.current_timestep] = num_updated_human
         delta_sum_transmit_data = np.sum(human_transmit_data_list)
         self.data_transmission += (delta_sum_transmit_data * 0.3)  # Mb, 0.02M/s per person
-        self.total_generated_data_amount += self.generate_data_amount_per_step
+        if self.env_mode == 'easy':
+            # in easy mode, the data amount generated per step is equal to the number of humans
+            self.total_generated_data_amount = self.num_timestep*self.human_num
+        elif self.env_mode == 'hard':
+            # in hard mode, the data amount generated per step is equal to the sum of the data amount of all humans
+            self.total_generated_data_amount += self.generate_data_amount_per_step
 
         # TODO: need to be well-defined
         reward = self.mean_aoi_timelist[self.current_timestep] - self.mean_aoi_timelist[self.current_timestep + 1] \

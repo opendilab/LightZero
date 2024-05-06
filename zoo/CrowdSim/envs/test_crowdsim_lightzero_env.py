@@ -10,6 +10,7 @@ mcfg=EasyDict(
         human_num = 59, # purdue
         one_uav_action_space = [[0, 0], [30, 0], [-30, 0], [0, 30], [0, -30]],
         obs_mode = '2-dim-array',
+        env_mode = 'easy',
         )
 
 @ pytest.mark.envtest

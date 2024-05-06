@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '2'
+os.environ["CUDA_VISIBLE_DEVICES"] = '1'
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -23,8 +23,9 @@ one_uav_action_space = [[0, 0], [30, 0], [-30, 0], [0, 30], [0, -30]]
 
 CrowdSim_muzero_config = dict(
     exp_name=
-    f'result/CrowdSim_muzeromd_ssl_step{max_env_step}_uav{robot_num}__human{human_num}_seed0',
+    f'result/new_env/new_CrowdSim_muzeromd_ssl_step{max_env_step}_uav{robot_num}__human{human_num}_seed0',
     env=dict(
+        env_mode = 'easy',
         obs_mode='1-dim-array',
         env_name='CrowdSim-v0',
         dataset = 'purdue',
