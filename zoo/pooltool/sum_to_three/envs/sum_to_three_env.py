@@ -77,6 +77,46 @@ def get_action_space(V0: Bounds, angle: Bounds) -> spaces.Box:
     )
 
 
+def _set_initial_positions(system: pt.System, random_pos: bool) -> None:
+    R = system.balls["cue"].params.R
+
+    if random_pos:
+        cue_pos = (
+            (system.table.w - 2 * R) * np.random.rand() + R,
+            (system.table.l - 2 * R) * np.random.rand() + R,
+            R,
+        )
+        object_pos = (
+            (system.table.w - 2 * R) * np.random.rand() + R,
+            (system.table.l - 2 * R) * np.random.rand() + R,
+            R,
+        )
+    else:
+        cue_pos = (
+            system.table.w / 2,
+            system.table.l / 4,
+            R,
+        )
+        object_pos = (
+            system.table.w / 2,
+            system.table.l * 3 / 4,
+            R,
+        )
+
+    system.balls["cue"].state.rvw[0] = cue_pos
+    system.balls["object"].state.rvw[0] = object_pos
+
+
+def _set_initial_cue_state(system: pt.System) -> None:
+    system.cue.set_state(
+        V0=0.0,
+        phi=0.0,
+        theta=0.0,
+        a=0.0,
+        b=0.0,
+    )
+
+
 def create_initial_state(random_pos: bool) -> State:
     """
     Overview:
@@ -104,18 +144,8 @@ def create_initial_state(random_pos: bool) -> State:
         balls=pt.get_rack(gametype, table),
     )
 
-    system.cue.set_state(V0=0.0)
-
-    if random_pos:
-        get_pos = lambda table, ball: (
-            (table.w - 2 * ball.params.R) * np.random.rand() + ball.params.R,
-            (table.l - 2 * ball.params.R) * np.random.rand() + ball.params.R,
-            ball.params.R,
-        )
-        system.balls["cue"].state.rvw[0] = get_pos(system.table, system.balls["cue"])
-        system.balls["object"].state.rvw[0] = get_pos(
-            system.table, system.balls["object"]
-        )
+    _set_initial_positions(system, random_pos)
+    _set_initial_cue_state(system)
 
     return State(system, game)
 
@@ -179,27 +209,12 @@ class SumToThreeSimulator(PoolToolSimulator):
             win_condition=-1,  # type: ignore
         )
 
-        R = self.state.system.balls["cue"].params.R
-
-        cue_pos = (
-            self.state.system.table.w / 2,
-            self.state.system.table.l / 4,
-            R,
-        )
-
-        object_pos = (
-            self.state.system.table.w / 2,
-            self.state.system.table.l * 3 / 4,
-            R,
-        )
-
         self.state.system.reset_history()
         self.state.system.stop_balls()
 
-        self.state.system.balls["cue"].state.rvw[0] = cue_pos
-        self.state.system.balls["object"].state.rvw[0] = object_pos
-
-        self.state.system.cue.set_state(V0=0.0)
+        # Set ball positions at the starting place
+        _set_initial_positions(self.state.system, random_pos=False)
+        _set_initial_cue_state(self.state.system)
 
         assert self.state.system.balls["cue"].state.s == pt.constants.stationary
         assert self.state.system.balls["object"].state.s == pt.constants.stationary
