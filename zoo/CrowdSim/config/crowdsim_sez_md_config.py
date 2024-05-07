@@ -18,15 +18,18 @@ human_num = 59  # purdue
 # human_num = 92  # KAIST
 one_uav_action_space = [[0, 0], [30, 0], [-30, 0], [0, 30], [0, -30]]
 K = 10
+transmit_v = 20
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 CrowdSim_sez_config = dict(
     exp_name=
-    f'result/old_env/new_CrowdSim_sez_md_ssl_step{max_env_step}_uav{robot_num}__human{human_num}_seed0',
+    f'result/new_env/new_CrowdSim_vt{transmit_v}_sez_md_ssl_K{K}_step{max_env_step}_uav{robot_num}__human{human_num}_seed0',
     env=dict(
+        env_mode='hard',
         obs_mode='1-dim-array',
+        transmit_v=transmit_v,
         env_name='CrowdSim-v0',
         dataset = 'purdue',
         robot_num = robot_num,

@@ -44,7 +44,7 @@ class CrowdSim(gym.Env):
         self.observation_space = gym.spaces.Box(low=float("-inf"), high=float("inf"), shape=(self.robot_num+self.human_num, 4), dtype=np.float32)
 
         # load_dataset
-        self.transmit_v = 20  # 5*0.3Mb/s
+        self.transmit_v = self.config.transmit_v  # 5*0.3Mb/s
         self.nlon = self.config.nlon
         self.nlat = self.config.nlat
         self.lower_left = self.config.lower_left
@@ -68,7 +68,7 @@ class CrowdSim(gym.Env):
         self.human_df['aoi'] = -1  # 加入aoi记录aoi
         self.human_df['data_amount'] = -1    # record the remaining data amount of each human
         self.human_df['energy'] = -1  # 加入energy记录energy
-        logging.info('Env mode:', self.env_mode)
+        logging.info('Env mode: {}'.format(self.env_mode))
         logging.info('human number: {}'.format(self.human_num))
         logging.info('Robot number: {}'.format(self.robot_num))
 

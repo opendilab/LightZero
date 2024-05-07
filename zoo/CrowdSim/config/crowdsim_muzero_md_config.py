@@ -17,15 +17,17 @@ human_num = 59  # purdue
 # human_num = 33  # NCSU
 # human_num = 92  # KAIST
 one_uav_action_space = [[0, 0], [30, 0], [-30, 0], [0, 30], [0, -30]]
+transmit_v = 20
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 CrowdSim_muzero_config = dict(
     exp_name=
-    f'result/new_env/new_CrowdSim_muzeromd_ssl_step{max_env_step}_uav{robot_num}__human{human_num}_seed0',
+    f'result/new_env/new_CrowdSim_vt{transmit_v}_muzero_md_ssl_step{max_env_step}_uav{robot_num}__human{human_num}_seed0',
     env=dict(
-        env_mode = 'easy',
+        env_mode = 'hard',
+        transmit_v=transmit_v,
         obs_mode='1-dim-array',
         env_name='CrowdSim-v0',
         dataset = 'purdue',
@@ -74,7 +76,7 @@ CrowdSim_muzero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(1e3),
+        eval_freq=int(2e2),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
