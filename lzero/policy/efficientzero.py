@@ -218,6 +218,8 @@ class EfficientZeroPolicy(MuZeroPolicy):
             return 'EfficientZeroModel', ['lzero.model.efficientzero_model']
         elif self._cfg.model.model_type == "mlp":
             return 'EfficientZeroModelMLP', ['lzero.model.efficientzero_model_mlp']
+        elif self._cfg.model.model_type == "mlp_md":
+            return 'EfficientZeroModelMD', ['lzero.model.efficientzero_model_md']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
