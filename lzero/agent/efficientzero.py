@@ -110,6 +110,9 @@ class EfficientZeroAgent:
             elif self.cfg.policy.model.model_type == 'conv':
                 from lzero.model.efficientzero_model import EfficientZeroModel
                 model = EfficientZeroModel(**self.cfg.policy.model)
+            elif self.cfg.policy.model.model_type == 'mlp_md':
+                from lzero.model.efficientzero_model_md import EfficientZeroModelMD
+                model = EfficientZeroModelMD(**self.cfg.policy.model)
             else:
                 raise NotImplementedError
         if self.cfg.policy.cuda and torch.cuda.is_available():
