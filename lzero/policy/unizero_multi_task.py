@@ -52,15 +52,18 @@ def configure_optimizers(model, weight_decay, learning_rate, betas, device_type)
     print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
     # Create AdamW optimizer and use the fused version if it is available
     fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
-    use_fused = fused_available and device_type == 'cuda'
-    extra_args = dict(fused=True) if use_fused else dict()
-    optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
-    print(f"using fused AdamW: {use_fused}")
+    if torch.cuda.is_available():
+        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas)
+    else:
+        use_fused = fused_available and device_type == 'cuda'
+        extra_args = dict(fused=True) if use_fused else dict()
+        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
+        print(f"using fused AdamW: {use_fused}")
 
     return optimizer
 
 @POLICY_REGISTRY.register('unizero_multi_task')
-class MuZeroGPTMTPolicy(Policy):
+class UniZeroMTPolicy(Policy):
     """
     Overview:
         The policy class for MuZero.
@@ -308,6 +311,10 @@ class MuZeroGPTMTPolicy(Policy):
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
         self.intermediate_losses = defaultdict(float)
+        self.l2_norm_before = 0.
+        self.l2_norm_after= 0.
+        self.grad_norm_before= 0.
+        self.grad_norm_after= 0.
 
     #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -445,7 +452,7 @@ class MuZeroGPTMTPolicy(Policy):
             # update world model
             # ==============================================================
             intermediate_losses = defaultdict(float)
-            losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer, task_id)
+            losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer, task_id=task_id)
 
             weighted_total_loss += losses.loss_total
             # weighted_total_loss = weighted_total_loss + losses.loss_total  # 修改为非in-place操作
@@ -479,11 +486,23 @@ class MuZeroGPTMTPolicy(Policy):
         for name, parameter in self._learn_model.tokenizer.named_parameters():
             print(name)
         """
-        gradient_scale = 1 / self._cfg.num_unroll_steps
-        # TODO(pu): test the effect of gradient scale.
-        weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
+        # gradient_scale = 1 / self._cfg.num_unroll_steps
+        # # TODO(pu): test the effect of gradient scale.
+        # weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
+
         self._optimizer_world_model.zero_grad()
         weighted_total_loss.backward()
+
+        # ============= for analysis ============= TODO
+        if self._cfg.analysis_sim_norm:
+            del self.l2_norm_before
+            del self.l2_norm_after
+            del self.grad_norm_before
+            del self.grad_norm_after
+            self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
+            self._target_model.encoder_hook.clear_data()  # 非常非常重要!!! 
+        # ============= for analysis =============
+
 
         # 在训练循环中使用
         # self.monitor_weights_and_grads(self._learn_model.tokenizer.representation_network)
@@ -491,9 +510,7 @@ class MuZeroGPTMTPolicy(Policy):
 
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
-        total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
-            self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
-        )
+        total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(), self._cfg.grad_clip_value)
 
         self._optimizer_world_model.step()
         if self._cfg.lr_piecewise_constant_decay:
@@ -503,20 +520,23 @@ class MuZeroGPTMTPolicy(Policy):
         # the core target model update step.
         # ==============================================================
         self._target_model.update(self._learn_model.state_dict())
-        if self._cfg.use_rnd_model:
-            self._target_model_for_intrinsic_reward.update(self._learn_model.state_dict())
 
-        # 确保所有的CUDA核心完成工作，以便准确统计显存使用情况
-        torch.cuda.synchronize()
-        # 获取当前分配的显存总量（字节）
-        current_memory_allocated = torch.cuda.memory_allocated()
-        # 获取程序运行到目前为止分配过的最大显存量（字节）
-        max_memory_allocated = torch.cuda.max_memory_allocated()
+        # # 确保所有的CUDA核心完成工作，以便准确统计显存使用情况
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            # 获取当前分配的显存总量（字节）
+            current_memory_allocated = torch.cuda.memory_allocated()
+            # 获取程序运行到目前为止分配过的最大显存量（字节）
+            max_memory_allocated = torch.cuda.max_memory_allocated()
 
-        # 将显存使用量从字节转换为GB
-        current_memory_allocated_gb = current_memory_allocated / (1024**3)
-        max_memory_allocated_gb = max_memory_allocated / (1024**3)
-        # 使用SummaryWriter记录当前和最大显存使用量
+            # 将显存使用量从字节转换为GB
+            current_memory_allocated_gb = current_memory_allocated / (1024**3)
+            max_memory_allocated_gb = max_memory_allocated / (1024**3)
+            # 使用SummaryWriter记录当前和最大显存使用量
+        else:
+            # TODO
+            current_memory_allocated_gb = 0.
+            max_memory_allocated_gb = 0.
 
 
         # 然后，在您的代码中，使用这个函数来构建损失字典：
@@ -803,13 +823,13 @@ class MuZeroGPTMTPolicy(Policy):
                 #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than
                 # sampling during the evaluation phase.
                 
-                # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                #     distributions, temperature=1, deterministic=True
-                # )
-                # TODO: eval for breakout
                 action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=0.25, deterministic=False
+                    distributions, temperature=1, deterministic=True
                 )
+                # TODO: eval for breakout
+                # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                #         distributions, temperature=0.25, deterministic=False
+                # )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]

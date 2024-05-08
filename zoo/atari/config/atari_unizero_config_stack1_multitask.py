@@ -26,6 +26,8 @@ elif env_id == 'BoxingNoFrameskip-v4':
 
 # share action space
 action_space_size = 18
+# action_space_size = 6
+
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -36,7 +38,9 @@ evaluator_env_num = 3
 update_per_collect = 1000  # TODO
 model_update_ratio = 0.25
 
-max_env_step = int(3e6)
+max_env_step = int(1e6) # TODO
+# max_env_step = int(5e5)
+
 reanalyze_ratio = 0.
 batch_size = 64
 num_simulations = 50
@@ -45,9 +49,12 @@ num_unroll_steps = 10
 eps_greedy_exploration_in_collect = True
 
 
-exp_name_prefix = 'data_unizero_mt_stack1_pong-mspacman/'
+exp_name_prefix = 'data_unizero_mt_stack1_pong-mspacman_action{action_space_size}_taskembedding/'
+# exp_name_prefix = 'data_unizero_mt_stack1_pong-action{action_space_size}_notaskembedding/'
+# exp_name_prefix = f'data_unizero_mt_stack1_pong-action{action_space_size}_taskembedding/'
 
-# debug
+
+# only for debug =========
 # batch_size = 2 
 # update_per_collect = 1 # debug
 # num_simulations = 1 # debug
@@ -59,7 +66,8 @@ exp_name_prefix = 'data_unizero_mt_stack1_pong-mspacman/'
 
 atari_muzero_config = dict(
     # mcts_ctree, muzero_collector: empty_cache
-    exp_name=exp_name_prefix+f'{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_taskembdding_sharehead_seed0',
+    # exp_name=exp_name_prefix+f'{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_notaskembdding_sharehead_seed0',
+    exp_name=exp_name_prefix+f'{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_taskembdding_nosharehead_seed0',
     # exp_name=exp_name_prefix+f'{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_taskembdding_sharehead_seed0',
     env=dict(
         stop_value=int(1e6),
@@ -186,6 +194,10 @@ if __name__ == "__main__":
     main_config_2.policy.task_id = 1
     main_config_3.policy.task_id = 2
 
+    # Pong
+    # train_unizero_multi_task_v2([[0, [main_config, create_config]]], seed=0, max_env_step=max_env_step)
+
+    # Pong Mspacman
     train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]]], seed=0, max_env_step=max_env_step)
 
     # train_unizero_multi_task([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]]], seed=0, max_env_step=max_env_step)

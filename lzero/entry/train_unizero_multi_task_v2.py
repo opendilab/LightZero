@@ -199,6 +199,7 @@ def train_unizero_multi_task_v2(
             print(f'='*20)
             print(f'collect task_id: {task_id}...')
             new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+            
             if cfg.policy.update_per_collect is None:
                 # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
                 collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])

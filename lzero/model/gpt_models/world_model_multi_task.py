@@ -170,16 +170,16 @@ class WorldModelMT(nn.Module):
         #         nn.Linear(config.embed_dim, self.support_size)
         #     )
         # )
-        self.head_observations = Head(  # TODO  
-            max_blocks=config.max_blocks,
-            block_mask=all_but_last_latent_state_pattern,  # 1,...,0,1 # https://github.com/eloialonso/iris/issues/19
-            head_module=nn.Sequential(
-                nn.Linear(config.embed_dim, config.embed_dim),
-                nn.GELU(),
-                nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
-                self.sim_norm,
-            )
-        )
+        # self.head_observations = Head(  # TODO  
+        #     max_blocks=config.max_blocks,
+        #     block_mask=all_but_last_latent_state_pattern,  # 1,...,0,1 # https://github.com/eloialonso/iris/issues/19
+        #     head_module=nn.Sequential(
+        #         nn.Linear(config.embed_dim, config.embed_dim),
+        #         nn.GELU(),
+        #         nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
+        #         self.sim_norm,
+        #     )
+        # )
         # self.head_policy = Head(
         #     max_blocks=config.max_blocks, 
         #     block_mask=value_policy_tokens_pattern,  # [0,...,1,0]
@@ -202,10 +202,13 @@ class WorldModelMT(nn.Module):
         self.head_policy_multi_task = nn.ModuleList()
         self.head_value_multi_task = nn.ModuleList()
         self.head_rewards_multi_task = nn.ModuleList()
+        self.head_observations_multi_task = nn.ModuleList()
 
+
+        # TODO:======================
         # for task_id in range(3):
         for task_id in range(2):  # TODO
-            action_space_size=18
+            action_space_size=18  # TODO:======================
             self.head_policy = Head(
                 max_blocks=config.max_blocks,
                 block_mask=value_policy_tokens_pattern,  # TODO: value_policy_tokens_pattern # [0,...,1,0]
@@ -239,12 +242,25 @@ class WorldModelMT(nn.Module):
             )
             self.head_rewards_multi_task.append(self.head_rewards)
 
+            self.head_observations = Head(  # TODO  
+            max_blocks=config.max_blocks,
+            block_mask=all_but_last_latent_state_pattern,  # 1,...,0,1 # https://github.com/eloialonso/iris/issues/19
+            head_module=nn.Sequential(
+                nn.Linear(config.embed_dim, config.embed_dim),
+                nn.GELU(),
+                nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
+                self.sim_norm,
+            )
+            )
+            self.head_observations_multi_task.append(self.head_observations)
+
+
 
         self.apply(init_weights)
 
         last_linear_layer_init_zero = True  # TODO: 有利于收敛速度。
         if last_linear_layer_init_zero:
-            for head in self.head_policy_multi_task + self.head_value_multi_task + self.head_rewards_multi_task:
+            for head in self.head_policy_multi_task + self.head_value_multi_task + self.head_rewards_multi_task + self.head_observations_multi_task:
                 # 将头部模块的最后一个线性层的权重和偏置初始化为零
                 for _, layer in enumerate(reversed(head.head_module)):
                     if isinstance(layer, nn.Linear):
@@ -440,15 +456,15 @@ class WorldModelMT(nn.Module):
                 # ========== for visualize ==========
         
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
-        logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
-
-        logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
-
-        # logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
+        
+        logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
 
         # TODO: root reward value
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)
@@ -704,7 +720,7 @@ class WorldModelMT(nn.Module):
         return self.keys_values_wm_size_list
 
 
-
+    # =================== world_model是共享的，是否需要根据task_id来存储kv_cache ===========
     def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0, latent_state_index_in_search_path=[], valid_context_lengths=None):
         if self.context_length <= 2:
             # 即全部是单帧的，没有context
@@ -910,7 +926,7 @@ class WorldModelMT(nn.Module):
         total_memory_gb = total_memory_bytes / (1024 ** 3)
         return total_memory_gb
 
-    def compute_loss(self, batch, target_tokenizer: Tokenizer=None, task_id=0, **kwargs: Any) -> LossWithIntermediateLosses:
+    def compute_loss(self, batch, target_tokenizer: Tokenizer=None, inverse_scalar_transform_handle=None, task_id=0, **kwargs: Any) -> LossWithIntermediateLosses:
         # 将观察编码为潜在状态表示
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False)
         
@@ -1032,7 +1048,7 @@ class WorldModelMT(nn.Module):
         log_probs = torch.log_softmax(logits, dim=1)
         entropy = -(probs * log_probs).sum(1)
         # 应用mask并返回平均熵损失
-        entropy_loss = (entropy * mask).mean()
+        entropy_loss = (entropy * mask)
         return entropy_loss
 
     def compute_labels_world_model(self, obs_embeddings: torch.Tensor, rewards: torch.Tensor, ends: torch.Tensor,
@@ -1056,56 +1072,6 @@ class WorldModelMT(nn.Module):
         mask_fill_value = mask_fill.unsqueeze(-1).expand_as(target_value)
         labels_value = target_value.masked_fill(mask_fill_value, -100)
         return labels_policy.reshape(-1, self.action_shape), labels_value.reshape(-1, self.support_size)  # TODO(pu)
-
-    def render_img(self, obs: int, rec_img: int):
-        import torch
-        from PIL import Image
-        import matplotlib.pyplot as plt
-
-        # 假设batch是一个字典,其中包含了observations键,
-        # 并且它的形状是torch.Size([B, N, C, H, W])
-        # batch_observations = batch_for_gpt['observations']
-        # batch_observations = batch['observations']
-        batch_observations = obs.unsqueeze(0)
-        # batch_observations = rec_img.unsqueeze(0)
-
-        # batch_observations = observations.unsqueeze(0)
-        # batch_observations = x.unsqueeze(0)
-        # batch_observations = reconstructions.unsqueeze(0)
-
-        B, N, C, H, W = batch_observations.shape  # 自动检测维度
-
-        # 分隔条的宽度(可以根据需要调整)
-        separator_width = 2
-
-        # 遍历每个样本
-        for i in range(B):
-            # 提取当前样本中的所有帧
-            frames = batch_observations[i]
-
-            # 计算拼接图像的总宽度(包括分隔条)
-            total_width = N * W + (N - 1) * separator_width
-
-            # 创建一个新的图像,其中包含分隔条
-            concat_image = Image.new('RGB', (total_width, H), color='black')
-
-            # 拼接每一帧及分隔条
-            for j in range(N):
-                frame = frames[j].permute(1, 2, 0).cpu().numpy()  # 转换为(H, W, C)
-                frame_image = Image.fromarray((frame * 255).astype('uint8'), 'RGB')
-
-                # 计算当前帧在拼接图像中的位置
-                x_position = j * (W + separator_width)
-                concat_image.paste(frame_image, (x_position, 0))
-
-            # 显示图像
-            plt.imshow(concat_image)
-            plt.title(f'Sample {i+1}')
-            plt.axis('off')  # 关闭坐标轴显示
-            plt.show()
-
-            # 保存图像到文件
-            concat_image.save(f'sample_{i+1}.png')
 
     def __repr__(self) -> str:
         return "world_model"
