@@ -24,7 +24,7 @@ num_simulations = 50
 update_per_collect = None
 batch_size = 256
 model_update_ratio = 0.25
-max_env_step = int(5e5)
+max_env_step = int(3e5)
 reanalyze_ratio = 0.99
 
 
@@ -36,9 +36,9 @@ eps_greedy_exploration_in_collect = False
 
 atari_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/{env_name[:-14]}/0325seed0',
+    f'data_ez_ctree/{env_name[:-14]}/0508newezratio99',
     env=dict(
-        env_name=env_name,
+        env_id=env_name,
         obs_shape=(4, 96, 96),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
