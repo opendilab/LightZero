@@ -48,16 +48,18 @@ evaluator_env_num = 3
 num_simulations = 50
 model_update_ratio = 0.25
 batch_size = 256
-max_env_step = int(5e5)
-# max_env_step = int(1e6)
+# max_env_step = int(5e5)
+max_env_step = int(1e6)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = True
 
-torch.cuda.set_device(2)
+torch.cuda.set_device(0)
 
 ssl_loss_weight = 2
 context_length_init =  4 #4  # 1
-num_unroll_steps = 10
+# num_unroll_steps = 10
+num_unroll_steps = 5
+
 rnn_hidden_size = 4096 #4096 # 768
 
 
@@ -82,7 +84,7 @@ rnn_hidden_size = 4096 #4096 # 768
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_paper_muzero_variants_0429/stack1/{env_id[:-14]}_muzero-rnn-fullobs_stack1_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_adamw1e-4_sslw{ssl_loss_weight}_rnn-hidden-size-{rnn_hidden_size}_seed0',
+    exp_name=f'data_paper_muzero_variants_0510/stack1/{env_id[:-14]}_muzero-rnn-fullobs_stack1_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_adamw1e-4_sslw{ssl_loss_weight}_rnn-hidden-size-{rnn_hidden_size}_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_csonlen1_simnorm-cossim_adamw1e-4_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_sslw2-cossim_adamw1e-4_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_sslw2-cossim_sgd02_seed0',
@@ -106,7 +108,7 @@ atari_muzero_config = dict(
                 hook=dict(
                     load_ckpt_before_run='',
                     log_show_after_iter=100,
-                    save_ckpt_after_iter=100000,  # default is 1000
+                    save_ckpt_after_iter=500000,  # default is 1000
                     save_ckpt_after_run=True,
                 ),
             ),

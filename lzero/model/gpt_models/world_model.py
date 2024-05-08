@@ -177,6 +177,7 @@ class WorldModel(nn.Module):
                 nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
                 self.sim_norm, # TODO
                 # nn.Sigmoid(),  # only for ablation
+                # nn.Softmax(),  # only for ablation
             )
         )
         self.head_policy = Head(
@@ -472,8 +473,8 @@ class WorldModel(nn.Module):
                     self.keys_values_wm_size_list_current = self.trim_and_pad_kv_cache(is_init_infer=True)
 
                     buffer_action = buffer_action[:ready_env_num]
-                    if ready_env_num<self.env_num:
-                        print(f'init inference ready_env_num: {ready_env_num} < env_num: {self.env_num}')
+                    # if ready_env_num<self.env_num:
+                    #     print(f'init inference ready_env_num: {ready_env_num} < env_num: {self.env_num}')
                     buffer_action = torch.from_numpy(np.array(buffer_action)).to(latent_state.device)
                     act_tokens = buffer_action.unsqueeze(-1)
                     outputs_wm = self.forward({'act_tokens': act_tokens}, past_keys_values=self.keys_values_wm, is_init_infer=True)

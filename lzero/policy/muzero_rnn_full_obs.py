@@ -632,8 +632,8 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
-        if active_collect_env_num != len(ready_env_id):
-            print('active_collect_env_num != len(ready_env_id)')
+        # if active_collect_env_num != len(ready_env_id):
+        #     print('active_collect_env_num != len(ready_env_id)')
         
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
@@ -773,8 +773,8 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         self._eval_model.env_num = self._cfg.model.evaluator_env_num
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
-        if active_eval_env_num != len(ready_env_id):
-            print('active_collect_env_num != len(ready_env_id)')
+        # if active_eval_env_num != len(ready_env_id):
+        #     print('active_collect_env_num != len(ready_env_id)')
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             # network_output = self._eval_model.initial_inference(data)

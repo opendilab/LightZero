@@ -311,6 +311,7 @@ class RepresentationNetworkGPT(nn.Module):
 
         self.sim_norm = SimNorm(simnorm_dim=group_size)
         # self.sim_norm = nn.Sigmoid() # only for ablation
+        # self.sim_norm = nn.Softmax() # only for ablation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

@@ -77,7 +77,7 @@ ssl_loss_weight = 2
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_paper_muzero_variants_0429/{env_id[:-14]}_muzero_stack1_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_sslw{ssl_loss_weight}_seed0',
+    exp_name=f'data_paper_muzero_variants_0510/{env_id[:-14]}_muzero_stack1_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_sslw{ssl_loss_weight}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,

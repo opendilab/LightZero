@@ -28,7 +28,9 @@ torch.cuda.set_device(6)
 env_id = 'UpNDownNoFrameskip-v4'
 
 update_per_collect = None # for others
-model_update_ratio = 1.
+# model_update_ratio = 1.
+model_update_ratio = 0.5
+
 
 if env_id == 'AlienNoFrameskip-v4':
     action_space_size = 18
@@ -84,7 +86,8 @@ n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
 batch_size = 256
-max_env_step = int(1e6)
+# max_env_step = int(1e6)
+max_env_step = int(5e5)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = True
 num_unroll_steps = 5
@@ -107,7 +110,8 @@ context_length_init = 1
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_paper_learn-dynamics_atari-20-games_0424/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_analysis_dratio0025_seed0',
+    exp_name=f'data_paper_muzero_atari-20-games_0510/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_seed0',
+    # exp_name=f'data_paper_learn-dynamics_atari-20-games_0424/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_analysis_dratio0025_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_simnorm-cossim_adamw1e-4_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_simnorm-cossim_adamw1e-4_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_sslw2-cossim_adamw1e-4_seed0',
@@ -133,7 +137,7 @@ atari_muzero_config = dict(
                 hook=dict(
                     load_ckpt_before_run='',
                     log_show_after_iter=100,
-                    save_ckpt_after_iter=100000,  # default is 1000
+                    save_ckpt_after_iter=500000,  # default is 1000
                     save_ckpt_after_run=True,
                 ),
             ),
@@ -223,8 +227,11 @@ if __name__ == "__main__":
 
     # Define a list of seeds for multiple runs
     seeds = [0,1,2]  # You can add more seed values here
+    # seeds = [1,2]  # You can add more seed values here
+    # seeds = [2]  # You can add more seed values here
+
     for seed in seeds:
         # Update exp_name to include the current seed TODO
-        main_config.exp_name=f'data_paper_learn-dynamics_atari-20-games_0424/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_analysis_dratio0025_seed{seed}'
+        main_config.exp_name=f'data_paper_muzero_atari-20-games_0510/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_seed{seed}'
         from lzero.entry import train_muzero_context
         train_muzero_context([main_config, create_config], seed=seed, max_env_step=max_env_step)

@@ -281,8 +281,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     # policy forward
                     # ==============================================================
-                    # policy_output = self._policy.forward(stack_obs, action_mask, to_play)
-                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id)
+                    # policy_output = self._policy.forward(stack_obs, action_mask, to_play) # for unizero
+                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id) # for muzero_rnn_allobs
 
                     actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                     distributions_dict_no_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}

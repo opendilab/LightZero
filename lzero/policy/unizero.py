@@ -285,7 +285,7 @@ class UniZeroPolicy(Policy):
             update_type='momentum',
             # update_kwargs={'theta': 0.01} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
             update_kwargs={'theta': 0.05} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
-            # update_kwargs={'theta': 1} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
+            # update_kwargs={'theta': 0.999} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
         )
         self._learn_model = self._model
 
@@ -601,7 +601,7 @@ class UniZeroPolicy(Policy):
             temperature: float = 1,
             to_play: List = [-1],
             epsilon: float = 0.25,
-            ready_env_id: np.array = None,
+            ready_env_id: np.array = None
     ) -> Dict:
         """
         Overview:
@@ -791,7 +791,7 @@ class UniZeroPolicy(Policy):
             end_index = self._cfg.model.observation_shape * (step + self._cfg.model.frame_stack_num)
         return beg_index, end_index
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1, ready_env_id: np.array = None,) -> Dict:
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1, ready_env_id: np.array = None) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
