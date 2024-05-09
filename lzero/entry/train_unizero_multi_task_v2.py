@@ -132,18 +132,18 @@ def train_unizero_multi_task_v2(
     # Main loop
     learner.call_hook('before_run')
 
-    for task_id, (cfg, evaluator, collector, replay_buffer) in enumerate(zip(cfgs, evaluators, collectors, game_buffers)):
-        # Usage
-        print(f'='*20)
-        print(f'evaluate task_id: {task_id}...')
-        policy.last_batch_obs = initialize_zeros_batch(
-            cfg.policy.model.observation_shape,
-            len(evaluator_env_cfg),
-            cfg.policy.device
-        )
-        policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
-        # TODO: comment if debugging
-        stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+    # for task_id, (cfg, evaluator, collector, replay_buffer) in enumerate(zip(cfgs, evaluators, collectors, game_buffers)):
+    #     # Usage
+    #     print(f'='*20)
+    #     print(f'evaluate task_id: {task_id}...')
+    #     policy.last_batch_obs = initialize_zeros_batch(
+    #         cfg.policy.model.observation_shape,
+    #         len(evaluator_env_cfg),
+    #         cfg.policy.device
+    #     )
+    #     policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
+    #     # TODO: comment if debugging
+    #     stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
     while True:
         # 每个环境单独收集数据，并放入各自独立的replay buffer中

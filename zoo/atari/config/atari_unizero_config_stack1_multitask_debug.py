@@ -29,9 +29,13 @@ action_space_size = 18
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
-evaluator_env_num = 3
+# collector_env_num = 8
+# n_episode = 8
+# evaluator_env_num = 3
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+
 update_per_collect = None  # TODO
 model_update_ratio = 0.25
 

@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(2)
+torch.cuda.set_device(5)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
 # env_id = 'MsPacmanNoFrameskip-v4'
@@ -49,9 +49,9 @@ num_unroll_steps = 10
 eps_greedy_exploration_in_collect = True
 
 
-exp_name_prefix = 'data_unizero_mt_stack1_pong-mspacman_action{action_space_size}_taskembedding/'
-# exp_name_prefix = 'data_unizero_mt_stack1_pong-action{action_space_size}_notaskembedding/'
-# exp_name_prefix = f'data_unizero_mt_stack1_pong-action{action_space_size}_taskembedding/'
+# exp_name_prefix = f'data_unizero_mt_stack1/pong-mspacman_action{action_space_size}_taskembedding_one-head/'
+exp_name_prefix = f'data_unizero_mt_stack1/pong-mspacman_action{action_space_size}_notaskembedding_N-head/'
+# exp_name_prefix = f'data_unizero_mt_stack1/pong-action{action_space_size}_notaskembedding/'
 
 
 # only for debug =========
@@ -66,9 +66,9 @@ exp_name_prefix = 'data_unizero_mt_stack1_pong-mspacman_action{action_space_size
 
 atari_muzero_config = dict(
     # mcts_ctree, muzero_collector: empty_cache
-    # exp_name=exp_name_prefix+f'{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_notaskembdding_sharehead_seed0',
-    exp_name=exp_name_prefix+f'{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_taskembdding_nosharehead_seed0',
-    # exp_name=exp_name_prefix+f'{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_taskembdding_sharehead_seed0',
+    exp_name=exp_name_prefix+f'{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_seed0',
+    # exp_name=exp_name_prefix+f'{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_seed0',
+    # exp_name=exp_name_prefix+f'{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,

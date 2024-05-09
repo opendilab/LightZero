@@ -208,7 +208,8 @@ class WorldModelMT(nn.Module):
         # TODO:======================
         # for task_id in range(3):
         for task_id in range(2):  # TODO
-            action_space_size=18  # TODO:======================
+            action_space_size=self.action_shape  # TODO:======================
+            # action_space_size=18  # TODO:======================
             self.head_policy = Head(
                 max_blocks=config.max_blocks,
                 block_mask=value_policy_tokens_pattern,  # TODO: value_policy_tokens_pattern # [0,...,1,0]
@@ -336,8 +337,8 @@ class WorldModelMT(nn.Module):
 
 
     def forward(self, obs_embeddings_or_act_tokens, past_keys_values: Optional[KeysValues] = None, kvcache_independent=False, is_init_infer=True, valid_context_lengths=None, task_id=0) -> WorldModelOutput:
-        task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE:TODO
-        # task_embeddings = torch.zeros(768, device=self.device) # NOTE:TODO
+        # task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE:TODO
+        task_embeddings = torch.zeros(768, device=self.device) # NOTE:TODO
 
         if kvcache_independent:
             # 根据past_keys_values获取每个样本的步骤数
@@ -1035,7 +1036,7 @@ class WorldModelMT(nn.Module):
 
         if element == 'policy':
             # 计算策略熵损失
-            policy_entropy = self.compute_policy_entropy_loss(logits, mask_padding)
+            policy_entropy = self.compute_policy_entropy_loss(logits, mask_padding).mean()
             # 用指定的权重组合损失
             combined_loss = loss - self.policy_entropy_weight * policy_entropy
             return combined_loss, loss, policy_entropy
