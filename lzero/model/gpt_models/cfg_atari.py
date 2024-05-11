@@ -75,7 +75,7 @@ cfg['world_model'] = {
                       # "gru_gating": False,
 
 
-                      "device": 'cuda:5',
+                      "device": 'cuda:0',
                       'analysis_sim_norm': False,
                       'analysis_dormant_ratio': False,
                       
@@ -131,12 +131,12 @@ cfg['world_model'] = {
                       # 'max_cache_size':500,
                       "env_num": 8,
 
-                      'latent_recon_loss_weight': 0.05,
-                      'perceptual_loss_weight': 0.05, # for stack1 rgb obs
+                      # 'latent_recon_loss_weight': 0.05,
+                      # 'perceptual_loss_weight': 0.05, # for stack1 rgb obs
                       # # 'perceptual_loss_weight':0., # for stack4 gray obs
 
-                      # 'latent_recon_loss_weight': 0.,
-                      # 'perceptual_loss_weight': 0., # for stack1 rgb obs
+                      'latent_recon_loss_weight': 0.,
+                      'perceptual_loss_weight': 0., # for stack1 rgb obs
 
                       # 'latent_recon_loss_weight':0.,
                       # 'perceptual_loss_weight':0.,

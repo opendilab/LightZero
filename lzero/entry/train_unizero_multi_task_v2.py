@@ -145,6 +145,7 @@ def train_unizero_multi_task_v2(
     #     # TODO: comment if debugging
     #     stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
+    totoal_env_steps = 0
     while True:
         # 每个环境单独收集数据，并放入各自独立的replay buffer中
         for task_id, (cfg, collector, evaluator, replay_buffer) in enumerate(zip(cfgs, collectors, evaluators, game_buffers)):
@@ -170,7 +171,9 @@ def train_unizero_multi_task_v2(
                     decay=policy_config.eps.decay,
                     type_=policy_config.eps.type
                 )
-                collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
+                totoal_env_steps += collector.envstep
+                # collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)  # TODO
+                collect_kwargs['epsilon'] = epsilon_greedy_fn(totoal_env_steps)
             else:
                 collect_kwargs['epsilon'] = 0.0
 

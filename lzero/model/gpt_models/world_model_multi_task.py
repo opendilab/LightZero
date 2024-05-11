@@ -337,8 +337,8 @@ class WorldModelMT(nn.Module):
 
 
     def forward(self, obs_embeddings_or_act_tokens, past_keys_values: Optional[KeysValues] = None, kvcache_independent=False, is_init_infer=True, valid_context_lengths=None, task_id=0) -> WorldModelOutput:
-        # task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE:TODO
-        task_embeddings = torch.zeros(768, device=self.device) # NOTE:TODO
+        task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE: TODO
+        # task_embeddings = torch.zeros(768, device=self.device) # NOTE:TODO
 
         if kvcache_independent:
             # 根据past_keys_values获取每个样本的步骤数
@@ -457,11 +457,13 @@ class WorldModelMT(nn.Module):
                 # ========== for visualize ==========
         
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
+        # one head
         # logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
         # logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
         # logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
         # logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
         
+        # N head
         logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
         logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
         logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
