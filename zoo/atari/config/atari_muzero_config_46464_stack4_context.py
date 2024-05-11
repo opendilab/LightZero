@@ -47,15 +47,16 @@ evaluator_env_num = 3
 num_simulations = 50
 model_update_ratio = 0.25
 batch_size = 256
-# max_env_step = int(5e5)
-max_env_step = int(1e6)
+max_env_step = int(5e5)
+# max_env_step = int(1e6)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = True
-torch.cuda.set_device(2)
+torch.cuda.set_device(0)
 
 num_unroll_steps = 10
-ssl_loss_weight = 2
-context_length_init = 4  # 1
+context_length_init = 4  # 1,4
+ssl_loss_weight = 2  # 0,2
+
 
 # for debug ===========
 # collector_env_num = 1
@@ -74,7 +75,7 @@ context_length_init = 4  # 1
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_paper_muzero_variants_0429/stack4/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_sslw{ssl_loss_weight}_seed0',
+    exp_name=f'data_paper_muzero_variants_0511/stack4_mlp/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_sslw{ssl_loss_weight}_seed0',
     # exp_name=f'data_paper_learn-dynamics_0423/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_adamw1e-4_analysis_dratio0025_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_simnorm-cossim_adamw1e-4_seed0',
     # exp_name=f'data_paper_muzero_variants_0422/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_conlen1_simnorm-cossim_adamw1e-4_seed0',
@@ -100,7 +101,7 @@ atari_muzero_config = dict(
                 hook=dict(
                     load_ckpt_before_run='',
                     log_show_after_iter=100,
-                    save_ckpt_after_iter=100000,  # default is 1000
+                    save_ckpt_after_iter=500000,  # default is 1000
                     save_ckpt_after_run=True,
                 ),
             ),
@@ -185,5 +186,17 @@ atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_context
-    train_muzero_context([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # from lzero.entry import train_muzero_context
+    # train_muzero_context([main_config, create_config], seed=0, max_env_step=max_env_step)
+
+    # Define a list of seeds for multiple runs
+    seeds = [1,2]  # You can add more seed values here
+    # seeds = [1,2]  # You can add more seed values here
+    # seeds = [2]  # You can add more seed values here
+
+    for seed in seeds:
+        # Update exp_name to include the current seed TODO
+        main_config.exp_name=f'data_paper_muzero_variants_0511/stack4_mlp/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_sslw{ssl_loss_weight}_seed{seed}'
+        # main_config.exp_name=f'data_paper_muzero_atari-20-games_0510/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_seed{seed}'
+        from lzero.entry import train_muzero_context
+        train_muzero_context([main_config, create_config], seed=seed, max_env_step=max_env_step)

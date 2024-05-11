@@ -3,7 +3,7 @@ from easydict import EasyDict
 
 # ==== NOTE: 需要设置cfg_atari中的action_shape =====
 import torch
-torch.cuda.set_device(6)
+torch.cuda.set_device(3)
 
 # env_id = 'AlienNoFrameskip-v4' # 18
 # env_id = 'AmidarNoFrameskip-v4' # 10
@@ -30,18 +30,21 @@ torch.cuda.set_device(6)
 # env_id = 'RoadRunnerNoFrameskip-v4' # 18
 # env_id = 'UpNDownNoFrameskip-v4' # 6
 
-env_id = 'PongNoFrameskip-v4' # 6
+# env_id = 'PongNoFrameskip-v4' # 6
 # env_id = 'MsPacmanNoFrameskip-v4' # 9
 # env_id = 'QbertNoFrameskip-v4'  # 6
 # env_id = 'SeaquestNoFrameskip-v4' # 18
-# env_id = 'BoxingNoFrameskip-v4' # 18
+env_id = 'BoxingNoFrameskip-v4' # 18
 
 # env_id = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
 
 
 update_per_collect = None # for others
+update_per_collect = 1000
 # model_update_ratio = 1.
-model_update_ratio = 0.5
+# model_update_ratio = 0.5
+model_update_ratio = 0.25
+
 
 
 if env_id == 'AlienNoFrameskip-v4':
@@ -169,7 +172,7 @@ atari_unizero_config = dict(
                 hook=dict(
                     load_ckpt_before_run='',
                     log_show_after_iter=100,
-                    save_ckpt_after_iter=200000,  # default is 1000
+                    save_ckpt_after_iter=500000,  # default is 1000
                     save_ckpt_after_run=True,
                 ),
             ),
@@ -258,11 +261,13 @@ if __name__ == "__main__":
 
     # Define a list of seeds for multiple runs
     # seeds = [2,1,0]  # You can add more seed values here
-    # seeds = [0,1,2]  # You can add more seed values here
-    seeds = [0]  # You can add more seed values here
+    seeds = [0,1,2]  # You can add more seed values here
+    # seeds = [0]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed TODO
-        main_config.exp_name=f'data_paper_unizero_ablation_0502/target_world_model_{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv{collector_env_num}_seed{seed}'
+        main_config.exp_name=f'data_paper_unizero_nodecode_0513/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv{collector_env_num}_reclw0_seed{seed}'
+
+        # main_config.exp_name=f'data_paper_unizero_ablation_0502/target_world_model_{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv{collector_env_num}_seed{seed}'
 
         # main_config.exp_name=f'data_paper_unizero_ablation_0502/regu_loss_{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv{collector_env_num}_reclw0_seed{seed}'
         # main_config.exp_name=f'data_paper_unizero_ablation_0502/latent_norm_{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv{collector_env_num}_latentsoftmax-true_seed{seed}'

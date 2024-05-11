@@ -464,6 +464,8 @@ class ImageEncoderMemory(nn.Module):
 
         self.normalize_pixel = normalize_pixel
         self.sim_norm = SimNorm(simnorm_dim=group_size)
+        # self.sim_norm = nn.Sigmoid() # only for ablation
+
 
 
     def forward(self, image):

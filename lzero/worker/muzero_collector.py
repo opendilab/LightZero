@@ -419,8 +419,8 @@ class MuZeroCollector(ISerialCollector):
                 # policy forward
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
-                # policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon) # for unizero
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id) # for muzero_rnn_allobs
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon) # for unizero and muzero
+                # policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id) # for muzero_rnn_allobs
 
 
                 actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
@@ -535,8 +535,8 @@ class MuZeroCollector(ISerialCollector):
                     #     print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
 
                     if hasattr(self._policy.get_attribute('collect_model'), 'world_model'):
-                        # if eps_steps_lst[env_id] % 2000 == 0:  # TODO: NOTE for memory
-                        if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE for atari unizero
+                        if eps_steps_lst[env_id] % 2000 == 0:  # TODO: NOTE for memory
+                        # if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE for atari unizero
                         # if eps_steps_lst[env_id] % 32 == 0:  # TODO: NOTE
                         # if eps_steps_lst[env_id] % 90 == 0:
                         # if eps_steps_lst[env_id] % 130 == 0:

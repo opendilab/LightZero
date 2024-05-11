@@ -918,12 +918,14 @@ class WorldModel(nn.Module):
             # 从潜在状态表示重建观察
             reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
             
-            # 计算重建损失和感知损失
-            latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
-            perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
+            # 计算重建损失和感知损失 TODO
+            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
+            # perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
 
             # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # NOTE: for stack=4
-            # perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
+            latent_recon_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
+            perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
+
         
         elif self.obs_type == 'vector':
             perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4

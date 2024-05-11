@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(6)
+torch.cuda.set_device(3)
 
 # env_id = 'AlienNoFrameskip-v4'
 # env_id = 'AmidarNoFrameskip-v4'
@@ -25,7 +25,7 @@ torch.cuda.set_device(6)
 # env_id = 'KungFuMasterNoFrameskip-v4'
 # env_id = 'PrivateEyeNoFrameskip-v4'
 # env_id = 'RoadRunnerNoFrameskip-v4'
-env_id = 'UpNDownNoFrameskip-v4'
+# env_id = 'UpNDownNoFrameskip-v4'
 
 update_per_collect = None # for others
 # model_update_ratio = 1.
