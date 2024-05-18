@@ -1,16 +1,69 @@
 from easydict import EasyDict
-
+import torch
+torch.cuda.set_device(5)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_id = 'PongNoFrameskip-v4'
+# env_id = 'PongNoFrameskip-v4'
+env_id = 'FrostbiteNoFrameskip-v4'
+update_per_collect = None
+model_update_ratio = 0.25
 
-if env_id == 'PongNoFrameskip-v4':
+if env_id == 'AlienNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'AmidarNoFrameskip-v4':
+    action_space_size = 10
+elif env_id == 'AssaultNoFrameskip-v4':
+    action_space_size = 7
+elif env_id == 'AsterixNoFrameskip-v4':
+    action_space_size = 9
+elif env_id == 'BankHeistNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'BattleZoneNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'ChopperCommandNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'CrazyClimberNoFrameskip-v4':
+    action_space_size = 9
+elif env_id == 'DemonAttackNoFrameskip-v4':
     action_space_size = 6
-elif env_id == 'QbertNoFrameskip-v4':
+    model_update_ratio = 0.25
+elif env_id == 'FreewayNoFrameskip-v4':
+    action_space_size = 3
+    model_update_ratio = 0.25
+elif env_id == 'FrostbiteNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'GopherNoFrameskip-v4':
+    action_space_size = 8
+elif env_id == 'HeroNoFrameskip-v4':
+    action_space_size = 18
+    model_update_ratio = 0.25
+elif env_id == 'JamesbondNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'KangarooNoFrameskip-v4':
+    action_space_size = 18
+elif env_id ==  'KrullNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'KungFuMasterNoFrameskip-v4':
+    action_space_size = 14
+elif env_id == 'PrivateEyeNoFrameskip-v4':
+    action_space_size = 18
+    # model_update_ratio = 0.25
+    model_update_ratio = 0.5
+elif env_id == 'RoadRunnerNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'UpNDownNoFrameskip-v4':
     action_space_size = 6
+elif env_id == 'PongNoFrameskip-v4':
+    action_space_size = 6
+    model_update_ratio = 0.25
 elif env_id == 'MsPacmanNoFrameskip-v4':
     action_space_size = 9
-elif env_id == 'SpaceInvadersNoFrameskip-v4':
+elif env_id == 'QbertNoFrameskip-v4':
     action_space_size = 6
+elif env_id == 'SeaquestNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'BoxingNoFrameskip-v4':
+    action_space_size = 18
+    model_update_ratio = 0.25
 elif env_id == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
 
@@ -21,9 +74,11 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 1000
+# update_per_collect = 1000
 batch_size = 256
-max_env_step = int(1e6)
+# max_env_step = int(1e6)
+max_env_step = int(5e5)
+
 reanalyze_ratio = 0.
 
 eps_greedy_exploration_in_collect = False
@@ -96,5 +151,13 @@ atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
 create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # from lzero.entry import train_muzero
+    # train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    
+    seeds = [0,1,2]  # You can add more seed values here
+    # seeds = [0]  # You can add more seed values here
+    for seed in seeds:
+        # Update exp_name to include the current seed TODO
+        main_config.exp_name=f'data_paper_ez_0518/{env_id[:-14]}_efficintzero_upc{update_per_collect}-mur{model_update_ratio}_bs{batch_size}_stack4_seed{seed}'
+        from lzero.entry import train_muzero
+        train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)

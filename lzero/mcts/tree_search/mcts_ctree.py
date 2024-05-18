@@ -799,7 +799,6 @@ class MuZeroRNNMCTSCtree(object):
                 )
 
 
-
 class EfficientZeroMCTSCtree(object):
     """
     Overview:
@@ -825,7 +824,6 @@ class EfficientZeroMCTSCtree(object):
         pb_c_init=1.25,
         # (float) The maximum change in value allowed during the backup step of the search tree update.
         value_delta_max=0.01,
-        env_type='not_board_games',
     )
 
     @classmethod
@@ -874,7 +872,6 @@ class EfficientZeroMCTSCtree(object):
         """
         return tree_efficientzero.Roots(active_collect_env_num, legal_actions)
 
-    # @profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any],
             reward_hidden_state_roots: List[Any], to_play_batch: Union[int, List[Any]]
@@ -910,13 +907,6 @@ class EfficientZeroMCTSCtree(object):
             min_max_stats_lst = tree_efficientzero.MinMaxStatsList(batch_size)
             min_max_stats_lst.set_delta(self._cfg.value_delta_max)
 
-            state_action_history = []  # 初始化 state_action_history 变量
-            last_latent_state = latent_state_roots
-            # NOTE: very important, from the right init key-value-cache
-            # forward_initial_inference()以及执行了下面的操作
-            # _ = model.world_model.refresh_keys_values_with_initial_obs_tokens(model.world_model.obs_tokens)
-            
-            # model.world_model.past_keys_values_cache.clear()  # 清除缓存
             for simulation_index in range(self._cfg.num_simulations):
                 # In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.
 
@@ -935,16 +925,19 @@ class EfficientZeroMCTSCtree(object):
                 MCTS stage 1: Selection
                     Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
                 """
-                if self._cfg.env_type=='not_board_games':
-                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
+                if self._cfg.env_type == 'not_board_games':
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
                         roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
                         to_play_batch
                     )
                 else:
-                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
-                    copy.deepcopy(to_play_batch)
-                )
+                    # the ``to_play_batch`` is only used in board games, here we need to deepcopy it to avoid changing the original data.
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        copy.deepcopy(to_play_batch)
+                    )
+                # obtain the search horizon for leaf nodes
+                search_lens = results.get_search_len()
 
                 # obtain the latent state for leaf node
                 for ix, iy in zip(latent_state_index_in_search_path, latent_state_index_in_batch):
@@ -953,16 +946,12 @@ class EfficientZeroMCTSCtree(object):
                     hidden_states_h_reward.append(reward_hidden_state_h_batch[ix][0][iy])
 
                 latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
-                # latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device).float()
-                # TODO: .long() is only for discrete action
+                hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(self._cfg.device
+                                                                                                 ).unsqueeze(0)
+                hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(self._cfg.device
+                                                                                                 ).unsqueeze(0)
+                # .long() is only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
-
-                # TODO
-                # 在每次模拟后更新 state_action_history
-                # state_action_history.append((last_latent_state, last_actions.detach().cpu().numpy()))
-                # state_action_history.append((latent_states.detach().cpu().numpy(), last_actions.detach().cpu().numpy()))
-                state_action_history.append((latent_states.detach().cpu().numpy(), last_actions))
-
                 """
                 MCTS stage 2: Expansion
                     At the final time-step l of the simulation, the next_latent_state and reward/value_prefix are computed by the dynamics function.
@@ -970,7 +959,6 @@ class EfficientZeroMCTSCtree(object):
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
-                ## EZ ######################
                 network_output = model.recurrent_inference(
                     latent_states, (hidden_states_c_reward, hidden_states_h_reward), last_actions
                 )
@@ -986,10 +974,6 @@ class EfficientZeroMCTSCtree(object):
                 )
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
-
-                # TODO
-                # last_latent_state = network_output.latent_state
-
                 # tolist() is to be compatible with cpp datatype.
                 value_prefix_batch = network_output.value_prefix.reshape(-1).tolist()
                 value_batch = network_output.value.reshape(-1).tolist()
@@ -1017,6 +1001,7 @@ class EfficientZeroMCTSCtree(object):
                     current_latent_state_index, discount_factor, value_prefix_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, is_reset_list, virtual_to_play_batch
                 )
+
 
 
 class GumbelMuZeroMCTSCtree(object):

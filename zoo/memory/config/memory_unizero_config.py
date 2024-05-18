@@ -2,25 +2,29 @@ from easydict import EasyDict
 import torch
 
 
-# env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
-env_id = 'key_to_door'  #   "explore": 15, =================很重要=======
+env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
+# env_id = 'key_to_door'  #   "explore": 15, =================很重要=======
 
 # memory_length = 1000
 # memory_length = 500
-memory_length = 250
+# memory_length = 250
 # memory_length = 120
 # memory_length = 100
-# memory_length = 60
+memory_length = 60
 # memory_length = 2
 
 
 # visual_match [60, 100, 250, 500]
 # key_to_door [60, 120, 250, 500]
 
-# max_env_step = int(3e6)  # for visual_match [1000]
-max_env_step = int(2e6)  # for visual_match [250, 500]
+# max_env_step = int(10e6)  # for visual_match [1000]
+# max_env_step = int(2e6)  # for visual_match [250, 500]
 # max_env_step = int(1e6)  # for visual_match [100, 120]
-# max_env_step = int(5e5)  # for visual_match [2, 60]
+max_env_step = int(5e5)  # for visual_match [2, 60]
+
+# max_env_step = int(3e6)  # for key_to_door [60]
+# max_env_step = int(5e6)  # forkey_to_door [120, 250, 500]
+
 
 
 # ==== NOTE: 需要设置cfg_memory中的action_shape =====
@@ -40,7 +44,10 @@ evaluator_env_num = 10
 num_simulations = 50
 update_per_collect = None  # for others
 # update_per_collect = 1000  # for visual_match [1000]
-model_update_ratio = 0.25 # for others
+# model_update_ratio = 0.25 # for others visual_match
+
+model_update_ratio = 0.25  # for key_to_door
+
 
 
 # batch_size = 64 # for visual_match [2, 60, 100]
@@ -51,15 +58,13 @@ batch_size = 32  # for key_to_door [250]
 # num_unroll_steps = 5
 
 # for key_to_door =================
-num_unroll_steps = 30+memory_length
-game_segment_length=30+memory_length # TODO: for "explore": 15
+# num_unroll_steps = 30+memory_length
+# game_segment_length=30+memory_length # TODO: for "explore": 15
 
 # for visual_match
-# num_unroll_steps = 16 + memory_length
-# game_segment_length = 16 + memory_length  # TODO: for "explore": 1
+num_unroll_steps = 16 + memory_length
+game_segment_length = 16 + memory_length  # TODO: for "explore": 1
 
-# num_unroll_steps = 21 + memory_length
-# game_segment_length = 21 + memory_length  # TODO: for "explore": 1
 
 
 reanalyze_ratio = 0
@@ -86,8 +91,8 @@ memory_xzero_config = dict(
         scale_rgb_img_observation=True,  # Whether to scale the RGB image observation to [0, 1]
         flatten_observation=False,  # Whether to flatten the observation
         max_frames={
-            "explore": 15, # for key_to_door ##================ 非常重要 =============
-            # "explore": 1,  # for visual_match
+            # "explore": 15, # for key_to_door ##================ 非常重要 =============
+            "explore": 1,  # for visual_match
             "distractor": memory_length,
             "reward": 15
             # "reward": 20
@@ -121,7 +126,7 @@ memory_xzero_config = dict(
         update_per_collect_tokenizer=update_per_collect,
         num_unroll_steps=num_unroll_steps,
         model=dict(
-            analysis_sim_norm = False,
+            analysis_sim_norm=False,
 
             env_name='memory',
             # observation_shape=25,
@@ -212,17 +217,17 @@ if __name__ == "__main__":
 
     # seeds = [0,1,2]  # You can add more seed values here
     seeds = [0,1]  # You can add more seed values here
-    # seeds = [0]  # You can add more seed values here
+    # seeds = [2,3]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed TODO
         # main_config.exp_name=f'data_paper_unizero_memory_0512/{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer2-nh2_bacth-kvmaxsize_collectenv{collector_env_num}_seed{seed}'
         # main_config.exp_name=f'data_paper_{env_id}_0512/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color_collect-evalnotclear_eval{evaluator_env_num}_nl4-nh4-emd64_reclw0_seed{seed}'
-        main_config.exp_name=f'data_paper_{env_id}_0512/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl4-nh4-emd64_reclw0_seed{seed}'
+        # main_config.exp_name=f'data_paper_{env_id}_0517/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl4-nh4-emd64_reclw0_entw1e-4_seed{seed}'
         
         # main_config.exp_name=f'data_paper_{env_id}_ablation_0513/latent_norm/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl4-nh4-emd64_reclw0_enw1e-3_eps50k_latentsoftmax_seed{seed}'
         # main_config.exp_name=f'data_paper_{env_id}_ablation_0513/target/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl4-nh4-emd64_reclw0_enw1e-3_eps50k_hardtarget_seed{seed}'
         # main_config.exp_name=f'data_paper_{env_id}_ablation_0513/decode_loss/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl4-nh4-emd64_reclw005_enw1e-3_eps50k_seed{seed}'
+        main_config.exp_name=f'data_paper_{env_id}_ablation_0513/model_size/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl12-nh4-emd64_reclw0_enw1e-3_eps50k_seed{seed}'
  
         from lzero.entry import train_unizero
-        train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path,
-                        max_env_step=max_env_step)
+        train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

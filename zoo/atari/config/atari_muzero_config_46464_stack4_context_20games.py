@@ -1,35 +1,46 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(3)
+torch.cuda.set_device(0)
 
-# env_id = 'AlienNoFrameskip-v4'
-# env_id = 'AmidarNoFrameskip-v4'
-# env_id = 'AssaultNoFrameskip-v4'
-# env_id = 'AsterixNoFrameskip-v4'
+# env_id = 'AlienNoFrameskip-v4' # 18
+# env_id = 'AmidarNoFrameskip-v4' # 10
+# env_id = 'AssaultNoFrameskip-v4' # 7
+# env_id = 'AsterixNoFrameskip-v4' # 9
 
-# env_id = 'BankHeistNoFrameskip-v4'
-# env_id = 'BattleZoneNoFrameskip-v4'
-# env_id = 'ChopperCommandNoFrameskip-v4'
-# env_id = 'CrazyClimberNoFrameskip-v4'
+# env_id = 'BankHeistNoFrameskip-v4' # 18
+# env_id = 'BattleZoneNoFrameskip-v4' # 18
+# env_id = 'ChopperCommandNoFrameskip-v4' # 18
+# env_id = 'CrazyClimberNoFrameskip-v4' # 9
 
-# env_id = 'DemonAttackNoFrameskip-v4'
-# env_id = 'FreewayNoFrameskip-v4'
-# env_id = 'FrostbiteNoFrameskip-v4'
-# env_id = 'GopherNoFrameskip-v4'
+# env_id = 'DemonAttackNoFrameskip-v4' # 6
+# env_id = 'FreewayNoFrameskip-v4' # 3
+# env_id = 'FrostbiteNoFrameskip-v4' # 18
+# env_id = 'GopherNoFrameskip-v4' # 8
 
-# env_id = 'HeroNoFrameskip-v4'
-# env_id = 'JamesbondNoFrameskip-v4'
-# env_id = 'KangarooNoFrameskip-v4'
-# env_id = 'KrullNoFrameskip-v4'
+# env_id = 'HeroNoFrameskip-v4' # 18
+# env_id = 'JamesbondNoFrameskip-v4' # 18
+# env_id = 'KangarooNoFrameskip-v4' # 18
+# env_id = 'KrullNoFrameskip-v4' # 18
 
-# env_id = 'KungFuMasterNoFrameskip-v4'
-# env_id = 'PrivateEyeNoFrameskip-v4'
-# env_id = 'RoadRunnerNoFrameskip-v4'
-# env_id = 'UpNDownNoFrameskip-v4'
+# env_id = 'KungFuMasterNoFrameskip-v4' # 14
+# env_id = 'PrivateEyeNoFrameskip-v4' # 18
+# env_id = 'RoadRunnerNoFrameskip-v4' # 18
+# env_id = 'UpNDownNoFrameskip-v4' # 6
+
+# env_id = 'PongNoFrameskip-v4' # 6
+# env_id = 'MsPacmanNoFrameskip-v4' # 9
+# env_id = 'QbertNoFrameskip-v4'  # 6
+# env_id = 'SeaquestNoFrameskip-v4' # 18
+env_id = 'BoxingNoFrameskip-v4' # 18
+
+# env_id = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
+
 
 update_per_collect = None # for others
+# update_per_collect = 1000
 # model_update_ratio = 1.
-model_update_ratio = 0.5
+# model_update_ratio = 0.5
+model_update_ratio = 0.25
 
 
 if env_id == 'AlienNoFrameskip-v4':
@@ -72,17 +83,34 @@ elif env_id == 'KungFuMasterNoFrameskip-v4':
 elif env_id == 'PrivateEyeNoFrameskip-v4':
     action_space_size = 18
     model_update_ratio = 0.25
+    # model_update_ratio = 0.5
 elif env_id == 'RoadRunnerNoFrameskip-v4':
     action_space_size = 18
 elif env_id == 'UpNDownNoFrameskip-v4':
     action_space_size = 6
+elif env_id == 'PongNoFrameskip-v4':
+    action_space_size = 6
+    model_update_ratio = 0.25
+elif env_id == 'MsPacmanNoFrameskip-v4':
+    action_space_size = 9
+elif env_id == 'QbertNoFrameskip-v4':
+    action_space_size = 6
+elif env_id == 'SeaquestNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'BoxingNoFrameskip-v4':
+    action_space_size = 18
+    model_update_ratio = 0.25
+elif env_id == 'BreakoutNoFrameskip-v4':
+    action_space_size = 4
 
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
+# collector_env_num = 8
+# n_episode = 8
+collector_env_num = 1 # TODO ========
+n_episode = 1
 evaluator_env_num = 3
 num_simulations = 50
 batch_size = 256
@@ -119,7 +147,8 @@ atari_muzero_config = dict(
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
-        observation_shape=(4, 64, 64),
+        # observation_shape=(4, 64, 64),
+        observation_shape=[4, 64, 64],
         frame_stack_num=4,
         gray_scale=True,
         collector_env_num=collector_env_num,
@@ -131,13 +160,12 @@ atari_muzero_config = dict(
         # eval_max_episode_steps=int(20),
     ),
     policy=dict(
-
         learn=dict(
             learner=dict(
                 hook=dict(
                     load_ckpt_before_run='',
                     log_show_after_iter=100,
-                    save_ckpt_after_iter=500000,  # default is 1000
+                    save_ckpt_after_iter=1000000,  # default is 1000
                     save_ckpt_after_run=True,
                 ),
             ),
@@ -146,7 +174,8 @@ atari_muzero_config = dict(
         analysis_sim_norm=False, # TODO
         model=dict(
             analysis_sim_norm=False, # TODO
-            observation_shape=(4, 64, 64),
+            # observation_shape=(4, 64, 64),
+            observation_shape=[4, 64, 64],
             image_channel=1,
             frame_stack_num=4,
             gray_scale=True,
@@ -227,11 +256,8 @@ if __name__ == "__main__":
 
     # Define a list of seeds for multiple runs
     seeds = [0,1,2]  # You can add more seed values here
-    # seeds = [1,2]  # You can add more seed values here
-    # seeds = [2]  # You can add more seed values here
-
     for seed in seeds:
         # Update exp_name to include the current seed TODO
-        main_config.exp_name=f'data_paper_muzero_atari-20-games_0510/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_seed{seed}'
+        main_config.exp_name=f'data_paper_muzero_0519/{env_id[:-14]}_muzero_stack4_collectenv{collector_env_num}_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_sgd02_seed{seed}'
         from lzero.entry import train_muzero_context
         train_muzero_context([main_config, create_config], seed=seed, max_env_step=max_env_step)

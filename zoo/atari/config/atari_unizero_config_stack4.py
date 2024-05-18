@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(2)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
@@ -98,7 +98,7 @@ atari_muzero_config = dict(
                 hook=dict(
                     load_ckpt_before_run='',
                     log_show_after_iter=100,
-                    save_ckpt_after_iter=200000,  # default is 1000
+                    save_ckpt_after_iter=500000,  # default is 1000
                     save_ckpt_after_run=True,
                 ),
             ),
@@ -110,6 +110,7 @@ atari_muzero_config = dict(
         update_per_collect_tokenizer=update_per_collect,
         num_unroll_steps=num_unroll_steps,
         model=dict(
+            analysis_sim_norm = False,
             # observation_shape=(4, 96, 96),
             # frame_stack_num=4,
             # observation_shape=(1, 96, 96),
@@ -159,7 +160,6 @@ atari_muzero_config = dict(
         grad_clip_value = 5, # TODO
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
         eval_freq=int(2e3),
         # eval_freq=int(9e9),
@@ -191,7 +191,7 @@ if __name__ == "__main__":
     # seeds = [0]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed TODO
-        main_config.exp_name=f'data_paper_unizero_papaer_0512/{env_id[:-14]}_stack4/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv{collector_env_num}_reclw0_seed{seed}'
+        main_config.exp_name=f'data_paper_unizero_0512/stack4/{env_id[:-14]}_stack4_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_conlen{4}_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv{collector_env_num}_reclw0_seed{seed}'
 
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, max_env_step=max_env_step)

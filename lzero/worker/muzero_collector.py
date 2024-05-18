@@ -535,7 +535,12 @@ class MuZeroCollector(ISerialCollector):
                     #     print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
 
                     if hasattr(self._policy.get_attribute('collect_model'), 'world_model'):
-                        if eps_steps_lst[env_id] % 2000 == 0:  # TODO: NOTE for memory
+                        if hasattr(self.policy_config, 'sample_type') and self.policy_config.sample_type=='episode':
+                            clear_interval = 2000
+                        else:
+                            clear_interval = 200
+                        if eps_steps_lst[env_id] % clear_interval == 0:  # TODO: NOTE for memory
+                            print(f'clear_interval: {clear_interval}')
                         # if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE for atari unizero
                         # if eps_steps_lst[env_id] % 32 == 0:  # TODO: NOTE
                         # if eps_steps_lst[env_id] % 90 == 0:

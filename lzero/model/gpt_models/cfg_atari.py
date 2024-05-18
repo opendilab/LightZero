@@ -40,6 +40,8 @@ cfg['world_model'] = {
                       # "context_length_for_recurrent": 20,
                       "context_length": 2 * 4, # TODO
                       "context_length_for_recurrent": 2 * 4,
+                      # "context_length": 2 * 2, # TODO
+                      # "context_length_for_recurrent": 2 * 2,
                       "recurrent_keep_deepth": 100,
                       "gru_gating": False,
                       # "gru_gating": True,
@@ -81,9 +83,9 @@ cfg['world_model'] = {
                       
                       # 'action_shape': 6, # TODO：for multi-task
                       
-                      # 'action_shape': 6, # TODO：for pong qbert 
+                      'action_shape': 6, # TODO：for pong qbert 
                       # 'action_shape': 9,# TODO：for mspacman
-                      'action_shape': 18,# TODO：for Seaquest boxing Frostbite
+                      # 'action_shape': 18,# TODO：for Seaquest boxing Frostbite
                       # 'action_shape': 4,# TODO：for breakout
 
                       # 'embed_dim':512, # TODO：for atari

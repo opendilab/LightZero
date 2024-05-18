@@ -28,10 +28,10 @@ cfg['world_model'] = {
     # "context_length": 2 * (18+5),
     # "context_length_for_recurrent": 2 * (18+5),
 
-    # 'max_blocks': 76+5, 
-    # "max_tokens": 2 * (76+5),  # 1+60+15 memory_length = 60
-    # "context_length": 2 * (76+5),
-    # "context_length_for_recurrent": 2 * (76+5),
+    'max_blocks': 76+5, 
+    "max_tokens": 2 * (76+5),  # 1+60+15 memory_length = 60
+    "context_length": 2 * (76+5),
+    "context_length_for_recurrent": 2 * (76+5),
 
     # 'max_blocks': 116+5, 
     # "max_tokens": 2 * (116+5),  # 1+100+15 memory_length = 100
@@ -60,6 +60,11 @@ cfg['world_model'] = {
 
     # Key2Door
     
+    # 'max_blocks': 32+5, 
+    # "max_tokens": 2 * (32+5),  # 15+2+15 memory_length = 2
+    # "context_length": 2 * (32+5),
+    # "context_length_for_recurrent": 2 * (32+5),
+
     # 'max_blocks': 90+5, 
     # "max_tokens": 2 * (90+5),  # 15+60+15 memory_length = 60
     # "context_length": 2 * (90+5),
@@ -70,10 +75,10 @@ cfg['world_model'] = {
     # "context_length": 2 * (150+5),
     # "context_length_for_recurrent": 2 * (150+5),
 
-    'max_blocks': 280+5, 
-    "max_tokens": 2 * (280+5),  # 15+250+15 memory_length = 250
-    "context_length": 2 * (280+5),
-    "context_length_for_recurrent": 2 * (280+5),
+    # 'max_blocks': 280+5, 
+    # "max_tokens": 2 * (280+5),  # 15+250+15 memory_length = 250
+    # "context_length": 2 * (280+5),
+    # "context_length_for_recurrent": 2 * (280+5),
 
     # 'max_blocks': 530+5, 
     # "max_tokens": 2 * (530+5),  # 15+500+15 memory_length = 500
@@ -81,8 +86,7 @@ cfg['world_model'] = {
     # "context_length_for_recurrent": 2 * (530+5),
 
 
-
-    "device": 'cuda:7',
+    "device": 'cuda:0',
     'analysis_sim_norm': False,
     'analysis_dormant_ratio': False,
 
@@ -96,9 +100,12 @@ cfg['world_model'] = {
     # 'num_heads': 8,
     # 'embed_dim': 64, # TODO： for for visual_match [1000]
 
-    'num_layers': 4,
+    # 'num_layers': 4,
+    'num_layers': 12,
     'num_heads': 4,
     'embed_dim': 64, # TODO： for for visual_match [250, 500]
+    # 'embed_dim': 96, # TODO： for for visual_match [250, 500]
+
     # 'embed_dim': 32, # TODO： for for visual_match [250, 500]
 
     # 'num_layers': 4,
@@ -140,8 +147,8 @@ cfg['world_model'] = {
     'support_size': 101, # TODO
     'action_shape': 4,  # NOTE：for memory
     'max_cache_size': 5000,
-    "env_num": 20, # for memeory_length=1000 TODO
-      # "env_num": 10,
+    # "env_num": 20, # for memeory_length=1000 TODO
+      "env_num": 10,
 
     # 'latent_recon_loss_weight': 0.05,
     'latent_recon_loss_weight': 0.0, # TODO
@@ -149,8 +156,8 @@ cfg['world_model'] = {
     # 'latent_recon_loss_weight':10,
 
     'perceptual_loss_weight': 0.,
-    'policy_entropy_weight': 1e-4,  # NOTE：for visual_match 
-    # 'policy_entropy_weight': 1e-3,  # NOTE：for key_to_door
+    # 'policy_entropy_weight': 1e-4,  # NOTE：for visual_match 
+    'policy_entropy_weight': 1e-3,  # NOTE：for key_to_door
 
     'predict_latent_loss_type': 'group_kl',
     # 'predict_latent_loss_type': 'mse',

@@ -180,32 +180,33 @@ class MemoryEnvLightZero(BaseEnv):
         if self.flatten_observation:
             observation = observation.flatten()
 
-        epsilon = 1e-3
-        values = observation[:, 3, 3]  # 提取 (3, 3) 的值，这是一个 (3,) 形状的数组
-        target_colors = np.array([
-            [0, 0, 0.90980392],
-            [0, 0.90980392, 0],
-            [0.90980392, 0, 0]
-        ])
-        # 我们需要对 values 进行 reshape 操作，使其变为 (3, 1) 形状
-        values = values.reshape(-1, 1)
-        # 现在我们可以计算两者之间的差异
-        diff = np.abs(values - target_colors)
-        # 检查 diff 中的每个元素是否小于 epsilon
-        condition = diff < epsilon
-        # 对每行使用 all 操作，检查是否所有元素都满足条件
-        all_match = condition.all(axis=0)
-        # 创建一个新的 channel，初始值为 0
-        new_channel = np.zeros([1, 5, 5])
-        # 检查每个颜色是否匹配，如果匹配则设置对应的值
-        if all_match[0]:
-            new_channel[:, :, :] = 1/3
-        elif all_match[1]:
-            new_channel[:, :, :] = 2/3
-        elif all_match[2]:
-            new_channel[:, :, :] = 1
-        # 合并原始 observation 和新 channel
-        new_observation = np.concatenate([observation, new_channel], axis=0)
+        # epsilon = 1e-3
+        # values = observation[:, 3, 3]  # 提取 (3, 3) 的值，这是一个 (3,) 形状的数组
+        # target_colors = np.array([
+        #     [0, 0, 0.90980392],
+        #     [0, 0.90980392, 0],
+        #     [0.90980392, 0, 0]
+        # ])
+        # # 我们需要对 values 进行 reshape 操作，使其变为 (3, 1) 形状
+        # values = values.reshape(-1, 1)
+        # # 现在我们可以计算两者之间的差异
+        # diff = np.abs(values - target_colors)
+        # # 检查 diff 中的每个元素是否小于 epsilon
+        # condition = diff < epsilon
+        # # 对每行使用 all 操作，检查是否所有元素都满足条件
+        # all_match = condition.all(axis=0)
+        # # 创建一个新的 channel，初始值为 0
+        # new_channel = np.zeros([1, 5, 5])
+        # # 检查每个颜色是否匹配，如果匹配则设置对应的值
+        # if all_match[0]:
+        #     new_channel[:, :, :] = 1/3
+        # elif all_match[1]:
+        #     new_channel[:, :, :] = 2/3
+        # elif all_match[2]:
+        #     new_channel[:, :, :] = 1
+        # # 合并原始 observation 和新 channel
+        # new_observation = np.concatenate([observation, new_channel], axis=0)
+
         # 输出新的 observation 结构和内容
         # print("New observation shape:", new_observation.shape)# TODO
         # print("New observation data:\n", new_observation)
@@ -292,32 +293,32 @@ class MemoryEnvLightZero(BaseEnv):
         if self.flatten_observation:
             observation = observation.flatten()
 
-        epsilon = 1e-3
-        values = observation[:, 3, 3]  # 提取 (3, 3) 的值，这是一个 (3,) 形状的数组
-        target_colors = np.array([
-            [0, 0, 0.90980392],
-            [0, 0.90980392, 0],
-            [0.90980392, 0, 0]
-        ])
-        # 我们需要对 values 进行 reshape 操作，使其变为 (3, 1) 形状
-        values = values.reshape(-1, 1)
-        # 现在我们可以计算两者之间的差异
-        diff = np.abs(values - target_colors)
-        # 检查 diff 中的每个元素是否小于 epsilon
-        condition = diff < epsilon
-        # 对每行使用 all 操作，检查是否所有元素都满足条件
-        all_match = condition.all(axis=0)
-        # 创建一个新的 channel，初始值为 0
-        new_channel = np.zeros([1, 5, 5])
-        # 检查每个颜色是否匹配，如果匹配则设置对应的值
-        if all_match[0]:
-            new_channel[:, :, :] = 1/3
-        elif all_match[1]:
-            new_channel[:, :, :] = 2/3
-        elif all_match[2]:
-            new_channel[:, :, :] = 1
-        # 合并原始 observation 和新 channel
-        new_observation = np.concatenate([observation, new_channel], axis=0)
+        # epsilon = 1e-3
+        # values = observation[:, 3, 3]  # 提取 (3, 3) 的值，这是一个 (3,) 形状的数组
+        # target_colors = np.array([
+        #     [0, 0, 0.90980392],
+        #     [0, 0.90980392, 0],
+        #     [0.90980392, 0, 0]
+        # ])
+        # # 我们需要对 values 进行 reshape 操作，使其变为 (3, 1) 形状
+        # values = values.reshape(-1, 1)
+        # # 现在我们可以计算两者之间的差异
+        # diff = np.abs(values - target_colors)
+        # # 检查 diff 中的每个元素是否小于 epsilon
+        # condition = diff < epsilon
+        # # 对每行使用 all 操作，检查是否所有元素都满足条件
+        # all_match = condition.all(axis=0)
+        # # 创建一个新的 channel，初始值为 0
+        # new_channel = np.zeros([1, 5, 5])
+        # # 检查每个颜色是否匹配，如果匹配则设置对应的值
+        # if all_match[0]:
+        #     new_channel[:, :, :] = 1/3
+        # elif all_match[1]:
+        #     new_channel[:, :, :] = 2/3
+        # elif all_match[2]:
+        #     new_channel[:, :, :] = 1
+        # # 合并原始 observation 和新 channel
+        # new_observation = np.concatenate([observation, new_channel], axis=0)
         # 输出新的 observation 结构和内容
         # print("New observation shape:", new_observation.shape)# TODO
         # print("New observation data:\n", new_observation)

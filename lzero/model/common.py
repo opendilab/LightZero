@@ -28,6 +28,15 @@ class EZNetworkOutput:
     predict_next_latent_state: torch.Tensor
     reward_hidden_state: Tuple[torch.Tensor]
 
+@dataclass
+class OrigEZNetworkOutput:
+    # output format of the EfficientZero model
+    value: torch.Tensor
+    value_prefix: torch.Tensor
+    policy_logits: torch.Tensor
+    latent_state: torch.Tensor
+    reward_hidden_state: Tuple[torch.Tensor]
+
 
 @dataclass
 class MZNetworkOutput:

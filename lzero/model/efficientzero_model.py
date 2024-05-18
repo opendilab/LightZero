@@ -11,7 +11,7 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
-from .common import EZNetworkOutput, RepresentationNetwork, PredictionNetwork
+from .common import EZNetworkOutput, RepresentationNetwork, PredictionNetwork, OrigEZNetworkOutput
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -231,12 +231,17 @@ class EfficientZeroModel(nn.Module):
         policy_logits, value = self._prediction(latent_state)
         # zero initialization for reward hidden states
         # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
+        # reward_hidden_state = (
+        #     torch.zeros(1, batch_size,
+        #                 self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
+        #                                                                    self.lstm_hidden_size).to(obs.device)
+        # )
         reward_hidden_state = (
             torch.zeros(1, batch_size,
                         self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
                                                                            self.lstm_hidden_size).to(obs.device)
         )
-        return EZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, latent_state, reward_hidden_state)
+        return OrigEZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, latent_state, reward_hidden_state)
 
     def recurrent_inference(
             self, latent_state: torch.Tensor, reward_hidden_state: Tuple[torch.Tensor], action: torch.Tensor
@@ -269,9 +274,10 @@ class EfficientZeroModel(nn.Module):
                 latent state, W_ is the width of latent state.
             - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): :math:`(1, B, lstm_hidden_size)`, where B is batch_size.
          """
+        # import pdb; pdb.set_trace()
         next_latent_state, reward_hidden_state, value_prefix = self._dynamics(latent_state, reward_hidden_state, action)
         policy_logits, value = self._prediction(next_latent_state)
-        return EZNetworkOutput(value, value_prefix, policy_logits, next_latent_state, reward_hidden_state)
+        return OrigEZNetworkOutput(value, value_prefix, policy_logits, next_latent_state, reward_hidden_state)
 
     def _representation(self, observation: torch.Tensor) -> torch.Tensor:
         """
@@ -571,6 +577,7 @@ class DynamicsNetwork(nn.Module):
         x = x.reshape(-1, self.flatten_output_size_for_reward_head).unsqueeze(0)
 
         # use lstm to predict value_prefix and reward_hidden_state
+        import pdb; pdb.set_trace()
         value_prefix, next_reward_hidden_state = self.lstm(x, reward_hidden_state)
 
         value_prefix = value_prefix.squeeze(0)
