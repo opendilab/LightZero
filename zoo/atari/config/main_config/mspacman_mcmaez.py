@@ -24,7 +24,7 @@ num_simulations = 50
 update_per_collect = None
 batch_size = 256
 model_update_ratio = 0.25
-max_env_step = int(6e5)
+max_env_step = int(3e5)
 reanalyze_ratio = 0
 
 
@@ -36,9 +36,9 @@ eps_greedy_exploration_in_collect = False
 
 atari_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/{env_name[:-14]}/mcmaez_gymcheck0315',
+    f'data_ez_ctree/{env_name[:-14]}/re-eznew0518',
     env=dict(
-        env_name=env_name,
+        env_id=env_name,
         obs_shape=(4, 96, 96),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -107,4 +107,4 @@ create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_mcmaez
-    train_mcmaez([main_config, create_config], seed=1, max_env_step=max_env_step)
+    train_mcmaez([main_config, create_config], seed=0, max_env_step=max_env_step)

@@ -29,7 +29,7 @@ update_per_collect = None
 batch_size = 256
 model_update_ratio = 0.25
 max_env_step = int(5e5)
-reanalyze_ratio = 0.99
+reanalyze_ratio = 0.
 
 eps_greedy_exploration_in_collect = False 
 # ==============================================================
@@ -37,9 +37,9 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 atari_efficientzero_config = dict(
-    exp_name=f'data_ez_0326/{env_name[:-14]}/final_ez_seed0',
+    exp_name=f'data_ez_ctree/{env_name[:-14]}/ezseed20515',
     env=dict(
-        env_name=env_name,
+        env_id=env_name,
         obs_shape=(4, 96, 96),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -108,4 +108,4 @@ create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=2, max_env_step=max_env_step)

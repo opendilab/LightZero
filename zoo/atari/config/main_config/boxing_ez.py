@@ -1,7 +1,7 @@
 from easydict import EasyDict
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_name = 'MsPacmanNoFrameskip-v4'
+env_name = 'BoxingNoFrameskip-v4'
 
 if env_name == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -13,6 +13,8 @@ elif env_name == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
 elif env_name == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
+elif env_name == 'BoxingNoFrameskip-v4':   
+    action_space_size = 18
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -25,18 +27,18 @@ update_per_collect = None
 batch_size = 256
 model_update_ratio = 0.25
 max_env_step = int(5e5)
-reanalyze_ratio = 0
+reanalyze_ratio = 0.
 
 
 
-eps_greedy_exploration_in_collect = False 
+eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/{env_name[:-14]}/ez0seed20514',
+    f'data_ez_ctree/{env_name[:-14]}/ez0518seed2',
     env=dict(
         env_id=env_name,
         obs_shape=(4, 96, 96),
