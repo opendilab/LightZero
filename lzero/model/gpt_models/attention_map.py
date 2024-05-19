@@ -78,7 +78,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
 
-def visualize_attention_maps(model, input_embeddings: torch.Tensor, kv_cache: Optional[KeysValues] = None, valid_context_lengths: Optional[torch.Tensor] = None, suffix='visual_match_memlen1-0-15_v2/attn_map_all_head_layer'):
+def visualize_attention_maps(model, input_embeddings: torch.Tensor, kv_cache: Optional[KeysValues] = None, valid_context_lengths: Optional[torch.Tensor] = None, suffix='visual_match_memlen1-0-15/attn_map_all_head_layer', nhead_each_row=4):
     """
     可视化所有层和头的attention map,并将它们放置在一张图中合适的位置
     
@@ -96,7 +96,8 @@ def visualize_attention_maps(model, input_embeddings: torch.Tensor, kv_cache: Op
     num_layers = len(model.blocks)
     num_heads = model.config.num_heads
     
-    num_cols = min(num_heads, 4)  # 每行最多4个子图
+    # num_cols = min(num_heads, 4)  # 每行最多4个子图
+    num_cols = min(num_heads, nhead_each_row)  # 每行最多4个子图
     num_rows = math.ceil(num_layers * num_heads / num_cols)
     
     fig, axs = plt.subplots(num_rows, num_cols, figsize=(num_cols*3, num_rows*3))
@@ -116,8 +117,10 @@ def visualize_attention_maps(model, input_embeddings: torch.Tensor, kv_cache: Op
                 col_id = head_count % num_cols
                 ax = axs[row_id, col_id] if num_rows > 1 else axs[col_id]
                 
-                attention_map = attention_maps[0, head_id].cpu().numpy()  # 取第一个样本的attention map
-                sns.heatmap(attention_map, cmap='coolwarm', square=True, cbar=False, xticklabels=input_ids[0].cpu().numpy(), yticklabels=input_ids[0, -T:].cpu().numpy(), ax=ax)
+                attention_map = attention_maps[0, head_id].cpu().numpy()  # NOTE: 取第一个样本的attention map
+                # sns.heatmap(attention_map, cmap='coolwarm', square=True, cbar=False, xticklabels=input_ids[0].cpu().numpy(), yticklabels=input_ids[0, -T:].cpu().numpy(), ax=ax)
+                sns.heatmap(attention_map, cmap='coolwarm', square=True, cbar=False, ax=ax)
+                
                 # ax.tick_params(labelsize=8, rotation_mode='anchor')
                 ax.tick_params(labelsize=8)
                 ax.tick_params(axis='x', rotation=90)  
@@ -125,16 +128,16 @@ def visualize_attention_maps(model, input_embeddings: torch.Tensor, kv_cache: Op
                 ax.set_xlabel(f'Key - Head {head_id+1}', fontsize=10)
                 ax.set_ylabel(f'Query - Layer {layer_id+1}', fontsize=10)
                 
-                head_count += 1
+                head_count += 1 
                 
     plt.tight_layout()
-    fig.suptitle('Attention Maps', fontsize=16)
+    # fig.suptitle('Attention Maps', fontsize=16) # TODO
     
     directory = f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}'
     if not os.path.exists(directory):
         os.makedirs(directory)
-    plt.savefig(f'{directory}/attn_maps.png', dpi=300)
-    print(f'Attention maps saved to {directory}/attn_maps.png')
+    plt.savefig(f'{directory}/attn_maps_{nhead_each_row}-each-row.png', dpi=300)
+    print(f'Attention maps saved to {directory}/attn_maps_{nhead_each_row}-each-row.png')
     plt.close()
 
 if __name__ == "__main__":

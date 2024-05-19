@@ -12,6 +12,8 @@ env_id = 'visual_match'  # The name of the environment, options: 'visual_match',
 # memory_length = 100
 memory_length = 60
 # memory_length = 2
+# memory_length = 0
+
 
 
 # visual_match [60, 100, 250, 500]
@@ -49,9 +51,12 @@ update_per_collect = None  # for others
 model_update_ratio = 0.25  # for key_to_door
 
 
+batch_size = 8  # for key_to_door [250]
+
+
 
 # batch_size = 64 # for visual_match [2, 60, 100]
-batch_size = 32  # for key_to_door [250]
+# batch_size = 32  # for key_to_door [250]
 # batch_size = 16  # for visual_match [500]
 # batch_size = 8  # for visual_match [1000]
 
@@ -118,7 +123,9 @@ memory_xzero_config = dict(
         ),
         # sample_type='transition',
         sample_type='episode',  # NOTE: very important for memory env
-        model_path=None,
+        # model_path=None,
+         model_path='/mnt/afs/niuyazhe/code/LightZero/data_paper_visual_match_0512/visual_match_memlen-60_unizero_H76_bs16/ckpt/ckpt_best.pth.tar',
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0418/visual_match_memlen-0_xzero_H16_bs64_seed0_eval8_reclw005_collectenv8_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0415/visual_match_memlen-0_xzero_H17_bs64_seed0_eval8_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer3_obschannel3_valuesize101_240415_165207/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0413/visual_match_memlen-0_xzero_H16_bs64_seed0_eval8_nl8-nh8-emd768_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer4_obschannel4_240414_172713/ckpt/ckpt_best.pth.tar',
         transformer_start_after_envsteps=int(0),
@@ -227,7 +234,7 @@ if __name__ == "__main__":
         # main_config.exp_name=f'data_paper_{env_id}_ablation_0513/latent_norm/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl4-nh4-emd64_reclw0_enw1e-3_eps50k_latentsoftmax_seed{seed}'
         # main_config.exp_name=f'data_paper_{env_id}_ablation_0513/target/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl4-nh4-emd64_reclw0_enw1e-3_eps50k_hardtarget_seed{seed}'
         # main_config.exp_name=f'data_paper_{env_id}_ablation_0513/decode_loss/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl4-nh4-emd64_reclw005_enw1e-3_eps50k_seed{seed}'
-        main_config.exp_name=f'data_paper_{env_id}_ablation_0513/model_size/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl12-nh4-emd64_reclw0_enw1e-3_eps50k_seed{seed}'
+        main_config.exp_name=f'data_paper_{env_id}_ablation_0513_debug/model_size/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl12-nh4-emd64_reclw0_enw1e-3_eps50k_seed{seed}'
  
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

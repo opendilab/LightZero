@@ -117,23 +117,28 @@ class EfficientZeroModel(nn.Module):
         self.norm_type = norm_type
         self.activation = activation
 
-        flatten_output_size_for_reward_head = (
-            (reward_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
-            (reward_head_channels * observation_shape[1] * observation_shape[2])
-        )
+        # TODO: ===========
+        flatten_output_size_for_reward_head = 1024
+        flatten_output_size_for_value_head = 1024
+        flatten_output_size_for_policy_head = 1024
 
-        flatten_output_size_for_value_head = (
-            (value_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
-            (value_head_channels * observation_shape[1] * observation_shape[2])
-        )
-
-        flatten_output_size_for_policy_head = (
-            (policy_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
-            (policy_head_channels * observation_shape[1] * observation_shape[2])
-        )
+        # flatten_output_size_for_reward_head = (
+        #     (reward_head_channels * math.ceil(observation_shape[1] / 16) *
+        #      math.ceil(observation_shape[2] / 16)) if downsample else
+        #     (reward_head_channels * observation_shape[1] * observation_shape[2])
+        # )
+        #
+        # flatten_output_size_for_value_head = (
+        #     (value_head_channels * math.ceil(observation_shape[1] / 16) *
+        #      math.ceil(observation_shape[2] / 16)) if downsample else
+        #     (value_head_channels * observation_shape[1] * observation_shape[2])
+        # )
+        #
+        # flatten_output_size_for_policy_head = (
+        #     (policy_head_channels * math.ceil(observation_shape[1] / 16) *
+        #      math.ceil(observation_shape[2] / 16)) if downsample else
+        #     (policy_head_channels * observation_shape[1] * observation_shape[2])
+        # )
 
         self.representation_network = RepresentationNetwork(
             observation_shape,
@@ -187,6 +192,7 @@ class EfficientZeroModel(nn.Module):
         else:
             self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
+        self.projection_input_dim = 4096 # TODO
         if self.self_supervised_learning_loss:
             self.projection = nn.Sequential(
                 nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
@@ -577,7 +583,7 @@ class DynamicsNetwork(nn.Module):
         x = x.reshape(-1, self.flatten_output_size_for_reward_head).unsqueeze(0)
 
         # use lstm to predict value_prefix and reward_hidden_state
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         value_prefix, next_reward_hidden_state = self.lstm(x, reward_hidden_state)
 
         value_prefix = value_prefix.squeeze(0)

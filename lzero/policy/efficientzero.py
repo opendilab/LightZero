@@ -409,6 +409,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
                 representation_state = to_tensor(network_output.latent_state)
 
                 # NOTE: no grad for the representation_state branch.
+                # import pdb; pdb.set_trace()
                 dynamic_proj = self._learn_model.project(latent_state, with_grad=True)
                 observation_proj = self._learn_model.project(representation_state, with_grad=False)
                 temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_k]

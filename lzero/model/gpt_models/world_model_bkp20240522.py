@@ -900,11 +900,9 @@ class WorldModel(nn.Module):
         # 将观察编码为潜在状态表示
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False)
 
-        # for pong
-        # self.plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong_H10_H4_tsne')
-        # self.save_as_image_with_timestep(batch['observations'], suffix='pong_H10_H4_tsne')
+        self.plot_latent_tsne_each_and_all(obs_embeddings, suffix='pong_H10_H4_tsne')
+        self.save_as_image_with_timestep(batch['observations'], suffix='pong_H10_H4_tsne')
         
-        # for visual_match
         # self.plot_latent_tsne_each_and_all(obs_embeddings, suffix='visual_match_memlen1-60-15_tsne')
         # self.save_as_image_with_timestep(batch['observations'], suffix='visual_match_memlen1-60-15_tsne')
         
@@ -1383,7 +1381,7 @@ class WorldModel(nn.Module):
 
     def plot_latent_tsne_each_and_all_for_pong(self, obs_embeddings, suffix='pong'):
         # # 假设 obs_embeddings 是一个 torch.Tensor，形状为 [608, 1, 64]
-        # obs_embeddings = torch.randn(608, 1, 768)  # 示例数据，实际使用时替换为实际的 obs_embeddings
+        # obs_embeddings = torch.randn(608, 1, 64)  # 示例数据，实际使用时替换为实际的 obs_embeddings
         #
         # # 去掉第二个维度（1）
         obs_embeddings = obs_embeddings.squeeze(1)
@@ -1401,7 +1399,7 @@ class WorldModel(nn.Module):
             plt.figure(figsize=(10, 8))
             for i, (x, y) in enumerate(embeddings_2d):
                 # plt.scatter(x, y, color=colors[i])
-                plt.scatter(x, y, color='red')
+                plt.scatter(x, y, color='read')
                 plt.text(x, y, str(timesteps[i]), fontsize=9, ha='right')
             plt.title(title)
             plt.xlabel('Component 1')
@@ -1416,15 +1414,8 @@ class WorldModel(nn.Module):
 
         # 分别处理每一局并保存为 PNG
         for episode_idx, episode in enumerate(episodes):
-            # 确认 episode 是一个 numpy 数组或其他适当的数据结构
-            n_samples = episode.shape[0]
-            # 设置 perplexity 小于 n_samples
-            perplexity = min(30, n_samples - 1)  # 选择一个合理的值，比如 30
-
-            tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42)
-            # tsne = TSNE(n_components=2, random_state=42)
+            tsne = TSNE(n_components=2, random_state=42)
             embeddings_2d = tsne.fit_transform(episode)
-
             timesteps = np.arange(timesteps_per_episode)
             plot_tsne(embeddings_2d, timesteps, f'TSNE of Latent States in Episode {episode_idx + 1}', f'episode_{episode_idx + 1}.png')
 
@@ -1443,11 +1434,12 @@ class WorldModel(nn.Module):
         # plt.ylabel('Component 2')
         # plt.grid(True)
 
-        # directory = f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}'
-        # if not os.path.exists(directory):
-        #     os.makedirs(directory)
-        # plt.savefig(f'{directory}/latent_tsne_all_episodes_combined.png')
-        # plt.close()
+        directory = f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}'
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        plt.savefig(f'{directory}/latent_tsne_all_episodes_combined.png')
+        # plt.savefig('all_episodes_combined.png')
+        plt.close()
 
 
     # def plot_latent_tsne_each_and_all(self, obs_embeddings, suffix='pong'):

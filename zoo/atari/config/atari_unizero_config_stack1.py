@@ -43,8 +43,10 @@ elif env_name == 'FrostbiteNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
+# collector_env_num = 8
+# n_episode = 8
+collector_env_num  = 1 # TODO
+n_episode = 1
 evaluator_env_num = 3
 
 model_update_ratio = 0.25
@@ -57,6 +59,8 @@ reanalyze_ratio = 0.
 # reanalyze_ratio = 0.05 # TODO
 
 batch_size = 64
+# batch_size = 8
+
 # num_unroll_steps = 5
 num_unroll_steps = 10
 # num_unroll_steps = 20 # TODO
@@ -75,7 +79,7 @@ atari_unizero_config = dict(
     # TODO: 
     # mcts_ctree
     # muzero_collector/evaluator: empty_cache
-    exp_name=f'data_paper_unizero_atari_0502/{env_name[:-14]}/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_seed0',
+    exp_name=f'data_paper_unizero_atari_0502_debug/{env_name[:-14]}/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_seed0',
     # exp_name=f'data_paper_ablation_0429/{env_name[:-14]}/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_seed0',
     # exp_name=f'data_paper_learn-dynamics_0423/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_analysis_dratio0025_seed0',
     # exp_name=f'data_paper_learn-dynamics_0422/{env_name[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer1-nh8_bacth-kvmaxsize_seed0',
@@ -114,7 +118,8 @@ atari_unizero_config = dict(
                 ),
             ),
         ),
-        model_path=None,
+        # model_path=None,
+        model_path='/mnt/afs/niuyazhe/code/LightZero/data_paper_unizero_0519/Pong_unizero_upcNone-mur0.25_H10_bs64_stack1_conlen8_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv1_reclw0_seed1/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_unizero_atari_0330/Pong_unizero_envnum8_ns50_upc1000-mur0.25_rr0.0_H8_bs64_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_nlayer2_soft005_gcv05_noeps_gamma1_nogradscale_seed0/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_unizero_stack1_0226/Pong_unizero_envnum8_ns50_upc1000-mur0.25_new-rr0.0_H5_bs64_stack1_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh4_collect-clear200_train-clear20_noeval_search-toplay-nodeepcopy_seed0/ckpt/iteration_220000.pth.tar',
         tokenizer_start_after_envsteps=int(0),
@@ -198,7 +203,7 @@ create_config = atari_unizero_create_config
 if __name__ == "__main__":
     # max_env_step = 10000
     from lzero.entry import train_unizero
-    train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    train_unizero([main_config, create_config], seed=1, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
 

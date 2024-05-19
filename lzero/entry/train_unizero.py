@@ -152,7 +152,7 @@ def train_unizero(
     )
     policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
     # TODO: comment if debugging
-    stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+    # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
     while True:
         collect_cnt += 1

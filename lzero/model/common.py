@@ -476,8 +476,8 @@ class ImageEncoderMemory(nn.Module):
         # self.sim_norm = nn.Sigmoid() # only for ablation
 
 
-
     def forward(self, image):
+        # import pdb; pdb.set_trace()
         if self.normalize_pixel:
             image = image / 255.0
         x = self.cnn(image.float())  # (B, C, 1, 1)

@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(1)
 
 # env_id = 'AlienNoFrameskip-v4' # 18
 # env_id = 'AmidarNoFrameskip-v4' # 10
@@ -31,9 +31,9 @@ torch.cuda.set_device(0)
 # env_id = 'MsPacmanNoFrameskip-v4' # 9
 # env_id = 'QbertNoFrameskip-v4'  # 6
 # env_id = 'SeaquestNoFrameskip-v4' # 18
-env_id = 'BoxingNoFrameskip-v4' # 18
+# env_id = 'BoxingNoFrameskip-v4' # 18
 
-# env_id = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
+env_id = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
 
 
 update_per_collect = None # for others
@@ -155,6 +155,12 @@ atari_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        # TODO: for breakout
+        # collect_max_episode_steps=int(5e3), # for breakout
+        # eval_max_episode_steps=int(5e3), # for breakout
+        # TODO: for others
+        collect_max_episode_steps=int(2e4), 
+        eval_max_episode_steps=int(1e4),
         # TODO: debug
         # collect_max_episode_steps=int(20),
         # eval_max_episode_steps=int(20),

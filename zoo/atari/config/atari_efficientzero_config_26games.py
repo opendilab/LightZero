@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(2)
 
 # env_id = 'AlienNoFrameskip-v4' # 18
 # env_id = 'AmidarNoFrameskip-v4' # 10
@@ -27,11 +27,11 @@ torch.cuda.set_device(0)
 # env_id = 'RoadRunnerNoFrameskip-v4' # 18
 # env_id = 'UpNDownNoFrameskip-v4' # 6
 
-env_id = 'PongNoFrameskip-v4' # 6
+# env_id = 'PongNoFrameskip-v4' # 6
 # env_id = 'MsPacmanNoFrameskip-v4' # 9
 # env_id = 'QbertNoFrameskip-v4'  # 6
 # env_id = 'SeaquestNoFrameskip-v4' # 18
-# env_id = 'BoxingNoFrameskip-v4' # 18
+env_id = 'BoxingNoFrameskip-v4' # 18
 
 # env_id = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
 

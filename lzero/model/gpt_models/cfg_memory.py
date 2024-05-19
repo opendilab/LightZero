@@ -98,10 +98,14 @@ cfg['world_model'] = {
 
     # 'num_layers': 8,
     # 'num_heads': 8,
+    # 'embed_dim': 256, # TODO： for visual ananlysis
+
+    # 'num_layers': 8,
+    # 'num_heads': 8,
     # 'embed_dim': 64, # TODO： for for visual_match [1000]
 
-    # 'num_layers': 4,
-    'num_layers': 12,
+    'num_layers': 4,
+    # 'num_layers': 12,
     'num_heads': 4,
     'embed_dim': 64, # TODO： for for visual_match [250, 500]
     # 'embed_dim': 96, # TODO： for for visual_match [250, 500]
