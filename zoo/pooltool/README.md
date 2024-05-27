@@ -1,3 +1,5 @@
+**TODO This is a historical document that provides important context for pooltool + LightZero. Prior to merging, this document should be replaced with a resource page that describes pooltool + LightZero.**
+
 # Welcome
 
 Welcome, and thanks for taking a look at my project. This is a small document to help you get started with LightZero + pooltool.
@@ -10,19 +12,13 @@ Make sure you have a working version of LightZero by following the install instr
 
 ## Step 2: Install `pooltool`
 
-Next, install this pooltool version:
+Follow the _pip_ install instructions [here](https://pooltool.readthedocs.io/en/latest/getting_started/install.html#install-option-1-pip).
 
-```bash
-pip install pooltool-billiards==0.2.2.1
-```
-
-Verify your installation:
+Verify your installation is ">=0.3.0":
 
 ```bash
 python -c "import pooltool; print(pooltool.__version__)"
 ```
-
-It should read `0.2.2.1`.
 
 Further test your installation by running the command line program:
 
@@ -34,7 +30,7 @@ run_pooltool
 run_pooltool.bat
 ```
 
-(For instructions on how to play, check out the [Wiki](https://github.com/ekiefl/pooltool/wiki/Controls))
+(For instructions on how to play, check out the [Getting Started tutorial](https://pooltool.readthedocs.io/en/latest/getting_started/interface.html))
 
 # A simple game: Sum To Three
 
