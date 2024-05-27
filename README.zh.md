@@ -538,7 +538,7 @@ and internal state transition dynamics,
 
 @article{xuan2024rezero,
   title={ReZero: Boosting MCTS-based Algorithms by Just-in-Time and Speedy Reanalyze},
-  author={Xuan, Chunyu and Niu, Yazhe and Pu, Yuan and Hu, Shuai and Yang, Jing},
+  author={Xuan, Chunyu and Niu, Yazhe and Pu, Yuan and Hu, Shuai and Liu, Yu and Yang, Jing},
   journal={arXiv preprint arXiv:2404.16364},
   year={2024}
 }
