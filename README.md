@@ -26,13 +26,14 @@
 [![GitHub pulls](https://img.shields.io/github/issues-pr/opendilab/LightZero)](https://github.com/opendilab/LightZero/pulls)
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
+[![discord badge](https://dcbadge.vercel.app/api/server/dkZS2JF56X?style=flat)](https://discord.gg/dkZS2JF56X)
 
-Updated on 2024.04.09 LightZero-v0.0.4
+Updated on 2024.04.12 LightZero-v0.0.5
 
 > LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL).
-> For any questions about LightZero, you can consult the RAG-based Q&A assistant: [ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal) (Simplified Chinese).
+> For any questions about LightZero, you can consult the RAG-based Q&A assistant: [ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal).
 
-English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Paper](https://arxiv.org/pdf/2310.08348.pdf)
+English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [LightZero Paper](https://arxiv.org/pdf/2310.08348.pdf) | [ReZero Paper](https://arxiv.org/abs/2404.16364)
 
 ## Background
 
@@ -211,10 +212,12 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 
 ## Customization Documentation
 
-For those looking to tailor environments and algorithms, we offer comprehensive guides:
+For those interested in customizing environments and algorithms, we provide relevant guides:
 
-- **Environments:** [Customize Environments](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/envs/customize_envs.md)
-- **Algorithms:** [Customize Algorithms](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/algos/customize_algos.md)
+- [Customize Environments](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/envs/customize_envs.md)
+- [Customize Algorithms](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/algos/customize_algos.md)
+- [How to Set Configuration Files?](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/config/config.md)
+- [Logging and Monitoring System](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/logs/logs.md)
 
 Should you have any questions, feel free to contact us for support.
 
@@ -518,7 +521,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 - [File an issue](https://github.com/opendilab/LightZero/issues/new/choose) on Github
 - Open or participate in our [discussion forum](https://github.com/opendilab/LightZero/discussions)
-- Discuss on LightZero [discord server](https://discord.gg/qZTQTycu)
+- Discuss on LightZero [discord server](https://discord.gg/dkZS2JF56X)
 - Contact our email (opendilab@pjlab.org.cn)
 
 - We appreciate all the feedback and contributions to improve LightZero, both algorithms and system designs. 
@@ -530,13 +533,19 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 ## Citation
 ```latex
-@misc{lightzero,
-      title={LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios},
-      author={Yazhe Niu and Yuan Pu and Zhenjie Yang and Xueyan Li and Tong Zhou and Jiyuan Ren and Shuai Hu and Hongsheng Li and Yu Liu},
-      year={2023},
-      eprint={2310.08348},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG}
+@article{niu2024lightzero,
+  title={LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios},
+  author={Niu, Yazhe and Pu, Yuan and Yang, Zhenjie and Li, Xueyan and Zhou, Tong and Ren, Jiyuan and Hu, Shuai and Li, Hongsheng and Liu, Yu},
+  journal={Advances in Neural Information Processing Systems},
+  volume={36},
+  year={2024}
+}
+
+@article{xuan2024rezero,
+  title={ReZero: Boosting MCTS-based Algorithms by Just-in-Time and Speedy Reanalyze},
+  author={Xuan, Chunyu and Niu, Yazhe and Pu, Yuan and Hu, Shuai and Liu, Yu and Yang, Jing},
+  journal={arXiv preprint arXiv:2404.16364},
+  year={2024}
 }
 ```
 

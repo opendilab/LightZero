@@ -27,12 +27,12 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
-最近更新于 2024.04.09 LightZero-v0.0.4
+最近更新于 2024.04.12 LightZero-v0.0.5
 
 > LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库。
 > 有关 LightZero 的任何疑问，您都可以咨询基于 RAG 技术的问答助手：[ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal)。
 
-[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [论文链接](https://arxiv.org/pdf/2310.08348.pdf) | 
+[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [LightZero 论文](https://arxiv.org/pdf/2310.08348.pdf) | [ReZero 论文](https://arxiv.org/abs/2404.16364)
 
 
 ## 背景
@@ -194,12 +194,14 @@ python3 -u zoo/atari/config/atari_muzero_config.py
 cd LightZero
 python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 ```
-## 定制化文档
+## 文档
 
-为希望定制环境和算法的用户，我们提供了全面的指南：
+为希望定制环境和算法的用户，我们提供了相应的指南：
 
-- **环境定制：** [定制环境](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/envs/customize_envs_zh.md)
-- **算法定制：** [定制算法](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/algos/customize_algos_zh.md)
+- [如何自定义环境?](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/envs/customize_envs_zh.md)
+- [如何自定义算法?](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/algos/customize_algos_zh.md)
+- [如何设置配置文件？](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/config/config_zh.md)
+- [日志系统](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/logs/logs_zh.md)
 
 如有任何疑问，欢迎随时联系我们寻求帮助。
 
@@ -526,13 +528,19 @@ and internal state transition dynamics,
 ## 引用
 
 ```latex
-@misc{lightzero,
-      title={LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios},
-      author={Yazhe Niu and Yuan Pu and Zhenjie Yang and Xueyan Li and Tong Zhou and Jiyuan Ren and Shuai Hu and Hongsheng Li and Yu Liu},
-      year={2023},
-      eprint={2310.08348},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG}
+@article{niu2024lightzero,
+  title={LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios},
+  author={Niu, Yazhe and Pu, Yuan and Yang, Zhenjie and Li, Xueyan and Zhou, Tong and Ren, Jiyuan and Hu, Shuai and Li, Hongsheng and Liu, Yu},
+  journal={Advances in Neural Information Processing Systems},
+  volume={36},
+  year={2024}
+}
+
+@article{xuan2024rezero,
+  title={ReZero: Boosting MCTS-based Algorithms by Just-in-Time and Speedy Reanalyze},
+  author={Xuan, Chunyu and Niu, Yazhe and Pu, Yuan and Hu, Shuai and Liu, Yu and Yang, Jing},
+  journal={arXiv preprint arXiv:2404.16364},
+  year={2024}
 }
 ```
 
