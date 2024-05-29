@@ -613,7 +613,7 @@ class WorldModelMT(nn.Module):
         ready_env_num = latest_state.shape[0]
         self.keys_values_wm_list = []
         self.keys_values_wm_size_list = []
-        self.keys_values_wm_size_list = self.retrieve_or_generate_kvcache(latest_state, ready_env_num, simulation_index)  
+        self.keys_values_wm_size_list = self.retrieve_or_generate_kvcache(latest_state, ready_env_num, simulation_index, task_id=task_id)
 
         latent_state_list = []
         token = action.reshape(-1, 1)
@@ -853,7 +853,7 @@ class WorldModelMT(nn.Module):
                 self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
 
 
-    def retrieve_or_generate_kvcache(self, latent_state, ready_env_num, simulation_index=0):
+    def retrieve_or_generate_kvcache(self, latent_state, ready_env_num, simulation_index=0, task_id=0):
         """
         This method iterates over the environments, retrieves a matching cache if available,
         or generates a new one otherwise. It updates the lists with the keys_values caches and their sizes.
@@ -880,7 +880,7 @@ class WorldModelMT(nn.Module):
             else:
                 # 如果没有找到匹配值,使用零重置
                 self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
-                self.forward({'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)}, past_keys_values=self.keys_values_wm_single_env, is_init_infer=True)
+                self.forward({'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)}, past_keys_values=self.keys_values_wm_single_env, is_init_infer=True, task_id=task_id)
                 self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                 self.keys_values_wm_size_list.append(1)
         return self.keys_values_wm_size_list
@@ -931,7 +931,7 @@ class WorldModelMT(nn.Module):
 
     def compute_loss(self, batch, target_tokenizer: Tokenizer=None, inverse_scalar_transform_handle=None, task_id=0, **kwargs: Any) -> LossWithIntermediateLosses:
         # 将观察编码为潜在状态表示
-        obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False)
+        obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False, task_id=task_id)
         
         # 注册梯度钩子,用于梯度缩放。这里的作用是将梯度缩小为原来的1/5,有助于训练的稳定性。
         # 但是否必要取决于具体问题,需要通过实验来验证。
@@ -942,11 +942,12 @@ class WorldModelMT(nn.Module):
             reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
             
             # 计算重建损失和感知损失
-            latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
-            perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
-
+            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
+            # perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
             # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # NOTE: for stack=4
-            # perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
+            
+            latent_recon_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
+            perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
         
         elif self.obs_type == 'vector':
             perceptual_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4

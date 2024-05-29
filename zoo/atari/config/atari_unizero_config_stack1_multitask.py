@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(3)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
 # env_id = 'MsPacmanNoFrameskip-v4'
@@ -44,7 +44,12 @@ max_env_step = int(1e6) # TODO
 reanalyze_ratio = 0.
 
 # batch_size = 64
-batch_size = 32  # TODO: multitask
+# batch_size = 32  # TODO: multitask
+
+# batch_size = [30, 5]  # TODO: multitask
+# batch_size = [34, 1]  # TODO: multitask
+batch_size = [20, 15]  # TODO: multitask
+# batch_size = [20, 20]  # TODO: multitask
 
 
 num_simulations = 50
@@ -53,7 +58,11 @@ num_unroll_steps = 10
 eps_greedy_exploration_in_collect = True
 
 
-exp_name_prefix = f'data_unizero_mt_stack1/pong-mspacman_action{action_space_size}_taskembedding_N-head/'
+# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_taskembedding_N-head_batchsize-30-5/'
+# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_taskembedding_N-head_batchsize-34-1/'
+exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_taskembedding_N-head_1-encoder_batchsize-20-15/'
+
+
 # exp_name_prefix = f'data_unizero_mt_stack1/pong-mspacman_action{action_space_size}_notaskembedding_N-head/'
 # exp_name_prefix = f'data_unizero_mt_stack1/pong-action{action_space_size}_notaskembedding/'
 

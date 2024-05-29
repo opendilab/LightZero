@@ -147,17 +147,31 @@ class UniZeroModelMT(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.representation_network.parameters())} parameters in agent.tokenizer.representation_network')
             print('=='*20)
         elif cfg.world_model.obs_type == 'image':
-            self.representation_network = RepresentationNetworkGPT(
-                observation_shape,
-                num_res_blocks,
-                num_channels,
-                downsample,
-                activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
-                # activation=nn.GELU(),
-                norm_type=norm_type,
-                embedding_dim=cfg.world_model.embed_dim,
-                group_size=cfg.world_model.group_size,
-            )
+            # self.representation_network = RepresentationNetworkGPT(
+            #     observation_shape,
+            #     num_res_blocks,
+            #     num_channels,
+            #     downsample,
+            #     activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
+            #     # activation=nn.GELU(),
+            #     norm_type=norm_type,
+            #     embedding_dim=cfg.world_model.embed_dim,
+            #     group_size=cfg.world_model.group_size,
+            # )
+            self.representation_network = nn.ModuleList()
+            for task_id in range(2):  # TODO: ========
+                self.representation_network.append(RepresentationNetworkGPT(
+                    observation_shape,
+                    num_res_blocks,
+                    num_channels,
+                    downsample,
+                    activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
+                    # activation=nn.GELU(),
+                    norm_type=norm_type,
+                    embedding_dim=cfg.world_model.embed_dim,
+                    group_size=cfg.world_model.group_size,
+                ))
+
             # Instantiate the decoder
             # decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(4, 64, 64)) # TODO: For K=4
             decoder_network = LatentDecoder(embedding_dim=cfg.world_model.embed_dim, output_shape=(3, 64, 64)) # TODO: For K=1

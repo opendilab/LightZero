@@ -58,7 +58,10 @@ class GameBuffer(ABC, object):
         assert self._cfg.action_type in ['fixed_action_space', 'varied_action_space']
 
         self.replay_buffer_size = self._cfg.replay_buffer_size
-        self.batch_size = self._cfg.batch_size
+        self.task_id = self._cfg.task_id
+
+        self.batch_size = copy.deepcopy(self._cfg.batch_size[self.task_id])
+
         self._alpha = self._cfg.priority_prob_alpha
         self._beta = self._cfg.priority_prob_beta
 
@@ -411,7 +414,7 @@ class GameBuffer(ABC, object):
         Overview:
             remove some oldest data if the replay buffer is full.
         """
-        assert self.replay_buffer_size > self._cfg.batch_size, "replay buffer size should be larger than batch size"
+        assert self.replay_buffer_size > self.batch_size, "replay buffer size should be larger than batch size"
         nums_of_game_segments = self.get_num_of_game_segments()
         total_transition = self.get_num_of_transitions()
         if total_transition > self.replay_buffer_size:
@@ -422,7 +425,7 @@ class GameBuffer(ABC, object):
                     # find the max game_segment index to keep in the buffer
                     index = i
                     break
-            if total_transition >= self._cfg.batch_size:
+            if total_transition >= self.batch_size:
                 self._remove(index + 1)
 
     def _remove(self, excess_game_segment_index: List[int]) -> None:

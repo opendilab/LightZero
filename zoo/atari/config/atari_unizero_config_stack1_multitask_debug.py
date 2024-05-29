@@ -47,7 +47,9 @@ num_unroll_steps = 10
 eps_greedy_exploration_in_collect = True
 
 # debug
-batch_size = 2 
+# batch_size = 2+1
+batch_size = [2,1]
+
 update_per_collect = 1
 num_simulations = 1 
 exp_name_prefix = 'data_debug_unizero_mt_stack1_pong-mspacman/'
@@ -69,8 +71,10 @@ atari_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        collect_max_episode_steps=int(50),
-        eval_max_episode_steps=int(50),
+        # collect_max_episode_steps=int(50),
+        # eval_max_episode_steps=int(50),
+        collect_max_episode_steps=int(40),
+        eval_max_episode_steps=int(40),
         # TODO: run
         # collect_max_episode_steps=int(2e4),
         # eval_max_episode_steps=int(1e4),

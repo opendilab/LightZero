@@ -403,10 +403,10 @@ class UniZeroMTPolicy(Policy):
             [mask_batch, target_reward, target_value, target_policy,
             weights] = to_torch_float_tensor(data_list, self._cfg.device)
 
-            target_reward = target_reward.view(self._cfg.batch_size, -1)
-            target_value = target_value.view(self._cfg.batch_size, -1)
+            target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
+            target_value = target_value.view(self._cfg.batch_size[task_id], -1)
 
-            assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
+            # assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
             # ``scalar_transform`` to transform the original value to the scaled value,
             # i.e. h(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -423,9 +423,9 @@ class UniZeroMTPolicy(Policy):
             batch_for_gpt = {}
             # TODO: for cartpole self._cfg.model.observation_shape
             if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape)==1:
-                batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
+                batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size[task_id], -1,  self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
             elif len(self._cfg.model.observation_shape)==3:
-                batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  *self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
+                batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size[task_id], -1,  *self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
 
             batch_for_gpt['actions'] = action_batch.squeeze(-1)  # (B, T-1, A) -> (B, T-1)
             batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]  # (B, T, R) -> (B, T-1, R)

@@ -75,7 +75,7 @@ cfg['world_model'] = {
                       # "gru_gating": False,
 
 
-                      "device": 'cuda:0',
+                      "device": 'cuda:4',
                       'analysis_sim_norm': False,
                       'analysis_dormant_ratio': False,
                       
@@ -141,8 +141,8 @@ cfg['world_model'] = {
                       # 'latent_recon_loss_weight':0.,
                       # 'perceptual_loss_weight':0.,
 
-                      # 'policy_entropy_weight': 0,
-                      'policy_entropy_weight': 1e-4,
+                      'policy_entropy_weight': 0,
+                      # 'policy_entropy_weight': 1e-4,
 
                       'predict_latent_loss_type': 'group_kl',
                       # 'predict_latent_loss_type': 'mse',

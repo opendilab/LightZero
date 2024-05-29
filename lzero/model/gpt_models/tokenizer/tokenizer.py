@@ -92,7 +92,7 @@ class Tokenizer(nn.Module):
         return LossWithIntermediateLosses(commitment_loss=commitment_loss, reconstruction_loss=reconstruction_loss, perceptual_loss=perceptual_loss)
 
     #@profile
-    def encode_to_obs_embeddings(self, x: torch.Tensor, should_preprocess: bool = False):
+    def encode_to_obs_embeddings(self, x: torch.Tensor, should_preprocess: bool = False, task_id=0):
         shape = x.shape  # (..., C, H, W)
         if len(shape) == 2:
             # x shape (4,4)
@@ -104,16 +104,20 @@ class Tokenizer(nn.Module):
             obs_embeddings = self.representation_network(x) # (160, 4) -> (160, 256)
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 (e)')  # ()
 
+        # ====== for image ==========
         if len(shape) == 4:
             # x shape (4,3,64,64)
-            obs_embeddings = self.representation_network(x) # (4,3,64,64) -> (4,64,4,4)
+            # obs_embeddings = self.representation_network[task_id](x) # (4,3,64,64) -> (4,64,4,4)
+            obs_embeddings = self.representation_network[0](x) # (4,3,64,64) -> (4,64,4,4)
             # obs_embeddings = rearrange(obs_embeddings, 'b c h w -> b 1 (c h w)')  # (4,1,1024)
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')  # (4,1,256) # TODO
 
         elif len(shape) == 5:
             # x shape (32,5,3,64,64)
             x = x.contiguous().view(-1, *shape[-3:]) # (32,5,3,64,64) -> (160,3,64,64)
-            obs_embeddings = self.representation_network(x) # (160,3,64,64) -> (160,64,4,4)
+            # obs_embeddings = self.representation_network[task_id](x) # (160,3,64,64) -> (160,64,4,4)
+            obs_embeddings = self.representation_network[0](x) # (160,3,64,64) -> (160,64,4,4)
+
             # obs_embeddings = rearrange(obs_embeddings, 'b c h w -> b 1 (c h w)')  # (160,1,1024)
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')  # (4,1,256) # TODO
 
