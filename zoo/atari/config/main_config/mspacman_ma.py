@@ -26,7 +26,7 @@ batch_size = 256
 model_update_ratio = 0.25
 buffer_reanalyze_interval = None
 buffer_reanalyze_freq = 1
-max_env_step = int(5e5)
+max_env_step = int(3e5)
 reanalyze_ratio = 0.0
 
 eps_greedy_exploration_in_collect = False 
@@ -36,10 +36,10 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_name[:-14]}/ma_ablation0327_seed0',
+    f'data_mz_ctree/{env_name[:-14]}/0419_ma',
     env=dict(
         stop_value=int(1e6),
-        env_name=env_name,
+        env_id=env_name,
         obs_shape=(4, 96, 96),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

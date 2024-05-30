@@ -16,41 +16,12 @@ from tensorboardX import SummaryWriter
 from lzero.entry.utils import log_buffer_memory_usage, log_buffer_run_time
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
-from lzero.worker import MuZeroCollector as Collector
+# from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 
 
-import pickle
-import numpy as np
-
-def iter_filter(data, batch_size, K):
-    current_batch, target_batch = data
-    obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list = current_batch
-    batch_rewards, batch_target_values, batch_target_policies = target_batch
-    # print(f'batch rewards after sample is {batch_rewards}')
-    iter_data = []
-    for i in range(K+1):
-
-        rewards_temp = batch_rewards[i*batch_size:(i+1)*batch_size]
-        # print(f'a mini batch  is {rewards_temp}')
-        values_temp = batch_target_values[i*batch_size:(i+1)*batch_size]
-        policies_temp = batch_target_policies[i*batch_size:(i+1)*batch_size]
-        target_temp = [rewards_temp, values_temp, policies_temp]
-
-        obs_temp = obs_list[i*batch_size:(i+1)*batch_size]
-        action_temp = action_list[i*batch_size:(i+1)*batch_size]
-        mask_temp = mask_list[i*batch_size:(i+1)*batch_size]
-        index_temp = batch_index_list[i*batch_size:(i+1)*batch_size]
-        weight_temp = weights_list[i*batch_size:(i+1)*batch_size]
-        time_temp = make_time_list[i*batch_size:(i+1)*batch_size]
-        current_temp = [obs_temp, action_temp, mask_temp, index_temp, weight_temp, time_temp]
-        iter_data.append([current_temp, target_temp])
-    
-    return iter_data
-    
-
-def train_mcma(
+def train_rezero(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -76,19 +47,19 @@ def train_mcma(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero', 'ma'], \
-        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'"
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
+        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'"
 
     if create_cfg.policy.type == 'muzero':
-        from lzero.mcts import MAGameBuffer as GameBuffer
+        from lzero.mcts import ReZeroMGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'efficientzero':
-        from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'sampled_efficientzero':
-        from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'gumbel_muzero':
-        from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'stochastic_muzero':
-        from lzero.mcts import StochasticMuZeroGameBuffer as GameBuffer
+        from lzero.mcts import ReZeroEGameBuffer as GameBuffer
+    # elif create_cfg.policy.type == 'sampled_efficientzero':
+    #     from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
+    # elif create_cfg.policy.type == 'gumbel_muzero':
+    #     from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
+    # elif create_cfg.policy.type == 'stochastic_muzero':
+    #     from lzero.mcts import StochasticMuZeroGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
@@ -96,6 +67,12 @@ def train_mcma(
         cfg.policy.device = 'cpu'
 
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
+
+    if cfg.policy.mcts_collect == True:
+        from lzero.worker import MuZeroCollector as Collector
+    else:
+        from lzero.worker import MACollector as Collector
+
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
 
@@ -105,6 +82,9 @@ def train_mcma(
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
+
+    if cfg.policy.eval_offline:
+        cfg.policy.learn.learner.hook.save_ckpt_after_iter = cfg.policy.eval_freq
 
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
@@ -146,15 +126,21 @@ def train_mcma(
     # ==============================================================
     # Learner's before_run hook.
     learner.call_hook('before_run')
-    
+
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
 
     # The purpose of collecting random data before training:
-    # Exploration: The collection of random data aids the agent in exploring the environment and prevents premature convergence to a suboptimal policy.
-    # Comparation: The agent's performance during random action-taking can be used as a reference point to evaluate the efficacy of reinforcement learning algorithms.
+    # Exploration: Collecting random data helps the agent explore the environment and avoid getting stuck in a suboptimal policy prematurely.
+    # Comparison: By observing the agent's performance during random action-taking, we can establish a baseline to evaluate the effectiveness of reinforcement learning algorithms.
     if cfg.policy.random_collect_episode_num > 0:
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
+    if cfg.policy.eval_offline:
+        eval_train_iter_list = []
+        eval_train_envstep_list = []
+
+    # Evaluate the random agent
+    stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
@@ -182,70 +168,38 @@ def train_mcma(
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
-            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-            # print("evaluated!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-            if stop:
-                break
+            if cfg.policy.eval_offline:
+                eval_train_iter_list.append(learner.train_iter)
+                eval_train_envstep_list.append(collector.envstep)
+            else:
+                stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+                if stop:
+                    break
 
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
-
-        # data = np.array(new_data)
-        # np.save('collected data.npy', data)
-        # breakpoint()
-
-        # print("collected new data")
         if cfg.policy.update_per_collect is None:
             # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
             collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
             update_per_collect = int(collected_transitions_num * cfg.policy.model_update_ratio)
-
-
-
         # save returned new_data collected by the collector
         replay_buffer.push_game_segments(new_data)
-        # print("remark 11111111111111111")
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
-        # print("remark 22222222222222222222")
-        if replay_buffer.get_num_of_transitions()>2000:
-                    replay_buffer.reanalyze_buffer(2000, policy)
-        # print("hhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
-        # print(replay_buffer.get_num_of_transitions())
-        # print(f"buffer reanalyze interval is {buffer_reanalyze_interval}")
 
-        # K = cfg.policy.K_batch
-        # sample_batch_size = (K+1) * batch_size
+        iteration_count = 0
+        buffer_reanalyze_count = 0
+        reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
         # Learn policy from collected data.
         for i in range(update_per_collect):
+            if iteration_count % reanalyze_interval == 0:
+                # reanalyze the whole buffer
+                if replay_buffer.get_num_of_transitions()>2000 and buffer_reanalyze_count < cfg.policy.buffer_reanalyze_freq:
+                    replay_buffer.reanalyze_buffer(2000, policy)
+                    buffer_reanalyze_count += 1
             # Learner will train ``update_per_collect`` times in one iteration.
-
             if replay_buffer.get_num_of_transitions() > batch_size:
-
-
-                # print("remark 00000000")
-                # policy对sample的影响是什么？？？？？？？？？？？？？？？？？？？？？？？？？
-                #!!!!!!!!!!!!!!!!!!!!!!!!!value是sample时就计算好的所以如果一次sample多次训练的话会增强value的off-policy性？？？？？？？？？？？
-                # 在非reannalyze的情况一采多训会影响value,reanalyze的情况则会额外影响policy！！！！！！！！！！！！！！！
-
-
-                # 修改_make_batch函数，将batch_size扩K+1倍，但是prepare出来的context分成K+1份
-                # 注意current_batch也要做对齐处理
-
                 train_data = replay_buffer.sample(batch_size, policy)
-                # iter_data = iter_filter(train_data, batch_size, K)
-                # print("remark 33333333333333333333")
-
-                # with open('data.pkl', 'wb') as file:
-                #     pickle.dump(replay_buffer, file)
-                #     print("the buffer is saved")
-
-
-
-
-
-
-
             else:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
@@ -255,14 +209,28 @@ def train_mcma(
                 )
                 break
 
-            
             # The core train steps for MCTS+RL algorithms.
             log_vars = learner.train(train_data, collector.envstep)
 
             if cfg.policy.use_priority:
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
+            iteration_count += 1
+
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
+            if cfg.policy.eval_offline:
+                logging.info(f'eval offline beginning...')
+                ckpt_dirname = './{}/ckpt'.format(learner.exp_name)
+                # Evaluate the performance of the pretrained model.
+                for train_iter, collector_envstep in zip(eval_train_iter_list, eval_train_envstep_list):
+                    ckpt_name = 'iteration_{}.pth.tar'.format(train_iter)
+                    ckpt_path = os.path.join(ckpt_dirname, ckpt_name)
+                    # load the ckpt of pretrained model
+                    policy.learn_mode.load_state_dict(torch.load(ckpt_path, map_location=cfg.policy.device))
+                    stop, reward = evaluator.eval(learner.save_checkpoint, train_iter, collector_envstep)
+                    logging.info(
+                        f'eval offline at train_iter: {train_iter}, collector_envstep: {collector_envstep}, reward: {reward}')
+                logging.info(f'eval offline finished!')
             break
 
     # Learner's after_run hook.

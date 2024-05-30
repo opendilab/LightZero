@@ -514,30 +514,20 @@ namespace tree
             - min_max_stats: a tool used to min-max normalize the q value.
             - results: the search results.
             - to_play_batch: the batch of which player is playing on this node.
+            - no_inference_lst: the list of the nodes which does not need to expand.
+            - reuse_lst: the list of the nodes which should use reuse-value to backpropagate.
+            - reuse_value_lst: the list of the reuse-value.
         */
         int count_a = 0;
         int count_b = 0;
         int count_c = 0;
         float value_propagate = 0;
-        // printf("no_inference_lst is:");
-        // printf(no_inference_lst);
-        // printf("reuse lst is");
-        // printf(reuse_lst);
-        // printf("reuse value lst is");
-        // printf(reuse_value_lst);
-        // 也许可以再传一个复用lst和reuse_value lst进来，然后判断下属不属于复用，以此确定value的值
-        // printf("check1\n");
         for (int i = 0; i < results.num; ++i)
         {
-            // 判断一下是不是需要展开的节点!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            // 对于要展开的节点进行展开，不要展开的就跳过！！！！！！！！！！！！！！！！！！！！！！！！！1
             if (i == no_inference_lst[count_a])
             {
                 count_a = count_a + 1;
                 value_propagate = reuse_value_lst[i];
-                // printf("count_a is %d\n", count_a);
-                
-                // results.nodes[i]->expand(to_play_batch[i], current_latent_state_index, i, value_prefixs[i], policies[i]);
             }
             else
             {
@@ -546,18 +536,15 @@ namespace tree
                 {
                     value_propagate = reuse_value_lst[i];
                     count_c = count_c + 1;
-                    // printf("count_c is %d\n", count_c);
                 }
                 else
                 {
                     value_propagate = values[count_b];
                 }
                 count_b = count_b + 1;
-                // printf("count_b is %d\n", count_b);
             }
 
             cbackpropagate(results.search_paths[i], min_max_stats_lst->stats_lst[i], to_play_batch[i], value_propagate, discount_factor);
-            // printf("propagated\n");
         }
     }
 
@@ -621,7 +608,9 @@ namespace tree
             - disount_factor: the discount factor of reward.
             - mean_q: the mean q value of the parent node.
             - players: the number of players.
-        Outputs:
+            - true_action: the action chosen in the trajectory.
+            - reuse_value: the value obtained from the search of the next state in the trajectory.
+        Returns:
             - action: the action to select.
         */
         float max_score = FLOAT_MIN;
@@ -724,10 +713,9 @@ namespace tree
             - pb_c_init: constants c1 in muzero.
             - disount_factor: the discount factor of reward.
             - players: the number of players.
-        Outputs:
+        Returns:
             - ucb_value: the ucb score of the child.
         */
-        // 对已知arm的先验没有进行特别的处理！！！！！！！！！！！！！！！！！！！！！！！
         float pb_c = 0.0, prior_score = 0.0, value_score = 0.0;
         pb_c = log((total_children_visit_counts + pb_c_base + 1) / pb_c_base) + pb_c_init;
         pb_c *= (sqrt(total_children_visit_counts) / (child->visit_count + 1));
@@ -752,7 +740,6 @@ namespace tree
             value_score = 0;
         if (value_score > 1)
             value_score = 1;
-        // 最好的方法是提前把已知的arm推断一下获得reward然后从一开始就直接按value_score算分
         float ucb_value = 0.0;
         if (child->visit_count == 0)
         {
@@ -850,6 +837,8 @@ namespace tree
             - min_max_stats: a tool used to min-max normalize the score.
             - results: the search results.
             - virtual_to_play_batch: the batch of which player is playing on this node.
+            - true_action: the action chosen in the trajectory.
+            - reuse_value: the value obtained from the search of the next state in the trajectory.
         */
         // set seed
         get_time_and_set_rand_seed();
@@ -868,7 +857,6 @@ namespace tree
         for (int i = 0; i < results.num; ++i)
         {
             CNode *node = &(roots->roots[i]);
-            // printf("check the code");
             int is_root = 1;
             int search_len = 0;
             results.search_paths[i].push_back(node);
@@ -878,7 +866,6 @@ namespace tree
                 float mean_q = node->compute_mean_q(is_root, parent_q, discount_factor);
                 parent_q = mean_q;
 
-                // if (is_root && true_action != NULL && reuse_value != NULL)
                 int action = 0;
                 if (is_root)
                 {
@@ -905,19 +892,9 @@ namespace tree
                 results.search_paths[i].push_back(node);
                 search_len += 1;
 
-                // if(true_action != NULL && reuse_value != NULL)
-                // {
-                //     if(is_root && action == true_action[i])
-                //     {
-                //         break;
-                //         printf("break is triggered");
-                //     }
-                // }
-
                 if(is_root && action == true_action[i])
                 {
                     break;
-                    // printf("break is triggered");
                 }
 
                 is_root = 0;

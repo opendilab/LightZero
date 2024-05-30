@@ -106,5 +106,11 @@ atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
 create_config = atari_efficientzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # from lzero.entry import train_muzero
+    # train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+
+    for ratio in [0.99, 0.5, 0]:
+        main_config.exp_name = f'data_ez_ctree/0423_{env_name[:-14]}_rr{ratio}_seed0'
+        main_config.policy.reanalyze_ratio = ratio
+        from lzero.entry import train_muzero
+        train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

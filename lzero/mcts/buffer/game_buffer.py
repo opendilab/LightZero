@@ -176,9 +176,7 @@ class GameBuffer(ABC, object):
                 # NOTE: used in reanalyze part
                 batch_index_list.sort()
 
-            # weights_list = (num_of_transitions * probs[batch_index_list]) ** (-self._beta)
-            # weights_list /= weights_list.max()
-
+            # TODO(xcy): use weighted sample
             game_segment_list = []
             pos_in_game_segment_list = []
 

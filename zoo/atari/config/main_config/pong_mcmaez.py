@@ -25,6 +25,7 @@ update_per_collect = None
 batch_size = 256
 model_update_ratio = 0.25
 max_env_step = int(3e5)
+max_env_step = int(3e5)
 reanalyze_ratio = 0.
 
 
@@ -38,6 +39,7 @@ atari_efficientzero_config = dict(
     exp_name=
     f'data_ez_ctree/{env_name[:-14]}/ree0508new',
     env=dict(
+        env_id=env_name,
         env_id=env_name,
         obs_shape=(4, 96, 96),
         collector_env_num=collector_env_num,
