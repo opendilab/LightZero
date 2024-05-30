@@ -373,9 +373,6 @@ class WorldModelMT(nn.Module):
                     sequences = obs_embeddings + position_embeddings + task_embeddings
 
         elif 'act_tokens' in obs_embeddings_or_act_tokens.keys():
-            # TODO: 对于action_token不需要增加task_embeddings会造成歧义，反而干扰学习 
-            task_embeddings = torch.zeros(768, device=self.device)
-
             act_tokens = obs_embeddings_or_act_tokens['act_tokens']
             if len(act_tokens.shape) == 3:
                 act_tokens = act_tokens.squeeze(1)
@@ -424,7 +421,7 @@ class WorldModelMT(nn.Module):
             # 对每一个序列长度L进行循环
             for i in range(L):
                 # 获取当前时刻的obs和act embeddings
-                obs = obs_embeddings[:, i, :, :]  + task_embeddings  # Shape: (B, K, E)
+                obs = obs_embeddings[:, i, :, :]  # Shape: (B, K, E)
                 act = act_embeddings[:, i, 0, :].unsqueeze(1)  # Shape: (B, 1, E), 补充维度以便拼接
 
                 # 交替拼接obs和act
@@ -433,9 +430,8 @@ class WorldModelMT(nn.Module):
                 # 将结果填充到最终的tensor中
                 obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
 
-            # 添加位置嵌入 
-            sequences = obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device))
-            # sequences = obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device)) + task_embeddings # bug
+            # 添加位置嵌入  
+            sequences = obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device)) + task_embeddings
             
 
         if kvcache_independent:
@@ -463,16 +459,16 @@ class WorldModelMT(nn.Module):
         
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
         # one head
-        logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
         
         # N head
-        # logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
 
         # TODO: root reward value
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)

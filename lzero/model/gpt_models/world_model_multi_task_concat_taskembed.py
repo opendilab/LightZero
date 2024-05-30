@@ -106,7 +106,8 @@ class WorldModelMT(nn.Module):
         self.policy_entropy_weight = config.policy_entropy_weight
         self.predict_latent_loss_type = config.predict_latent_loss_type
         self.group_size = config.group_size
-        self.num_groups = config.embed_dim // config.group_size
+        # self.num_groups = config.embed_dim // config.group_size
+        self.num_groups = config.obs_embed_dim // config.group_size
         self.obs_type = config.obs_type
         self.embed_dim = config.embed_dim 
         self.num_heads = config.num_heads
@@ -145,7 +146,8 @@ class WorldModelMT(nn.Module):
         value_policy_tokens_pattern[-2] = 1  # [0,...,1,0]
 
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim)
-        self.task_emb = nn.Embedding(2, config.embed_dim, max_norm=1)  # TODO
+        # self.task_emb = nn.Embedding(2, config.embed_dim, max_norm=1)  # TODO
+        self.task_emb = nn.Embedding(2, config.task_embed_dim, max_norm=1)  # TODO
 
 
         # 预先计算位置编码矩阵，只用于collect/eval 的推理阶段，不用于训练阶段
@@ -155,11 +157,13 @@ class WorldModelMT(nn.Module):
         # 预先计算位置编码矩阵，只用于collect/eval 的推理阶段，不用于训练阶段
         self.precompute_pos_emb_diff_kv()
 
-        self.act_embedding_table = nn.Embedding(act_vocab_size, config.embed_dim)
+        # self.act_embedding_table = nn.Embedding(act_vocab_size, config.embed_dim)
+        self.act_embedding_table = nn.Embedding(act_vocab_size, config.obs_embed_dim)
+
          # NOTE: 对于离散动作，使用fixed_act_embedding，可能前期效率更高,但后期性能较差, 注意需要self.act_embedding_table.weight不是全零初始化的 ####
         # self.act_embedding_table.weight.requires_grad = False
 
-        self.obs_per_embdding_dim = config.embed_dim  # 16*64=1024
+        self.obs_embed_dim  = config.obs_embed_dim  # 16*64=1024
         # self.head_rewards = Head(
         #     max_blocks=config.max_blocks,
         #     block_mask=act_tokens_pattern,  # 0,...,0,1
@@ -176,7 +180,7 @@ class WorldModelMT(nn.Module):
         #     head_module=nn.Sequential(
         #         nn.Linear(config.embed_dim, config.embed_dim),
         #         nn.GELU(),
-        #         nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
+        #         nn.Linear(config.embed_dim, self.obs_embed_dim ),
         #         self.sim_norm,
         #     )
         # )
@@ -214,7 +218,8 @@ class WorldModelMT(nn.Module):
                 max_blocks=config.max_blocks,
                 block_mask=value_policy_tokens_pattern,  # TODO: value_policy_tokens_pattern # [0,...,1,0]
                 head_module=nn.Sequential( # （8, 5, 128）
-                    nn.Linear(config.embed_dim, config.embed_dim),
+                    # nn.Linear(config.embed_dim, config.embed_dim),
+                    nn.Linear(config.embed_dim+config.task_embed_dim, config.embed_dim),
                     nn.GELU(),
                     nn.Linear(config.embed_dim, action_space_size)  # TODO(pu); action shape
                 )
@@ -225,7 +230,8 @@ class WorldModelMT(nn.Module):
                 max_blocks=config.max_blocks,
                 block_mask=value_policy_tokens_pattern,
                 head_module=nn.Sequential(
-                    nn.Linear(config.embed_dim, config.embed_dim),
+                    nn.Linear(config.embed_dim+config.task_embed_dim, config.embed_dim),
+                    # nn.Linear(config.embed_dim, config.embed_dim),
                     nn.GELU(),
                     nn.Linear(config.embed_dim, self.support_size)  # TODO(pu): action shape
                 )
@@ -236,7 +242,8 @@ class WorldModelMT(nn.Module):
                 max_blocks=config.max_blocks,
                 block_mask=act_tokens_pattern,  # 0,...,0,1
                 head_module=nn.Sequential(
-                    nn.Linear(config.embed_dim, config.embed_dim),
+                    nn.Linear(config.embed_dim+config.task_embed_dim, config.embed_dim),
+                    # nn.Linear(config.embed_dim, config.embed_dim),
                     nn.GELU(),
                     nn.Linear(config.embed_dim, self.support_size)
                 )
@@ -247,9 +254,10 @@ class WorldModelMT(nn.Module):
             max_blocks=config.max_blocks,
             block_mask=all_but_last_latent_state_pattern,  # 1,...,0,1 # https://github.com/eloialonso/iris/issues/19
             head_module=nn.Sequential(
-                nn.Linear(config.embed_dim, config.embed_dim),
+                nn.Linear(config.embed_dim+config.task_embed_dim, config.embed_dim),
+                # nn.Linear(config.embed_dim, config.embed_dim),
                 nn.GELU(),
-                nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
+                nn.Linear(config.embed_dim, self.obs_embed_dim),
                 self.sim_norm,
             )
             )
@@ -294,7 +302,7 @@ class WorldModelMT(nn.Module):
         if self.num_observations_tokens == 16:  # k=16
             self.projection_input_dim = 128
         elif self.num_observations_tokens == 1:  # K=1
-            self.projection_input_dim = self.obs_per_embdding_dim  # for atari #TODO
+            self.projection_input_dim = self.obs_embed_dim   # for atari #TODO
 
         self.hit_count = 0
         self.total_query_count = 0
@@ -337,8 +345,10 @@ class WorldModelMT(nn.Module):
 
 
     def forward(self, obs_embeddings_or_act_tokens, past_keys_values: Optional[KeysValues] = None, kvcache_independent=False, is_init_infer=True, valid_context_lengths=None, task_id=0) -> WorldModelOutput:
-        task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE: TODO
-        # task_embeddings = torch.zeros(768, device=self.device) # NOTE:TODO
+        # task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE: TODO
+        
+        # 获取任务嵌入，确保 task_id 是一个张量并适应批次大小
+        task_id_tensor = torch.tensor([task_id], device=self.device)
 
         if kvcache_independent:
             # 根据past_keys_values获取每个样本的步骤数
@@ -350,6 +360,9 @@ class WorldModelMT(nn.Module):
             valid_context_lengths=None
         if 'obs_embeddings' in obs_embeddings_or_act_tokens.keys():
             obs_embeddings = obs_embeddings_or_act_tokens['obs_embeddings']
+            task_embeddings = self.task_emb(task_id_tensor).unsqueeze(0).expand(obs_embeddings.size(0), 1, -1)
+            # task_embeddings = torch.zeros(768, device=self.device) # NOTE:TODO
+
             if len(obs_embeddings.shape) == 2:
                 obs_embeddings = obs_embeddings.unsqueeze(1)
             num_steps = obs_embeddings.size(1)  # (B, T, E)
@@ -364,19 +377,26 @@ class WorldModelMT(nn.Module):
                 sequences = obs_embeddings + position_embeddings + task_embeddings
             else:
                 if is_init_infer:
-                    sequences = obs_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device)) + task_embeddings
+                    # sequences = obs_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device)) + task_embeddings
+                    position_embeddings = self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device))
+                    # sequences = obs_embeddings + position_embeddings + task_embeddings
+                    # TODO =====
+                    combined_embeddings = torch.cat((obs_embeddings, task_embeddings), dim=-1)
+                    sequences = combined_embeddings + position_embeddings
                 else:
                     # 获取每个样本的有效长度
                     valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)  # NOTE
                     # NOTE: 根据有效长度获取位置编码
                     position_embeddings = self.pos_emb(valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
-                    sequences = obs_embeddings + position_embeddings + task_embeddings
+                    # sequences = obs_embeddings + position_embeddings + task_embeddings
+                    # TODO =====
+                    combined_embeddings = torch.cat((obs_embeddings, task_embeddings), dim=-1)
+                    sequences = combined_embeddings + position_embeddings
 
         elif 'act_tokens' in obs_embeddings_or_act_tokens.keys():
-            # TODO: 对于action_token不需要增加task_embeddings会造成歧义，反而干扰学习 
-            task_embeddings = torch.zeros(768, device=self.device)
-
             act_tokens = obs_embeddings_or_act_tokens['act_tokens']
+            task_embeddings = self.task_emb(task_id_tensor).unsqueeze(0).expand(act_tokens.size(0), 1, -1)
+            # task_embeddings = torch.zeros(768, device=self.device) # NOTE:TODO
             if len(act_tokens.shape) == 3:
                 act_tokens = act_tokens.squeeze(1)
             num_steps = act_tokens.size(1)  # (B, T)
@@ -393,18 +413,27 @@ class WorldModelMT(nn.Module):
                 sequences = act_embeddings + position_embeddings + task_embeddings
             else:
                 if is_init_infer:
-                    sequences = act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=act_tokens.device)) + task_embeddings
+                    # sequences = act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=act_tokens.device)) + task_embeddings
+                    position_embeddings = self.pos_emb(prev_steps + torch.arange(num_steps, device=act_embeddings.device))
+                    # sequences = act_embeddings + position_embeddings + task_embeddings
+                    # TODO =====
+                    combined_embeddings = torch.cat((act_embeddings, task_embeddings), dim=-1)
+                    sequences = combined_embeddings + position_embeddings
                 else:
                     # 获取每个样本的有效长度
                     valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)
                     # NOTE: 根据有效长度获取位置编码
                     position_embeddings = self.pos_emb(valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
-                    sequences = act_embeddings + position_embeddings + task_embeddings
+                    # sequences = act_embeddings + position_embeddings + task_embeddings
+                    # TODO =====
+                    combined_embeddings = torch.cat((act_embeddings, task_embeddings), dim=-1)
+                    sequences = combined_embeddings + position_embeddings
         else:
             # ============== for learn ==============
             obs_embeddings_and_act_tokens = obs_embeddings_or_act_tokens['obs_embeddings_and_act_tokens']
             # obs_embeddings: (B, L, K=16, E), act_tokens: (B, L, 1)
             obs_embeddings, act_tokens = obs_embeddings_and_act_tokens
+
             if len(obs_embeddings.shape) == 3:  # for batch compute loss
                 obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1], self.num_observations_tokens, -1)
 
@@ -424,7 +453,7 @@ class WorldModelMT(nn.Module):
             # 对每一个序列长度L进行循环
             for i in range(L):
                 # 获取当前时刻的obs和act embeddings
-                obs = obs_embeddings[:, i, :, :]  + task_embeddings  # Shape: (B, K, E)
+                obs = obs_embeddings[:, i, :, :]  # Shape: (B, K, E)
                 act = act_embeddings[:, i, 0, :].unsqueeze(1)  # Shape: (B, 1, E), 补充维度以便拼接
 
                 # 交替拼接obs和act
@@ -433,9 +462,15 @@ class WorldModelMT(nn.Module):
                 # 将结果填充到最终的tensor中
                 obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
 
-            # 添加位置嵌入 
-            sequences = obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device))
-            # sequences = obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device)) + task_embeddings # bug
+            # 添加位置嵌入  
+            # sequences = obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device)) + task_embeddings
+            position_embeddings = self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device))
+            # sequences = obs_act_embeddings + position_embeddings + task_embeddings
+            # TODO =====
+            task_embeddings = self.task_emb(task_id_tensor).unsqueeze(0).expand(obs_act_embeddings.size(0), obs_act_embeddings.size(1), -1)
+            # task_embeddings = torch.zeros(768, device=self.device) # NOTE:TODO
+            combined_embeddings = torch.cat((obs_act_embeddings, task_embeddings), dim=-1)
+            sequences = combined_embeddings + position_embeddings
             
 
         if kvcache_independent:
@@ -463,16 +498,17 @@ class WorldModelMT(nn.Module):
         
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
         # one head
-        logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
+        # x = torch.cat((x, task_embeddings), dim=-1) # TODO: skip connection
+        # logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
         
         # N head
-        # logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
 
         # TODO: root reward value
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)
@@ -563,7 +599,7 @@ class WorldModelMT(nn.Module):
         elif n > self.env_num and buffer_action is not None:
             # 训练时计算 target value/
             # [192, 16, 64] -> [32, 6, 16, 64]
-            latent_state = latent_state.contiguous().view(buffer_action.shape[0], -1, num_observations_tokens, self.obs_per_embdding_dim)  # (BL, K) for unroll_step=1
+            latent_state = latent_state.contiguous().view(buffer_action.shape[0], -1, num_observations_tokens, self.obs_embed_dim )  # (BL, K) for unroll_step=1
 
             latent_state = latent_state[:, :-1, :]
             buffer_action = torch.from_numpy(buffer_action).to(latent_state.device)
@@ -944,8 +980,7 @@ class WorldModelMT(nn.Module):
         
         if self.obs_type == 'image':
             # 从潜在状态表示重建观察
-            reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
-            
+            # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
             # 计算重建损失和感知损失
             # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
             # perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1

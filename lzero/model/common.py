@@ -245,7 +245,7 @@ class RepresentationNetworkGPT(nn.Module):
             activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),  # TODO
             # activation: nn.Module = nn.GELU(), # TODO
             norm_type: str = 'BN',
-            embedding_dim: int = 256,
+            obs_embedding_dim: int = 256,
             group_size: int = 8,
     ) -> None:
         """
@@ -294,13 +294,13 @@ class RepresentationNetworkGPT(nn.Module):
             ]
         )
         self.activation = activation
-        self.embedding_dim = embedding_dim
+        self.obs_embedding_dim = obs_embedding_dim
         # (B,64,4,4) -> (B,64*4*4) -> (B,64,4,4)
         # self.last_linear = nn.Linear(64*4*4, 64*4*4)
 
         # self.last_linear = nn.Linear(64*4*4, 256)
-        # self.last_linear = nn.Linear(64*8*8, self.embedding_dim)
-        self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
+        # self.last_linear = nn.Linear(64*8*8, self.obs_embedding_dim)
+        self.last_linear = nn.Linear(64 * 8 * 8, self.obs_embedding_dim, bias=False)
 
         # TODO
         # Initialize weights using He initialization
@@ -336,7 +336,7 @@ class RepresentationNetworkGPT(nn.Module):
         # x = self.last_linear(x.contiguous().view(-1, 64*8*8))
         x = self.last_linear(x.reshape(-1, 64 * 8 * 8))  # TODO
 
-        x = x.view(-1, self.embedding_dim)  # TODO
+        x = x.view(-1, self.obs_embedding_dim)  # TODO
 
         # print('cont embedings before renormalize', x.max(), x.min(), x.mean())
         # x = torch.softmax(x)
@@ -1027,7 +1027,7 @@ class RepresentationNetwork(nn.Module):
             downsample: bool = True,
             activation: nn.Module = nn.ReLU(inplace=True),
             norm_type: str = 'BN',
-            embedding_dim: int = 256,
+            obs_embedding_dim: int = 256,
             group_size: int = 8,
             use_sim_norm: bool = False,
     ) -> None:
@@ -1081,8 +1081,8 @@ class RepresentationNetwork(nn.Module):
         self.use_sim_norm = use_sim_norm
 
         if self.use_sim_norm:
-            self.embedding_dim = embedding_dim
-            self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
+            self.obs_embedding_dim = obs_embedding_dim
+            self.last_linear = nn.Linear(64 * 8 * 8, self.obs_embedding_dim, bias=False)
             # Initialize weights using He initialization
             init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
             self.sim_norm = SimNorm(simnorm_dim=group_size)
@@ -1108,7 +1108,7 @@ class RepresentationNetwork(nn.Module):
         if self.use_sim_norm:
             # NOTE: very important. for unizero atari 64,8,8 = 4096 -> 768
             # x = self.last_linear(x.reshape(-1, 64 * 8 * 8))  # TODO
-            # x = x.view(-1, self.embedding_dim)  # TODO
+            # x = x.view(-1, self.obs_embedding_dim)  # TODO
             x = self.sim_norm(x)
 
         return x

@@ -75,7 +75,7 @@ cfg['world_model'] = {
                       # "gru_gating": False,
 
 
-                      "device": 'cuda:4',
+                      "device": 'cuda:1',
                       'analysis_sim_norm': False,
                       'analysis_dormant_ratio': False,
                       
@@ -101,6 +101,13 @@ cfg['world_model'] = {
                       # 'num_layers': 12, # TODO：for atari debug
                       'num_heads': 8,
                       'embed_dim': 768, # TODO：for atari
+
+                      # for concat setting
+                      # 'obs_embed_dim': 672,
+                      # 'task_embed_dim': 96,
+                      
+                      'obs_embed_dim': 768,
+                      'task_embed_dim': 768,
 
                       # 'num_layers': 12, # TODO：Gpt2 Base
                       # 'num_heads': 12, # TODO：Gpt2 Base

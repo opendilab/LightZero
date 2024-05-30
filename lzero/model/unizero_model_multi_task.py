@@ -127,7 +127,7 @@ class UniZeroModelMT(nn.Module):
         if cfg.world_model.obs_type == 'vector':
             self.representation_network = RepresentationNetworkMLP(
                 observation_shape,
-                hidden_channels= cfg.world_model.embed_dim,
+                hidden_channels= cfg.world_model.obs_embed_dim,
                 layer_num = 2, # NOTE
                 activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
                 # activation=nn.GELU(),
@@ -168,7 +168,7 @@ class UniZeroModelMT(nn.Module):
                     activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
                     # activation=nn.GELU(),
                     norm_type=norm_type,
-                    embedding_dim=cfg.world_model.embed_dim,
+                    obs_embedding_dim=cfg.world_model.obs_embed_dim,
                     group_size=cfg.world_model.group_size,
                 ))
 
