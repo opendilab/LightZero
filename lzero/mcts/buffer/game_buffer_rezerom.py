@@ -314,40 +314,68 @@ class ReZeroMGameBuffer(MuZeroGameBuffer):
                 temp_length = 0
                 temp_infer = 0
 
-                for iter in range(unroll_steps + 1):
-                    iter_batch_size = transition_batch_size / (unroll_steps + 1)
-                    roots = MCTSCtree.roots(iter_batch_size, legal_actions_by_iter[iter])
+                if self._cfg.reuse_search == True:
+                    for iter in range(unroll_steps + 1):
+                        iter_batch_size = transition_batch_size / (unroll_steps + 1)
+                        roots = MCTSCtree.roots(iter_batch_size, legal_actions_by_iter[iter])
 
-                    if self._cfg.reanalyze_noise:
-                        roots.prepare(self._cfg.root_noise_weight, 
-                                    noises_by_iter[iter], 
-                                    reward_pool_by_iter[iter],
-                                    policy_logits_pool_by_iter[iter], 
-                                    to_play_by_iter[iter])
-                    else:
-                        roots.prepare_no_noise(
-                                    reward_pool_by_iter[iter],
-                                    policy_logits_pool_by_iter[iter], 
-                                    to_play_by_iter[iter])
+                        if self._cfg.reanalyze_noise:
+                            roots.prepare(self._cfg.root_noise_weight, 
+                                        noises_by_iter[iter], 
+                                        reward_pool_by_iter[iter],
+                                        policy_logits_pool_by_iter[iter], 
+                                        to_play_by_iter[iter])
+                        else:
+                            roots.prepare_no_noise(
+                                        reward_pool_by_iter[iter],
+                                        policy_logits_pool_by_iter[iter], 
+                                        to_play_by_iter[iter])
 
-                    if iter == 0:
+                        if iter == 0:
+                            with self._origin_search_timer:
+                                mcts_ctree.search(roots, model, latent_state_roots_by_iter[iter], to_play_by_iter[iter])
+                            self.origin_search_time += self._origin_search_timer.value
+                        else:
+                            with self._reuse_search_timer:
+                                length, average_infer = mcts_ctree.search_with_reuse(roots, model, latent_state_roots_by_iter[iter], 
+                                                            to_play_by_iter[iter],
+                                                            true_action_list=true_action_by_iter[iter], 
+                                                            reuse_value_list=iter_values)
+                            temp_search_time += self._reuse_search_timer.value
+                            temp_length += length
+                            temp_infer += average_infer
+
+                        iter_values = roots.get_values()
+                        iter_distributions = roots.get_distributions()
+                        temp_values.append(iter_values)
+                        temp_distributions.append(iter_distributions)
+                else:
+                    for iter in range(unroll_steps + 1):
+                        iter_batch_size = transition_batch_size / (unroll_steps + 1)
+                        roots = MCTSCtree.roots(iter_batch_size, legal_actions_by_iter[iter])
+
+                        if self._cfg.reanalyze_noise:
+                            roots.prepare(self._cfg.root_noise_weight, 
+                                        noises_by_iter[iter], 
+                                        reward_pool_by_iter[iter],
+                                        policy_logits_pool_by_iter[iter], 
+                                        to_play_by_iter[iter])
+                        else:
+                            roots.prepare_no_noise(
+                                        reward_pool_by_iter[iter],
+                                        policy_logits_pool_by_iter[iter], 
+                                        to_play_by_iter[iter])
+
                         with self._origin_search_timer:
                             mcts_ctree.search(roots, model, latent_state_roots_by_iter[iter], to_play_by_iter[iter])
                         self.origin_search_time += self._origin_search_timer.value
-                    else:
-                        with self._reuse_search_timer:
-                            length, average_infer = mcts_ctree.search_with_reuse(roots, model, latent_state_roots_by_iter[iter], 
-                                                        to_play_by_iter[iter],
-                                                        true_action_list=true_action_by_iter[iter], 
-                                                        reuse_value_list=iter_values)
-                        temp_search_time += self._reuse_search_timer.value
-                        temp_length += length
-                        temp_infer += average_infer
 
-                    iter_values = roots.get_values()
-                    iter_distributions = roots.get_distributions()
-                    temp_values.append(iter_values)
-                    temp_distributions.append(iter_distributions)
+                        iter_values = roots.get_values()
+                        iter_distributions = roots.get_distributions()
+                        temp_values.append(iter_values)
+                        temp_distributions.append(iter_distributions)
+                    self.origin_search_time = self.origin_search_time / (unroll_steps + 1)
+
             else:
                 # python mcts_ptree
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)

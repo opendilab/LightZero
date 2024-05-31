@@ -16,7 +16,7 @@ from tensorboardX import SummaryWriter
 from lzero.entry.utils import log_buffer_memory_usage, log_buffer_run_time
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
-# from lzero.worker import MuZeroCollector as Collector
+from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 
@@ -47,8 +47,8 @@ def train_rezero(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
-        "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'"
+    assert create_cfg.policy.type in ['efficientzero', 'muzero'], \
+        "train_rezero entry now only support the following algo.: 'efficientzero', 'muzero'"
 
     if create_cfg.policy.type == 'muzero':
         from lzero.mcts import ReZeroMGameBuffer as GameBuffer
@@ -68,10 +68,10 @@ def train_rezero(
 
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
 
-    if cfg.policy.mcts_collect == True:
-        from lzero.worker import MuZeroCollector as Collector
-    else:
-        from lzero.worker import MACollector as Collector
+    # if cfg.policy.mcts_collect == True:
+    #     from lzero.worker import MuZeroCollector as Collector
+    # else:
+    #     from lzero.worker import MACollector as Collector
 
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
@@ -177,7 +177,11 @@ def train_rezero(
                     break
 
         # Collect data by default config n_sample/n_episode.
-        new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+        if cfg.policy.mcts_collect == True:
+            new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+        else:
+            new_data = collector.policy_collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+
         if cfg.policy.update_per_collect is None:
             # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
             collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])

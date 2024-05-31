@@ -171,7 +171,10 @@ class MuZeroPolicy(Policy):
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
         # (bool) Whether to add noise to roots during reanalyze process.
-        reanalyze_noise=False,
+        reanalyze_noise=True,
+        # (bool) Whether to reuse the root value between batch searches.
+        reuse_search=True,
+
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
@@ -192,6 +195,8 @@ class MuZeroPolicy(Policy):
         # ****** Explore by random collect ******
         # (int) The number of episodes to collect data randomly before training.
         random_collect_episode_num=0,
+        # (bool) whether to use mcts during collect phase.
+        mcts_collect=True,
 
         # ****** Explore by eps greedy ******
         eps=dict(
