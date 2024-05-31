@@ -1022,7 +1022,7 @@ class WorldModel(nn.Module):
         # self.visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_success_episode') # TODO
         # self.visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_fail_episode') # TODO
 
-        self.visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=[], suffix='pong_H10_H4') # TODO
+        self.visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=[], suffix='pong_H10_H4_0531') # TODO
 
 
 
@@ -1378,6 +1378,7 @@ class WorldModel(nn.Module):
                 os.makedirs(directory)
             plt.savefig(f'{directory}/visualization_sequence_{batch_idx}_reward_value_img_policy_mcts-policy.png')
             plt.close()
+            sys.exit(0) # TODO
 
 
 

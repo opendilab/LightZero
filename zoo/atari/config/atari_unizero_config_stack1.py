@@ -119,7 +119,7 @@ atari_unizero_config = dict(
             ),
         ),
         # model_path=None,
-        model_path='/mnt/afs/niuyazhe/code/LightZero/data_paper_unizero_0519/Pong_unizero_upcNone-mur0.25_H10_bs64_stack1_conlen8_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv1_reclw0_seed1/ckpt/ckpt_best.pth.tar',
+        model_path='/mnt/afs/niuyazhe/code/LightZero/data_unizero_paper/data_paper_unizero_0519/Pong_unizero_upcNone-mur0.25_H10_bs64_stack1_conlen8_lsd768-nlayer4-nh8_bacth-kvmaxsize_collectenv1_reclw0_seed1/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_unizero_atari_0330/Pong_unizero_envnum8_ns50_upc1000-mur0.25_rr0.0_H8_bs64_stack1_mcts-kvbatch-pad-min-quantize15-lsd768-nh8_simnorm_latentw10_pew1e-4_latent-groupkl_nlayer2_soft005_gcv05_noeps_gamma1_nogradscale_seed0/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_unizero_stack1_0226/Pong_unizero_envnum8_ns50_upc1000-mur0.25_new-rr0.0_H5_bs64_stack1_mcts-kv-reset-5-kvbatch-pad-min-quantize15-lsd768-nh4_collect-clear200_train-clear20_noeval_search-toplay-nodeepcopy_seed0/ckpt/iteration_220000.pth.tar',
         tokenizer_start_after_envsteps=int(0),

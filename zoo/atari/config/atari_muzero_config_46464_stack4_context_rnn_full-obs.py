@@ -48,16 +48,18 @@ evaluator_env_num = 3
 num_simulations = 50
 model_update_ratio = 0.25
 batch_size = 256
-# max_env_step = int(5e5)
-max_env_step = int(1e6)
+max_env_step = int(5e5)
+# max_env_step = int(1e6)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = True
 
-torch.cuda.set_device(4)
+torch.cuda.set_device(5)
 
-ssl_loss_weight = 2
-context_length_init =  1 #4  # 1
-num_unroll_steps = 5 # 10
+ssl_loss_weight = 0
+# ssl_loss_weight = 2
+
+context_length_init =  4  # 1
+num_unroll_steps = 10 # 10
 rnn_hidden_size = 4096  #4096 # 768
 
 
@@ -201,5 +203,14 @@ atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_context
-    train_muzero_context([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # from lzero.entry import train_muzero_context
+    # train_muzero_context([main_config, create_config], seed=0, max_env_step=max_env_step)
+
+    seeds = [0,1,2,3,4]  # You can add more seed values here
+
+    for seed in seeds:
+        # Update exp_name to include the current seed TODO
+        main_config.exp_name=f'data_paper_muzero_variants_0603/stack4/{env_id[:-14]}_muzero-rnn-fullobs_stack4_H{num_unroll_steps}_initconlen{context_length_init}_simnorm-cossim_adamw1e-4_sslw{ssl_loss_weight}_rnn-hidden-size-{rnn_hidden_size}_seed{seed}'
+
+        from lzero.entry import train_muzero_context
+        train_muzero_context([main_config, create_config], seed=seed, max_env_step=max_env_step)
