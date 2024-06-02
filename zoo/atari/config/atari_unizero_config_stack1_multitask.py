@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(1)
+torch.cuda.set_device(3)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
 # env_id = 'MsPacmanNoFrameskip-v4'
@@ -61,8 +61,11 @@ eps_greedy_exploration_in_collect = True
 
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_taskembedding_N-head_batchsize-30-5/'
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_taskembedding_N-head_batchsize-34-1/'
-# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_concat-taskembedding_1-head-taskskip_1-encoder_batchsize-20-15/'
-exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_1-head_1-encoder_batchsize-32-32/'
+# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_concat-taskembedding_1-head-taskskip_1-encoder/'
+
+# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_1-encoder_lsd768-nlayer2-nh8_moco/'
+exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_1-encoder_lsd768-nlayer2-nh8_moco-encoder-trans/'
+# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_1-encoder_lsd768-nlayer2-nh8_cagrad-encoder-trans/'
 
 
 # exp_name_prefix = f'data_unizero_mt_stack1/pong-mspacman_action{action_space_size}_notaskembedding_N-head/'
@@ -81,7 +84,7 @@ exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_spac
 
 atari_muzero_config = dict(
     # mcts_ctree, muzero_collector: empty_cache
-    exp_name=exp_name_prefix+f'{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_seed0',
+    exp_name=exp_name_prefix+f'{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_bacth-kvmaxsize_seed0',
     # exp_name=exp_name_prefix+f'{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_seed0',
     # exp_name=exp_name_prefix+f'{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer4-nh8_bacth-kvmaxsize_seed0',
     env=dict(
@@ -103,6 +106,16 @@ atari_muzero_config = dict(
         clip_rewards=True,
     ),
     policy=dict(
+        grad_correct_params=dict(
+            MoCo_beta=0.5,
+            MoCo_beta_sigma=0.5,
+            MoCo_gamma=0.1,
+            MoCo_gamma_sigma=0.5,
+            MoCo_rho=0,
+            # CAGrad
+            calpha=0.5,
+            rescale=1,
+        ),
         task_id=0,  # TODO
         model_path=None,
         analysis_sim_norm=False, # TODO
@@ -166,6 +179,9 @@ atari_muzero_config = dict(
         learning_rate=0.0001,
         target_update_freq=100,
         grad_clip_value = 5, # TODO: 1
+        # grad_clip_value=1, # TODO: 1
+        # grad_clip_value=20, # TODO: 1
+
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

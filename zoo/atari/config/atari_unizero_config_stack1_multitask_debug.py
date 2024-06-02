@@ -48,7 +48,7 @@ eps_greedy_exploration_in_collect = True
 
 # debug
 # batch_size = 2+1
-batch_size = [2,1]
+batch_size = [2,2]
 
 update_per_collect = 1
 num_simulations = 1 
@@ -84,6 +84,16 @@ atari_muzero_config = dict(
         clip_rewards=True,
     ),
     policy=dict(
+        grad_correct_params=dict(
+            MoCo_beta=0.5,
+            MoCo_beta_sigma=0.5,
+            MoCo_gamma=0.1,
+            MoCo_gamma_sigma=0.5,
+            MoCo_rho=0,
+            # CAGrad
+            calpha=0.5,
+            rescale=1,
+        ),
         task_id=0,  # TODO
         model_path=None,
         analysis_sim_norm=False, # TODO

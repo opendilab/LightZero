@@ -62,27 +62,6 @@ def configure_optimizers(model, weight_decay, learning_rate, betas, device_type)
 
     return optimizer
 
-import sys
-sys.path.append('/mnt/afs/niuyazhe/code/LibMTL/')
-from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
-# from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
-# from LibMTL.weighting.abstract_weighting import AbsWeighting
-
-class WrappedModel:
-    def __init__(self, tokenizer, transformer):
-        self.tokenizer = tokenizer
-        self.transformer = transformer
-
-    def parameters(self):
-        # 返回 tokenizer 和 transformer 的参数
-        return list(self.tokenizer.parameters()) + list(self.transformer.parameters())
-
-    def zero_grad(self, set_to_none=False):
-        # 将 tokenizer 和 transformer 的梯度设为零
-        self.tokenizer.zero_grad(set_to_none=set_to_none)
-        self.transformer.zero_grad(set_to_none=set_to_none)
-
-
 @POLICY_REGISTRY.register('unizero_multi_task')
 class UniZeroMTPolicy(Policy):
     """
@@ -288,8 +267,6 @@ class UniZeroMTPolicy(Policy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
-
-
         # TODO: nanoGPT optimizer
         self._optimizer_world_model = configure_optimizers(
             model=self._model.world_model,
@@ -338,19 +315,6 @@ class UniZeroMTPolicy(Policy):
         self.l2_norm_after= 0.
         self.grad_norm_before= 0.
         self.grad_norm_after= 0.
-
-        # 创建 WrappedModel 实例
-        wrapped_model = WrappedModel(
-            self._learn_model.world_model.tokenizer,
-            self._learn_model.world_model.transformer
-        )
-        # 将 wrapped_model 作为 share_model 传递给 GradCorrect
-        self.grad_correct = GradCorrect(wrapped_model, 2, self._cfg.device)
-
-        # self.grad_correct = GradCorrect(self._learn_model.world_model, 2, self._cfg.device)  # 初始化MoCo
-
-        self.grad_correct.init_param()  # 初始化MoCo参数
-        self.grad_correct.rep_grad = False
 
     #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -412,7 +376,7 @@ class UniZeroMTPolicy(Policy):
         
         average_target_policy_entropy_multi_task = []
 
-        losses_list = []  # 用于存储每个任务的损失
+        task_losses = []
         for task_id, data_one_task in enumerate(data):
             current_batch, target_batch, task_id = data_one_task
             obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
@@ -455,8 +419,7 @@ class UniZeroMTPolicy(Policy):
             target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
             target_value_categorical = phi_transform(self.value_support, transformed_target_value)
 
-            # Debugging: print shapes and device
-            # print(f"ttransformed_target_value shape: {transformed_target_value.shape}, device: {transformed_target_value.device}")
+            # compute_loss(self, batch: Batch, tokenizer: Tokenizer, ** kwargs: Any)
 
             batch_for_gpt = {}
             # TODO: for cartpole self._cfg.model.observation_shape
@@ -473,17 +436,12 @@ class UniZeroMTPolicy(Policy):
             batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long, device=self._cfg.device) # (B, T-1)
             batch_for_gpt['target_value'] = target_value_categorical[:, :-1]  # (B, T-1, V)
             batch_for_gpt['target_policy'] = target_policy[:, :-1]  # (B, T-1, A)
-            
-            # Debugging: print shapes and device
-            # print(f"target_policy shape: {batch_for_gpt['target_policy'].shape}, device: {batch_for_gpt['target_policy'].device}")
-            # print(f"mask_padding shape: {batch_for_gpt['mask_padding'].shape}, device: {batch_for_gpt['mask_padding'].device}")
+            # NOTE: TODO: next latent state's policy value
+            # batch_for_gpt['target_value'] = target_value_categorical[:, 1:]  # (B, T-1, V)
+            # batch_for_gpt['target_policy'] = target_policy[:, 1:]  # (B, T-1, A)
 
             # get valid target_policy data
-            # try:
             valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
-            # except Exception as e:
-            #     print(e)
-
             # compute entropy of each policy
             target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
             # compute average entropy
@@ -498,12 +456,9 @@ class UniZeroMTPolicy(Policy):
             losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer, task_id=task_id)
 
             # weighted_total_loss += losses.loss_total
-            weighted_total_loss = torch.tensor(0., device=self._cfg.device)
 
-            assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
-            assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
-
-            losses_list.append(losses.loss_total)  # TODO: for moco
+            task_loss = losses.loss_total
+            task_losses.append(task_loss)
 
             # weighted_total_loss = weighted_total_loss + losses.loss_total  # 修改为非in-place操作
             for loss_name, loss_value in losses.intermediate_losses.items():
@@ -529,6 +484,15 @@ class UniZeroMTPolicy(Policy):
             perceptual_loss_multi_task.append(perceptual_loss)
 
 
+        # 计算各任务损失的均值和方差
+        mean_loss = torch.mean(torch.stack(task_losses))
+        std_loss = torch.std(torch.stack(task_losses))
+        # 归一化损失并累加
+        weighted_total_loss = 0.0
+        for task_loss in task_losses:
+            normalized_loss = (task_loss - mean_loss) / std_loss
+            weighted_total_loss += normalized_loss
+
         # ==============================================================
         # the core learn model update step.
         # ==============================================================
@@ -541,11 +505,7 @@ class UniZeroMTPolicy(Policy):
         # weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
 
         self._optimizer_world_model.zero_grad()
-
-        # TODO MoCo
-        # 使用MoCo来计算梯度和权重
-        lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
-        # weighted_total_loss.backward()
+        weighted_total_loss.backward()
 
         # ============= for analysis ============= TODO
         if self._cfg.analysis_sim_norm:
@@ -557,6 +517,7 @@ class UniZeroMTPolicy(Policy):
             self._target_model.encoder_hook.clear_data()  # 非常非常重要!!! 
         # ============= for analysis =============
 
+
         # 在训练循环中使用
         # self.monitor_weights_and_grads(self._learn_model.tokenizer.representation_network)
         # print('torch.cuda.memory_summary():', torch.cuda.memory_summary())
@@ -566,17 +527,6 @@ class UniZeroMTPolicy(Policy):
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(), self._cfg.grad_clip_value)
 
         self._optimizer_world_model.step()
-        
-
-        # self._learn_model.world_model.head_policy_multi_task[0].head_module[2].weight.grad.max()
-        for name, param in self._learn_model.world_model.named_parameters():
-            if param.grad is not None:
-                if torch.isnan(param.grad).any():
-                    print(f"NaN detected in grad of {name}")
-                if torch.isinf(param.grad).any():
-                    print(f"Inf detected in grad of {name}")
-
-
         if self._cfg.lr_piecewise_constant_decay:
                 self.lr_scheduler.step()
 
@@ -627,7 +577,7 @@ class UniZeroMTPolicy(Policy):
             **generate_task_loss_dict(reward_loss_multi_task, 'reward_loss_task{}'),
             **generate_task_loss_dict(value_loss_multi_task, 'value_loss_task{}'),
             **generate_task_loss_dict(average_target_policy_entropy_multi_task, 'target_policy_entropy_task{}'),
-            **generate_task_loss_dict(lambd, 'lambd_task{}'),
+
         }
 
         # 合并两个字典
@@ -944,7 +894,6 @@ class UniZeroMTPolicy(Policy):
             'reward_loss',
             'value_loss',
             'perceptual_loss',
-            'lambd',
         ]
 
         # If the number of tasks is provided, extend the monitored variables list with task-specific variables

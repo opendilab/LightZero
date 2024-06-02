@@ -256,14 +256,6 @@ def train_unizero_multi_task_v2(
                         #     batch_size = 16*6
                         # elif task_id==1: # mspacman
                         #     batch_size = 16  
-                        # if task_id==0: # pong
-                        #     batch_size = 2
-                        # elif task_id==1: # mspacman
-                        #     batch_size = 1  
-                        # if task_id==0: # pong
-                        #     batch_size = 31
-                        # elif task_id==1: # mspacman
-                        #     batch_size = 1  
                         train_data = replay_buffer.sample(batch_size, policy)
                         if cfg.policy.reanalyze_ratio > 0:
                             if i % 20 == 0: # for reanalyze_ratio>0

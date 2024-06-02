@@ -159,7 +159,8 @@ class UniZeroModelMT(nn.Module):
             #     group_size=cfg.world_model.group_size,
             # )
             self.representation_network = nn.ModuleList()
-            for task_id in range(2):  # TODO: ========
+            # for task_id in range(2):  # TODO: ========
+            for task_id in range(1):  # TODO: ========
                 self.representation_network.append(RepresentationNetworkGPT(
                     observation_shape,
                     num_res_blocks,
@@ -183,13 +184,13 @@ class UniZeroModelMT(nn.Module):
             self.world_model = WorldModelMT(obs_vocab_size=self.tokenizer.vocab_size, act_vocab_size=self.action_space_size,
                                         config=cfg.world_model, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-            print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters())-sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
+            # print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters())-sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
 
             print('=='*20)
             print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
             print(f'{sum(p.numel() for p in self.tokenizer.representation_network.parameters())} parameters in agent.tokenizer.representation_network')
-            print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
-            print(f'{sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.tokenizer.lpips')
+            # print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
+            # print(f'{sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.tokenizer.lpips')
             print('=='*20)
         
 

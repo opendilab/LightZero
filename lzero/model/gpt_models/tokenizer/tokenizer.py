@@ -39,11 +39,9 @@ class Tokenizer(nn.Module):
     def __init__(self, vocab_size: int, embed_dim: int, encoder: Encoder, decoder: Decoder, with_lpips: bool = True, representation_network = None, decoder_network =None) -> None:
         super().__init__()
         self.vocab_size = vocab_size
-        self.embedding = nn.Embedding(vocab_size, embed_dim)
-        self.embedding.weight.data.uniform_(-1.0 / vocab_size, 1.0 / vocab_size)
-        self.lpips = LPIPS().eval() if with_lpips else None
+        # self.lpips = LPIPS().eval() if with_lpips else None  # TODO
         self.representation_network = representation_network
-        self.decoder_network = decoder_network
+        # self.decoder_network = decoder_network # TODO
 
 
     def __repr__(self) -> str:
