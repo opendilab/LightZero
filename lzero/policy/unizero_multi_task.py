@@ -74,6 +74,9 @@ class WrappedModel:
         self.transformer = transformer
 
     def parameters(self):
+        # pos_emb.weight
+        # task_emb.weight
+        # act_embedding_table.weight
         # 返回 tokenizer 和 transformer 的参数
         return list(self.tokenizer.parameters()) + list(self.transformer.parameters())
 
@@ -81,6 +84,43 @@ class WrappedModel:
         # 将 tokenizer 和 transformer 的梯度设为零
         self.tokenizer.zero_grad(set_to_none=set_to_none)
         self.transformer.zero_grad(set_to_none=set_to_none)
+
+class WrappedModelV2:
+    def __init__(self, tokenizer, transformer, pos_emb, task_emb, act_embedding_table):
+        self.tokenizer = tokenizer
+        self.transformer = transformer
+        self.pos_emb = pos_emb
+        self.task_emb = task_emb
+        self.act_embedding_table = act_embedding_table
+
+    def parameters(self):
+        # 返回 tokenizer, transformer 以及所有嵌入层的参数
+        return (list(self.tokenizer.parameters()) +
+                list(self.transformer.parameters()) +
+                list(self.pos_emb.parameters()) +
+                list(self.task_emb.parameters()) +
+                list(self.act_embedding_table.parameters()))
+
+    def zero_grad(self, set_to_none=False):
+        # 将 tokenizer, transformer 和所有嵌入层的梯度设为零
+        self.tokenizer.zero_grad(set_to_none=set_to_none)
+        self.transformer.zero_grad(set_to_none=set_to_none)
+        self.pos_emb.zero_grad(set_to_none=set_to_none)
+        self.task_emb.zero_grad(set_to_none=set_to_none)
+        self.act_embedding_table.zero_grad(set_to_none=set_to_none)
+
+
+class WrappedModelV3:
+    def __init__(self, world_model):
+        self.world_model = world_model
+
+    def parameters(self):
+        # 返回 tokenizer, transformer 以及所有嵌入层的参数
+        return self.world_model.parameters()
+
+    def zero_grad(self, set_to_none=False):
+        # 将 tokenizer, transformer 和所有嵌入层的梯度设为零
+        self.world_model.zero_grad(set_to_none=set_to_none)
 
 
 @POLICY_REGISTRY.register('unizero_multi_task')
@@ -340,10 +380,20 @@ class UniZeroMTPolicy(Policy):
         self.grad_norm_after= 0.
 
         # 创建 WrappedModel 实例
-        wrapped_model = WrappedModel(
+        # wrapped_model = WrappedModel(
+        #     self._learn_model.world_model.tokenizer,
+        #     self._learn_model.world_model.transformer
+        # )
+        wrapped_model = WrappedModelV2(
             self._learn_model.world_model.tokenizer,
-            self._learn_model.world_model.transformer
+            self._learn_model.world_model.transformer,
+            self._learn_model.world_model.pos_emb,
+            self._learn_model.world_model.task_emb,
+            self._learn_model.world_model.act_embedding_table,
         )
+        # wrapped_model = WrappedModelV3(
+        #     self._learn_model.world_model,
+        # )
         # 将 wrapped_model 作为 share_model 传递给 GradCorrect
         self.grad_correct = GradCorrect(wrapped_model, 2, self._cfg.device)
 
@@ -497,11 +547,11 @@ class UniZeroMTPolicy(Policy):
             intermediate_losses = defaultdict(float)
             losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer, task_id=task_id)
 
-            # weighted_total_loss += losses.loss_total
-            weighted_total_loss = torch.tensor(0., device=self._cfg.device)
+            weighted_total_loss += losses.loss_total # TODO
+            # weighted_total_loss = torch.tensor(0., device=self._cfg.device)
 
-            assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
-            assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
+            # assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
+            # assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
             losses_list.append(losses.loss_total)  # TODO: for moco
 
@@ -544,6 +594,7 @@ class UniZeroMTPolicy(Policy):
 
         # TODO MoCo
         # 使用MoCo来计算梯度和权重
+        # lambd = torch.tensor([0. for i in range(len(data))], device=self._cfg.device)
         lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
         # weighted_total_loss.backward()
 

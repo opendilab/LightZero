@@ -100,9 +100,6 @@ def train_unizero_multi_task_v2(
         # cfg.policy.task_id = task_id
         replay_buffer = GameBuffer(cfg.policy)
 
-        # collector = Collector(...)  # Collector initialization
-        # evaluator = Evaluator(...)  # Evaluator initialization
-        policy.collect_mode
         collector = Collector(
             env=collector_env,
             policy=policy.collect_mode,
@@ -124,7 +121,7 @@ def train_unizero_multi_task_v2(
         )
         cfgs.append(cfg)
         replay_buffer.batch_size = cfg.policy.batch_size[task_id]
-        print(f'task_id:{task_id}, replay_buffer.batch_size: {replay_buffer.batch_size}')
+        print(f'task_id:{task_id}, replay_buffer.batch_size: {replay_buffer.batch_size}, replay_buffer.task_id: {replay_buffer.task_id}')
         game_buffers.append(replay_buffer)
         collector_envs.append(collector_env)
         evaluator_envs.append(evaluator_env)
@@ -151,25 +148,28 @@ def train_unizero_multi_task_v2(
 
     totoal_env_steps = 0
     while True:
+        # 预先计算位置编码矩阵，只用于 collect/eval 的推理阶段，不用于训练阶段
+        policy._collect_model.world_model.precompute_pos_emb_diff_kv() # 非常重要，kv更新后需要重新计算
+        policy._target_model.world_model.precompute_pos_emb_diff_kv() # 非常重要，kv更新后需要重新计算
+
         # 每个环境单独收集数据，并放入各自独立的replay buffer中
         for task_id, (cfg, collector, evaluator, replay_buffer) in enumerate(zip(cfgs, collectors, evaluators, game_buffers)):
 
             # TODO ===========================
-            # 预先计算位置编码矩阵，只用于 collect/eval 的推理阶段，不用于训练阶段
-            policy._collect_model.world_model.precompute_pos_emb_diff_kv() # 非常重要，kv更新后需要重新计算
-            policy._target_model.world_model.precompute_pos_emb_diff_kv() # 非常重要，kv更新后需要重新计算
+            policy._collect_model.world_model.past_keys_values_cache_init_infer.clear() # very important
+            for kv_cache_dict_env in policy._collect_model.world_model.past_keys_values_cache_init_infer_envs:
+                kv_cache_dict_env.clear() 
+            policy._collect_model.world_model.past_keys_values_cache_recurrent_infer.clear() # very important
+            policy._collect_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
+            
             policy._target_model.world_model.past_keys_values_cache_init_infer.clear()
             for kv_cache_dict_env in policy._target_model.world_model.past_keys_values_cache_init_infer_envs:
                 kv_cache_dict_env.clear() 
             policy._target_model.world_model.past_keys_values_cache_recurrent_infer.clear()
             policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad
             print('sample target_model past_keys_values_cache.clear()')
-            policy._collect_model.world_model.past_keys_values_cache_init_infer.clear() # very important
-            for kv_cache_dict_env in policy._collect_model.world_model.past_keys_values_cache_init_infer_envs:
-                kv_cache_dict_env.clear() 
-            policy._collect_model.world_model.past_keys_values_cache_recurrent_infer.clear() # very important
-            policy._collect_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
             torch.cuda.empty_cache() # TODO: NOTE
+
 
             # Perform task-specific collection, evaluation, and training as needed
             # ... (same collection code as before, but with task-specific components)
@@ -233,8 +233,6 @@ def train_unizero_multi_task_v2(
             replay_buffer.push_game_segments(new_data)
             # remove the oldest data if the replay buffer is full.
             replay_buffer.remove_oldest_data_to_fit()
-
-
 
 
         not_enough_data = False
