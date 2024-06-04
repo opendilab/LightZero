@@ -485,10 +485,10 @@ class WorldModelMT(nn.Module):
             observations = obs_act_dict['obs']
             buffer_action = obs_act_dict['action']
             current_obs = obs_act_dict['current_obs']
-        obs_embeddings = self.tokenizer.encode_to_obs_embeddings(observations, should_preprocess=True)  # (B, C, H, W) -> (B, K, E)
+        obs_embeddings = self.tokenizer.encode_to_obs_embeddings(observations, should_preprocess=True, task_id=task_id)  # (B, C, H, W) -> (B, K, E)
 
         if current_obs is not None:
-            current_obs_embeddings = self.tokenizer.encode_to_obs_embeddings(current_obs, should_preprocess=True)  # (B, C, H, W) -> (B, K, E)
+            current_obs_embeddings = self.tokenizer.encode_to_obs_embeddings(current_obs, should_preprocess=True, task_id=task_id)  # (B, C, H, W) -> (B, K, E)
             self.latent_state = current_obs_embeddings
             outputs_wm = self.refresh_keys_values_with_initial_latent_state_for_init_infer(obs_embeddings, buffer_action, current_obs_embeddings, task_id=task_id)
         else:
@@ -623,23 +623,24 @@ class WorldModelMT(nn.Module):
         latent_state_list = []
         token = action.reshape(-1, 1)
 
+        # only for logging
         # 获取self.keys_values_wm_size_list的最小值min_size
-        min_size = min(self.keys_values_wm_size_list)
-        if min_size >= self.config.max_tokens - 5:
-            self.length_largethan_maxminus5_context_cnt += len(self.keys_values_wm_size_list)
-        if min_size >= self.config.max_tokens - 7:
-            self.length_largethan_maxminus7_context_cnt += len(self.keys_values_wm_size_list)
-        # 打印统计信息
-        if self.total_query_count > 0 and self.total_query_count % 10000 == 0:
-            self.hit_freq = self.hit_count / (self.total_query_count)
-            print('total_query_count:', self.total_query_count)
-            # 如果总查询次数大于0,计算并打印cnt的比率
-            length_largethan_maxminus5_context_cnt_ratio = self.length_largethan_maxminus5_context_cnt / self.total_query_count
-            print('recurrent largethan_maxminus5_context:', self.length_largethan_maxminus5_context_cnt)
-            print('recurrent largethan_maxminus5_context_ratio:', length_largethan_maxminus5_context_cnt_ratio)
-            length_largethan_maxminus7_context_cnt_ratio = self.length_largethan_maxminus7_context_cnt / self.total_query_count
-            print('recurrent largethan_maxminus7_context_ratio:', length_largethan_maxminus7_context_cnt_ratio)
-            print('recurrent largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
+        # min_size = min(self.keys_values_wm_size_list)
+        # if min_size >= self.config.max_tokens - 5:
+        #     self.length_largethan_maxminus5_context_cnt += len(self.keys_values_wm_size_list)
+        # if min_size >= self.config.max_tokens - 7:
+        #     self.length_largethan_maxminus7_context_cnt += len(self.keys_values_wm_size_list)
+        # # 打印统计信息
+        # if self.total_query_count > 0 and self.total_query_count % 10000 == 0:
+        #     self.hit_freq = self.hit_count / (self.total_query_count)
+        #     print('total_query_count:', self.total_query_count)
+        #     # 如果总查询次数大于0,计算并打印cnt的比率
+        #     length_largethan_maxminus5_context_cnt_ratio = self.length_largethan_maxminus5_context_cnt / self.total_query_count
+        #     print('recurrent largethan_maxminus5_context:', self.length_largethan_maxminus5_context_cnt)
+        #     print('recurrent largethan_maxminus5_context_ratio:', length_largethan_maxminus5_context_cnt_ratio)
+        #     length_largethan_maxminus7_context_cnt_ratio = self.length_largethan_maxminus7_context_cnt / self.total_query_count
+        #     print('recurrent largethan_maxminus7_context_ratio:', length_largethan_maxminus7_context_cnt_ratio)
+        #     print('recurrent largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
 
         # 输入self.keys_values_wm_list,输出为self.keys_values_wm
         self.keys_values_wm_size_list = self.trim_and_pad_kv_cache(is_init_infer=False) # 与上面self.retrieve_or_generate_kvcache返回的一致
@@ -973,7 +974,7 @@ class WorldModelMT(nn.Module):
         
         # 为了训练稳定性,使用target_tokenizer计算真实的下一个潜在状态表示
         with torch.no_grad():
-            traget_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False)
+            traget_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False, task_id=task_id)
 
         # 计算观察、奖励和结束标签  
         labels_observations, labels_rewards, labels_ends = self.compute_labels_world_model(traget_obs_embeddings, batch['rewards'],

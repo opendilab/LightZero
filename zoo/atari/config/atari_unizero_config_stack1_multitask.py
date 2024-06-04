@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(4)
+torch.cuda.set_device(3)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
 # env_id = 'MsPacmanNoFrameskip-v4'
@@ -59,16 +59,19 @@ num_unroll_steps = 10
 eps_greedy_exploration_in_collect = True
 
 
-# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_taskembedding_N-head_batchsize-30-5/'
-# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_taskembedding_N-head_batchsize-34-1/'
-# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_concat-taskembedding_1-head-taskskip_1-encoder/'
 
-exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_1-encoder_lsd768-nlayer2-nh8_moco-encoder-trans-posacttaskemb_fixbuffer/'
+# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_1-encoder_lsd768-nlayer2-nh8_moco-encoder-trans-posacttaskemb_fixbuffer/'
 
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_1-head_1-encoder_lsd768-nlayer2-nh8_cagrad-encoder-trans-posacttaskemb-head_fixbuffer/'
-
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_1-encoder_lsd768-nlayer2-nh8_cagrad-encoder-trans-posacttaskemb_fixbuffer/'
-# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_1-encoder_lsd768-nlayer2-nh8_fixbuffer/'
+
+# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_1-encoder_lsd768-nlayer2-nh8_fixbuffer-targetlatent/'
+
+# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_N-encoder_lsd768-nlayer2-nh8_fixbuffer-targetlatent/'
+
+# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_N-encoder_lsd768-nlayer2-nh8_cagrad-trans-posacttaskemb_fixbuffer-targetlatent/'
+exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_1-encoder_lsd768-nlayer2-nh8_cagrad-trans-posacttaskemb-encoder_fixbuffer-targetlatent/'
+
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_1-head_1-encoder_lsd768-nlayer2-nh8_fixbuffer/'
 
 

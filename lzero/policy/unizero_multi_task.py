@@ -64,8 +64,8 @@ def configure_optimizers(model, weight_decay, learning_rate, betas, device_type)
 
 import sys
 sys.path.append('/mnt/afs/niuyazhe/code/LibMTL/')
-from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
-# from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
+# from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 # from LibMTL.weighting.abstract_weighting import AbsWeighting
 
 class WrappedModel:
@@ -121,6 +121,29 @@ class WrappedModelV3:
     def zero_grad(self, set_to_none=False):
         # 将 tokenizer, transformer 和所有嵌入层的梯度设为零
         self.world_model.zero_grad(set_to_none=set_to_none)
+
+    
+class WrappedModelV4:
+    def __init__(self, transformer, pos_emb, task_emb, act_embedding_table):
+        self.transformer = transformer
+        self.pos_emb = pos_emb
+        self.task_emb = task_emb
+        self.act_embedding_table = act_embedding_table
+
+    def parameters(self):
+        # 返回 tokenizer, transformer 以及所有嵌入层的参数
+        return (list(self.transformer.parameters()) +
+                list(self.pos_emb.parameters()) +
+                list(self.task_emb.parameters()) +
+                list(self.act_embedding_table.parameters()))
+
+    def zero_grad(self, set_to_none=False):
+        # 将 tokenizer, transformer 和所有嵌入层的梯度设为零
+        # self.tokenizer.zero_grad(set_to_none=set_to_none)
+        self.transformer.zero_grad(set_to_none=set_to_none)
+        self.pos_emb.zero_grad(set_to_none=set_to_none)
+        self.task_emb.zero_grad(set_to_none=set_to_none)
+        self.act_embedding_table.zero_grad(set_to_none=set_to_none)
 
 
 @POLICY_REGISTRY.register('unizero_multi_task')
@@ -385,7 +408,8 @@ class UniZeroMTPolicy(Policy):
         #     self._learn_model.world_model.transformer
         # )
         wrapped_model = WrappedModelV2(
-            self._learn_model.world_model.tokenizer,
+            # self._learn_model.world_model.tokenizer, # TODO
+            self._learn_model.world_model.tokenizer.representation_network[0], # TODO: one encoder
             self._learn_model.world_model.transformer,
             self._learn_model.world_model.pos_emb,
             self._learn_model.world_model.task_emb,
@@ -393,6 +417,12 @@ class UniZeroMTPolicy(Policy):
         )
         # wrapped_model = WrappedModelV3(
         #     self._learn_model.world_model,
+        # )
+        # wrapped_model = WrappedModelV4(
+        #     self._learn_model.world_model.transformer,
+        #     self._learn_model.world_model.pos_emb,
+        #     self._learn_model.world_model.task_emb,
+        #     self._learn_model.world_model.act_embedding_table,
         # )
         # 将 wrapped_model 作为 share_model 传递给 GradCorrect
         self.grad_correct = GradCorrect(wrapped_model, 2, self._cfg.device)

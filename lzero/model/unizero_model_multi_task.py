@@ -159,8 +159,8 @@ class UniZeroModelMT(nn.Module):
             #     group_size=cfg.world_model.group_size,
             # )
             self.representation_network = nn.ModuleList()
-            # for task_id in range(2):  # TODO: ========
-            for task_id in range(1):  # TODO: ========
+            for task_id in range(2):  # TODO: ========
+            # for task_id in range(1):  # TODO: ========
                 self.representation_network.append(RepresentationNetworkGPT(
                     observation_shape,
                     num_res_blocks,
