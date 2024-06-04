@@ -92,7 +92,7 @@ class Tokenizer(nn.Module):
     #@profile
     def encode_to_obs_embeddings(self, x: torch.Tensor, should_preprocess: bool = False, task_id=0):
         shape = x.shape  # (..., C, H, W)
-        # task_id=0 # TODO: ============= one encoder ===============
+        task_id=0 # TODO: ============= one encoder ===============
         if len(shape) == 2:
             # x shape (4,4)
             obs_embeddings = self.representation_network(x)

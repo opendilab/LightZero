@@ -338,7 +338,7 @@ class WorldModelMT(nn.Module):
 
     def forward(self, obs_embeddings_or_act_tokens, past_keys_values: Optional[KeysValues] = None, kvcache_independent=False, is_init_infer=True, valid_context_lengths=None, task_id=0) -> WorldModelOutput:
         task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE: TODO
-        # task_embeddings = torch.zeros(768, device=self.device) # NOTE:TODO
+        # task_embeddings = torch.zeros(768, device=self.device) # NOTE:TODO no task_embeddings =============
 
         if kvcache_independent:
             # 根据past_keys_values获取每个样本的步骤数

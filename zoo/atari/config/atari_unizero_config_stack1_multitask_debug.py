@@ -115,6 +115,7 @@ atari_muzero_config = dict(
         update_per_collect_tokenizer=update_per_collect,
         num_unroll_steps=num_unroll_steps,
         model=dict(
+            task_num=4, # TODO
             analysis_sim_norm = False,
             observation_shape=(3, 64, 64),
             image_channel=3,

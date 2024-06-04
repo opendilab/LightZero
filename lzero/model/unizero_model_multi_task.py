@@ -162,7 +162,6 @@ class UniZeroModelMT(nn.Module):
             # )
             self.representation_network = nn.ModuleList()
             for task_id in range(self.task_num):  # TODO: ========
-            # for task_id in range(1):  # TODO: ========
                 self.representation_network.append(RepresentationNetworkGPT(
                     observation_shape,
                     num_res_blocks,

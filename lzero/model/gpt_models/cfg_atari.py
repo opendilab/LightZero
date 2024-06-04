@@ -75,8 +75,10 @@ cfg['world_model'] = {
                       # "gru_gating": False,
 
 
-                      "device": 'cuda:0',
-                      "task_num": 4,
+                      "device": 'cuda:1',
+                      # "task_num": 4,
+                      "task_num": 2,
+
                       'analysis_sim_norm': False,
                       'analysis_dormant_ratio': False,
                       

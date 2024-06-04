@@ -59,6 +59,7 @@ class DownSample(nn.Module):
         """
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+        print(f"use {norm_type} in DownSample.")
 
         self.conv1 = nn.Conv2d(
             observation_shape[0],
@@ -78,7 +79,7 @@ class DownSample(nn.Module):
                 ResBlock(
                     in_channels=out_channels // 2,
                     activation=activation,
-                    norm_type='BN',
+                    norm_type=norm_type,
                     res_type='basic',
                     bias=False
                 ) for _ in range(1)
@@ -89,14 +90,14 @@ class DownSample(nn.Module):
             in_channels=out_channels // 2,
             out_channels=out_channels,
             activation=activation,
-            norm_type='BN',
+            norm_type=norm_type,
             res_type='downsample',
             bias=False
         )
         self.resblocks2 = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
                 ) for _ in range(1)
             ]
         )
@@ -104,7 +105,7 @@ class DownSample(nn.Module):
         self.resblocks3 = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
                 ) for _ in range(1)
             ]
         )
@@ -265,6 +266,7 @@ class RepresentationNetworkGPT(nn.Module):
         """
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+        print(f'use {norm_type} in RepresentationNetworkGPT')
         self.observation_shape = observation_shape
         self.downsample = downsample
         if self.downsample:
@@ -289,7 +291,7 @@ class RepresentationNetworkGPT(nn.Module):
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
@@ -1048,6 +1050,7 @@ class RepresentationNetwork(nn.Module):
         """
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+        print(f'use {norm_type} in RepresentationNetwork')
 
         self.downsample = downsample
         if self.downsample:
@@ -1072,7 +1075,7 @@ class RepresentationNetwork(nn.Module):
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
