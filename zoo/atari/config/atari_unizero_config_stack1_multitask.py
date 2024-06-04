@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(3)
+torch.cuda.set_device(6)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
 # env_id = 'MsPacmanNoFrameskip-v4'
@@ -50,7 +50,8 @@ reanalyze_ratio = 0.
 # batch_size = [34, 1]  # TODO: multitask
 # batch_size = [20, 15]  # TODO: multitask
 # batch_size = [20, 20]  # TODO: multitask
-batch_size = [32, 32]  # TODO: multitask
+# batch_size = [32, 32]  # TODO: multitask
+batch_size = [32, 32, 32, 32]  # TODO: multitask
 
 
 num_simulations = 50
@@ -58,6 +59,8 @@ num_simulations = 50
 num_unroll_steps = 10
 eps_greedy_exploration_in_collect = True
 
+
+# =========tokenizer representation network, world_model_multi_task =========
 
 
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_1-encoder_lsd768-nlayer2-nh8_moco-encoder-trans-posacttaskemb_fixbuffer/'
@@ -70,7 +73,10 @@ eps_greedy_exploration_in_collect = True
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_N-encoder_lsd768-nlayer2-nh8_fixbuffer-targetlatent/'
 
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_N-encoder_lsd768-nlayer2-nh8_cagrad-trans-posacttaskemb_fixbuffer-targetlatent/'
-exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_1-encoder_lsd768-nlayer2-nh8_cagrad-trans-posacttaskemb-encoder_fixbuffer-targetlatent/'
+# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_N-encoder_lsd768-nlayer2-nh8_famo-trans-posacttaskemb_fixbuffer-targetlatent/'
+
+# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_1-encoder_lsd768-nlayer2-nh8_cagrad-trans-posacttaskemb-encoder_fixbuffer-targetlatent/'
+exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_1-head_N-encoder_lsd768-nlayer2-nh8_fixbuffer-targetlatent/'
 
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_1-head_1-encoder_lsd768-nlayer2-nh8_fixbuffer/'
 
@@ -124,6 +130,7 @@ atari_muzero_config = dict(
             calpha=0.5,
             rescale=1,
         ),
+        task_num=4, # TODO
         task_id=0,  # TODO
         model_path=None,
         analysis_sim_norm=False, # TODO
@@ -221,22 +228,31 @@ create_config = atari_muzero_create_config
 if __name__ == "__main__":
     from lzero.entry import train_unizero_multi_task_v2
     import copy
-    [main_config_2, main_config_3] = [copy.deepcopy(main_config) for _ in range(2)]
-    [create_config_2, create_config_3] = [copy.deepcopy(create_config) for _ in range(2)]
+    [main_config_2, main_config_3, main_config_4] = [copy.deepcopy(main_config) for _ in range(3)]
+    [create_config_2, create_config_3, create_config_4] = [copy.deepcopy(create_config) for _ in range(3)]
 
     main_config_2.env.env_id = 'MsPacmanNoFrameskip-v4'
     main_config_3.env.env_id = 'SeaquestNoFrameskip-v4'
+    main_config_4.env.env_id = 'BoxingNoFrameskip-v4'
+
     
     main_config_2.exp_name = exp_name_prefix + f'MsPacman_unizero-mt_seed0'
     main_config_3.exp_name = exp_name_prefix + f'Seaquest_unizero-mt_seed0'
+    main_config_4.exp_name = exp_name_prefix + f'Boxing_unizero-mt_seed0'
 
     main_config_2.policy.task_id = 1
     main_config_3.policy.task_id = 2
+    main_config_4.policy.task_id = 3
+
 
     # Pong
     # train_unizero_multi_task_v2([[0, [main_config, create_config]]], seed=0, max_env_step=max_env_step)
 
     # Pong Mspacman
-    train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]]], seed=0, max_env_step=max_env_step)
+    # train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]]], seed=0, max_env_step=max_env_step)
+
+    # Pong Mspacman Seaquest Boxing
+    train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]], [3, [main_config_4, create_config_4]]], seed=0, max_env_step=max_env_step)
+
 
     # train_unizero_multi_task([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]]], seed=0, max_env_step=max_env_step)

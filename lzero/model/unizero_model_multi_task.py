@@ -45,6 +45,7 @@ class UniZeroModelMT(nn.Module):
         downsample: bool = False,
         norm_type: Optional[str] = 'BN',
         discrete_action_encoding_type: str = 'one_hot',
+        task_num: int = 1,
         *args,
         **kwargs
     ):
@@ -101,6 +102,7 @@ class UniZeroModelMT(nn.Module):
 
         # self.action_space_size = action_space_size
         self.action_space_size = 18 # for multi-task
+        self.task_num = task_num
 
         assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
         self.discrete_action_encoding_type = discrete_action_encoding_type
@@ -159,7 +161,7 @@ class UniZeroModelMT(nn.Module):
             #     group_size=cfg.world_model.group_size,
             # )
             self.representation_network = nn.ModuleList()
-            for task_id in range(2):  # TODO: ========
+            for task_id in range(self.task_num):  # TODO: ========
             # for task_id in range(1):  # TODO: ========
                 self.representation_network.append(RepresentationNetworkGPT(
                     observation_shape,

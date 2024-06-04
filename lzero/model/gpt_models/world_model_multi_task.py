@@ -99,7 +99,7 @@ class WorldModelOutput:
 class WorldModelMT(nn.Module):
     def __init__(self, obs_vocab_size: int, act_vocab_size: int, config: TransformerConfig, tokenizer) -> None:
         super().__init__()
-
+        self.task_num = config.task_num
         self.tokenizer = tokenizer
         self.obs_vocab_size, self.act_vocab_size = obs_vocab_size, act_vocab_size
         self.config = config
@@ -145,7 +145,7 @@ class WorldModelMT(nn.Module):
         value_policy_tokens_pattern[-2] = 1  # [0,...,1,0]
 
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim)
-        self.task_emb = nn.Embedding(2, config.embed_dim, max_norm=1)  # TODO
+        self.task_emb = nn.Embedding(self.task_num, config.embed_dim, max_norm=1)  # TODO
 
 
         # 预先计算位置编码矩阵，只用于collect/eval 的推理阶段，不用于训练阶段
@@ -207,7 +207,7 @@ class WorldModelMT(nn.Module):
 
         # TODO:======================
         # for task_id in range(3):
-        for task_id in range(2):  # TODO
+        for task_id in range(self.task_num):  # TODO
             action_space_size=self.action_shape  # TODO:======================
             # action_space_size=18  # TODO:======================
             self.head_policy = Head(

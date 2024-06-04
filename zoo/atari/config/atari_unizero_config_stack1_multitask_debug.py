@@ -48,7 +48,7 @@ eps_greedy_exploration_in_collect = True
 
 # debug
 # batch_size = 2+1
-batch_size = [2,2]
+batch_size = [2,2,2,2]
 
 update_per_collect = 1
 num_simulations = 1 
@@ -94,6 +94,7 @@ atari_muzero_config = dict(
             calpha=0.5,
             rescale=1,
         ),
+        task_num=4, # TODO
         task_id=0,  # TODO
         model_path=None,
         analysis_sim_norm=False, # TODO
@@ -189,19 +190,31 @@ create_config = atari_muzero_create_config
 if __name__ == "__main__":
     from lzero.entry import train_unizero_multi_task_v2
     import copy
-    [main_config_2, main_config_3] = [copy.deepcopy(main_config) for _ in range(2)]
-    [create_config_2, create_config_3] = [copy.deepcopy(create_config) for _ in range(2)]
+    [main_config_2, main_config_3, main_config_4] = [copy.deepcopy(main_config) for _ in range(3)]
+    [create_config_2, create_config_3, create_config_4] = [copy.deepcopy(create_config) for _ in range(3)]
 
     main_config_2.env.env_id = 'MsPacmanNoFrameskip-v4'
     main_config_3.env.env_id = 'SeaquestNoFrameskip-v4'
+    main_config_4.env.env_id = 'BoxingNoFrameskip-v4'
+
     
     main_config_2.exp_name = exp_name_prefix + f'MsPacman_unizero-mt_seed0'
     main_config_3.exp_name = exp_name_prefix + f'Seaquest_unizero-mt_seed0'
+    main_config_4.exp_name = exp_name_prefix + f'Boxing_unizero-mt_seed0'
 
     main_config_2.policy.task_id = 1
     main_config_3.policy.task_id = 2
+    main_config_4.policy.task_id = 3
 
-    train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]]], seed=0, max_env_step=max_env_step)
+
+    # Pong
     # train_unizero_multi_task_v2([[0, [main_config, create_config]]], seed=0, max_env_step=max_env_step)
+
+    # Pong Mspacman
+    # train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]]], seed=0, max_env_step=max_env_step)
+
+    # Pong Mspacman Seaquest Boxing
+    train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]], [3, [main_config_4, create_config_4]]], seed=0, max_env_step=max_env_step)
+
 
     # train_unizero_multi_task([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]]], seed=0, max_env_step=max_env_step)

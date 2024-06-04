@@ -65,7 +65,9 @@ def configure_optimizers(model, weight_decay, learning_rate, betas, device_type)
 import sys
 sys.path.append('/mnt/afs/niuyazhe/code/LibMTL/')
 # from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
-from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
+# from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
+from LibMTL.weighting.FAMO_unizero import FAMO as GradCorrect
+
 # from LibMTL.weighting.abstract_weighting import AbsWeighting
 
 class WrappedModel:
@@ -425,12 +427,16 @@ class UniZeroMTPolicy(Policy):
         #     self._learn_model.world_model.act_embedding_table,
         # )
         # 将 wrapped_model 作为 share_model 传递给 GradCorrect
-        self.grad_correct = GradCorrect(wrapped_model, 2, self._cfg.device)
+        self.task_num = self._cfg.task_num
+        self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
 
-        # self.grad_correct = GradCorrect(self._learn_model.world_model, 2, self._cfg.device)  # 初始化MoCo
+        # self.grad_correct = GradCorrect(self._learn_model.world_model, self.task_num, self._cfg.device)  # 初始化MoCo
 
         self.grad_correct.init_param()  # 初始化MoCo参数
         self.grad_correct.rep_grad = False
+        # self.grad_correct.set_min_losses(torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device))  # only for FAMO
+        self.curr_min_loss = torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)
+        self.grad_correct.prev_loss = self.curr_min_loss
 
     #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -624,9 +630,22 @@ class UniZeroMTPolicy(Policy):
 
         # TODO MoCo
         # 使用MoCo来计算梯度和权重
-        # lambd = torch.tensor([0. for i in range(len(data))], device=self._cfg.device)
-        lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
-        # weighted_total_loss.backward()
+        #  ============= for CAGrad and MoCo ============= 
+        # lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+
+        #  ============= for FAMO  =============  TODO: self.grad_correct.min_loss
+        # lambd = torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)
+        # curr_loss, _ = self.grad_correct.backward(losses=torch.tensor(losses_list, device=self._cfg.device))
+        # for i in range(self.task_num):
+        #     if losses_list[i] < self.grad_correct.min_losses[i]:
+        #         self.curr_min_loss[i] = losses_list[i]
+        # self.grad_correct.min_loss = self.curr_min_loss  # only for FAMO
+        # self.grad_correct.update(curr_loss.detach())
+        # self.grad_correct.prev_loss = curr_loss.detach()
+
+        #  ============= 不使用梯度矫正的情况  ============= 
+        lambd = torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)
+        weighted_total_loss.backward()  
 
         # ============= for analysis ============= TODO
         if self._cfg.analysis_sim_norm:
@@ -645,7 +664,7 @@ class UniZeroMTPolicy(Policy):
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(), self._cfg.grad_clip_value)
-
+        # NOTE================
         self._optimizer_world_model.step()
         
 
@@ -659,7 +678,7 @@ class UniZeroMTPolicy(Policy):
 
 
         if self._cfg.lr_piecewise_constant_decay:
-                self.lr_scheduler.step()
+            self.lr_scheduler.step()
 
         # ==============================================================
         # the core target model update step.
