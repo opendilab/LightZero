@@ -72,7 +72,7 @@ class DownSample(nn.Module):
         if norm_type == 'BN':
             self.norm1 = nn.BatchNorm2d(out_channels // 2)
         elif norm_type == 'LN':
-            self.norm1 = nn.LayerNorm([out_channels // 2, observation_shape[-2] // 2, observation_shape[-1] // 2])
+            self.norm1 = nn.LayerNorm([out_channels // 2, observation_shape[-2] // 2, observation_shape[-1] // 2], eps=1e-6) # TODO: EPS
 
         self.resblocks1 = nn.ModuleList(
             [
@@ -284,9 +284,9 @@ class RepresentationNetworkGPT(nn.Module):
             elif norm_type == 'LN':
                 if downsample:
                     self.norm = nn.LayerNorm(
-                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)], eps=1e-6) # TODO: EPS
                 else:
-                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]])
+                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-6)
 
         self.resblocks = nn.ModuleList(
             [

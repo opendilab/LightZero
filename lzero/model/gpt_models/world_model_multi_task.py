@@ -463,16 +463,16 @@ class WorldModelMT(nn.Module):
         
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
         # one head
-        # logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
         
         # N head
-        logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
 
         # TODO: root reward value
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)

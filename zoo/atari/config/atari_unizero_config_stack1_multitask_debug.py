@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(0)
+torch.cuda.set_device(4)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
 # env_id = 'MsPacmanNoFrameskip-v4'
@@ -94,7 +94,7 @@ atari_muzero_config = dict(
             calpha=0.5,
             rescale=1,
         ),
-        task_num=4, # TODO
+        task_num=2, # TODO
         task_id=0,  # TODO
         model_path=None,
         analysis_sim_norm=False, # TODO
@@ -115,7 +115,7 @@ atari_muzero_config = dict(
         update_per_collect_tokenizer=update_per_collect,
         num_unroll_steps=num_unroll_steps,
         model=dict(
-            task_num=4, # TODO
+            task_num=2, # TODO
             analysis_sim_norm = False,
             observation_shape=(3, 64, 64),
             image_channel=3,
@@ -125,7 +125,9 @@ atari_muzero_config = dict(
             downsample=True,
             self_supervised_learning_loss=True,  # default is False
             discrete_action_encoding_type='one_hot',
-            norm_type='BN',
+            # norm_type='BN',
+            norm_type='LN',
+
             # reward_support_size=601,
             # value_support_size=601,
             # support_scale=300,
@@ -212,10 +214,10 @@ if __name__ == "__main__":
     # train_unizero_multi_task_v2([[0, [main_config, create_config]]], seed=0, max_env_step=max_env_step)
 
     # Pong Mspacman
-    # train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]]], seed=0, max_env_step=max_env_step)
+    train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]]], seed=0, max_env_step=max_env_step)
 
     # Pong Mspacman Seaquest Boxing
-    train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]], [3, [main_config_4, create_config_4]]], seed=0, max_env_step=max_env_step)
+    # train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]], [3, [main_config_4, create_config_4]]], seed=0, max_env_step=max_env_step)
 
 
     # train_unizero_multi_task([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]]], seed=0, max_env_step=max_env_step)

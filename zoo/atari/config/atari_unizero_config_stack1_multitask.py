@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(1)
+torch.cuda.set_device(5)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
 # env_id = 'MsPacmanNoFrameskip-v4'
@@ -50,8 +50,8 @@ reanalyze_ratio = 0.
 # batch_size = [34, 1]  # TODO: multitask
 # batch_size = [20, 15]  # TODO: multitask
 # batch_size = [20, 20]  # TODO: multitask
-batch_size = [32, 32]  # TODO: multitask
-# batch_size = [32, 32, 32, 32]  # TODO: multitask
+# batch_size = [32, 32]  # TODO: multitask
+batch_size = [32, 32, 32, 32]  # TODO: multitask
 
 
 num_simulations = 50
@@ -65,7 +65,8 @@ eps_greedy_exploration_in_collect = True
 
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_N-encoder_lsd768-nlayer2-nh8_fixbuffer-targetlatent/'
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_no-taskembedding-to-obs_N-head_N-encoder_lsd768-nlayer2-nh8_fixbuffer-targetlatent/'
-exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_no-taskembedding-to-obs_N-head_1-encoder-LN_lsd768-nlayer2-nh8_fixbuffer-targetlatent/'
+# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_taskembedding-to-obs_1-head_N-encoder-BN_lsd768-nlayer2-nh8_fixbuffer-targetlatent_4games_seed1/'
+exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_taskembedding-to-obs_1-head_1-encoder-LN-eps-gelu_lsd768-nlayer2-nh8_fixbuffer-targetlatent_4games_seed0/'
 
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_1-head_N-encoder_lsd768-nlayer2-nh8_fixbuffer-targetlatent/'
 
@@ -121,7 +122,7 @@ atari_muzero_config = dict(
             calpha=0.5,
             rescale=1,
         ),
-        task_num=2, # TODO
+        task_num=4, # TODO
         task_id=0,  # TODO
         model_path=None,
         analysis_sim_norm=False, # TODO
@@ -142,7 +143,7 @@ atari_muzero_config = dict(
         update_per_collect_tokenizer=update_per_collect,
         num_unroll_steps=num_unroll_steps,
         model=dict(
-            task_num=2, # TODO
+            task_num=4, # TODO
             analysis_sim_norm = False,
             observation_shape=(3, 64, 64),
             image_channel=3,
@@ -228,10 +229,10 @@ if __name__ == "__main__":
     main_config_3.env.env_id = 'SeaquestNoFrameskip-v4'
     main_config_4.env.env_id = 'BoxingNoFrameskip-v4'
 
-    
-    main_config_2.exp_name = exp_name_prefix + f'MsPacman_unizero-mt_seed0'
-    main_config_3.exp_name = exp_name_prefix + f'Seaquest_unizero-mt_seed0'
-    main_config_4.exp_name = exp_name_prefix + f'Boxing_unizero-mt_seed0'
+    seed = 0
+    main_config_2.exp_name = exp_name_prefix + f'MsPacman_unizero-mt_seed{seed}'
+    main_config_3.exp_name = exp_name_prefix + f'Seaquest_unizero-mt_seed{seed}'
+    main_config_4.exp_name = exp_name_prefix + f'Boxing_unizero-mt_seed{seed}'
 
     main_config_2.policy.task_id = 1
     main_config_3.policy.task_id = 2
@@ -242,10 +243,10 @@ if __name__ == "__main__":
     # train_unizero_multi_task_v2([[0, [main_config, create_config]]], seed=0, max_env_step=max_env_step)
 
     # Pong Mspacman
-    train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]]], seed=0, max_env_step=max_env_step)
+    # train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]]], seed=0, max_env_step=max_env_step)
 
     # Pong Mspacman Seaquest Boxing
-    # train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]], [3, [main_config_4, create_config_4]]], seed=0, max_env_step=max_env_step)
+    train_unizero_multi_task_v2([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]], [3, [main_config_4, create_config_4]]], seed=seed, max_env_step=max_env_step)
 
 
     # train_unizero_multi_task([[0, [main_config, create_config]], [1, [main_config_2, create_config_2]], [2, [main_config_3, create_config_3]]], seed=0, max_env_step=max_env_step)

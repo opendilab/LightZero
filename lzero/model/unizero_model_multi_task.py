@@ -161,14 +161,15 @@ class UniZeroModelMT(nn.Module):
             #     group_size=cfg.world_model.group_size,
             # )
             self.representation_network = nn.ModuleList()
-            for task_id in range(self.task_num):  # TODO: ========
+            # for task_id in range(self.task_num):  # TODO: ========
+            for task_id in range(1):  # TODO: ========
                 self.representation_network.append(RepresentationNetworkGPT(
                     observation_shape,
                     num_res_blocks,
                     num_channels,
                     downsample,
-                    activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
-                    # activation=nn.GELU(),
+                    # activation=nn.LeakyReLU(negative_slope=0.01),  # TODO
+                    activation=nn.GELU(), # TODO: 测试GELU的效果, eps的效果
                     norm_type=norm_type,
                     obs_embedding_dim=cfg.world_model.obs_embed_dim,
                     group_size=cfg.world_model.group_size,

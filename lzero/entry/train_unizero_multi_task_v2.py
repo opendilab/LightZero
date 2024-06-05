@@ -91,7 +91,7 @@ def train_unizero_multi_task_v2(
         env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
         collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
         evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
-        collector_env.seed(cfg.seed + task_id)  # Ensure different seeds for different tasks
+        collector_env.seed(cfg.seed + task_id)  # Ensure different seeds for different tasks TODO=====
         evaluator_env.seed(cfg.seed + task_id, dynamic_seed=False)
         set_pkg_seed(cfg.seed + task_id, use_cuda=cfg.policy.cuda)
 
