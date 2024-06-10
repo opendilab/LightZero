@@ -110,6 +110,19 @@ reanalyze_ratio = 0.
 batch_size = 64
 num_unroll_steps = 10
 eps_greedy_exploration_in_collect = True
+
+
+# debug
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+num_simulations = 5
+max_env_step = int(5e5)
+reanalyze_ratio = 0.
+batch_size = 20
+num_unroll_steps = 10
+eps_greedy_exploration_in_collect = True
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================

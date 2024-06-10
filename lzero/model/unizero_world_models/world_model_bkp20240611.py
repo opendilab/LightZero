@@ -1,11 +1,12 @@
 import copy
 import logging
 from typing import Any, Tuple
-from typing import Optional, Union, Dict
 from typing import Optional
 logging.getLogger().setLevel(logging.DEBUG)
 from einops import rearrange
+import torch.nn as nn
 import torch.nn.functional as F
+import collections
 from sklearn.manifold import TSNE
 from .kv_caching import KeysValues
 from .slicer import Head
@@ -15,14 +16,13 @@ from .utils import LossWithIntermediateLosses, init_weights
 from lzero.model.utils import cal_dormant_ratio
 import os
 from PIL import ImageDraw
+import torch
 import numpy as np
 from PIL import Image
 import torchvision
 import matplotlib.pyplot as plt
 from .utils import SimNorm, WorldModelOutput, quantize_state
-import torch
-import torch.nn as nn
-import collections
+
 
 class WorldModel(nn.Module):
     def __init__(self,  act_vocab_size: int, config: TransformerConfig, tokenizer) -> None:
@@ -32,116 +32,123 @@ class WorldModel(nn.Module):
         self.config = config
         self.transformer = Transformer(self.config)
 
-        # Initialize configuration parameters
-        self._initialize_config_parameters()
-
-        # Initialize patterns for block masks
-        self._initialize_patterns()
-
-        # Position embedding
-        self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim)
-        self.precompute_pos_emb_diff_kv()
-
-        # Initialize action embedding table
-        self.act_embedding_table = nn.Embedding(act_vocab_size, config.embed_dim)
-
-        # Head modules
-        self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
-        self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim,
-                                                   self.sim_norm)
-        self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_shape)
-        self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
-
-        # Apply weight initialization
-        self.apply(init_weights)
-        self._initialize_last_layer()
-
-        # Cache structures
-        self._initialize_cache_structures()
-
-        # Projection input dimension
-        self._initialize_projection_input_dim()
-
-        # Hit count and query count statistics
-        self._initialize_statistics()
-
-        # Initialize keys and values for transformer
-        self._initialize_transformer_keys_values()
-
-    def _initialize_config_parameters(self) -> None:
-        self.policy_entropy_weight = self.config.policy_entropy_weight
-        self.predict_latent_loss_type = self.config.predict_latent_loss_type
-        self.group_size = self.config.group_size
-        self.num_groups = self.config.embed_dim // self.group_size
-        self.obs_type = self.config.obs_type
-        self.embed_dim = self.config.embed_dim
-        self.num_heads = self.config.num_heads
-        self.gamma = self.config.gamma
-        self.context_length = self.config.context_length
-        self.dormant_threshold = self.config.dormant_threshold
-        self.analysis_dormant_ratio = self.config.analysis_dormant_ratio
-        self.num_observations_tokens = self.config.tokens_per_block - 1
-        self.latent_recon_loss_weight = self.config.latent_recon_loss_weight
-        self.perceptual_loss_weight = self.config.perceptual_loss_weight
-        self.device = self.config.device
-        self.support_size = self.config.support_size
-        self.action_shape = self.config.action_shape
-        self.max_cache_size = self.config.max_cache_size
-        self.env_num = self.config.env_num
-        self.num_layers = self.config.num_layers
-        self.obs_per_embdding_dim = self.config.embed_dim
+        self.policy_entropy_weight = config.policy_entropy_weight
+        self.predict_latent_loss_type = config.predict_latent_loss_type
+        self.group_size = config.group_size
+        self.num_groups = config.embed_dim // config.group_size
+        self.obs_type = config.obs_type
+        self.embed_dim = config.embed_dim
+        self.num_heads = config.num_heads
+        self.gamma = config.gamma
+        self.context_length = config.context_length
+        self.dormant_threshold = config.dormant_threshold
+        self.analysis_dormant_ratio = config.analysis_dormant_ratio
+        self.num_observations_tokens = config.tokens_per_block - 1
+        self.latent_recon_loss_weight = config.latent_recon_loss_weight
+        self.perceptual_loss_weight = config.perceptual_loss_weight
+        self.device = config.device
+        self.support_size = config.support_size
+        self.action_shape = config.action_shape
+        self.max_cache_size = config.max_cache_size
+        self.env_num = config.env_num
+        self.num_layers = config.num_layers
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
 
-    def _initialize_patterns(self) -> None:
-        self.all_but_last_latent_state_pattern = torch.ones(self.config.tokens_per_block)
-        self.all_but_last_latent_state_pattern[-2] = 0
-        self.act_tokens_pattern = torch.zeros(self.config.tokens_per_block)
-        self.act_tokens_pattern[-1] = 1
-        self.value_policy_tokens_pattern = torch.zeros(self.config.tokens_per_block)
-        self.value_policy_tokens_pattern[-2] = 1
+        all_but_last_latent_state_pattern = torch.ones(config.tokens_per_block)
+        all_but_last_latent_state_pattern[-2] = 0  # 1,...,0,1
+        act_tokens_pattern = torch.zeros(self.config.tokens_per_block)  # 17
+        act_tokens_pattern[-1] = 1  # 0,...,0,1
 
-    def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
-        modules = [
-            nn.Linear(self.config.embed_dim, self.config.embed_dim),
-            nn.GELU(),
-            nn.Linear(self.config.embed_dim, output_dim)
-        ]
-        if norm_layer:
-            modules.append(norm_layer)
-        return Head(
-            max_blocks=self.config.max_blocks,
-            block_mask=block_mask,
-            head_module=nn.Sequential(*modules)
+        # 当前latent state的策略值
+        value_policy_tokens_pattern = torch.zeros(config.tokens_per_block)
+        value_policy_tokens_pattern[-2] = 1  # [0,...,1,0]
+
+        self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim)
+
+        # 预先计算位置编码矩阵，只用于collect/eval 的推理阶段，不用于训练阶段
+        self.precompute_pos_emb_diff_kv()
+
+        self.act_embedding_table = nn.Embedding(act_vocab_size, config.embed_dim)
+        # NOTE: 对于离散动作，使用fixed_act_embedding，可能前期效率更高,但后期性能较差, 注意需要self.act_embedding_table.weight不是全零初始化的 ####
+        # self.act_embedding_table.weight.requires_grad = False
+
+        self.obs_per_embdding_dim = config.embed_dim  # 16*64=1024
+
+        self.head_rewards = Head(
+            max_blocks=config.max_blocks,
+            block_mask=act_tokens_pattern,  # 0,...,0,1
+            head_module=nn.Sequential(
+                nn.Linear(config.embed_dim, config.embed_dim),
+                nn.GELU(),
+                nn.Linear(config.embed_dim, self.support_size)
+            )
+        )
+        self.head_observations = Head(  # TODO
+            max_blocks=config.max_blocks,
+            block_mask=all_but_last_latent_state_pattern,  # 1,...,0,1 # https://github.com/eloialonso/iris/issues/19
+            head_module=nn.Sequential(
+                nn.Linear(config.embed_dim, config.embed_dim),
+                nn.GELU(),
+                nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
+                self.sim_norm,  # TODO
+            )
+        )
+        self.head_policy = Head(
+            max_blocks=config.max_blocks,
+            block_mask=value_policy_tokens_pattern,  # [0,...,1,0]
+            head_module=nn.Sequential(  # （8, 5, 128）
+                nn.Linear(config.embed_dim, config.embed_dim),
+                nn.GELU(),
+                nn.Linear(config.embed_dim, self.action_shape)  # TODO(pu); action shape
+            )
+        )
+        self.head_value = Head(
+            max_blocks=config.max_blocks,
+            block_mask=value_policy_tokens_pattern,
+            head_module=nn.Sequential(
+                nn.Linear(config.embed_dim, config.embed_dim),
+                nn.GELU(),
+                nn.Linear(config.embed_dim, self.support_size)  # TODO(pu): action shape
+            )
         )
 
-    def _initialize_last_layer(self) -> None:
-        last_linear_layer_init_zero = True
-        if last_linear_layer_init_zero:
-            for head in [self.head_value, self.head_rewards, self.head_observations]:
-                for layer in reversed(head.head_module):
-                    if isinstance(layer, nn.Linear):
-                        nn.init.zeros_(layer.weight)
-                        if layer.bias is not None:
-                            nn.init.zeros_(layer.bias)
-                        break
+        self.apply(init_weights)
 
-    def _initialize_cache_structures(self) -> None:
-        """Initialize cache structures for past keys and values."""
+        last_linear_layer_init_zero = True  # TODO: 有利于收敛速度。
+        if last_linear_layer_init_zero:
+            # 将头部模块的最后一个线性层的权重和偏置初始化为零
+            for _, layer in enumerate(reversed(self.head_value.head_module)):
+                if isinstance(layer, nn.Linear):
+                    nn.init.zeros_(layer.weight)
+                    if layer.bias is not None:
+                        nn.init.zeros_(layer.bias)
+                    break
+            for _, layer in enumerate(reversed(self.head_rewards.head_module)):
+                if isinstance(layer, nn.Linear):
+                    nn.init.zeros_(layer.weight)
+                    if layer.bias is not None:
+                        nn.init.zeros_(layer.bias)
+                    break
+            for _, layer in enumerate(reversed(self.head_observations.head_module)):
+                if isinstance(layer, nn.Linear):
+                    nn.init.zeros_(layer.weight)
+                    if layer.bias is not None:
+                        nn.init.zeros_(layer.bias)
+                    break
+
+        # 使用collections.OrderedDict作为缓存结构，可以维持插入顺序
         self.past_keys_values_cache_recurrent_infer = collections.OrderedDict()
         self.past_keys_values_cache_init_infer = collections.OrderedDict()
         self.past_keys_values_cache_init_infer_envs = [collections.OrderedDict() for _ in range(self.env_num)]
+
         self.keys_values_wm_list = []
         self.keys_values_wm_size_list = []
 
-    def _initialize_projection_input_dim(self) -> None:
-        """Initialize the projection input dimension based on the number of observation tokens."""
-        if self.num_observations_tokens == 16:
+        if self.num_observations_tokens == 16:  # k=16
             self.projection_input_dim = 128
-        elif self.num_observations_tokens == 1:
-            self.projection_input_dim = self.obs_per_embdding_dim
+        elif self.num_observations_tokens == 1:  # K=1
+            self.projection_input_dim = self.obs_per_embdding_dim  # for atari #TODO
 
-    def _initialize_statistics(self) -> None:
-        """Initialize counters for hit count and query count statistics."""
         self.hit_count = 0
         self.total_query_count = 0
         self.length_largethan_maxminus5_context_cnt = 0
@@ -149,36 +156,44 @@ class WorldModel(nn.Module):
         self.root_hit_cnt = 0
         self.root_total_query_cnt = 0
 
-    def _initialize_transformer_keys_values(self) -> None:
-        """Initialize keys and values for the transformer."""
         self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1,
                                                                                      max_tokens=self.context_length)
+        # TODO: Transformer更新后应该清除缓存
         self.keys_values_wm = self.transformer.generate_empty_keys_values(n=self.env_num,
                                                                           max_tokens=self.context_length)
 
     def precompute_pos_emb_diff_kv(self):
         if self.context_length <= 2:
-            # If context length is 2 or less, no context is present
+            # 即全部是单帧的，没有context
             return
-
-        # Precompute positional embedding matrices for inference in collect/eval stages, not for training
+        # 预先计算位置编码矩阵,只用于collect/eval的推理阶段,不用于训练阶段
         self.positional_embedding_k = [
-            self._get_positional_embedding(layer, 'key')
-            for layer in range(self.config.num_layers)
-        ]
+            self.transformer.blocks[layer].attn.key(self.pos_emb.weight).view(1, self.config.max_tokens, self.num_heads,
+                                                                              self.embed_dim // self.num_heads).transpose(
+                1, 2).detach() for layer in range(self.config.num_layers)]  # (B, nh, T, hs)
         self.positional_embedding_v = [
-            self._get_positional_embedding(layer, 'value')
-            for layer in range(self.config.num_layers)
-        ]
+            self.transformer.blocks[layer].attn.value(self.pos_emb.weight).view(1, self.config.max_tokens,
+                                                                                self.num_heads,
+                                                                                self.embed_dim // self.num_heads).transpose(
+                1, 2).detach() for layer in range(self.config.num_layers)]  # (B, nh, T, hs)
+        # self.positional_embedding_k = [
+        #     self.transformer.blocks[layer].attn.key(self.pos_emb.weight).view(1, self.config.max_tokens, self.num_heads,
+        #                                                                       self.embed_dim // self.num_heads).transpose(
+        #         1, 2).cuda().detach() for layer in range(self.config.num_layers)]  # (B, nh, T, hs)
+        # self.positional_embedding_v = [
+        #     self.transformer.blocks[layer].attn.value(self.pos_emb.weight).view(1, self.config.max_tokens,
+        #                                                                         self.num_heads,
+        #                                                                         self.embed_dim // self.num_heads).transpose(
+        #         1, 2).cuda().detach() for layer in range(self.config.num_layers)]  # (B, nh, T, hs)
 
-        # Precompute all possible positional embedding differences
+        # 预先计算所有可能的位置编码差值
         self.pos_emb_diff_k = []
         self.pos_emb_diff_v = []
-
         for layer in range(self.config.num_layers):
             layer_pos_emb_diff_k = {}
             layer_pos_emb_diff_v = {}
-
+            # for start in range(self.config.max_tokens):
+            #     for end in range(start+1, self.config.max_tokens):
             for start in [2]:
                 for end in [self.context_length - 1]:
                     original_pos_emb_k = self.positional_embedding_k[layer][:, :, start:end, :]
@@ -188,166 +203,146 @@ class WorldModel(nn.Module):
                     original_pos_emb_v = self.positional_embedding_v[layer][:, :, start:end, :]
                     new_pos_emb_v = self.positional_embedding_v[layer][:, :, :end - start, :]
                     layer_pos_emb_diff_v[(start, end)] = new_pos_emb_v - original_pos_emb_v
-
             self.pos_emb_diff_k.append(layer_pos_emb_diff_k)
             self.pos_emb_diff_v.append(layer_pos_emb_diff_v)
 
-    def _get_positional_embedding(self, layer, attn_type):
-        """
-        Helper function to get positional embedding for a given layer and attention type.
-        Args:
-            layer (int): Layer index.
-            attn_type (str): Attention type, either 'key' or 'value'.
-        Returns:
-            torch.Tensor: The positional embedding tensor.
-        """
-        attn_func = getattr(self.transformer.blocks[layer].attn, attn_type)
-        return attn_func(self.pos_emb.weight).view(
-            1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
-        ).transpose(1, 2).detach()
-
-    def forward(self, obs_embeddings_or_act_tokens: Dict[str, Union[torch.Tensor, tuple]],
-                past_keys_values: Optional[torch.Tensor] = None,
-                kvcache_independent: bool = False, is_init_infer: bool = True,
-                valid_context_lengths: Optional[torch.Tensor] = None) -> WorldModelOutput:
-        """
-        Forward pass for the model.
-
-        Args:
-            obs_embeddings_or_act_tokens (dict): Dictionary containing observation embeddings or action tokens.
-            past_keys_values (Optional[KeysValues]): Previous keys and values for transformer.
-            kvcache_independent (bool): Whether to use independent key-value caching.
-            is_init_infer (bool): Initialize inference.
-            valid_context_lengths (Optional[torch.Tensor]): Valid context lengths.
-
-        Returns:
-            WorldModelOutput: Model output containing logits for observations, rewards, policy, and value.
-        """
-        # Determine previous steps based on key-value caching method
+    def forward(self, obs_embeddings_or_act_tokens, past_keys_values: Optional[KeysValues] = None,
+                kvcache_independent=False, is_init_infer=True, valid_context_lengths=None) -> WorldModelOutput:
         if kvcache_independent:
-            prev_steps = torch.tensor([0 if past_keys_values is None else past_kv.size for past_kv in past_keys_values],
-                                      device=self.device)
+            # 根据past_keys_values获取每个样本的步骤数
+            prev_steps = 0 if past_keys_values is None else [past_kv.size for past_kv in past_keys_values]
+            prev_steps = torch.tensor(prev_steps, device=self.device)
         else:
             prev_steps = 0 if past_keys_values is None else past_keys_values.size
-
-        # Reset valid_context_lengths during initial inference
-        if is_init_infer:
+        if is_init_infer:  # TODO ===================
             valid_context_lengths = None
-
-        # Process observation embeddings
-        if 'obs_embeddings' in obs_embeddings_or_act_tokens:
+        if 'obs_embeddings' in obs_embeddings_or_act_tokens.keys():
             obs_embeddings = obs_embeddings_or_act_tokens['obs_embeddings']
             if len(obs_embeddings.shape) == 2:
                 obs_embeddings = obs_embeddings.unsqueeze(1)
-            num_steps = obs_embeddings.size(1)
-            sequences = self._add_position_embeddings(obs_embeddings, prev_steps, num_steps, kvcache_independent,
-                                                      is_init_infer, valid_context_lengths)
-
-        # Process action tokens
-        elif 'act_tokens' in obs_embeddings_or_act_tokens:
+            num_steps = obs_embeddings.size(1)  # (B, T, E)
+            if kvcache_independent:
+                # 生成每个样本的步骤indices
+                steps_indices = prev_steps + torch.arange(num_steps, device=obs_embeddings.device)
+                # 获取位置嵌入
+                position_embeddings = self.pos_emb(steps_indices)
+                # 将位置嵌入reshape回(batch_size, num_steps, embedding_dim)
+                position_embeddings = position_embeddings.view(-1, num_steps, position_embeddings.shape[-1])
+                # 将位置嵌入加到obs_embeddings上
+                sequences = obs_embeddings + position_embeddings
+            else:
+                if is_init_infer:
+                    sequences = obs_embeddings + self.pos_emb(
+                        prev_steps + torch.arange(num_steps, device=obs_embeddings.device))
+                else:
+                    # 获取每个样本的有效长度
+                    valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current,
+                                                         device=self.device)  # NOTE
+                    # NOTE: 根据有效长度获取位置编码
+                    position_embeddings = self.pos_emb(
+                        valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
+                    sequences = obs_embeddings + position_embeddings
+        elif 'act_tokens' in obs_embeddings_or_act_tokens.keys():
             act_tokens = obs_embeddings_or_act_tokens['act_tokens']
             if len(act_tokens.shape) == 3:
                 act_tokens = act_tokens.squeeze(1)
-            num_steps = act_tokens.size(1)
+            num_steps = act_tokens.size(1)  # (B, T)
             act_embeddings = self.act_embedding_table(act_tokens)
-            sequences = self._add_position_embeddings(act_embeddings, prev_steps, num_steps, kvcache_independent,
-                                                      is_init_infer, valid_context_lengths)
 
-        # Process combined observation embeddings and action tokens
+            if kvcache_independent:
+                # 生成每个样本的步骤indices
+                steps_indices = prev_steps + torch.arange(num_steps, device=act_embeddings.device)
+                # 获取位置嵌入
+                position_embeddings = self.pos_emb(steps_indices)
+                # 将位置嵌入reshape回(batch_size, num_steps, embedding_dim)
+                position_embeddings = position_embeddings.view(-1, num_steps, position_embeddings.shape[-1])
+                # 将位置嵌入加到obs_embeddings上
+                sequences = act_embeddings + position_embeddings
+            else:
+                if is_init_infer:
+                    sequences = act_embeddings + self.pos_emb(
+                        prev_steps + torch.arange(num_steps, device=act_tokens.device))
+                else:
+                    # 获取每个样本的有效长度
+                    valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)
+                    # NOTE: 根据有效长度获取位置编码
+                    position_embeddings = self.pos_emb(
+                        valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
+                    sequences = act_embeddings + position_embeddings
         else:
-            sequences = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
+            # ============== for learn ==============
+            obs_embeddings_and_act_tokens = obs_embeddings_or_act_tokens['obs_embeddings_and_act_tokens']
+            # obs_embeddings: (B, L, K=16, E), act_tokens: (B, L, 1)
+            obs_embeddings, act_tokens = obs_embeddings_and_act_tokens
+            if len(obs_embeddings.shape) == 3:  # for batch compute loss
+                obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1],
+                                                     self.num_observations_tokens, -1)
 
-        # Pass sequences through transformer
-        x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths)
+            num_steps = int(obs_embeddings.size(1) * (obs_embeddings.size(2) + 1))  # L(k+1)
 
-        # Generate logits
+            # 根据动作tokens生成动作嵌入
+            act_embeddings = self.act_embedding_table(act_tokens)  # (B, L, 1) -> (B, L, 1, E)
+
+            # 已知obs_embeddings的维度为 (B, L, K, E), act_embeddings的维度为(B, L, 1, E)
+            # 希望得到一个obs_act_embeddings向量的维度为 (B, L(K+1), E)
+            # 而且让得到的obs_act_embeddings的第2个维度的数据为：obs, act, obs, act, ..., 这样的排列顺序。
+
+            B, L, K, E = obs_embeddings.size()
+            # 初始化一个新的空tensor，用于存放最终的拼接结果
+            obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=obs_embeddings.device)
+
+            # 对每一个序列长度L进行循环
+            for i in range(L):
+                # 获取当前时刻的obs和act embeddings
+                obs = obs_embeddings[:, i, :, :]  # Shape: (B, K, E)
+                act = act_embeddings[:, i, 0, :].unsqueeze(1)  # Shape: (B, 1, E), 补充维度以便拼接
+
+                # 交替拼接obs和act
+                obs_act = torch.cat([obs, act], dim=1)  # Shape: (B, K + 1, E)
+
+                # 将结果填充到最终的tensor中
+                obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
+
+            # 添加位置嵌入
+            sequences = obs_act_embeddings + self.pos_emb(
+                prev_steps + torch.arange(num_steps, device=obs_embeddings.device))
+
+        if kvcache_independent:
+            x = []
+            for k, past_kv in enumerate(past_keys_values):
+                # x.append(self.transformer(sequences[k].unsqueeze(0), past_kv))
+                x.append(self.transformer(sequences[k].unsqueeze(0), past_kv,
+                                          valid_context_lengths=valid_context_lengths[k].unsqueeze(0)))
+            x = torch.cat(x, dim=0)
+        else:  #
+            # x = self.transformer(sequences, past_keys_values)
+            x = self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths)
+
+            # ============ visualize_attention_map =================
+            # TODO: only in train 注意不要是在计算target value的时候
+            if 'obs_embeddings_and_act_tokens' in obs_embeddings_or_act_tokens.keys():
+                from lzero.model.unizero_world_models.attention_map import visualize_attention_maps
+                # visualize_attention_maps(self.transformer, sequences, past_keys_values, valid_context_lengths, 'visual_match_memlen1-60-15/one_fail_episode/attn_map_all_head_layer_v2', nhead_each_row=4)
+                visualize_attention_maps(self.transformer, sequences, past_keys_values, valid_context_lengths,
+                                         'pong_H10_H4/one_fail_episode/attn_map_all_head_layer_v2', nhead_each_row=8)
+
+                # 每个layer-head的单独画图
+                # past_keys_values = None
+                # for layer_id in range(8):
+                #     for head_id in range(8):
+                #         visualize_attention_map(self.transformer, sequences, past_keys_values, valid_context_lengths, layer_id=layer_id, head_id=head_id)
+                # import sys
+                # sys.exit(0)
+                # ========== for visualize ==========
+
+        # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
         logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
 
-        # logits_ends is None
+        # TODO: root reward value
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)
-
-    def _add_position_embeddings(self, embeddings, prev_steps, num_steps, kvcache_independent, is_init_infer,
-                                 valid_context_lengths):
-        """
-        Add position embeddings to the input embeddings.
-
-        Args:
-            embeddings (torch.Tensor): Input embeddings.
-            prev_steps (torch.Tensor): Previous steps.
-            num_steps (int): Number of steps.
-            kvcache_independent (bool): Whether to use independent key-value caching.
-            is_init_infer (bool): Initialize inference.
-            valid_context_lengths (torch.Tensor): Valid context lengths.
-
-        Returns:
-            torch.Tensor: Embeddings with position information added.
-        """
-        if kvcache_independent:
-            steps_indices = prev_steps + torch.arange(num_steps, device=embeddings.device)
-            position_embeddings = self.pos_emb(steps_indices).view(-1, num_steps, embeddings.shape[-1])
-            return embeddings + position_embeddings
-        else:
-            if is_init_infer:
-                return embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=embeddings.device))
-            else:
-                valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)
-                position_embeddings = self.pos_emb(
-                    valid_context_lengths + torch.arange(num_steps, device=embeddings.device)).unsqueeze(1)
-                return embeddings + position_embeddings
-
-    def _process_obs_act_combined(self, obs_embeddings_or_act_tokens, prev_steps):
-        """
-        Process combined observation embeddings and action tokens.
-
-        Args:
-            obs_embeddings_or_act_tokens (dict): Dictionary containing combined observation embeddings and action tokens.
-            prev_steps (torch.Tensor): Previous steps.
-
-        Returns:
-            torch.Tensor: Combined observation and action embeddings with position information added.
-        """
-        obs_embeddings, act_tokens = obs_embeddings_or_act_tokens['obs_embeddings_and_act_tokens']
-        if len(obs_embeddings.shape) == 3:
-            obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1], self.num_observations_tokens,
-                                                 -1)
-
-        num_steps = int(obs_embeddings.size(1) * (obs_embeddings.size(2) + 1))
-        act_embeddings = self.act_embedding_table(act_tokens)
-
-        B, L, K, E = obs_embeddings.size()
-        obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=obs_embeddings.device)
-
-        for i in range(L):
-            obs = obs_embeddings[:, i, :, :]
-            act = act_embeddings[:, i, 0, :].unsqueeze(1)
-            obs_act = torch.cat([obs, act], dim=1)
-            obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
-
-        return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device))
-
-    def _transformer_pass(self, sequences, past_keys_values, kvcache_independent, valid_context_lengths):
-        """
-        Pass sequences through the transformer.
-
-        Args:
-            sequences (torch.Tensor): Input sequences.
-            past_keys_values (Optional[torch.Tensor]): Previous keys and values for transformer.
-            kvcache_independent (bool): Whether to use independent key-value caching.
-            valid_context_lengths (torch.Tensor): Valid context lengths.
-
-        Returns:
-            torch.Tensor: Transformer output.
-        """
-        if kvcache_independent:
-            x = [self.transformer(sequences[k].unsqueeze(0), past_kv,
-                                  valid_context_lengths=valid_context_lengths[k].unsqueeze(0)) for k, past_kv in
-                 enumerate(past_keys_values)]
-            return torch.cat(x, dim=0)
-        else:
-            return self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths)
 
     @torch.no_grad()
     def reset_from_initial_observations(self, obs_act_dict: torch.FloatTensor) -> torch.FloatTensor:
@@ -997,9 +992,9 @@ class WorldModel(nn.Module):
         # self.visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_success_episode') # TODO
         # self.visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_fail_episode') # TODO
 
-        # self.visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value,
-        #                                        true_rewards, target_policy, predict_value, predict_rewards,
-        #                                        predict_policy, not_plot_timesteps=[], suffix='pong_H10_H4_0531')  # TODO
+        self.visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value,
+                                               true_rewards, target_policy, predict_value, predict_rewards,
+                                               predict_policy, not_plot_timesteps=[], suffix='pong_H10_H4_0531')  # TODO
 
         # import sys
         # sys.exit(0)

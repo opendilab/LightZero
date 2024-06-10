@@ -7,9 +7,44 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from dataclasses import dataclass
 
 from lzero.model.common import RepresentationNetwork
 
+# 使用LRU缓存替换原有的字典缓存
+from functools import lru_cache
+import hashlib
+
+@lru_cache(maxsize=5000)
+def quantize_state_with_lru_cache(state, num_buckets=15):
+    quantized_state = np.digitize(state, bins=np.linspace(0, 1, num=num_buckets))
+    return tuple(quantized_state)
+
+
+def quantize_state(state, num_buckets=100):
+    """
+    量化状态向量。
+    参数:
+        state: 要量化的状态向量。
+        num_buckets: 量化的桶数。
+    返回:
+        量化后的状态向量的哈希值。
+    """
+    # 使用np.digitize将状态向量的每个维度值映射到num_buckets个桶中
+    quantized_state = np.digitize(state, bins=np.linspace(0, 1, num=num_buckets))
+    # 使用更稳定的哈希函数
+    quantized_state_bytes = quantized_state.tobytes()
+    hash_object = hashlib.sha256(quantized_state_bytes)
+    return hash_object.hexdigest()
+
+@dataclass
+class WorldModelOutput:
+    output_sequence: torch.FloatTensor
+    logits_observations: torch.FloatTensor
+    logits_rewards: torch.FloatTensor
+    logits_ends: torch.FloatTensor
+    logits_policy: torch.FloatTensor
+    logits_value: torch.FloatTensor
 
 class SimNorm(nn.Module):
     """
