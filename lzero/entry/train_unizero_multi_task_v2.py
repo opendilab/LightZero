@@ -80,13 +80,15 @@ def train_unizero_multi_task_v2(
     for task_id, input_cfg in input_cfg_list:
         if task_id > 0:
             cfg, create_cfg = input_cfg
-            # Replicate the setup process for each task, creating individual components.
-            # ... (same initialization code as before)
             if cfg.policy.cuda and torch.cuda.is_available():
                 cfg.policy.device = 'cuda'
             else:
                 cfg.policy.device = 'cpu'
             cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
+            policy_config = cfg.policy
+            policy.collect_mode.get_attribute('cfg').n_episode = policy_config.n_episode  # NOTE
+            policy.eval_mode.get_attribute('cfg').n_episode = policy_config.n_episode  # NOTE
+
 
         env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
         collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
@@ -98,7 +100,7 @@ def train_unizero_multi_task_v2(
         # GameBuffer = get_game_buffer_class(create_cfg['policy']['type'])  # get_game_buffer_class should return the correct GameBuffer class
 
         # cfg.policy.task_id = task_id
-        replay_buffer = GameBuffer(cfg.policy)
+        replay_buffer = GameBuffer(policy_config)
 
         collector = Collector(
             env=collector_env,
@@ -133,18 +135,18 @@ def train_unizero_multi_task_v2(
     # Main loop
     learner.call_hook('before_run')
 
-    # for task_id, (cfg, evaluator, collector, replay_buffer) in enumerate(zip(cfgs, evaluators, collectors, game_buffers)):
-    #     # Usage
-    #     print(f'='*20)
-    #     print(f'evaluate task_id: {task_id}...')
-    #     policy.last_batch_obs = initialize_zeros_batch(
-    #         cfg.policy.model.observation_shape,
-    #         len(evaluator_env_cfg),
-    #         cfg.policy.device
-    #     )
-    #     policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
-    #     # TODO: comment if debugging
-    #     stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+    for task_id, (cfg, evaluator, collector, replay_buffer) in enumerate(zip(cfgs, evaluators, collectors, game_buffers)):
+        # Usage
+        print(f'='*20)
+        print(f'evaluate task_id: {task_id}...')
+        policy.last_batch_obs = initialize_zeros_batch(
+            cfg.policy.model.observation_shape,
+            len(evaluator_env_cfg),
+            cfg.policy.device
+        )
+        policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
+        # TODO: comment if debugging
+        stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
     totoal_env_steps = 0
     while True:
@@ -213,12 +215,19 @@ def train_unizero_multi_task_v2(
                 if stop:
                     break
 
+            # policy.last_batch_obs = initialize_zeros_batch(
+            #     cfg.policy.model.observation_shape,
+            #     len(collector_env_cfg),
+            #     cfg.policy.device
+            # )
+            # policy.last_batch_action = [-1 for _ in range(len(collector_env_cfg))]
             policy.last_batch_obs = initialize_zeros_batch(
                 cfg.policy.model.observation_shape,
-                len(collector_env_cfg),
+                collector._env_num,
                 cfg.policy.device
             )
-            policy.last_batch_action = [-1 for _ in range(len(collector_env_cfg))]
+            policy.last_batch_action = [-1 for _ in range(collector._env_num )]
+
             
             # Collect data by default config n_sample/n_episode.
             print(f'='*20)

@@ -751,11 +751,11 @@ class UniZeroMTPolicy(Policy):
         self._collect_mcts_temperature = 1.
         self.collect_epsilon = 0.0
         if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros([8, self._cfg.model.observation_shape[0],64,64]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(8)]
+            self.last_batch_obs = torch.zeros([self._cfg.collector_env_num, self._cfg.model.observation_shape[0],64,64]).to(self._cfg.device)
+            self.last_batch_action = [-1 for i in range(self._cfg.collector_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([8, self._cfg.model.observation_shape]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(8)]
+            self.last_batch_obs = torch.zeros([self._cfg.collector_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
+            self.last_batch_action = [-1 for i in range(self._cfg.collector_env_num)]
 
     #@profile
     def _forward_collect(

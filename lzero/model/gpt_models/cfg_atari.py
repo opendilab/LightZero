@@ -75,7 +75,7 @@ cfg['world_model'] = {
                       # "gru_gating": False,
 
 
-                      "device": 'cuda:5',
+                      "device": 'cuda:1',
                       "task_num": 4,
                       # "task_num": 2,
 
@@ -141,7 +141,10 @@ cfg['world_model'] = {
                       'max_cache_size': 5000,
                       # 'max_cache_size':50000,
                       # 'max_cache_size':500,
-                      "env_num": 8,
+                      # "env_num": 8,
+                      "env_num": [2,8,8,2],
+                      "eval_env_num": 3,
+                      "batch_size":[32,32,32,32],
 
                       # 'latent_recon_loss_weight': 0.05,
                       # 'perceptual_loss_weight': 0.05, # for stack1 rgb obs

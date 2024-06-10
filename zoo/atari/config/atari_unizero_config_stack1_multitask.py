@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(5)
+torch.cuda.set_device(1)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
 # env_id = 'MsPacmanNoFrameskip-v4'
@@ -35,7 +35,9 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 # update_per_collect = None  # TODO
-update_per_collect = 1000  # TODO
+# update_per_collect = 1000  # TODO
+update_per_collect = 500  # TODO
+
 model_update_ratio = 0.25
 
 max_env_step = int(1e6) # TODO
@@ -51,7 +53,8 @@ reanalyze_ratio = 0.
 # batch_size = [20, 15]  # TODO: multitask
 # batch_size = [20, 20]  # TODO: multitask
 # batch_size = [32, 32]  # TODO: multitask
-batch_size = [32, 32, 32, 32]  # TODO: multitask
+# batch_size = [32, 32, 32, 32]  # TODO: multitask
+batch_size = [96, 32, 32, 32]  # TODO: multitask
 
 
 num_simulations = 50
@@ -66,7 +69,10 @@ eps_greedy_exploration_in_collect = True
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_N-head_N-encoder_lsd768-nlayer2-nh8_fixbuffer-targetlatent/'
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_no-taskembedding-to-obs_N-head_N-encoder_lsd768-nlayer2-nh8_fixbuffer-targetlatent/'
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_taskembedding-to-obs_1-head_N-encoder-BN_lsd768-nlayer2-nh8_fixbuffer-targetlatent_4games_seed1/'
-exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_taskembedding-to-obs_1-head_1-encoder-LN-eps-gelu_lsd768-nlayer2-nh8_fixbuffer-targetlatent_4games_seed0/'
+# exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_taskembedding-to-obs_1-head_1-encoder-LN-eps-gelu_lsd768-nlayer2-nh8_fixbuffer-targetlatent_4games_seed2/'
+
+# exp_name_prefix = f'data_unizero_mt_stack1_0610/pong-mspacman_action{action_space_size}_notaskembedding-to-obs_N-head_1-encoder-LN-eps-gelu_lsd768-nlayer2-nh8_fixbuffer-targetlatent_4games_pong-boxing-cnum2_bs-pong96-others32_seed0/'
+exp_name_prefix = f'data_unizero_mt_stack1_0610/pong-mspacman_action{action_space_size}_notaskembedding-to-obs_N-head_1-encoder-LN-eps-gelu_lsd768-nlayer2-nh8_fixbuffer-targetlatent_4games_pong-boxing-cnum2_bs-pong96-others32_seed0/'
 
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_1-head_N-encoder_lsd768-nlayer2-nh8_fixbuffer-targetlatent/'
 
@@ -228,6 +234,21 @@ if __name__ == "__main__":
     main_config_2.env.env_id = 'MsPacmanNoFrameskip-v4'
     main_config_3.env.env_id = 'SeaquestNoFrameskip-v4'
     main_config_4.env.env_id = 'BoxingNoFrameskip-v4'
+
+    main_config_2.policy.collector_env_num = 8
+    main_config_3.policy.collector_env_num = 8
+
+    # TODO
+    # for pong
+    main_config.env.collector_env_num = 2
+    main_config.policy.n_episode = 2
+    main_config.policy.collector_env_num = 2
+    
+    # for boxing
+    main_config_4.env.collector_env_num = 2
+    main_config_4.policy.n_episode = 2
+    main_config_4.policy.collector_env_num = 2
+
 
     seed = 0
     main_config_2.exp_name = exp_name_prefix + f'MsPacman_unizero-mt_seed{seed}'

@@ -129,6 +129,10 @@ class WorldModelMT(nn.Module):
         self.action_shape = config.action_shape
         self.max_cache_size = config.max_cache_size
         self.env_num = config.env_num
+        self.eval_env_num = config.eval_env_num
+        self.batch_size = config.batch_size
+
+
         self.num_layers = config.num_layers
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
         # self.recurrent_keep_deepth = config.recurrent_keep_deepth
@@ -285,8 +289,8 @@ class WorldModelMT(nn.Module):
         # 使用collections.OrderedDict作为缓存结构，可以维持插入顺序
         self.past_keys_values_cache_recurrent_infer = collections.OrderedDict()
         self.past_keys_values_cache_init_infer = collections.OrderedDict()
-        self.past_keys_values_cache_init_infer_envs = [collections.OrderedDict() for _ in range(self.env_num )]
-
+        # self.past_keys_values_cache_init_infer_envs = [collections.OrderedDict() for _ in range(self.env_num[0] )]
+        self.past_keys_values_cache_init_infer_envs = [collections.OrderedDict() for _ in range(max(self.env_num) )]
 
         self.keys_values_wm_list = []
         self.keys_values_wm_size_list = []
@@ -305,7 +309,7 @@ class WorldModelMT(nn.Module):
 
         self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
         # TODO: Transformer更新后应该清除缓存 
-        self.keys_values_wm = self.transformer.generate_empty_keys_values(n=self.env_num, max_tokens=self.context_length)
+        self.keys_values_wm = self.transformer.generate_empty_keys_values(n=self.env_num[0], max_tokens=self.context_length)
 
     def precompute_pos_emb_diff_kv(self):
         if self.context_length <= 2:
@@ -337,8 +341,8 @@ class WorldModelMT(nn.Module):
 
 
     def forward(self, obs_embeddings_or_act_tokens, past_keys_values: Optional[KeysValues] = None, kvcache_independent=False, is_init_infer=True, valid_context_lengths=None, task_id=0) -> WorldModelOutput:
-        task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE: TODO
-        # task_embeddings = torch.zeros(768, device=self.device) # NOTE:TODO no task_embeddings =============
+        # task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE: TODO
+        task_embeddings = torch.zeros(768, device=self.device) # NOTE:TODO no task_embeddings =============
 
         if kvcache_independent:
             # 根据past_keys_values获取每个样本的步骤数
@@ -463,16 +467,16 @@ class WorldModelMT(nn.Module):
         
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
         # one head
-        logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
         
         # N head
-        # logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
 
         # TODO: root reward value
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)
@@ -500,13 +504,17 @@ class WorldModelMT(nn.Module):
     @torch.no_grad()
     def refresh_keys_values_with_initial_latent_state_for_init_infer(self, latent_state: torch.LongTensor, buffer_action=None, current_obs_embeddings=None, task_id=0) -> torch.FloatTensor:
         n, num_observations_tokens, _ = latent_state.shape
-        if n <= self.env_num:
+        if n <= self.env_num[task_id] or n<=self.eval_env_num: 
             if current_obs_embeddings is not None:
                 if max(buffer_action) == -1:
                     # 一集的第一步
-                    self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.context_length)
-                    outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings}, past_keys_values=self.keys_values_wm, is_init_infer=True, task_id=task_id)
-
+                    # self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n, max_tokens=self.context_length)
+                    self.keys_values_wm = self.transformer.generate_empty_keys_values(n=current_obs_embeddings.shape[0], max_tokens=self.context_length)
+                    try:
+                        outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings}, past_keys_values=self.keys_values_wm, is_init_infer=True, task_id=task_id)
+                    except Exception as e:
+                        print(e)
+                        outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings}, past_keys_values=self.keys_values_wm, is_init_infer=True, task_id=task_id)
                     # 复制单个环境对应的 keys_values_wm 并存储
                     self.update_cache_context(current_obs_embeddings, is_init_infer=True) # TODO
                 else:
@@ -560,14 +568,20 @@ class WorldModelMT(nn.Module):
                     self.update_cache_context(current_obs_embeddings, is_init_infer=True) # TODO
 
 
-        elif n > self.env_num and buffer_action is not None:
+        # elif n > self.env_num[task_id] and buffer_action is not None:
+        # elif n > self.env_num[task_id] and buffer_action is not None:
+        elif n > self.batch_size[0] and buffer_action is not None:
+        
             # 训练时计算 target value/
             # [192, 16, 64] -> [32, 6, 16, 64]
+            # try:
             latent_state = latent_state.contiguous().view(buffer_action.shape[0], -1, num_observations_tokens, self.obs_per_embdding_dim)  # (BL, K) for unroll_step=1
-
             latent_state = latent_state[:, :-1, :]
             buffer_action = torch.from_numpy(buffer_action).to(latent_state.device)
             act_tokens = rearrange(buffer_action, 'b l -> b l 1')
+            # except Exception as e:
+            #     print(e)
+
 
             # 选择每个样本的最后一步
             ###### 这将选择最后一列并保持维度不变, 最后一步的target policy/value本身就没有用到 ######
@@ -853,7 +867,10 @@ class WorldModelMT(nn.Module):
             if is_init_infer:
                 # TODO：每次都存储最新的    
                 # self.past_keys_values_cache_init_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-                self.past_keys_values_cache_init_infer_envs[i][cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                try:
+                    self.past_keys_values_cache_init_infer_envs[i][cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                except Exception as e:
+                    print(e)
             
             else:
                 self.past_keys_values_cache_recurrent_infer[cache_key] = copy.deepcopy(self.to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
