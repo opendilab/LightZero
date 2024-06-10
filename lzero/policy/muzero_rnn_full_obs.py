@@ -11,7 +11,6 @@ from torch.distributions import Categorical
 from torch.nn import L1Loss
 
 from lzero.mcts import MuZeroRNNFullobsMCTSCtree as MCTSCtree
-# from lzero.mcts import MuZeroRNNMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, mz_rnn_fullobs_network_output_unpack, negative_cosine_similarity, \
@@ -218,8 +217,6 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         """
         if self._cfg.model.model_type == "conv":
             return 'MuZeroRNNFullobsModel', ['lzero.model.muzero_rnn_full_obs_model']
-        elif self._cfg.model.model_type == "mlp":
-            return 'MuZeroRNNModelMLP', ['lzero.model.muzero_rnn_model_mlp']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
@@ -431,19 +428,17 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
                     current_latent_state.shape[0], policy_logits.shape[-1], current_latent_state.shape[2], current_latent_state.shape[3]
                 )
                 state_action_encoding = torch.cat((current_latent_state, action_encoding), dim=1)
-                self.dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network, [state_action_encoding.detach(),world_model_latent_history,next_latent_state], percentage=self._cfg.dormant_threshold)
+                self.dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network, [state_action_encoding.detach(), world_model_latent_history, next_latent_state], percentage=self._cfg.dormant_threshold)
             # ========= logging for analysis ===============
-            current_latent_state =  next_latent_state # =========== 很重要
 
-            # transform the scaled value or its categorical representation to its original value,
-            # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
-            original_value = self.inverse_scalar_transform_handle(value)
+            # =========== very important ===========
+            current_latent_state = next_latent_state
 
             # ==============================================================
             # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
             # ==============================================================
             if self._cfg.ssl_loss_weight > 0:
-                # obtain the oracle latent states from representation function.
+                # get the oracle latent states from representation function.
                 predict_next_latent_state = to_tensor(predict_next_latent_state)
 
                 # NOTE: no grad for the representation_state branch.
