@@ -1,79 +1,131 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(5)
-# options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_name = 'PongNoFrameskip-v4'
-# env_name = 'MsPacmanNoFrameskip-v4'
-# env_name = 'BreakoutNoFrameskip-v4'
-# env_name = 'QbertNoFrameskip-v4'
-# env_name = 'SeaquestNoFrameskip-v4'
-# env_name = 'BoxingNoFrameskip-v4'
-# env_name = 'FrostbiteNoFrameskip-v4'
+# torch.cuda.set_device(0)
 
-if env_name == 'PongNoFrameskip-v4':
-    action_space_size = 6
-elif env_name == 'QbertNoFrameskip-v4':
-    action_space_size = 6
-elif env_name == 'MsPacmanNoFrameskip-v4':
+env_id = 'PongNoFrameskip-v4'
+# env_id = 'MsPacmanNoFrameskip-v4'
+# env_id = 'SeaquestNoFrameskip-v4'
+# env_id = 'BoxingNoFrameskip-v4'
+
+# env_id = 'FrostbiteNoFrameskip-v4'
+# env_id = 'BreakoutNoFrameskip-v4'
+# env_id = 'QbertNoFrameskip-v4'
+# env_id = 'AlienNoFrameskip-v4'
+# env_id = 'AmidarNoFrameskip-v4'
+# env_id = 'AssaultNoFrameskip-v4'
+# env_id = 'AsterixNoFrameskip-v4'
+# env_id = 'BankHeistNoFrameskip-v4'
+# env_id = 'BattleZoneNoFrameskip-v4'
+# env_id = 'ChopperCommandNoFrameskip-v4'
+# env_id = 'CrazyClimberNoFrameskip-v4'
+# env_id = 'DemonAttackNoFrameskip-v4'
+# env_id = 'FreewayNoFrameskip-v4'
+# env_id = 'FrostbiteNoFrameskip-v4'
+# env_id = 'GopherNoFrameskip-v4'
+# env_id = 'HeroNoFrameskip-v4'
+# env_id = 'JamesbondNoFrameskip-v4'
+# env_id = 'KangarooNoFrameskip-v4'
+# env_id = 'KrullNoFrameskip-v4'
+# env_id = 'KungFuMasterNoFrameskip-v4'
+# env_id = 'PrivateEyeNoFrameskip-v4'
+# env_id = 'RoadRunnerNoFrameskip-v4'
+# env_id = 'UpNDownNoFrameskip-v4'
+
+if env_id == 'AlienNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'AmidarNoFrameskip-v4':
+    action_space_size = 10
+elif env_id == 'AssaultNoFrameskip-v4':
+    action_space_size = 7
+elif env_id == 'AsterixNoFrameskip-v4':
     action_space_size = 9
-elif env_name == 'SpaceInvadersNoFrameskip-v4':
+elif env_id == 'BankHeistNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'BattleZoneNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'ChopperCommandNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'CrazyClimberNoFrameskip-v4':
+    action_space_size = 9
+elif env_id == 'DemonAttackNoFrameskip-v4':
     action_space_size = 6
-elif env_name == 'BreakoutNoFrameskip-v4':
+elif env_id == 'FreewayNoFrameskip-v4':
+    action_space_size = 3
+elif env_id == 'FrostbiteNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'GopherNoFrameskip-v4':
+    action_space_size = 8
+elif env_id == 'HeroNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'JamesbondNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'KangarooNoFrameskip-v4':
+    action_space_size = 18
+elif env_id ==  'KrullNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'KungFuMasterNoFrameskip-v4':
+    action_space_size = 14
+elif env_id == 'PrivateEyeNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'RoadRunnerNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'UpNDownNoFrameskip-v4':
+    action_space_size = 6
+elif env_id == 'PongNoFrameskip-v4':
+    action_space_size = 6
+elif env_id == 'MsPacmanNoFrameskip-v4':
+    action_space_size = 9
+elif env_id == 'QbertNoFrameskip-v4':
+    action_space_size = 6
+elif env_id == 'SeaquestNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'BoxingNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
-elif env_name == 'SeaquestNoFrameskip-v4':
-    action_space_size = 18
-elif env_name == 'BoxingNoFrameskip-v4':
-    action_space_size = 18
-elif env_name == 'FrostbiteNoFrameskip-v4':
-    action_space_size = 18
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 1
-# num_simulations = 50
-num_simulations = 100
-
-# num_simulations = 1 # TODO: only for debug
-
-update_per_collect = 1000
+evaluator_env_num = 3
+num_simulations = 50
+update_per_collect = None
+model_update_ratio = 0.25
 batch_size = 256
-max_env_step = int(10e6)
+max_env_step = int(5e5)
 reanalyze_ratio = 0.
-eps_greedy_exploration_in_collect = False
-# eps_greedy_exploration_in_collect = True
+eps_greedy_exploration_in_collect = True
 
+# debug
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+num_simulations = 5
+update_per_collect = 2
+batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
-    # ('collect_model').world_model.past_keys_values_cache.clear()
-    # msts search
-    exp_name=
-    f'data_mz_stack1_0226/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_46464_stack1_seed0',
+    exp_name=f'data_muzero/{env_id[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_stack1_seed0',
     env=dict(
         stop_value=int(1e6),
-        env_name=env_name,
-        # obs_shape=(4, 96, 96),
-        # observation_shape=(4, 64, 64),
-        # frame_stack_num=4,
-        # gray_scale=True,
+        env_id=env_id,
         observation_shape=(3, 64, 64),
         frame_stack_num=1,
         gray_scale=False,
-
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        collect_max_episode_steps=int(2e4),
-        eval_max_episode_steps=int(1e4),
+        # collect_max_episode_steps=int(2e4),
+        # eval_max_episode_steps=int(1e4),
         # TODO: debug
-        # collect_max_episode_steps=int(50),
-        # eval_max_episode_steps=int(50),
+        collect_max_episode_steps=int(50),
+        eval_max_episode_steps=int(50),
     ),
     policy=dict(
         learner=dict(
@@ -84,20 +136,14 @@ atari_muzero_config = dict(
             ),
         ),
         model=dict(
-            # observation_shape=(4, 96, 96),
-            # observation_shape=(4, 64, 64),
-            # image_channel=1,
-            # frame_stack_num=4,
-            # gray_scale=True,
-
+            analysis_sim_norm=False,
             observation_shape=(3, 64, 64),
             image_channel=3,
             frame_stack_num=1,
             gray_scale=False,
-
             action_space_size=action_space_size,
             downsample=True,
-            self_supervised_learning_loss=True,  # default is False
+            self_supervised_learning_loss=True,
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
         ),
@@ -107,25 +153,24 @@ atari_muzero_config = dict(
         random_collect_episode_num=0,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            # need to dynamically adjust the number of decay steps 
-            # according to the characteristics of the environment and the algorithm
             type='linear',
             start=1.,
             end=0.05,
-            decay=int(5e4),
+            decay=int(2e4),
         ),
         use_augmentation=True,
         update_per_collect=update_per_collect,
+        model_update_ratio=model_update_ratio,
         batch_size=batch_size,
         optim_type='SGD',
         lr_piecewise_constant_decay=True,
         learning_rate=0.2,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=2,  # default is 0
+        ssl_loss_weight=2,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

@@ -91,13 +91,10 @@ class AtariLightZeroEnv(BaseEnv):
             observation = np.transpose(observation, (2, 0, 1))
 
         action_mask = np.ones(self._action_space.n, 'int8')
-        # action_mask = np.ones(18, 'int8')  # TODO: full action space
-
         return {'observation': observation, 'action_mask': action_mask, 'to_play': -1}
 
     def step(self, action):
         obs, reward, done, info = self._env.step(action)
-        # self._env.render()
         self.obs = to_ndarray(obs)
         self.reward = np.array(reward).astype(np.float32)
         self._eval_episode_return += self.reward
@@ -182,6 +179,5 @@ class AtariLightZeroEnv(BaseEnv):
         cfg = copy.deepcopy(cfg)
         cfg.max_episode_steps = cfg.eval_max_episode_steps
         cfg.episode_life = False
-        # cfg.episode_life = True
         cfg.clip_rewards = False
         return [cfg for _ in range(evaluator_env_num)]

@@ -45,6 +45,7 @@ class MuZeroModel(nn.Module):
         downsample: bool = False,
         norm_type: Optional[str] = 'BN',
         discrete_action_encoding_type: str = 'one_hot',
+        analysis_sim_norm: bool = False,
         *args,
         **kwargs
     ):
@@ -86,6 +87,8 @@ class MuZeroModel(nn.Module):
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
         """
         super(MuZeroModel, self).__init__()
+        assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
+
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
             # for vector obs input, e.g. classical control and box2d environments
             # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
@@ -100,8 +103,6 @@ class MuZeroModel(nn.Module):
             self.value_support_size = 1
 
         self.action_space_size = action_space_size
-
-        assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
         self.discrete_action_encoding_type = discrete_action_encoding_type
         if self.discrete_action_encoding_type == 'one_hot':
             self.action_encoding_dim = action_space_size
@@ -115,6 +116,8 @@ class MuZeroModel(nn.Module):
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
         self.downsample = downsample
+        self.analysis_sim_norm = analysis_sim_norm
+
 
         flatten_output_size_for_reward_head = (
             (reward_head_channels * math.ceil(observation_shape[1] / 16) *
@@ -142,8 +145,9 @@ class MuZeroModel(nn.Module):
         )
         
         # ====== for analysis ======
-        self.encoder_hook = FeatureAndGradientHook()
-        self.encoder_hook.setup_hooks(self.representation_network)
+        if self.analysis_sim_norm:
+            self.encoder_hook = FeatureAndGradientHook()
+            self.encoder_hook.setup_hooks(self.representation_network)
 
         self.dynamics_network = DynamicsNetwork(
             observation_shape,
@@ -232,7 +236,7 @@ class MuZeroModel(nn.Module):
             value,
             [0. for _ in range(batch_size)],
             policy_logits,
-            latent_state,
+            self.latent_state,
         )
 
     def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:

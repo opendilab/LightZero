@@ -1,18 +1,18 @@
 # Borrow a lot from openai baselines:
 # https://github.com/openai/baselines/blob/master/baselines/common/atari_wrappers.py
 
+from typing import Tuple
+
 import cv2
 import gym
 import numpy as np
+from PIL import Image
 from ding.envs import NoopResetWrapper, MaxAndSkipWrapper, EpisodicLifeWrapper, FireResetWrapper, WarpFrameWrapper, \
     ScaledFloatFrameWrapper, \
     ClipRewardWrapper, FrameStackWrapper
 from ding.utils.compression_helper import jpeg_data_compressor
 from gym.wrappers import RecordVideo
-from typing import Tuple
-import gym
-import numpy as np
-from PIL import Image
+
 
 def wrap_deepmind(env_id, episode_life=True, clip_rewards=True, frame_stack=4, scale=True, warp_frame=True):
     """Configure environment for DeepMind-style Atari. The observation is
@@ -90,8 +90,7 @@ def wrap_lightzero(config, episode_life, clip_rewards):
         - the wrapped atari environment.
     """
     # TODO: full_action_space=True
-    # full_action_space=True
-    full_action_space=False
+    full_action_space = False
 
     if config.render_mode_human:
         env = gym.make(config.env_id, render_mode='human', full_action_space=full_action_space)
@@ -103,12 +102,8 @@ def wrap_lightzero(config, episode_life, clip_rewards):
     if episode_life:
         env = EpisodicLifeWrapper(env)
     env = TimeLimit(env, max_episode_steps=config.max_episode_steps)
-    # TODO: LightZero
     if config.warp_frame:
-        # we must set WarpFrame before ScaledFloatFrameWrapper # (84,84,3) -> (64,64,1)?
         env = WarpFrame(env, width=config.observation_shape[1], height=config.observation_shape[2], grayscale=config.gray_scale)
-    # TODO: IRIS
-    # env = ResizeObsWrapper(env, (config.observation_shape[1], config.observation_shape[2]))
 
     if config.scale:
         env = ScaledFloatFrameWrapper(env)
@@ -200,23 +195,6 @@ class WarpFrame(gym.ObservationWrapper):
             obs = obs.copy()
             obs[self._key] = frame
         return obs
-
-# same as in IRIS
-class ResizeObsWrapper(gym.ObservationWrapper):
-    def __init__(self, env: gym.Env, size: Tuple[int, int]) -> None:
-        gym.ObservationWrapper.__init__(self, env)
-        self.size = tuple(size)
-        self.observation_space = gym.spaces.Box(low=0, high=255, shape=(size[0], size[1], 3), dtype=np.uint8)
-        self.unwrapped.original_obs = None
-
-    def resize(self, obs: np.ndarray):
-        img = Image.fromarray(obs)
-        img = img.resize(self.size, Image.BILINEAR)
-        return np.array(img)
-
-    def observation(self, observation: np.ndarray) -> np.ndarray:
-        self.unwrapped.original_obs = observation
-        return self.resize(observation)
 
 
 class JpegWrapper(gym.Wrapper):

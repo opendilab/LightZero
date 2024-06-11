@@ -1,30 +1,27 @@
 from easydict import EasyDict
-# import torch
+import torch
 # torch.cuda.set_device(0)
 
-env_name = 'PongNoFrameskip-v4'
-# env_name = 'MsPacmanNoFrameskip-v4'
-# env_name = 'BreakoutNoFrameskip-v4'
-# env_name = 'QbertNoFrameskip-v4'
-# env_name = 'SeaquestNoFrameskip-v4'
-# env_name = 'BoxingNoFrameskip-v4'
-# env_name = 'FrostbiteNoFrameskip-v4'
+env_id = 'PongNoFrameskip-v4'
+# env_id = 'MsPacmanNoFrameskip-v4'
+# env_id = 'QbertNoFrameskip-v4'
+# env_id = 'SeaquestNoFrameskip-v4'
+# env_id = 'BoxingNoFrameskip-v4'
+# env_id = 'FrostbiteNoFrameskip-v4'
 
-if env_name == 'PongNoFrameskip-v4':
+if env_id == 'PongNoFrameskip-v4':
     action_space_size = 6
-elif env_name == 'QbertNoFrameskip-v4':
+elif env_id == 'QbertNoFrameskip-v4':
     action_space_size = 6
-elif env_name == 'MsPacmanNoFrameskip-v4':
+elif env_id == 'MsPacmanNoFrameskip-v4':
     action_space_size = 9
-elif env_name == 'SpaceInvadersNoFrameskip-v4':
+elif env_id == 'SpaceInvadersNoFrameskip-v4':
     action_space_size = 6
-elif env_name == 'BreakoutNoFrameskip-v4':
-    action_space_size = 4
-elif env_name == 'SeaquestNoFrameskip-v4':
+elif env_id == 'SeaquestNoFrameskip-v4':
     action_space_size = 18
-elif env_name == 'BoxingNoFrameskip-v4':
+elif env_id == 'BoxingNoFrameskip-v4':
     action_space_size = 18
-elif env_name == 'FrostbiteNoFrameskip-v4':
+elif env_id == 'FrostbiteNoFrameskip-v4':
     action_space_size = 18
 
 # ==============================================================
@@ -40,36 +37,60 @@ batch_size = 256
 max_env_step = int(5e5)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = True
+
+ssl_loss_weight = 2
+context_length_init = 4
+num_unroll_steps = 10
+rnn_hidden_size = 4096
+
+# for debug ===========
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 2
+# update_per_collect = 2
+# batch_size = 3
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_muzero/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_seed0',
+    exp_name=f'data_muzero_rnn_fullobs/stack1/{env_id[:-14]}_muzero-rnn-fullobs_stack1_H{num_unroll_steps}_initconlen{context_length_init}_sslw{ssl_loss_weight}_hidden-{rnn_hidden_size}_seed0',
     env=dict(
         stop_value=int(1e6),
-        env_name=env_name,
-        observation_shape=(4, 64, 64),
-        frame_stack_num=4,
-        gray_scale=True,
+        env_id=env_id,
+        observation_shape=(3, 64, 64),
+        frame_stack_num=1,
+        gray_scale=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        # TODO: debug
+        collect_max_episode_steps=int(50),
+        eval_max_episode_steps=int(50),
     ),
     policy=dict(
         analysis_sim_norm=False,
         cal_dormant_ratio=False,
         model=dict(
-            observation_shape=(4, 64, 64),
-            image_channel=1,
-            frame_stack_num=4,
-            gray_scale=True,
+            collector_env_num=collector_env_num,
+            evaluator_env_num=evaluator_env_num,
+            rnn_hidden_size=rnn_hidden_size,
+            analysis_sim_norm=False,
+            image_channel=3,
+            observation_shape=(3, 64, 64),
+            frame_stack_num=1,
+            gray_scale=False,
             action_space_size=action_space_size,
             downsample=True,
-            self_supervised_learning_loss=True,  # default is False
+            self_supervised_learning_loss=True,
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
+            reward_support_size=101,
+            value_support_size=101,
+            support_scale=50,
+            context_length=context_length_init,  # NOTE
             use_sim_norm=True,
             use_sim_norm_kl_loss=False,
         ),
@@ -81,21 +102,21 @@ atari_muzero_config = dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
             type='linear',
             start=1.,
-            end=0.05,
+            end=0.01,
             decay=int(2e4),
         ),
-        use_augmentation=True,
+        use_augmentation=False,
         use_priority=False,
         model_update_ratio=model_update_ratio,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='SGD',
-        lr_piecewise_constant_decay=True,
-        learning_rate=0.2,
+        optim_type='AdamW',
+        lr_piecewise_constant_decay=False,
+        learning_rate=1e-4,
         target_update_freq=100,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        ssl_loss_weight=2,
+        ssl_loss_weight=ssl_loss_weight,
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),
@@ -113,13 +134,18 @@ atari_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero',
-        import_names=['lzero.policy.muzero'],
+        type='muzero_rnn_full_obs',
+        import_names=['lzero.policy.muzero_rnn_full_obs'],
     ),
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    # Define a list of seeds for multiple runs
+    seeds = [0, 1, 2]  # You can add more seed values here
+    for seed in seeds:
+        # Update exp_name to include the current seed
+        main_config.exp_name = f'data_muzero_rnn_fullobs/stack1/{env_id[:-14]}_muzero-rnn-fullobs_stack1_H{num_unroll_steps}_initconlen{context_length_init}_sslw{ssl_loss_weight}_hidden-{rnn_hidden_size}_seed{seed}'
+        from lzero.entry import train_muzero_context
+        train_muzero_context([main_config, create_config], seed=seed, max_env_step=max_env_step)

@@ -603,7 +603,7 @@ class MuZeroPolicy(Policy):
                     )
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                output[env_id] = {
+                output[i] = {
                     'action': action,
                     'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
@@ -717,7 +717,7 @@ class MuZeroPolicy(Policy):
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
-                output[env_id] = {
+                output[i] = {
                     'action': action,
                     'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,

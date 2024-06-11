@@ -133,8 +133,8 @@ class UniZeroModel(nn.Module):
             # TODO: we should change the output_shape to the real observation shape
             decoder_network = LatentDecoder(embedding_dim=world_model_cfg.embed_dim, output_shape=(3, 64, 64))
 
+            # ====== for analysis ======
             if world_model_cfg.analysis_sim_norm:
-                # ====== for analysis ======
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
 

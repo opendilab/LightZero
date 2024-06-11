@@ -1,7 +1,3 @@
-"""
-Overview:
-    BTW, users can refer to the unittest of these model templates to learn how to use them.
-"""
 from typing import Optional, Tuple
 
 import math
@@ -147,11 +143,11 @@ class MuZeroContextModel(nn.Module):
             norm_type=norm_type,
             embedding_dim=768,
             group_size=8,
-            use_sim_norm=use_sim_norm, # TODO
+            use_sim_norm=use_sim_norm,  # NOTE
         )
 
+        # ====== for analysis ======
         if self.analysis_sim_norm:
-            # ====== for analysis ======
             self.encoder_hook = FeatureAndGradientHook()
             self.encoder_hook.setup_hooks(self.representation_network)
 
@@ -170,7 +166,7 @@ class MuZeroContextModel(nn.Module):
             norm_type=norm_type,
             embedding_dim=768,
             group_size=8,
-            use_sim_norm=use_sim_norm,# TODO
+            use_sim_norm=use_sim_norm,  # NOTE
         )
         self.prediction_network = PredictionNetwork(
             observation_shape,

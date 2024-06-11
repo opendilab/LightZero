@@ -35,8 +35,6 @@ env_id = 'PongNoFrameskip-v4' # 6
 
 # env_id = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
 
-update_per_collect = None
-model_update_ratio = 0.25
 
 if env_id == 'AlienNoFrameskip-v4':
     action_space_size = 18
@@ -56,17 +54,14 @@ elif env_id == 'CrazyClimberNoFrameskip-v4':
     action_space_size = 9
 elif env_id == 'DemonAttackNoFrameskip-v4':
     action_space_size = 6
-    model_update_ratio = 0.25
 elif env_id == 'FreewayNoFrameskip-v4':
     action_space_size = 3
-    model_update_ratio = 0.25
 elif env_id == 'FrostbiteNoFrameskip-v4':
     action_space_size = 18
 elif env_id == 'GopherNoFrameskip-v4':
     action_space_size = 8
 elif env_id == 'HeroNoFrameskip-v4':
     action_space_size = 18
-    model_update_ratio = 0.25
 elif env_id == 'JamesbondNoFrameskip-v4':
     action_space_size = 18
 elif env_id == 'KangarooNoFrameskip-v4':
@@ -77,15 +72,12 @@ elif env_id == 'KungFuMasterNoFrameskip-v4':
     action_space_size = 14
 elif env_id == 'PrivateEyeNoFrameskip-v4':
     action_space_size = 18
-    model_update_ratio = 0.25
-    # model_update_ratio = 0.5
 elif env_id == 'RoadRunnerNoFrameskip-v4':
     action_space_size = 18
 elif env_id == 'UpNDownNoFrameskip-v4':
     action_space_size = 6
 elif env_id == 'PongNoFrameskip-v4':
     action_space_size = 6
-    model_update_ratio = 0.25
 elif env_id == 'MsPacmanNoFrameskip-v4':
     action_space_size = 9
 elif env_id == 'QbertNoFrameskip-v4':
@@ -94,13 +86,15 @@ elif env_id == 'SeaquestNoFrameskip-v4':
     action_space_size = 18
 elif env_id == 'BoxingNoFrameskip-v4':
     action_space_size = 18
-    model_update_ratio = 0.25
 elif env_id == 'BreakoutNoFrameskip-v4':
     action_space_size = 4
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+
+update_per_collect = None
+model_update_ratio = 0.25
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3

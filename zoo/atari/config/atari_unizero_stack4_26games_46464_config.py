@@ -1,18 +1,85 @@
 from easydict import EasyDict
 
-env_id = 'PongNoFrameskip-v4'  # 6
-# env_id = 'SeaquestNoFrameskip-v4' # 18
+env_id = 'PongNoFrameskip-v4' # 6
 # env_id = 'MsPacmanNoFrameskip-v4' # 9
+# env_id = 'QbertNoFrameskip-v4'  # 6
+# env_id = 'SeaquestNoFrameskip-v4' # 18
 # env_id = 'BoxingNoFrameskip-v4' # 18
+# env_id = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
 
-if env_id == 'PongNoFrameskip-v4':
+# env_id = 'AlienNoFrameskip-v4' # 18
+# env_id = 'AmidarNoFrameskip-v4' # 10
+# env_id = 'AssaultNoFrameskip-v4' # 7
+# env_id = 'AsterixNoFrameskip-v4' # 9
+# env_id = 'BankHeistNoFrameskip-v4' # 18
+# env_id = 'BattleZoneNoFrameskip-v4' # 18
+# env_id = 'ChopperCommandNoFrameskip-v4' # 18
+# env_id = 'CrazyClimberNoFrameskip-v4' # 9
+# env_id = 'DemonAttackNoFrameskip-v4' # 6
+# env_id = 'FreewayNoFrameskip-v4' # 3
+# env_id = 'FrostbiteNoFrameskip-v4' # 18
+# env_id = 'GopherNoFrameskip-v4' # 8
+# env_id = 'HeroNoFrameskip-v4' # 18
+# env_id = 'JamesbondNoFrameskip-v4' # 18
+# env_id = 'KangarooNoFrameskip-v4' # 18
+# env_id = 'KrullNoFrameskip-v4' # 18
+# env_id = 'KungFuMasterNoFrameskip-v4' # 14
+# env_id = 'PrivateEyeNoFrameskip-v4' # 18
+# env_id = 'RoadRunnerNoFrameskip-v4' # 18
+# env_id = 'UpNDownNoFrameskip-v4' # 6
+
+if env_id == 'AlienNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'AmidarNoFrameskip-v4':
+    action_space_size = 10
+elif env_id == 'AssaultNoFrameskip-v4':
+    action_space_size = 7
+elif env_id == 'AsterixNoFrameskip-v4':
+    action_space_size = 9
+elif env_id == 'BankHeistNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'BattleZoneNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'ChopperCommandNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'CrazyClimberNoFrameskip-v4':
+    action_space_size = 9
+elif env_id == 'DemonAttackNoFrameskip-v4':
+    action_space_size = 6
+elif env_id == 'FreewayNoFrameskip-v4':
+    action_space_size = 3
+elif env_id == 'FrostbiteNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'GopherNoFrameskip-v4':
+    action_space_size = 8
+elif env_id == 'HeroNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'JamesbondNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'KangarooNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'KrullNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'KungFuMasterNoFrameskip-v4':
+    action_space_size = 14
+elif env_id == 'PrivateEyeNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'RoadRunnerNoFrameskip-v4':
+    action_space_size = 18
+elif env_id == 'UpNDownNoFrameskip-v4':
+    action_space_size = 6
+elif env_id == 'PongNoFrameskip-v4':
+    action_space_size = 6
+elif env_id == 'MsPacmanNoFrameskip-v4':
+    action_space_size = 9
+elif env_id == 'QbertNoFrameskip-v4':
     action_space_size = 6
 elif env_id == 'SeaquestNoFrameskip-v4':
     action_space_size = 18
-elif env_id == 'MsPacmanNoFrameskip-v4':
-    action_space_size = 9
 elif env_id == 'BoxingNoFrameskip-v4':
     action_space_size = 18
+elif env_id == 'BreakoutNoFrameskip-v4':
+    action_space_size = 4
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user

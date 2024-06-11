@@ -7,13 +7,13 @@ import torch.optim as optim
 from ding.model import model_wrap
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
-from torch.distributions import Categorical
 from torch.nn import L1Loss
 
 from lzero.mcts import MuZeroRNNFullobsMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, mz_rnn_fullobs_network_output_unpack, negative_cosine_similarity, \
+    DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, \
+    mz_rnn_fullobs_network_output_unpack, negative_cosine_similarity, \
     prepare_obs, \
     configure_optimizers
 from lzero.policy.muzero import MuZeroPolicy
@@ -35,7 +35,6 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
             # (bool) If True, the action space of the environment is continuous, otherwise discrete.
             continuous_action_space=False,
             # (tuple) The stacked obs shape.
-            # observation_shape=(1, 96, 96),  # if frame_stack_num=1
             observation_shape=(4, 96, 96),  # if frame_stack_num=4
             # (bool) Whether to use the self-supervised learning loss.
             self_supervised_learning_loss=True,
@@ -59,6 +58,10 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
             norm_type='BN',
+            # (bool) Whether to analyze simulation normalization.
+            analysis_sim_norm=False,
+            # (bool) Whether to analyze dormant ratio.
+            analysis_dormant_ratio=False,
         ),
         # ****** common ******
         # (bool) Whether to use multi-gpu training.
@@ -277,9 +280,9 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
         self.l2_norm_before = 0.
-        self.l2_norm_after= 0.
-        self.grad_norm_before= 0.
-        self.grad_norm_after= 0.
+        self.l2_norm_after = 0.
+        self.grad_norm_before = 0.
+        self.grad_norm_after = 0.
         self.dormant_ratio_encoder = 0.
         self.dormant_ratio_dynamics = 0.
 
@@ -339,13 +342,17 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         # ==============================================================
         network_output = self._learn_model.initial_inference(obs_batch)
         # reward shape: (batch_size, 10), the ``reward`` at the first step is zero padding.
-        current_latent_state, reward, world_model_latent_history, value, policy_logits = ez_network_output_unpack(network_output)
+        current_latent_state, reward, world_model_latent_history, value, policy_logits = ez_network_output_unpack(
+            network_output)
 
+        # ========= logging for analysis =========
         if self._cfg.cal_dormant_ratio:
-            # ========= logging for analysis =========
             # calculate dormant ratio of encoder
-            self.dormant_ratio_encoder = cal_dormant_ratio(self._learn_model.representation_network, obs_batch.detach(), percentage=self._cfg.dormant_threshold)
-        self.latent_state_l2_norms = torch.norm(current_latent_state.view(current_latent_state.shape[0], -1), p=2, dim=1).mean()  # 计算L2范数
+            self.dormant_ratio_encoder = cal_dormant_ratio(self._learn_model.representation_network, obs_batch.detach(),
+                                                           percentage=self._cfg.dormant_threshold)
+        # calculate the L2 norm of latent state
+        self.latent_state_l2_norms = torch.norm(current_latent_state.view(current_latent_state.shape[0], -1), p=2,
+                                                dim=1).mean()
         # ========= logging for analysis ===============
 
         # transform the scaled value or its categorical representation to its original value,
@@ -381,7 +388,8 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
             target_normalized_visit_count_masked = torch.index_select(
                 target_normalized_visit_count_init_step, 0, non_masked_indices
             )
-            target_policy_entropy = -((target_normalized_visit_count_masked+1e-6) * (target_normalized_visit_count_masked+1e-6).log()).sum(-1).mean()
+            target_policy_entropy = -((target_normalized_visit_count_masked + 1e-6) * (
+                        target_normalized_visit_count_masked + 1e-6).log()).sum(-1).mean()
         else:
             # Set target_policy_entropy to log(|A|) if all rows are masked
             target_policy_entropy = torch.log(torch.tensor(target_normalized_visit_count_init_step.shape[-1]))
@@ -397,8 +405,8 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         for step_k in range(self._cfg.num_unroll_steps):
             # unroll with the dynamics function: predict the next ``latent_state``, ``world_model_latent_history``,
             # `` reward`` given current ``latent_state`` ``world_model_latent_history`` and ``action``.
-            # And then predict policy_logits and value  with the prediction function.
-            
+            # And then predict policy_logits and value with the prediction function.
+
             # obtain the oracle latent states from representation function.
             beg_index, end_index = self._get_target_obs_index_in_step_k(step_k)
             next_obs_batch = obs_target_batch[:, beg_index:end_index]
@@ -412,7 +420,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
             )
 
             # ========= logging for analysis ===============
-            if step_k == self._cfg.num_unroll_steps -1 and self._cfg.cal_dormant_ratio:
+            if step_k == self._cfg.num_unroll_steps - 1 and self._cfg.cal_dormant_ratio:
                 # calculate dormant ratio of encoder
                 action_tmp = action_batch[:, step_k]
                 if len(action_tmp.shape) == 1:
@@ -425,15 +433,18 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
                 action_one_hot.scatter_(1, action_tmp, 1)
                 action_encoding_tmp = action_one_hot.unsqueeze(-1).unsqueeze(-1)
                 action_encoding = action_encoding_tmp.expand(
-                    current_latent_state.shape[0], policy_logits.shape[-1], current_latent_state.shape[2], current_latent_state.shape[3]
+                    current_latent_state.shape[0], policy_logits.shape[-1], current_latent_state.shape[2],
+                    current_latent_state.shape[3]
                 )
                 state_action_encoding = torch.cat((current_latent_state, action_encoding), dim=1)
-                self.dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network, [state_action_encoding.detach(), world_model_latent_history, next_latent_state], percentage=self._cfg.dormant_threshold)
+                self.dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network,
+                                                                [state_action_encoding.detach(),
+                                                                 world_model_latent_history, next_latent_state],
+                                                                percentage=self._cfg.dormant_threshold)
             # ========= logging for analysis ===============
 
-            # =========== very important ===========
+            # === very important ====
             current_latent_state = next_latent_state
-
             # ==============================================================
             # calculate consistency loss for the next ``num_unroll_steps`` unroll steps.
             # ==============================================================
@@ -469,20 +480,14 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
                 target_normalized_visit_count_masked = torch.index_select(
                     target_normalized_visit_count, 0, non_masked_indices
                 )
-                target_policy_entropy += -((target_normalized_visit_count_masked+1e-6) * (target_normalized_visit_count_masked+1e-6).log()).sum(-1).mean()
+                target_policy_entropy += -((target_normalized_visit_count_masked + 1e-6) * (
+                            target_normalized_visit_count_masked + 1e-6).log()).sum(-1).mean()
             else:
                 # Set target_policy_entropy to log(|A|) if all rows are masked
                 target_policy_entropy += torch.log(torch.tensor(target_normalized_visit_count.shape[-1]))
 
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
-
-            # reset hidden states every ``lstm_horizon_len`` unroll steps.
-            # if (step_k + 1) % self._cfg.lstm_horizon_len == 0:
-            #     world_model_latent_history = (
-            #         torch.zeros(1, self._cfg.batch_size, self._cfg.model.rnn_hidden_size).to(self._cfg.device),
-            #         torch.zeros(1, self._cfg.batch_size, self._cfg.model.rnn_hidden_size).to(self._cfg.device)
-            #     )
 
             if self._cfg.monitor_extra_statistics:
                 original_rewards = self.inverse_scalar_transform_handle(reward)
@@ -498,13 +503,10 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         # ==============================================================
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
+                self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss
         )
         weighted_total_loss = (weights * loss).mean()
-        # TODO(pu): test the effect of gradient scale.
-        gradient_scale = 1 / self._cfg.num_unroll_steps
-        weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
 
@@ -515,7 +517,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
             del self.grad_norm_before
             del self.grad_norm_after
             self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
-            self._target_model.encoder_hook.clear_data()  # 非常非常重要!!!
+            self._target_model.encoder_hook.clear_data()
         # ============= for analysis =============
 
         if self._cfg.multi_gpu:
@@ -561,13 +563,13 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
             'value_priority': value_priority.mean().item(),
             'value_priority_orig': value_priority,
 
-            'analysis/dormant_ratio_encoder':self.dormant_ratio_encoder,
+            'analysis/dormant_ratio_encoder': self.dormant_ratio_encoder,
             'analysis/dormant_ratio_dynamics': self.dormant_ratio_dynamics,
             'analysis/latent_state_l2_norms': self.latent_state_l2_norms,
-            'analysis/l2_norm_before': self.l2_norm_before, 
-            'analysis/l2_norm_after': self.l2_norm_after, 
-            'analysis/grad_norm_before':self.grad_norm_before, 
-            'analysis/grad_norm_after':self.grad_norm_after, 
+            'analysis/l2_norm_before': self.l2_norm_before,
+            'analysis/l2_norm_after': self.l2_norm_after,
+            'analysis/grad_norm_before': self.grad_norm_before,
+            'analysis/grad_norm_after': self.grad_norm_after,
         }
 
     def _init_collect(self) -> None:
@@ -583,21 +585,21 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         self._collect_mcts_temperature = 1
         self.collect_epsilon = 0.0
         if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros([8,self._cfg.model.observation_shape[0],64,64]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(8)]
+            self.last_batch_obs = torch.zeros([8, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            self.last_batch_action = [-1 for _ in range(8)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([8,self._cfg.model.observation_shape]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(8)]
+            self.last_batch_obs = torch.zeros([8, self._cfg.model.observation_shape]).to(self._cfg.device)
+            self.last_batch_action = [-1 for _ in range(8)]
         self.last_ready_env_id = None
 
     def _forward_collect(
-        self,
-        data: torch.Tensor,
-        action_mask: list = None,
-        temperature: float = 1,
-        to_play: List = [-1],
-        epsilon: float = 0.25,
-        ready_env_id: np.array = None
+            self,
+            data: torch.Tensor,
+            action_mask: list = None,
+            temperature: float = 1,
+            to_play: List = [-1],
+            epsilon: float = 0.25,
+            ready_env_id: np.array = None
     ):
         """
         Overview:
@@ -627,27 +629,16 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
-        # if active_collect_env_num != len(ready_env_id):
-        #     print('active_collect_env_num != len(ready_env_id)')
-        
         with torch.no_grad():
-            # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
-            # network_output = self._collect_model.initial_inference(data)
-            # if data.shape[0] < 2:
-            #     print('debug')
-            # if len(ready_env_id)<8:
-            #     print('debug')
-            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, ready_env_id, self.last_ready_env_id)
+            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data,
+                                                                   ready_env_id, self.last_ready_env_id)
             self.last_ready_env_id = copy.deepcopy(ready_env_id)
 
             latent_state_roots, reward_roots, world_model_latent_history_roots, pred_values, policy_logits = ez_network_output_unpack(
                 network_output
             )
-            # try:
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
-            # except Exception as e:
-            #     print(e)
-                
+
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             world_model_latent_history_roots = world_model_latent_history_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
@@ -672,14 +663,13 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
-            data_id = [i for i in range(active_collect_env_num)]
-            # data_id = [i for i in list(ready_env_id)]
-            # if ready_env_id == {1}:
-            #     print('debug')
-            output = {i: None for i in data_id}
+            # data_id = [i for i in range(active_collect_env_num)]
+            # output = {i: None for i in data_id}
+            output = {i: None for i in ready_env_id}  # NOTE: we need to return the data in the order of ready_env_id.
+
             if ready_env_id is None:
                 ready_env_id = np.arange(active_collect_env_num)
-            
+
             batch_action = []
 
             for i, env_id in enumerate(ready_env_id):
@@ -701,15 +691,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
                     )
                     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                # output[env_id] = {
-                #     'action': action,
-                #     'visit_count_distributions': distributions,
-                #     'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                #     'searched_value': value,
-                #     'predicted_value': pred_values[i],
-                #     'predicted_policy_logits': policy_logits[i],
-                # }
-                output[i] = {
+                output[env_id] = {
                     'action': action,
                     'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
@@ -735,15 +717,14 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
         if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape[0],64,64]).to(self._cfg.device)
+            self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(3)]
         elif self._cfg.model.model_type == 'mlp':
             self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(3)]
         self.last_ready_env_id_eval = None
 
-
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None,):
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None, ):
         """
          Overview:
              The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -768,12 +749,9 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
         self._eval_model.env_num = self._cfg.model.evaluator_env_num
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
-        # if active_eval_env_num != len(ready_env_id):
-        #     print('active_collect_env_num != len(ready_env_id)')
         with torch.no_grad():
-            # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
-            # network_output = self._eval_model.initial_inference(data)
-            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, ready_env_id, self.last_ready_env_id_eval)
+            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data,
+                                                                ready_env_id, self.last_ready_env_id_eval)
             self.last_ready_env_id_eval = copy.deepcopy(ready_env_id)
 
             latent_state_roots, reward_roots, world_model_latent_history_roots, pred_values, policy_logits = ez_network_output_unpack(
@@ -795,16 +773,16 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, world_model_latent_history_roots, to_play, ready_env_id)
+            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, world_model_latent_history_roots,
+                                   to_play, ready_env_id)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
-            data_id = [i for i in range(active_eval_env_num)]
-            # data_id = [i for i in list(ready_env_id)]
-            output = {i: None for i in data_id}
-            # if ready_env_id == {1}:
-            #     print('debug')
+
+            # data_id = [i for i in range(active_eval_env_num)]
+            # output = {i: None for i in data_id}
+            output = {i: None for i in ready_env_id}  # NOTE: we need to return the data in the order of ready_env_id.
 
             if ready_env_id is None:
                 ready_env_id = np.arange(active_eval_env_num)
@@ -820,7 +798,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
                 )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                output[i] = {
+                output[env_id] = {
                     'action': action,
                     'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
@@ -828,14 +806,6 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
                 }
-                # output[env_id] = {
-                #     'action': action,
-                #     'visit_count_distributions': distributions,
-                #     'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                #     'searched_value': value,
-                #     'predicted_value': pred_values[i],
-                #     'predicted_policy_logits': policy_logits[i],
-                # }
                 batch_action.append(action)
 
             self.last_batch_obs = data
@@ -853,10 +823,10 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
             'analysis/dormant_ratio_encoder',
             'analysis/dormant_ratio_dynamics',
             'analysis/latent_state_l2_norms',
-            'analysis/l2_norm_before', 
-            'analysis/l2_norm_after', 
-            'analysis/grad_norm_before', 
-            'analysis/grad_norm_after', 
+            'analysis/l2_norm_before',
+            'analysis/l2_norm_after',
+            'analysis/grad_norm_before',
+            'analysis/grad_norm_after',
 
             'collect_mcts_temperature',
             'cur_lr',
