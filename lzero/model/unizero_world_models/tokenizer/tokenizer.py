@@ -76,7 +76,7 @@ class Tokenizer(nn.Module):
                                           perceptual_loss=perceptual_loss)
 
     # @profile
-    def encode_to_obs_embeddings(self, x: torch.Tensor, should_preprocess: bool = False):
+    def encode_to_obs_embeddings(self, x: torch.Tensor):
         shape = x.shape  # (..., C, H, W)
         if len(shape) == 2:
             # x shape (4,4)

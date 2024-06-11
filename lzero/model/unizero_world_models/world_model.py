@@ -3,6 +3,7 @@ import logging
 from typing import Any, Tuple
 from typing import Optional, Union, Dict
 from typing import Optional
+
 logging.getLogger().setLevel(logging.DEBUG)
 from einops import rearrange
 import torch.nn.functional as F
@@ -24,8 +25,9 @@ import torch
 import torch.nn as nn
 import collections
 
+
 class WorldModel(nn.Module):
-    def __init__(self,  act_vocab_size: int, config: TransformerConfig, tokenizer) -> None:
+    def __init__(self, act_vocab_size: int, config: TransformerConfig, tokenizer) -> None:
         super().__init__()
         self.tokenizer = tokenizer
         self.act_vocab_size = act_vocab_size
@@ -351,74 +353,87 @@ class WorldModel(nn.Module):
 
     @torch.no_grad()
     def reset_from_initial_observations(self, obs_act_dict: torch.FloatTensor) -> torch.FloatTensor:
+        """
+        Reset the model state based on initial observations and actions.
+
+        Args:
+            obs_act_dict (torch.FloatTensor): A dictionary containing 'obs', 'action', and 'current_obs'.
+
+        Returns:
+            torch.FloatTensor: The outputs from the world model and the latent state.
+        """
+        # Extract observations, actions, and current observations from the dictionary.
         if isinstance(obs_act_dict, dict):
             observations = obs_act_dict['obs']
             buffer_action = obs_act_dict['action']
             current_obs = obs_act_dict['current_obs']
-        obs_embeddings = self.tokenizer.encode_to_obs_embeddings(observations,
-                                                                 should_preprocess=True)  # (B, C, H, W) -> (B, K, E)
+
+        # Encode observations to latent embeddings.
+        obs_embeddings = self.tokenizer.encode_to_obs_embeddings(observations)
 
         if current_obs is not None:
-            current_obs_embeddings = self.tokenizer.encode_to_obs_embeddings(current_obs,
-                                                                             should_preprocess=True)  # (B, C, H, W) -> (B, K, E)
+            # Encode current observations to latent embeddings
+            current_obs_embeddings = self.tokenizer.encode_to_obs_embeddings(current_obs)
             self.latent_state = current_obs_embeddings
-            outputs_wm = self.refresh_keys_values_with_initial_latent_state_for_init_infer(obs_embeddings,
-                                                                                           buffer_action,
-                                                                                           current_obs_embeddings)
+            outputs_wm = self.refresh_kvs_with_initial_latent_state_for_init_infer(obs_embeddings, buffer_action, current_obs_embeddings)
         else:
             self.latent_state = obs_embeddings
-            outputs_wm = self.refresh_keys_values_with_initial_latent_state_for_init_infer(obs_embeddings,
-                                                                                           buffer_action, None)
+            outputs_wm = self.refresh_kvs_with_initial_latent_state_for_init_infer(obs_embeddings, buffer_action, None)
 
         return outputs_wm, self.latent_state
 
     @torch.no_grad()
-    def refresh_keys_values_with_initial_latent_state_for_init_infer(self, latent_state: torch.LongTensor,
-                                                                     buffer_action=None,
-                                                                     current_obs_embeddings=None) -> torch.FloatTensor:
+    def refresh_kvs_with_initial_latent_state_for_init_infer(self, latent_state: torch.LongTensor,
+                                                             buffer_action=None,
+                                                             current_obs_embeddings=None) -> torch.FloatTensor:
+        """
+        Refresh key-value pairs with the initial latent state for inference.
+
+        Args:
+            latent_state (torch.LongTensor): The latent state embeddings.
+            buffer_action (optional): Actions taken.
+            current_obs_embeddings (optional): Current observation embeddings.
+
+        Returns:
+            torch.FloatTensor: The outputs from the world model.
+        """
         n, num_observations_tokens, _ = latent_state.shape
         if n <= self.env_num:
+            # ================ Collect and Evaluation Phase ================
             if current_obs_embeddings is not None:
                 if max(buffer_action) == -1:
-                    # 一集的第一步
+                    # First step in an episode
                     self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n,
                                                                                       max_tokens=self.context_length)
                     outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings},
                                               past_keys_values=self.keys_values_wm, is_init_infer=True)
 
-                    # 复制单个环境对应的 keys_values_wm 并存储
-                    self.update_cache_context(current_obs_embeddings, is_init_infer=True)  # TODO
+                    # Copy and store keys_values_wm for a single environment
+                    self.update_cache_context(current_obs_embeddings, is_init_infer=True)
                 else:
-                    # 假设 latest_state 是新的 latent_state，包含 ready_env_num 个环境的信息
+                    # Assume latest_state is the new latent_state, containing information from ready_env_num environments
                     ready_env_num = current_obs_embeddings.shape[0]
                     self.keys_values_wm_list = []
                     self.keys_values_wm_size_list = []
                     for i in range(ready_env_num):
-                        state_single_env = latent_state[i]  # 获取单个环境的 latent state
+                        # Retrieve latent state for a single environment
+                        state_single_env = latent_state[i]
                         quantized_state = state_single_env.detach().cpu().numpy()
-                        cache_key = quantize_state(quantized_state)  # 使用量化后的状态计算哈希值
-                        # matched_value = self.past_keys_values_cache_init_infer.get(cache_key)  # 检索缓存值
-                        matched_value = self.past_keys_values_cache_init_infer_envs[i].get(cache_key)  # 检索缓存值
+                        # Compute hash value using quantized state
+                        cache_key = quantize_state(quantized_state)
+                        # Retrieve cached value
+                        matched_value = self.past_keys_values_cache_init_infer_envs[i].get(cache_key)
 
                         self.root_total_query_cnt += 1
                         if matched_value is not None:
-                            # 如果找到匹配的值，将其添加到列表中
+                            # If a matching value is found, add it to the list
                             self.root_hit_cnt += 1
-                            # if self.root_total_query_cnt > 0 and self.root_total_query_cnt % 1000 == 0:
-                            #     root_hit_ratio = self.root_hit_cnt / self.root_total_query_cnt
-                            #     print('root_total_query_cnt:', self.root_total_query_cnt)
-                            #     print(f'root_hit_ratio:{root_hit_ratio}')
-                            #     print(f'root_hit find size {self.past_keys_values_cache_init_infer_envs[i][cache_key].size}') # TODO env
-                            #     if self.past_keys_values_cache_init_infer[cache_key].size >= self.config.max_tokens - 3:
-                            #         print(f'==' * 20)
-                            #         print(f'NOTE: root_hit find size >= self.config.max_tokens - 3')
-                            #         print(f'==' * 20)
-                            # 这里需要deepcopy因为在transformer的forward中会原地修改matched_value
+                            # deepcopy is needed because forward modifies matched_value in place
                             self.keys_values_wm_list.append(
                                 copy.deepcopy(self.to_device_for_kvcache(matched_value, 'cuda')))
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
-                            # 使用零值重置
+                            # Reset using zero values
                             self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1,
                                                                                                          max_tokens=self.context_length)
                             outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
@@ -427,11 +442,11 @@ class WorldModel(nn.Module):
                             self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                             self.keys_values_wm_size_list.append(1)
 
-                    # 输入self.keys_values_wm_list，输出为self.keys_values_wm
+                    # Input self.keys_values_wm_list, output self.keys_values_wm
                     self.keys_values_wm_size_list_current = self.trim_and_pad_kv_cache(is_init_infer=True)
 
                     buffer_action = buffer_action[:ready_env_num]
-                    # if ready_env_num<self.env_num:
+                    # if ready_env_num < self.env_num:
                     #     print(f'init inference ready_env_num: {ready_env_num} < env_num: {self.env_num}')
                     buffer_action = torch.from_numpy(np.array(buffer_action)).to(latent_state.device)
                     act_tokens = buffer_action.unsqueeze(-1)
@@ -441,12 +456,11 @@ class WorldModel(nn.Module):
                     outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings},
                                               past_keys_values=self.keys_values_wm, is_init_infer=True)
 
-                    # 复制单个环境对应的 keys_values_wm 并存储
-                    self.update_cache_context(current_obs_embeddings, is_init_infer=True)  # TODO
-
+                    # Copy and store keys_values_wm for a single environment
+                    self.update_cache_context(current_obs_embeddings, is_init_infer=True)
 
         elif n > self.env_num and buffer_action is not None:
-            # 训练时计算 target value/
+            # ================ calculate the target value in train phase ================
             # [192, 16, 64] -> [32, 6, 16, 64]
             latent_state = latent_state.contiguous().view(buffer_action.shape[0], -1, num_observations_tokens,
                                                           self.obs_per_embdding_dim)  # (BL, K) for unroll_step=1
@@ -455,24 +469,22 @@ class WorldModel(nn.Module):
             buffer_action = torch.from_numpy(buffer_action).to(latent_state.device)
             act_tokens = rearrange(buffer_action, 'b l -> b l 1')
 
-            # 选择每个样本的最后一步
-            ###### 这将选择最后一列并保持维度不变, 最后一步的target policy/value本身就没有用到 ######
-            last_steps = act_tokens[:, -1:, :]
-            # 使用torch.cat在第二个维度上连接原始act_tokens和last_steps
-            act_tokens = torch.cat((act_tokens, last_steps), dim=1)
+            # select the last timestep for each sample
+            # This will select the last column while keeping the dimensions unchanged, and the target policy/value in the final step itself is not used.
+            last_steps_act = act_tokens[:, -1:, :]
+            act_tokens = torch.cat((act_tokens, last_steps_act), dim=1)
 
             outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (latent_state, act_tokens)})
 
-            # 选择每个样本的最后一步
-            last_steps_value = outputs_wm.logits_value[:, -1:, :]  # 这将选择最后一列并保持维度不变
-            # 使用torch.cat在第二个维度上连接原始act_tokens和last_steps
+            # select the last timestep for each sample
+            last_steps_value = outputs_wm.logits_value[:, -1:, :]
             outputs_wm.logits_value = torch.cat((outputs_wm.logits_value, last_steps_value), dim=1)
 
-            last_steps_policy = outputs_wm.logits_policy[:, -1:, :]  # 这将选择最后一列并保持维度不变
+            last_steps_policy = outputs_wm.logits_policy[:, -1:, :]
             outputs_wm.logits_policy = torch.cat((outputs_wm.logits_policy, last_steps_policy), dim=1)
 
             # Reshape your tensors
-            #  outputs_wm.logits_value.shape (30,21) = (B*6, 21)
+            # outputs_wm.logits_value.shape (B, H, 101) = (B*H, 101)
             outputs_wm.logits_value = rearrange(outputs_wm.logits_value, 'b t e -> (b t) e')
             outputs_wm.logits_policy = rearrange(outputs_wm.logits_policy, 'b t e -> (b t) e')
 
@@ -482,18 +494,9 @@ class WorldModel(nn.Module):
     def forward_initial_inference(self, obs_act_dict):
         # self.past_keys_values_cache_init_infer_envs[i]
         outputs_wm, latent_state = self.reset_from_initial_observations(obs_act_dict)  # root节点也有context
-        # self.past_keys_values_cache_recurrent_infer
         # TODO: 每次search后清空，可以保证存储的 kv_cache_recurrent 都是从根节点的最长context来的
         # 或者每次search后不清空，但每次都重新存储，这样便可以保证 存储的kv_cache_recurrent, latent_state是预测部分的限制在一次search内
         self.past_keys_values_cache_recurrent_infer.clear()
-        # print('=='*20)
-        # print('self.past_keys_values_cache_recurrent_infer.clear() after init_inference')
-
-        # self.latent_state_index_in_search_path = [[] for i in range(latent_state.shape[0])]
-        # self.next_latent_state_depth = [[] for i in range(latent_state.shape[0])]
-        # self.last_depth = [0 for i in range(latent_state.shape[0])]
-        # 维护一个全局的depth_map字典,用于存储已计算过的深度信息
-        # self.depth_map =  [{0: 1} for i in range(latent_state.shape[0])]  # 根节点处的深度映射
 
         return outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards, outputs_wm.logits_policy, outputs_wm.logits_value
 
@@ -864,7 +867,7 @@ class WorldModel(nn.Module):
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None,
                      **kwargs: Any) -> LossWithIntermediateLosses:
         # 将观察编码为潜在状态表示
-        obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], should_preprocess=False)
+        obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
         # for pong
         # self.plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong_H10_H4_tsne')
@@ -1007,8 +1010,7 @@ class WorldModel(nn.Module):
 
         # 为了训练稳定性,使用target_tokenizer计算真实的下一个潜在状态表示
         with torch.no_grad():
-            traget_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'],
-                                                                              should_preprocess=False)
+            traget_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'])
 
         # 计算观察、奖励和结束标签
         labels_observations, labels_rewards, labels_ends = self.compute_labels_world_model(traget_obs_embeddings,
