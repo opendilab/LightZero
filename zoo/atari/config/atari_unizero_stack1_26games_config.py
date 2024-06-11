@@ -1,40 +1,34 @@
 from easydict import EasyDict
+import torch
+device = 0
+torch.cuda.set_device(device)
 
-# ==== NOTE: 需要设置fg_atari中的action_shape =====
-
+env_id = 'PongNoFrameskip-v4'  # 6
+# env_id = 'MsPacmanNoFrameskip-v4' # 9
+# env_id = 'SeaquestNoFrameskip-v4' # 18
+# env_id = 'BoxingNoFrameskip-v4' # 18
+# env_id = 'QbertNoFrameskip-v4'  # 6
+# env_id = 'BreakoutNoFrameskip-v4'
 # env_id = 'AlienNoFrameskip-v4' # 18
 # env_id = 'AmidarNoFrameskip-v4' # 10
 # env_id = 'AssaultNoFrameskip-v4' # 7
 # env_id = 'AsterixNoFrameskip-v4' # 9
-
 # env_id = 'BankHeistNoFrameskip-v4' # 18
 # env_id = 'BattleZoneNoFrameskip-v4' # 18
 # env_id = 'ChopperCommandNoFrameskip-v4' # 18
 # env_id = 'CrazyClimberNoFrameskip-v4' # 9
-
 # env_id = 'DemonAttackNoFrameskip-v4' # 6
 # env_id = 'FreewayNoFrameskip-v4' # 3
 # env_id = 'FrostbiteNoFrameskip-v4' # 18
 # env_id = 'GopherNoFrameskip-v4' # 8
-
 # env_id = 'HeroNoFrameskip-v4' # 18
 # env_id = 'JamesbondNoFrameskip-v4' # 18
 # env_id = 'KangarooNoFrameskip-v4' # 18
 # env_id = 'KrullNoFrameskip-v4' # 18
-
 # env_id = 'KungFuMasterNoFrameskip-v4' # 14
 # env_id = 'PrivateEyeNoFrameskip-v4' # 18
 # env_id = 'RoadRunnerNoFrameskip-v4' # 18
 # env_id = 'UpNDownNoFrameskip-v4' # 6
-
-env_id = 'PongNoFrameskip-v4' # 6
-# env_id = 'MsPacmanNoFrameskip-v4' # 9
-# env_id = 'QbertNoFrameskip-v4'  # 6
-# env_id = 'SeaquestNoFrameskip-v4' # 18
-# env_id = 'BoxingNoFrameskip-v4' # 18
-
-# env_id = 'BreakoutNoFrameskip-v4'  # TODO: eval_sample, episode_steps
-
 
 if env_id == 'AlienNoFrameskip-v4':
     action_space_size = 18
@@ -92,7 +86,6 @@ elif env_id == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-
 update_per_collect = None
 model_update_ratio = 0.25
 collector_env_num = 8
@@ -107,15 +100,15 @@ eps_greedy_exploration_in_collect = True
 
 
 # debug
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-num_simulations = 5
-max_env_step = int(5e5)
-reanalyze_ratio = 0.
-batch_size = 5
-num_unroll_steps = 10
-eps_greedy_exploration_in_collect = True
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 5
+# max_env_step = int(5e5)
+# reanalyze_ratio = 0.
+# batch_size = 5
+# num_unroll_steps = 10
+# eps_greedy_exploration_in_collect = True
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -132,15 +125,14 @@ atari_unizero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        collect_max_episode_steps=int(50),
-        eval_max_episode_steps=int(50),
-        # collect_max_episode_steps=int(2e4),
-        # eval_max_episode_steps=int(1e4),
+        # collect_max_episode_steps=int(50),
+        # eval_max_episode_steps=int(50),
+        collect_max_episode_steps=int(2e4),
+        eval_max_episode_steps=int(1e4),
         clip_rewards=True,
     ),
     policy=dict(
-        # TODO
-        analysis_sim_norm=False,
+        analysis_sim_norm=False, # TODO
         cal_dormant_ratio=False,
         learn=dict(
             learner=dict(
@@ -164,26 +156,26 @@ atari_unizero_config = dict(
             downsample=True,
             self_supervised_learning_loss=True,
             discrete_action_encoding_type='one_hot',
-            norm_type='BN',
+            norm_type='LN',
             reward_support_size=101,
             value_support_size=101,
             support_scale=50,
             world_model=dict(
                 tokens_per_block=2,
                 max_blocks=10,
-                max_tokens=2 * 10,
+                max_tokens=2 * 10,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * 4,
                 context_length_for_recurrent=2 * 4,
                 gru_gating=False,
-                device='cpu',
+                device=f'cuda:{device}',
                 analysis_sim_norm=False,
                 analysis_dormant_ratio=False,
-                action_shape=6,  # TODO
+                action_shape=action_space_size,
                 group_size=8,  # NOTE: sim_norm
                 attention='causal',
                 num_layers=4,  # TODO
                 num_heads=8,
-                embed_dim=768,  # TODO
+                embed_dim=768,
                 embed_pdrop=0.1,
                 resid_pdrop=0.1,
                 attn_pdrop=0.1,
@@ -209,9 +201,6 @@ atari_unizero_config = dict(
         random_collect_episode_num=0,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            type='linear',
-            start=1.,
-            end=0.01,
             decay=int(2e4),
         ),
         update_per_collect=update_per_collect,
@@ -253,6 +242,6 @@ if __name__ == "__main__":
     seeds = [0, 1, 2]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_unizero/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_seed{seed}'
+        main_config.exp_name = f'data_unizero_stack1/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, max_env_step=max_env_step)
