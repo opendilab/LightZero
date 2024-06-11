@@ -1,19 +1,18 @@
 """
-Credits to https://github.com/karpathy/minGPT
+Modified from https://github.com/karpathy/nanoGPT
 """
 
-from dataclasses import dataclass
 import math
-import copy
+from dataclasses import dataclass
 from typing import Optional
 
-from einops import rearrange
 import torch
 import torch.nn as nn
+from ding.torch_utils.network import GRUGatingUnit
+from einops import rearrange
 from torch.nn import functional as F
 
-from .kv_caching import KeysValues, KVCache
-from line_profiler import line_profiler
+from .kv_caching import KeysValues
 
 
 @dataclass
@@ -36,6 +35,19 @@ class TransformerConfig:
 
 
 class Transformer(nn.Module):
+    """
+    Transformer model class.
+
+    Args:
+        config (TransformerConfig): Configuration for the Transformer model.
+
+    Attributes:
+        config (TransformerConfig): Configuration object.
+        drop (nn.Dropout): Dropout layer for embedding dropout.
+        blocks (nn.ModuleList): List of Transformer blocks.
+        ln_f (nn.LayerNorm): Layer normalization applied to the final output.
+    """
+
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__()
         self.config = config
@@ -44,12 +56,32 @@ class Transformer(nn.Module):
         self.ln_f = nn.LayerNorm(config.embed_dim)
 
     def generate_empty_keys_values(self, n: int, max_tokens: int) -> KeysValues:
-        device = self.ln_f.weight.device  # Assumption that all submodules are on the same device
+        """
+        Generate a placeholder for keys and values.
+
+        Args:
+            n (int): Batch size.
+            max_tokens (int): Maximum number of tokens in the sequence.
+
+        Returns:
+            KeysValues: An object containing empty keys and values.
+        """
+        device = self.ln_f.weight.device  # Assumption: All submodules are on the same device
         return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
-        # return KeysValues(n, self.config.num_heads, 50, self.config.embed_dim, self.config.num_layers, device)
 
     def forward(self, sequences: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
                 valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Forward pass of the Transformer model.
+
+        Args:
+            sequences (torch.Tensor): Input tensor of shape (batch_size, seq_length, embed_dim).
+            past_keys_values (Optional[KeysValues]): Precomputed keys and values for faster generation (default: None).
+            valid_context_lengths (Optional[torch.Tensor]): Valid lengths of context for masking (default: None).
+
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
+        """
         assert past_keys_values is None or len(past_keys_values) == len(self.blocks)
         x = self.drop(sequences)
         for i, block in enumerate(self.blocks):
@@ -59,18 +91,30 @@ class Transformer(nn.Module):
         return x
 
 
-from ding.torch_utils.network import GRUGatingUnit
-
-
 class Block(nn.Module):
+    """
+    Transformer block class.
+
+    Args:
+        config (TransformerConfig): Configuration for the Transformer block.
+
+    Attributes:
+        gru_gating (bool): Flag to use GRU gating mechanism.
+        gru_bias (float): Bias for the GRU gating mechanism.
+        gate1 (Optional[GRUGatingUnit]): First GRU gating unit (if GRU gating is enabled).
+        gate2 (Optional[GRUGatingUnit]): Second GRU gating unit (if GRU gating is enabled).
+        ln1 (nn.LayerNorm): Layer normalization before the attention layer.
+        ln2 (nn.LayerNorm): Layer normalization before the MLP.
+        attn (SelfAttention): Self-attention mechanism.
+        mlp (nn.Sequential): Multi-layer perceptron.
+    """
+
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__()
-        # TODO
+        # NOTE: GRU gating as in GTrXL
         self.gru_gating = config.gru_gating
-        # self.gru_gating = False
-        # self.gru_gating = True
-        self.gru_bias = 2.
-        if self.gru_gating is True:
+        self.gru_bias = 2.0
+        if self.gru_gating:
             self.gate1 = GRUGatingUnit(config.embed_dim, self.gru_bias)
             self.gate2 = GRUGatingUnit(config.embed_dim, self.gru_bias)
 
@@ -86,20 +130,46 @@ class Block(nn.Module):
 
     def forward(self, x: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
                 valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Forward pass of the Transformer block.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, seq_length, embed_dim).
+            past_keys_values (Optional[KeysValues]): Precomputed keys and values for faster generation (default: None).
+            valid_context_lengths (Optional[torch.Tensor]): Valid lengths of context for masking (default: None).
+
+        Returns:
+            torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
+        """
         x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths)
-        # x = x + x_attn
         x = self.gate1(x, x_attn) if self.gru_gating else x + x_attn
-        # x = x + self.mlp(self.ln2(x))
         x = self.gate2(x, self.mlp(self.ln2(x))) if self.gru_gating else x + self.mlp(self.ln2(x))
 
         return x
 
 
 class SelfAttention(nn.Module):
+    """
+    Implements self-attention mechanism for transformers.
+
+    Args:
+        config (TransformerConfig): Configuration object containing hyperparameters.
+
+    Attributes:
+        config (TransformerConfig): Stores the configuration for the self-attention module.
+        num_heads (int): Number of attention heads.
+        key (nn.Linear): Linear layer to project input to key vectors.
+        query (nn.Linear): Linear layer to project input to query vectors.
+        value (nn.Linear): Linear layer to project input to value vectors.
+        attn_drop (nn.Dropout): Dropout layer for attention weights.
+        resid_drop (nn.Dropout): Dropout layer for residual connection.
+        proj (nn.Linear): Final linear layer for projection.
+        mask (torch.Tensor): Mask tensor for causal or block-causal attention.
+    """
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__()
-        assert config.embed_dim % config.num_heads == 0
-        assert config.attention in ('causal', 'block_causal')
+        assert config.embed_dim % config.num_heads == 0, "Embedding dimension must be divisible by number of heads."
+
         self.config = config
         self.num_heads = config.num_heads
 
@@ -112,22 +182,32 @@ class SelfAttention(nn.Module):
         self.proj = nn.Linear(config.embed_dim, config.embed_dim)
 
         causal_mask = torch.tril(torch.ones(config.max_tokens, config.max_tokens))
-        block_causal_mask = torch.max(causal_mask, torch.block_diag(
-            *[torch.ones(config.tokens_per_block, config.tokens_per_block) for _ in range(config.max_blocks)]))
-        self.register_buffer('mask', causal_mask if config.attention == 'causal' else block_causal_mask)
+        self.register_buffer('mask', causal_mask)
 
     def forward(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None,
                 valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Forward pass for the self-attention mechanism.
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (B, T, C) where B is batch size,
+                              T is sequence length, and C is embedding dimension.
+            kv_cache (Optional[KeysValues]): Optional key-value cache for faster inference.
+            valid_context_lengths (Optional[torch.Tensor]): Optional tensor containing valid context lengths.
+
+        Returns:
+            torch.Tensor: Output tensor of shape (B, T, C).
+        """
         B, T, C = x.size()
         if kv_cache is not None:
             b, nh, L, c = kv_cache.shape
-            assert nh == self.num_heads and b == B and c * nh == C
+            assert nh == self.num_heads and b == B and c * nh == C, "Cache dimensions do not match input dimensions."
         else:
             L = 0
 
-        q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, nh, T, hs)
-        k = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, nh, T, hs)
-        v = self.value(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, nh, T, hs)
+        q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, num_heads, T, head_size)
+        k = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, num_heads, T, head_size)
+        v = self.value(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, num_heads, T, head_size)
 
         if kv_cache is not None:
             kv_cache.update(k, v)
@@ -135,46 +215,30 @@ class SelfAttention(nn.Module):
 
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
 
-        # # # # 处理mask
-        # if valid_context_lengths is not None:
-        #     # 最终得到的  mask.shape: (B, T, L + T)
-        #     # 其中L是context长度，T是当前输入的长度, valid_context_lengths是context中有效的长度，位于context的后面valid_context_lengths长的一段
-        #     mask = torch.ones(B, T, L + T, device=att.device)
-        #     # 对每个样本,根据其有效长度,将无效的部分设为0
-        #     for i in range(B):
-        #         mask[i] = copy.deepcopy(self.mask[L:L + T, :L + T])
-        #         if L - valid_context_lengths[i]>0:
-        #             mask[i, :, :(L - valid_context_lengths[i])] = 0
-        # else:
-        #     # mask.shape: (B, nh, T, L + T)
-        #     mask = self.mask[L:L + T, :L + T]
-        # att.shape: (B, nh, T, L + T)
-        # att = att.masked_fill(mask == 0, float('-inf'))
-
         if valid_context_lengths is not None:
-            # 最终得到的  mask.shape: (B, T, L + T)
-            # 其中L是context长度，T是当前输入的长度, valid_context_lengths是context中有效的长度，位于context的后面valid_context_lengths长的一段
-            # mask = torch.ones(B, T, L + T, device=att.device)
+            # Final mask.shape: (B, T, L + T)
+            # L is the context length, T is the current input length,
+            # valid_context_lengths is the valid length at the end of the context.
             mask = torch.zeros(B, T, L + T, device=att.device)
-            # 对每个样本,根据其有效长度,将无效的部分设为0
+            # For each sample, set the invalid parts to 0 based on its valid length.
             for i in range(B):
-                mask[i] = self.mask[L:L + T, :L + T].clone()  # 不需要.clone()吗
-                mask[i, :, :(L - valid_context_lengths[i])] = 0  # 无效的部分设为0
-            # 将mask的维度调整为与att的后两个维度相同
-            # (B, T, L + T) -> (B, 1, T, L + T) -> (B, nh, T, L + T)
-            mask = mask.unsqueeze(1).expand(-1, att.size(1), -1, -1)
+                mask[i] = self.mask[L:L + T, :L + T].clone()
+                mask[i, :, :(L - valid_context_lengths[i])] = 0  # Set invalid parts to 0.
+            # Adjust mask dimensions to match the last two dimensions of att.
+            # (B, T, L + T) -> (B, 1, T, L + T) -> (B, num_heads, T, L + T)
+                mask = mask.unsqueeze(1).expand(-1, att.size(1), -1, -1)
         else:
             # mask.shape: (T, L + T)
             mask = self.mask[L:L + T, :L + T]
 
-        # att.shape: (B, nh, T, L + T)
+        # att.shape: (B, num_heads, T, L + T)
         att = att.masked_fill(mask == 0, float('-inf'))
 
         att = F.softmax(att, dim=-1)
         att = self.attn_drop(att)
-        y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        y = att @ v  # (B, num_heads, T, L + T) x (B, num_heads, L + T, head_size) -> (B, num_heads, T, head_size)
 
-        y = rearrange(y, 'b h t e -> b t (h e)')
+        y = rearrange(y, 'b h t e -> b t (h e)')  # Combine the heads back together (B, T, embed_dim)
         y = self.resid_drop(self.proj(y))
 
         return y
@@ -183,44 +247,47 @@ class SelfAttention(nn.Module):
     def get_attention_map(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None,
                           valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
-        获取attention map
+        Get the attention map.
 
-        参数:
-            x: 输入的序列,shape为(B, T, C)
-            kv_cache: 缓存的keys和values,用于支持长序列的推断
-            valid_context_lengths: 有效的上下文长度,用于处理变长上下文
+        Args:
+            x (torch.Tensor): Input sequence with shape (B, T, C).
+            kv_cache (Optional[KeysValues]): Cached keys and values for supporting long sequence inference.
+            valid_context_lengths (Optional[torch.Tensor]): Valid context lengths for handling variable-length contexts.
 
-        返回:
-            attention_map: shape为(B, nh, T, L + T)的tensor,表示attention的分布
+        Returns:
+            torch.Tensor: Attention map with shape (B, nh, T, L + T), representing the distribution of attention.
         """
         B, T, C = x.size()
         if kv_cache is not None:
             b, nh, L, c = kv_cache.shape
-            assert nh == self.num_heads and b == B and c * nh == C
+            assert nh == self.num_heads and b == B and c * nh == C, "Cache dimensions are inconsistent with input dimensions."
         else:
             L = 0
 
+        # Compute query, key, and value projections
         q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, nh, T, hs)
         k = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, nh, T, hs)
         v = self.value(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, nh, T, hs)
 
         if kv_cache is not None:
-            # kv_cache.update(k, None)  # 这里只需要更新keys,不需要更新values
-            # k, _ = kv_cache.get()
+            # Update the kv_cache with the new keys and values
             kv_cache.update(k, v)
             k, v = kv_cache.get()
 
+        # Compute the attention scores
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
 
         if valid_context_lengths is not None:
             mask = torch.zeros(B, T, L + T, device=att.device)
             for i in range(B):
+                # Create attention mask for each batch
                 mask[i] = self.mask[L:L + T, :L + T].clone()
                 mask[i, :, :(L - valid_context_lengths[i])] = 0
             mask = mask.unsqueeze(1).expand(-1, att.size(1), -1, -1)
         else:
             mask = self.mask[L:L + T, :L + T]
 
+        # Apply the attention mask
         att = att.masked_fill(mask == 0, float('-inf'))
         att = F.softmax(att, dim=-1)
 

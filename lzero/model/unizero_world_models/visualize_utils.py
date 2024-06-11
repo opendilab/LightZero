@@ -13,7 +13,26 @@ def visualize_reward_value_img_policy( original_images, reconstructed_images, ta
                                       target_policy, predict_value, predict_rewards, predict_policy,
                                       not_plot_timesteps=[], suffix='pong', width=64
                                       ):
-    # 确保输入张量的维度匹配
+    """
+    Visualizes the rewards, values, original images, and policy distributions over time for a batch of sequences.
+
+    Parameters:
+        original_images (torch.Tensor): The original input images with shape (batch_size, num_timesteps, channels, height, width).
+        reconstructed_images (torch.Tensor): The reconstructed images with shape (batch_size * num_timesteps, channels, height, width).
+        target_predict_value (torch.Tensor): The target predicted values.
+        true_rewards (torch.Tensor): The true rewards with shape (batch_size, num_timesteps, 1).
+        target_policy (torch.Tensor): The target policy distribution with shape (batch_size, num_timesteps, num_actions).
+        predict_value (torch.Tensor): The predicted values with shape (batch_size, num_timesteps, 1).
+        predict_rewards (torch.Tensor): The predicted rewards with shape (batch_size, num_timesteps, 1).
+        predict_policy (torch.Tensor): The predicted policy distribution with shape (batch_size, num_timesteps, num_actions).
+        not_plot_timesteps (list, optional): A list of timesteps to exclude from plotting. Default is an empty list.
+        suffix (str, optional): A suffix for the output directory. Default is 'pong'.
+        width (int, optional): The width of the images. Default is 64.
+
+    Returns:
+        None
+    """
+    # Ensure the dimensions of input tensors match
     assert original_images.shape[0] == reconstructed_images.shape[0] // original_images.shape[1]
     assert original_images.shape[1] == reconstructed_images.shape[0] // original_images.shape[0]
     assert original_images.shape[2:] == reconstructed_images.shape[1:]
@@ -22,14 +41,14 @@ def visualize_reward_value_img_policy( original_images, reconstructed_images, ta
     num_timesteps = original_images.shape[1]
     num_actions = predict_policy.shape[2]
 
-    # 根据动作空间大小自适应颜色
+    # Adapt colors based on the size of the action space
     colors = plt.cm.viridis(np.linspace(0, 1, num_actions))
 
     for batch_idx in range(batch_size):
-        # fig, ax = plt.subplots(3, 1, figsize=(20, 12), gridspec_kw={'height_ratios': [1, 1, 1]})
+        # Create subplots for rewards, values, original images, and policy distributions
         fig, ax = plt.subplots(4, 1, figsize=(20, 12), gridspec_kw={'height_ratios': [1, 1, 1, 1]})
 
-        # 绘制rewards和value的折线图
+        # Plot rewards and values as scatter plots
         timesteps = range(1, num_timesteps + 1)
         plot_timesteps = [t for t in timesteps if t not in not_plot_timesteps]
 
@@ -38,19 +57,6 @@ def visualize_reward_value_img_policy( original_images, reconstructed_images, ta
                                     plot_timesteps]
         predict_value_filtered = [predict_value[batch_idx, t - 1, 0].cpu().detach().numpy() for t in plot_timesteps]
 
-        # ax[0].plot(plot_timesteps, true_rewards_filtered, 'g-', label='True Rewards')
-        # ax[0].plot(plot_timesteps, predict_rewards_filtered, 'g--', label='Predict Rewards')
-        # ax[0].plot(plot_timesteps, true_rewards_filtered, 'g-', label='True Rewards', marker='o')
-        # ax[0].plot(plot_timesteps, predict_rewards_filtered, 'g--', label='Predict Rewards', marker='x')
-        # ax[0].set_xticks(plot_timesteps)
-        # # ax[0].set_xticklabels([])
-        # ax[0].set_xticklabels(plot_timesteps)  # 添加时间步索引作为x轴标签
-        # ax[0].legend(loc='upper left')
-        # ax[0].set_ylabel('Rewards')
-        # ax[0].set_ylim(0, 1)  # 固定reward的纵轴范围为[0, 1]
-
-        # 绘制rewards和value的散点图
-        # 使用不同颜色和符号来区分
         ax[0].scatter(plot_timesteps, true_rewards_filtered, color='g', label='True Rewards', marker='o', s=80)
         ax[0].scatter(plot_timesteps, predict_rewards_filtered, color='r', label='Predict Rewards', marker='x',
                       s=80)
@@ -66,7 +72,7 @@ def visualize_reward_value_img_policy( original_images, reconstructed_images, ta
         # ax0_twin.legend(loc='upper right')
         # ax0_twin.set_ylabel('Value')
 
-        # 绘制原始图像
+        # Plot original images
         image_width = 1.0
         image_height = original_images.shape[3] / original_images.shape[4] * image_width
         gap_width = 0.2
@@ -89,7 +95,7 @@ def visualize_reward_value_img_policy( original_images, reconstructed_images, ta
         ax[1].set_yticks([])
         ax[1].set_ylabel('Original', rotation=0, labelpad=30)
 
-        # 绘制predict_policy的概率分布柱状图
+        # Plot predicted policy distributions as bar charts
         bar_width = 0.8 / num_actions
         offset = np.linspace(-0.4 + bar_width / 2, 0.4 - bar_width / 2, num_actions)
 
@@ -101,12 +107,12 @@ def visualize_reward_value_img_policy( original_images, reconstructed_images, ta
         ax[2].set_xticks(range(len(plot_timesteps)))
         ax[2].set_xticklabels(plot_timesteps)
         ax[2].set_ylabel('Predict Policy')
-        # 添加图例
+        # Add legend for predicted policy
         handles = [plt.Rectangle((0, 0), 1, 1, color=colors[i], alpha=0.5) for i in range(num_actions)]
         labels = [f'Action {i}' for i in range(num_actions)]
         ax[2].legend(handles, labels, loc='upper right', ncol=num_actions)
 
-        # 绘制target_policy的概率分布柱状图
+        # Plot target policy distributions as bar charts
         bar_width = 0.8 / num_actions
         offset = np.linspace(-0.4 + bar_width / 2, 0.4 - bar_width / 2, num_actions)
         for i, t in enumerate(plot_timesteps):
@@ -116,13 +122,13 @@ def visualize_reward_value_img_policy( original_images, reconstructed_images, ta
         ax[3].set_xticks(range(len(plot_timesteps)))
         ax[3].set_xticklabels(plot_timesteps)
         ax[3].set_ylabel('MCTS Policy')
-        # 添加图例
+        # Add legend for target policy
         handles = [plt.Rectangle((0, 0), 1, 1, color=colors[i], alpha=0.5) for i in range(num_actions)]
         labels = [f'Action {i}' for i in range(num_actions)]
         ax[3].legend(handles, labels, loc='upper right', ncol=num_actions)
 
         plt.tight_layout()
-        directory = f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}'
+        directory = f'/your_path/code/LightZero/render/{suffix}'
         if not os.path.exists(directory):
             os.makedirs(directory)
         plt.savefig(f'{directory}/visualization_sequence_{batch_idx}_reward_value_img_policy_mcts-policy.png')
@@ -131,22 +137,41 @@ def visualize_reward_value_img_policy( original_images, reconstructed_images, ta
 
 
 def plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong'):
-    # # 假设 obs_embeddings 是一个 torch.Tensor，形状为 [608, 1, 64]
-    # obs_embeddings = torch.randn(608, 1, 768)  # 示例数据，实际使用时替换为实际的 obs_embeddings
-    #
-    # # 去掉第二个维度（1）
+    """
+    Plots t-SNE dimensionality reduction of latent state embeddings for individual episodes and
+    saves the plots as PNG files.
+
+    Parameters:
+    obs_embeddings (torch.Tensor): The latent state embeddings with shape (num_samples, 1, embedding_dim).
+    suffix (str): The suffix for the directory name where plots are saved. Default is 'pong'.
+
+    Returns:
+    None
+    """
+    # Remove the second dimension (1)
     obs_embeddings = obs_embeddings.squeeze(1)
 
-    # 分割为 8 局，每局 76 个时间步
+    # Split into 8 episodes, each with 76 timesteps
     num_episodes = 1
     timesteps_per_episode = 10
     episodes = np.split(obs_embeddings.cpu().detach().numpy(), num_episodes)
 
-    # 创建一个颜色列表
+    # Create a list of colors
     # colors = ['red'] * 1 + ['green'] * 60 + ['blue'] * 15
 
-    # 函数：为每一局绘制 t-SNE 降维结果并保存为 PNG
     def plot_tsne(embeddings_2d, timesteps, title, filename):
+        """
+        Plots the 2D t-SNE embeddings and saves the plot as a PNG file.
+
+        Parameters:
+        embeddings_2d (np.ndarray): The 2D t-SNE embeddings.
+        timesteps (np.ndarray): The timesteps corresponding to the embeddings.
+        title (str): The title of the plot.
+        filename (str): The filename for saving the plot.
+
+        Returns:
+        None
+        """
         plt.figure(figsize=(10, 8))
         for i, (x, y) in enumerate(embeddings_2d):
             # plt.scatter(x, y, color=colors[i])
@@ -156,66 +181,59 @@ def plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong'):
         plt.xlabel('Component 1')
         plt.ylabel('Component 2')
         plt.grid(True)
-        directory = f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}'
+        directory = f'/your_path/code/LightZero/render/{suffix}'
         if not os.path.exists(directory):
             os.makedirs(directory)
         plt.savefig(f'{directory}/latent_tsne_{filename}')
         # plt.savefig(filename)
         plt.close()
 
-    # 分别处理每一局并保存为 PNG
+    # Process and save each episode as a PNG
     for episode_idx, episode in enumerate(episodes):
-        # 确认 episode 是一个 numpy 数组或其他适当的数据结构
+        # Ensure episode is a numpy array or an appropriate data structure
         n_samples = episode.shape[0]
-        # 设置 perplexity 小于 n_samples
-        perplexity = min(30, n_samples - 1)  # 选择一个合理的值，比如 30
+        # Set perplexity less than n_samples
+        perplexity = min(30, n_samples - 1)  # Choose a reasonable value, such as 30
 
         tsne = TSNE(n_components=2, perplexity=perplexity, random_state=42)
-        # tsne = TSNE(n_components=2, random_state=42)
         embeddings_2d = tsne.fit_transform(episode)
 
         timesteps = np.arange(timesteps_per_episode)
         plot_tsne(embeddings_2d, timesteps, f'TSNE of Latent States in Episode {episode_idx + 1}',
                   f'episode_{episode_idx + 1}.png')
 
-    # 将所有局的降维结果绘制在一张图中并保存为 PNG
-    # plt.figure(figsize=(14, 12))
-    # for episode_idx, episode in enumerate(episodes):
-    #     tsne = TSNE(n_components=2, random_state=42)
-    #     embeddings_2d = tsne.fit_transform(episode)
-    #     timesteps = np.arange(timesteps_per_episode) + episode_idx * timesteps_per_episode
-    #     for i, (x, y) in enumerate(embeddings_2d):
-    #         plt.scatter(x, y, color=colors[i % timesteps_per_episode])
-    #         plt.text(x, y, str(timesteps[i]), fontsize=9, ha='right')
-    # plt.title('TSNE of Latent States of 8 Episodes')
-    # # plt.title('TSNE of Latent States of All Episodes Combined')
-    # plt.xlabel('Component 1')
-    # plt.ylabel('Component 2')
-    # plt.grid(True)
-
-    # directory = f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}'
-    # if not os.path.exists(directory):
-    #     os.makedirs(directory)
-    # plt.savefig(f'{directory}/latent_tsne_all_episodes_combined.png')
-    # plt.close()
 
 
 def plot_latent_tsne_each_and_all_for_visualmatch(obs_embeddings, suffix='visualmatch'):
-    # # 假设 obs_embeddings 是一个 torch.Tensor，形状为 [608, 1, 64]
-    # obs_embeddings = torch.randn(608, 1, 64)  # 示例数据，实际使用时替换为实际的 obs_embeddings
-    #
-    # # 去掉第二个维度（1）
+    """
+    This function visualizes the t-SNE dimensionality reduction results of latent state embeddings.
+    It processes the embeddings for multiple episodes and generates both individual plots for each episode
+    and a combined plot for all episodes.
+
+    Parameters:
+    - obs_embeddings (Tensor): The observations embeddings tensor of shape (num_episodes * timesteps_per_episode, 1, embedding_dim).
+    - suffix (str): The suffix for the output directory where the plots will be saved.
+
+    The function performs the following steps:
+    1. Removes the second dimension (1) from `obs_embeddings`.
+    2. Splits the embeddings into 8 episodes, each containing 76 timesteps.
+    3. Creates a list of colors for plotting.
+    4. Defines a nested function `plot_tsne` to plot and save t-SNE results.
+    5. Processes each episode to plot and save the t-SNE results individually.
+    6. Plots and saves the t-SNE results for all episodes combined in a single plot.
+    """
+    # Remove the second dimension (1)
     obs_embeddings = obs_embeddings.squeeze(1)
 
-    # 分割为 8 局，每局 76 个时间步
+    # Split into 8 episodes, each with 76 timesteps
     num_episodes = 8
     timesteps_per_episode = 76
     episodes = np.split(obs_embeddings.cpu().detach().numpy(), num_episodes)
 
-    # 创建一个颜色列表
+    # Create a list of colors
     colors = ['red'] * 1 + ['green'] * 60 + ['blue'] * 15
 
-    # 函数：为每一局绘制 t-SNE 降维结果并保存为 PNG
+    # Function to plot t-SNE results for each episode and save as PNG
     def plot_tsne(embeddings_2d, timesteps, title, filename):
         plt.figure(figsize=(10, 8))
         for i, (x, y) in enumerate(embeddings_2d):
@@ -225,21 +243,20 @@ def plot_latent_tsne_each_and_all_for_visualmatch(obs_embeddings, suffix='visual
         plt.xlabel('Component 1')
         plt.ylabel('Component 2')
         plt.grid(True)
-        directory = f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}'
+        directory = f'/your_path/code/LightZero/render/{suffix}'
         if not os.path.exists(directory):
             os.makedirs(directory)
         plt.savefig(f'{directory}/latent_tsne_{filename}')
-        # plt.savefig(filename)
         plt.close()
 
-    # 分别处理每一局并保存为 PNG
+    # Process each episode separately and save as PNG
     for episode_idx, episode in enumerate(episodes):
         tsne = TSNE(n_components=2, random_state=42)
         embeddings_2d = tsne.fit_transform(episode)
         timesteps = np.arange(timesteps_per_episode)
         plot_tsne(embeddings_2d, timesteps, f'TSNE of Latent States in Episode {episode_idx + 1}', f'episode_{episode_idx + 1}.png')
 
-    # 将所有局的降维结果绘制在一张图中并保存为 PNG
+    # Plot and save the combined t-SNE results of all episodes
     plt.figure(figsize=(14, 12))
     for episode_idx, episode in enumerate(episodes):
         tsne = TSNE(n_components=2, random_state=42)
@@ -249,23 +266,41 @@ def plot_latent_tsne_each_and_all_for_visualmatch(obs_embeddings, suffix='visual
             plt.scatter(x, y, color=colors[i % timesteps_per_episode])
             plt.text(x, y, str(timesteps[i]), fontsize=9, ha='right')
     plt.title('TSNE of Latent States of 8 Episodes')
-    # plt.title('TSNE of Latent States of All Episodes Combined')
     plt.xlabel('Component 1')
     plt.ylabel('Component 2')
     plt.grid(True)
 
-    directory = f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}'
+    directory = f'/your_path/code/LightZero/render/{suffix}'
     if not os.path.exists(directory):
         os.makedirs(directory)
     plt.savefig(f'{directory}/latent_tsne_all_episodes_combined.png')
-    # plt.savefig('all_episodes_combined.png')
     plt.close()
 
 
 def visualize_reconstruction_v3(original_images, reconstructed_images, target_predict_value, true_rewards,
                                 target_policy, predict_value, predict_rewards, predict_policy,
                                 not_plot_timesteps=[], suffix='pong', width=64):
-    # 确保输入张量的维度匹配
+    """
+    Visualizes the reconstruction of a sequence of images and the performance of different policies.
+
+    Args:
+        original_images (torch.Tensor): Tensor of original images of shape (batch_size, num_timesteps, channels, height, width).
+        reconstructed_images (torch.Tensor): Tensor of reconstructed images of shape (batch_size * num_timesteps, channels, height, width).
+        target_predict_value (torch.Tensor): Tensor of target predicted values.
+        true_rewards (torch.Tensor): Tensor of true rewards of shape (batch_size, num_timesteps, 1).
+        target_policy (torch.Tensor): Tensor of target policy probabilities of shape (batch_size, num_timesteps, num_actions).
+        predict_value (torch.Tensor): Tensor of predicted values of shape (batch_size, num_timesteps, 1).
+        predict_rewards (torch.Tensor): Tensor of predicted rewards of shape (batch_size, num_timesteps, 1).
+        predict_policy (torch.Tensor): Tensor of predicted policy probabilities of shape (batch_size, num_timesteps, num_actions).
+        not_plot_timesteps (list, optional): List of timesteps to exclude from the plot. Defaults to [].
+        suffix (str, optional): Suffix for the output file name. Defaults to 'pong'.
+        width (int, optional): Width of the images in the plot. Defaults to 64.
+
+    Notes:
+        - The function saves the visualizations as PNG files in the specified directory.
+        - It plots the true and predicted rewards, values, original and reconstructed images, and policy probabilities.
+    """
+    # Ensure the dimensions of the input tensors match
     assert original_images.shape[0] == reconstructed_images.shape[0] // original_images.shape[1]
     assert original_images.shape[1] == reconstructed_images.shape[0] // original_images.shape[0]
     assert original_images.shape[2:] == reconstructed_images.shape[1:]
@@ -274,19 +309,18 @@ def visualize_reconstruction_v3(original_images, reconstructed_images, target_pr
     num_timesteps = original_images.shape[1]
     num_actions = predict_policy.shape[2]
 
-    # 根据动作空间大小自适应颜色
+    # Adapt colors based on the number of actions
     colors = plt.cm.viridis(np.linspace(0, 1, num_actions))
 
     for batch_idx in range(batch_size):
         fig, ax = plt.subplots(5, 1, figsize=(20, 15), gridspec_kw={'height_ratios': [1, 1, 1, 1, 1]})
 
-        # 绘制rewards和value的折线图
+        # Plot the rewards and values as line charts
         timesteps = range(1, num_timesteps + 1)
         plot_timesteps = [t for t in timesteps if t not in not_plot_timesteps]
 
         true_rewards_filtered = [true_rewards[batch_idx, t - 1, 0].cpu().detach().numpy() for t in plot_timesteps]
-        predict_rewards_filtered = [predict_rewards[batch_idx, t - 1, 0].cpu().detach().numpy() for t in
-                                    plot_timesteps]
+        predict_rewards_filtered = [predict_rewards[batch_idx, t - 1, 0].cpu().detach().numpy() for t in plot_timesteps]
         predict_value_filtered = [predict_value[batch_idx, t - 1, 0].cpu().detach().numpy() for t in plot_timesteps]
 
         ax[0].plot(plot_timesteps, true_rewards_filtered, 'g-', label='True Rewards')
@@ -295,14 +329,14 @@ def visualize_reconstruction_v3(original_images, reconstructed_images, target_pr
         ax[0].set_xticklabels([])
         ax[0].legend(loc='upper left')
         ax[0].set_ylabel('Rewards')
-        ax[0].set_ylim(0, 1)  # 固定reward的纵轴范围为[0, 1]
+        ax[0].set_ylim(0, 1)  # Fixed y-axis range for rewards
 
         ax0_twin = ax[0].twinx()
         ax0_twin.plot(plot_timesteps, predict_value_filtered, 'b--', label='Predict Value')
         ax0_twin.legend(loc='upper right')
         ax0_twin.set_ylabel('Value')
 
-        # 绘制原始图像和重建图像
+        # Plot the original and reconstructed images
         image_width = 1.0
         image_height = original_images.shape[3] / original_images.shape[4] * image_width
         gap_width = 0.2
@@ -315,11 +349,11 @@ def visualize_reconstruction_v3(original_images, reconstructed_images, target_pr
                 right = left + image_width
                 bottom = 0.5 - image_height / 2
                 top = 0.5 + image_height / 2
-
                 ax[1].imshow(torchvision.transforms.ToPILImage()(original_image), extent=[left, right, bottom, top],
                              aspect='auto')
                 ax[2].imshow(torchvision.transforms.ToPILImage()(reconstructed_image),
-                             extent=[left, right, bottom, top], aspect='auto')
+                             extent=[left, right, bottom, top],
+                             aspect='auto')
 
         ax[1].set_xlim(0, len(plot_timesteps) * (image_width + gap_width) - gap_width)
         ax[1].set_xticks([(i + 0.5) * (image_width + gap_width) for i in range(len(plot_timesteps))])
@@ -333,7 +367,7 @@ def visualize_reconstruction_v3(original_images, reconstructed_images, target_pr
         ax[2].set_yticks([])
         ax[2].set_ylabel('Reconstructed', rotation=0, labelpad=30)
 
-        # 绘制predict_policy和target_policy的概率分布柱状图
+        # Plot the predicted and target policy probability distributions as bar charts
         bar_width = 0.8 / num_actions
         offset = np.linspace(-0.4 + bar_width / 2, 0.4 - bar_width / 2, num_actions)
 
@@ -351,117 +385,33 @@ def visualize_reconstruction_v3(original_images, reconstructed_images, target_pr
         ax[4].set_xlabel('Timestep')
         ax[4].set_ylabel('Target Policy')
 
-        # 添加图例
+        # Add legend for the action colors
         handles = [plt.Rectangle((0, 0), 1, 1, color=colors[i], alpha=0.5) for i in range(num_actions)]
         labels = [f'Action {i}' for i in range(num_actions)]
         ax[4].legend(handles, labels, loc='upper right', ncol=num_actions)
 
         plt.tight_layout()
-        directory = f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}'
+        directory = f'/your_path/code/LightZero/render/{suffix}'
         if not os.path.exists(directory):
             os.makedirs(directory)
         plt.savefig(f'{directory}/reconstruction_visualization_batch_{batch_idx}_v3.png')
         plt.close()
 
-
-def visualize_reconstruction_v2(original_images, reconstructed_images, target_predict_value, true_rewards,
-                                target_policy, predict_value, predict_rewards, predict_policy, suffix='pong',
-                                width=64):
-    # 确保输入张量的维度匹配
-    assert original_images.shape[0] == reconstructed_images.shape[0] // original_images.shape[1]
-    assert original_images.shape[1] == reconstructed_images.shape[0] // original_images.shape[0]
-    assert original_images.shape[2:] == reconstructed_images.shape[1:]
-
-    batch_size = original_images.shape[0]
-    num_timesteps = original_images.shape[1]
-    num_actions = predict_policy.shape[2]
-
-    # 根据动作空间大小自适应颜色
-    colors = plt.cm.viridis(np.linspace(0, 1, num_actions))
-    # colors = ['r', 'g', 'b', 'y']
-
-    for batch_idx in range(batch_size):
-        fig, ax = plt.subplots(5, 1, figsize=(20, 15), gridspec_kw={'height_ratios': [1, 1, 1, 1, 1]})
-
-        # 绘制rewards和value的折线图
-        timesteps = range(1, num_timesteps + 1)
-        ax[0].plot(timesteps, true_rewards[batch_idx, :, 0].cpu().detach().numpy(), 'g-', label='True Rewards')
-        ax[0].plot(timesteps, predict_rewards[batch_idx, :, 0].cpu().detach().numpy(), 'g--',
-                   label='Predict Rewards')
-        ax[0].set_xticks(timesteps)
-        ax[0].set_xticklabels([])
-        ax[0].legend(loc='upper left')
-        ax[0].set_ylabel('Rewards')
-
-        ax0_twin = ax[0].twinx()
-        # ax0_twin.plot(timesteps, target_predict_value[batch_idx, :, 0].cpu().detach().numpy(), 'b-', label='Target Predict Value')
-        ax0_twin.plot(timesteps, predict_value[batch_idx, :, 0].cpu().detach().numpy(), 'b--',
-                      label='Predict Value')
-        ax0_twin.legend(loc='upper right')
-        ax0_twin.set_ylabel('Value')
-
-        # 绘制原始图像和重建图像
-        image_width = 1.0
-        image_height = original_images.shape[3] / original_images.shape[4] * image_width
-        gap_width = 0.2
-        for i in range(num_timesteps):
-            original_image = original_images[batch_idx, i, :, :, :]
-            reconstructed_image = reconstructed_images[i * batch_size + batch_idx, :, :, :]
-
-            left = i * (image_width + gap_width)
-            right = left + image_width
-            bottom = 0.5 - image_height / 2
-            top = 0.5 + image_height / 2
-
-            ax[1].imshow(torchvision.transforms.ToPILImage()(original_image), extent=[left, right, bottom, top],
-                         aspect='auto')
-            ax[2].imshow(torchvision.transforms.ToPILImage()(reconstructed_image),
-                         extent=[left, right, bottom, top], aspect='auto')
-
-        ax[1].set_xlim(0, num_timesteps * (image_width + gap_width) - gap_width)
-        ax[1].set_xticks([(i + 0.5) * (image_width + gap_width) for i in range(num_timesteps)])
-        ax[1].set_xticklabels([])
-        ax[1].set_yticks([])
-        ax[1].set_ylabel('Original', rotation=0, labelpad=30)
-
-        ax[2].set_xlim(0, num_timesteps * (image_width + gap_width) - gap_width)
-        ax[2].set_xticks([(i + 0.5) * (image_width + gap_width) for i in range(num_timesteps)])
-        ax[2].set_xticklabels([])
-        ax[2].set_yticks([])
-        ax[2].set_ylabel('Reconstructed', rotation=0, labelpad=30)
-
-        # # 绘制predict_policy和target_policy的概率分布柱状图
-        # 计算柱状图的宽度和偏移量，确保它们不会重叠
-        bar_width = 0.8 / num_actions
-        offset = np.linspace(-0.4 + bar_width / 2, 0.4 - bar_width / 2, num_actions)
-        # 绘制predict_policy和target_policy的概率分布柱状图
-        for i in range(num_timesteps):
-            for j in range(num_actions):
-                ax[3].bar(i + offset[j], predict_policy[batch_idx, i, j].item(), width=bar_width, color=colors[j],
-                          alpha=0.5)
-                ax[4].bar(i + offset[j], target_policy[batch_idx, i, j].item(), width=bar_width, color=colors[j],
-                          alpha=0.5)
-        ax[3].set_xticks(timesteps)
-        ax[3].set_ylabel('Predict Policy')
-        ax[4].set_xticks(timesteps)
-        ax[4].set_xlabel('Timestep')
-        ax[4].set_ylabel('Target Policy')
-        # 添加图例
-        handles = [plt.Rectangle((0, 0), 1, 1, color=colors[i], alpha=0.5) for i in range(num_actions)]
-        labels = [f'Action {i}' for i in range(num_actions)]
-        ax[4].legend(handles, labels, loc='upper right', ncol=num_actions)
-
-        plt.tight_layout()
-        directory = f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}'
-        # 检查路径是否存在，不存在则创建
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-        plt.savefig(f'{directory}/reconstruction_visualization_batch_{batch_idx}_v2.png')
-        # plt.savefig(f'./render/{suffix}/reconstruction_visualization_batch_{batch_idx}_v2.png')
-        plt.close()
-
 def visualize_reconstruction_v1(original_images, reconstructed_images, suffix='pong', width=64):
-    # 确保输入张量的维度匹配
+    """
+    Visualizes the reconstruction of images by comparing original and reconstructed images side by side.
+
+    Args:
+        original_images (torch.Tensor): A tensor of original images with shape (batch_size, num_timesteps, channels, height, width).
+        reconstructed_images (torch.Tensor): A tensor of reconstructed images with shape (batch_size * num_timesteps, channels, height, width).
+        suffix (str, optional): A suffix for the saved image filenames. Default is 'pong'.
+        width (int, optional): The width of each image. Default is 64.
+
+    Raises:
+        AssertionError: If the dimensions of the input tensors do not match the expected shapes.
+
+    """
+    # Ensure the input tensor dimensions match
     assert original_images.shape[0] == reconstructed_images.shape[0] // original_images.shape[1]
     assert original_images.shape[1] == reconstructed_images.shape[0] // original_images.shape[0]
     assert original_images.shape[2:] == reconstructed_images.shape[1:]
@@ -470,10 +420,10 @@ def visualize_reconstruction_v1(original_images, reconstructed_images, suffix='p
     num_timesteps = original_images.shape[1]
 
     for batch_idx in range(batch_size):
-        # 创建一个白色背景的大图像
+        # Create a large image with a white background
         big_image = torch.ones(3, (width + 1) * 2 + 1, (width + 1) * num_timesteps + 1)
 
-        # 将原始图像和重建图像复制到大图像中
+        # Copy the original and reconstructed images into the large image
         for i in range(num_timesteps):
             original_image = original_images[batch_idx, i, :, :, :]
             reconstructed_image = reconstructed_images[i * batch_size + batch_idx, :, :, :]
@@ -481,106 +431,133 @@ def visualize_reconstruction_v1(original_images, reconstructed_images, suffix='p
             big_image[:, 1:1 + width, (width + 1) * i + 1:(width + 1) * (i + 1)] = original_image
             big_image[:, 2 + width:2 + 2 * width, (width + 1) * i + 1:(width + 1) * (i + 1)] = reconstructed_image
 
-        # 转换张量为PIL图像
+        # Convert the tensor to a PIL image
         image = torchvision.transforms.ToPILImage()(big_image)
 
-        # 绘制图像
+        # Plot the image
         plt.figure(figsize=(20, 4))
         plt.imshow(image)
         plt.axis('off')
 
-        # 添加时间步标签
+        # Add timestep labels
         for i in range(num_timesteps):
             plt.text((width + 1) * i + width / 2, -10, str(i + 1), ha='center', va='top', fontsize=12)
 
-        # 添加行标签
+        # Add row labels
         plt.text(-0.5, 3, 'Original', ha='right', va='center', fontsize=12)
         plt.text(-0.5, 3 + width + 1, 'Reconstructed', ha='right', va='center', fontsize=12)
 
         plt.tight_layout()
-        # plt.savefig(f'./render/{suffix}/reconstruction_visualization_batch_{batch_idx}_v1.png')
         plt.savefig(
-            f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}/reconstruction_visualization_batch_{batch_idx}_v1.png')
+            f'/your_path/code/LightZero/render/{suffix}/reconstruction_visualization_batch_{batch_idx}_v1.png')
         plt.close()
 
-
 def save_as_image_with_timestep(batch_tensor, suffix='pong'):
-    # batch_tensor 的形状应该是 [batch_size, sequence_length, channels, height, width]
-    # 在这里 channels = 4, height = 5, width = 5
+    """
+    Saves a batch of image sequences as a single image with timestep annotations.
+
+    Args:
+        batch_tensor (torch.Tensor): A tensor of shape [batch_size, sequence_length, channels, height, width].
+                                     Here, channels = 4, height = 5, width = 5.
+        suffix (str): A suffix for the directory where the image will be saved. Default is 'pong'.
+
+    The function will arrange the frames in a grid where each row corresponds to a sequence in the batch
+    and each column corresponds to a timestep within that sequence. Each frame is converted to a PIL image,
+    and the timestep index is added below each frame.
+    """
+    # Extract dimensions from the batch tensor
     batch_size, sequence_length, channels, height, width = batch_tensor.shape
 
-    # 为了将所有帧组合成一张图，我们设置每行显示 sequence_length 个图像
+    # Set the number of rows and columns for the output image
     rows = batch_size
     cols = sequence_length
 
-    # 创建一个足够大的空白图像来容纳所有的帧
-    # 每个RGB图像的大小是 height x width，总图像的大小是 (rows * height + text_height) x (cols * width)
-    text_height = 20  # 留出空间用于显示时间步索引
+    # Create a blank image large enough to hold all frames
+    text_height = 20  # Extra space for displaying timestep index
     total_height = rows * (height + text_height)
     final_image = Image.new('RGB', (cols * width, total_height), color='white')
 
-    # 遍历每一帧，将其转换为PIL图像，并粘贴到正确的位置
+    # Iterate over each frame, convert to PIL image, and paste it in the correct location
     for i in range(rows):
         for j in range(cols):
-            # 提取当前帧的前三个通道（假设前三个通道是RGB）
+            # Extract the first three channels (assuming they are RGB)
             frame = batch_tensor[i, j, :3, :, :]
-            # 转换为numpy数组，并调整数据范围为0-255
+            # Convert to numpy array and scale data to range 0-255
             frame = frame.mul(255).byte().cpu().detach().numpy().transpose(1, 2, 0)
-            # 创建一个PIL图像
+            # Create a PIL image
             img = Image.fromarray(frame)
-            # 粘贴到最终图像的相应位置
+            # Paste the image at the correct location in the final image
             final_image.paste(img, (j * width, i * (height + text_height)))
 
-            # 在图像下方添加时间步索引
+            # Add timestep index below the image
             draw = ImageDraw.Draw(final_image)
-            # text = f"Timestep {j}"
             text = f"{j}"
-            # 使用默认字体
             draw.text((j * width, i * (height + text_height) + height), text, fill="black")
 
-    # 保存图像
-    directory = f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}'
-    # 检查路径是否存在，不存在则创建
+    # Define the directory to save the image
+    directory = f'/your_path/code/LightZero/render/{suffix}'
+    # Check if the directory exists, create if it does not
     if not os.path.exists(directory):
         os.makedirs(directory)
+    # Save the final image
     final_image.save(f'{directory}/visualization_batch_with_timestep.png')
 
 
 def save_as_image(batch_tensor, suffix='pong'):
-    # # 假设 batch['observations'] 是一个满足条件的tensor
-    # # 示例tensor，实际使用中应替换为实际的tensor数据
-    # batch = {'observations': torch.randn(3, 16, 4, 5, 5)}
+    """
+    Save a batch of image sequences as a single image file.
 
-    # # 调用函数
-    # save_as_image(batch['observations'])
+    This function takes a 5D tensor representing a batch of image sequences and
+    combines them into a single image, which is then saved to disk. The resulting
+    image will have each sequence arranged in a row, with individual frames
+    displayed in columns.
 
-    # batch_tensor 的形状应该是 [batch_size, sequence_length, channels, height, width]
-    # 在这里 channels = 4, height = 5, width = 5
+    Parameters:
+    - batch_tensor (torch.Tensor): A 5D tensor of shape [batch_size, sequence_length, channels, height, width],
+                                   where channels should be at least 4.
+    - suffix (str): A suffix to include in the directory path where the image will be saved.
+
+    Example:
+    ```python
+    # Example tensor, replace with actual tensor data in practice
+    batch = {'observations': torch.randn(3, 16, 4, 5, 5)}
+
+    # Call the function
+    save_as_image(batch['observations'])
+    ```
+
+    Note:
+    The function assumes that the first three channels of each frame represent RGB data.
+
+    """
+
+    # batch_tensor should have the shape [batch_size, sequence_length, channels, height, width]
+    # Here, channels = 4, height = 5, width = 5
     batch_size, sequence_length, channels, height, width = batch_tensor.shape
 
-    # 为了将所有帧组合成一张图，我们设置每行显示 sequence_length 个图像
+    # To combine all frames into one image, we set each row to display sequence_length images
     rows = batch_size
     cols = sequence_length
 
-    # 创建一个足够大的空白图像来容纳所有的帧
-    # 每个RGB图像的大小是 height x width，总图像的大小是 (rows * height) x (cols * width)
+    # Create a blank image large enough to hold all frames
+    # Each RGB image has size height x width, so the total image size is (rows * height) x (cols * width)
     final_image = Image.new('RGB', (cols * width, rows * height))
 
-    # 遍历每一帧，将其转换为PIL图像，并粘贴到正确的位置
+    # Iterate over each frame, convert it to a PIL image, and paste it in the correct position
     for i in range(rows):
         for j in range(cols):
-            # 提取当前帧的前三个通道（假设前三个通道是RGB）
+            # Extract the first three channels of the current frame (assuming the first three channels are RGB)
             frame = batch_tensor[i, j, :3, :, :]
-            # 转换为numpy数组，并调整数据范围为0-255
+            # Convert to numpy array and adjust data range to 0-255
             frame = frame.mul(255).byte().cpu().detach().numpy().transpose(1, 2, 0)
-            # 创建一个PIL图像
+            # Create a PIL image
             img = Image.fromarray(frame)
-            # 粘贴到最终图像的相应位置
+            # Paste it at the corresponding position in the final image
             final_image.paste(img, (j * width, i * height))
 
-    # 保存图像
-    directory = f'/mnt/afs/niuyazhe/code/LightZero/render/{suffix}'
-    # 检查路径是否存在，不存在则创建
+    # Save the image
+    directory = f'/your_path/code/LightZero/render/{suffix}'
+    # Check if the path exists, create it if it doesn't
     if not os.path.exists(directory):
         os.makedirs(directory)
     final_image.save(f'{directory}/visualization_batch.png')
@@ -588,52 +565,3 @@ def save_as_image(batch_tensor, suffix='pong'):
 
 
 
-
-def render_img(obs: int, rec_img: int):
-    from PIL import Image
-    import matplotlib.pyplot as plt
-
-    # 假设batch是一个字典,其中包含了observations键,
-    # 并且它的形状是torch.Size([B, N, C, H, W])
-    # batch_observations = batch_for_gpt['observations']
-    # batch_observations = batch['observations']
-    batch_observations = obs.unsqueeze(0)
-    # batch_observations = rec_img.unsqueeze(0)
-
-    # batch_observations = observations.unsqueeze(0)
-    # batch_observations = x.unsqueeze(0)
-    # batch_observations = reconstructions.unsqueeze(0)
-
-    B, N, C, H, W = batch_observations.shape  # 自动检测维度
-
-    # 分隔条的宽度(可以根据需要调整)
-    separator_width = 2
-
-    # 遍历每个样本
-    for i in range(B):
-        # 提取当前样本中的所有帧
-        frames = batch_observations[i]
-
-        # 计算拼接图像的总宽度(包括分隔条)
-        total_width = N * W + (N - 1) * separator_width
-
-        # 创建一个新的图像,其中包含分隔条
-        concat_image = Image.new('RGB', (total_width, H), color='black')
-
-        # 拼接每一帧及分隔条
-        for j in range(N):
-            frame = frames[j].permute(1, 2, 0).cpu().detach().numpy()  # 转换为(H, W, C)
-            frame_image = Image.fromarray((frame * 255).astype('uint8'), 'RGB')
-
-            # 计算当前帧在拼接图像中的位置
-            x_position = j * (W + separator_width)
-            concat_image.paste(frame_image, (x_position, 0))
-
-        # 显示图像
-        plt.imshow(concat_image)
-        plt.title(f'Sample {i + 1}')
-        plt.axis('off')  # 关闭坐标轴显示
-        plt.show()
-
-        # 保存图像到文件
-        concat_image.save(f'render/sample_{i + 1}.png')
