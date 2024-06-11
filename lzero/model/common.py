@@ -605,9 +605,7 @@ class RepresentationNetworkMLP(nn.Module):
             observation_shape: int,
             hidden_channels: int = 64,
             layer_num: int = 2,
-            # activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),  # TODO
-            last_linear_layer_init_zero: bool = True,
+            activation: nn.Module = nn.GELU(),
             norm_type: Optional[str] = 'BN',
             group_size: int = 8,
     ) -> torch.Tensor:
@@ -624,8 +622,6 @@ class RepresentationNetworkMLP(nn.Module):
                 we don't need this module.
             - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
                 Use the inplace operation to speed up.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to initialize the last linear layer with zeros, \
-                which can provide stable zero outputs in the beginning, defaults to True.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super().__init__()
@@ -651,9 +647,7 @@ class RepresentationNetworkMLP(nn.Module):
             - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
         """
         x = self.fc_representation(x)
-        # print('before cont embediings', x.max(), x.min(), x.mean())
         x = self.sim_norm(x)
-
         return x
 
 
