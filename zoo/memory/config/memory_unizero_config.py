@@ -1,94 +1,49 @@
 from easydict import EasyDict
 import torch
-
+# torch.cuda.set_device(0)
 
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
-# env_id = 'key_to_door'  #   "explore": 15, =================很重要=======
 
-# memory_length = 1000
-# memory_length = 500
-# memory_length = 250
-# memory_length = 120
-# memory_length = 100
 memory_length = 60
-# memory_length = 2
-# memory_length = 0
-
-
-
-# visual_match [60, 100, 250, 500]
-# key_to_door [60, 120, 250, 500]
-
-# max_env_step = int(10e6)  # for visual_match [1000]
-# max_env_step = int(2e6)  # for visual_match [250, 500]
-# max_env_step = int(1e6)  # for visual_match [100, 120]
 max_env_step = int(5e5)  # for visual_match [2, 60]
 
-# max_env_step = int(3e6)  # for key_to_door [60]
-# max_env_step = int(5e6)  # forkey_to_door [120, 250, 500]
-
-
-
-# ==== NOTE: 需要设置cfg_memory中的action_shape =====
-# ==== NOTE: 需要设置cfg_memory中的policy_entropy_weight =====
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-seed = 0
-collector_env_num = 8
-n_episode = 8
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 20
-evaluator_env_num = 10
-
-
-num_simulations = 50
-update_per_collect = None  # for others
-# update_per_collect = 1000  # for visual_match [1000]
-# model_update_ratio = 0.25 # for others visual_match
-
-model_update_ratio = 0.25  # for key_to_door
-
-
-batch_size = 8  # for key_to_door [250]
-
-
-
-# batch_size = 64 # for visual_match [2, 60, 100]
-# batch_size = 32  # for key_to_door [250]
-# batch_size = 16  # for visual_match [500]
-# batch_size = 8  # for visual_match [1000]
-
-# num_unroll_steps = 5
-
-# for key_to_door =================
+# for key_to_door
 # num_unroll_steps = 30+memory_length
 # game_segment_length=30+memory_length # TODO: for "explore": 15
 
 # for visual_match
 num_unroll_steps = 16 + memory_length
 game_segment_length = 16 + memory_length  # TODO: for "explore": 1
+seed = 0
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 10
 
-
-
+num_simulations = 50
+update_per_collect = None
+model_update_ratio = 0.25
+batch_size = 32
 reanalyze_ratio = 0
 td_steps = 5
-
-ute_lothreshold_training_steps_for_final_temperature = int(5e4)  # TODO: 100k train iter
 eps_greedy_exploration_in_collect = True
+
+# debug
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 5
+# update_per_collect = None
+# model_update_ratio = 0.25
+# batch_size = 4
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-torch.cuda.set_device(0)
 memory_xzero_config = dict(
-    # TODO: collector clear
-    # (3,5,5) config, world_model, unizero_model, memory env
-    # mcts_ctree.py muzero_collector muzero_evaluator
-    exp_name=f'data_paper_{env_id}_0512/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}'
-    f'_reclw005_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color_collect-evalnotclear_eval{evaluator_env_num}_nl2-nh2-emd64_seed{seed}',
-    # exp_name=f'data_paper_{env_id}_0424/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}'
-    # f'_seed{seed}_eval{evaluator_env_num}_reclw005_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color_collect-evalnotclear',
+    exp_name=f'data_{env_id}/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -96,84 +51,90 @@ memory_xzero_config = dict(
         scale_rgb_img_observation=True,  # Whether to scale the RGB image observation to [0, 1]
         flatten_observation=False,  # Whether to flatten the observation
         max_frames={
-            # "explore": 15, # for key_to_door ##================ 非常重要 =============
+            # ================ Maximum frames per phase =============
+            # "explore": 15, # for key_to_door
             "explore": 1,  # for visual_match
             "distractor": memory_length,
             "reward": 15
-            # "reward": 20
-            # "reward": 8  # debug
-        },  # Maximum frames per phase
+        },
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        analysis_sim_norm=False, # TODO
-        cal_dormant_ratio=False, # TODO
+        analysis_sim_norm=False,
+        cal_dormant_ratio=False,
         learn=dict(
             learner=dict(
                 hook=dict(
-                    load_ckpt_before_run='',
-                    log_show_after_iter=100,
                     save_ckpt_after_iter=500000,  # default is 10000
-                    save_ckpt_after_run=True,
                 ),
             ),
         ),
-        # sample_type='transition',
         sample_type='episode',  # NOTE: very important for memory env
-        # model_path=None,
-         model_path='/mnt/afs/niuyazhe/code/LightZero/data_paper_visual_match_0512/visual_match_memlen-60_unizero_H76_bs16/ckpt/ckpt_best.pth.tar',
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0418/visual_match_memlen-0_xzero_H16_bs64_seed0_eval8_reclw005_collectenv8_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color/ckpt/ckpt_best.pth.tar',
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0415/visual_match_memlen-0_xzero_H17_bs64_seed0_eval8_nl8-nh8-emd256_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer3_obschannel3_valuesize101_240415_165207/ckpt/ckpt_best.pth.tar',
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_memory_visual_match_0413/visual_match_memlen-0_xzero_H16_bs64_seed0_eval8_nl8-nh8-emd768_phase3-fixed-colormap-bce_phase1-fixed-target-pos_random-target-color_reclw005_encoder-layer4_obschannel4_240414_172713/ckpt/ckpt_best.pth.tar',
-        transformer_start_after_envsteps=int(0),
-        update_per_collect_transformer=update_per_collect,
-        update_per_collect_tokenizer=update_per_collect,
+        model_path=None,
+        train_start_after_envsteps=int(0),
         num_unroll_steps=num_unroll_steps,
         model=dict(
             analysis_sim_norm=False,
-
             env_name='memory',
-            # observation_shape=25,
-            # observation_shape=75,
-
             observation_shape=(3, 5, 5),
             image_channel=3,
-
-            # observation_shape=(4, 5, 5),  # TODO
-            # image_channel=4,
-
             model_type='conv',
             frame_stack_num=1,
             gray_scale=False,
-
             action_space_size=4,
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
-            self_supervised_learning_loss=True,  # NOTE: default is False. 不能省略
-            # reward_support_size=21,
-            # value_support_size=21,
-            # support_scale=10,
+            self_supervised_learning_loss=True,
             reward_support_size=101,
             value_support_size=101,
             support_scale=50,
+            world_model=dict(
+                # In order to preserve the observation data of the first frame in a memory environment,
+                # we must ensure that we do not exceed the episode_length during the MCTS of the last frame.
+                # Therefore, we set a longer context_length than during training to ensure that the observation data of the first frame is not lost.
+                tokens_per_block=2,
+                max_blocks=76 + 5,
+                max_tokens=2 * (76 + 5),  # 1+60+15 memory_length = 60
+                context_length=2 * (76 + 5),
+                context_length_for_recurrent=2 * (76 + 5),
+                gru_gating=False,
+                device='cpu',
+                analysis_sim_norm=False,
+                analysis_dormant_ratio=False,
+                action_shape=4,
+                group_size=8,  # NOTE: sim_norm
+                attention='causal',
+                num_layers=4,  # TODO
+                num_heads=4,
+                embed_dim=64,  # TODO
+                embed_pdrop=0.1,
+                resid_pdrop=0.1,
+                attn_pdrop=0.1,
+                support_size=101,
+                max_cache_size=5000,
+                env_num=10,
+                collector_env_num=collector_env_num,
+                evaluator_env_num=evaluator_env_num,
+                latent_recon_loss_weight=0.,
+                perceptual_loss_weight=0.,
+                policy_entropy_weight=1e-4,
+                predict_latent_loss_type='group_kl',
+                obs_type='image_memory',
+                gamma=1,
+                dormant_threshold=0.025,
+            ),
         ),
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            # decay=int(2e3),  # NOTE: 2k env steps
-            # decay=int(2e4),  # NOTE: 20k env steps  for visual_match 
-            decay=int(5e4),  # NOTE: 50k env steps  for key_to_door
+            decay=int(2e4),
         ),
         use_priority=False,
-        use_augmentation=False,  # NOTE
+        use_augmentation=False,
         td_steps=td_steps,
         discount_factor=1,
-
-        # manual_temperature_decay=True,
-        # threshold_training_steps_for_final_temperature=threshold_training_steps_for_final_temperature,
-
         cuda=True,
         env_type='not_board_games',
         game_segment_length=game_segment_length,  # TODO:
@@ -183,14 +144,12 @@ memory_xzero_config = dict(
         lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
         target_update_freq=100,
-        # grad_clip_value=0.5,  # TODO: 10
-        grad_clip_value=5,  # TODO: 10
+        grad_clip_value=5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        # eval_freq=int(8e3), # TODO: 1000
-        eval_freq=int(5e3),  # TODO
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        eval_freq=int(5e3),
+        replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
@@ -218,23 +177,8 @@ memory_xzero_create_config = EasyDict(memory_xzero_create_config)
 create_config = memory_xzero_create_config
 
 if __name__ == "__main__":
-    # from lzero.entry import train_unizero
-    # train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path,
-    #                  max_env_step=max_env_step)
-
-    # seeds = [0,1,2]  # You can add more seed values here
-    seeds = [0,1]  # You can add more seed values here
-    # seeds = [2,3]  # You can add more seed values here
+    seeds = [0, 1, 2]  # You can add more seed values here
     for seed in seeds:
-        # Update exp_name to include the current seed TODO
-        # main_config.exp_name=f'data_paper_unizero_memory_0512/{env_id[:-14]}/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_conlen{8}_lsd768-nlayer2-nh2_bacth-kvmaxsize_collectenv{collector_env_num}_seed{seed}'
-        # main_config.exp_name=f'data_paper_{env_id}_0512/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_bacth-kvmaxsize_conlenH+5_kvcache-init-envs_phase3-fixed-colormap-bce_phase1-random-target-pos_random-target-color_collect-evalnotclear_eval{evaluator_env_num}_nl4-nh4-emd64_reclw0_seed{seed}'
-        # main_config.exp_name=f'data_paper_{env_id}_0517/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl4-nh4-emd64_reclw0_entw1e-4_seed{seed}'
-        
-        # main_config.exp_name=f'data_paper_{env_id}_ablation_0513/latent_norm/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl4-nh4-emd64_reclw0_enw1e-3_eps50k_latentsoftmax_seed{seed}'
-        # main_config.exp_name=f'data_paper_{env_id}_ablation_0513/target/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl4-nh4-emd64_reclw0_enw1e-3_eps50k_hardtarget_seed{seed}'
-        # main_config.exp_name=f'data_paper_{env_id}_ablation_0513/decode_loss/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl4-nh4-emd64_reclw005_enw1e-3_eps50k_seed{seed}'
-        main_config.exp_name=f'data_paper_{env_id}_ablation_0513_debug/model_size/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_eval{evaluator_env_num}_nl12-nh4-emd64_reclw0_enw1e-3_eps50k_seed{seed}'
- 
+        main_config.exp_name=f'data_{env_id}/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

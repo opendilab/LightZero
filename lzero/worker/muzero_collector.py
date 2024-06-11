@@ -411,17 +411,14 @@ class MuZeroCollector(ISerialCollector):
                 stack_obs = to_ndarray(stack_obs)
                 # return stack_obs shape: [B, S*C, W, H] e.g. [8, 4*1, 96, 96]
                 stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
-
-                # stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
                 stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device)
 
                 # ==============================================================
                 # policy forward
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
-                # policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon) # for unizero and muzero
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id) # for muzero_rnn_allobs
-
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon,
+                                                     ready_env_id=ready_env_id)
 
                 actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                 distributions_dict_no_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
@@ -525,35 +522,21 @@ class MuZeroCollector(ISerialCollector):
 
                     eps_steps_lst[env_id] += 1
 
-                    # if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE
-                    #     # TODO: 是否需要clear
-                    #     self._policy.get_attribute('collect_model').world_model.past_keys_values_cache.clear()
-                    #     self._policy.get_attribute('collect_model').world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
-                        
-                    #     torch.cuda.empty_cache()
-                    #     print('collector: collect_model clear()')
-                    #     print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
-
                     if hasattr(self._policy.get_attribute('collect_model'), 'world_model'):
-                        if hasattr(self.policy_config, 'sample_type') and self.policy_config.sample_type=='episode':
+                        if hasattr(self.policy_config, 'sample_type') and self.policy_config.sample_type == 'episode':
                             clear_interval = 2000
                         else:
                             clear_interval = 200
-                        if eps_steps_lst[env_id] % clear_interval == 0:  # TODO: NOTE for memory
+                        if eps_steps_lst[env_id] % clear_interval == 0:
                             print(f'clear_interval: {clear_interval}')
-                        # if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE for atari unizero
-                        # if eps_steps_lst[env_id] % 32 == 0:  # TODO: NOTE
-                        # if eps_steps_lst[env_id] % 90 == 0:
-                        # if eps_steps_lst[env_id] % 130 == 0:
-                        # if eps_steps_lst[env_id] % 150 == 0:
-                        # if eps_steps_lst[env_id] % 280 == 0:
-                            # TODO: 是否需要clear
-                            self._policy.get_attribute('collect_model').world_model.past_keys_values_cache_init_infer.clear()
-                            for kv_cache_dict_env in self._policy.get_attribute('collect_model').world_model.past_keys_values_cache_init_infer_envs:
-                                kv_cache_dict_env.clear() 
-                            self._policy.get_attribute('collect_model').world_model.past_keys_values_cache_recurrent_infer.clear()
-                            self._policy.get_attribute('collect_model').world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
-                            
+                            self._policy.get_attribute('collect_model').world_model.past_kv_cache_init_infer.clear()
+                            for kv_cache_dict_env in self._policy.get_attribute(
+                                    'collect_model').world_model.past_kv_cache_init_infer_envs:
+                                kv_cache_dict_env.clear()
+                            self._policy.get_attribute(
+                                'collect_model').world_model.past_kv_cache_recurrent_infer.clear()
+                            self._policy.get_attribute('collect_model').world_model.keys_values_wm_list.clear()
+
                             torch.cuda.empty_cache()
                             print('collector: collect_model clear()')
                             print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
@@ -698,14 +681,9 @@ class MuZeroCollector(ISerialCollector):
                     # Env reset is done by env_manager automatically
                     self._policy.reset([env_id])
                     self._reset_stat(env_id)
-                    # TODO(pu): subprocess mode, when n_episode > self._env_num, occasionally the ready_env_id=()
-                    # and the stack_obs is np.array(None, dtype=object)
                     ready_env_id.remove(env_id)
 
             if collected_episode >= n_episode:
-                # self._policy.get_attribute('last_batch_obs') = torch.zeros([self._env_num,3,64,64]).to(self.policy_config.device)
-                # self._policy.get_attribute('last_batch_action') = [0 for _ in range(self._env_num)]
-                       
                 # [data, meta_data]
                 return_data = [self.game_segment_pool[i][0] for i in range(len(self.game_segment_pool))], [
                     {

@@ -205,9 +205,14 @@ class WorldModel(nn.Module):
             torch.Tensor: The positional embedding tensor.
         """
         attn_func = getattr(self.transformer.blocks[layer].attn, attn_type)
-        return attn_func(self.pos_emb.weight).view(
-            1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
-        ).transpose(1, 2).detach()
+        if torch.cuda.is_available():
+            return attn_func(self.pos_emb.weight).view(
+                1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
+            ).transpose(1, 2).cuda().detach()
+        else:
+            return attn_func(self.pos_emb.weight).view(
+                1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
+            ).transpose(1, 2).detach()
 
     def forward(self, obs_embeddings_or_act_tokens: Dict[str, Union[torch.Tensor, tuple]],
                 past_keys_values: Optional[torch.Tensor] = None,
@@ -891,10 +896,12 @@ class WorldModel(nn.Module):
                                            dtype=batch['observations'].dtype)
 
             # Reconstruct observations from latent state representations
-            reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings.reshape(-1, self.embed_dim))
-            # Calculate reconstruction loss
-            latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 25),
-                                                                   reconstructed_images)
+            # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings.reshape(-1, self.embed_dim))
+            # # Calculate reconstruction loss
+            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 25),
+            #                                                        reconstructed_images)
+            latent_recon_loss = torch.tensor(0., device=batch['observations'].device,
+                                             dtype=batch['observations'].dtype)
 
         elif self.obs_type == 'image_memory':
             # Reconstruct observations from latent state representations

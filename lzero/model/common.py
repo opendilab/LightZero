@@ -87,7 +87,7 @@ class DownSample(nn.Module):
                 ResBlock(
                     in_channels=out_channels // 2,
                     activation=activation,
-                    norm_type='BN',
+                    norm_type=norm_type,
                     res_type='basic',
                     bias=False
                 ) for _ in range(1)
@@ -98,14 +98,14 @@ class DownSample(nn.Module):
             in_channels=out_channels // 2,
             out_channels=out_channels,
             activation=activation,
-            norm_type='BN',
+            norm_type=norm_type,
             res_type='downsample',
             bias=False
         )
         self.resblocks2 = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
                 ) for _ in range(1)
             ]
         )
@@ -113,7 +113,7 @@ class DownSample(nn.Module):
         self.resblocks3 = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
                 ) for _ in range(1)
             ]
         )
@@ -187,8 +187,6 @@ def AvgL1Norm(x, eps=1e-8):
     return x / x.abs().mean(-1, keepdim=True).clamp(min=eps)
 
 
-import torch
-
 class FeatureAndGradientHook:
     def __init__(self):
         self.features_before = []
@@ -240,8 +238,6 @@ class FeatureAndGradientHook:
         self.backward_handler.remove()
 
 
-
-
 class RepresentationNetworkGPT(nn.Module):
 
     def __init__(
@@ -250,9 +246,7 @@ class RepresentationNetworkGPT(nn.Module):
             num_res_blocks: int = 1,
             num_channels: int = 64,
             downsample: bool = True,
-            # activation: nn.Module = nn.ReLU(inplace=True),
-            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),  # TODO
-            # activation: nn.Module = nn.GELU(), # TODO
+            activation: nn.Module = nn.GELU(),
             norm_type: str = 'BN',
             embedding_dim: int = 256,
             group_size: int = 8,
@@ -298,7 +292,7 @@ class RepresentationNetworkGPT(nn.Module):
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
@@ -528,25 +522,6 @@ class ImageDecoderMemory(nn.Module):
         return x
 
 
-def conv_transpose_output_shape(h_w, kernel_size, stride, pad=0, out_pad=0):
-    """
-    Utility function for computing output of transposed convolutions
-    """
-    if isinstance(h_w, int):
-        h_w = (h_w, h_w)
-
-    if isinstance(kernel_size, int):
-        kernel_size = (kernel_size, kernel_size)
-
-    if isinstance(stride, int):
-        stride = (stride, stride)
-
-    h = (h_w[0] - 1) * stride[0] - 2 * pad + kernel_size[0] + out_pad
-    w = (h_w[1] - 1) * stride[1] - 2 * pad + kernel_size[1] + out_pad
-
-    return h, w
-
-
 class VectorDecoderMemory(nn.Module):
     # def __init__(self, embedding_dim: int, output_shape: SequenceType, hidden_size: int = 64):
     def __init__(
@@ -651,7 +626,6 @@ class RepresentationNetworkMLP(nn.Module):
         return x
 
 
-
 class PredictionHiddenNetwork(nn.Module):
 
     def __init__(
@@ -706,7 +680,7 @@ class PredictionHiddenNetwork(nn.Module):
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
@@ -795,8 +769,6 @@ class PredictionHiddenNetwork(nn.Module):
         return policy, value
 
 
-
-
 class PredictionNetwork(nn.Module):
 
     def __init__(
@@ -849,7 +821,7 @@ class PredictionNetwork(nn.Module):
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
@@ -1078,7 +1050,7 @@ class RepresentationNetwork(nn.Module):
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )

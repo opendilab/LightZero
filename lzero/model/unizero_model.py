@@ -176,22 +176,17 @@ class UniZeroModel(nn.Module):
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
 
-            self.tokenizer = Tokenizer(with_lpips=True, representation_network=self.representation_network,
+            self.tokenizer = Tokenizer(with_lpips=True, encoder=self.representation_network,
                                        decoder_network=decoder_network)
-            self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size,
-                                          act_vocab_size=self.action_space_size,
+            self.world_model = WorldModel(act_vocab_size=self.action_space_size,
                                           config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-            print(
-                f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
+            print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
 
             print('==' * 20)
-            print(
-                f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
-            print(
-                f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
-            print(
-                f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
+            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
+            print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
+            print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
             print(f'{sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.tokenizer.lpips')
             print('==' * 20)
 

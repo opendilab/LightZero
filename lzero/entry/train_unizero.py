@@ -34,10 +34,6 @@ def initialize_zeros_batch(observation_shape, batch_size, device):
     
     return torch.zeros(shape).to(device)
 
-
-
-
-
 def train_unizero(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,

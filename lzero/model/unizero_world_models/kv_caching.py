@@ -1,3 +1,5 @@
+# Modified from https://github.com/eloialonso/iris/blob/main/src/models/kv_caching.py
+
 from typing import Tuple
 
 import numpy as np
@@ -8,7 +10,8 @@ class Cache:
     def __init__(self, num_samples: int, num_heads: int, max_tokens: int, embed_dim: int, device: torch.device) -> None:
         assert embed_dim % num_heads == 0
         self._n, self._cache, self._size = num_samples, None, None
-        self._reset = lambda n: torch.empty(n, num_heads, max_tokens, embed_dim // num_heads, device=device)  # (B, nh, T, hs)
+        self._reset = lambda n: torch.empty(n, num_heads, max_tokens, embed_dim // num_heads,
+                                            device=device)  # (B, nh, T, hs)
         self.reset()
 
     @property
@@ -61,7 +64,8 @@ class KVCache:
 
 
 class KeysValues:
-    def __init__(self, n: int, num_heads: int, max_tokens: int, embed_dim: int, num_layers: int, device: torch.device) -> None:
+    def __init__(self, n: int, num_heads: int, max_tokens: int, embed_dim: int, num_layers: int,
+                 device: torch.device) -> None:
         self._keys_values = tuple([KVCache(n, num_heads, max_tokens, embed_dim, device) for _ in range(num_layers)])
 
     def __getitem__(self, key: int) -> KVCache:
@@ -71,10 +75,10 @@ class KeysValues:
         return len(self._keys_values)
 
     @property
-    def size(self): # TODO
+    def size(self):
+        # TODO
         return self._keys_values[0].shape[2]
         # print([self._keys_values[layer].shape[2] for layer in range(len(self._keys_values))])
-        # return min(self._keys_values[layer].shape[2] for layer in range(len(self._keys_values)))
 
     def reset(self) -> None:
         for kv_cache in self._keys_values:

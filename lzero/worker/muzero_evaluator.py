@@ -257,7 +257,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
             ready_env_id = set()
             remain_episode = n_episode
-            eps_steps_lst =  np.zeros(env_nums)
+            eps_steps_lst = np.zeros(env_nums)
             with self._timer:
                 while not eval_monitor.is_finished():
                     # Get current ready env obs.
@@ -281,8 +281,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     # policy forward
                     # ==============================================================
-                    # policy_output = self._policy.forward(stack_obs, action_mask, to_play) # for unizero  and muzero
-                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id) # for muzero_rnn_allobs
+                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id)
 
                     actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
                     distributions_dict_no_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
@@ -326,36 +325,28 @@ class MuZeroEvaluator(ISerialEvaluator):
                         eps_steps_lst[env_id] += 1
 
                         if hasattr(self._policy.get_attribute('collect_model'), 'world_model'):
-                            if hasattr(self.policy_config, 'sample_type') and self.policy_config.sample_type=='episode':
+                            if hasattr(self.policy_config,
+                                       'sample_type') and self.policy_config.sample_type == 'episode':
                                 clear_interval = 2000
                             else:
                                 clear_interval = 200
                             # print(f'clear_interval: {clear_interval}')
-                            if eps_steps_lst[env_id] % clear_interval == 0:  # TODO: NOTE for memory
+                            if eps_steps_lst[env_id] % clear_interval == 0:
                                 print(f'clear_interval: {clear_interval}')
-                            # if eps_steps_lst[env_id] % 2000 == 0:  # TODO: NOTE for memory
-                            # if eps_steps_lst[env_id] % 200 == 0:  # TODO: NOTE for atari  unizero
-                            # if eps_steps_lst[env_id] % 32 == 0:  # TODO: NOTE
-                            # if eps_steps_lst[env_id] % 90 == 0:
-                            # if eps_steps_lst[env_id] % 130 == 0:
-                            # if eps_steps_lst[env_id] % 150 == 0:
-                            # if eps_steps_lst[env_id] % 280 == 0:
-                                # TODO: 是否需要clear
-                                self._policy.get_attribute('collect_model').world_model.past_keys_values_cache_init_infer.clear()
-                                self._policy.get_attribute('collect_model').world_model.past_keys_values_cache_recurrent_infer.clear()
-                                self._policy.get_attribute('collect_model').world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
+                                self._policy.get_attribute(
+                                    'collect_model').world_model.past_kv_cache_init_infer.clear()
+                                self._policy.get_attribute(
+                                    'collect_model').world_model.past_kv_cache_recurrent_infer.clear()
+                                self._policy.get_attribute(
+                                    'collect_model').world_model.keys_values_wm_list.clear() 
                                 torch.cuda.empty_cache()
                                 print('evaluator: eval_model clear()')
                                 print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
-
 
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
                             to_play_dict[env_id]
                         )
-
-                        # NOTE: in evaluator, we only need save the ``o_{t+1} = obs['observation']``
-                        # game_segments[env_id].obs_segment.append(to_ndarray(obs['observation']))
 
                         # NOTE: the position of code snippet is very important.
                         # the obs['action_mask'] and obs['to_play'] are corresponding to next action
@@ -421,13 +412,10 @@ class MuZeroEvaluator(ISerialEvaluator):
                                     ]
                                 )
 
-
                             eps_steps_lst[env_id] = 0
 
                             # Env reset is done by env_manager automatically.
                             self._policy.reset([env_id])
-                            # TODO(pu): subprocess mode, when n_episode > self._env_num, occasionally the ready_env_id=()
-                            # and the stack_obs is np.array(None, dtype=object)
                             ready_env_id.remove(env_id)
 
                         envstep_count += 1
