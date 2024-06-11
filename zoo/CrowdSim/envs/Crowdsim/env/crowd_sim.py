@@ -74,7 +74,7 @@ class CrowdSim(gym.Env):
 
         # for debug
         self.current_human_aoi_list = np.zeros([self.human_num, ])
-        self.mean_aoi_timelist = np.ones([self.config.num_timestep + 1, ])
+        self.mean_aoi_timelist = np.zeros([self.config.num_timestep + 1, ])
         self.cur_data_amount_timelist = np.zeros([self.human_num, ])
         self.robot_energy_timelist = np.zeros([self.config.num_timestep + 1, self.robot_num])
         self.robot_x_timelist = np.zeros([self.config.num_timestep + 1, self.robot_num])
@@ -205,7 +205,7 @@ class CrowdSim(gym.Env):
                     else:
                         human_transmit_data_list[human_id] = 1
 
-                    human.set(next_px, next_py, next_theta, aoi=1, data_amount=human.aoi)
+                    human.set(next_px, next_py, next_theta, aoi=0, data_amount=0)
                     num_updated_human += 1
                 else:
                     # if the human is not in the range of the robot, then update the aoi of the human
@@ -218,7 +218,7 @@ class CrowdSim(gym.Env):
                     # if the human is in the range of the robot, then part of human's data will be transmitted
                     last_data_amount = human.data_amount
                     human.update(next_px, next_py, next_theta, transmitted_data=self.transmit_v)
-                    human_transmit_data_list[human_id] = min(last_data_amount, self.transmit_v)
+                    human_transmit_data_list[human_id] = min(last_data_amount + human.collect_v, self.transmit_v)
                     num_updated_human += 1
                 else:
                     # if the human is not in the range of the robot, then no data will be transmitted, \

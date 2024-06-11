@@ -19,7 +19,7 @@ class CrowdSimEnv(BaseEnv):
     def __init__(self, cfg: dict = {}) -> None:
         self._cfg = cfg
         self._init_flag = False
-        self._replay_path = None
+        self._replay_path = cfg.get('replay_path', None)
         self._robot_num = self._cfg.robot_num
         self._human_num = self._cfg.human_num
         self._observation_space = gym.spaces.Dict({
@@ -124,7 +124,9 @@ class CrowdSimEnv(BaseEnv):
         if self._replay_path is not None:
             self._frame.append(self._env.render())
             if done:
-                import imageio
+                import imageio, os
+                if not os.path.exists(self._replay_path):
+                    os.makedirs(self._replay_path)
                 imageio.mimsave(self._replay_path + '/replay.gif', self._frame)
         return BaseEnvTimestep(obs, rew, done, info)
 

@@ -26,7 +26,7 @@ class Agent():
 
 
 class Human():
-    collect_v_prob = {1: 0.3, 2: 0.6}
+    # collect_v_prob = {1: 1, 2: 0}
     def __init__(self, id, config):
         self.id = id
         self.config = config
@@ -36,6 +36,7 @@ class Human():
         self.aoi = 0
         self.data_queue = InformationQueue()
         self.data_amount = 0
+        self.collect_v_prob = getattr(self.config, 'collect_v_prob', {1: 1, 2: 0})
         self.collect_v = random.choices(list(self.collect_v_prob.keys()), list(self.collect_v_prob.values()))[0]
 
     def set(self, px, py, theta, aoi, data_amount):

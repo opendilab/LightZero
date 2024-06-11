@@ -342,11 +342,12 @@ class MuZeroEvaluator(ISerialEvaluator):
                             # Env reset is done by env_manager automatically.
                             self._policy.reset([env_id])
                             reward = t.info['eval_episode_return']
-                            # 'performance_info' and 'episode_info' only choose one 
+                            saved_info = {'eval_episode_return': t.info['eval_episode_return']} 
                             if 'performance_info' in t.info:
-                                eval_monitor.update_info(env_id, t.info['performance_info'])
-                            elif 'episode_info' in t.info:
-                                eval_monitor.update_info(env_id, t.info['episode_info'])
+                                saved_info.update(t.info['performance_info'])
+                            if 'episode_info' in t.info:
+                                saved_info.update(t.info['episode_info'])
+                            eval_monitor.update_info(env_id, saved_info)
                             eval_monitor.update_reward(env_id, reward)
                             self._logger.info(
                                 "[EVALUATOR]env {} finish episode, final reward: {}, current episode: {}".format(
