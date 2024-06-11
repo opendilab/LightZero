@@ -223,11 +223,11 @@ def train_unizero(
                     if cfg.policy.reanalyze_ratio > 0:
                         if i % 20 == 0:
                         # if i % 2 == 0:# for reanalyze_ratio>0
-                            policy._target_model.world_model.past_keys_values_cache_init_infer.clear()
-                            policy._target_model.world_model.past_keys_values_cache_recurrent_infer.clear()
+                            policy._target_model.world_model.past_kv_cache_init_infer.clear()
+                            policy._target_model.world_model.past_kv_cache_recurrent_infer.clear()
                             policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad
                             torch.cuda.empty_cache() # TODO: 是否需要立即释放显存
-                            print('sample target_model past_keys_values_cache.clear()')
+                            print('sample target_model past_kv_cache.clear()')
 
                     train_data.append({'train_which_component': 'transformer'})
                 else:
@@ -248,32 +248,25 @@ def train_unizero(
         policy._collect_model.world_model.precompute_pos_emb_diff_kv() # 非常重要，kv更新后需要重新计算
         policy._target_model.world_model.precompute_pos_emb_diff_kv() # 非常重要，kv更新后需要重新计算
 
-        policy._target_model.world_model.past_keys_values_cache_init_infer.clear()
-        for kv_cache_dict_env in policy._target_model.world_model.past_keys_values_cache_init_infer_envs:
+        policy._target_model.world_model.past_kv_cache_init_infer.clear()
+        for kv_cache_dict_env in policy._target_model.world_model.past_kv_cache_init_infer_envs:
             kv_cache_dict_env.clear() 
 
-        policy._target_model.world_model.past_keys_values_cache_recurrent_infer.clear()
+        policy._target_model.world_model.past_kv_cache_recurrent_infer.clear()
         policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad
-        print('sample target_model past_keys_values_cache.clear()')
+        print('sample target_model past_kv_cache.clear()')
 
-        policy._collect_model.world_model.past_keys_values_cache_init_infer.clear() # very important
-        for kv_cache_dict_env in policy._collect_model.world_model.past_keys_values_cache_init_infer_envs:
+        policy._collect_model.world_model.past_kv_cache_init_infer.clear() # very important
+        for kv_cache_dict_env in policy._collect_model.world_model.past_kv_cache_init_infer_envs:
             kv_cache_dict_env.clear() 
-        policy._collect_model.world_model.past_keys_values_cache_recurrent_infer.clear() # very important
+        policy._collect_model.world_model.past_kv_cache_recurrent_infer.clear() # very important
         policy._collect_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
         torch.cuda.empty_cache() # TODO: NOTE
-        
-
-        # if collector.envstep > 0:
-        #     # TODO: only for debug
-        #     for param in policy._learn_model.world_model.tokenizer.parameters():
-        #         param.requires_grad = False
-        #     print("train some steps before collector.envstep > 0, then fixed")
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break
 
-    # 训练结束后移除钩子
+    # Remove hooks after training.
     if cfg.policy.model.analysis_sim_norm:
         policy._collect_model.encoder_hook.remove_hooks()
         policy._target_model.encoder_hook.remove_hooks()

@@ -1,19 +1,80 @@
+import hashlib
 import random
 import shutil
 from collections import OrderedDict
+from dataclasses import dataclass
+from functools import lru_cache
 
 import cv2
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from dataclasses import dataclass
 
 from lzero.model.common import RepresentationNetwork
+from .kv_caching import KeysValues
 
-# 使用LRU缓存替换原有的字典缓存
-from functools import lru_cache
-import hashlib
+
+def to_device_for_kvcache(keys_values: KeysValues, device: str) -> KeysValues:
+    """
+    Transfer all KVCache objects within the KeysValues object to a certain device.
+
+    Arguments:
+        - keys_values (KeysValues): The KeysValues object to be transferred.
+        - device (str): The device to transfer to.
+
+    Returns:
+        - keys_values (KeysValues): The KeysValues object with its caches transferred to the specified device.
+    """
+    device = torch.device(device if torch.cuda.is_available() else 'cpu')
+
+    for kv_cache in keys_values:
+        kv_cache._k_cache._cache = kv_cache._k_cache._cache.to(device)
+        kv_cache._v_cache._cache = kv_cache._v_cache._cache.to(device)
+    return keys_values
+
+
+def convert_to_depth(search_path, depth_map, last_depth):
+    # Get the newly added element
+    new_index = search_path[-1]
+
+    # If the depth of the newly added element has not been calculated, compute it based on the depth of the parent node
+    if new_index not in depth_map:
+        if search_path[new_index] not in depth_map:
+            depth_map[search_path[new_index]] = max(list(depth_map.values())) + 1
+        else:
+            depth_map[new_index] = depth_map[search_path[new_index]] + 1
+
+    # Append the depth of the newly added element to the end of last_depth
+    last_depth.append(depth_map[new_index])
+
+    return last_depth
+
+
+# Function to calculate CUDA memory usage in gigabytes
+def calculate_cuda_memory_gb(past_keys_values_cache, num_layers: int):
+    total_memory_bytes = 0
+
+    # Iterate over all KeysValues instances in the OrderedDict
+    for kv_instance in past_keys_values_cache.values():
+        num_layers = len(kv_instance)  # Get the number of layers
+        for layer in range(num_layers):
+            kv_cache = kv_instance[layer]
+            k_shape = kv_cache._k_cache.shape  # Get the shape of the keys cache
+            v_shape = kv_cache._v_cache.shape  # Get the shape of the values cache
+
+            # Calculate the number of elements and multiply by the number of bytes per element
+            k_memory = torch.prod(torch.tensor(k_shape)) * 4
+            v_memory = torch.prod(torch.tensor(v_shape)) * 4
+
+            # Accumulate the memory used by the keys and values cache
+            layer_memory = k_memory + v_memory
+            total_memory_bytes += layer_memory.item()  # .item() ensures conversion to a standard Python number
+
+    # Convert total memory from bytes to gigabytes
+    total_memory_gb = total_memory_bytes / (1024 ** 3)
+    return total_memory_gb
+
 
 @lru_cache(maxsize=5000)
 def quantize_state_with_lru_cache(state, num_buckets=15):
@@ -23,19 +84,20 @@ def quantize_state_with_lru_cache(state, num_buckets=15):
 
 def quantize_state(state, num_buckets=100):
     """
-    量化状态向量。
-    参数:
-        state: 要量化的状态向量。
-        num_buckets: 量化的桶数。
-    返回:
-        量化后的状态向量的哈希值。
+    Quantize the state vector.
+    Args:
+        state: The state vector to be quantized.
+        num_buckets: The number of quantization buckets.
+    Returns:
+        The hash value of the quantized state vector.
     """
-    # 使用np.digitize将状态向量的每个维度值映射到num_buckets个桶中
+    # Use np.digitize to map each dimension value of the state vector into num_buckets
     quantized_state = np.digitize(state, bins=np.linspace(0, 1, num=num_buckets))
-    # 使用更稳定的哈希函数
+    # Use a more stable hash function
     quantized_state_bytes = quantized_state.tobytes()
     hash_object = hashlib.sha256(quantized_state_bytes)
     return hash_object.hexdigest()
+
 
 @dataclass
 class WorldModelOutput:
@@ -46,10 +108,10 @@ class WorldModelOutput:
     logits_policy: torch.FloatTensor
     logits_value: torch.FloatTensor
 
+
 class SimNorm(nn.Module):
     """
-    简单单位向量归一化。
-    改编自 https://arxiv.org/abs/2204.00616.
+    Simplified normalization. Adapted from https://arxiv.org/abs/2204.00616.
     """
 
     def __init__(self, simnorm_dim):
@@ -58,7 +120,7 @@ class SimNorm(nn.Module):
 
     def forward(self, x):
         shp = x.shape
-        # 确保至少有一个单纯形用于归一化。
+        # Ensure there is at least one simplex for normalization.
         if shp[1] != 0:
             x = x.view(*shp[:-1], -1, self.dim)
             x = F.softmax(x, dim=-1)
@@ -115,14 +177,7 @@ def compute_lambda_returns(rewards, values, ends, gamma, lambda_):
 
 
 class LossWithIntermediateLosses:
-    def __init__(self, latent_recon_loss_weight=0, perceptual_loss_weight=0,
-                 #  first_step_losses=None, middle_step_losses=None, last_step_losses=None,
-                 **kwargs):
-        # self.first_step_losses = first_step_losses
-        # self.middle_step_losses = middle_step_losses
-        # self.last_step_losses = last_step_losses
-        # self.loss_total = sum(kwargs.values())
-
+    def __init__(self, latent_recon_loss_weight=0, perceptual_loss_weight=0, **kwargs):
         # Ensure that kwargs is not empty
         if not kwargs:
             raise ValueError("At least one loss must be provided")
@@ -130,30 +185,15 @@ class LossWithIntermediateLosses:
         # Get a reference device from one of the provided losses
         device = next(iter(kwargs.values())).device
 
-        # similar with ssl_loss in EZ
-        # self.obs_loss_weight = 2.
-        # self.reward_loss_weight = 1.
-        # self.value_loss_weight = 0.25
-        # self.policy_loss_weight = 1.
-        # # self.ends_loss_weight = 1.
-        # self.ends_loss_weight = 0.
-
+        # Define the weights for each loss type
         self.obs_loss_weight = 10
-        # self.obs_loss_weight = 20
         self.reward_loss_weight = 1.
         self.value_loss_weight = 0.25
         self.policy_loss_weight = 1.
-        # self.ends_loss_weight = 1.
         self.ends_loss_weight = 0.
-
-        # self.obs_loss_weight = 20
-        # self.reward_loss_weight = 0.1
-        # self.value_loss_weight = 0.1
-        # self.policy_loss_weight = 0.1
 
         self.latent_recon_loss_weight = latent_recon_loss_weight
         self.perceptual_loss_weight = perceptual_loss_weight
-        # self.latent_recon_loss_weight = 0.1
 
         # Initialize the total loss tensor on the correct device
         self.loss_total = torch.tensor(0., device=device)
@@ -172,11 +212,7 @@ class LossWithIntermediateLosses:
                 self.loss_total += self.latent_recon_loss_weight * v
             elif k == 'perceptual_loss':
                 self.loss_total += self.perceptual_loss_weight * v
-            # else:
-            #     raise ValueError(f"Unknown loss type : {k}")
 
-        # self.intermediate_losses = {k: v.item() for k, v in kwargs.items()}
-        # self.intermediate_losses = {k: v if isinstance(v, dict) elif isinstance(v, float) v else v.item() for k, v in kwargs.items()}
         self.intermediate_losses = {
             k: v if isinstance(v, dict) else (v if isinstance(v, float) else v.item())
             for k, v in kwargs.items()
@@ -188,23 +224,3 @@ class LossWithIntermediateLosses:
         self.loss_total = self.loss_total / value
         return self
 
-
-class RandomHeuristic:
-    def __init__(self, num_actions):
-        self.num_actions = num_actions
-
-    def act(self, obs):
-        assert obs.ndim == 4  # (N, H, W, C)
-        n = obs.size(0)
-        return torch.randint(low=0, high=self.num_actions, size=(n,))
-
-
-def make_video(fname, fps, frames):
-    assert frames.ndim == 4  # (t, h, w, c)
-    t, h, w, c = frames.shape
-    assert c == 3
-
-    video = cv2.VideoWriter(str(fname), cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
-    for frame in frames:
-        video.write(frame[:, :, ::-1])
-    video.release()

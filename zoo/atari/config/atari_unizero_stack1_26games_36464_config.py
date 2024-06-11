@@ -119,7 +119,7 @@ evaluator_env_num = 2
 num_simulations = 5
 max_env_step = int(5e5)
 reanalyze_ratio = 0.
-batch_size = 20
+batch_size = 5
 num_unroll_steps = 10
 eps_greedy_exploration_in_collect = True
 

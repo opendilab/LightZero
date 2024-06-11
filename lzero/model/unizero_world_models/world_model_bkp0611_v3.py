@@ -835,21 +835,22 @@ class WorldModel(nn.Module):
 
         return self.keys_values_wm_size_list
 
+
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None, **kwargs: Any) -> LossWithIntermediateLosses:
-        # Encode observations into latent state representations
+        # 将观察编码为潜在状态表示
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
         # ========= for visual analysis =========
-        # Uncomment the lines below for visual analysis in Pong
+        # for pong
         # self.plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong_H10_H4_tsne')
         # self.save_as_image_with_timestep(batch['observations'], suffix='pong_H10_H4_tsne')
-        # Uncomment the lines below for visual analysis in visual match
+        # for visual_match
         # self.plot_latent_tsne_each_and_all(obs_embeddings, suffix='visual_match_memlen1-60-15_tsne')
         # self.save_as_image_with_timestep(batch['observations'], suffix='visual_match_memlen1-60-15_tsne')
         # ========= logging for analysis =========
 
         if self.analysis_dormant_ratio:
-            # Calculate dormant ratio of the encoder
+            # calculate dormant ratio of encoder
             shape = batch['observations'].shape  # (..., C, H, W)
             inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
             dormant_ratio_encoder = cal_dormant_ratio(self.tokenizer.representation_network, inputs.detach(),
@@ -861,70 +862,87 @@ class WorldModel(nn.Module):
         else:
             dormant_ratio_encoder = torch.tensor(0.)
 
-        # Calculate the L2 norm of the latent state roots
-        latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()
+        # 假设latent_state_roots是一个tensor
+        latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()  # 计算L2范数
 
         if self.obs_type == 'image':
-            # Reconstruct observations from latent state representations
+            # 从潜在状态表示重建观察
             reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
 
-            #  ========== for visualization ==========
-            # Uncomment the lines below for visual analysis
-            # original_images, reconstructed_images = batch['observations'], reconstructed_images
-            # target_policy = batch['target_policy']
-            # target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1, 101)).reshape(
-            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
-            # true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1, 101)).reshape(
-            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
-            #  ========== for visualization ==========
+            #  ========== for visualize ==========
+            # batch['target_policy'].shape torch.Size([2, 17, 4])
+            # batch['target_value'].shape torch.Size([2, 17, 101])
+            # batch['rewards'].shape torch.Size([2, 17, 101])
+            original_images, reconstructed_images = batch['observations'], reconstructed_images
+            target_policy = batch['target_policy']
+            target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1, 101)).reshape(
+                batch['observations'].shape[0], batch['observations'].shape[1], 1)  # torch.Size([2, 17, 1])
+            true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1, 101)).reshape(
+                batch['observations'].shape[0], batch['observations'].shape[1], 1)  # torch.Size([2, 17, 1])
+            #  ========== for visualize ==========
 
-            # Calculate reconstruction loss and perceptual loss
+            # 计算重建损失和感知损失 TODO
             # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
             # perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
+
+            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 64, 64), reconstructed_images) # NOTE: for stack=4
             latent_recon_loss = torch.tensor(0., device=batch['observations'].device,
-                                             dtype=batch['observations'].dtype)
+                                             dtype=batch['observations'].dtype)  # NOTE: for stack=4
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
-                                           dtype=batch['observations'].dtype)
+                                           dtype=batch['observations'].dtype)  # NOTE: for stack=4
+
 
         elif self.obs_type == 'vector':
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
-                                           dtype=batch['observations'].dtype)
+                                           dtype=batch['observations'].dtype)  # NOTE: for stack=4
 
-            # Reconstruct observations from latent state representations
+            # TODO: no decoder
+            # latent_recon_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
+
+            # 从潜在状态表示重建观察
             reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings.reshape(-1, self.embed_dim))
-            # Calculate reconstruction loss
+            # 计算重建损失
             latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 25),
-                                                                   reconstructed_images)
-
+                                                                   reconstructed_images)  # NOTE: for stack=1
         elif self.obs_type == 'image_memory':
-            # Reconstruct observations from latent state representations
+            # 从潜在状态表示重建观察
             reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+
+            #  ========== for debugging ==========
+            # batch['observations'].shape torch.Size([2, 17, 3, 5, 5])
+            # reconstructed_images.shape torch.Size([34, 3, 5, 5])
+            # self.visualize_reconstruction_v1(original_images, reconstructed_images)
+
+            #  ========== for visualize ==========
+            # batch['target_policy'].shape torch.Size([2, 17, 4])
+            # batch['target_value'].shape torch.Size([2, 17, 101])
+            # batch['rewards'].shape torch.Size([2, 17, 101])
             original_images, reconstructed_images = batch['observations'], reconstructed_images
 
-            #  ========== for visualization ==========
-            # Uncomment the lines below for visual analysis
-            # target_policy = batch['target_policy']
-            # target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1, 101)).reshape(
-            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
-            # true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1, 101)).reshape(
-            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
-            #  ========== for visualization ==========
+            target_policy = batch['target_policy']
+            target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1, 101)).reshape(
+                batch['observations'].shape[0], batch['observations'].shape[1], 1)  # torch.Size([2, 17, 1])
+            true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1, 101)).reshape(
+                batch['observations'].shape[0], batch['observations'].shape[1], 1)  # torch.Size([2, 17, 1])
+            #  ========== for visualize ==========
 
-            # Calculate reconstruction loss and perceptual loss
+            # 计算重建损失和感知损失
             latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 5, 5),
-                                                                   reconstructed_images)
+                                                                   reconstructed_images)  # NOTE: for stack=1 TODO
+            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 4, 5, 5), reconstructed_images)  # NOTE: for stack=1
+            # latent_recon_loss = torch.tensor(0., device=batch['observations'].device, dtype=batch['observations'].dtype)  # NOTE: for stack=4
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
-                                           dtype=batch['observations'].dtype)
+                                           dtype=batch['observations'].dtype)  # NOTE: for stack=4
 
-            # Action tokens
+        # 动作tokens
         act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
 
-        # Forward pass to obtain predictions for observations, rewards, and policies
+        # 前向传播,得到预测的观察、奖励和策略等
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)})
 
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio:
-            # Calculate dormant ratio of the world model
+            # calculate dormant ratio of world_model
             dormant_ratio_world_model = cal_dormant_ratio(self, {
                 'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())},
                                                           percentage=self.dormant_threshold)
@@ -935,40 +953,46 @@ class WorldModel(nn.Module):
         else:
             dormant_ratio_world_model = torch.tensor(0.)
 
-        #  ========== for visualization ==========
-        # Uncomment the lines below for visualization
-        # predict_policy = outputs.logits_policy
-        # predict_policy = F.softmax(outputs.logits_policy, dim=-1)
-        # predict_value = inverse_scalar_transform_handle(outputs.logits_value.reshape(-1, 101)).reshape(batch['observations'].shape[0], batch['observations'].shape[1], 1)
-        # predict_rewards = inverse_scalar_transform_handle(outputs.logits_rewards.reshape(-1, 101)).reshape(batch['observations'].shape[0], batch['observations'].shape[1], 1)
+        #  ========== for visualize ==========
+        # outputs.logits_policy.shape torch.Size([2, 17, 4])
+        # outputs.logits_value.shape torch.Size([2, 17, 101])
+        # outputs.logits_rewards.shape torch.Size([2, 17, 101])
+        predict_policy = outputs.logits_policy
+        # 使用 softmax 对最后一个维度（dim=-1）进行处理
+        predict_policy = F.softmax(outputs.logits_policy, dim=-1)
+        predict_value = inverse_scalar_transform_handle(outputs.logits_value.reshape(-1, 101)).reshape(
+            batch['observations'].shape[0], batch['observations'].shape[1], 1)  # predict_value: torch.Size([2, 17, 1])
+        predict_rewards = inverse_scalar_transform_handle(outputs.logits_rewards.reshape(-1, 101)).reshape(
+            batch['observations'].shape[0], batch['observations'].shape[1],
+            1)  # predict_rewards: torch.Size([2, 17, 1])
         # self.visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_success_episode')
         # self.visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_fail_episode')
         # self.visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=[], suffix='pong_H10_H4_0531')
         # import sys
         # sys.exit(0)
-        #  ========== for visualization ==========
+        #  ========== for visualize ==========
 
-        # For training stability, use target_tokenizer to compute the true next latent state representations
+        # 为了训练稳定性,使用target_tokenizer计算真实的下一个潜在状态表示
         with torch.no_grad():
-            target_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'])
+            traget_obs_embeddings = target_tokenizer.encode_to_obs_embeddings(batch['observations'])
 
-        # Compute labels for observations, rewards, and ends
-        labels_observations, labels_rewards, labels_ends = self.compute_labels_world_model(target_obs_embeddings,
+        # 计算观察、奖励和结束标签
+        labels_observations, labels_rewards, labels_ends = self.compute_labels_world_model(traget_obs_embeddings,
                                                                                            batch['rewards'],
                                                                                            batch['ends'],
                                                                                            batch['mask_padding'])
 
-        # Reshape the logits and labels for observations
+        # 重塑观察的logits和labels
         logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o')
         labels_observations = labels_observations.reshape(-1, self.projection_input_dim)
 
-        # Compute prediction loss for observations. Options: MSE and Group KL
+        # 计算观察的预测损失。这里提供了两种选择:MSE和Group KL
         if self.predict_latent_loss_type == 'mse':
-            # MSE loss, directly compare logits and labels
+            # MSE损失,直接比较logits和labels
             loss_obs = torch.nn.functional.mse_loss(logits_observations, labels_observations, reduction='none').mean(
-                -1)
+                -1)  # labels_observations.detach()是冗余的，因为前面是在with torch.no_grad()中计算的
         elif self.predict_latent_loss_type == 'group_kl':
-            # Group KL loss, group features and calculate KL divergence within each group
+            # Group KL损失,将特征分组,然后计算组内的KL散度
             batch_size, num_features = logits_observations.shape
 
             logits_reshaped = logits_observations.reshape(batch_size, self.num_groups, self.group_size)
@@ -976,66 +1000,66 @@ class WorldModel(nn.Module):
 
             loss_obs = F.kl_div(logits_reshaped.log(), labels_reshaped, reduction='none').sum(dim=-1).mean(dim=-1)
 
-        # Apply mask to loss_obs
+        # 应用mask到loss_obs
         mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1)
         loss_obs = (loss_obs * mask_padding_expanded)
 
-        # Compute labels for policy and value
+        # 计算策略和价值的标签
         labels_policy, labels_value = self.compute_labels_world_model_value_policy(batch['target_value'],
                                                                                    batch['target_policy'],
                                                                                    batch['mask_padding'])
 
-        # Compute losses for rewards, policy, and value
+        # 计算奖励、策略和价值的损失
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
         loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy, batch,
                                                                                         element='policy')
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
 
-        # Compute timesteps
+        # 计算时间步
         timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
-        # Compute discount coefficients for each timestep
+        # 计算每个时间步的折扣系数
         discounts = self.gamma ** timesteps
 
-        # Group losses into first step, middle step, and last step
+        # 将损失分为第一步、中间步和最后一步
         first_step_losses = {}
         middle_step_losses = {}
         last_step_losses = {}
-        # batch['mask_padding'] indicates mask status for future H steps, exclude masked losses to maintain accurate mean statistics
-        # Group losses for each loss item
+        #  batch['mask_padding'] 为后面H步的mask情况，如果mask为False则把对应的loss从统计中去掉，以维持平均统计值的准确性
+        # 对每个损失项进行分组计算
         for loss_name, loss_tmp in zip(
                 ['loss_obs', 'loss_rewards', 'loss_value', 'loss_policy', 'orig_policy_loss', 'policy_entropy'],
                 [loss_obs, loss_rewards, loss_value, loss_policy, orig_policy_loss, policy_entropy]
         ):
             if loss_name == 'loss_obs':
                 seq_len = batch['actions'].shape[1] - 1
-                # Get the corresponding mask_padding
+                # 获取对应的 mask_padding
                 mask_padding = batch['mask_padding'][:, 1:seq_len]
             else:
                 seq_len = batch['actions'].shape[1]
-                # Get the corresponding mask_padding
+                # 获取对应的 mask_padding
                 mask_padding = batch['mask_padding'][:, :seq_len]
 
-            # Adjust loss shape to (batch_size, seq_len)
+            # 将损失调整为 (batch_size, seq_len) 的形状
             loss_tmp = loss_tmp.view(-1, seq_len)
 
-            # First step loss
+            # 第一步的损失
             first_step_mask = mask_padding[:, 0]
             first_step_losses[loss_name] = loss_tmp[:, 0][first_step_mask].mean()
 
-            # Middle step loss
+            # 中间步的损失
             middle_step_index = seq_len // 2
             middle_step_mask = mask_padding[:, middle_step_index]
             middle_step_losses[loss_name] = loss_tmp[:, middle_step_index][middle_step_mask].mean()
 
-            # Last step loss
+            # 最后一步的损失
             last_step_mask = mask_padding[:, -1]
             last_step_losses[loss_name] = loss_tmp[:, -1][last_step_mask].mean()
 
-        # Discount reconstruction loss and perceptual loss
+        # 对重构损失和感知损失进行折扣
         discounted_latent_recon_loss = latent_recon_loss
         discounted_perceptual_loss = perceptual_loss
 
-        # Calculate overall discounted loss
+        # 计算整体的折扣损失
         discounted_loss_obs = (loss_obs.view(-1, batch['actions'].shape[1] - 1) * discounts[1:]).mean()
         discounted_loss_rewards = (loss_rewards.view(-1, batch['actions'].shape[1]) * discounts).mean()
         discounted_loss_value = (loss_value.view(-1, batch['actions'].shape[1]) * discounts).mean()
@@ -1063,70 +1087,61 @@ class WorldModel(nn.Module):
         )
 
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
-        # Assume outputs is an object with logits attributes like 'rewards', 'policy', and 'value'.
-        # labels is a target tensor for comparison. batch is a dictionary with a mask indicating valid timesteps.
+        # 假设outputs是一个具有'rewards'、'policy'和'value'的logits属性的对象
+        # labels是一个与之比较的目标张量。batch是一个带有指示有效时间步的mask的字典。
 
         logits = getattr(outputs, f'logits_{element}')
 
-        # Reshape your tensors
+        # 重塑你的张量
         logits = rearrange(logits, 'b t e -> (b t) e')
-        labels = labels.reshape(-1, labels.shape[-1])  # Assume labels initially have shape [batch, time, dim]
+        labels = labels.reshape(-1, labels.shape[-1])  # 假设labels最初的shape是 [batch, time, dim]
 
-        # Reshape your mask. True indicates valid data.
+        # 重塑你的mask。True表示有效数据。
         mask_padding = rearrange(batch['mask_padding'], 'b t -> (b t)')
 
-        # Compute cross-entropy loss
+        # 计算交叉熵损失
         loss = -(torch.log_softmax(logits, dim=1) * labels).sum(1)
         loss = (loss * mask_padding)
 
         if element == 'policy':
-            # Compute policy entropy loss
+            # 计算策略熵损失
             policy_entropy = self.compute_policy_entropy_loss(logits, mask_padding)
-            # Combine losses with specified weight
+            # 用指定的权重组合损失
             combined_loss = loss - self.policy_entropy_weight * policy_entropy
             return combined_loss, loss, policy_entropy
 
         return loss
 
     def compute_policy_entropy_loss(self, logits, mask):
-        # Compute entropy of the policy
+        # 计算策略的熵
         probs = torch.softmax(logits, dim=1)
         log_probs = torch.log_softmax(logits, dim=1)
         entropy = -(probs * log_probs).sum(1)
-        # Apply mask and return average entropy loss
+        # 应用mask并返回平均熵损失
         entropy_loss = (entropy * mask)
         return entropy_loss
 
     def compute_labels_world_model(self, obs_embeddings: torch.Tensor, rewards: torch.Tensor, ends: torch.Tensor,
                                    mask_padding: torch.BoolTensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        assert torch.all(ends.sum(dim=1) <= 1)  # Each sequence sample should have at most one 'done' flag
+        assert torch.all(ends.sum(dim=1) <= 1)  # 每个序列样本最多只有1个done
         mask_fill = torch.logical_not(mask_padding)
-
-        # Prepare observation labels
         labels_observations = obs_embeddings.contiguous().view(rewards.shape[0], -1, self.projection_input_dim)[:, 1:]
-
-        # Fill the masked areas of rewards
         mask_fill_rewards = mask_fill.unsqueeze(-1).expand_as(rewards)
         labels_rewards = rewards.masked_fill(mask_fill_rewards, -100)
 
-        # Fill the masked areas of ends
         labels_ends = ends.masked_fill(mask_fill, -100)
-
         return labels_observations, labels_rewards.reshape(-1, self.support_size), labels_ends.reshape(-1)
 
     def compute_labels_world_model_value_policy(self, target_value: torch.Tensor, target_policy: torch.Tensor,
                                                 mask_padding: torch.BoolTensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        mask_fill = torch.logical_not(mask_padding)
 
-        # Fill the masked areas of policy
+        mask_fill = torch.logical_not(mask_padding)
         mask_fill_policy = mask_fill.unsqueeze(-1).expand_as(target_policy)
         labels_policy = target_policy.masked_fill(mask_fill_policy, -100)
 
-        # Fill the masked areas of value
         mask_fill_value = mask_fill.unsqueeze(-1).expand_as(target_value)
         labels_value = target_value.masked_fill(mask_fill_value, -100)
-
-        return labels_policy.reshape(-1, self.action_shape), labels_value.reshape(-1, self.support_size)
+        return labels_policy.reshape(-1, self.action_shape), labels_value.reshape(-1, self.support_size)  # TODO(pu)
 
     def __repr__(self) -> str:
-        return "transformer-based latent world_model of UniZero"
+        return "world_model"
