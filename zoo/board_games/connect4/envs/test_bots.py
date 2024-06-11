@@ -24,7 +24,7 @@ class TestConnect4Bot():
         self.cfg = EasyDict(
             battle_mode='self_play_mode',
             battle_mode_in_simulation_env='self_play_mode',
-            channel_last=True,
+            channel_last=False,
             scale=True,
             agent_vs_human=False,
             prob_random_agent=0,

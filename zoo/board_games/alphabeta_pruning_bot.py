@@ -161,7 +161,7 @@ if __name__ == "__main__":
         battle_mode='self_play_mode',
         agent_vs_human=False,
         bot_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
-        channel_last=True,
+        channel_last=False,
         scale=True,
     )
     env = TicTacToeEnv(EasyDict(cfg))
@@ -216,7 +216,7 @@ if __name__ == "__main__":
         prob_expert_agent=0,
         battle_mode='self_play_mode',
         scale=True,
-        channel_last=True,
+        channel_last=False,
         agent_vs_human=False,
         bot_action_type='alpha_beta_pruning',  # {'v0', 'alpha_beta_pruning'}
         prob_random_action_in_bot=0.,

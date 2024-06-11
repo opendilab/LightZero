@@ -13,7 +13,16 @@ from zoo.atari.envs.atari_wrappers import wrap_lightzero
 
 
 @ENV_REGISTRY.register('atari_lightzero')
-class AtariLightZeroEnv(BaseEnv):
+class AtariEnvLightZero(BaseEnv):
+    """
+    Overview:
+        AtariEnvLightZero is a derived class from BaseEnv and represents the environment for the Atari LightZero game.
+        This class provides the necessary interfaces to interact with the environment, including reset, step, seed,
+        close, etc. and manages the environment's properties such as observation_space, action_space, and reward_space.
+    Properties:
+        cfg, _init_flag, channel_last, clip_rewards, episode_life, _env, _observation_space, _action_space,
+        _reward_space, obs, _eval_episode_return, has_reset, _seed, _dynamic_seed
+    """
     config = dict(
         collector_env_num=8,
         evaluator_env_num=3,
@@ -40,6 +49,14 @@ class AtariLightZeroEnv(BaseEnv):
 
     @classmethod
     def default_config(cls: type) -> EasyDict:
+        """
+        Overview:
+            Return the default configuration for the Atari LightZero environment.
+        Arguments:
+            - cls (:obj:`type`): The class AtariEnvLightZero.
+        Returns:
+            - cfg (:obj:`EasyDict`): The default configuration dictionary.
+        """
         cfg = EasyDict(copy.deepcopy(cls.config))
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg

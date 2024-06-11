@@ -55,9 +55,9 @@ memory_muzero_rnd_config = dict(
         # Specifically for sparse reward env MiniGrid, in this env, if we reach goal, the agent gets reward ~1, otherwise 0.
         # We could set the intrinsic_reward_weight approximately equal to the inverse of max_episode_steps.Please refer to rnd_reward_model for details.
         intrinsic_reward_weight=0.003,  # 1/300
-        obs_shape=2835,
-        latent_state_dim=512,
-        hidden_size_list=[256, 256],
+        obs_shape=25,
+        latent_state_dim=128,
+        hidden_size_list=[128, 128],
         learning_rate=3e-3,
         weight_decay=1e-4,
         batch_size=batch_size,
@@ -71,11 +71,11 @@ memory_muzero_rnd_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=2835,
-            action_space_size=7,
+            observation_shape=25,
+            action_space_size=4,
             model_type='mlp',
-            lstm_hidden_size=256,
-            latent_state_dim=512,
+            lstm_hidden_size=128,
+            latent_state_dim=128,
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
             self_supervised_learning_loss=True,  # NOTE: default is False.
@@ -97,7 +97,7 @@ memory_muzero_rnd_config = dict(
 
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=300,
+        game_segment_length=60, # TODO
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
@@ -108,7 +108,7 @@ memory_muzero_rnd_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(2e2),
+        eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

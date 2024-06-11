@@ -11,7 +11,7 @@ from dizoo.mujoco.envs.mujoco_env import MujocoEnv
 
 
 @ENV_REGISTRY.register('mujoco_lightzero')
-class MujocoEnvLZ(MujocoEnv):
+class MujocoEnvLightZero(MujocoEnv):
     """
     Overview:
         The modified MuJoCo environment with continuous action space for LightZero's algorithms.

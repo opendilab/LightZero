@@ -6,4 +6,3 @@ pympler
 minigrid
 moviepy
 pycolab
-opencv-python

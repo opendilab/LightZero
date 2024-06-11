@@ -259,7 +259,6 @@ class AlphaZeroCollector(ISerialCollector):
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
-                    self._total_episode_count += 1
                     # the eval_episode_return is calculated from Player 1's perspective
                     reward = timestep.info['eval_episode_return']
                     info = {

@@ -17,8 +17,8 @@ def test_game_segment(test_algo):
         from lzero.mcts.tree_search.mcts_ctree import EfficientZeroMCTSCtree as MCTSCtree
         from lzero.model.efficientzero_model import EfficientZeroModel as Model
         from lzero.mcts.tests.config.atari_efficientzero_config_for_test import atari_efficientzero_config as config
-        from zoo.atari.envs.atari_lightzero_env import AtariLightZeroEnv
-        envs = [AtariLightZeroEnv(config.env) for _ in range(config.env.evaluator_env_num)]
+        from zoo.atari.envs.atari_lightzero_env import AtariEnvLightZero
+        envs = [AtariEnvLightZero(config.env) for _ in range(config.env.evaluator_env_num)]
 
     elif test_algo == 'MuZero':
         from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
