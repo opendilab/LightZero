@@ -132,43 +132,6 @@ class UniZeroModel(nn.Module):
         print(f'{sum(p.numel() for p in self.tokenizer.parameters())} parameters in agent.tokenizer')
         print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
 
-        # self.dynamics_network = self.world_model
-        # self.dynamics_network = DynamicsNetwork(
-        #     action_encoding_dim=self.action_encoding_dim,
-        #     num_channels=self.latent_state_dim + self.action_encoding_dim,
-        #     common_layer_num=2,
-        #     fc_reward_layers=fc_reward_layers,
-        #     output_support_size=self.reward_support_size,
-        #     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-        #     norm_type=norm_type,
-        #     res_connection_in_dynamics=self.res_connection_in_dynamics,
-        # )
-
-        # self.prediction_network = PredictionNetworkMLP(
-        #     action_space_size=action_space_size,
-        #     num_channels=latent_state_dim,
-        #     fc_value_layers=fc_value_layers,
-        #     fc_policy_layers=fc_policy_layers,
-        #     output_support_size=self.value_support_size,
-        #     last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-        #     norm_type=norm_type
-        # )
-
-        # if self.self_supervised_learning_loss:
-        #     # self_supervised_learning_loss related network proposed in EfficientZero
-        #     self.projection_input_dim = latent_state_dim
-
-        #     self.projection = nn.Sequential(
-        #         nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-        #         nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-        #         nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
-        #     )
-        #     self.prediction_head = nn.Sequential(
-        #         nn.Linear(self.proj_out, self.pred_hid),
-        #         nn.BatchNorm1d(self.pred_hid),
-        #         activation,
-        #         nn.Linear(self.pred_hid, self.pred_out),
-        #     )
 
     def initial_inference(self, obs: torch.Tensor, action_batch=None) -> MZNetworkOutput:
         """
@@ -195,26 +158,6 @@ class UniZeroModel(nn.Module):
             - latent_state (:obj:`torch.Tensor`): :math:`(B, H)`, where B is batch_size, H is the dimension of latent state.
         """
         batch_size = obs.size(0)
-        # latent_state = self._representation(obs)
-        # policy_logits, value = self._prediction(latent_state)
-        # return MZNetworkOutput(
-        #     value,
-        #     [0. for _ in range(batch_size)],
-        #     policy_logits,
-        #     latent_state,
-        # )
-
-        # x, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
-        #     obs)
-        # logits_observations, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
-
-        # # obs discrete distribution to one_hot latent state?
-        # # torch.Size([8, 16, 512]) -> torch.Size([8, 16])
-        # latent_state = torch.argmax(logits_observations, dim=2, keepdim=False)
-
-        # x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
-        #     obs)
-
         obs_act_dict = {'obs':obs, 'action':action_batch}
         x, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(
             obs_act_dict)
@@ -261,11 +204,6 @@ class UniZeroModel(nn.Module):
             - latent_state (:obj:`torch.Tensor`): :math:`(B, H)`, where B is batch_size, H is the dimension of latent state.
             - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H)`, where B is batch_size, H is the dimension of latent state.
         """
-        # next_latent_state, reward = self._dynamics(latent_state, action)
-        #
-        # policy_logits, value = self._prediction(next_latent_state)
-        # return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
-
         x, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
             state_action_history)
         logits_observations, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
@@ -278,9 +216,6 @@ class UniZeroModel(nn.Module):
         policy_logits = policy_logits.squeeze(1)
         # torch.Size([8, 1, 601]) - > torch.Size([8, 601])
         value = value.squeeze(1)
-
-        # torch.Size([8,]) - > torch.Size([8, 1])
-        # reward = torch.tensor(reward).unsqueeze(-1) # TODO(pu)
         # torch.Size([8, 1, 601]) - > torch.Size([8, 601])
         reward = reward.squeeze(1)
 

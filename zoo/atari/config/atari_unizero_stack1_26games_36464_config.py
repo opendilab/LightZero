@@ -156,8 +156,7 @@ atari_unizero_config = dict(
             ),
         ),
         model_path=None,
-        tokenizer_start_after_envsteps=int(0),
-        transformer_start_after_envsteps=int(0),
+        train_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,
         update_per_collect_tokenizer=update_per_collect,
         num_unroll_steps=num_unroll_steps,
@@ -176,36 +175,37 @@ atari_unizero_config = dict(
             value_support_size=101,
             support_scale=50,
             world_model=dict(
-                        tokens_per_block=2,
-                        max_blocks=10,
-                        max_tokens=2 * 10,
-                        context_length=2 * 4,
-                        context_length_for_recurrent=2 * 4,
-                        recurrent_keep_deepth=100,
-                        gru_gating=False,
-                        device='cpu',
-                        analysis_sim_norm=False,
-                        analysis_dormant_ratio=False,
-                        action_shape=6,  # TODO
-                        group_size=8,  # NOTE: sim_norm
-                        attention='causal',
-                        num_layers=4,  # TODO
-                        num_heads=8,
-                        embed_dim=768,  # TODO
-                        embed_pdrop=0.1,
-                        resid_pdrop=0.1,
-                        attn_pdrop=0.1,
-                        support_size=101,
-                        max_cache_size=5000,
-                        env_num=8,
-                        latent_recon_loss_weight=0.,
-                        perceptual_loss_weight=0.,
-                        policy_entropy_weight=1e-4,
-                        predict_latent_loss_type='group_kl',
-                        obs_type='image',  # 'vector', 'image'
-                        gamma=1,
-                        dormant_threshold=0.025,
-                    ),
+                tokens_per_block=2,
+                max_blocks=10,
+                max_tokens=2 * 10,
+                context_length=2 * 4,
+                context_length_for_recurrent=2 * 4,
+                gru_gating=False,
+                device='cpu',
+                analysis_sim_norm=False,
+                analysis_dormant_ratio=False,
+                action_shape=6,  # TODO
+                group_size=8,  # NOTE: sim_norm
+                attention='causal',
+                num_layers=4,  # TODO
+                num_heads=8,
+                embed_dim=768,  # TODO
+                embed_pdrop=0.1,
+                resid_pdrop=0.1,
+                attn_pdrop=0.1,
+                support_size=101,
+                max_cache_size=5000,
+                env_num=8,
+                collector_env_num=collector_env_num,
+                evaluator_env_num=evaluator_env_num,
+                latent_recon_loss_weight=0.,
+                perceptual_loss_weight=0.,
+                policy_entropy_weight=1e-4,
+                predict_latent_loss_type='group_kl',
+                obs_type='image',
+                gamma=1,
+                dormant_threshold=0.025,
+            ),
         ),
         use_priority=False,  # TODO
         use_augmentation=False,  # TODO
@@ -256,7 +256,7 @@ create_config = atari_unizero_create_config
 
 if __name__ == "__main__":
     # Define a list of seeds for multiple runs
-    seeds = [2, 1, 0]  # You can add more seed values here
+    seeds = [0, 1, 2]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
         main_config.exp_name = f'data_unizero/{env_id[:-14]}_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_stack1_seed{seed}'

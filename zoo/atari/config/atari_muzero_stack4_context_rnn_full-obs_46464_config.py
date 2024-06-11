@@ -157,27 +157,18 @@ atari_muzero_config = dict(
             end=0.01,
             decay=int(2e4),  # TODO: 20k
         ),
-        # use_augmentation=True,  # TODO
         use_augmentation=False,
         use_priority=False,
         model_update_ratio = model_update_ratio,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-
-        # optim_type='SGD', # for collector orig
-        # lr_piecewise_constant_decay=True,
-        # learning_rate=0.2,
-
-        optim_type='AdamW', # for collector game_segment
+        optim_type='AdamW',  # for collector game_segment
         lr_piecewise_constant_decay=False,
         learning_rate=1e-4,
-
         target_update_freq=100,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        # ssl_loss_weight=2,  # default is 0
         ssl_loss_weight=ssl_loss_weight,  # default is 0
-
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
@@ -206,7 +197,7 @@ if __name__ == "__main__":
     # from lzero.entry import train_muzero_context
     # train_muzero_context([main_config, create_config], seed=0, max_env_step=max_env_step)
 
-    seeds = [0,1,2,3,4]  # You can add more seed values here
+    seeds = [0,1,2]  # You can add more seed values here
 
     for seed in seeds:
         # Update exp_name to include the current seed TODO

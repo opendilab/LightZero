@@ -32,7 +32,7 @@ eps_greedy_exploration_in_collect = True
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-atari_muzero_config = dict(
+atari_unizero_config = dict(
     exp_name=f'data_unizero/{env_id[:-14]}_stack4/',
     env=dict(
         stop_value=int(1e6),
@@ -51,8 +51,7 @@ atari_muzero_config = dict(
         analysis_sim_norm=False,
         cal_dormant_ratio=False,
         model_path=None,
-        tokenizer_start_after_envsteps=int(0),
-        transformer_start_after_envsteps=int(0),
+        train_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,
         update_per_collect_tokenizer=update_per_collect,
         num_unroll_steps=num_unroll_steps,
@@ -76,28 +75,27 @@ atari_muzero_config = dict(
                 max_tokens=2 * 10,
                 context_length=2 * 4,
                 context_length_for_recurrent=2 * 4,
-                recurrent_keep_deepth=100,
                 gru_gating=False,
                 device='cpu',
                 analysis_sim_norm=False,
                 analysis_dormant_ratio=False,
-                action_shape=6,  # TODO：for pong qbert
-                group_size=8,  # NOTE: sim_norm
+                action_shape=6,
+                group_size=8,
                 attention='causal',
-                num_layers=4,  # TODO：for atari debug
+                num_layers=4,
                 num_heads=8,
-                embed_dim=768,  # TODO：for atari
+                embed_dim=768,
                 embed_pdrop=0.1,
                 resid_pdrop=0.1,
                 attn_pdrop=0.1,
-                support_size=101,  # TODO
+                support_size=101,
                 max_cache_size=5000,
                 env_num=8,
                 latent_recon_loss_weight=0.,
-                perceptual_loss_weight=0.,  # for stack1 rgb obs
+                perceptual_loss_weight=0.,
                 policy_entropy_weight=1e-4,
                 predict_latent_loss_type='group_kl',
-                obs_type='image',  # 'vector', 'image'
+                obs_type='image',
                 gamma=1,
                 dormant_threshold=0.025,
             ),
@@ -132,10 +130,10 @@ atari_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
     ),
 )
-atari_muzero_config = EasyDict(atari_muzero_config)
-main_config = atari_muzero_config
+atari_unizero_config = EasyDict(atari_unizero_config)
+main_config = atari_unizero_config
 
-atari_muzero_create_config = dict(
+atari_unizero_create_config = dict(
     env=dict(
         type='atari_lightzero',
         import_names=['zoo.atari.envs.atari_lightzero_env'],
@@ -146,8 +144,8 @@ atari_muzero_create_config = dict(
         import_names=['lzero.policy.unizero'],
     ),
 )
-atari_muzero_create_config = EasyDict(atari_muzero_create_config)
-create_config = atari_muzero_create_config
+atari_unizero_create_config = EasyDict(atari_unizero_create_config)
+create_config = atari_unizero_create_config
 
 if __name__ == "__main__":
     seeds = [0, 1, 2]  # You can add more seed values here

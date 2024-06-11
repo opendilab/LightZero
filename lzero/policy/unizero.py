@@ -1,60 +1,27 @@
 import copy
+import inspect
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch
-import torch.optim as optim
 from ding.model import model_wrap
 from ding.policy.base_policy import Policy
-from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
-from torch.distributions import Categorical
-from torch.nn import L1Loss
-import inspect
+
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
-# from lzero.mcts import UniZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
-from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
-    prepare_obs, prepare_obs_stack4_for_gpt
-from line_profiler import line_profiler
+from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
+    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
+    prepare_obs_stack4_for_gpt
+from .utils import configure_optimizers_nanogpt
 
-
-def configure_optimizers(model, weight_decay, learning_rate, betas, device_type):
-    # start with all of the candidate parameters
-    param_dict = {pn: p for pn, p in model.named_parameters()}
-    # filter out those that do not require grad
-    param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
-    # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
-    # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
-    decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
-    nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
-    optim_groups = [
-        {'params': decay_params, 'weight_decay': weight_decay},
-        {'params': nodecay_params, 'weight_decay': 0.0}
-    ]
-    num_decay_params = sum(p.numel() for p in decay_params)
-    num_nodecay_params = sum(p.numel() for p in nodecay_params)
-    print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
-    print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
-    # Create AdamW optimizer and use the fused version if it is available
-    fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
-    if torch.cuda.is_available():
-        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas)
-    else:
-        use_fused = fused_available and device_type == 'cuda'
-        extra_args = dict(fused=True) if use_fused else dict()
-        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
-        print(f"using fused AdamW: {use_fused}")
-
-    return optimizer
 
 @POLICY_REGISTRY.register('unizero')
 class UniZeroPolicy(Policy):
     """
     Overview:
-        The policy class for MuZero.
+        The policy class for UniZero.
     """
 
     # The default_config for MuZero policy.
@@ -90,6 +57,64 @@ class UniZeroPolicy(Policy):
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
             norm_type='BN',
+            world_model=dict(
+                # (int) The number of tokens per block.
+                tokens_per_block=2,
+                # (int) The maximum number of blocks.
+                max_blocks=10,
+                # (int) The maximum number of tokens, calculated as tokens per block multiplied by max blocks.
+                max_tokens=2 * 10,
+                # (int) The context length, usually calculated as twice the number of some base unit.
+                context_length=2 * 4,
+                # (int) The context length for recurrent models, usually the same as context_length.
+                context_length_for_recurrent=2 * 4,
+                # (bool) Whether to use GRU gating mechanism.
+                gru_gating=False,
+                # (str) The device to be used for computation, e.g., 'cpu' or 'cuda'.
+                device='cpu',
+                # (bool) Whether to analyze simulation normalization.
+                analysis_sim_norm=False,
+                # (bool) Whether to analyze dormant ratio.
+                analysis_dormant_ratio=False,
+                # (int) The shape of the action space.
+                action_shape=6,
+                # (int) The size of the group, related to simulation normalization.
+                group_size=8,  # NOTE: sim_norm
+                # (str) The type of attention mechanism used. Options could be ['causal'].
+                attention='causal',
+                # (int) The number of layers in the model.
+                num_layers=4,
+                # (int) The number of attention heads.
+                num_heads=8,
+                # (int) The dimension of the embedding.
+                embed_dim=768,
+                # (float) The dropout probability for the embedding layer.
+                embed_pdrop=0.1,
+                # (float) The dropout probability for the residual connections.
+                resid_pdrop=0.1,
+                # (float) The dropout probability for the attention mechanism.
+                attn_pdrop=0.1,
+                # (int) The size of the support set for value and policy heads.
+                support_size=101,
+                # (int) The maximum size of the cache.
+                max_cache_size=5000,
+                # (int) The number of environments.
+                env_num=8,
+                # (float) The weight of the latent reconstruction loss.
+                latent_recon_loss_weight=0.,
+                # (float) The weight of the perceptual loss.
+                perceptual_loss_weight=0.,
+                # (float) The weight of the policy entropy.
+                policy_entropy_weight=1e-4,
+                # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
+                predict_latent_loss_type='group_kl',
+                # (str) The type of observation. Options are ['image', 'vector'].
+                obs_type='image',
+                # (float) The discount factor for future rewards.
+                gamma=1,
+                # (float) The threshold for a dormant neuron.
+                dormant_threshold=0.025,
+            ),
         ),
         # ****** common ******
         # (bool) whether to use rnd model.
@@ -245,8 +270,7 @@ class UniZeroPolicy(Policy):
         if self._cfg.model.model_type == "conv":
             return 'UniZeroModel', ['lzero.model.unizero_model']
         elif self._cfg.model.model_type == "mlp":
-            # return 'UniZeroModel', ['lzero.model.unizero_model_vector_obs']  # TODO
-            return 'UniZeroModel', ['lzero.model.unizero_model']
+            return 'UniZeroModel', ['lzero.model.unizero_model_vector_obs']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
@@ -255,8 +279,8 @@ class UniZeroPolicy(Policy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
-        # TODO: nanoGPT optimizer
-        self._optimizer_world_model = configure_optimizers(
+        # NOTE: nanoGPT optimizer
+        self._optimizer_world_model = configure_optimizers_nanogpt(
             model=self._model.world_model,
             learning_rate=1e-4,
             weight_decay=self._cfg.weight_decay,
@@ -267,25 +291,15 @@ class UniZeroPolicy(Policy):
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
 
-        # TODO: torch 2.0
+        # NOTE: need torch 2.0
         self._model = torch.compile(self._model)
         self._target_model = torch.compile(self._target_model)
-
-        # TODO: hard target
-        # self._target_model = model_wrap(
-        #     self._target_model,
-        #     wrapper_name='target',
-        #     update_type='assign',
-        #     update_kwargs={'freq': self._cfg.target_update_freq}
-        # )
-        # TODO: soft target
+        # NOTE: soft target
         self._target_model = model_wrap(
             self._target_model,
             wrapper_name='target',
             update_type='momentum',
-            # update_kwargs={'theta': 0.01} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
-            update_kwargs={'theta': 0.05} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
-            # update_kwargs={'theta': 0.999} # MOCO:0.001,  DDPG:0.005, TD-MPC:0.01
+            update_kwargs={'theta': 0.05}
         )
         self._learn_model = self._model
 
@@ -301,43 +315,19 @@ class UniZeroPolicy(Policy):
         )
         self.intermediate_losses = defaultdict(float)
         self.l2_norm_before = 0.
-        self.l2_norm_after= 0.
-        self.grad_norm_before= 0.
-        self.grad_norm_after= 0.
+        self.l2_norm_after = 0.
+        self.grad_norm_before = 0.
+        self.grad_norm_after = 0.
 
-    #@profile
+    # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
-        """
-        Overview:
-            The forward function for learning policy in learn mode, which is the core of the learning process.
-            The data is sampled from replay buffer.
-            The loss is calculated by the loss function and the loss is backpropagated to update the model.
-        Arguments:
-            - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
-                The first tensor is the current_batch, the second tensor is the target_batch.
-        Returns:
-            - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
-                current learning loss and learning statistics.
-        """
-        # current_batch, target_batch, train_which_component_dict = data
         if data[-1]['train_which_component'] == 'transformer':
             return_loss_dict = self._forward_learn_transformer(data)
         else:
             ValueError('Unknown component type')
         return return_loss_dict
 
-    #@profile
-    def monitor_weights_and_grads(self, model):
-        for name, param in model.named_parameters():
-            if param.requires_grad:
-                print(f"Layer: {name} | "
-                    f"Weight mean: {param.data.mean():.4f} | "
-                    f"Weight std: {param.data.std():.4f} | "
-                    f"Grad mean: {param.grad.mean():.4f} | "
-                    f"Grad std: {param.grad.std():.4f}")
-                    
-
-    #@profile
+    # @profile
     def _forward_learn_transformer(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         Overview:
@@ -351,7 +341,6 @@ class UniZeroPolicy(Policy):
             - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
                 current learning loss and learning statistics.
         """
-
         self._learn_model.train()
         self._target_model.train()
 
@@ -359,78 +348,67 @@ class UniZeroPolicy(Policy):
         obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
+        # Prepare observations based on frame stack number
         if self._cfg.model.frame_stack_num == 4:
             obs_batch, obs_target_batch = prepare_obs_stack4_for_gpt(obs_batch_ori, self._cfg)
         else:
             obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
-        # do augmentations
+        # Apply augmentations if needed
         if self._cfg.use_augmentation:
             obs_batch = self.image_transforms.transform(obs_batch)
             if self._cfg.model.self_supervised_learning_loss:
                 obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
-        # shape: (batch_size, num_unroll_steps, action_dim)
-        # NOTE: .long(), in discrete action space.
-        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()  # TODO: only for discrete action space
-        data_list = [
-            mask_batch,
-            target_reward.astype('float32'),
-            target_value.astype('float32'), target_policy, weights
-        ]
-        [mask_batch, target_reward, target_value, target_policy,
-         weights] = to_torch_float_tensor(data_list, self._cfg.device)
+        # Prepare action batch and convert to torch tensor
+        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
+            -1).long()  # For discrete action space
+        data_list = [mask_batch, target_reward.astype('float32'), target_value.astype('float32'), target_policy,
+                     weights]
+        mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
+                                                                                                self._cfg.device)
 
         target_reward = target_reward.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
 
         assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
-        # ``scalar_transform`` to transform the original value to the scaled value,
-        # i.e. h(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
+        # Transform rewards and values to their scaled forms
         transformed_target_reward = scalar_transform(target_reward)
         transformed_target_value = scalar_transform(target_value)
 
-        # transform a scalar to its categorical_distribution. After this transformation, each scalar is
-        # represented as the linear combination of its two adjacent supports.
+        # Convert to categorical distributions
         target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
         target_value_categorical = phi_transform(self.value_support, transformed_target_value)
 
-        # compute_loss(self, batch: Batch, tokenizer: Tokenizer, ** kwargs: Any)
-
+        # Prepare batch for GPT model
         batch_for_gpt = {}
-        # TODO: for cartpole self._cfg.model.observation_shape
-        if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape)==1:
-            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
-        elif len(self._cfg.model.observation_shape)==3:
-            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape( self._cfg.batch_size, -1,  *self._cfg.model.observation_shape)  # (B, T, O) or (B, T, C, H, W)
+        if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
+            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+                self._cfg.batch_size, -1, self._cfg.model.observation_shape)
+        elif len(self._cfg.model.observation_shape) == 3:
+            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+                self._cfg.batch_size, -1, *self._cfg.model.observation_shape)
 
-        batch_for_gpt['actions'] = action_batch.squeeze(-1)  # (B, T-1, A) -> (B, T-1)
-        batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]  # (B, T, R) -> (B, T-1, R)
-        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # (B, T) NOTE: 0 means invalid padding data
-        batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]  # (B, T-1) TODO
+        batch_for_gpt['actions'] = action_batch.squeeze(-1)
+        batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
+        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
+        batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
+        batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
+        batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long,
+                                            device=self._cfg.device)
+        batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
+        batch_for_gpt['target_policy'] = target_policy[:, :-1]
 
-        batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]  # (B, T-1, O) or (B, T-1, C, H, W)
-        batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long, device=self._cfg.device) # (B, T-1)
-
-        batch_for_gpt['target_value'] = target_value_categorical[:, :-1]  # (B, T-1, V)
-        batch_for_gpt['target_policy'] = target_policy[:, :-1]  # (B, T-1, A)
-        # NOTE: TODO: next latent state's policy value
-
-        # get valid target_policy data
+        # Extract valid target policy data and compute entropy
         valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
-        # compute entropy of each policy
         target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
-        # compute average entropy
         average_target_policy_entropy = target_policy_entropy.mean().item()
-        # print(f'Average entropy: {average_entropy}')
 
-        # ==============================================================
-        # update world model
-        # ==============================================================
-        # losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer) 
-        losses = self._learn_model.world_model.compute_loss(batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle) # for debugging
-
+        # Update world model
+        losses = self._learn_model.world_model.compute_loss(
+            batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle
+        )
 
         weighted_total_loss = losses.loss_total
         for loss_name, loss_value in losses.intermediate_losses.items():
@@ -451,128 +429,94 @@ class UniZeroPolicy(Policy):
         dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
 
-
-        # ==============================================================
-        # the core learn model update step.
-        # ==============================================================
-        """
-        for name, parameter in self._learn_model.tokenizer.named_parameters():
-            print(name)
-        """
-        # gradient_scale = 1 / self._cfg.num_unroll_steps
-        # TODO(pu): test the effect of gradient scale.
-        # weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
-        
+        # Core learn model update step
         self._optimizer_world_model.zero_grad()
         weighted_total_loss.backward()
 
-        # ============= for analysis ============= TODO
         if self._cfg.analysis_sim_norm:
-            del self.l2_norm_before
-            del self.l2_norm_after
-            del self.grad_norm_before
-            del self.grad_norm_after
+            del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
             self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
-            self._target_model.encoder_hook.clear_data()  # 非常非常重要!!! 
-        # ============= for analysis =============
-
-        # 在训练循环中使用
-        # self.monitor_weights_and_grads(self._learn_model.tokenizer.representation_network)
-        # print('torch.cuda.memory_summary():', torch.cuda.memory_summary())
+            self._target_model.encoder_hook.clear_data()
 
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
-        total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(), self._cfg.grad_clip_value)
+        total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
+                                                                        self._cfg.grad_clip_value)
 
         self._optimizer_world_model.step()
         if self._cfg.lr_piecewise_constant_decay:
-                self.lr_scheduler.step()
+            self.lr_scheduler.step()
 
-        # ==============================================================
-        # the core target model update step.
-        # ==============================================================
+        # Core target model update step
         self._target_model.update(self._learn_model.state_dict())
 
-        # # 确保所有的CUDA核心完成工作，以便准确统计显存使用情况
         if torch.cuda.is_available():
             torch.cuda.synchronize()
-            # 获取当前分配的显存总量（字节）
             current_memory_allocated = torch.cuda.memory_allocated()
-            # 获取程序运行到目前为止分配过的最大显存量（字节）
             max_memory_allocated = torch.cuda.max_memory_allocated()
-
-            # 将显存使用量从字节转换为GB
-            current_memory_allocated_gb = current_memory_allocated / (1024**3)
-            max_memory_allocated_gb = max_memory_allocated / (1024**3)
-            # 使用SummaryWriter记录当前和最大显存使用量
+            current_memory_allocated_gb = current_memory_allocated / (1024 ** 3)
+            max_memory_allocated_gb = max_memory_allocated / (1024 ** 3)
         else:
-            # TODO
             current_memory_allocated_gb = 0.
             max_memory_allocated_gb = 0.
 
         return_loss_dict = {
-            'analysis/first_step_loss_value':first_step_losses['loss_value'].item(),
-            'analysis/first_step_loss_policy':first_step_losses['loss_policy'].item(),
-            'analysis/first_step_loss_rewards':first_step_losses['loss_rewards'].item(),
-            'analysis/first_step_loss_obs':first_step_losses['loss_obs'].item(),
+            'analysis/first_step_loss_value': first_step_losses['loss_value'].item(),
+            'analysis/first_step_loss_policy': first_step_losses['loss_policy'].item(),
+            'analysis/first_step_loss_rewards': first_step_losses['loss_rewards'].item(),
+            'analysis/first_step_loss_obs': first_step_losses['loss_obs'].item(),
 
-            'analysis/middle_step_loss_value':middle_step_losses['loss_value'].item(),
-            'analysis/middle_step_loss_policy':middle_step_losses['loss_policy'].item(),
-            'analysis/middle_step_loss_rewards':middle_step_losses['loss_rewards'].item(),
-            'analysis/middle_step_loss_obs':middle_step_losses['loss_obs'].item(),
+            'analysis/middle_step_loss_value': middle_step_losses['loss_value'].item(),
+            'analysis/middle_step_loss_policy': middle_step_losses['loss_policy'].item(),
+            'analysis/middle_step_loss_rewards': middle_step_losses['loss_rewards'].item(),
+            'analysis/middle_step_loss_obs': middle_step_losses['loss_obs'].item(),
 
-            'analysis/last_step_loss_value':last_step_losses['loss_value'].item(),
-            'analysis/last_step_loss_policy':last_step_losses['loss_policy'].item(),
-            'analysis/last_step_loss_rewards':last_step_losses['loss_rewards'].item(),
-            'analysis/last_step_loss_obs':last_step_losses['loss_obs'].item(),
+            'analysis/last_step_loss_value': last_step_losses['loss_value'].item(),
+            'analysis/last_step_loss_policy': last_step_losses['loss_policy'].item(),
+            'analysis/last_step_loss_rewards': last_step_losses['loss_rewards'].item(),
+            'analysis/last_step_loss_obs': last_step_losses['loss_obs'].item(),
 
             'Current_GPU': current_memory_allocated_gb,
             'Max_GPU': max_memory_allocated_gb,
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
             'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
-
             'weighted_total_loss': weighted_total_loss.item(),
             'obs_loss': obs_loss,
-            'latent_recon_loss':latent_recon_loss,
-            'perceptual_loss':perceptual_loss,
+            'latent_recon_loss': latent_recon_loss,
+            'perceptual_loss': perceptual_loss,
             'policy_loss': policy_loss,
-            'orig_policy_loss':orig_policy_loss,
-            'policy_entropy':policy_entropy,
-
+            'orig_policy_loss': orig_policy_loss,
+            'policy_entropy': policy_entropy,
             'target_policy_entropy': average_target_policy_entropy,
-            # 'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),
             'reward_loss': reward_loss,
             'value_loss': value_loss,
-            # 'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
-
-            # ==============================================================
-            # priority related
-            # ==============================================================
-            # 'value_priority_orig': value_priority,
             'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
-            # 'value_priority': value_priority.mean().item(),
             'target_reward': target_reward.mean().item(),
             'target_value': target_value.mean().item(),
             'transformed_target_reward': transformed_target_reward.mean().item(),
             'transformed_target_value': transformed_target_value.mean().item(),
-            # 'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
-            # 'predicted_values': predicted_values.detach().cpu().numpy().mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
-            # 'total_grad_norm_before_clip_rep_net': total_grad_norm_before_clip_rep_net.item(),  
-
-            'analysis/dormant_ratio_encoder':dormant_ratio_encoder,
-            'analysis/dormant_ratio_world_model':dormant_ratio_world_model,
-            'analysis/latent_state_l2_norms':latent_state_l2_norms,
-            'analysis/l2_norm_before': self.l2_norm_before, 
-            'analysis/l2_norm_after': self.l2_norm_after, 
-            'analysis/grad_norm_before':self.grad_norm_before, 
-            'analysis/grad_norm_after':self.grad_norm_after, 
+            'analysis/dormant_ratio_encoder': dormant_ratio_encoder,
+            'analysis/dormant_ratio_world_model': dormant_ratio_world_model,
+            'analysis/latent_state_l2_norms': latent_state_l2_norms,
+            'analysis/l2_norm_before': self.l2_norm_before,
+            'analysis/l2_norm_after': self.l2_norm_after,
+            'analysis/grad_norm_before': self.grad_norm_before,
+            'analysis/grad_norm_after': self.grad_norm_after,
         }
 
         return return_loss_dict
 
 
+    def monitor_weights_and_grads(self, model):
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                print(f"Layer: {name} | "
+                      f"Weight mean: {param.data.mean():.4f} | "
+                      f"Weight std: {param.data.std():.4f} | "
+                      f"Grad mean: {param.grad.mean():.4f} | "
+                      f"Grad std: {param.grad.std():.4f}")
     def _init_collect(self) -> None:
         """
         Overview:
@@ -586,14 +530,15 @@ class UniZeroPolicy(Policy):
             self._mcts_collect = MCTSPtree(self._cfg)
         self._collect_mcts_temperature = 1.
         self.collect_epsilon = 0.0
+        self.collector_env_num = self._cfg.model.world_model.collector_env_num
         if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros([8,self._cfg.model.observation_shape[0],64,64]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(8)]
+            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            self.last_batch_action = [-1 for i in range(self.collector_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([8,self._cfg.model.observation_shape]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(8)]
+            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
+            self.last_batch_action = [-1 for i in range(self.collector_env_num)]
 
-    #@profile
+    # @profile
     def _forward_collect(
             self,
             data: torch.Tensor,
@@ -627,62 +572,21 @@ class UniZeroPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._collect_model.eval()
-        self._collect_model.tokenizer.eval() # TODO
-        self._collect_model.world_model.transformer.eval() # TODO
-
+        self._collect_model.tokenizer.eval()
+        self._collect_model.world_model.transformer.eval()
 
         self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
-        # if active_collect_env_num == 1:
-        #     print('debug')
+
         with torch.no_grad():
 
             network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
-
-            # network_output = self._collect_model.initial_inference(data)
-            # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
-
-            # from torch.nn.functional import pairwise_distance, cosine_similarity
-            # 假定 latent_state_roots 是一个 PyTorch tensor
-            # 计算 L2 距离
-            # l2_dist_01 = pairwise_distance(latent_state_roots[0], latent_state_roots[1])
-            # l2_dist_12 = pairwise_distance(latent_state_roots[1], latent_state_roots[2])
-            # l2_dist_02 = pairwise_distance(latent_state_roots[0], latent_state_roots[2])
-            # # 计算余弦相似度
-            # cos_sim_01 = cosine_similarity(latent_state_roots[0], latent_state_roots[1])
-            # cos_sim_12 = cosine_similarity(latent_state_roots[1], latent_state_roots[2])
-            # cos_sim_02 = cosine_similarity(latent_state_roots[0], latent_state_roots[2])
-            # print("L2 Distances:")
-            # print("Frame 0 to 1:", l2_dist_01.item())
-            # print("Frame 1 to 2:", l2_dist_12.item())
-            # print("Frame 0 to 2:", l2_dist_02.item())
-            # print("\nCosine Similarities:")
-            # print("Frame 0 to 1:", cos_sim_01.item())
-            # print("Frame 1 to 2:", cos_sim_12.item())
-            # print("Frame 0 to 2:", cos_sim_02.item())
-
-            # 假设latent_state_roots是一个tensor
-            # l1_norms = torch.norm(latent_state_roots, p=1, dim=2)  # 计算L1范数
-            # l2_norms = torch.norm(latent_state_roots, p=2, dim=2)  # 计算L2范数
-            # print("L1 Norms:", l1_norms) #固定值
-            # print("L2 Norms:", l2_norms)
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
-
-            # import matplotlib.pyplot as plt
-            # import torch
-            # # 假定 obs_batch 是一个 PyTorch tensor
-            # # obs_batch = torch.randn(8, 3, 5, 5)  # 示例数据
-            # # 保存前三帧图像
-            # for i in range(3):
-            #     plt.imshow(data[i].permute(1, 2, 0).cpu().numpy())  # 将通道从 (C, H, W) 转换为 (H, W, C)
-            #     plt.axis('off')  # 关闭坐标轴
-            #     plt.savefig(f'./render/image_frame_{i}.png')
-            #     plt.close()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
             # the only difference between collect and eval is the dirichlet noise
@@ -709,34 +613,34 @@ class UniZeroPolicy(Policy):
 
             if ready_env_id is None:
                 ready_env_id = np.arange(active_collect_env_num)
-            
+
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                # if self._cfg.eps.eps_greedy_exploration_in_collect:
-                #     # eps greedy collect
-                #     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                #         distributions, temperature=self._collect_mcts_temperature, deterministic=True
-                #     )
-                #     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                #     if np.random.rand() < self.collect_epsilon:
-                #         action = np.random.choice(legal_actions[i])
-                # else:
-                #     # normal collect
-                #     # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
-                #     # the index within the legal action set, rather than the index in the entire action set.
-                #     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                #         distributions, temperature=self._collect_mcts_temperature, deterministic=False
-                #     )
-                #     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
-                #     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                if self._cfg.eps.eps_greedy_exploration_in_collect:
+                    # eps greedy collect
+                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=True
+                    )
+                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                    if np.random.rand() < self.collect_epsilon:
+                        action = np.random.choice(legal_actions[i])
+                else:
+                    # normal collect
+                    # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                    # the index within the legal action set, rather than the index in the entire action set.
+                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=False
+                    )
+                    # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
+                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
-                # # ============== TODO: only for visualize ============== 
-                action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=self._collect_mcts_temperature, deterministic=True
-                )
-                # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
-                action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                # ============== TODO: only for visualize ==============
+                # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                #     distributions, temperature=self._collect_mcts_temperature, deterministic=True
+                # )
+                # action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                # ============== TODO: only for visualize ==============
 
                 output[i] = {
                     'action': action,
@@ -753,7 +657,6 @@ class UniZeroPolicy(Policy):
 
         return output
 
-
     def _init_eval(self) -> None:
         """
         Overview:
@@ -764,38 +667,17 @@ class UniZeroPolicy(Policy):
             self._mcts_eval = MCTSCtree(self._cfg)
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
-        if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros([3,self._cfg.model.observation_shape[0],64,64]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(3)]
-        elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([3,self._cfg.model.observation_shape]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(3)]
+        self.evaluator_env_num = self._cfg.model.world_model.evaluator_env_num
 
-    def _get_target_obs_index_in_step_k(self, step):
-        """
-        Overview:
-            Get the begin index and end index of the target obs in step k.
-        Arguments:
-            - step (:obj:`int`): The current step k.
-        Returns:
-            - beg_index (:obj:`int`): The begin index of the target obs in step k.
-            - end_index (:obj:`int`): The end index of the target obs in step k.
-        Examples:
-            >>> self._cfg.model.model_type = 'conv'
-            >>> self._cfg.model.image_channel = 3
-            >>> self._cfg.model.frame_stack_num = 4
-            >>> self._get_target_obs_index_in_step_k(0)
-            >>> (0, 12)
-        """
         if self._cfg.model.model_type == 'conv':
-            beg_index = self._cfg.model.image_channel * step
-            end_index = self._cfg.model.image_channel * (step + self._cfg.model.frame_stack_num)
+            self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            beg_index = self._cfg.model.observation_shape * step
-            end_index = self._cfg.model.observation_shape * (step + self._cfg.model.frame_stack_num)
-        return beg_index, end_index
+            self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
+            self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1, ready_env_id: np.array = None) -> Dict:
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
+                      ready_env_id: np.array = None) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -818,16 +700,13 @@ class UniZeroPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._eval_model.eval()
-        self._eval_model.tokenizer.eval() # TODO
-        self._eval_model.world_model.transformer.eval() # TODO
+        self._eval_model.tokenizer.eval()
+        self._eval_model.world_model.transformer.eval()
 
         active_eval_env_num = data.shape[0]
         with torch.no_grad():
-            # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
-            # network_output = self._collect_model.initial_inference(data)
             network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
-            # print(f"latent_state_roots:{latent_state_roots}")  # TODO
 
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
@@ -854,25 +733,20 @@ class UniZeroPolicy(Policy):
 
             if ready_env_id is None:
                 ready_env_id = np.arange(active_eval_env_num)
-            
+
             batch_action = []
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                # print("roots_visit_count_distributions:", distributions, "root_value:", value)  # TODO
+                # print("roots_visit_count_distributions:", distributions, "root_value:", value)
 
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
                 #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than
                 # sampling during the evaluation phase.
-                
                 action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
                     distributions, temperature=1, deterministic=True
                 )
-                # TODO: eval for breakout
-                # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                #         distributions, temperature=0.25, deterministic=False
-                # )
                 # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
@@ -902,10 +776,10 @@ class UniZeroPolicy(Policy):
             'analysis/dormant_ratio_encoder',
             'analysis/dormant_ratio_world_model',
             'analysis/latent_state_l2_norms',
-            'analysis/l2_norm_before', 
-            'analysis/l2_norm_after', 
-            'analysis/grad_norm_before', 
-            'analysis/grad_norm_after', 
+            'analysis/l2_norm_before',
+            'analysis/l2_norm_after',
+            'analysis/grad_norm_before',
+            'analysis/grad_norm_after',
 
             'analysis/first_step_loss_value',
             'analysis/first_step_loss_policy',
@@ -926,18 +800,15 @@ class UniZeroPolicy(Policy):
             'Max_GPU',
             'collect_epsilon',
             'collect_mcts_temperature',
-            # 'cur_lr',
-              'cur_lr_world_model',
+            'cur_lr_world_model',
             'cur_lr_tokenizer',
 
             'weighted_total_loss',
-            # 'total_loss',
             'obs_loss',
             'policy_loss',
             'orig_policy_loss',
             'policy_entropy',
             'latent_recon_loss',
-            # 'policy_entropy',
             'target_policy_entropy',
             'reward_loss',
             'value_loss',
@@ -945,13 +816,7 @@ class UniZeroPolicy(Policy):
             'value_priority',
             'target_reward',
             'target_value',
-            # 'predicted_rewards',
-            # 'predicted_values',
-            # 'transformed_target_reward',
-            # 'transformed_target_value',
-            'total_grad_norm_before_clip_tokenizer',
             'total_grad_norm_before_clip_wm',
-            # 'total_grad_norm_before_clip_rep_net',
             # tokenizer
             'commitment_loss',
             'reconstruction_loss',
@@ -971,7 +836,6 @@ class UniZeroPolicy(Policy):
             'optimizer_world_model': self._optimizer_world_model.state_dict(),
         }
 
-    # TODO:
     def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
         """
         Overview:
@@ -982,59 +846,6 @@ class UniZeroPolicy(Policy):
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
         self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
-
-    # def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
-    #     """
-    #     Overview:
-    #         Load the state_dict variable into policy learn mode, specifically loading only the 
-    #         representation network of the tokenizer within model and target_model.
-    #     Arguments:
-    #         - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
-    #     """
-    #     # Extract the relevant sub-state-dicts for representation_network from the state_dict
-    #     # model_rep_network_state = state_dict['model']['tokenizer']['representation_network']
-    #     # target_model_rep_network_state = state_dict['target_model']['tokenizer']['representation_network']
-
-    #     # # Load the state into the model's representation network
-    #     # self._learn_model.tokenizer.representation_network.load_state_dict(model_rep_network_state)
-    #     # self._target_model.tokenizer.representation_network.load_state_dict(target_model_rep_network_state)
-
-    #     # Assuming self._learn_model and self._target_model have a 'representation_network' submodule
-    #     self._load_representation_network_state(state_dict['model'], self._learn_model.tokenizer.representation_network)
-    #     self._load_representation_network_state(state_dict['target_model'], self._target_model.tokenizer.representation_network)
-
-
-    def _load_representation_network_state(self, state_dict, model_submodule):
-        """
-        This function filters the state_dict to only include the state of the representation_network
-        and loads it into the given model submodule.
-        """
-        from collections import OrderedDict
-
-        # Filter the state_dict to only include keys that start with 'representation_network'
-        representation_network_keys = {k: v for k, v in state_dict.items() if k.startswith('representation_network')}
-        
-        # Load the state into the model's representation_network submodule
-        # model_submodule.load_state_dict(OrderedDict(representation_network_keys))
-
-        # 去掉键名前缀
-        new_state_dict = OrderedDict()
-        for key, value in representation_network_keys.items():
-            new_key = key.replace('representation_network.', '')  # 去掉前缀
-            new_state_dict[new_key] = value
-
-        # # 如果模型在特定的设备上，确保状态字典也在那个设备上
-        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # new_state_dict = {key: value.to(device) for key, value in new_state_dict.items()}
-
-        # 尝试加载状态字典
-        try:
-            # model_submodule.load_state_dict(new_state_dict)
-            # 使用 strict=False 参数忽略缺少的键
-            model_submodule.load_state_dict(new_state_dict, strict=False)
-        except RuntimeError as e:
-            print("加载失败: ", e)
-
 
     def _process_transition(self, obs, policy_output, timestep):
         # be compatible with DI-engine Policy class

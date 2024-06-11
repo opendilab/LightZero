@@ -1,17 +1,19 @@
+import copy
 import logging
 import os
 from functools import partial
-from typing import Optional, Tuple
+from typing import Tuple, Optional
 
 import torch
 from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
-from ding.utils import set_pkg_seed, get_rank
 from ding.rl_utils import get_epsilon_greedy_fn
+from ding.utils import set_pkg_seed, get_rank
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
@@ -19,7 +21,7 @@ from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
-import torch.nn as nn
+
 
 def initialize_zeros_batch(observation_shape, batch_size, device):
     """Initialize a zeros tensor for batch observations based on the shape."""
@@ -33,6 +35,9 @@ def initialize_zeros_batch(observation_shape, batch_size, device):
     return torch.zeros(shape).to(device)
 
 
+
+
+
 def train_unizero(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
@@ -40,7 +45,7 @@ def train_unizero(
         model_path: Optional[str] = None,
         max_train_iter: Optional[int] = int(1e10),
         max_env_step: Optional[int] = int(1e10),
-) -> 'Policy':  # noqa
+) -> 'Policy':
     """
     Overview:
         The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel Muzero.
@@ -59,29 +64,32 @@ def train_unizero(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'unizero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
-        "train_unizero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'"
 
-    if create_cfg.policy.type == 'unizero':
-        from lzero.mcts import UniZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'efficientzero':
-        from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'sampled_efficientzero':
-        from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'gumbel_muzero':
-        from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
-    elif create_cfg.policy.type == 'stochastic_muzero':
-        from lzero.mcts import StochasticMuZeroGameBuffer as GameBuffer
+    # Ensure the specified policy type is supported
+    assert create_cfg.policy.type in [
+        'efficientzero', 'unizero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'
+    ], "train_unizero entry now only supports the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'"
 
-    if cfg.policy.cuda and torch.cuda.is_available():
-        cfg.policy.device = 'cuda'
-    else:
-        cfg.policy.device = 'cpu'
+    # Import the correct GameBuffer class based on the policy type
+    game_buffer_classes = {
+        'unizero': 'UniZeroGameBuffer',
+        'efficientzero': 'EfficientZeroGameBuffer',
+        'sampled_efficientzero': 'SampledEfficientZeroGameBuffer',
+        'gumbel_muzero': 'GumbelMuZeroGameBuffer',
+        'stochastic_muzero': 'StochasticMuZeroGameBuffer'
+    }
 
+    GameBuffer = getattr(__import__('lzero.mcts', fromlist=[game_buffer_classes[create_cfg.policy.type]]),
+                         game_buffer_classes[create_cfg.policy.type])
+
+    # Set device based on CUDA availability
+    cfg.policy.device = 'cuda' if cfg.policy.cuda and torch.cuda.is_available() else 'cpu'
+
+    # Compile the configuration
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
+
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
-
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
@@ -91,75 +99,46 @@ def train_unizero(
 
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
-    # load pretrained model
+    # Load pretrained model if specified
     if model_path is not None:
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
-        print('load model from path:', model_path)
+        print('Loaded model from path:', model_path)
 
-    # Create worker components: learner, collector, evaluator, replay buffer, commander.
+    # Create worker components: learner, collector, evaluator, replay buffer, commander
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
-    # ==============================================================
     # MCTS+RL algorithms related core code
-    # ==============================================================
     policy_config = cfg.policy
-    batch_size = policy_config.batch_size
-    # specific game buffer for MCTS+RL algorithms
     replay_buffer = GameBuffer(policy_config)
-    collector = Collector(
-        env=collector_env,
-        policy=policy.collect_mode,
-        tb_logger=tb_logger,
-        exp_name=cfg.exp_name,
-        policy_config=policy_config
-    )
-    evaluator = Evaluator(
-        eval_freq=cfg.policy.eval_freq,
-        n_evaluator_episode=cfg.env.n_evaluator_episode,
-        stop_value=cfg.env.stop_value,
-        env=evaluator_env,
-        policy=policy.eval_mode,
-        tb_logger=tb_logger,
-        exp_name=cfg.exp_name,
-        policy_config=policy_config
-    )
+    collector = Collector(env=collector_env, policy=policy.collect_mode, tb_logger=tb_logger, exp_name=cfg.exp_name,
+                          policy_config=policy_config)
+    evaluator = Evaluator(eval_freq=cfg.policy.eval_freq, n_evaluator_episode=cfg.env.n_evaluator_episode,
+                          stop_value=cfg.env.stop_value, env=evaluator_env, policy=policy.eval_mode,
+                          tb_logger=tb_logger, exp_name=cfg.exp_name, policy_config=policy_config)
 
-    # ==============================================================
-    # Main loop
-    # ==============================================================
-    # Learner's before_run hook.
+    # Learner's before_run hook
     learner.call_hook('before_run')
-    
+
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
 
-    # The purpose of collecting random data before training:
-    # Exploration: Collecting random data helps the agent explore the environment and avoid getting stuck in a suboptimal policy prematurely.
-    # Comparison: By observing the agent's performance during random action-taking, we can establish a baseline to evaluate the effectiveness of reinforcement learning algorithms.
+    # Collect random data before training
     if cfg.policy.random_collect_episode_num > 0:
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
 
-    import copy
     num_unroll_steps = copy.deepcopy(replay_buffer._cfg.num_unroll_steps)
     collect_cnt = -1
 
-    # Usage
-    policy.last_batch_obs = initialize_zeros_batch(
-        cfg.policy.model.observation_shape,
-        len(evaluator_env_cfg),
-        cfg.policy.device
-    )
+    policy.last_batch_obs = initialize_zeros_batch(cfg.policy.model.observation_shape, len(evaluator_env_cfg),
+                                                   cfg.policy.device)
     policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
-    # TODO: comment if debugging
-    # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
     while True:
         collect_cnt += 1
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         collect_kwargs = {}
-        # set temperature for visit count distributions according to the train_iter,
-        # please refer to Appendix D in MuZero paper for details.
+        # Set temperature for visit count distributions according to the train_iter
         collect_kwargs['temperature'] = visit_count_temperature(
             policy_config.manual_temperature_decay,
             policy_config.fixed_temperature_value,
@@ -178,56 +157,41 @@ def train_unizero(
         else:
             collect_kwargs['epsilon'] = 0.0
 
-
-        # Evaluate policy performance.
+        # Evaluate policy performance
         if evaluator.should_eval(learner.train_iter):
-            policy.last_batch_obs = initialize_zeros_batch(
-                cfg.policy.model.observation_shape,
-                len(evaluator_env_cfg),
-                cfg.policy.device
-            )
+            policy.last_batch_obs = initialize_zeros_batch(cfg.policy.model.observation_shape, len(evaluator_env_cfg),
+                                                           cfg.policy.device)
             policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
                 break
 
-        policy.last_batch_obs = initialize_zeros_batch(
-            cfg.policy.model.observation_shape,
-            len(collector_env_cfg),
-            cfg.policy.device
-        )
+        policy.last_batch_obs = initialize_zeros_batch(cfg.policy.model.observation_shape, len(collector_env_cfg),
+                                                       cfg.policy.device)
         policy.last_batch_action = [-1 for _ in range(len(collector_env_cfg))]
-        # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+
         if cfg.policy.update_per_collect is None:
-            # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
             collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
             update_per_collect = int(collected_transitions_num * cfg.policy.model_update_ratio)
-        # save returned new_data collected by the collector
+
         replay_buffer.push_game_segments(new_data)
-        # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
         replay_buffer._cfg.num_unroll_steps = num_unroll_steps
         batch_size = policy._cfg.batch_size
         replay_buffer._cfg.batch_size = batch_size
-        if collector.envstep > cfg.policy.transformer_start_after_envsteps:
-            # TODO：transformer tokenizer交替更新
-            # Learn policy from collected data.
-            # for i in range(cfg.policy.update_per_collect_transformer):
+
+        if collector.envstep > cfg.policy.train_start_after_envsteps:
             for i in range(update_per_collect):
-                # Learner will train ``update_per_collect`` times in one iteration.
-                # if replay_buffer.get_num_of_transitions() > batch_size:
-                if replay_buffer.get_num_of_game_segments() > batch_size:  # TODO: for memory env
+                if replay_buffer.get_num_of_game_segments() > batch_size:
                     train_data = replay_buffer.sample(batch_size, policy)
-                    if cfg.policy.reanalyze_ratio > 0:
-                        if i % 20 == 0:
-                        # if i % 2 == 0:# for reanalyze_ratio>0
-                            policy._target_model.world_model.past_kv_cache_init_infer.clear()
-                            policy._target_model.world_model.past_kv_cache_recurrent_infer.clear()
-                            policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad
-                            torch.cuda.empty_cache() # TODO: 是否需要立即释放显存
-                            print('sample target_model past_kv_cache.clear()')
+                    if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
+                        policy._target_model.world_model.past_kv_cache_init_infer.clear()
+                        policy._target_model.world_model.past_kv_cache_recurrent_infer.clear()
+                        policy._target_model.world_model.keys_values_wm_list.clear()
+                        torch.cuda.empty_cache()
+                        print('Cleared target_model past_kv_cache.')
 
                     train_data.append({'train_which_component': 'transformer'})
                 else:
@@ -238,39 +202,37 @@ def train_unizero(
                         f'continue to collect now ....'
                     )
                     break
-                # The core train steps for MCTS+RL algorithms.
                 log_vars = learner.train(train_data, collector.envstep)
 
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
-        
-        # 预先计算位置编码矩阵，只用于 collect/eval 的推理阶段，不用于训练阶段
-        policy._collect_model.world_model.precompute_pos_emb_diff_kv() # 非常重要，kv更新后需要重新计算
-        policy._target_model.world_model.precompute_pos_emb_diff_kv() # 非常重要，kv更新后需要重新计算
+
+        # Precompute positional embedding matrices for inference in collect/eval stages, not for training
+        policy._collect_model.world_model.precompute_pos_emb_diff_kv()
+        policy._target_model.world_model.precompute_pos_emb_diff_kv()
 
         policy._target_model.world_model.past_kv_cache_init_infer.clear()
         for kv_cache_dict_env in policy._target_model.world_model.past_kv_cache_init_infer_envs:
-            kv_cache_dict_env.clear() 
-
+            kv_cache_dict_env.clear()
         policy._target_model.world_model.past_kv_cache_recurrent_infer.clear()
-        policy._target_model.world_model.keys_values_wm_list.clear() # TODO: 只适用于recurrent_inference() batch_pad
-        print('sample target_model past_kv_cache.clear()')
+        policy._target_model.world_model.keys_values_wm_list.clear()
+        print('Cleared target_model past_kv_cache.')
 
-        policy._collect_model.world_model.past_kv_cache_init_infer.clear() # very important
+        policy._collect_model.world_model.past_kv_cache_init_infer.clear()
         for kv_cache_dict_env in policy._collect_model.world_model.past_kv_cache_init_infer_envs:
-            kv_cache_dict_env.clear() 
-        policy._collect_model.world_model.past_kv_cache_recurrent_infer.clear() # very important
-        policy._collect_model.world_model.keys_values_wm_list.clear()  # TODO: 只适用于recurrent_inference() batch_pad
-        torch.cuda.empty_cache() # TODO: NOTE
+            kv_cache_dict_env.clear()
+        policy._collect_model.world_model.past_kv_cache_recurrent_infer.clear()
+        policy._collect_model.world_model.keys_values_wm_list.clear()
+        print('Cleared collect_model past_kv_cache.')
+
+        torch.cuda.empty_cache()
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break
 
-    # Remove hooks after training.
     if cfg.policy.model.analysis_sim_norm:
         policy._collect_model.encoder_hook.remove_hooks()
         policy._target_model.encoder_hook.remove_hooks()
-    
-    # Learner's after_run hook.
+
     learner.call_hook('after_run')
     return policy
