@@ -1135,5 +1135,16 @@ class WorldModel(nn.Module):
 
         return labels_policy.reshape(-1, self.action_shape), labels_value.reshape(-1, self.support_size)
 
+    def clear_caches(self):
+        """
+        Clears the caches of the world model.
+        """
+        self.past_kv_cache_init_infer.clear()
+        for kv_cache_dict_env in self.past_kv_cache_init_infer_envs:
+            kv_cache_dict_env.clear()
+        self.past_kv_cache_recurrent_infer.clear()
+        self.keys_values_wm_list.clear()
+        print(f'Cleared {self.__class__.__name__} past_kv_cache.')
+
     def __repr__(self) -> str:
         return "transformer-based latent world_model of UniZero"

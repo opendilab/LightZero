@@ -34,6 +34,7 @@ def initialize_zeros_batch(observation_shape, batch_size, device):
     
     return torch.zeros(shape).to(device)
 
+
 def train_unizero(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
@@ -116,32 +117,33 @@ def train_unizero(
     # Learner's before_run hook
     learner.call_hook('before_run')
 
-    if cfg.policy.update_per_collect is not None:
-        update_per_collect = cfg.policy.update_per_collect
-
     # Collect random data before training
     if cfg.policy.random_collect_episode_num > 0:
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
 
-    num_unroll_steps = copy.deepcopy(replay_buffer._cfg.num_unroll_steps)
-    collect_cnt = -1
-
     policy.last_batch_obs = initialize_zeros_batch(cfg.policy.model.observation_shape, len(evaluator_env_cfg),
                                                    cfg.policy.device)
     policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
+    batch_size = policy._cfg.batch_size
+    data_sufficient = False
+    # sample_type = replay_buffer.sample_type  # 'transition' or 'episode'
 
     while True:
-        collect_cnt += 1
+        # Log buffer memory usage
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
-        collect_kwargs = {}
-        # Set temperature for visit count distributions according to the train_iter
-        collect_kwargs['temperature'] = visit_count_temperature(
-            policy_config.manual_temperature_decay,
-            policy_config.fixed_temperature_value,
-            policy_config.threshold_training_steps_for_final_temperature,
-            trained_steps=learner.train_iter
-        )
 
+        # Set temperature for visit count distributions
+        collect_kwargs = {
+            'temperature': visit_count_temperature(
+                policy_config.manual_temperature_decay,
+                policy_config.fixed_temperature_value,
+                policy_config.threshold_training_steps_for_final_temperature,
+                trained_steps=learner.train_iter
+            ),
+            'epsilon': 0.0  # Default epsilon value
+        }
+
+        # Configure epsilon for epsilon-greedy exploration
         if policy_config.eps.eps_greedy_exploration_in_collect:
             epsilon_greedy_fn = get_epsilon_greedy_fn(
                 start=policy_config.eps.start,
@@ -150,79 +152,70 @@ def train_unizero(
                 type_=policy_config.eps.type
             )
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
-        else:
-            collect_kwargs['epsilon'] = 0.0
 
         # Evaluate policy performance
         if evaluator.should_eval(learner.train_iter):
-            policy.last_batch_obs = initialize_zeros_batch(cfg.policy.model.observation_shape, len(evaluator_env_cfg),
-                                                           cfg.policy.device)
-            policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
+            policy.last_batch_obs = initialize_zeros_batch(
+                cfg.policy.model.observation_shape, len(evaluator_env_cfg), cfg.policy.device
+            )
+            policy.last_batch_action = [-1] * len(evaluator_env_cfg)
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
                 break
 
-        policy.last_batch_obs = initialize_zeros_batch(cfg.policy.model.observation_shape, len(collector_env_cfg),
-                                                       cfg.policy.device)
-        policy.last_batch_action = [-1 for _ in range(len(collector_env_cfg))]
+        # Collect new data
+        policy.last_batch_obs = initialize_zeros_batch(
+            cfg.policy.model.observation_shape, len(collector_env_cfg), cfg.policy.device
+        )
+        policy.last_batch_action = [-1] * len(collector_env_cfg)
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
-        if cfg.policy.update_per_collect is None:
-            collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
+        # Determine updates per collection
+        update_per_collect = cfg.policy.update_per_collect
+        if update_per_collect is None:
+            collected_transitions_num = sum(len(game_segment) for game_segment in new_data[0])
             update_per_collect = int(collected_transitions_num * cfg.policy.model_update_ratio)
 
+        # Update replay buffer
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
 
-        replay_buffer._cfg.num_unroll_steps = num_unroll_steps
-        batch_size = policy._cfg.batch_size
-        replay_buffer._cfg.batch_size = batch_size
-
+        # Train the policy if sufficient data is available
         if collector.envstep > cfg.policy.train_start_after_envsteps:
+            # data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size  # For 'episode' sample type
+            data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
+            if not data_sufficient:
+                logging.warning(
+                    f'The data in replay_buffer is not sufficient to sample a mini-batch: '
+                    f'batch_size: {batch_size}, replay_buffer: {replay_buffer}. Continue to collect now ....'
+                )
+                continue
+
             for i in range(update_per_collect):
-                if replay_buffer.get_num_of_game_segments() > batch_size:
+                if data_sufficient:
                     train_data = replay_buffer.sample(batch_size, policy)
                     if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
-                        policy._target_model.world_model.past_kv_cache_init_infer.clear()
-                        policy._target_model.world_model.past_kv_cache_recurrent_infer.clear()
-                        policy._target_model.world_model.keys_values_wm_list.clear()
+                        # Clear caches
+                        for model in [policy._collect_model, policy._target_model]:
+                            # model.world_model.precompute_pos_emb_diff_kv()  # TODO
+                            model.world_model.clear_caches()
+
                         torch.cuda.empty_cache()
-                        print('Cleared target_model past_kv_cache.')
 
                     train_data.append({'train_which_component': 'transformer'})
-                else:
-                    logging.warning(
-                        f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                        f'batch_size: {batch_size}, '
-                        f'{replay_buffer} '
-                        f'continue to collect now ....'
-                    )
-                    break
-                log_vars = learner.train(train_data, collector.envstep)
+                    log_vars = learner.train(train_data, collector.envstep)
 
-                if cfg.policy.use_priority:
-                    replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+                    if cfg.policy.use_priority:
+                        replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
-        # Precompute positional embedding matrices for inference in collect/eval stages, not for training
-        policy._collect_model.world_model.precompute_pos_emb_diff_kv()
-        policy._target_model.world_model.precompute_pos_emb_diff_kv()
-
-        policy._target_model.world_model.past_kv_cache_init_infer.clear()
-        for kv_cache_dict_env in policy._target_model.world_model.past_kv_cache_init_infer_envs:
-            kv_cache_dict_env.clear()
-        policy._target_model.world_model.past_kv_cache_recurrent_infer.clear()
-        policy._target_model.world_model.keys_values_wm_list.clear()
-        print('Cleared target_model past_kv_cache.')
-
-        policy._collect_model.world_model.past_kv_cache_init_infer.clear()
-        for kv_cache_dict_env in policy._collect_model.world_model.past_kv_cache_init_infer_envs:
-            kv_cache_dict_env.clear()
-        policy._collect_model.world_model.past_kv_cache_recurrent_infer.clear()
-        policy._collect_model.world_model.keys_values_wm_list.clear()
-        print('Cleared collect_model past_kv_cache.')
+        # Clear caches and precompute positional embedding matrices
+        for model in [policy._collect_model, policy._target_model]:
+            model.world_model.precompute_pos_emb_diff_kv()
+            model.world_model.clear_caches()
 
         torch.cuda.empty_cache()
 
+        # Check stopping criteria
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break
 

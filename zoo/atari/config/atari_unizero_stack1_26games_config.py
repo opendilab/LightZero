@@ -100,14 +100,14 @@ num_unroll_steps = 10
 eps_greedy_exploration_in_collect = True
 
 
-# debug
+# ====== debug =====
 # collector_env_num = 2
 # n_episode = 2
 # evaluator_env_num = 2
 # num_simulations = 5
 # max_env_step = int(5e5)
 # reanalyze_ratio = 0.
-# batch_size = 5
+# batch_size = 640
 # num_unroll_steps = 10
 # eps_greedy_exploration_in_collect = True
 
@@ -133,7 +133,7 @@ atari_unizero_config = dict(
         clip_rewards=True,
     ),
     policy=dict(
-        analysis_sim_norm=False, # TODO
+        analysis_sim_norm=False,  # TODO
         cal_dormant_ratio=False,
         learn=dict(
             learner=dict(
@@ -169,6 +169,7 @@ atari_unizero_config = dict(
                 context_length_for_recurrent=2 * 4,
                 gru_gating=False,
                 device=f'cuda:{device}',
+                # device=f'cpu',
                 analysis_sim_norm=False,
                 analysis_dormant_ratio=False,
                 action_shape=action_space_size,
