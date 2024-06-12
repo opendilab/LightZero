@@ -28,6 +28,7 @@ class EZNetworkOutput:
     predict_next_latent_state: torch.Tensor
     reward_hidden_state: Tuple[torch.Tensor]
 
+
 @dataclass
 class OrigEZNetworkOutput:
     # output format of the EfficientZero model
@@ -80,7 +81,8 @@ class DownSample(nn.Module):
         if norm_type == 'BN':
             self.norm1 = nn.BatchNorm2d(out_channels // 2)
         elif norm_type == 'LN':
-            self.norm1 = nn.LayerNorm([out_channels // 2, observation_shape[-2] // 2, observation_shape[-1] // 2])
+            self.norm1 = nn.LayerNorm([out_channels // 2, observation_shape[-2] // 2, observation_shape[-1] // 2],
+                                      eps=1e-6)
 
         self.resblocks1 = nn.ModuleList(
             [
@@ -116,7 +118,6 @@ class DownSample(nn.Module):
                 ) for _ in range(1)
             ]
         )
-        # self.pooling2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
         self.activation = activation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -139,23 +140,9 @@ class DownSample(nn.Module):
         x = self.pooling1(x)
         for block in self.resblocks3:
             x = block(x)
-        # output = self.pooling2(x) 
         output = x  # TODO: for (4,64,64) obs
 
         return output
-
-
-def renormalize_min_max(x):  # min-max
-    # x is a 2D tensor of shape (batch_size, num_features)
-    # Compute the min and max for each feature across the batch
-    x_min = torch.min(x, dim=0, keepdim=True).values
-    x_max = torch.max(x, dim=0, keepdim=True).values
-
-    # Apply min-max normalization
-    x_std = (x - x_min) / (x_max - x_min + 1e-8)  # Add a small epsilon to avoid division by zero
-    x_scaled = x_std * (1 - 0) + 0  # Assuming you want to scale between 0 and 1
-
-    return x_scaled
 
 
 class SimNorm(nn.Module):
@@ -214,8 +201,10 @@ class FeatureAndGradientHook:
         l2_norm_after = torch.mean(torch.stack([torch.norm(f, p=2, dim=1).mean() for f in self.features_after]))
 
         # Calculate norms of gradients
-        grad_norm_before = torch.mean(torch.stack([torch.norm(g, p=2, dim=1).mean() for g in self.grads_before if g is not None]))
-        grad_norm_after = torch.mean(torch.stack([torch.norm(g, p=2, dim=1).mean() for g in self.grads_after if g is not None]))
+        grad_norm_before = torch.mean(
+            torch.stack([torch.norm(g, p=2, dim=1).mean() for g in self.grads_before if g is not None]))
+        grad_norm_after = torch.mean(
+            torch.stack([torch.norm(g, p=2, dim=1).mean() for g in self.grads_after if g is not None]))
 
         # Clear stored data and delete tensors to free memory
         self.clear_data()
@@ -267,6 +256,9 @@ class RepresentationNetworkGPT(nn.Module):
         """
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
+        print(f"Using norm type: {norm_type}")
+        print(f"Using activation type: {activation}")
+
         self.observation_shape = observation_shape
         self.downsample = downsample
         if self.downsample:
@@ -284,9 +276,10 @@ class RepresentationNetworkGPT(nn.Module):
             elif norm_type == 'LN':
                 if downsample:
                     self.norm = nn.LayerNorm(
-                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
+                        eps=1e-6)
                 else:
-                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]])
+                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-6)
 
         self.resblocks = nn.ModuleList(
             [
@@ -297,19 +290,11 @@ class RepresentationNetworkGPT(nn.Module):
         )
         self.activation = activation
         self.embedding_dim = embedding_dim
-        # (B,64,4,4) -> (B,64*4*4) -> (B,64,4,4)
-        # self.last_linear = nn.Linear(64*4*4, 64*4*4)
 
-        # self.last_linear = nn.Linear(64*4*4, 256)
-        # self.last_linear = nn.Linear(64*8*8, self.embedding_dim)
         self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
 
-        # TODO
         # Initialize weights using He initialization
         init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
-
-        # Initialize biases to zero
-        # init.zeros_(self.last_linear.bias)
 
         self.sim_norm = SimNorm(simnorm_dim=group_size)
         # self.sim_norm = nn.Sigmoid() # only for ablation
@@ -329,37 +314,18 @@ class RepresentationNetworkGPT(nn.Module):
             x = self.conv(x)
             x = self.norm(x)
             x = self.activation(x)
-        # print('after downsample_net:', x.max(), x.min(), x.mean())
         for block in self.resblocks:
             x = block(x)
 
-        # print('cont embedings before last_linear', x.max(), x.min(), x.mean())
-
-        # NOTE: very important. for unizero atari 64,8,8 = 4096 -> 1024
-        # x = self.last_linear(x.contiguous().view(-1, 64*8*8))
+        # NOTE: very important. 
+        # for atari 64,8,8 = 4096 -> 1024
         x = self.last_linear(x.reshape(-1, 64 * 8 * 8))  # TODO
 
-        x = x.view(-1, self.embedding_dim)  # TODO
+        x = x.view(-1, self.embedding_dim)
 
-        # print('cont embedings before renormalize', x.max(), x.min(), x.mean())
-        # x = torch.softmax(x)
-        x = self.sim_norm(x)  # only for ablation
-        # print('after renormalize', x.max(), x.min(),x.mean())
+        x = self.sim_norm(x)
 
         return x
-
-    def get_param_mean(self) -> float:
-        """
-        Overview:
-            Get the mean of parameters in the network for debug and visualization.
-        Returns:
-            - mean (:obj:`float`): The mean of parameters in the network.
-        """
-        mean = []
-        for name, param in self.named_parameters():
-            mean += np.abs(param.detach().cpu().numpy().reshape(-1)).tolist()
-        mean = sum(mean) / len(mean)
-        return mean
 
 
 class LatentDecoder(nn.Module):
@@ -405,35 +371,16 @@ class LatentDecoder(nn.Module):
         return x
 
 
-def conv_output_shape(h_w, kernel_size=1, stride=1, pad=0, dilation=1):
-    """
-    Utility function for computing output of convolutions
-    takes a tuple of (h,w) and returns a tuple of (h,w)
-    """
-    from math import floor
-
-    if type(kernel_size) is not tuple:
-        kernel_size = (kernel_size, kernel_size)
-    h = floor(
-        ((h_w[0] + (2 * pad) - (dilation * (kernel_size[0] - 1)) - 1) / stride) + 1
-    )
-    w = floor(
-        ((h_w[1] + (2 * pad) - (dilation * (kernel_size[1] - 1)) - 1) / stride) + 1
-    )
-    return h, w
-
-
 class ImageEncoderMemory(nn.Module):
     def __init__(
             self,
             image_shape=(3, 5, 5),
             embedding_size=100,
-            channels=[16, 32, 64],  # 增加通道数
-            kernel_sizes=[3, 3, 3],  # 调整卷积核大小
-            strides=[1, 1, 1], 
-            activation: nn.Module = nn.LeakyReLU(negative_slope=0.01),
-            # normalize_pixel=True,  # 归一化输入
-            normalize_pixel=False,  # 归一化输入
+            channels=[16, 32, 64],
+            kernel_sizes=[3, 3, 3],
+            strides=[1, 1, 1],
+            activation: nn.Module = nn.GELU(),
+            normalize_pixel=False,
             group_size: int = 8,
             **kwargs,
     ):
@@ -445,38 +392,30 @@ class ImageEncoderMemory(nn.Module):
         for i in range(len(self.channels) - 1):
             layers.append(
                 nn.Conv2d(
-                    self.channels[i], self.channels[i + 1], kernel_sizes[i], strides[i], 
-                    padding=kernel_sizes[i]//2  # 保持特征图大小
+                    self.channels[i], self.channels[i + 1], kernel_sizes[i], strides[i],
+                    padding=kernel_sizes[i] // 2  # keep the same size of feature map
                 )
             )
-            layers.append(nn.BatchNorm2d(self.channels[i + 1]))  # 加入BN稳定训练
+            layers.append(nn.BatchNorm2d(self.channels[i + 1]))  # BN
             layers.append(activation)
-        
-        layers.append(nn.AdaptiveAvgPool2d(1))  # 替代Reshape操作
-        
+
+        layers.append(nn.AdaptiveAvgPool2d(1))
+
         self.cnn = nn.Sequential(*layers)
-        # self.linear = nn.Sequential(
-        #     nn.Linear(self.channels[-1], embedding_size),
-        # )
         self.linear = nn.Sequential(
             nn.Linear(self.channels[-1], embedding_size, bias=False),
-            # nn.LayerNorm(embedding_size)  # 归一化embedding  # TODO
         )
         init.kaiming_normal_(self.linear[0].weight, mode='fan_out', nonlinearity='relu')
 
         self.normalize_pixel = normalize_pixel
         self.sim_norm = SimNorm(simnorm_dim=group_size)
-        # self.sim_norm = nn.Sigmoid() # only for ablation
-
 
     def forward(self, image):
-        # import pdb; pdb.set_trace()
         if self.normalize_pixel:
             image = image / 255.0
         x = self.cnn(image.float())  # (B, C, 1, 1)
         x = torch.flatten(x, start_dim=1)  # (B, C)
         x = self.linear(x)  # (B, embedding_size)
-        # TODO:
         x = self.sim_norm(x)
         return x
 
@@ -485,7 +424,7 @@ class ImageDecoderMemory(nn.Module):
     def __init__(
             self,
             image_shape=(3, 5, 5),
-            embedding_size=256,  # 修改为与输入 embedding 的大小匹配
+            embedding_size=256,
             channels=[64, 32, 16],
             kernel_sizes=[3, 3, 3],
             strides=[1, 1, 1],
@@ -497,13 +436,13 @@ class ImageDecoderMemory(nn.Module):
         self.channels = list(channels) + [image_shape[0]]
 
         self.linear = nn.Linear(embedding_size, channels[0] * image_shape[1] * image_shape[2])
-        
+
         layers = []
         for i in range(len(self.channels) - 1):
             layers.append(
                 nn.ConvTranspose2d(
                     self.channels[i], self.channels[i + 1], kernel_sizes[i], strides[i],
-                    padding=kernel_sizes[i]//2, output_padding=strides[i]-1
+                    padding=kernel_sizes[i] // 2, output_padding=strides[i] - 1
                 )
             )
             if i < len(self.channels) - 2:
@@ -516,13 +455,12 @@ class ImageDecoderMemory(nn.Module):
 
     def forward(self, embedding):
         x = self.linear(embedding)
-        x = x.view(-1, self.channels[0], self.shape[1], self.shape[2])  # 修改 view 操作
+        x = x.view(-1, self.channels[0], self.shape[1], self.shape[2])
         x = self.deconv(x)  # (B, C, H, W)
         return x
 
 
 class VectorDecoderMemory(nn.Module):
-    # def __init__(self, embedding_dim: int, output_shape: SequenceType, hidden_size: int = 64):
     def __init__(
             self,
             embedding_dim: int,
@@ -693,12 +631,15 @@ class PredictionHiddenNetwork(nn.Module):
         elif norm_type == 'LN':
             if downsample:
                 self.norm_value = nn.LayerNorm(
-                    [value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                    [value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
+                    eps=1e-6)
                 self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16),
-                                                 math.ceil(observation_shape[-1] / 16)])
+                                                 math.ceil(observation_shape[-1] / 16)], eps=1e-6)
             else:
-                self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]])
-                self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]])
+                self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]],
+                                               eps=1e-6)
+                self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]],
+                                                eps=1e-6)
 
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
@@ -709,7 +650,7 @@ class PredictionHiddenNetwork(nn.Module):
         self.activation = activation
 
         self.fc_value = MLP(
-            in_channels=self.flatten_output_size_for_value_head+self.gru_hidden_size,
+            in_channels=self.flatten_output_size_for_value_head + self.gru_hidden_size,
             hidden_channels=fc_value_layers[0],
             out_channels=output_support_size,
             layer_num=len(fc_value_layers) + 1,
@@ -721,7 +662,7 @@ class PredictionHiddenNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy = MLP(
-            in_channels=self.flatten_output_size_for_policy_head+self.gru_hidden_size,
+            in_channels=self.flatten_output_size_for_policy_head + self.gru_hidden_size,
             hidden_channels=fc_policy_layers[0],
             out_channels=action_space_size,
             layer_num=len(fc_policy_layers) + 1,
@@ -733,7 +674,8 @@ class PredictionHiddenNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
 
-    def forward(self, latent_state: torch.Tensor, world_model_latent_history: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, latent_state: torch.Tensor, world_model_latent_history: torch.Tensor) -> Tuple[
+        torch.Tensor, torch.Tensor]:
         """
         Overview:
             Forward computation of the prediction network.
@@ -746,7 +688,6 @@ class PredictionHiddenNetwork(nn.Module):
         for res_block in self.resblocks:
             latent_state = res_block(latent_state)
 
-
         value = self.conv1x1_value(latent_state)
         value = self.norm_value(value)
         value = self.activation(value)
@@ -758,11 +699,10 @@ class PredictionHiddenNetwork(nn.Module):
         latent_state_value = value.reshape(-1, self.flatten_output_size_for_value_head)
         latent_state_policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
 
-        # try:
-        latent_history_value =  torch.cat([latent_state_value, world_model_latent_history.squeeze(0)], dim=1) # TODO: world_model_latent_history.squeeze(0) 隐状态的形状为: (num_layers * num_directions, batch_size, hidden_size) ->  ( batch_size, hidden_size)
-        latent_history_policy =  torch.cat([latent_state_policy, world_model_latent_history.squeeze(0)], dim=1) # TODO
-        # except Exception as e:
-        #     print(e)
+        # TODO: world_model_latent_history.squeeze(0) shape: (num_layers * num_directions, batch_size, hidden_size) ->  ( batch_size, hidden_size)
+        latent_history_value = torch.cat([latent_state_value, world_model_latent_history.squeeze(0)], dim=1)
+        latent_history_policy = torch.cat([latent_state_policy, world_model_latent_history.squeeze(0)], dim=1)
+
         value = self.fc_value(latent_history_value)
         policy = self.fc_policy(latent_history_policy)
         return policy, value
@@ -834,12 +774,15 @@ class PredictionNetwork(nn.Module):
         elif norm_type == 'LN':
             if downsample:
                 self.norm_value = nn.LayerNorm(
-                    [value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                    [value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
+                    eps=1e-6)
                 self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16),
-                                                 math.ceil(observation_shape[-1] / 16)])
+                                                 math.ceil(observation_shape[-1] / 16)], eps=1e-6)
             else:
-                self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]])
-                self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]])
+                self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]],
+                                               eps=1e-6)
+                self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]],
+                                                eps=1e-6)
 
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
@@ -1042,9 +985,10 @@ class RepresentationNetwork(nn.Module):
             elif norm_type == 'LN':
                 if downsample:
                     self.norm = nn.LayerNorm(
-                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
+                        eps=1e-6)
                 else:
-                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]])
+                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-6)
 
         self.resblocks = nn.ModuleList(
             [
@@ -1081,24 +1025,10 @@ class RepresentationNetwork(nn.Module):
 
         for block in self.resblocks:
             x = block(x)
-        
+
         if self.use_sim_norm:
-            # NOTE: very important. for unizero atari 64,8,8 = 4096 -> 768
-            # x = self.last_linear(x.reshape(-1, 64 * 8 * 8))  # TODO
-            # x = x.view(-1, self.embedding_dim)  # TODO
+            # NOTE: very important. 
+            # for atari 64,8,8 = 4096 -> 768
             x = self.sim_norm(x)
 
         return x
-
-    def get_param_mean(self) -> float:
-        """
-        Overview:
-            Get the mean of parameters in the network for debug and visualization.
-        Returns:
-            - mean (:obj:`float`): The mean of parameters in the network.
-        """
-        mean = []
-        for name, param in self.named_parameters():
-            mean += np.abs(param.detach().cpu().numpy().reshape(-1)).tolist()
-        mean = sum(mean) / len(mean)
-        return mean

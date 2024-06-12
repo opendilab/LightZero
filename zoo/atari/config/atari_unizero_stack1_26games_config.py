@@ -1,7 +1,8 @@
 from easydict import EasyDict
 import torch
-device = 0
+device = 3
 torch.cuda.set_device(device)
+norm_type = 'BN'
 
 env_id = 'PongNoFrameskip-v4'  # 6
 # env_id = 'MsPacmanNoFrameskip-v4' # 9
@@ -156,7 +157,7 @@ atari_unizero_config = dict(
             downsample=True,
             self_supervised_learning_loss=True,
             discrete_action_encoding_type='one_hot',
-            norm_type='LN',
+            norm_type=norm_type,
             reward_support_size=101,
             value_support_size=101,
             support_scale=50,
@@ -239,9 +240,11 @@ create_config = atari_unizero_create_config
 
 if __name__ == "__main__":
     # Define a list of seeds for multiple runs
-    seeds = [0, 1, 2]  # You can add more seed values here
+    # seeds = [0, 1, 2]  # You can add more seed values here
+    seeds = [0]  # You can add more seed values here
+
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_unizero_stack1/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
+        main_config.exp_name = f'data_unizero_refactor/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, max_env_step=max_env_step)
