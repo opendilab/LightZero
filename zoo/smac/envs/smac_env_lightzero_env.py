@@ -97,8 +97,11 @@ FORCE_RESTART_INTERVAL = 50000
 @ENV_REGISTRY.register('smac_lz')
 class SMACLZEnv(SC2Env, BaseEnv):
     """
-    This environment provides the interface for both single agent and multiple agents (two players) in
-    SC2 environment.
+    Overview:
+        LightZero version of SMAC environment. This class includes methods for environment reset, step, and close. \
+        It also includes methods for updating observations, units, states, and rewards. It also includes properties \
+        for accessing the observation space, action space, and reward space of the environment. This environment \
+        provides the interface for both single agent and multiple agents (two players) in SC2 environment.
     """
 
     SMACTimestep = namedtuple('SMACTimestep', ['obs', 'reward', 'done', 'info', 'episode_steps'])
@@ -122,6 +125,10 @@ class SMACLZEnv(SC2Env, BaseEnv):
             self,
             cfg,
     ):
+        """
+        Overview:
+            Initialize the environment with a configuration dictionary. Sets up spaces for observations, actions, and rewards.
+        """
         cfg = deep_merge_dicts(EasyDict(self.config), cfg)
         self.cfg = cfg
         # Client parameters
@@ -178,6 +185,10 @@ class SMACLZEnv(SC2Env, BaseEnv):
         self.move_amount = 2
 
     def _create_join(self):
+        """
+        Overview:
+            Create the join requests for the agents. This function is called by the reset function.
+        """
         # copy and overwrite original implementation
         map_inst = random.choice(self._maps)
         self._map_name = map_inst.name
@@ -258,6 +269,10 @@ class SMACLZEnv(SC2Env, BaseEnv):
 
 
     def _launch(self):
+        """
+        Overview:
+            Launch the environment. This function is called by the reset function.
+        """
         self.old_unit_tags = set()
         print("*****LAUNCH FUNCTION CALLED*****")
         SC2Env.__init__(
@@ -286,9 +301,11 @@ class SMACLZEnv(SC2Env, BaseEnv):
         self._init_map()
 
     def _episode_restart(self):
-        """Restart the environment by killing all units on the map.
-        There is a trigger in the SC2Map file, which restarts the
-        episode when there are no units left.
+        """
+        Overview:
+            Restart the environment by killing all units on the map.
+            There is a trigger in the SC2Map file, which restarts the
+            episode when there are no units left.
         """
         try:
             # save current units' tag
@@ -319,6 +336,11 @@ class SMACLZEnv(SC2Env, BaseEnv):
         self._force_restarts += 1
 
     def reset(self):
+        """
+        Overview:
+            Reset the environment. If it hasn't been initialized yet, this method also handles that. It also handles seeding \
+            if necessary. Returns the first observation.
+        """
         if self._launch_env_flag:
             # Launch StarCraft II
             print("*************LAUNCH TOTAL GAME********************")
@@ -373,6 +395,10 @@ class SMACLZEnv(SC2Env, BaseEnv):
         return obs
 
     def _init_map(self):
+        """
+        Overview:
+            Initialize the map. This function is called by the launch function.
+        """
         game_info = self._game_info[0]
         map_info = game_info.start_raw
         map_play_area_min = map_info.playable_area.p0
@@ -399,6 +425,11 @@ class SMACLZEnv(SC2Env, BaseEnv):
         ) / 255
 
     def _init_units(self):
+        """
+        Overview:
+            Initialize the units. This function is called by the reset function. It checks if all units have been created \
+            and if all units are healthy. If not, it returns False. Otherwise, it returns True.
+        """
         # Sometimes not all units have yet been created by SC2 ToDO: check if use list not dict is a bug
         self.agents = [
             unit for unit in self._obs.observation.raw_data.units
@@ -433,6 +464,11 @@ class SMACLZEnv(SC2Env, BaseEnv):
             return False
 
     def _init_units_attr(self):
+        """
+        Overview:
+            Initialize the attributes of the units. This function is called by the reset function. It sets the unit types, \
+            unit type ids, cooldowns, and shoot ranges.
+        """
         # type
         self.min_unit_type = min([u.unit_type for u in self.agents])
         self.types = [ally_types[self.map_type][u.unit_type - self.min_unit_type] for u in self.agents] + \
@@ -448,6 +484,11 @@ class SMACLZEnv(SC2Env, BaseEnv):
         self.shoot_range = np.array([6 for t in self.types], dtype=np.float32)
 
     def _init_rewards(self):
+        """
+        Overview:
+            Initialize the rewards. This function is called by the reset function. It sets the rewards for injury, death, \
+            and the end of the game. It also sets the maximum reward and the reward scale.
+        """
         self.reward_injury = np.zeros(self.n_agents + self.n_enemies, dtype=np.float32)
         self.reward_dead = np.zeros(self.n_agents + self.n_enemies, dtype=np.float32)
         self.reward_end = 0
@@ -459,6 +500,11 @@ class SMACLZEnv(SC2Env, BaseEnv):
         self.reward_scale = self.reward_max if self.reward_scale is None else self.reward_scale
 
     def _init_states(self):
+        """
+        Overview:
+            Initialize the states. This function is called by the reset function. It sets the state length, the states, \
+            the relations, and the actions.
+        """
         self.state_len = 1 + self.unit_type_bits + 2 + 1 + 2 + 1 + 7 + 9 + 9  # ally or enemy, unit_type, pos.x and y, health, sheld(abs value and whether shield is zero), cooldown, last action(stop,move,attack), path, height
         self.relation_len = 2 + 2 + 2  # distance, cos(theta) and sin(theta), whether can attack
         self.action_len = self.n_actions_no_attack + self.n_entities  # (dead, stop, move) + help ally(currentlly only for medivac) + attack enemy
@@ -479,6 +525,12 @@ class SMACLZEnv(SC2Env, BaseEnv):
         self._update_states()
 
     def step(self, actions):
+        """
+        Overview:
+            Take a step in the environment. This function is called by the reset function. It sets the action mask, \
+            processes the actions, submits the actions, updates the observations, updates the units, updates the states, \
+            gets the reward, and gets the info. It then returns the timestep.
+        """
         processed_actions = self._process_actions(actions)
         try:
             self._submit_actions(processed_actions)
@@ -514,9 +566,11 @@ class SMACLZEnv(SC2Env, BaseEnv):
         return BaseEnvTimestep(obs, reward, done, info)
 
     def _process_actions(self, my_actions):
-        """Construct the action for agent a_id.
-        The input action here is *absolute* and is not mirrored!
-        We use skip_mirror=True in get_avail_agent_actions to avoid error.
+        """
+        Overview:
+            Process the actions. This function is called by the step function. It constructs the action for the agent \
+            based on the input action. It then returns the processed actions. The input action here is *absolute* and \
+            is not mirrored! We use skip_mirror=True in get_avail_agent_actions to avoid error.
         """
         processed_actions = []
         for i, (unit, action) in enumerate(zip(self.agents, my_actions)):
@@ -560,6 +614,10 @@ class SMACLZEnv(SC2Env, BaseEnv):
         return processed_actions
 
     def _submit_actions(self, actions):
+        """
+        Overview:
+            Submit the actions. This function is called by the step function. It sends the actions to the SC2 environment.
+        """
         # actions is a sequence
         # Send action request
         req_actions = sc_pb.RequestAction(actions=actions)
@@ -567,12 +625,19 @@ class SMACLZEnv(SC2Env, BaseEnv):
         self._controllers[0].step(self._step_mul)
 
     def _update_obs(self):
+        """
+        Overview:
+            Update the observations. This function is called by the step function. It gets the observations from the SC2 \
+            environment and sets the observations to the environment observations.
+        """
         # Transform in the thread so it runs while waiting for other observations.
         self._obs = self._controllers[0].observe()
 
     def _update_units(self):
-        """Update units after an environment step.
-        This function assumes that self._obs is up-to-date.
+        """
+        Overview:
+            Update units after an environment step. \
+            This function assumes that self._obs is up-to-date.
         """
         n_ally_alive = 0
         n_enemy_alive = 0
@@ -619,6 +684,11 @@ class SMACLZEnv(SC2Env, BaseEnv):
             return None  # not end
 
     def _update_states(self):
+        """
+        Overview:
+            Update the states. This function is called by the step function. It updates the states, relations, and \
+            actions. It also updates the surrounding terrain and the unit states.
+        """
         # update unit states
         self.states[:, 1 + self.unit_type_bits + 6: 1 + self.unit_type_bits + 13] = 0
         self.states[np.arange(self.n_agents), 1 + self.unit_type_bits + 6 + self.last_actions] = 1
@@ -684,14 +754,22 @@ class SMACLZEnv(SC2Env, BaseEnv):
         self.action_mask[~alive_mask, :] = self.dead_action  # dead action
 
     def get_reward(self):
+        """
+        Overview:
+            Get the reward. This function is called by the step function. It calculates the reward based on the injury, \
+            death, and the end of the game. It then returns the reward.
+        """
         reward = (self.reward_injury + self.reward_dead)[None, :].sum(axis=1) + self.reward_end
         reward *= self.reward_scale / self.reward_max
         return reward
 
     def get_obs(self):
-        """Returns all agent observations in a list.
-        NOTE: Agents should have access only to their local observations
-        during decentralised execution.
+        """
+        Overview:
+            Returns all agent observations in a list. This function is called by the step function. It returns the \
+            observations for each agent.
+            NOTE: Agents should have access only to their local observations
+            during decentralised execution.
         """
         obs = {
             'states': self.states.copy(),
@@ -705,8 +783,10 @@ class SMACLZEnv(SC2Env, BaseEnv):
     #     return self.action_mask[agent_id]
 
     def get_info(self, game_end_code):
-        """This function is called only once at each step, no matter whether you take opponent as agent.
-        We already return dicts for each term, as in Multi-agent scenario.
+        """
+        Overview:
+            This function is called only once at each step, no matter whether you take opponent as agent.
+            We already return dicts for each term, as in Multi-agent scenario.
         """
         info = {
             "battle_won": False,
@@ -746,6 +826,11 @@ class SMACLZEnv(SC2Env, BaseEnv):
         return done, info
 
     def info(self):
+        """
+        Overview:
+            Return the environment information. This function is called by the reset function. It returns the number of \
+            agents, the number of enemies, the observation space, the action space, the reward space, and the episode limit.
+        """
         agent_num = self.n_agents
         enemy_num = self.n_enemies
         obs_space = {}  # TODO: Now, obs_space is only accessible after self.reset().
@@ -763,11 +848,19 @@ class SMACLZEnv(SC2Env, BaseEnv):
         )
 
     def seed(self, seed, dynamic_seed=False):
+        """
+        Overview:
+            Set the seed. This function is called by the reset function. It sets the seed for the environment.
+        """
         self._seed = seed
         if self.cfg.get('subprocess_numpy_seed', False):
             np.random.seed(self._seed)
 
     def close(self):
+        """
+        Overview:
+            Close the environment.
+        """
         SC2Env.close(self)
 
 
