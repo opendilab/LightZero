@@ -523,6 +523,7 @@ class SMACLZEnv(SC2Env, BaseEnv):
         row_inds = np.arange(self.n_agents)
         # update states with current units
         self._update_states()
+        self._eval_episode_return = 0
 
     def step(self, actions):
         """
@@ -561,6 +562,9 @@ class SMACLZEnv(SC2Env, BaseEnv):
         obs_marl['agent_specifig_global_state'] = np.concatenate((obs_marl['agent_state'], np.repeat(obs_marl['global_state'].reshape(1, -1), self.n_agents, axis=0)), axis=1)
         ori_obs['states'] = obs_marl
 
+        self._eval_episode_return += reward
+        if done:
+            info['eval_episode_return'] = self._eval_episode_return
         action_mask = None
         obs = {'observation': ori_obs, 'action_mask': action_mask, 'to_play': -1}
         return BaseEnvTimestep(obs, reward, done, info)

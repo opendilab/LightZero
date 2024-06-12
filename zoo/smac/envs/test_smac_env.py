@@ -3,14 +3,14 @@ import numpy as np
 import gym
 import sys
 from easydict import EasyDict
-from LightZero.zoo.smac.envs.smac_env_lightzero_env import SMACLZEnv
+from zoo.smac.envs.smac_env_lightzero_env import SMACLZEnv
 
 agent_num = 3
 
 @pytest.mark.envtest
 class TestSmacEnv:
 
-    def test_samc():
+    def test_samc(self):
         cfg = dict(
         map_name='3s_vs_5z',
         difficulty=7,
@@ -23,15 +23,24 @@ class TestSmacEnv:
         obs = samc_env.reset()
         assert isinstance(obs, dict)
         while True:
-            random_action = np.random.randint(0, 6, size=(agent_num, ))
-            timestep = samc_env.step(random_action)
+            # access random action according to samc_env.action_mask (shape: (agent_num, 14), bool)
+            random_actions = np.zeros(agent_num, dtype=int)
+            for agent in range(agent_num):
+                available_actions = np.where(samc_env.action_mask[agent])[0]
+                if available_actions.size > 0:
+                    random_actions[agent] = np.random.choice(available_actions)
+                else:
+                    # Handle case where no actions are available (all False)
+                    random_actions[agent] = -1  # or any other placeholder value
+            # random_action = np.random.randint(1, 6, size=(agent_num, ))
+
+            timestep = samc_env.step(random_actions)
             assert isinstance(obs, dict)
-            assert set(['agent_state', 'global_state', 'agent_specifig_global_state']).issubset(timestep.obs['observation'])
+            assert set(['agent_state', 'global_state', 'agent_specifig_global_state']).issubset(timestep.obs['observation']['states'])
             assert timestep.reward.shape == (1, )
             if timestep.done:
                 assert 'eval_episode_return' in timestep.info, timestep.info
                 break
-        print(samc_env.observation_space, samc_env.action_space, samc_env.reward_space)
         print('eval_episode_return: {}'.format(timestep.info['eval_episode_return']))
         samc_env.close()
 
