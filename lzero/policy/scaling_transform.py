@@ -33,6 +33,26 @@ def scalar_transform(x: torch.Tensor, epsilon: float = 0.001, delta: float = 1.)
     return output
 
 
+def ensure_softmax(logits, dim=1):
+    # Calculate the sum along the specified dimension (dim=1 in this case)
+    sum_along_dim = logits.sum(dim=dim, keepdim=True)
+    
+    # Create a tensor of ones with the same shape as sum_along_dim
+    ones_like_sum = torch.ones_like(sum_along_dim)
+    
+    # Check if the logits are already normalized (i.e., if the sum along the dimension is approximately 1)
+    # torch.allclose checks if all elements of two tensors are close within a tolerance
+    # atol (absolute tolerance) is set to a small value to allow for numerical precision issues
+    is_normalized = torch.allclose(sum_along_dim, ones_like_sum, atol=1e-5)
+    
+    # If logits are not normalized, apply softmax along the specified dimension
+    if not is_normalized:
+        return torch.softmax(logits, dim=dim)
+    else:
+        # If logits are already normalized, return them as they are
+        return logits
+
+
 def inverse_scalar_transform(
         logits: torch.Tensor,
         support_size: int,
@@ -49,8 +69,9 @@ def inverse_scalar_transform(
     """
     if categorical_distribution:
         scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
-        value_probs = torch.softmax(logits, dim=1)
-
+        # value_probs = torch.softmax(logits, dim=1)
+        # value_probs = logits
+        value_probs = ensure_softmax(logits, dim=1)
         value_support = torch.from_numpy(scalar_support.range).unsqueeze(0)
 
         value_support = value_support.to(device=value_probs.device)
@@ -92,7 +113,9 @@ class InverseScalarTransform:
 
     def __call__(self, logits: torch.Tensor, epsilon: float = 0.001) -> torch.Tensor:
         if self.categorical_distribution:
-            value_probs = torch.softmax(logits, dim=1)
+            # value_probs = torch.softmax(logits, dim=1)
+            # value_probs = logits
+            value_probs = ensure_softmax(logits, dim=1)
             value = value_probs.mul_(self.value_support).sum(1, keepdim=True)
         else:
             value = logits

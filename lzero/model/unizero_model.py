@@ -124,7 +124,8 @@ class UniZeroModel(nn.Module):
                 num_res_blocks,
                 num_channels,
                 downsample,
-                activation=self.activation,
+                # activation=self.activation,
+                activation=nn.LeakyReLU(negative_slope=0.01),  # TODO: LN+LeakyReLU ========
                 norm_type=norm_type,
                 embedding_dim=world_model_cfg.embed_dim,
                 group_size=world_model_cfg.group_size,

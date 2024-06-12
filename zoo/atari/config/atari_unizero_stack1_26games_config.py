@@ -1,8 +1,10 @@
 from easydict import EasyDict
 import torch
-device = 3
+device = 4
 torch.cuda.set_device(device)
-norm_type = 'BN'
+# norm_type = 'BN'
+norm_type = 'LN'
+
 
 env_id = 'PongNoFrameskip-v4'  # 6
 # env_id = 'MsPacmanNoFrameskip-v4' # 9
@@ -246,6 +248,6 @@ if __name__ == "__main__":
 
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_unizero_refactor/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}'
+        main_config.exp_name = f'data_unizero_refactor/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_encoder-{norm_type}-leakyrelu_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, max_env_step=max_env_step)
