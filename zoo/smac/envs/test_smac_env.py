@@ -3,7 +3,7 @@ import numpy as np
 import gym
 import sys
 from easydict import EasyDict
-from zoo.smac.envs.smac_env_lz import SMACLZEnv
+from LightZero.zoo.smac.envs.smac_env_lightzero_env import SMACLZEnv
 
 agent_num = 3
 
@@ -26,7 +26,7 @@ def test_samc():
         random_action = np.random.randint(0, 6, size=(agent_num, ))
         timestep = samc_env.step(random_action)
         assert isinstance(obs, dict)
-        assert set(['agent_state', 'global_state', 'agent_specifig_global_state']).issubset(timestep[0]['states'])
+        assert set(['agent_state', 'global_state', 'agent_specifig_global_state']).issubset(timestep.obs['observation'])
         assert timestep.reward.shape == (1, )
         if timestep.done:
             assert 'eval_episode_return' in timestep.info, timestep.info

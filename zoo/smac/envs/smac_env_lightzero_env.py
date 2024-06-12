@@ -10,6 +10,7 @@ from pysc2.lib import protocol
 from s2clientprotocol import common_pb2 as sc_common, sc2api_pb2 as sc_pb, raw_pb2 as r_pb, debug_pb2 as d_pb
 from ding.envs import BaseEnv
 from ding.envs.common.env_element import EnvElement, EnvElementInfo
+from ding.envs import BaseEnvTimestep
 from ding.utils import ENV_REGISTRY, deep_merge_dicts
 
 from .smac_map import get_map_params
@@ -366,7 +367,10 @@ class SMACLZEnv(SC2Env, BaseEnv):
         # agent_specifig_global_state
         obs_marl['agent_specifig_global_state'] = np.concatenate((obs_marl['agent_state'], np.repeat(obs_marl['global_state'].reshape(1, -1), self.n_agents, axis=0)), axis=1)
         ori_obs['states'] = obs_marl
-        return ori_obs
+
+        action_mask = None
+        obs = {'observation': ori_obs, 'action_mask': action_mask, 'to_play': -1}
+        return obs
 
     def _init_map(self):
         game_info = self._game_info[0]
@@ -504,9 +508,10 @@ class SMACLZEnv(SC2Env, BaseEnv):
         # agent_specifig_global_state
         obs_marl['agent_specifig_global_state'] = np.concatenate((obs_marl['agent_state'], np.repeat(obs_marl['global_state'].reshape(1, -1), self.n_agents, axis=0)), axis=1)
         ori_obs['states'] = obs_marl
-        return self.SMACTimestep(
-            obs=ori_obs, reward=reward.copy(), done=done, info=info, episode_steps=self._episode_steps
-        )
+
+        action_mask = None
+        obs = {'observation': ori_obs, 'action_mask': action_mask, 'to_play': -1}
+        return BaseEnvTimestep(obs, reward, done, info)
 
     def _process_actions(self, my_actions):
         """Construct the action for agent a_id.
