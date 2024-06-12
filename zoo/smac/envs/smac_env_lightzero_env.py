@@ -119,7 +119,7 @@ class SMACLZEnv(SC2Env, BaseEnv):
     )
 
     def __repr__(self):
-        return "DI-engine SMAC Env"
+        return "LightZero SMAC Env"
 
     def __init__(
             self,
@@ -177,8 +177,8 @@ class SMACLZEnv(SC2Env, BaseEnv):
         self.reward_win = cfg.reward_win
         self.reward_defeat = 0
         self.reward_scale = cfg.reward_scale
-        self.reward_max = 1020 # TODO: change after the env is lannched
-        self.reward_type=cfg.reward_type
+        self.reward_max = 1020  # TODO: change after the env is lannched
+        self.reward_type = cfg.reward_type
 
         # Action parameters
         self.n_actions_no_attack = 6
@@ -266,7 +266,6 @@ class SMACLZEnv(SC2Env, BaseEnv):
                     "Requested:\n%s\n\nActual:\n%s", interface, g.options)
 
         self._features = None
-
 
     def _launch(self):
         """
@@ -386,8 +385,10 @@ class SMACLZEnv(SC2Env, BaseEnv):
         obs_marl['agent_state'] = ori_obs['states'][:self.n_agents]
         # global_state:
         obs_marl['global_state'] = ori_obs['states'].flatten()
-        # agent_specifig_global_state
-        obs_marl['agent_specifig_global_state'] = np.concatenate((obs_marl['agent_state'], np.repeat(obs_marl['global_state'].reshape(1, -1), self.n_agents, axis=0)), axis=1)
+        # agent_specific_global_state
+        obs_marl['agent_specific_global_state'] = np.concatenate(
+            (obs_marl['agent_state'], np.repeat(obs_marl['global_state'].reshape(1, -1), self.n_agents, axis=0)),
+            axis=1)
         ori_obs['states'] = obs_marl
 
         action_mask = None
@@ -410,13 +411,13 @@ class SMACLZEnv(SC2Env, BaseEnv):
         if map_info.pathing_grid.bits_per_pixel == 1:
             vals = np.array(list(map_info.pathing_grid.data)).reshape(self.map_x, int(self.map_y / 8))
             self.pathing_grid = np.transpose(
-                np.array([[(b >> i) & 1 for b in row for i in range(7, -1, -1)] for row in vals], dtype=np.bool)
+                np.array([[(b >> i) & 1 for b in row for i in range(7, -1, -1)] for row in vals], dtype=np.bool_)
             )
         else:
             self.pathing_grid = np.invert(
                 np.flip(
                     np.transpose(
-                        np.array(list(map_info.pathing_grid.data), dtype=np.bool).reshape(self.map_x, self.map_y)),
+                        np.array(list(map_info.pathing_grid.data), dtype=np.bool_).reshape(self.map_x, self.map_y)),
                     axis=1
                 )
             )
@@ -473,7 +474,7 @@ class SMACLZEnv(SC2Env, BaseEnv):
         self.min_unit_type = min([u.unit_type for u in self.agents])
         self.types = [ally_types[self.map_type][u.unit_type - self.min_unit_type] for u in self.agents] + \
                      [enemey_types[u.unit_type] for u in self.enemies]
-        self.is_medivac = np.array([(t == 'medivac') for t in self.types], dtype=np.bool)
+        self.is_medivac = np.array([(t == 'medivac') for t in self.types], dtype=np.bool_)
         # type id
         type_to_id = {t: i for i, t in enumerate(sorted(list(set(self.types))))}
         self.unit_type_bits = len(type_to_id)
@@ -492,10 +493,10 @@ class SMACLZEnv(SC2Env, BaseEnv):
         self.reward_injury = np.zeros(self.n_agents + self.n_enemies, dtype=np.float32)
         self.reward_dead = np.zeros(self.n_agents + self.n_enemies, dtype=np.float32)
         self.reward_end = 0
-        if self.reward_type=='original':
+        if self.reward_type == 'original':
             self.reward_max = (self.n_enemies * self.reward_death_value + self.reward_win) + sum(
                 [(u.health_max + u.shield_max) for u in self.enemies])
-        elif self.reward_type=='unit_norm':
+        elif self.reward_type == 'unit_norm':
             self.reward_max = max([(u.health_max + u.shield_max) for u in self.enemies])
         self.reward_scale = self.reward_max if self.reward_scale is None else self.reward_scale
 
@@ -513,12 +514,12 @@ class SMACLZEnv(SC2Env, BaseEnv):
         row_ind = np.arange(self.n_entities)
         self.states[:, 0] = (row_ind >= self.n_agents)  # ally or enemy
         self.states[row_ind, 1 + self.type_id] = 1  # unit_type
-        self.alive_mask = np.ones(self.n_entities, dtype=np.bool)
+        self.alive_mask = np.ones(self.n_entities, dtype=np.bool_)
         # init relations
         self.relations = np.zeros((self.n_entities, self.n_entities, self.relation_len), dtype=np.float32)
         # init actions
-        self.action_mask = np.zeros((self.n_agents, self.action_len), dtype=np.bool)
-        self.dead_action = np.array([[1] + [0] * (self.action_len - 1)], dtype=np.bool)
+        self.action_mask = np.zeros((self.n_agents, self.action_len), dtype=np.bool_)
+        self.dead_action = np.array([[1] + [0] * (self.action_len - 1)], dtype=np.bool_)
         self.last_actions = np.ones(self.n_agents, dtype=np.int64)
         row_inds = np.arange(self.n_agents)
         # update states with current units
@@ -557,8 +558,10 @@ class SMACLZEnv(SC2Env, BaseEnv):
         obs_marl['agent_state'] = ori_obs['states'][:self.n_agents]
         # global_state:
         obs_marl['global_state'] = ori_obs['states'].flatten()
-        # agent_specifig_global_state
-        obs_marl['agent_specifig_global_state'] = np.concatenate((obs_marl['agent_state'], np.repeat(obs_marl['global_state'].reshape(1, -1), self.n_agents, axis=0)), axis=1)
+        # agent_specific_global_state
+        obs_marl['agent_specific_global_state'] = np.concatenate(
+            (obs_marl['agent_state'], np.repeat(obs_marl['global_state'].reshape(1, -1), self.n_agents, axis=0)),
+            axis=1)
         ori_obs['states'] = obs_marl
 
         action_mask = None
@@ -664,7 +667,7 @@ class SMACLZEnv(SC2Env, BaseEnv):
                 e_unit.health, e_unit.shield = 0, 0
             curr_health, curr_shield = self.enemies[e_id].health, self.enemies[e_id].shield
             self.reward_injury[e_id + self.n_agents] = self.reward_pos_scale * (
-                        prev_health + prev_shield - curr_health - curr_shield)
+                    prev_health + prev_shield - curr_health - curr_shield)
             self.reward_dead[
                 e_id + self.n_agents] = self.reward_pos_scale * self.reward_death_value if prev_health > 0 and curr_health == 0 else 0
             if e_unit.health > 0 and not self.is_medivac[
@@ -721,7 +724,7 @@ class SMACLZEnv(SC2Env, BaseEnv):
             [-ma / 2, 0],  # move west
         ])
         surround = (pos[:, None, :] + offset[None, :, :]).astype(np.int64)
-        surround_clip = np.clip(surround, border[0], border[1]-1)
+        surround_clip = np.clip(surround, border[0], border[1] - 1)
         in_path = self.pathing_grid[surround_clip[:, :, 0], surround_clip[:, :, 1]]
         in_border = (surround >= border[0]).all(axis=-1) & (surround < border[1]).all(axis=-1)
         surround_path = in_path & in_border
@@ -746,7 +749,7 @@ class SMACLZEnv(SC2Env, BaseEnv):
         self.action_mask[:, 2:6] = surround_path[:self.n_agents, 9:]  # move action
         medivac_mask = self.is_medivac[:self.n_agents]
         alive_mask = self.alive_mask[:self.n_agents]
-        shoot_mask = self.relations[: self.n_agents, :, 5].astype(np.bool) & self.alive_mask
+        shoot_mask = self.relations[: self.n_agents, :, 5].astype(bool) & self.alive_mask
         self.action_mask[~medivac_mask, 6 + self.n_agents:6 + self.n_entities] = shoot_mask[~medivac_mask,
                                                                                  self.n_agents:self.n_entities]  # attack action
         self.action_mask[medivac_mask, 6:6 + self.n_agents] = shoot_mask[medivac_mask,
