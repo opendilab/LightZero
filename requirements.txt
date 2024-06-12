@@ -6,3 +6,4 @@ pympler
 minigrid
 moviepy
 pycolab
+pyecharts
