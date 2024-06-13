@@ -52,6 +52,8 @@ class WorldModel(nn.Module):
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
         self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim,
                                                    self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
+        # self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim,
+        #                                            )  # NOTE: we add a sim_norm to the head for observations
         self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_shape)
         self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
 
@@ -977,11 +979,18 @@ class WorldModel(nn.Module):
         elif self.predict_latent_loss_type == 'group_kl':
             # Group KL loss, group features and calculate KL divergence within each group
             batch_size, num_features = logits_observations.shape
-
-            logits_reshaped = logits_observations.reshape(batch_size, self.num_groups, self.group_size)
-            labels_reshaped = labels_observations.reshape(batch_size, self.num_groups, self.group_size)
+            epsilon = 1e-6
+            logits_reshaped = logits_observations.reshape(batch_size, self.num_groups, self.group_size) + epsilon
+            labels_reshaped = labels_observations.reshape(batch_size, self.num_groups, self.group_size) + epsilon
 
             loss_obs = F.kl_div(logits_reshaped.log(), labels_reshaped, reduction='none').sum(dim=-1).mean(dim=-1)
+
+            #  ========== for debugging ==========
+            print('loss_obs:', loss_obs.mean())
+            assert not torch.isnan(loss_obs).any(), "loss_obs contains NaN values"
+            assert not torch.isinf(loss_obs).any(), "loss_obs contains Inf values"
+            for name, param in self.tokenizer.encoder.named_parameters():
+                print('name, param.mean(), param.std():', name, param.mean(), param.std())
 
         # Apply mask to loss_obs
         mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1)

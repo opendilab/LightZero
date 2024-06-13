@@ -436,6 +436,12 @@ class UniZeroPolicy(Policy):
         self._optimizer_world_model.zero_grad()
         weighted_total_loss.backward()
 
+        #  ========== for debugging ==========
+        for name, param in self._learn_model.world_model.tokenizer.encoder.named_parameters():
+            print('name, param.mean(), param.std():', name, param.mean(), param.std())
+            if param.requires_grad:
+                print(name, param.grad.norm())
+
         if self._cfg.analysis_sim_norm:
             del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
             self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()

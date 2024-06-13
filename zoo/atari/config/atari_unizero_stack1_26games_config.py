@@ -1,10 +1,9 @@
 from easydict import EasyDict
 import torch
-device = 0
+device = 3
 torch.cuda.set_device(device)
-norm_type = 'BN'
-# norm_type = 'LN'
-
+# norm_type = 'BN'
+norm_type = 'LN'
 
 env_id = 'PongNoFrameskip-v4'  # 6
 # env_id = 'MsPacmanNoFrameskip-v4' # 9
@@ -143,7 +142,8 @@ atari_unizero_config = dict(
                 ),
             ),
         ),
-        model_path=None,
+        model_path=None,  # TODO
+        # model_path="/mnt/afs/niuyazhe/code/LightZero/data_unizero_refactor/Pong_stack1_unizero_upcNone-mur0.25_H10_bs64_encoder-LN-eps1e-5-gelu-changeinit-maxnorm1_seed0/ckpt/ckpt_best.pth.tar",
         train_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,
         update_per_collect_tokenizer=update_per_collect,
@@ -249,6 +249,8 @@ if __name__ == "__main__":
 
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_unizero_refactor/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_encoder-{norm_type}-eps1e-5-gelu-changeinit-alsoGN-maxnorm1_seed{seed}'
+        main_config.exp_name = f'data_unizero_refactor/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_encoder-{norm_type}-eps1e-5-gelu-changeinit-alsoGN-maxnorm1-havesimnorm_seed{seed}'
+        # main_config.exp_name = f'data_unizero_refactor_debug/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_encoder-{norm_type}-eps1e-5-gelu-changeinit-alsoGN-maxnorm1-havesimnorm_seed{seed}'
+        
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
