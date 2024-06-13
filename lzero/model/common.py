@@ -82,7 +82,7 @@ class DownSample(nn.Module):
             self.norm1 = nn.BatchNorm2d(out_channels // 2)
         elif norm_type == 'LN':
             self.norm1 = nn.LayerNorm([out_channels // 2, observation_shape[-2] // 2, observation_shape[-1] // 2],
-                                      eps=1e-6)
+                                      eps=1e-5)
 
         self.resblocks1 = nn.ModuleList(
             [
@@ -277,9 +277,9 @@ class RepresentationNetworkGPT(nn.Module):
                 if downsample:
                     self.norm = nn.LayerNorm(
                         [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
-                        eps=1e-6)
+                        eps=1e-5)
                 else:
-                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-6)
+                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-5)
 
         self.resblocks = nn.ModuleList(
             [
@@ -294,7 +294,7 @@ class RepresentationNetworkGPT(nn.Module):
         self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
 
         # Initialize weights using He initialization
-        init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
+        # init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
 
         self.sim_norm = SimNorm(simnorm_dim=group_size)
         # self.sim_norm = nn.Sigmoid() # only for ablation
@@ -632,14 +632,14 @@ class PredictionHiddenNetwork(nn.Module):
             if downsample:
                 self.norm_value = nn.LayerNorm(
                     [value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
-                    eps=1e-6)
+                    eps=1e-5)
                 self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16),
-                                                 math.ceil(observation_shape[-1] / 16)], eps=1e-6)
+                                                 math.ceil(observation_shape[-1] / 16)], eps=1e-5)
             else:
                 self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]],
-                                               eps=1e-6)
+                                               eps=1e-5)
                 self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]],
-                                                eps=1e-6)
+                                                eps=1e-5)
 
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
@@ -775,14 +775,14 @@ class PredictionNetwork(nn.Module):
             if downsample:
                 self.norm_value = nn.LayerNorm(
                     [value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
-                    eps=1e-6)
+                    eps=1e-5)
                 self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16),
-                                                 math.ceil(observation_shape[-1] / 16)], eps=1e-6)
+                                                 math.ceil(observation_shape[-1] / 16)], eps=1e-5)
             else:
                 self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]],
-                                               eps=1e-6)
+                                               eps=1e-5)
                 self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]],
-                                                eps=1e-6)
+                                                eps=1e-5)
 
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
@@ -986,9 +986,9 @@ class RepresentationNetwork(nn.Module):
                 if downsample:
                     self.norm = nn.LayerNorm(
                         [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
-                        eps=1e-6)
+                        eps=1e-5)
                 else:
-                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-6)
+                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-5)
 
         self.resblocks = nn.ModuleList(
             [

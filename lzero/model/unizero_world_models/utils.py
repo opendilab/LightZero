@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from lzero.model.common import RepresentationNetwork
+from lzero.model.common import RepresentationNetwork, RepresentationNetworkGPT
 from .kv_caching import KeysValues
 
 
@@ -128,15 +128,44 @@ class SimNorm(nn.Module):
         return f"SimNorm(dim={self.dim})"
 
 
-def init_weights(module):
-    if not isinstance(module, RepresentationNetwork):
-        if isinstance(module, (nn.Linear, nn.Embedding)):
-            module.weight.data.normal_(mean=0.0, std=0.02)
-            if isinstance(module, nn.Linear) and module.bias is not None:
-                module.bias.data.zero_()
-        elif isinstance(module, nn.LayerNorm):
+def init_weights(module, norm_type='BN'):
+    """
+    Initialize the weights of the module based on the specified normalization type.
+
+    Args:
+        module (nn.Module): The module to initialize.
+        norm_type (str): The type of normalization to use ('BN' for BatchNorm, 'LN' for LayerNorm).
+    """
+    if isinstance(module, (nn.Linear, nn.Embedding)):
+        module.weight.data.normal_(mean=0.0, std=0.02)
+        if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
-            module.weight.data.fill_(1.0)
+    elif isinstance(module, nn.LayerNorm):
+        print(f"Init nn.LayerNorm using zero bias, 1 weight")
+        module.bias.data.zero_()
+        module.weight.data.fill_(1.0)
+    elif isinstance(module, nn.GroupNorm):
+        print(f"Init nn.GroupNorm using zero bias, 1 weight")
+        module.bias.data.zero_()
+        module.weight.data.fill_(1.0)
+    elif isinstance(module, nn.BatchNorm2d):
+        print(f"Init nn.BatchNorm2d using zero bias, 1 weight")
+        module.weight.data.fill_(1.0)
+        module.bias.data.zero_()
+    elif isinstance(module, nn.Conv2d):
+        if norm_type == 'BN':
+            nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+            print(f"Init nn.Conv2d using kaiming normal for BN")
+        elif norm_type == 'LN':
+            nn.init.xavier_uniform_(module.weight)
+            print(f"Init nn.Conv2d using xavier uniform for LN")
+    elif isinstance(module, nn.Linear):
+        if norm_type == 'BN':
+            nn.init.kaiming_normal_(module.weight, mode='fan_out', nonlinearity='relu')
+            print("Init Linear using kaiming normal for BN")
+        elif norm_type == 'LN':
+            nn.init.xavier_uniform_(module.weight)
+            print("Init Linear using xavier uniform for LN")
 
 
 class LossWithIntermediateLosses:

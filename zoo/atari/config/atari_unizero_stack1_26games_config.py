@@ -164,6 +164,7 @@ atari_unizero_config = dict(
             value_support_size=101,
             support_scale=50,
             world_model=dict(
+                norm_type=norm_type,
                 tokens_per_block=2,
                 max_blocks=10,
                 max_tokens=2 * 10,  # NOTE: each timestep has 2 tokens: obs and action
@@ -214,7 +215,8 @@ atari_unizero_config = dict(
         lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
         target_update_freq=100,
-        grad_clip_value=5,
+        # grad_clip_value=5,  # for BN
+        grad_clip_value=1,  # for LN
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
@@ -248,6 +250,6 @@ if __name__ == "__main__":
 
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_unizero_refactor/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_encoder-{norm_type}-leakyrelu_seed{seed}'
+        main_config.exp_name = f'data_unizero_refactor/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_encoder-{norm_type}-eps1e-5-gelu-changeinit-alsoGN-maxnorm1_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, max_env_step=max_env_step)

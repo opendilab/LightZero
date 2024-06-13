@@ -51,12 +51,12 @@ class WorldModel(nn.Module):
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
         self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim,
-                                                   self.sim_norm)
+                                                   self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
         self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_shape)
         self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
 
-        # Apply weight initialization
-        self.apply(init_weights)
+        # Apply weight initialization, the order is important
+        self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
         self._initialize_last_layer()
 
         # Cache structures
@@ -120,7 +120,7 @@ class WorldModel(nn.Module):
     def _initialize_last_layer(self) -> None:
         last_linear_layer_init_zero = True
         if last_linear_layer_init_zero:
-            for head in [self.head_value, self.head_rewards, self.head_observations]:
+            for head in [self.head_policy, self.head_value, self.head_rewards, self.head_observations]:
                 for layer in reversed(head.head_module):
                     if isinstance(layer, nn.Linear):
                         nn.init.zeros_(layer.weight)
