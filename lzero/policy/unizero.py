@@ -620,29 +620,30 @@ class UniZeroPolicy(Policy):
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                if self._cfg.eps.eps_greedy_exploration_in_collect:
-                    # eps greedy collect
-                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self._collect_mcts_temperature, deterministic=True
-                    )
-                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                    if np.random.rand() < self.collect_epsilon:
-                        action = np.random.choice(legal_actions[i])
-                else:
-                    # normal collect
-                    # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
-                    # the index within the legal action set, rather than the index in the entire action set.
-                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self._collect_mcts_temperature, deterministic=False
-                    )
-                    # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
-                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                
+                # if self._cfg.eps.eps_greedy_exploration_in_collect:
+                #     # eps greedy collect
+                #     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                #         distributions, temperature=self._collect_mcts_temperature, deterministic=True
+                #     )
+                #     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                #     if np.random.rand() < self.collect_epsilon:
+                #         action = np.random.choice(legal_actions[i])
+                # else:
+                #     # normal collect
+                #     # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                #     # the index within the legal action set, rather than the index in the entire action set.
+                #     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                #         distributions, temperature=self._collect_mcts_temperature, deterministic=False
+                #     )
+                #     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
+                #     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
                 # ============== TODO: only for visualize ==============
-                # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                #     distributions, temperature=self._collect_mcts_temperature, deterministic=True
-                # )
-                # action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                    distributions, temperature=self._collect_mcts_temperature, deterministic=True
+                )
+                action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                 # ============== TODO: only for visualize ==============
 
                 output[i] = {

@@ -128,10 +128,12 @@ def visualize_reward_value_img_policy( original_images, reconstructed_images, ta
         ax[3].legend(handles, labels, loc='upper right', ncol=num_actions)
 
         plt.tight_layout()
-        directory = f'/your_path/code/LightZero/render/{suffix}'
+        # directory = f'/your_path/code/LightZero/render_{suffix}'
+        directory = f'/mnt/afs/niuyazhe/code/LightZero/render_{suffix}'
         if not os.path.exists(directory):
             os.makedirs(directory)
         plt.savefig(f'{directory}/visualization_sequence_{batch_idx}_reward_value_img_policy_mcts-policy.png')
+        print(f'Saved visualization to {directory}/visualization_sequence_{batch_idx}_reward_value_img_policy_mcts-policy.png')
         plt.close()
         # sys.exit(0)  # TODO
 

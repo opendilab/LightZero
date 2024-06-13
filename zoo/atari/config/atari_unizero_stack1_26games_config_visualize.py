@@ -101,6 +101,20 @@ batch_size = 64
 num_unroll_steps = 10
 eps_greedy_exploration_in_collect = True
 
+# ====== for visualize =====
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 3
+num_simulations = 50
+max_env_step = int(5e5)
+reanalyze_ratio = 0.
+batch_size = 8
+num_unroll_steps = 10
+# num_unroll_steps = 20
+
+eps_greedy_exploration_in_collect = False
+
+
 # ====== debug =====
 # collector_env_num = 2
 # n_episode = 2
@@ -127,10 +141,10 @@ atari_unizero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        # collect_max_episode_steps=int(50),
-        # eval_max_episode_steps=int(50),
-        collect_max_episode_steps=int(2e4),
-        eval_max_episode_steps=int(1e4),
+        collect_max_episode_steps=int(400),
+        eval_max_episode_steps=int(400),
+        # collect_max_episode_steps=int(2e4),
+        # eval_max_episode_steps=int(1e4),
         clip_rewards=True,
     ),
     policy=dict(
@@ -143,7 +157,8 @@ atari_unizero_config = dict(
                 ),
             ),
         ),
-        model_path=None,
+        # model_path=None,
+        model_path='/mnt/afs/niuyazhe/code/LightZero/data_unizero_refactor/Pong_stack1_unizero_upcNone-mur0.25_H10_bs64-LeakyReLU_BN_seed0/ckpt/ckpt_best.pth.tar',
         train_start_after_envsteps=int(0),
         update_per_collect_transformer=update_per_collect,
         update_per_collect_tokenizer=update_per_collect,
@@ -249,6 +264,7 @@ if __name__ == "__main__":
 
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_unizero_refactor/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_encoder-{norm_type}-eps1e-5-gelu-changeinit-alsoGN-maxnorm1_seed{seed}'
+        main_config.exp_name = f'data_unizero_refactor_visualize/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_encoder-{norm_type}_seed{seed}'
+        # main_config.exp_name = f'data_unizero_refactor/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-mur{model_update_ratio}_H{num_unroll_steps}_bs{batch_size}_encoder-{norm_type}-eps1e-5-gelu-changeinit-alsoGN-maxnorm1_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

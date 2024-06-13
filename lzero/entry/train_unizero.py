@@ -98,8 +98,9 @@ def train_unizero(
 
     # Load pretrained model if specified
     if model_path is not None:
+        print(f'Loading model from {model_path} begin...')
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
-        print('Loaded model from path:', model_path)
+        print(f'Loading model from {model_path} end!')
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
@@ -127,6 +128,9 @@ def train_unizero(
     batch_size = policy._cfg.batch_size
     data_sufficient = False
     # sample_type = replay_buffer.sample_type  # 'transition' or 'episode'
+
+    # TODO: for visualize
+    # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
     while True:
         # Log buffer memory usage
