@@ -14,7 +14,10 @@ from dizoo.multiagent_mujoco.envs.multi_mujoco_env import MujocoEnv,MujocoMulti
 class MAMujocoEnvLZ(MujocoEnv):
     """
     Overview:
-        The modified Multi-agentMuJoCo environment with continuous action space for LightZero's algorithms.
+        The modified Multi-agentMuJoCo environment with continuous action space for LightZero's algorithms. \
+        You can find the original implementation at \
+        [Multi-Agent Mujoco](https://robotics.farama.org/envs/MaMuJoCo/index.html). The class is registered \
+        in ENV_REGISTRY with the key 'multiagent_mujoco_lightzero'.
     """
 
     config = dict(
@@ -24,6 +27,18 @@ class MAMujocoEnvLZ(MujocoEnv):
     )
 
     def __init__(self, cfg: dict) -> None:
+        """
+        Overview:
+            Initialize the Multi-agent MuJoCo environment.
+        Arguments:
+            - cfg (:obj:`dict`): Config dict. The following keys must be specified:
+                - 'env_name' (:obj:`str`): The name of the environment.
+                - 'scenario' (:obj:`str`): The scenario of the environment.
+                - 'agent_conf' (:obj:`str`): The configuration of the agents.
+                - 'agent_obsk' (:obj:`int`): The observation space of the agents.
+                - 'add_agent_id' (:obj:`bool`): Whether to add agent id to the observation.
+                - 'episode_limit' (:obj:`int`): The maximum number of episodes.
+        """
         super().__init__(cfg)
         self._cfg = cfg
         # We use env_name to indicate the env_id in LightZero.
@@ -31,6 +46,14 @@ class MAMujocoEnvLZ(MujocoEnv):
         self._init_flag = False
 
     def reset(self) -> np.ndarray:
+        """
+        Overview:
+            Reset the environment and return the initial observation.
+        Returns:
+            - obs (:obj:`np.ndarray`): The initial observation after resetting. The observation is a dict with keys \
+                'observation', 'action_mask', and 'to_play'. The 'observation' is a dict with keys 'agent_state' and \
+                'global_state'.
+        """
         if not self._init_flag:
             self._env = MujocoMulti(env_args=self._cfg)
             self._init_flag = True
@@ -79,6 +102,14 @@ class MAMujocoEnvLZ(MujocoEnv):
         return obs
 
     def step(self, action: Union[np.ndarray, list]) -> BaseEnvTimestep:
+        """
+        Overview:
+            Take a step in the environment with the given action.
+        Arguments:
+            - action (:obj:`np.ndarray`): The action to be taken.
+        Returns:
+            - timestep (:obj:`BaseEnvTimestep`): The timestep information including observation, reward, done flag, and info.
+        """
         action = to_ndarray(action)
         obs, rew, done, info = self._env.step(action)
         self._eval_episode_return += rew
