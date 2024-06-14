@@ -587,6 +587,7 @@ class MuZeroCollector(ISerialCollector):
                             'mean_energy_consumption': mean_energy_consumption,
                             'transmitted_data_ratio': transmitted_data_ratio,
                             'human_coverage': human_coverage,
+                            "distribution_entropy":  timestep.info['performance_info']['distribution_entropy']
                         }
                     else:
                         info = {
@@ -735,6 +736,7 @@ class MuZeroCollector(ISerialCollector):
                 episode_transmitted_data_ratio = [d['transmitted_data_ratio'] for d in self._episode_info]
                 episode_human_coverage = [d['human_coverage'] for d in self._episode_info]
                 mean_transmit_data = [d['mean_transmit_data'] for d in self._episode_info]
+                mean_distribution_entropy = [d['distribution_entropy'] for d in self._episode_info]
                 info = {
                     'episode_count': episode_count,
                     'envstep_count': envstep_count,
@@ -755,6 +757,7 @@ class MuZeroCollector(ISerialCollector):
                     'episode_mean_energy_consumption': np.mean(episode_energy_consumption),
                     'episode_mean_transmitted_data_ratio': np.mean(episode_transmitted_data_ratio),
                     'episode_mean_human_coverage': np.mean(episode_human_coverage),
+                    'episode_mean_distribution_entropy': np.mean(mean_distribution_entropy),
                 }
             else:
                 info = {
