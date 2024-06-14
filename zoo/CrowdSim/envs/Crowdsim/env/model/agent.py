@@ -37,7 +37,7 @@ class Human():
         self.data_queue = InformationQueue()
         self.data_amount = 0
         self.collect_v_prob = getattr(self.config, 'collect_v_prob', {1: 1, 2: 0})
-        self.collect_v = random.choices(list(self.collect_v_prob.keys()), list(self.collect_v_prob.values()))[0]
+        self.collect_v = random.choices(list(map(int, self.collect_v_prob.keys())), list(self.collect_v_prob.values()))[0]
 
     def set(self, px, py, theta, aoi, data_amount):
         self.px = px
