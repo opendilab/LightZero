@@ -27,12 +27,12 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
-最近更新于 2024.04.12 LightZero-v0.0.5
+最近更新于 2024.06.19 LightZero-v0.0.5
 
 > LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库。
 > 有关 LightZero 的任何疑问，您都可以咨询基于 RAG 技术的问答助手：[ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal)。
 
-[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [LightZero 论文](https://arxiv.org/pdf/2310.08348.pdf) | [ReZero 论文](https://arxiv.org/abs/2404.16364)
+[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [LightZero 论文](https://arxiv.org/abs/2310.08348) | [🔥UniZero 论文](https://arxiv.org/abs/2406.10667) | [🔥ReZero 论文](https://arxiv.org/abs/2404.16364)
 
 
 ## 背景
@@ -110,23 +110,23 @@ LightZero 是基于 [PyTorch](https://pytorch.org/) 实现的 MCTS 算法库，�
 
 LightZero 目前支持的环境及算法如下表所示：
 
-| Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | 
-|---------------| -------- | ------ |-------------| ------------------ | ---------- |----------------|
-| TicTacToe     | ✔      | ✔      | 🔒           | 🔒                | ✔          | 🔒             |
-| Gomoku        | ✔      | ✔      | 🔒          | 🔒               | ✔          | 🔒             |
-| Connect4      | ✔      | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |
-| 2048          | ---       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |
-| Chess         | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
-| Go            | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
-| CartPole      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
-| Pendulum      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
-| LunarLander   | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
-| BipedalWalker | ---      | ✔      | ✔           | ✔                | ✔          | 🔒              |
-| Atari         | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
-| MuJoCo        | ---      | ✔     | ✔          | ✔                | 🔒         | 🔒               |
-| MiniGrid      | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
-| Bsuite        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
-| Memory        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
+| Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | UniZero |
+|---------------| -------- | ------ |-------------| ------------------ | ---------- |----------------|---------------|
+| TicTacToe     | ✔      | ✔      | 🔒           | 🔒                | ✔          | 🔒             |✔|
+| Gomoku        | ✔      | ✔      | 🔒          | 🔒               | ✔          | 🔒             |✔|
+| Connect4      | ✔      | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |✔|
+| 2048          | ---       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |✔|
+| Chess         | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |🔒|
+| Go            | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |🔒|
+| CartPole      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|
+| Pendulum      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |🔒|
+| LunarLander   | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|
+| BipedalWalker | ---      | ✔      | ✔           | ✔                | ✔          | 🔒              |🔒|
+| Atari         | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|
+| MuJoCo        | ---      | ✔     | ✔          | ✔                | 🔒         | 🔒               |🔒|
+| MiniGrid      | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|
+| Bsuite        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|
+| Memory        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|
 
 <sup>(1): "✔" 表示对应的项目已经完成并经过良好的测试。</sup>
 
@@ -283,6 +283,8 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 [算法概览图符号表](https://github.com/opendilab/LightZero/blob/main/assets/paper_notes/NotationTable.pdf)
 
 </details>
+
+也可参考相应的知乎专栏: [MCTS+RL 前沿理论和应用的深入解析](https://www.zhihu.com/column/c_1764308735227662336)。
 
 ### 算法框架图
 
@@ -533,6 +535,13 @@ and internal state transition dynamics,
   author={Niu, Yazhe and Pu, Yuan and Yang, Zhenjie and Li, Xueyan and Zhou, Tong and Ren, Jiyuan and Hu, Shuai and Li, Hongsheng and Liu, Yu},
   journal={Advances in Neural Information Processing Systems},
   volume={36},
+  year={2024}
+}
+
+@article{pu2024unizero,
+  title={UniZero: Generalized and Efficient Planning with Scalable Latent World Models},
+  author={Pu, Yuan and Niu, Yazhe and Ren, Jiyuan and Yang, Zhenjie and Li, Hongsheng and Liu, Yu},
+  journal={arXiv preprint arXiv:2406.10667},
   year={2024}
 }
 
