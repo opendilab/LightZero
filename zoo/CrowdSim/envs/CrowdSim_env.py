@@ -23,22 +23,20 @@ class CrowdSimEnv(BaseEnv):
         self._robot_num = self._cfg.robot_num
         self._human_num = self._cfg.human_num
         self._observation_space = gym.spaces.Box(
-            low=float("-inf"),
-            high=float("inf"),
-            shape=((self._robot_num+self._human_num)*4,),
-            dtype=np.float32)
+            low=float("-inf"), high=float("inf"), shape=((self._robot_num + self._human_num) * 4, ), dtype=np.float32
+        )
         # action space
         # one_uav_action_space = [[0, 0], [30, 0], [-30, 0], [0, 30], [0, -30]]
         self.real_action_space = list(product(self._cfg.one_uav_action_space, repeat=self._robot_num))
         one_uav_action_n = len(self._cfg.one_uav_action_space)
-        self._action_space = gym.spaces.Discrete(one_uav_action_n**self._robot_num)
+        self._action_space = gym.spaces.Discrete(one_uav_action_n ** self._robot_num)
         self._action_space.seed(0)  # default seed
         self._reward_space = gym.spaces.Box(low=0.0, high=1.0, shape=(1, ), dtype=np.float32)
         self._continuous = False
 
     def reset(self) -> np.ndarray:
         if not self._init_flag:
-            self._env = gym.make('CrowdSim-v0', dataset = self._cfg.dataset, custom_config = self._cfg)
+            self._env = gym.make('CrowdSim-v0', dataset=self._cfg.dataset, custom_config=self._cfg)
             self._init_flag = True
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
@@ -52,8 +50,8 @@ class CrowdSimEnv(BaseEnv):
         raw_obs = self._env.reset()
         obs_list = raw_obs.to_array()
         # human_obs, robot_obs = obs_list
-        obs = np.concatenate(obs_list,axis=0).flatten() # for 1 dim e.g.(244,)
-        assert len(obs)==(self._robot_num+self._human_num)*4
+        obs = np.concatenate(obs_list, axis=0).flatten()  # for 1 dim e.g.(244,)
+        assert len(obs) == (self._robot_num + self._human_num) * 4
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
@@ -76,8 +74,8 @@ class CrowdSimEnv(BaseEnv):
         assert isinstance(real_action, tuple) and len(real_action) == self._robot_num, "illegal action!"
         raw_obs, rew, done, info = self._env.step(real_action)
         obs_list = to_ndarray(raw_obs.to_tensor())
-        obs = np.concatenate(obs_list,axis=0).flatten() # for 1 dim e.g.(244,)
-        assert len(obs)==(self._robot_num+self._human_num)*4
+        obs = np.concatenate(obs_list, axis=0).flatten()  # for 1 dim e.g.(244,)
+        assert len(obs) == (self._robot_num + self._human_num) * 4
 
         self._eval_episode_return += rew
         if done:

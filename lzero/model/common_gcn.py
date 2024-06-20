@@ -9,29 +9,31 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
+
 class RGCNLayer(nn.Module):
     """
     Overview:
         Relational graph convolutional network layer.
     """
+
     def __init__(
-            self,
-            robot_num: int,
-            human_num: int,
-            robot_state_dim,
-            human_state_dim,
-            similarity_function,
-            num_layer = 2,
-            X_dim = 32,
-            layerwise_graph = False,
-            skip_connection = True,
-            wr_dims = [64, 32],     # the last dim should equal to X_dim
-            wh_dims = [64, 32],     # the last dim should equal to X_dim
-            final_state_dim = 32,   # should equal to X_dim
-            norm_type= None,
-            last_linear_layer_init_zero=True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            ):
+        self,
+        robot_num: int,
+        human_num: int,
+        robot_state_dim,
+        human_state_dim,
+        similarity_function,
+        num_layer=2,
+        X_dim=32,
+        layerwise_graph=False,
+        skip_connection=True,
+        wr_dims=[64, 32],  # the last dim should equal to X_dim
+        wh_dims=[64, 32],  # the last dim should equal to X_dim
+        final_state_dim=32,  # should equal to X_dim
+        norm_type=None,
+        last_linear_layer_init_zero=True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+    ):
         super().__init__()
 
         # design choice
@@ -59,7 +61,7 @@ class RGCNLayer(nn.Module):
             activation=activation,
             norm_type=norm_type,
             last_linear_layer_init_zero=last_linear_layer_init_zero,
-            )  # inputs,64,32
+        )  # inputs,64,32
         self.w_h = MLP(
             in_channels=human_state_dim,
             hidden_channels=wh_dims[0],
@@ -68,7 +70,7 @@ class RGCNLayer(nn.Module):
             activation=activation,
             norm_type=norm_type,
             last_linear_layer_init_zero=last_linear_layer_init_zero,
-            )  # inputs,64,32
+        )  # inputs,64,32
 
         if self.similarity_function == 'embedded_gaussian':
             self.w_a = nn.Parameter(torch.randn(self.X_dim, self.X_dim))
@@ -79,7 +81,7 @@ class RGCNLayer(nn.Module):
                 hidden_channels=2 * X_dim,
                 out_channels=1,
                 layer_num=1,
-                )
+            )
 
         embedding_dim = self.X_dim
         self.Ws = torch.nn.ParameterList()
@@ -148,10 +150,12 @@ class RGCNLayer(nn.Module):
                 stack_num = state.size(1) // ((self.robot_num + self.human_num) * self.robot_state_dim)
                 assert stack_num == 1, "stack_num should be 1 for 1-dim-array obs"
                 # robot_states shape:(B, stack_num*robot_num, state_dim)
-                robot_states = state[:, :stack_num * self.robot_num * self.robot_state_dim].reshape(-1, self.robot_num, self.robot_state_dim)
+                robot_states = state[:, :stack_num * self.robot_num *
+                                     self.robot_state_dim].reshape(-1, self.robot_num, self.robot_state_dim)
                 # human_states shape:(B, stack_num*human_num, state_dim)
-                human_states = state[:, stack_num * self.robot_num * self.robot_state_dim:].reshape(-1, self.human_num, self.human_state_dim)
-                
+                human_states = state[:, stack_num * self.robot_num *
+                                     self.robot_state_dim:].reshape(-1, self.human_num, self.human_state_dim)
+
         # compute feature matrix X
         robot_state_embedings = self.w_r(robot_states)  # batch x num x embedding_dim
         human_state_embedings = self.w_h(human_states)
@@ -180,19 +184,20 @@ class RGCNLayer(nn.Module):
 
         return next_H
 
+
 class RepresentationNetworkGCN(nn.Module):
 
     def __init__(
-            self,
-            robot_state_dim: int,
-            human_state_dim:  int,
-            robot_num: int,
-            human_num: int,
-            hidden_channels: int = 64,
-            layer_num: int = 2,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            last_linear_layer_init_zero: bool = True,
-            norm_type: Optional[str] = 'BN',
+        self,
+        robot_state_dim: int,
+        human_state_dim: int,
+        robot_num: int,
+        human_num: int,
+        hidden_channels: int = 64,
+        layer_num: int = 2,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        last_linear_layer_init_zero: bool = True,
+        norm_type: Optional[str] = 'BN',
     ) -> torch.Tensor:
         """
         Overview:
@@ -229,7 +234,7 @@ class RepresentationNetworkGCN(nn.Module):
             num_layer=2,
             X_dim=hidden_channels,
             final_state_dim=hidden_channels,
-            wr_dims=[hidden_channels, hidden_channels], # TODO: check dim
+            wr_dims=[hidden_channels, hidden_channels],  # TODO: check dim
             wh_dims=[hidden_channels, hidden_channels],
             layerwise_graph=False,
             skip_connection=True,

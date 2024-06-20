@@ -144,10 +144,10 @@ class SampledEfficientZeroModelMLP(nn.Module):
         self.res_connection_in_dynamics = res_connection_in_dynamics
 
         self.representation_network = RepresentationNetworkGCN(
-            robot_state_dim = robot_state_dim,
-            human_state_dim = human_state_dim,
-            robot_num = robot_num,
-            human_num = human_num,
+            robot_state_dim=robot_state_dim,
+            human_state_dim=human_state_dim,
+            robot_num=robot_num,
+            human_num=human_num,
             hidden_channels=self.latent_state_dim,
             norm_type=norm_type
         )

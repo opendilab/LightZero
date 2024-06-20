@@ -22,25 +22,21 @@ class CrowdSimEnv(BaseEnv):
         self._replay_path = cfg.get('replay_path', None)
         self._robot_num = self._cfg.robot_num
         self._human_num = self._cfg.human_num
-        self._observation_space = gym.spaces.Dict({
-            'robot_state': gym.spaces.Box(
-                low=float("-inf"),
-                high=float("inf"),
-                shape=(self._robot_num, 4),
-                dtype=np.float32
-            ),
-            'human_state': gym.spaces.Box(
-                low=float("-inf"),
-                high=float("inf"),
-                shape=(self._human_num, 4),
-                dtype=np.float32
-            )
-        })
+        self._observation_space = gym.spaces.Dict(
+            {
+                'robot_state': gym.spaces.Box(
+                    low=float("-inf"), high=float("inf"), shape=(self._robot_num, 4), dtype=np.float32
+                ),
+                'human_state': gym.spaces.Box(
+                    low=float("-inf"), high=float("inf"), shape=(self._human_num, 4), dtype=np.float32
+                )
+            }
+        )
         # action space
         # one_uav_action_space = [[0, 0], [30, 0], [-30, 0], [0, 30], [0, -30]]
         self.real_action_space = list(product(self._cfg.one_uav_action_space, repeat=self._robot_num))
         one_uav_action_n = len(self._cfg.one_uav_action_space)
-        self._action_space = gym.spaces.Discrete(one_uav_action_n**self._robot_num)
+        self._action_space = gym.spaces.Discrete(one_uav_action_n ** self._robot_num)
         self._action_space.seed(0)  # default seed
         self._reward_space = gym.spaces.Box(low=0.0, high=1.0, shape=(1, ), dtype=np.float32)
         self._continuous = False
@@ -48,16 +44,17 @@ class CrowdSimEnv(BaseEnv):
         # obs_mode '2-dim-array': np.concatenate((robot_state, human_state), axis=0)
         # obs_mode '1-dim-array': np.concatenate((robot_state, human_state), axis=0).flatten()
         self.obs_mode = self._cfg.get('obs_mode', '2-dim-array')
-        assert self.obs_mode in ['dict', '2-dim-array', '1-dim-array'], "obs_mode should be 'dict' or '2-dim-array' or '1-dim-array'!"
+        assert self.obs_mode in [
+            'dict', '2-dim-array', '1-dim-array'
+        ], "obs_mode should be 'dict' or '2-dim-array' or '1-dim-array'!"
         # action_mode 'combine': combine all robot actions into one action, action space size = one_uav_action_n**robot_num
         # action_mode 'separate': separate robot actions, shape (robot_num,), for each robot action space size = one_uav_action_n
         self.action_mode = self._cfg.get('action_mode', 'combine')
         assert self.action_mode in ['combine', 'separate'], "action_mode should be 'combine' or 'separate'!"
 
-
     def reset(self) -> np.ndarray:
         if not self._init_flag:
-            self._env = gym.make('CrowdSim-v0', dataset = self._cfg.dataset, custom_config = self._cfg)
+            self._env = gym.make('CrowdSim-v0', dataset=self._cfg.dataset, custom_config=self._cfg)
             self._init_flag = True
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)

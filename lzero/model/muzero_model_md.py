@@ -453,21 +453,20 @@ class DynamicsNetwork(nn.Module):
         return get_reward_mean(self)
 
 
-
 class PredictionNetworkMD(nn.Module):
 
     def __init__(
-            self,
-            agent_num: int,
-            single_agent_action_size,
-            num_channels,
-            common_layer_num: int = 2,
-            fc_value_layers: SequenceType = [32],
-            output_support_size: int = 601,
-            last_linear_layer_init_zero: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            norm_type: Optional[str] = 'BN',
-            output_separate_logit: bool = False,
+        self,
+        agent_num: int,
+        single_agent_action_size,
+        num_channels,
+        common_layer_num: int = 2,
+        fc_value_layers: SequenceType = [32],
+        output_support_size: int = 601,
+        last_linear_layer_init_zero: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        norm_type: Optional[str] = 'BN',
+        output_separate_logit: bool = False,
     ):
         """
         Overview:

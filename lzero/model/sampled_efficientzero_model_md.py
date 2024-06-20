@@ -499,10 +499,10 @@ class PredictionNetworkMD(nn.Module):
             )
         else:
             self.policy_multi_head = MultiHead(
-            head_cls=DiscreteHead,
-            hidden_size=self.num_channels,
-            output_size_list=[single_agent_action_size for _ in range(agent_num)],
-        )
+                head_cls=DiscreteHead,
+                hidden_size=self.num_channels,
+                output_size_list=[single_agent_action_size for _ in range(agent_num)],
+            )
         self.output_separate_logit = output_separate_logit
 
     def forward(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:

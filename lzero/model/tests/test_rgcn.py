@@ -5,7 +5,9 @@ from itertools import product
 import unittest
 from lzero.model.common_gcn import RGCNLayer
 
+
 class TestRGCNLayer(unittest.TestCase):
+
     def setUp(self):
         self.robot_state_dim = 10
         self.human_state_dim = 10
@@ -42,8 +44,12 @@ class TestRGCNLayer(unittest.TestCase):
         if self.similarity_function == 'embedded_gaussian':
             X = torch.randn(self.batch_size, self.num_nodes * 2, 32)
             A = self.rgcn_layer.compute_similarity_matrix(X)
-            self.assertEqual(A.shape, (self.batch_size, self.num_nodes * 2, self.num_nodes * 2), "Similarity matrix shape is incorrect.")
+            self.assertEqual(
+                A.shape, (self.batch_size, self.num_nodes * 2, self.num_nodes * 2),
+                "Similarity matrix shape is incorrect."
+            )
             self.assertTrue(torch.all(A >= 0) and torch.all(A <= 1), "Similarity matrix values should be normalized.")
+
 
 # Running the tests
 if __name__ == '__main__':

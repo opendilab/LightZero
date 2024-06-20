@@ -38,10 +38,14 @@ class MZNetworkOutput:
 
 
 class DownSample(nn.Module):
-            
-    def __init__(self, observation_shape: SequenceType, out_channels: int, activation: nn.Module = nn.ReLU(inplace=True),
-                 norm_type: Optional[str] = 'BN',
-                 ) -> None:
+
+    def __init__(
+            self,
+            observation_shape: SequenceType,
+            out_channels: int,
+            activation: nn.Module = nn.ReLU(inplace=True),
+            norm_type: Optional[str] = 'BN',
+    ) -> None:
         """
         Overview:
             Define downSample convolution network. Encode the observation into hidden state.
@@ -74,11 +78,7 @@ class DownSample(nn.Module):
         self.resblocks1 = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=out_channels // 2,
-                    activation=activation,
-                    norm_type='BN',
-                    res_type='basic',
-                    bias=False
+                    in_channels=out_channels // 2, activation=activation, norm_type='BN', res_type='basic', bias=False
                 ) for _ in range(1)
             ]
         )
@@ -92,17 +92,15 @@ class DownSample(nn.Module):
         )
         self.resblocks2 = nn.ModuleList(
             [
-                ResBlock(
-                    in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
-                ) for _ in range(1)
+                ResBlock(in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                for _ in range(1)
             ]
         )
         self.pooling1 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
         self.resblocks3 = nn.ModuleList(
             [
-                ResBlock(
-                    in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
-                ) for _ in range(1)
+                ResBlock(in_channels=out_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                for _ in range(1)
             ]
         )
         self.pooling2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
@@ -176,15 +174,18 @@ class RepresentationNetwork(nn.Module):
                 self.norm = nn.BatchNorm2d(num_channels)
             elif norm_type == 'LN':
                 if downsample:
-                    self.norm = nn.LayerNorm([num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                    self.norm = nn.LayerNorm(
+                        [num_channels,
+                         math.ceil(observation_shape[-2] / 16),
+                         math.ceil(observation_shape[-1] / 16)]
+                    )
                 else:
                     self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]])
-            
+
         self.resblocks = nn.ModuleList(
             [
-                ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
-                ) for _ in range(num_res_blocks)
+                ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                for _ in range(num_res_blocks)
             ]
         )
         self.activation = activation
@@ -225,13 +226,13 @@ class RepresentationNetwork(nn.Module):
 class RepresentationNetworkMLP(nn.Module):
 
     def __init__(
-            self,
-            observation_shape: int,
-            hidden_channels: int = 64,
-            layer_num: int = 2,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            last_linear_layer_init_zero: bool = True,
-            norm_type: Optional[str] = 'BN',
+        self,
+        observation_shape: int,
+        hidden_channels: int = 64,
+        layer_num: int = 2,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        last_linear_layer_init_zero: bool = True,
+        norm_type: Optional[str] = 'BN',
     ) -> torch.Tensor:
         """
         Overview:
@@ -325,26 +326,35 @@ class PredictionNetwork(nn.Module):
 
         self.resblocks = nn.ModuleList(
             [
-                ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
-                ) for _ in range(num_res_blocks)
+                ResBlock(in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False)
+                for _ in range(num_res_blocks)
             ]
         )
 
         self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
         self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
-        
+
         if norm_type == 'BN':
             self.norm_value = nn.BatchNorm2d(value_head_channels)
             self.norm_policy = nn.BatchNorm2d(policy_head_channels)
         elif norm_type == 'LN':
             if downsample:
-                self.norm_value = nn.LayerNorm([value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
-                self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                self.norm_value = nn.LayerNorm(
+                    [value_head_channels,
+                     math.ceil(observation_shape[-2] / 16),
+                     math.ceil(observation_shape[-1] / 16)]
+                )
+                self.norm_policy = nn.LayerNorm(
+                    [
+                        policy_head_channels,
+                        math.ceil(observation_shape[-2] / 16),
+                        math.ceil(observation_shape[-1] / 16)
+                    ]
+                )
             else:
                 self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]])
                 self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]])
-        
+
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
         self.activation = activation
@@ -406,16 +416,16 @@ class PredictionNetwork(nn.Module):
 class PredictionNetworkMLP(nn.Module):
 
     def __init__(
-            self,
-            action_space_size,
-            num_channels,
-            common_layer_num: int = 2,
-            fc_value_layers: SequenceType = [32],
-            fc_policy_layers: SequenceType = [32],
-            output_support_size: int = 601,
-            last_linear_layer_init_zero: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            norm_type: Optional[str] = 'BN',
+        self,
+        action_space_size,
+        num_channels,
+        common_layer_num: int = 2,
+        fc_value_layers: SequenceType = [32],
+        fc_policy_layers: SequenceType = [32],
+        output_support_size: int = 601,
+        last_linear_layer_init_zero: bool = True,
+        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        norm_type: Optional[str] = 'BN',
     ):
         """
         Overview:

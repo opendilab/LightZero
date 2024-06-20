@@ -6,6 +6,7 @@ import numpy as np
 
 # State
 class HumanState(object):
+
     def __init__(self, px, py, theta, aoi):
         self.px = px
         self.py = py
@@ -24,6 +25,7 @@ class HumanState(object):
 
 
 class RobotState(object):
+
     def __init__(self, px, py, theta, energy):
         self.px = px
         self.py = py
@@ -43,6 +45,7 @@ class RobotState(object):
 
 
 class JointState(object):
+
     def __init__(self, robot_states, human_states):
         for robot_state in robot_states:
             assert isinstance(robot_state, RobotState)
@@ -53,10 +56,12 @@ class JointState(object):
         self.human_states = human_states
 
     def to_tensor(self, add_batch_size=False, device=None):
-        robot_states_tensor = torch.tensor([robot_state.to_tuple() for robot_state in self.robot_states],
-                                           dtype=torch.float32)
-        human_states_tensor = torch.tensor([human_state.to_tuple() for human_state in self.human_states],
-                                           dtype=torch.float32)
+        robot_states_tensor = torch.tensor(
+            [robot_state.to_tuple() for robot_state in self.robot_states], dtype=torch.float32
+        )
+        human_states_tensor = torch.tensor(
+            [human_state.to_tuple() for human_state in self.human_states], dtype=torch.float32
+        )
 
         if add_batch_size:  # True
             robot_states_tensor = robot_states_tensor.unsqueeze(0)
@@ -67,7 +72,7 @@ class JointState(object):
             human_states_tensor = human_states_tensor.to(device)
 
         return robot_states_tensor, human_states_tensor
-    
+
     def to_array(self):
         robot_states_array = np.array([robot_state.to_tuple() for robot_state in self.robot_states])
         human_states_array = np.array([human_state.to_tuple() for human_state in self.human_states])

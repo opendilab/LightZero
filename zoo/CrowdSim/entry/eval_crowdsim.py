@@ -28,8 +28,8 @@ if __name__ == "__main__":
 
     # model_path is the path to the trained MuZero model checkpoint.
     # If no path is provided, the script will use the default model.
-    model_path = '/home/nighoodRen/LightZero/result/old_env/CrowdSim_muzeromd_ssl_step300000_uav2__human59_seed0_240503_022923/ckpt/ckpt_best.pth.tar'
-    main_config.exp_name = '/home/nighoodRen/LightZero/result/old_env/CrowdSim_muzeromd_ssl_step300000_uav2__human59_seed0_240503_022923/' + 'eval'   # original result folder/eval
+    model_path = 'xxx/ckpt_best.pth.tar'
+    main_config.exp_name = 'xxx' + 'eval'  # original result folder/eval
     # seeds is a list of seed values for the random number generator, used to initialize the environment.
     seeds = [0]
     # num_episodes_each_seed is the number of episodes to run for each seed.
@@ -49,8 +49,8 @@ if __name__ == "__main__":
     # A boolean flag indicating whether to save the video of the environment.
     main_config.env.save_replay = True
     # The path where the recorded video will be saved.
-    main_config.env.replay_path = main_config.exp_name + '/video'   # current result folder/eval
-    
+    main_config.env.replay_path = main_config.exp_name + '/video'  # current result folder/eval
+
     # The maximum number of steps for each episode during evaluation. This may need to be adjusted based on the specific characteristics of the environment.
     main_config.env.eval_max_episode_steps = int(20)
 
@@ -77,7 +77,9 @@ if __name__ == "__main__":
 
     # Printing the evaluation results. The average reward and the total reward for each seed are displayed, followed by the mean reward across all seeds.
     print("=" * 20)
-    print(f"We evaluated a total of {len(seeds)} seeds. For each seed, we evaluated {num_episodes_each_seed} episode(s).")
+    print(
+        f"We evaluated a total of {len(seeds)} seeds. For each seed, we evaluated {num_episodes_each_seed} episode(s)."
+    )
     print(f"For seeds {seeds}, the mean returns are {returns_mean_seeds}, and the returns are {returns_seeds}.")
     print("Across all seeds, the mean reward is:", returns_mean_seeds.mean())
     print("=" * 20)

@@ -5,6 +5,7 @@ from lzero.model.common_gcn import RepresentationNetworkGCN, RGCNLayer
 
 # ...
 
+
 class TestLightZeroEnvWrapper:
 
     # ...
@@ -55,7 +56,7 @@ class TestLightZeroEnvWrapper:
 
     def test_representation_network_gcn_with_2d_array_obs(self):
         robot_state_dim = 10
-        human_state_dim = 10    # 2d_array_obs, so the dimensions must be the same
+        human_state_dim = 10  # 2d_array_obs, so the dimensions must be the same
         robot_num = 3
         human_num = 2
         hidden_channels = 64
@@ -94,6 +95,7 @@ class TestLightZeroEnvWrapper:
 
         # Check intermediate type
         assert isinstance(representation_network.rgcn(x), torch.Tensor)
+
 
 if __name__ == '__main__':
     test = TestLightZeroEnvWrapper()

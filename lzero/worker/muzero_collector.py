@@ -210,24 +210,23 @@ class MuZeroCollector(ISerialCollector):
         if self.policy_config.use_priority:
             # Calculate priorities. The priorities are the L1 losses between the predicted
             # values and the search values. We use 'none' as the reduction parameter, which
-            # means the loss is calculated for each element individually, instead of being summed or averaged. 
+            # means the loss is calculated for each element individually, instead of being summed or averaged.
             # A small constant (1e-6) is added to the results to avoid zero priorities. This
             # is done because zero priorities could potentially cause issues in some scenarios.
             pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.policy_config.device).float().view(-1)
             search_values = torch.from_numpy(np.array(search_values_lst[i])).to(self.policy_config.device
                                                                                 ).float().view(-1)
-            priorities = L1Loss(reduction='none'
-                                )(pred_values,
-                                  search_values).detach().cpu().numpy() + 1e-6
+            priorities = L1Loss(reduction='none')(pred_values, search_values).detach().cpu().numpy() + 1e-6
         else:
             # priorities is None -> use the max priority for all newly collected data
             priorities = None
 
         return priorities
 
-    def pad_and_save_last_trajectory(self, i: int, last_game_segments: List[GameSegment],
-                                     last_game_priorities: List[np.ndarray],
-                                     game_segments: List[GameSegment], done: np.ndarray) -> None:
+    def pad_and_save_last_trajectory(
+            self, i: int, last_game_segments: List[GameSegment], last_game_priorities: List[np.ndarray],
+            game_segments: List[GameSegment], done: np.ndarray
+    ) -> None:
         """
         Overview:
             Save the game segment to the pool if the current game is finished, padding it if necessary.
@@ -270,12 +269,18 @@ class MuZeroCollector(ISerialCollector):
 
         # pad over and save
         if self.policy_config.gumbel_algo:
-            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst,
-                                           next_segment_improved_policy=pad_improved_policy_prob)
+            last_game_segments[i].pad_over(
+                pad_obs_lst,
+                pad_reward_lst,
+                pad_root_values_lst,
+                pad_child_visits_lst,
+                next_segment_improved_policy=pad_improved_policy_prob
+            )
         else:
             if self.policy_config.use_ture_chance_label_in_chance_encoder:
-                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst,
-                                               next_chances=chance_lst)
+                last_game_segments[i].pad_over(
+                    pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst, next_chances=chance_lst
+                )
             else:
                 last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
         """
@@ -437,10 +442,7 @@ class MuZeroCollector(ISerialCollector):
 
                 if self.policy_config.gumbel_algo:
                     improved_policy_dict_no_env_id = {k: v['improved_policy_probs'] for k, v in policy_output.items()}
-                    completed_value_no_env_id = {
-                        k: v['roots_completed_value']
-                        for k, v in policy_output.items()
-                    }
+                    completed_value_no_env_id = {k: v['roots_completed_value'] for k, v in policy_output.items()}
                 # TODO(pu): subprocess
                 actions = {}
                 distributions_dict = {}
@@ -488,8 +490,11 @@ class MuZeroCollector(ISerialCollector):
                             distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
                         )
                     elif self.policy_config.gumbel_algo:
-                        game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id],
-                                                                 improved_policy=improved_policy_dict[env_id])
+                        game_segments[env_id].store_search_stats(
+                            distributions_dict[env_id],
+                            value_dict[env_id],
+                            improved_policy=improved_policy_dict[env_id]
+                        )
                     else:
                         game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
                     # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
@@ -571,30 +576,28 @@ class MuZeroCollector(ISerialCollector):
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
                     reward = timestep.info['eval_episode_return']
+                    info = {
+                        'reward': reward,
+                        'time': self._env_info[env_id]['time'],
+                        'step': self._env_info[env_id]['step'],
+                        'visit_entropy': visit_entropies_lst[env_id] / eps_steps_lst[env_id],
+                    }
                     if timestep.info.get('performance_info') is not None:
+                        # this branch is for the performance evaluation of crowdsim env
                         mean_aoi = timestep.info['performance_info']['mean_aoi']
                         mean_transmit_data = timestep.info['performance_info']['mean_transmit_data']
                         mean_energy_consumption = timestep.info['performance_info']['mean_energy_consumption']
                         transmitted_data_ratio = timestep.info['performance_info']['transmitted_data_ratio']
                         human_coverage = timestep.info['performance_info']['human_coverage']
-                        info = {
-                            'reward': reward,
-                            'time': self._env_info[env_id]['time'],
-                            'step': self._env_info[env_id]['step'],
-                            'visit_entropy': visit_entropies_lst[env_id] / eps_steps_lst[env_id],
-                            'mean_aoi': mean_aoi,
-                            'mean_transmit_data': mean_transmit_data,
-                            'mean_energy_consumption': mean_energy_consumption,
-                            'transmitted_data_ratio': transmitted_data_ratio,
-                            'human_coverage': human_coverage,
-                        }
-                    else:
-                        info = {
-                            'reward': reward,
-                            'time': self._env_info[env_id]['time'],
-                            'step': self._env_info[env_id]['step'],
-                            'visit_entropy': visit_entropies_lst[env_id] / eps_steps_lst[env_id],
-                        }
+                        info.update(
+                            {
+                                'mean_aoi': mean_aoi,
+                                'mean_transmit_data': mean_transmit_data,
+                                'mean_energy_consumption': mean_energy_consumption,
+                                'transmitted_data_ratio': transmitted_data_ratio,
+                                'human_coverage': human_coverage,
+                            }
+                        )
                     if self.policy_config.gumbel_algo:
                         info['completed_value'] = completed_value_lst[env_id] / eps_steps_lst[env_id]
                     collected_episode += 1
@@ -729,51 +732,39 @@ class MuZeroCollector(ISerialCollector):
             if self.policy_config.gumbel_algo:
                 completed_value = [d['completed_value'] for d in self._episode_info]
             self._total_duration += duration
+            info = {
+                'episode_count': episode_count,
+                'envstep_count': envstep_count,
+                'avg_envstep_per_episode': envstep_count / episode_count,
+                'avg_envstep_per_sec': envstep_count / duration,
+                'avg_episode_per_sec': episode_count / duration,
+                'collect_time': duration,
+                'reward_mean': np.mean(episode_reward),
+                'reward_std': np.std(episode_reward),
+                'reward_max': np.max(episode_reward),
+                'reward_min': np.min(episode_reward),
+                'total_envstep_count': self._total_envstep_count,
+                'total_episode_count': self._total_episode_count,
+                'total_duration': self._total_duration,
+                'visit_entropy': np.mean(visit_entropy),
+                # 'each_reward': episode_reward,
+            }
             if self._episode_info[0].get('mean_aoi') is not None:
+                # this branch is for the performance evaluation of crowdsim env
                 episode_aoi = [d['mean_aoi'] for d in self._episode_info]
                 episode_energy_consumption = [d['mean_energy_consumption'] for d in self._episode_info]
                 episode_transmitted_data_ratio = [d['transmitted_data_ratio'] for d in self._episode_info]
                 episode_human_coverage = [d['human_coverage'] for d in self._episode_info]
                 mean_transmit_data = [d['mean_transmit_data'] for d in self._episode_info]
-                info = {
-                    'episode_count': episode_count,
-                    'envstep_count': envstep_count,
-                    'avg_envstep_per_episode': envstep_count / episode_count,
-                    'avg_envstep_per_sec': envstep_count / duration,
-                    'avg_episode_per_sec': episode_count / duration,
-                    'collect_time': duration,
-                    'reward_mean': np.mean(episode_reward),
-                    'reward_std': np.std(episode_reward),
-                    'reward_max': np.max(episode_reward),
-                    'reward_min': np.min(episode_reward),
-                    'total_envstep_count': self._total_envstep_count,
-                    'total_episode_count': self._total_episode_count,
-                    'total_duration': self._total_duration,
-                    'visit_entropy': np.mean(visit_entropy),
-                    'episode_mean_aoi': np.mean(episode_aoi),
-                    'episode_mean_transmit_data': np.mean(mean_transmit_data),
-                    'episode_mean_energy_consumption': np.mean(episode_energy_consumption),
-                    'episode_mean_transmitted_data_ratio': np.mean(episode_transmitted_data_ratio),
-                    'episode_mean_human_coverage': np.mean(episode_human_coverage),
-                }
-            else:
-                info = {
-                    'episode_count': episode_count,
-                    'envstep_count': envstep_count,
-                    'avg_envstep_per_episode': envstep_count / episode_count,
-                    'avg_envstep_per_sec': envstep_count / duration,
-                    'avg_episode_per_sec': episode_count / duration,
-                    'collect_time': duration,
-                    'reward_mean': np.mean(episode_reward),
-                    'reward_std': np.std(episode_reward),
-                    'reward_max': np.max(episode_reward),
-                    'reward_min': np.min(episode_reward),
-                    'total_envstep_count': self._total_envstep_count,
-                    'total_episode_count': self._total_episode_count,
-                    'total_duration': self._total_duration,
-                    'visit_entropy': np.mean(visit_entropy),
-                    # 'each_reward': episode_reward,
-                }
+                info.update(
+                    {
+                        'episode_mean_aoi': np.mean(episode_aoi),
+                        'episode_mean_transmit_data': np.mean(mean_transmit_data),
+                        'episode_mean_energy_consumption': np.mean(episode_energy_consumption),
+                        'episode_mean_transmitted_data_ratio': np.mean(episode_transmitted_data_ratio),
+                        'episode_mean_human_coverage': np.mean(episode_human_coverage),
+                    }
+                )
             if self.policy_config.gumbel_algo:
                 info['completed_value'] = np.mean(completed_value)
             self._episode_info.clear()

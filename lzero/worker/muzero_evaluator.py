@@ -235,8 +235,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                 time.sleep(retry_waiting_time)
                 self._logger.info('=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
                 self._logger.info(
-                    'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time,
-                                                                               self._env._env_states)
+                    'After sleeping {}s, the current _env_states is {}'.format(
+                        retry_waiting_time, self._env._env_states
+                    )
                 )
                 init_obs = self._env.ready_obs
 
@@ -342,8 +343,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                             # Env reset is done by env_manager automatically.
                             self._policy.reset([env_id])
                             reward = t.info['eval_episode_return']
-                            saved_info = {'eval_episode_return': t.info['eval_episode_return']} 
+                            saved_info = {'eval_episode_return': t.info['eval_episode_return']}
                             if 'performance_info' in t.info:
+                                # this branch is for crowdsim env
                                 saved_info.update(t.info['performance_info'])
                             if 'episode_info' in t.info:
                                 saved_info.update(t.info['episode_info'])
@@ -369,7 +371,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                                     )
                                     time.sleep(retry_waiting_time)
                                     self._logger.info(
-                                        '=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10
+                                        '=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' +
+                                        '=' * 10
                                     )
                                     self._logger.info(
                                         'After sleeping {}s, the current _env_states is {}'.format(
@@ -442,9 +445,8 @@ class MuZeroEvaluator(ISerialEvaluator):
             stop_flag = episode_return >= self._stop_value and train_iter > 0
             if stop_flag:
                 self._logger.info(
-                    "[LightZero serial pipeline] " +
-                    "Current episode_return: {} is greater than stop_value: {}".format(episode_return,
-                                                                                       self._stop_value) +
+                    "[LightZero serial pipeline] " + "Current episode_return: {} is greater than stop_value: {}".
+                    format(episode_return, self._stop_value) +
                     ", so your MCTS/RL agent is converged, you can refer to 'log/evaluator/evaluator_logger.txt' for details."
                 )
 

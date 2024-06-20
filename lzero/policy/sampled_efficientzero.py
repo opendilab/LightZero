@@ -500,9 +500,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # ==============================================================
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-                self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss +
-                self._cfg.policy_entropy_loss_weight * policy_entropy_loss
+            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss +
+            self._cfg.policy_entropy_loss_weight * policy_entropy_loss
         )
         weighted_total_loss = (weights * loss).mean()
 
@@ -554,33 +554,37 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         }
 
         if self._cfg.model.continuous_action_space:
-            return_data.update({
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                'policy_mu_max': mu[:, 0].max().item(),
-                'policy_mu_min': mu[:, 0].min().item(),
-                'policy_mu_mean': mu[:, 0].mean().item(),
-                'policy_sigma_max': sigma.max().item(),
-                'policy_sigma_min': sigma.min().item(),
-                'policy_sigma_mean': sigma.mean().item(),
-                # take the fist dim in action space
-                'target_sampled_actions_max': target_sampled_actions[:, :, 0].max().item(),
-                'target_sampled_actions_min': target_sampled_actions[:, :, 0].min().item(),
-                'target_sampled_actions_mean': target_sampled_actions[:, :, 0].mean().item(),
-                'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
-            })
+            return_data.update(
+                {
+                    # ==============================================================
+                    # sampled related core code
+                    # ==============================================================
+                    'policy_mu_max': mu[:, 0].max().item(),
+                    'policy_mu_min': mu[:, 0].min().item(),
+                    'policy_mu_mean': mu[:, 0].mean().item(),
+                    'policy_sigma_max': sigma.max().item(),
+                    'policy_sigma_min': sigma.min().item(),
+                    'policy_sigma_mean': sigma.mean().item(),
+                    # take the fist dim in action space
+                    'target_sampled_actions_max': target_sampled_actions[:, :, 0].max().item(),
+                    'target_sampled_actions_min': target_sampled_actions[:, :, 0].min().item(),
+                    'target_sampled_actions_mean': target_sampled_actions[:, :, 0].mean().item(),
+                    'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
+                }
+            )
         else:
-            return_data.update({
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                # take the fist dim in action space
-                'target_sampled_actions_max': target_sampled_actions[:, :].float().max().item(),
-                'target_sampled_actions_min': target_sampled_actions[:, :].float().min().item(),
-                'target_sampled_actions_mean': target_sampled_actions[:, :].float().mean().item(),
-                'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
-            })
+            return_data.update(
+                {
+                    # ==============================================================
+                    # sampled related core code
+                    # ==============================================================
+                    # take the fist dim in action space
+                    'target_sampled_actions_max': target_sampled_actions[:, :].float().max().item(),
+                    'target_sampled_actions_min': target_sampled_actions[:, :].float().min().item(),
+                    'target_sampled_actions_mean': target_sampled_actions[:, :].float().mean().item(),
+                    'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
+                }
+            )
 
         return return_data
 
@@ -681,9 +685,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         if self._cfg.policy_loss_type == 'KL':
             # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
             policy_loss += (
-                                   torch.exp(target_log_prob_sampled_actions.detach()) *
-                                   (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
-                           ).sum(-1) * mask_batch[:, unroll_step]
+                torch.exp(target_log_prob_sampled_actions.detach()) *
+                (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
+            ).sum(-1) * mask_batch[:, unroll_step]
         elif self._cfg.policy_loss_type == 'cross_entropy':
             # cross_entropy loss: - sum(p * log (q) )
             policy_loss += -torch.sum(
@@ -724,8 +728,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             torch.nonzero(mask_batch[:, unroll_step]).squeeze(-1)
         )
 
-        target_policy_entropy = -((target_normalized_visit_count_masked + 1e-6) * (
-                    target_normalized_visit_count_masked + 1e-6).log()).sum(-1).mean()
+        target_policy_entropy = -(
+            (target_normalized_visit_count_masked + 1e-6) * (target_normalized_visit_count_masked + 1e-6).log()
+        ).sum(-1).mean()
 
         # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim) -> (batch_size,
         # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2) ->  (4, 20, 2)
@@ -769,9 +774,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         if self._cfg.policy_loss_type == 'KL':
             # KL divergence loss: sum( p* log(p/q) ) = sum( p*log(p) - p*log(q) )= sum( p*log(p)) - sum( p*log(q) )
             policy_loss += (
-                                   torch.exp(target_log_prob_sampled_actions.detach()) *
-                                   (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
-                           ).sum(-1) * mask_batch[:, unroll_step]
+                torch.exp(target_log_prob_sampled_actions.detach()) *
+                (target_log_prob_sampled_actions.detach() - log_prob_sampled_actions)
+            ).sum(-1) * mask_batch[:, unroll_step]
         elif self._cfg.policy_loss_type == 'cross_entropy':
             # cross_entropy loss: - sum(p * log (q) )
             policy_loss += -torch.sum(
@@ -793,8 +798,13 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         self._collect_mcts_temperature = 1
 
     def _forward_collect(
-            self, data: torch.Tensor, action_mask: list = None, temperature: np.ndarray = 1, to_play=-1,
-            epsilon: float = 0.25, ready_env_id: np.array = None,
+        self,
+        data: torch.Tensor,
+        action_mask: list = None,
+        temperature: np.ndarray = 1,
+        to_play=-1,
+        epsilon: float = 0.25,
+        ready_env_id: np.array = None,
     ):
         """
         Overview:
@@ -832,8 +842,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             reward_hidden_state_roots = (
-                reward_hidden_state_roots[0].detach().cpu().numpy(),
-                reward_hidden_state_roots[1].detach().cpu().numpy()
+                reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()
             )
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
@@ -933,7 +942,13 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None,):
+    def _forward_eval(
+        self,
+        data: torch.Tensor,
+        action_mask: list,
+        to_play: -1,
+        ready_env_id: np.array = None,
+    ):
         """
          Overview:
              The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.

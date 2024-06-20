@@ -370,7 +370,9 @@ class EfficientZeroPolicy(MuZeroPolicy):
             target_normalized_visit_count_masked = torch.index_select(
                 target_normalized_visit_count_init_step, 0, non_masked_indices
             )
-            target_policy_entropy = -((target_normalized_visit_count_masked+1e-6) * (target_normalized_visit_count_masked+1e-6).log()).sum(-1).mean()
+            target_policy_entropy = -(
+                (target_normalized_visit_count_masked + 1e-6) * (target_normalized_visit_count_masked + 1e-6).log()
+            ).sum(-1).mean()
         else:
             # Set target_policy_entropy to log(|A|) if all rows are masked
             target_policy_entropy = torch.log(torch.tensor(target_normalized_visit_count_init_step.shape[-1]))
@@ -437,7 +439,9 @@ class EfficientZeroPolicy(MuZeroPolicy):
                 target_normalized_visit_count_masked = torch.index_select(
                     target_normalized_visit_count, 0, non_masked_indices
                 )
-                target_policy_entropy += -((target_normalized_visit_count_masked+1e-6) * (target_normalized_visit_count_masked+1e-6).log()).sum(-1).mean()
+                target_policy_entropy += -(
+                    (target_normalized_visit_count_masked + 1e-6) * (target_normalized_visit_count_masked + 1e-6).log()
+                ).sum(-1).mean()
             else:
                 # Set target_policy_entropy to log(|A|) if all rows are masked
                 target_policy_entropy += torch.log(torch.tensor(target_normalized_visit_count.shape[-1]))
@@ -578,8 +582,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             reward_hidden_state_roots = (
-                reward_hidden_state_roots[0].detach().cpu().numpy(),
-                reward_hidden_state_roots[1].detach().cpu().numpy()
+                reward_hidden_state_roots[0].detach().cpu().numpy(), reward_hidden_state_roots[1].detach().cpu().numpy()
             )
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
@@ -649,7 +652,13 @@ class EfficientZeroPolicy(MuZeroPolicy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None,):
+    def _forward_eval(
+        self,
+        data: torch.Tensor,
+        action_mask: list,
+        to_play: -1,
+        ready_env_id: np.array = None,
+    ):
         """
          Overview:
              The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.

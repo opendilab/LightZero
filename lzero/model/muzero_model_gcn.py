@@ -106,10 +106,10 @@ class MuZeroModelGCN(nn.Module):
         self.res_connection_in_dynamics = res_connection_in_dynamics
 
         self.representation_network = RepresentationNetworkGCN(
-            robot_state_dim = robot_state_dim,
-            human_state_dim = human_state_dim,
-            robot_num = robot_num,
-            human_num = human_num,
+            robot_state_dim=robot_state_dim,
+            human_state_dim=human_state_dim,
+            robot_num=robot_num,
+            human_num=human_num,
             hidden_channels=self.latent_state_dim,
             layer_num=2,
             norm_type=norm_type
@@ -454,4 +454,3 @@ class DynamicsNetwork(nn.Module):
 
     def get_reward_mean(self) -> float:
         return get_reward_mean(self)
-

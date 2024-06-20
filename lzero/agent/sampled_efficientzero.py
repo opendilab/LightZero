@@ -93,7 +93,12 @@ class SampledEfficientZeroAgent:
             cfg.main_config.exp_name = exp_name
         self.origin_cfg = cfg
         self.cfg = compile_config(
-            cfg.main_config, seed=seed, env=None, auto=True, policy=SampledEfficientZeroPolicy, create_cfg=cfg.create_config
+            cfg.main_config,
+            seed=seed,
+            env=None,
+            auto=True,
+            policy=SampledEfficientZeroPolicy,
+            create_cfg=cfg.create_config
         )
         self.exp_name = self.cfg.exp_name
 
@@ -127,8 +132,8 @@ class SampledEfficientZeroAgent:
         self.env_fn, self.collector_env_cfg, self.evaluator_env_cfg = get_vec_env_setting(self.cfg.env)
 
     def train(
-        self,
-        step: int = int(1e7),
+            self,
+            step: int = int(1e7),
     ) -> TrainingReturn:
         """
         Overview:
@@ -359,8 +364,8 @@ class SampledEfficientZeroAgent:
         return EvalReturn(eval_value=np.mean(reward_list), eval_value_std=np.std(reward_list))
 
     def batch_evaluate(
-        self,
-        n_evaluator_episode: int = None,
+            self,
+            n_evaluator_episode: int = None,
     ) -> EvalReturn:
         """
         Overview:
