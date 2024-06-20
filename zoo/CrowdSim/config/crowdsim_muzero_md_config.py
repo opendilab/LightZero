@@ -1,14 +1,14 @@
 from easydict import EasyDict
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '2'
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-num_simulations = 25
-update_per_collect = 100
+num_simulations = 50
+# num_simulations = 25
+update_per_collect = 250
 batch_size = 256
 max_env_step = int(5e5)
 reanalyze_ratio = 0.
@@ -29,6 +29,7 @@ CrowdSim_muzero_config = dict(
     env=dict(
         env_mode='hard',
         transmit_v=transmit_v,
+        collect_v_prob = {'1': 1, '2': 0},
         obs_mode='1-dim-array',
         env_name='CrowdSim-v0',
         dataset='purdue',
@@ -66,6 +67,7 @@ CrowdSim_muzero_config = dict(
         ),
         cuda=True,
         env_type='not_board_games',
+        # game_segment_length=120,
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
@@ -73,7 +75,7 @@ CrowdSim_muzero_config = dict(
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         ssl_loss_weight=2,  # NOTE: default is 0.
-        grad_clip_value=0.5,
+        grad_clip_value=10,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
@@ -92,7 +94,7 @@ CrowdSim_muzero_create_config = dict(
         type='crowdsim_lightzero',
         import_names=['zoo.CrowdSim.envs.crowdsim_lightzero_env'],
     ),
-    env_manager=dict(type='base'),
+    env_manager=dict(type='subprocess'),
     policy=dict(
         type='muzero',
         import_names=['lzero.policy.muzero'],

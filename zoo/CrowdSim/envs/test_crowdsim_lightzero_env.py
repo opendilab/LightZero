@@ -3,18 +3,20 @@ import pytest
 from easydict import EasyDict
 from zoo.CrowdSim.envs.crowdsim_lightzero_env import CrowdSimEnv
 
-mcfg = EasyDict(
-    env_name='CrowdSim-v0',
-    dataset='purdue',
-    robot_num=2,
-    human_num=59,  # purdue
-    one_uav_action_space=[[0, 0], [30, 0], [-30, 0], [0, 30], [0, -30]],
-    obs_mode='2-dim-array',
-    env_mode='easy',
-)
+mcfg=EasyDict(
+        env_name='CrowdSim-v0',
+        dataset = 'purdue',
+        robot_num = 2,
+        human_num = 59, # purdue
+        one_uav_action_space = [[0, 0], [30, 0], [-30, 0], [0, 30], [0, -30]],
+        obs_mode = '2-dim-array',
+        env_mode = 'hard',
+        transmit_v=120,
+        collect_v_prob = {'1': 1, '2': 0},
+        )
 
+@ pytest.mark.envtest
 
-@pytest.mark.envtest
 class TestCrowdSimEnv:
 
     def test_obs_dict(self):
@@ -73,6 +75,7 @@ class TestCrowdSimEnv:
             if timestep.done:
                 break
         print(env.observation_space, env.action_space, env.reward_space)
+        print('episode reward:', timestep.info['eval_episode_return'])
         env.close()
 
 

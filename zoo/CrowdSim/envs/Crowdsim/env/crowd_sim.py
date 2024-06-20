@@ -5,6 +5,7 @@ import random
 import gym
 # from shapely.geometry import Point
 import numpy as np
+from scipy.stats import entropy
 # import folium
 # from folium.plugins import TimestampedGeoJson, AntPath
 
@@ -117,6 +118,8 @@ class CrowdSim(gym.Env):
             self.config.num_timestep,
         ])
         self.data_transmission = 0
+        self.data_collection_distribution = np.zeros(self.human_num)
+        self.data_transmission_distribution = np.zeros(self.human_num)
 
     def generate_human(self, human_id, selected_data, selected_next_data):
         """
@@ -220,11 +223,15 @@ class CrowdSim(gym.Env):
             self.config.num_timestep,
         ])
         self.data_transmission = 0
+        self.data_collection_distribution = np.zeros(self.human_num)
+        self.data_transmission_distribution = np.zeros(self.human_num)
 
         # for visualization
         self.plot_states = []
         self.robot_actions = []
         self.rewards = []
+        self.aoi_rewards = []
+        self.energy_rewards = []
         self.action_values = []
         self.plot_states.append(
             [[robot.get_obs() for robot in self.robots], [human.get_obs() for human in self.humans]]
@@ -272,7 +279,7 @@ class CrowdSim(gym.Env):
             new_energy = robot.energy - consume_energy
             self.robot_energy_timelist[self.current_timestep + 1][robot_id] = new_energy
 
-            if is_collide is True:
+            if is_collide or (new_robot_px < 0 or new_robot_px > self.nlon or new_robot_py < 0 or new_robot_py > self.nlat):
                 new_robot_position[robot_id][0] = robot.px
                 new_robot_position[robot_id][1] = robot.py
                 self.robot_x_timelist[self.current_timestep + 1][robot_id] = robot.px
@@ -328,6 +335,8 @@ class CrowdSim(gym.Env):
             self.cur_data_amount_timelist[human_id] = human.data_amount
             self.current_human_aoi_list[human_id] = human.aoi
             self.sync_human_df(human_id, self.current_timestep + 1, human.aoi, human.data_amount)
+            self.data_collection_distribution[human_id] += human.collect_v
+            self.data_transmission_distribution[human_id] += human_transmit_data_list[human_id]
 
         self.mean_aoi_timelist[self.current_timestep + 1] = np.mean(self.current_human_aoi_list)
         self.update_human_timelist[self.current_timestep] = num_updated_human
@@ -341,16 +350,22 @@ class CrowdSim(gym.Env):
             self.total_generated_data_amount += self.generate_data_amount_per_step
 
         # TODO: need to be well-defined
-        reward = self.mean_aoi_timelist[self.current_timestep] - self.mean_aoi_timelist[self.current_timestep + 1] \
-                 - self.config.energy_factor * np.sum(current_enenrgy_consume)
+        aoi_reward = self.mean_aoi_timelist[self.current_timestep] - self.mean_aoi_timelist[self.current_timestep + 1]
+        energy_reward = np.sum(current_enenrgy_consume)
+        reward = aoi_reward \
+                 - self.config.energy_factor * energy_reward
 
         # if hasattr(self.agent.policy, 'action_values'):
         #     self.action_values.append(self.agent.policy.action_values)
         self.robot_actions.append(action)
         self.rewards.append(reward)
-        self.plot_states.append(
-            [[robot.get_obs() for robot in self.robots], [human.get_obs() for human in self.humans]]
-        )
+        self.aoi_rewards.append(aoi_reward)
+        self.energy_rewards.append(energy_reward)
+        distribution_entropy = entropy(
+            self.data_collection_distribution/ np.sum(self.data_collection_distribution),
+            self.data_transmission_distribution/np.sum(self.data_transmission_distribution) + 1e-10)
+        self.plot_states.append([[robot.get_obs() for robot in self.robots],
+                                 [human.get_obs() for human in self.humans]])
 
         next_state = JointState([robot.get_obs() for robot in self.robots], [human.get_obs() for human in self.humans])
 
@@ -362,12 +377,13 @@ class CrowdSim(gym.Env):
             done = False
         info = {
             "performance_info": {
-                "mean_aoi": self.mean_aoi_timelist[self.current_timestep],
-                "mean_transmit_data": delta_sum_transmit_data / self.human_num,
-                "mean_energy_consumption": 1.0 -
-                (np.mean(self.robot_energy_timelist[self.current_timestep]) / self.max_uav_energy),
-                "transmitted_data_ratio": self.data_transmission / (self.total_generated_data_amount * 0.3),
-                "human_coverage": np.mean(self.update_human_timelist) / self.human_num
+            "mean_aoi": self.mean_aoi_timelist[self.current_timestep],
+            "mean_transmit_data": self.data_transmission / self.human_num,
+            "mean_energy_consumption": 1.0 - (
+                        np.mean(self.robot_energy_timelist[self.current_timestep]) / self.max_uav_energy),
+            "transmitted_data_ratio": self.data_transmission/(self.total_generated_data_amount*0.3),
+            "human_coverage": np.mean(self.update_human_timelist) / self.human_num,
+            "distribution_entropy": distribution_entropy  # 增加交叉熵信息
             },
         }
 
@@ -391,6 +407,7 @@ class CrowdSim(gym.Env):
         map_max_y = self.config.nlat
         # Create a new figure
         fig, ax = plt.subplots(figsize=(8, 6))
+        plt.subplots_adjust(right=0.75) # 给数据留白
 
         # Plot the historical trajectories of the robots
         for timestep in range(len(self.robot_x_timelist)):
@@ -424,7 +441,16 @@ class CrowdSim(gym.Env):
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
 
-        # Leave some margin around the map
+        # show reward/aoi_reward/energy_reward/mean_aoi/energy in the upper right corner
+        reward_text = f"Reward: {self.rewards[-1] if self.rewards else 0:.2f}\n" \
+                      f"AOI Reward: {self.aoi_rewards[-1] if self.aoi_rewards else 0:.2f}\n" \
+                      f"Energy Reward: {self.energy_rewards[-1] if self.energy_rewards else 0:.2f}\n" \
+                      f"Mean AOI: {self.mean_aoi_timelist[self.current_timestep] if self.current_timestep < len(self.mean_aoi_timelist) else 0:.2f}\n" \
+                      f"Energy: {np.mean(self.robot_energy_timelist[self.current_timestep]) if self.current_timestep < len(self.robot_energy_timelist) else 0:.2f}"
+        plt.text(1.05, 0.95, reward_text, horizontalalignment='left', verticalalignment='top', 
+             transform=ax.transAxes, fontsize=10, bbox=dict(facecolor='white', alpha=0.6), 
+             clip_on=False)  # Ensure text is not clipped
+        # Leave some blank space outside of the map
         ax.margins(x=0.1, y=0.1)
         ax.set_title('Crowd Simulation Visualization')
 

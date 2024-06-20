@@ -125,6 +125,8 @@ class CrowdSimEnv(BaseEnv):
                 if not os.path.exists(self._replay_path):
                     os.makedirs(self._replay_path)
                 imageio.mimsave(self._replay_path + '/replay.gif', self._frame)
+                # save env.human_df as csv
+                self._env.human_df.to_csv(self._replay_path + '/human_df.csv')
         return BaseEnvTimestep(obs, rew, done, info)
 
     def enable_save_replay(self, replay_path: Optional[str] = None) -> None:
