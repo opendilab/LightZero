@@ -119,8 +119,8 @@ mujoco_sampled_efficientzero_create_config = dict(
     ),
     env_manager=dict(type='base'),
     policy=dict(
-        type='sampled_efficientzero',
-        import_names=['lzero.policy.sampled_efficientzero'],
+        type='sampled_efficientzero_ma',
+        import_names=['lzero.policy.sampled_efficientzero_ma'],
     ),
 )
 mujoco_sampled_efficientzero_create_config = EasyDict(mujoco_sampled_efficientzero_create_config)

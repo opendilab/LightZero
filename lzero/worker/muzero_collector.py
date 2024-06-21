@@ -398,12 +398,17 @@ class MuZeroCollector(ISerialCollector):
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
 
-                stack_obs = {env_id: game_segments[env_id].get_obs()[0] for env_id in ready_env_id}
-                stack_obs = list(stack_obs.values())
-                stack_obs = default_collate(stack_obs)
-                if not isinstance(stack_obs, dict):
+                if self._multi_agent:
+                    stack_obs = {env_id: game_segments[env_id].get_obs()[0] for env_id in ready_env_id}
+                    stack_obs = list(stack_obs.values())
+                    stack_obs = default_collate(stack_obs)
+                    stack_obs = to_device(stack_obs, self.policy_config.device)
+                else:
+                    stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
+                    stack_obs = list(stack_obs.values())
+                    stack_obs = to_ndarray(stack_obs)
                     stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
-                stack_obs = to_device(stack_obs, self.policy_config.device)
+                    stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
 
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
                 to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
@@ -646,15 +651,21 @@ class MuZeroCollector(ISerialCollector):
                         last_game_priorities[env_id] = None
 
                     # log
-                    # self_play_moves_max = max(self_play_moves_max, eps_steps_lst[env_id])
-                    self_play_visit_entropy.append(visit_entropies_lst[env_id] / eps_steps_lst[env_id])
-                    self_play_moves += eps_steps_lst[env_id]
+                    if self._multi_agent:
+                        self_play_visit_entropy.append(visit_entropies_lst[env_id] / eps_steps_lst[env_id])
+                        self_play_moves += eps_steps_lst[env_id].sum()
+                        eps_steps_lst[env_id] = np.zeros(self._agent_num)
+                        visit_entropies_lst[env_id] = np.zeros(self._agent_num)
+                    else:
+                        self_play_moves_max = max(self_play_moves_max, eps_steps_lst[env_id])
+                        self_play_visit_entropy.append(visit_entropies_lst[env_id] / eps_steps_lst[env_id])
+                        self_play_moves += eps_steps_lst[env_id]
+                        eps_steps_lst[env_id] = 0
+                        visit_entropies_lst[env_id] = 0
                     self_play_episodes += 1
 
                     pred_values_lst[env_id] = []
                     search_values_lst[env_id] = []
-                    eps_steps_lst[env_id] = np.zeros(self._agent_num)
-                    visit_entropies_lst[env_id] = np.zeros(self._agent_num)
 
                     # Env reset is done by env_manager automatically
                     self._policy.reset([env_id])
@@ -673,11 +684,6 @@ class MuZeroCollector(ISerialCollector):
                     } for i in range(len(self.game_segment_pool))
                 ]
                 self.game_segment_pool.clear()
-                # for i in range(len(self.game_segment_pool)):
-                #     print(self.game_segment_pool[i][0].obs_segment.__len__())
-                #     print(self.game_segment_pool[i][0].reward_segment)
-                # for i in range(len(return_data[0])):
-                #     print(return_data[0][i].reward_segment)
                 break
 
         collected_duration = sum([d['time'] for d in self._episode_info])

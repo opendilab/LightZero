@@ -267,14 +267,14 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
         value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
         to_play_segment = reward_value_context  # noqa
 
-        # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
+        # transition_batch_size = game_segment_batch_size * (num_unroll_steps + 1)
         transition_batch_size = len(value_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)
 
         to_play, action_mask = self._preprocess_to_play_and_action_mask(
             game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
         )
-        if self._cfg.model.continuous_action_space is True:
+        if self._cfg.model.continuous_action_space:
             # when the action space of the environment is continuous, action_mask[:] is None.
             action_mask = [
                 list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
@@ -296,12 +296,13 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
             for i in range(slices):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
-                m_obs = to_dtype(to_device(to_tensor(value_obs_list[beg_index:end_index]), self._cfg.device), torch.float)
-
-                # calculate the target value
-                m_obs = default_collate(m_obs)
                 if self._multi_agent:
+                    m_obs = to_dtype(to_device(to_tensor(value_obs_list[beg_index:end_index]), self._cfg.device), torch.float)
+                    m_obs = default_collate(m_obs)
                     m_obs = m_obs[0]
+                else:
+                    m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device).float()
+                # calculate the target value
                 m_output = model.initial_inference(m_obs)
 
                 # TODO(pu)
@@ -355,8 +356,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     )
                     roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
-                    MCTSPtree.roots(self._cfg
-                                    ).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
+                    MCTSPtree.roots(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
 
                 roots_values = roots.get_values()
                 value_list = np.array(roots_values)
@@ -392,8 +392,8 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
 
             horizon_id, value_index = 0, 0
             for game_segment_len_non_re, reward_list, state_index, to_play_list in zip(game_segment_lens, rewards_list,
-                                                                                       pos_in_game_segment_list,
-                                                                                       to_play_segment):
+                                                                                    pos_in_game_segment_list,
+                                                                                    to_play_segment):
                 target_values = []
                 target_value_prefixs = []
 
@@ -401,7 +401,6 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                 base_index = state_index
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
-                    # for i, reward in enumerate(game.rewards[current_index:bootstrap_index]):
                     for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
                         if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
                             # TODO(pu): for board_games, very important, to check
@@ -423,13 +422,15 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                         target_values.append(value_list[value_index])
                         # Since the horizon is small and the discount_factor is close to 1.
                         # Compute the reward sum to approximate the value prefix for simplification
-                        value_prefix += reward_list[current_index
-                                                    ]  # * config.discount_factor ** (current_index - base_index)
+                        value_prefix += reward_list[current_index]
                         target_value_prefixs.append(value_prefix)
                     else:
-                        target_values.append(np.zeros_like(value_list[0]))
-                        target_value_prefixs.append(np.array([0,]))
-
+                        if self._multi_agent:
+                            target_values.append(np.zeros_like(value_list[0]))
+                            target_value_prefixs.append(np.array([0,]))
+                        else:
+                            target_values.append(0)
+                            target_value_prefixs.append(value_prefix)
                     value_index += 1
 
                 batch_value_prefixs.append(target_value_prefixs)

@@ -273,12 +273,17 @@ class MuZeroEvaluator(ISerialEvaluator):
                     ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                     remain_episode -= min(len(new_available_env_id), remain_episode)
 
-                    stack_obs = {env_id: game_segments[env_id].get_obs()[0] for env_id in ready_env_id}
-                    stack_obs = list(stack_obs.values())
-                    stack_obs = default_collate(stack_obs)
-                    if not isinstance(stack_obs, dict):
+                    if self._multi_agent:
+                        stack_obs = {env_id: game_segments[env_id].get_obs()[0] for env_id in ready_env_id}
+                        stack_obs = list(stack_obs.values())
+                        stack_obs = default_collate(stack_obs)
+                        stack_obs = to_device(stack_obs, self.policy_config.device)
+                    else:
+                        stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
+                        stack_obs = list(stack_obs.values())
+                        stack_obs = to_ndarray(stack_obs)
                         stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
-                    stack_obs = to_device(stack_obs, self.policy_config.device)
+                        stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
 
                     action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
                     to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}

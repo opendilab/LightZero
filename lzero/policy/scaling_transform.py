@@ -118,7 +118,7 @@ def visit_count_temperature(
         return fixed_temperature_value
 
 
-def phi_transform(discrete_support: DiscreteSupport, x: torch.Tensor) -> torch.Tensor:
+def phi_transform(discrete_support: DiscreteSupport, x: torch.Tensor, multi_agent: bool = False) -> torch.Tensor:
     """
     Overview:
         We then apply a transformation ``phi`` to the scalar in order to obtain equivalent categorical representations.
@@ -137,10 +137,16 @@ def phi_transform(discrete_support: DiscreteSupport, x: torch.Tensor) -> torch.T
     p_high = x - x_low
     p_low = 1 - p_high
 
-    target = torch.zeros(*x.shape, set_size).to(x.device)
-    x_high_idx, x_low_idx = x_high - min / delta, x_low - min / delta
-    target.scatter_(target.dim()-1, x_high_idx.long().unsqueeze(-1), p_high.unsqueeze(-1))
-    target.scatter_(target.dim()-1, x_low_idx.long().unsqueeze(-1), p_low.unsqueeze(-1))
+    if multi_agent:
+        target = torch.zeros(*x.shape, set_size).to(x.device)
+        dim = target.dim() - 1
+    else:
+        target = torch.zeros(x.shape[0], x.shape[1], set_size).to(x.device)
+        dim = 2
+
+    x_high_idx, x_low_idx = (x_high - min) / delta, (x_low - min) / delta
+    target.scatter_(dim, x_high_idx.long().unsqueeze(-1), p_high.unsqueeze(-1))
+    target.scatter_(dim, x_low_idx.long().unsqueeze(-1), p_low.unsqueeze(-1))
 
     return target
 
