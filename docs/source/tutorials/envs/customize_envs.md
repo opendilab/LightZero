@@ -1,4 +1,4 @@
-# **How to Customize Your Environments in LightZero?**
+# How to Customize Your Environments in LightZero?
 
 When conducting reinforcement learning research or applications with LightZero, you may need to create a custom environment. Creating a custom environment can better adapt to specific problems or tasks, allowing the reinforcement learning algorithms to be effectively trained in those specific environments.
 
