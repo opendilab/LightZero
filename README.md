@@ -139,6 +139,7 @@ The environments and algorithms currently supported by LightZero are shown in th
 | MiniGrid      | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
 | Bsuite        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
 | Memory        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
+| SumToThree (billiards) | ---      | 🔒     | 🔒          | ✔               | 🔒         | 🔒             |
 
 <sup>(1): "✔" means that the corresponding item is finished and well-tested.</sup>
 
