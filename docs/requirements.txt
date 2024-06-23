@@ -1,5 +1,5 @@
 Pillow==8.2.0
-sphinx>=2.2.1,<=4.2
+sphinx>=7.3.7
 sphinx_rtd_theme
 enum_tools
 sphinx-toolbox
