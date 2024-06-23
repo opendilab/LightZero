@@ -5,5 +5,6 @@ enum_tools
 sphinx-toolbox
 plantumlcli>=0.0.2
 sphinx-autobuild
+recommonmark>=0.7.1
 git+http://github.com/opendilab/LightZero@main
 -e git+https://github.com/opendilab/pytorch_sphinx_theme.git#egg=pytorch_sphinx_theme
