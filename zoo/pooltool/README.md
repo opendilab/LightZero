@@ -1,26 +1,22 @@
-**TODO This is a historical document that provides important context for pooltool + LightZero. Prior to merging, this document should be replaced with a resource page that describes pooltool + LightZero.**
+# Billiards RL
 
-# Welcome
+Welcome to the documentation for billiards simulation within the LightZero framework. jBilliards offers an intriguing learning environment for reinforcement learning due to its continuous action space, turn-based play, and the need for long-term planning and strategy formulation.
 
-Welcome, and thanks for taking a look at my project. This is a small document to help you get started with LightZero + pooltool.
+## Pooltool
 
-# Installation
+Pooltool is a general purpose billiards simulator crafted specifically for science and engineering applications (learn more [here](https://github.com/ekiefl/pooltool)). It has been incorporated into LightZero to create diverse learning environments for billiards games.
 
-## Step 1: Follow the install instructions in the README.md
+## Testing your installation
 
-Make sure you have a working version of LightZero by following the install instructions in `README.md`. This is an identical copy of the main LightZero repo.
+Pooltool comes pre-installed with LightZero. If you are using a custom setup, follow the _pip_ install instructions [here](https://pooltool.readthedocs.io/en/latest/getting_started/install.html#install-option-1-pip).
 
-## Step 2: Install `pooltool`
-
-Follow the _pip_ install instructions [here](https://pooltool.readthedocs.io/en/latest/getting_started/install.html#install-option-1-pip).
-
-Verify your installation is ">=0.3.0":
+Verify pooltool is found in your python path:
 
 ```bash
 python -c "import pooltool; print(pooltool.__version__)"
 ```
 
-Further test your installation by running the command line program:
+Further test your installation by opening the interactive interface:
 
 ```bash
 # Unix
@@ -32,11 +28,22 @@ run_pooltool.bat
 
 (For instructions on how to play, check out the [Getting Started tutorial](https://pooltool.readthedocs.io/en/latest/getting_started/interface.html))
 
-# A simple game: Sum To Three
+## Supported Games
+
+Currently supports the following games:
+
+1. **Sum to Three**: A simplified billiards game designed to make learning easier for agents.
+2. **Standard Billiards Games** (planned for future updates): Including 8-ball, 9-ball, and snooker.
+
+The rest of the document provides details for each supported game.
+
+## Game 1: Sum to Three
 
 Standard billiards games like 8-ball, 9-ball, and snooker have complex rulesets which make learning more difficult.
 
-To make things much simpler (to begin), I created a game called _sum to three_. The rules are simple.
+In contrast, _sum to three_ is a fictitious billiards game with a simple ruleset.
+
+### Rules
 
 1. The game is played on a table with no pockets
 1. There are 2 balls: a cue ball and an object ball
@@ -46,15 +53,17 @@ To make things much simpler (to begin), I created a game called _sum to three_. 
 
 For example, this is a successful shot because there are three ball-cushion collisions:
 
-<img src="assets/pooltool/3hits.gif" width="600" />
+<img src="../../assets/pooltool/3hits.gif" width="600" />
 
 This is an unsuccessful shot because there are four ball-cushion collisions:
 
-<img src="assets/pooltool/4hits.gif" width="600" />
+<img src="../../assets/pooltool/4hits.gif" width="600" />
 
-## Action space
+### Observation / Action Spaces
 
-pool/billiards has a complex and continuous action space. When the agent strikes the cue ball, the cue is described by 5 continuous parameters:
+Continuous and discrete observatwon spaces are supported. The continuous observation space uses the coordinates of the two balls as the observation. The discrete observation space is based on configurable image-based feature planes.
+
+In general, when an agent strikes a cue ball, the cue stick is described by 5 continuous parameters:
 
 ```
 V0 : positive float
@@ -71,111 +80,44 @@ b : float
     topmost side of ball
 ```
 
-Since sum to three is a simple game, I have created a reduced action space with 2 parameters:
+Since sum to three is a simple game, only a reduced action space with 2 parameters is supported:
 
 1. V0: The speed of the cue stick. Increasing this means the cue ball travels further
 1. cut angle: The angle that the cue ball hits the object ball with
 
 For example, in this shot, the cut angle is -70 (hitting the left side of the object ball):
 
-<img src="assets/pooltool/largecut.gif" width="600" />
+<img src="../../assets/pooltool/largecut.gif" width="600" />
 
 For example, in this shot, the cut angle is 0 (head-on collision):
 
-<img src="assets/pooltool/nocut.gif" width="600" />
+<img src="../../assets/pooltool/nocut.gif" width="600" />
 
-Based on the game dimensions, a suitable bound for the action parameters are as follows:
+Based on the game dimensions, a suitable bound for the action parameters is used: [0.3, 3] for speed and [-70, 70] for cut angle.
 
-```python
-action=spaces.Box(
-    low=np.array([0.3, -70], dtype=np.float32),
-    high=np.array([3.0, +70], dtype=np.float32),
-    shape=(2,),
-    dtype=np.float32,
-)
-```
+### Experiments
 
-So, [0.3, 3.0] for speed and [-70, 70] for cut angle.
+You can conduct experiments using different observation spaces:
 
-# Experiment 1: continuous observation space
+1. **Continuous Observation Space Experiment**:
+    - Run the experiment with:
+      ```bash
+      python ./zoo/pooltool/sum_to_three/config/sum_to_three_config.py
+      ```
+    - Results will be saved in `./data_pooltool_ctree/`.
 
-My first experiment was to see whether an agent could learn to play the game from a continuous observation space defined by the two balls' coordinates. That means the observation space has four parameters:
+2. **Discrete Observation Space Experiment**:
+    - Run the experiment with:
+      ```bash
+      python ./zoo/pooltool/sum_to_three/config/sum_to_three_image_config.py
+      ```
+    - Modify the feature plane information by editing `./zoo/pooltool/sum_to_three/config/feature_plane_config.json`. View the usage example in `./zoo/pooltool/image_representation.py` for details about the feature plane content.
+    - Results will be saved in `./data_pooltool_ctree/`.
 
-1. Cue ball x coordinate
-1. Cue ball y coordinate
-1. Object ball x coordinate
-1. Object ball y coordinate
+### Results
 
-The environment can be found in `./zoo/pooltool/sum_to_three/envs/sum_to_three_env.py` and the config can be found in `./zoo/pooltool/sum_to_three/config/sum_to_three_config.py`.
+TODO(puyuan1996)
 
-You can run the experiment like so:
+## Game 2: 8-ball / 9-ball / 3-cushion / snooker
 
-```bash
-python ./zoo/pooltool/sum_to_three/config/sum_to_three_config.py
-```
-
-## Results
-
-The results end up in `./data_pooltool_ctree/`.
-
-Here are the trajectories for the 3 experiments I ran longest:
-
-<img src="assets/pooltool/cts.png" width="600" />
-
-Here are the same trajectories zoomed into the first 10k iterations:
-
-<img src="assets/pooltool/cts_zoom.png" width="600" />
-
-Unfortunately, the agent doesn't converge to perfect play.
-
-# Experiment 2: discrete (image) observation space
-
-The continuous observation space will not work for real billiards games with multiple balls and obstacles. So as a second experiment, I created a discrete observation space with several feature planes.
-
-I created 5 feature planes, each 100 x 50 pixels which are the relative dimensions of the table:
-
-1. The cue ball
-1. The object ball
-1. Both balls
-1. A line drawn between their line of centers
-1. The cushions
-
-Here is an example:
-
-<img src="assets/pooltool/feature_planes.png" width="600" />
-
-The code relevant that creates these feature planes can be found at `./zoo/pooltool/image_representation.py`. If you run this file, you can produce the above plot for several frames to see exactly how the above plot is produced.
-
-The environment for this observation space can be found in `./zoo/pooltool/sum_to_three/envs/sum_to_three_image_env.py` and the config can be found in `./zoo/pooltool/sum_to_three/config/sum_to_three_image_config.py`.
-
-You can run the experiment like so:
-
-```bash
-python ./zoo/pooltool/sum_to_three/config/sum_to_three_image_config.py
-```
-
-## Results
-
-The results end up in `./data_pooltool_ctree/`.
-
-Despite my best efforts, I am unable to observe any learning using this observation space. Here are the results of the longest experiment I attempted:
-
-<img src="assets/pooltool/discrete.png" width="600" />
-
-
-# Summary and Future Direction
-
-Currently `zoo/pooltool` contains unit-tested modules for discrete (image-based) and continuous (coordinate-based) pool experiments for the "hello world" game I made called sum to three.
-
-But there are problems:
-
-1. The continuous environment learns something, but does not converge
-1. The discrete environment doesn't learn anything
-
-I think to proceed I need the help of experts to look at the config and environment for each experiment type.
-
-If anyone is able to take a look, please follow the install instructions above. I purposefully created a fork that does not touch any of the upstream code. The only modifications I made were the addition of `zoo/pooltool`, so it is a faithful clone of the main repo.
-
-I also think a future direction could be including pooltool as a supported environment for LightZero. It represents a continuous action space with scalable complexity (all the way from sum to three to advanced planning required for 8-ball and 9-ball pool). If anyone has suggestions for making this happen, I am very interested in collaborating.
-
-Thanks for reading and looking forward to any discussions this sparks. To comment, visit the discussion page: https://github.com/opendilab/LightZero/discussions/182
+What billiards game would you like to see next?
