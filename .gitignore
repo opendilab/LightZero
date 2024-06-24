@@ -1445,3 +1445,6 @@ events.*
 **/tb/*
 **/mcts/ctree/tests_cpp/*
 **/*tmp*
+
+# pooltool-specific stuff
+!/assets/pooltool/**

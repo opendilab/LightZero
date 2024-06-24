@@ -1,0 +1,50 @@
+{
+    "px": 20,
+    "planes": [
+        {
+            "ball_ids": [
+                "cue"
+            ],
+            "cushion_ids": [],
+            "ball_ball_lines": []
+        },
+        {
+            "ball_ids": [
+                "object"
+            ],
+            "cushion_ids": [],
+            "ball_ball_lines": []
+        },
+        {
+            "ball_ids": [
+                "cue",
+                "object"
+            ],
+            "cushion_ids": [],
+            "ball_ball_lines": []
+        },
+        {
+            "ball_ids": [],
+            "cushion_ids": [],
+            "ball_ball_lines": [
+                [
+                    "cue",
+                    "object"
+                ]
+            ]
+        },
+        {
+            "ball_ids": [],
+            "cushion_ids": [
+                "3",
+                "12",
+                "9",
+                "18"
+            ],
+            "ball_ball_lines": []
+        }
+    ],
+    "line_width": 1,
+    "antialias_circle": true,
+    "antialias_line": true
+}
