@@ -1,7 +1,10 @@
 from easydict import EasyDict
+import torch
+device = 1
+torch.cuda.set_device(device)
 
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_id = 'PongNoFrameskip-v4'
+env_id = 'MsPacmanNoFrameskip-v4'
 
 if env_id == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -17,21 +20,27 @@ elif env_id == 'BreakoutNoFrameskip-v4':
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
+# collector_env_num = 8
+# n_episode = 8
+collector_env_num = 1
+n_episode = 1
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 1000
+# update_per_collect = 1000
+update_per_collect = None
+model_update_ratio = 0.25
 batch_size = 256
-max_env_step = int(1e6)
-reanalyze_ratio = 0.
+# max_env_step = int(1e6)
+max_env_step = int(1e8)
+# reanalyze_ratio = 0.
+reanalyze_ratio = 1
 eps_greedy_exploration_in_collect = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_mz_ctree/{env_id[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_muzero_tune/{env_id[:-14]}_muzero_collect{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_no-priority_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -42,6 +51,13 @@ atari_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        learn=dict(
+            learner=dict(
+                hook=dict(
+                    save_ckpt_after_iter=1000000,  # default is 10000
+                ),
+            ),
+        ),
         model=dict(
             observation_shape=(4, 96, 96),
             frame_stack_num=4,
@@ -65,8 +81,10 @@ atari_muzero_config = dict(
             end=0.05,
             decay=int(1e5),
         ),
+        use_priority=False,  # TODO
         use_augmentation=True,
         update_per_collect=update_per_collect,
+        model_update_ratio=model_update_ratio,
         batch_size=batch_size,
         optim_type='SGD',
         lr_piecewise_constant_decay=True,
@@ -75,7 +93,8 @@ atari_muzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         ssl_loss_weight=2,  # default is 0
         n_episode=n_episode,
-        eval_freq=int(2e3),
+        # eval_freq=int(2e3),
+        eval_freq=int(1e4),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

@@ -13,7 +13,8 @@ import torch
 import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import SequenceType
-
+import torch.nn.init as init
+import torch.nn.functional as F
 
 # use dataclass to make the output of network more convenient to use
 @dataclass
@@ -33,6 +34,31 @@ class MZNetworkOutput:
     reward: torch.Tensor
     policy_logits: torch.Tensor
     latent_state: torch.Tensor
+
+
+
+class SimNorm(nn.Module):
+    """
+    Simplicial normalization.
+    Adapted from https://arxiv.org/abs/2204.00616.
+    """
+
+    def __init__(self, simnorm_dim):
+        super().__init__()
+        self.dim = simnorm_dim
+
+    def forward(self, x):
+        shp = x.shape
+        # Ensure that there is at least one simplex to normalize across.
+        if shp[1] != 0:
+            x = x.view(*shp[:-1], -1, self.dim)
+            x = F.softmax(x, dim=-1)
+            return x.view(*shp)
+        else:
+            return x
+
+    def __repr__(self):
+        return f"SimNorm(dim={self.dim})"
 
 
 class DownSample(nn.Module):
@@ -140,6 +166,9 @@ class RepresentationNetwork(nn.Module):
             downsample: bool = True,
             activation: nn.Module = nn.ReLU(inplace=True),
             norm_type: str = 'BN',
+            embedding_dim: int = 256,
+            group_size: int = 8,
+            use_sim_norm: bool = False,
     ) -> None:
         """
         Overview:
@@ -174,18 +203,29 @@ class RepresentationNetwork(nn.Module):
                 self.norm = nn.BatchNorm2d(num_channels)
             elif norm_type == 'LN':
                 if downsample:
-                    self.norm = nn.LayerNorm([num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)])
+                    self.norm = nn.LayerNorm(
+                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
+                        eps=1e-5)
                 else:
-                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]])
-            
+                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-5)
+
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type='BN', res_type='basic', bias=False
+                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
         self.activation = activation
+
+        self.use_sim_norm = use_sim_norm
+
+        if self.use_sim_norm:
+            self.embedding_dim = embedding_dim
+            self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
+            # Initialize weights using He initialization
+            init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
+            self.sim_norm = SimNorm(simnorm_dim=group_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -204,20 +244,13 @@ class RepresentationNetwork(nn.Module):
 
         for block in self.resblocks:
             x = block(x)
-        return x
 
-    def get_param_mean(self) -> float:
-        """
-        Overview:
-            Get the mean of parameters in the network for debug and visualization.
-        Returns:
-            - mean (:obj:`float`): The mean of parameters in the network.
-        """
-        mean = []
-        for name, param in self.named_parameters():
-            mean += np.abs(param.detach().cpu().numpy().reshape(-1)).tolist()
-        mean = sum(mean) / len(mean)
-        return mean
+        if self.use_sim_norm:
+            # NOTE: very important. 
+            # for atari 64,8,8 = 4096 -> 768
+            x = self.sim_norm(x)
+
+        return x
 
 
 class RepresentationNetworkMLP(nn.Module):
@@ -227,9 +260,9 @@ class RepresentationNetworkMLP(nn.Module):
             observation_shape: int,
             hidden_channels: int = 64,
             layer_num: int = 2,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
-            last_linear_layer_init_zero: bool = True,
+            activation: nn.Module = nn.GELU(),
             norm_type: Optional[str] = 'BN',
+            group_size: int = 8,
     ) -> torch.Tensor:
         """
         Overview:
@@ -244,8 +277,6 @@ class RepresentationNetworkMLP(nn.Module):
                 we don't need this module.
             - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
                 Use the inplace operation to speed up.
-            - last_linear_layer_init_zero (:obj:`bool`): Whether to initialize the last linear layer with zeros, \
-                which can provide stable zero outputs in the beginning, defaults to True.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super().__init__()
@@ -262,6 +293,7 @@ class RepresentationNetworkMLP(nn.Module):
             # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=True,
         )
+        self.sim_norm = SimNorm(simnorm_dim=group_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -269,7 +301,10 @@ class RepresentationNetworkMLP(nn.Module):
             - x (:obj:`torch.Tensor`): :math:`(B, N)`, where B is batch size, N is the length of vector observation.
             - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
         """
-        return self.fc_representation(x)
+        x = self.fc_representation(x)
+        x = self.sim_norm(x)
+        return x
+
 
 
 class PredictionNetwork(nn.Module):
