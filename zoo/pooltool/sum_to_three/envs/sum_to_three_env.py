@@ -247,6 +247,7 @@ class SumToThreeEnv(PoolToolEnv):
         action_V0_high=3.0,
         action_angle_low=-70,
         action_angle_high=70,
+        raw_observation=False,
     )
 
     def __repr__(self) -> str:
@@ -254,6 +255,7 @@ class SumToThreeEnv(PoolToolEnv):
 
     def __init__(self, cfg: EasyDict) -> None:
         self.cfg = cfg
+        self.raw_observation = cfg.raw_observation
 
         # Get the reward function
         self.calc_reward = get_reward_function(self.cfg.reward_algorithm)
@@ -366,7 +368,10 @@ class SumToThreeEnv(PoolToolEnv):
         self._action_space = self._env.spaces.action
         self._reward_space = self._env.spaces.reward
 
-        return self._env.observation()
+        if self.raw_observation:
+            return self._env.observation_raw()
+        else:
+            return self._env.observation()
 
     def step(self, action: NDArray[np.float32]) -> BaseEnvTimestep:
         self._env.set_action(self._env.scale_action(action))
@@ -380,9 +385,17 @@ class SumToThreeEnv(PoolToolEnv):
         done = self._tracked_stats.eval_episode_length == self.cfg.episode_length
         info = asdict(self._tracked_stats) if done else {}
 
-        return BaseEnvTimestep(
-            obs=self._env.observation(),
-            reward=np.array([rew], dtype=np.float32),
-            done=done,
-            info=info,
-        )
+        if self.raw_observation:
+            return BaseEnvTimestep(
+                obs=self._env.observation_raw(),
+                reward=np.array([rew], dtype=np.float32),
+                done=done,
+                info=info,
+            )
+        else:
+            return BaseEnvTimestep(
+                obs=self._env.observation(),
+                reward=np.array([rew], dtype=np.float32),
+                done=done,
+                info=info,
+            )

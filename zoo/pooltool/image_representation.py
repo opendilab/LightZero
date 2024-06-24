@@ -73,6 +73,8 @@ from zoo.pooltool.datatypes import State
 import pooltool as pt
 import pooltool.constants as const
 
+pygame.init()
+
 Color = Tuple[int, int, int]
 WHITE: Color = (255, 255, 255)
 
@@ -236,8 +238,6 @@ class PygameRenderer:
 
         self.screen = pygame.Surface((self.coordinates.width, self.coordinates.height))
         self.clock = pygame.time.Clock()
-
-        pygame.init()
 
     def set_state(self, state: State) -> None:
         """

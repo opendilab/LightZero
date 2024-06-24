@@ -129,6 +129,15 @@ class PoolToolSimulator(ABC):
             to_play=-1,
         )
 
+    def observation_raw(self) -> NDArray[np.float32]:
+        """
+        Overview:
+            Returns the raw observation dictionary.
+        Returns:
+            - observation (:obj:`NDArray[np.float32]`): The raw observation array.
+        """
+        return self.observation_array()
+
     def scale_action(self, action: NDArray[np.float32]) -> NDArray[np.float32]:
         """
         Overview:

@@ -1,6 +1,6 @@
 # Billiards RL
 
-Welcome to the documentation for billiards simulation within the LightZero framework. jBilliards offers an intriguing learning environment for reinforcement learning due to its continuous action space, turn-based play, and the need for long-term planning and strategy formulation.
+Welcome to the documentation for billiards simulation within the LightZero framework. Billiards offers an intriguing learning environment for reinforcement learning due to its continuous action space, turn-based play, and the need for long-term planning and strategy formulation.
 
 ## Pooltool
 
@@ -104,7 +104,7 @@ You can conduct experiments using different observation spaces:
       ```bash
       python ./zoo/pooltool/sum_to_three/config/sum_to_three_config.py
       ```
-    - Results will be saved in `./data_pooltool_ctree/`.
+    - Results will be saved in `./data_pooltool_sampled_efficientzero/image-obs`.
 
 2. **Discrete Observation Space Experiment**:
     - Run the experiment with:
@@ -112,7 +112,7 @@ You can conduct experiments using different observation spaces:
       python ./zoo/pooltool/sum_to_three/config/sum_to_three_image_config.py
       ```
     - Modify the feature plane information by editing `./zoo/pooltool/sum_to_three/config/feature_plane_config.json`. View the usage example in `./zoo/pooltool/image_representation.py` for details about the feature plane content.
-    - Results will be saved in `./data_pooltool_ctree/`.
+    - Results will be saved in `./data_pooltool_sampled_efficientzero/vector-obs`.
 
 ### Results
 
