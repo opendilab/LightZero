@@ -19,7 +19,7 @@ import numpy as np
 from numpy.typing import NDArray
 import pooltool as pt
 from zoo.pooltool.sum_to_three.envs.sum_to_three_env import SumToThreeEnv
-from zoo.pooltool.sum_to_three.observation import ObservationType
+from zoo.pooltool.sum_to_three.envs.utils import ObservationType
 
 def random_action() -> NDArray[np.float32]:
     return (2.0 * np.random.random(size=2) - 1.0).astype(np.float32)

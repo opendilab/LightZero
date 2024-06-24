@@ -1,8 +1,7 @@
-from dataclasses import dataclass
 import math
 import pytest
 import numpy as np
-from zoo.pooltool.datatypes import ObservationDict, Spaces
+from zoo.pooltool.datatypes import Spaces
 from zoo.pooltool.image_representation import PygameRenderer, RenderConfig
 from zoo.pooltool.sum_to_three.envs.sum_to_three_env import (
     Bounds,
@@ -13,31 +12,37 @@ from zoo.pooltool.sum_to_three.envs.sum_to_three_env import (
 )
 
 import pooltool as pt
-from zoo.pooltool.sum_to_three.observation import ObservationType
-from zoo.pooltool.sum_to_three.observation.coordinate import get_coordinate_obs_space
-from zoo.pooltool.sum_to_three.observation.image import get_image_obs_space
-from zoo.pooltool.sum_to_three.reward import get_reward_space
+from zoo.pooltool.sum_to_three.envs.utils import (
+    ObservationType,
+    get_coordinate_obs_space,
+    get_image_obs_space,
+    get_reward_space,
+)
 from easydict import EasyDict
 
 np.random.seed(42)
 
+
 @pytest.fixture
 def env_config():
-    return EasyDict({
-        "env_name": "PoolTool-SumToThree",
-        "episode_length": 10,
-        "reward_algorithm": "binary",
-        "action_V0_low": 0.3,
-        "action_V0_high": 3.0,
-        "action_angle_low": -70,
-        "action_angle_high": 70,
-        "observation_type": "coordinate",
-    })
+    return EasyDict(
+        {
+            "env_name": "PoolTool-SumToThree",
+            "episode_length": 10,
+            "reward_algorithm": "binary",
+            "action_V0_low": 0.3,
+            "action_V0_high": 3.0,
+            "action_angle_low": -70,
+            "action_angle_high": 70,
+            "observation_type": "coordinate",
+        }
+    )
 
 
 @pytest.fixture
 def env(env_config) -> SumToThreeEnv:
     return SumToThreeEnv(env_config)
+
 
 @pytest.fixture
 def st3_coord() -> SumToThreeSimulator:
@@ -71,7 +76,7 @@ def st3_image() -> SumToThreeSimulator:
     renderer = PygameRenderer.build(state.system.table, render_config)
     renderer.set_state(state)
     renderer.init()
-        
+
     action_space = get_action_space(
         Bounds(0.3, 3.0),
         Bounds(-70, 70),
@@ -94,7 +99,8 @@ def st3_image() -> SumToThreeSimulator:
 
 
 def _random_normalized_action():
-    return np.random.uniform(low=-1., high=1., size=2).astype(np.float32)
+    return np.random.uniform(low=-1.0, high=1.0, size=2).astype(np.float32)
+
 
 def test_create_initial_state():
     state = create_initial_state(random_pos=False)
@@ -174,10 +180,19 @@ def test_observation_array_coordinate(st3_coord: SumToThreeSimulator):
     assert isinstance(obs_array, np.ndarray)
 
     # Each observation element matches the order of ball coordinates
-    assert math.isclose(obs_array[0], st3_coord.state.system.balls["cue"].xyz[0], rel_tol=1e-3)
-    assert math.isclose(obs_array[1], st3_coord.state.system.balls["cue"].xyz[1], rel_tol=1e-3)
-    assert math.isclose(obs_array[2], st3_coord.state.system.balls["object"].xyz[0], rel_tol=1e-3)
-    assert math.isclose(obs_array[3], st3_coord.state.system.balls["object"].xyz[1], rel_tol=1e-3)
+    assert math.isclose(
+        obs_array[0], st3_coord.state.system.balls["cue"].xyz[0], rel_tol=1e-3
+    )
+    assert math.isclose(
+        obs_array[1], st3_coord.state.system.balls["cue"].xyz[1], rel_tol=1e-3
+    )
+    assert math.isclose(
+        obs_array[2], st3_coord.state.system.balls["object"].xyz[0], rel_tol=1e-3
+    )
+    assert math.isclose(
+        obs_array[3], st3_coord.state.system.balls["object"].xyz[1], rel_tol=1e-3
+    )
+
 
 def test_observation_array_image(st3_image: SumToThreeSimulator):
     # Grab an observation
@@ -220,8 +235,17 @@ def test_observation_types():
         else:
             raise NotImplementedError()
 
-        spaces = Spaces(observation_space, get_action_space(Bounds(0.3, 3.0), Bounds(-70, 70)), get_reward_space("binary"),)
-        simulator = SumToThreeSimulator(state, spaces, observation_type=observation_type, renderer=renderer if observation_type == ObservationType.IMAGE else None,)
+        spaces = Spaces(
+            observation_space,
+            get_action_space(Bounds(0.3, 3.0), Bounds(-70, 70)),
+            get_reward_space("binary"),
+        )
+        simulator = SumToThreeSimulator(
+            state,
+            spaces,
+            observation_type=observation_type,
+            renderer=renderer if observation_type == ObservationType.IMAGE else None,
+        )
 
         obs = simulator.observation_array()
         assert obs.shape == observation_space.shape
@@ -238,7 +262,7 @@ def test_unnormalized_action_to_step(env: SumToThreeEnv):
     env.reset()
 
     with pytest.raises(AssertionError):
-        env.step(np.array([1.4, -40.], dtype=np.float32))
+        env.step(np.array([1.4, -40.0], dtype=np.float32))
 
 
 def test_step_progresses_state(env: SumToThreeEnv):
@@ -252,8 +276,14 @@ def test_step_progresses_state(env: SumToThreeEnv):
     step_2 = env.step(_random_normalized_action())
 
     # Check that each step progresses the state
-    assert np.allclose(step_0['observation'], step_1.obs['observation'], atol=1e-3) is False
-    assert np.allclose(step_1.obs['observation'], step_2.obs['observation'], atol=1e-3) is False
+    assert (
+        np.allclose(step_0["observation"], step_1.obs["observation"], atol=1e-3)
+        is False
+    )
+    assert (
+        np.allclose(step_1.obs["observation"], step_2.obs["observation"], atol=1e-3)
+        is False
+    )
 
     # Check that the episode progresses
     assert not step_1.done

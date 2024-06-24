@@ -60,8 +60,15 @@ from gym import spaces
 
 import pooltool as pt
 from zoo.pooltool.image_representation import PygameRenderer, RenderConfig
-from zoo.pooltool.sum_to_three.observation import ObservationType, coordinate_observation_array, image_observation_array, get_image_obs_space, get_coordinate_obs_space
-from zoo.pooltool.sum_to_three.reward import get_reward_function, get_reward_space
+from zoo.pooltool.sum_to_three.envs.utils import (
+    ObservationType,
+    coordinate_observation_array,
+    image_observation_array,
+    get_image_obs_space,
+    get_coordinate_obs_space,
+    get_reward_function,
+    get_reward_space,
+)
 
 
 def get_action_space(V0: Bounds, angle: Bounds) -> spaces.Box:
@@ -157,6 +164,7 @@ class SumToThreeSimulator(PoolToolSimulator):
         Manages the simulation state for simulating actions and retrieving subsequent \
         observations.
     """
+
     observation_type: ObservationType
     renderer: Optional[PygameRenderer] = None
 
@@ -265,10 +273,14 @@ class SumToThreeEnv(PoolToolEnv):
         try:
             self.observation_type = ObservationType(self.cfg.observation_type)
         except AttributeError:
-            available = [member.value for member in ObservationType.__members__.values()]
+            available = [
+                member.value for member in ObservationType.__members__.values()
+            ]
             raise ValueError(f"Must set 'observation_type' to one of {available}.")
         except ValueError:
-            available = [member.value for member in ObservationType.__members__.values()]
+            available = [
+                member.value for member in ObservationType.__members__.values()
+            ]
             raise ValueError(f"'observation_type' must be one of {available}.")
 
         if self.observation_type == ObservationType.IMAGE:
@@ -321,7 +333,7 @@ class SumToThreeEnv(PoolToolEnv):
                 renderer.init()
             else:
                 raise ValueError(f"Unhandled Enum member '{self.observation_type}'")
-                
+
             action_space = get_action_space(
                 self.action_bounds["V0"],
                 self.action_bounds["angle"],
