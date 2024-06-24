@@ -131,6 +131,7 @@ def train_rezero(
     # Evaluate the random agent
     stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
+    buffer_reanalyze_count = 0
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         log_buffer_run_time(learner.train_iter, replay_buffer, tb_logger)
@@ -178,7 +179,6 @@ def train_rezero(
         replay_buffer.remove_oldest_data_to_fit()
 
         iteration_count = 0
-        buffer_reanalyze_count = 0
         reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
         # Learn policy from collected data.
         for i in range(update_per_collect):
@@ -187,6 +187,7 @@ def train_rezero(
                 if replay_buffer.get_num_of_transitions() > 2000:
                     replay_buffer.reanalyze_buffer(2000, policy)
                     buffer_reanalyze_count += 1
+                    print(f'buffer reanalyze count: {buffer_reanalyze_count}')
             # Learner will train ``update_per_collect`` times in one iteration.
             if replay_buffer.get_num_of_transitions() > batch_size:
                 train_data = replay_buffer.sample(batch_size, policy)

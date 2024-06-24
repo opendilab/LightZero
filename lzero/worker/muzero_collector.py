@@ -80,6 +80,7 @@ class MuZeroCollector(ISerialCollector):
             self._tb_logger = None
 
         self.policy_config = policy_config
+        self.collect_with_pure_policy = self.policy_config.collect_with_pure_policy
 
         self.reset(policy, env)
 
@@ -732,7 +733,10 @@ class MuZeroCollector(ISerialCollector):
             envstep_count = sum([d['step'] for d in self._episode_info])
             duration = sum([d['time'] for d in self._episode_info])
             episode_reward = [d['reward'] for d in self._episode_info]
-            visit_entropy = [d['visit_entropy'] for d in self._episode_info]
+            if not self.collect_with_pure_policy:
+                visit_entropy = [d['visit_entropy'] for d in self._episode_info]
+            else:
+                visit_entropy = [0.0]
             if self.policy_config.gumbel_algo:
                 completed_value = [d['completed_value'] for d in self._episode_info]
             self._total_duration += duration
@@ -751,7 +755,6 @@ class MuZeroCollector(ISerialCollector):
                 'total_episode_count': self._total_episode_count,
                 'total_duration': self._total_duration,
                 'visit_entropy': np.mean(visit_entropy),
-                # 'each_reward': episode_reward,
             }
             if self.policy_config.gumbel_algo:
                 info['completed_value'] = np.mean(completed_value)
