@@ -1,9 +1,9 @@
 import os
+from typing import Optional, Callable
 
 import psutil
 from pympler.asizeof import asizeof
 from tensorboardX import SummaryWriter
-from typing import Optional, Callable
 
 
 def random_collect(
@@ -26,7 +26,8 @@ def random_collect(
     collect_kwargs = {'temperature': 1, 'epsilon': 0.0}
 
     # Collect data by default config n_sample/n_episode.
-    new_data = collector.collect(n_episode=policy_cfg.random_collect_episode_num, train_iter=0, policy_kwargs=collect_kwargs)
+    new_data = collector.collect(n_episode=policy_cfg.random_collect_episode_num, train_iter=0,
+                                 policy_kwargs=collect_kwargs)
 
     if postprocess_data_fn is not None:
         new_data = postprocess_data_fn(new_data)
@@ -76,6 +77,7 @@ def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: Summa
         # Record the memory usage of the process to TensorBoard.
         writer.add_scalar('Buffer/memory_usage/process', process_memory_usage_mb, train_iter)
 
+
 def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:
     # "writer is None" means we are in a slave process in the DDP setup.
     if writer is not None:
@@ -104,16 +106,9 @@ def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWr
         average_active_root_num = total_active_root_num / sample_times
         writer.add_scalar('Buffer/average_active_root_num', average_active_root_num, train_iter)
 
-        # Record average reanalyze time.
-        # total_infer = buffer.average_infer
-        # average_average_infer = total_infer / sample_times
-        # writer.add_scalar('Buffer/average_infer', average_average_infer, train_iter)
-
-
         # Reset the time records.
         buffer.sample_times = 0
         buffer.compute_target_re_time = 0
         buffer.reuse_search_time = 0
         buffer.origin_search_time = 0
         buffer.active_root_num = 0
-        # buffer.average_infer = 0

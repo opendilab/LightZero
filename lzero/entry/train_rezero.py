@@ -166,12 +166,7 @@ def train_rezero(
                     break
 
         # Collect data by default config n_sample/n_episode.
-        if cfg.policy.mcts_collect:
-            # use MCTS (guided by prior policy) to collect data
-            new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
-        else:
-            # use prior policy to collect data
-            new_data = collector.policy_collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+        new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs, collect_with_pure_policy=cfg.policy.collect_with_pure_policy)
 
         if cfg.policy.update_per_collect is None:
             # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.

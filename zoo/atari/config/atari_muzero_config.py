@@ -23,9 +23,17 @@ evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 1000
 batch_size = 256
-max_env_step = int(8e5)
-reanalyze_ratio = 0.99
+max_env_step = int(1e6)
+reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = False
+
+# only for debug
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 1
+num_simulations = 5
+update_per_collect = 1
+batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -40,6 +48,9 @@ atari_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        # only for debug
+        collect_max_episode_steps=int(50),
+        eval_max_episode_steps=int(50),
     ),
     policy=dict(
         model=dict(
@@ -94,18 +105,10 @@ atari_muzero_create_config = dict(
         type='muzero',
         import_names=['lzero.policy.muzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)
 create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    # def run(max_env_step: int):
-    #     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
-    # import cProfile
-    # cProfile.run(f"run({30000})", filename="pong_mzssl", sort="cumulative")
     train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
