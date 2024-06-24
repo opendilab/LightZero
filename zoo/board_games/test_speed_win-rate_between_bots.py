@@ -368,7 +368,7 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
     for i in range(10):
         print('-' * 10 + str(i) + '-' * 10)
         memory_usage = get_memory_usage()
-        print(f"初始内存使用量: {memory_usage} 字节")
+        print(f'Memory usage at the beginning of the game: {memory_usage} bytes')
         # Initialize the game, where there are two players: player 1 and player 2.
         env = TicTacToeEnv(EasyDict(cfg_tictactoe))
         # Reset the environment, set the board  to a clean board and the  start player to be player 1.
@@ -414,8 +414,8 @@ def test_tictactoe_mcts_bot_vs_alphabeta_bot(num_simulations=50):
             temp = memory_usage
             memory_usage = get_memory_usage()
             memory_cost = memory_usage - temp
-            print(f"搜索后内存使用量: {memory_usage} 字节")
-            print(f"搜索增加的内存使用量: {memory_cost} 字节")
+            print(f'Memory usage after searching: {memory_usage} bytes')
+            print(f'Memory increase after searching: {memory_cost} bytes')
         # Record the winner.
         winner.append(env.get_done_winner()[1])
 

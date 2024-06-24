@@ -86,5 +86,5 @@ if __name__ == "__main__":
     for seed in seeds:
         # Update exp_name to include the current seed
         main_config.exp_name = f'data_rezero-collect-mcts_ctree_0128/connect4_rezero-collect-mcts_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
-        from lzero.entry import train_mcma
-        train_mcma([main_config, create_config], seed=seed, max_env_step=max_env_step)
+        from lzero.entry import train_rezero
+        train_rezero([main_config, create_config], seed=seed, max_env_step=max_env_step)

@@ -9,16 +9,19 @@ evaluator_env_num = 3
 num_simulations = 25
 update_per_collect = 100
 buffer_reanalyze_interval = None
-buffer_reanalyze_freq = 2
 batch_size = 256
 max_env_step = int(6e4)
-reanalyze_ratio = 0
+reanalyze_ratio = 1
+reuse_search = True
+collect_with_pure_policy = True
+use_priority = False
+buffer_reanalyze_freq = 1
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 cartpole_muzero_config = dict(
-    exp_name=f'data_mz_ctree/cartpole/final_ma_r2',
+    exp_name=f'data_rezero-mz/cartpole_rezero-mz_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -43,20 +46,23 @@ cartpole_muzero_config = dict(
         env_type='not_board_games',
         game_segment_length=50,
         update_per_collect=update_per_collect,
-        buffer_reanalyze_interval = buffer_reanalyze_interval,
-        buffer_reanalyze_freq = buffer_reanalyze_freq,
         batch_size=batch_size,
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        ssl_loss_weight=2,  # NOTE: default is 0.
+        ssl_loss_weight=2,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e2),
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
+        reanalyze_noise=True,
+        reuse_search=reuse_search,
+        collect_with_pure_policy=collect_with_pure_policy,
+        use_priority=use_priority,
+        buffer_reanalyze_freq=buffer_reanalyze_freq,
     ),
 )
 
@@ -70,18 +76,13 @@ cartpole_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='ma',
-        import_names=['lzero.policy.ma'],
+        type='muzero',
+        import_names=['lzero.policy.muzero'],
     ),
-    collector=dict(
-        type='episode_ma',
-        import_names=['lzero.worker.ma_collector'],
-    )
 )
 cartpole_muzero_create_config = EasyDict(cartpole_muzero_create_config)
 create_config = cartpole_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_ma
-
-    train_ma([main_config, create_config], seed=0, max_env_step=max_env_step)
+    from lzero.entry import train_rezero
+    train_rezero([main_config, create_config], seed=0, max_env_step=max_env_step)
