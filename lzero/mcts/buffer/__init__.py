@@ -3,6 +3,5 @@ from .game_buffer_efficientzero import EfficientZeroGameBuffer
 from .game_buffer_sampled_efficientzero import SampledEfficientZeroGameBuffer
 from .game_buffer_gumbel_muzero import GumbelMuZeroGameBuffer
 from .game_buffer_stochastic_muzero import StochasticMuZeroGameBuffer
-from .game_buffer_rezerom import ReZeroMGameBuffer
-from .game_buffer_rezeroe import ReZeroEGameBuffer
-from .game_buffer_nrma import NRMAGameBuffer
+from .game_buffer_rezero_mz import ReZeroMZGameBuffer
+from .game_buffer_rezero_ez import ReZeroEZGameBuffer

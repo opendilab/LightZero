@@ -31,7 +31,7 @@ def train_rezero(
 ) -> 'Policy':  # noqa
     """
     Overview:
-        The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel Muzero.
+        The train entry for ReZero algorithms, including ReZero-MuZero, ReZero-EfficientZero.
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
             ``Tuple[dict, dict]`` type means [user_config, create_cfg].
@@ -51,15 +51,9 @@ def train_rezero(
         "train_rezero entry now only support the following algo.: 'efficientzero', 'muzero'"
 
     if create_cfg.policy.type == 'muzero':
-        from lzero.mcts import ReZeroMGameBuffer as GameBuffer
+        from lzero.mcts import ReZeroMZGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'efficientzero':
-        from lzero.mcts import ReZeroEGameBuffer as GameBuffer
-    # elif create_cfg.policy.type == 'sampled_efficientzero':
-    #     from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
-    # elif create_cfg.policy.type == 'gumbel_muzero':
-    #     from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
-    # elif create_cfg.policy.type == 'stochastic_muzero':
-    #     from lzero.mcts import StochasticMuZeroGameBuffer as GameBuffer
+        from lzero.mcts import ReZeroEZGameBuffer as GameBuffer
 
     if cfg.policy.cuda and torch.cuda.is_available():
         cfg.policy.device = 'cuda'
@@ -67,11 +61,6 @@ def train_rezero(
         cfg.policy.device = 'cpu'
 
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
-
-    # if cfg.policy.mcts_collect == True:
-    #     from lzero.worker import MuZeroCollector as Collector
-    # else:
-    #     from lzero.worker import MACollector as Collector
 
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
@@ -177,9 +166,11 @@ def train_rezero(
                     break
 
         # Collect data by default config n_sample/n_episode.
-        if cfg.policy.mcts_collect == True:
+        if cfg.policy.mcts_collect:
+            # use MCTS (guided by prior policy) to collect data
             new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         else:
+            # use prior policy to collect data
             new_data = collector.policy_collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
         if cfg.policy.update_per_collect is None:
@@ -198,7 +189,7 @@ def train_rezero(
         for i in range(update_per_collect):
             if iteration_count % reanalyze_interval == 0:
                 # reanalyze the whole buffer
-                if replay_buffer.get_num_of_transitions()>2000 and buffer_reanalyze_count < cfg.policy.buffer_reanalyze_freq:
+                if replay_buffer.get_num_of_transitions() > 2000:
                     replay_buffer.reanalyze_buffer(2000, policy)
                     buffer_reanalyze_count += 1
             # Learner will train ``update_per_collect`` times in one iteration.

@@ -195,8 +195,6 @@ class MuZeroPolicy(Policy):
         # ****** Explore by random collect ******
         # (int) The number of episodes to collect data randomly before training.
         random_collect_episode_num=0,
-        # (bool) whether to use mcts during collect phase.
-        mcts_collect=True,
 
         # ****** Explore by eps greedy ******
         eps=dict(
