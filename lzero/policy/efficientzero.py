@@ -168,6 +168,8 @@ class EfficientZeroPolicy(MuZeroPolicy):
         reanalyze_noise=True,
         # (bool) Whether to reuse the root value between batch searches.
         reuse_search=True,
+        # (bool) whether to use the pure policy to collect data. If False, use the MCTS guided with policy.
+        collect_with_pure_policy=False,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
@@ -188,8 +190,6 @@ class EfficientZeroPolicy(MuZeroPolicy):
         # ****** Explore by random collect ******
         # (int) The number of episodes to collect data randomly before training.
         random_collect_episode_num=0,
-        # (bool) whether to use mcts during collect phase.
-        mcts_collect=True,
 
         # ****** Explore by eps greedy ******
         eps=dict(
@@ -587,7 +587,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
 
-            if self._cfg.mcts_collect == True:
+            if not self._cfg.collect_with_pure_policy:
                 # the only difference between collect and eval is the dirichlet noise.
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))

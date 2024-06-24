@@ -28,7 +28,7 @@ eps_greedy_exploration_in_collect = False
 
 reanalyze_ratio = 1
 reuse_search = True
-mcts_collect = False
+collect_with_pure_policy = True
 use_priority = False
 buffer_reanalyze_freq = 1
 
@@ -91,7 +91,7 @@ atari_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         reanalyze_noise=True,
         reuse_search=reuse_search,
-        mcts_collect=mcts_collect,
+        collect_with_pure_policy=collect_with_pure_policy,
         use_priority=use_priority,
         buffer_reanalyze_freq=buffer_reanalyze_freq,
     ),

@@ -76,7 +76,7 @@ class MuZeroGameBuffer(GameBuffer):
         policy._target_model.eval()
 
         # obtain the current_batch and prepare target context
-        reward_value_context, policy_re_context, policy_non_re_context, search_contex,  current_batch = self._make_batch(
+        reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(
             batch_size, self._cfg.reanalyze_ratio
         )
         # target reward, target value
