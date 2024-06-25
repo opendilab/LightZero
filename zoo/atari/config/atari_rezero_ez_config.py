@@ -1,5 +1,4 @@
 from easydict import EasyDict
-
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
 
@@ -23,28 +22,19 @@ evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = 1000
 batch_size = 256
-max_env_step = int(1e6)
+max_env_step = int(5e5)
 eps_greedy_exploration_in_collect = False
 
-reanalyze_ratio = 1
 reuse_search = True
 collect_with_pure_policy = True
 use_priority = False
 buffer_reanalyze_freq = 1
-
-# only for debug
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 1
-num_simulations = 5
-update_per_collect = 1
-batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_efficientzero_config = dict(
-    exp_name=f'data_rezero_ez/{env_id[:-14]}_rezero_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_rezero_ez/{env_id[:-14]}_rezero_efficientzero_ns{num_simulations}_upc{update_per_collect}_brf{buffer_reanalyze_freq}_seed0',
     env=dict(
         env_id=env_id,
         obs_shape=(4, 96, 96),
@@ -52,9 +42,6 @@ atari_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        # only for debug
-        collect_max_episode_steps=int(50),
-        eval_max_episode_steps=int(50),
     ),
     policy=dict(
         model=dict(
@@ -83,7 +70,7 @@ atari_efficientzero_config = dict(
         lr_piecewise_constant_decay=True,
         learning_rate=0.2,
         num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
+        reanalyze_ratio=0,  # NOTE: for rezero, reanalyze_ratio should be 0. To be compatible with muzero.
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),

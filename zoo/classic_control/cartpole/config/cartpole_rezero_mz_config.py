@@ -8,12 +8,10 @@ n_episode = 8
 evaluator_env_num = 3
 num_simulations = 25
 update_per_collect = 100
-buffer_reanalyze_interval = None
 batch_size = 256
-max_env_step = int(6e4)
-reanalyze_ratio = 1
+max_env_step = int(1e5)
 reuse_search = True
-collect_with_pure_policy = True
+collect_with_pure_policy = False
 use_priority = False
 buffer_reanalyze_freq = 1
 # ==============================================================
@@ -21,7 +19,7 @@ buffer_reanalyze_freq = 1
 # ==============================================================
 
 cartpole_muzero_config = dict(
-    exp_name=f'data_rezero-mz/cartpole_rezero-mz_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_rezero-mz/cartpole_rezero-mz_ns{num_simulations}_upc{update_per_collect}_brf{buffer_reanalyze_freq}_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -52,7 +50,7 @@ cartpole_muzero_config = dict(
         learning_rate=0.003,
         ssl_loss_weight=2,
         num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
+        reanalyze_ratio=0,  # NOTE: for rezero, reanalyze_ratio should be 0. To be compatible with muzero.
         n_episode=n_episode,
         eval_freq=int(2e2),
         replay_buffer_size=int(1e6),

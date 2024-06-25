@@ -30,7 +30,7 @@ class GameBuffer(ABC, object):
         # (int) The size/capacity of the replay buffer in terms of transitions.
         replay_buffer_size=int(1e6),
         # (float) The ratio of experiences required for the reanalyzing part in a minibatch.
-        reanalyze_ratio=0.3,
+        reanalyze_ratio=0.25,
         # (bool) Whether to consider outdated experiences for reanalyzing. If True, we first sort the data in the minibatch by the time it was produced
         # and only reanalyze the oldest ``reanalyze_ratio`` fraction.
         reanalyze_outdated=True,

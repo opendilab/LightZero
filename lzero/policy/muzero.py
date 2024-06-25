@@ -93,8 +93,6 @@ class MuZeroPolicy(Policy):
         # IMPORTANT: Setting eval_offline to True requires configuring the saving of checkpoints to align with the evaluation frequency.
         # This is done by setting the parameter learn.learner.hook.save_ckpt_after_iter to the same value as eval_freq in the train_muzero.py automatically.
         eval_offline=False,
-        # Whether to use mcts during the collect phase.
-        mcts_collect=True,
 
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.

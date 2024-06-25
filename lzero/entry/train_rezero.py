@@ -115,6 +115,7 @@ def train_rezero(
     stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
     buffer_reanalyze_count = 0
+    train_epoch = 0
     while True:
         # Log buffer metrics
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
@@ -160,15 +161,29 @@ def train_rezero(
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
 
-        # Training loop
-        for i in range(update_per_collect):
-            # Periodically reanalyze buffer
-            if i % (update_per_collect // cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions() > 2000:
+        # Periodically reanalyze buffer
+        if cfg.policy.buffer_reanalyze_freq >= 1:
+            # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+            reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
+        else:
+            # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
+            if train_epoch % (1//cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions() > 2000:
                 # When reanalyzing the buffer, the samples in the entire buffer are processed in mini-batches with a batch size of 2000.
                 # This is an empirically selected value for optimal efficiency.
                 replay_buffer.reanalyze_buffer(2000, policy)
                 buffer_reanalyze_count += 1
                 logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
+
+        # Training loop
+        for i in range(update_per_collect):
+            if cfg.policy.buffer_reanalyze_freq >= 1:
+                # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+                if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions() > 2000:
+                    # When reanalyzing the buffer, the samples in the entire buffer are processed in mini-batches with a batch size of 2000.
+                    # This is an empirically selected value for optimal efficiency.
+                    replay_buffer.reanalyze_buffer(2000, policy)
+                    buffer_reanalyze_count += 1
+                    logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
 
             # Sample and train on mini-batch
             if replay_buffer.get_num_of_transitions() > cfg.policy.batch_size:
@@ -181,6 +196,7 @@ def train_rezero(
                 logging.warning('Insufficient data in replay buffer for sampling. Continuing collection...')
                 break
 
+        train_epoch += 1
         # Check termination conditions
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             if cfg.policy.eval_offline:
