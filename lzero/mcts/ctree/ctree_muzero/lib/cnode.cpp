@@ -432,7 +432,6 @@ namespace tree
         if (to_play == -1)
         {           
             // for play-with-bot-mode
-            // printf("111111111111111111\n");
             float bootstrap_value = value;
             int path_len = search_path.size();
             for (int i = path_len - 1; i >= 0; --i)
@@ -504,7 +503,8 @@ namespace tree
     {
         /*
         Overview:
-            Expand the nodes along the search path and update the infos.
+            Expand the nodes along the search path and update the infos.  Details are similar to cbatch_backpropagate, but with reuse value.
+            Please refer to https://arxiv.org/abs/2404.16364 for more details.
         Arguments:
             - current_latent_state_index: The index of latent state of the leaf node in the search path.
             - discount_factor: the discount factor of reward.
@@ -605,7 +605,7 @@ namespace tree
             - min_max_stats: a tool used to min-max normalize the score.
             - pb_c_base: constants c2 in muzero.
             - pb_c_init: constants c1 in muzero.
-            - disount_factor: the discount factor of reward.
+            - discount_factor: the discount factor of reward.
             - mean_q: the mean q value of the parent node.
             - players: the number of players.
             - true_action: the action chosen in the trajectory.
@@ -828,7 +828,8 @@ namespace tree
     {
         /*
         Overview:
-            Search node path from the roots.
+            Search node path from the roots. Details are similar to cbatch_traverse, but with reuse value.
+            Please refer to https://arxiv.org/abs/2404.16364 for more details.
         Arguments:
             - roots: the roots that search from.
             - pb_c_base: constants c2 in muzero.

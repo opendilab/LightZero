@@ -5,11 +5,10 @@ from typing import Optional, Tuple
 
 import torch
 from ding.config import compile_config
-from ding.envs import create_env_manager
-from ding.envs import get_vec_env_setting
+from ding.envs import create_env_manager, get_vec_env_setting
 from ding.policy import create_policy
-from ding.utils import set_pkg_seed, get_rank
 from ding.rl_utils import get_epsilon_greedy_fn
+from ding.utils import set_pkg_seed, get_rank
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
@@ -28,76 +27,66 @@ def train_rezero(
         model_path: Optional[str] = None,
         max_train_iter: Optional[int] = int(1e10),
         max_env_step: Optional[int] = int(1e10),
-) -> 'Policy':  # noqa
+) -> 'Policy':
     """
-    Overview:
-        The train entry for ReZero algorithms, including ReZero-MuZero, ReZero-EfficientZero.
-    Arguments:
-        - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
-            ``Tuple[dict, dict]`` type means [user_config, create_cfg].
-        - seed (:obj:`int`): Random seed.
-        - model (:obj:`Optional[torch.nn.Module]`): Instance of torch.nn.Module.
-        - model_path (:obj:`Optional[str]`): The pretrained model path, which should
-            point to the ckpt file of the pretrained model, and an absolute path is recommended.
-            In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
-        - max_train_iter (:obj:`Optional[int]`): Maximum policy update iterations in training.
-        - max_env_step (:obj:`Optional[int]`): Maximum collected environment interaction steps.
-    Returns:
-        - policy (:obj:`Policy`): Converged policy.
-    """
+    Train entry for ReZero algorithms (ReZero-MuZero, ReZero-EfficientZero).
 
+    Args:
+        - input_cfg (:obj:`Tuple[dict, dict]`): Configuration dictionaries (user_config, create_cfg).
+        - seed (:obj:`int`): Random seed for reproducibility.
+        - model (:obj:`Optional[torch.nn.Module]`): Pre-initialized model instance.
+        - model_path (:obj:`Optional[str]`): Path to pretrained model checkpoint.
+        - max_train_iter (:obj:`Optional[int]`): Maximum number of training iterations.
+        - max_env_step (:obj:`Optional[int]`): Maximum number of environment steps.
+
+    Returns:
+        - Policy: Trained policy object.
+    """
     cfg, create_cfg = input_cfg
     assert create_cfg.policy.type in ['efficientzero', 'muzero'], \
-        "train_rezero entry now only support the following algo.: 'efficientzero', 'muzero'"
+        "train_rezero entry only supports 'efficientzero' and 'muzero' algorithms"
 
+    # Import appropriate GameBuffer based on policy type
     if create_cfg.policy.type == 'muzero':
         from lzero.mcts import ReZeroMZGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'efficientzero':
         from lzero.mcts import ReZeroEZGameBuffer as GameBuffer
 
-    if cfg.policy.cuda and torch.cuda.is_available():
-        cfg.policy.device = 'cuda'
-    else:
-        cfg.policy.device = 'cpu'
+    # Set device (CUDA if available and enabled, otherwise CPU)
+    cfg.policy.device = 'cuda' if cfg.policy.cuda and torch.cuda.is_available() else 'cpu'
 
+    # Compile and finalize configuration
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
 
-    # Create main components: env, policy
+    # Create environment, policy, and core components
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
-
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
+    # Set seeds for reproducibility
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
 
+    # Adjust checkpoint saving frequency for offline evaluation
     if cfg.policy.eval_offline:
         cfg.policy.learn.learner.hook.save_ckpt_after_iter = cfg.policy.eval_freq
 
+    # Create and initialize policy
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
-
-    # load pretrained model
-    if model_path is not None:
+    if model_path:
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
 
-    # Create worker components: learner, collector, evaluator, replay buffer, commander.
-    tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
+    # Initialize worker components
+    tb_logger = SummaryWriter(os.path.join(f'./{cfg.exp_name}/log/', 'serial')) if get_rank() == 0 else None
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
-
-    # ==============================================================
-    # MCTS+RL algorithms related core code
-    # ==============================================================
-    policy_config = cfg.policy
-    batch_size = policy_config.batch_size
-    # specific game buffer for MCTS+RL algorithms
-    replay_buffer = GameBuffer(policy_config)
+    replay_buffer = GameBuffer(cfg.policy)
     collector = Collector(
         env=collector_env,
         policy=policy.collect_mode,
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
-        policy_config=policy_config
+        policy_config=cfg.policy
     )
     evaluator = Evaluator(
         eval_freq=cfg.policy.eval_freq,
@@ -107,56 +96,45 @@ def train_rezero(
         policy=policy.eval_mode,
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
-        policy_config=policy_config
+        policy_config=cfg.policy
     )
 
-    # ==============================================================
-    # Main loop
-    # ==============================================================
-    # Learner's before_run hook.
+    # Main training loop
     learner.call_hook('before_run')
+    update_per_collect = cfg.policy.update_per_collect
 
-    if cfg.policy.update_per_collect is not None:
-        update_per_collect = cfg.policy.update_per_collect
-
-    # The purpose of collecting random data before training:
-    # Exploration: Collecting random data helps the agent explore the environment and avoid getting stuck in a suboptimal policy prematurely.
-    # Comparison: By observing the agent's performance during random action-taking, we can establish a baseline to evaluate the effectiveness of reinforcement learning algorithms.
+    # Perform initial random data collection if specified
     if cfg.policy.random_collect_episode_num > 0:
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
-    if cfg.policy.eval_offline:
-        eval_train_iter_list = []
-        eval_train_envstep_list = []
 
-    # Evaluate the random agent
+    # Initialize offline evaluation tracking if enabled
+    if cfg.policy.eval_offline:
+        eval_train_iter_list, eval_train_envstep_list = [], []
+
+    # Evaluate initial random agent
     stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
     buffer_reanalyze_count = 0
     while True:
+        # Log buffer metrics
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
         log_buffer_run_time(learner.train_iter, replay_buffer, tb_logger)
-        collect_kwargs = {}
-        # set temperature for visit count distributions according to the train_iter,
-        # please refer to Appendix D in MuZero paper for details.
-        collect_kwargs['temperature'] = visit_count_temperature(
-            policy_config.manual_temperature_decay,
-            policy_config.fixed_temperature_value,
-            policy_config.threshold_training_steps_for_final_temperature,
-            trained_steps=learner.train_iter
-        )
 
-        if policy_config.eps.eps_greedy_exploration_in_collect:
-            epsilon_greedy_fn = get_epsilon_greedy_fn(
-                start=policy_config.eps.start,
-                end=policy_config.eps.end,
-                decay=policy_config.eps.decay,
-                type_=policy_config.eps.type
-            )
-            collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
-        else:
-            collect_kwargs['epsilon'] = 0.0
+        # Prepare collection parameters
+        collect_kwargs = {
+            'temperature': visit_count_temperature(
+                cfg.policy.manual_temperature_decay,
+                cfg.policy.fixed_temperature_value,
+                cfg.policy.threshold_training_steps_for_final_temperature,
+                trained_steps=learner.train_iter
+            ),
+            'epsilon': get_epsilon_greedy_fn(
+                cfg.policy.eps.start, cfg.policy.eps.end,
+                cfg.policy.eps.decay, cfg.policy.eps.type
+            )(collector.envstep) if cfg.policy.eps.eps_greedy_exploration_in_collect else 0.0
+        }
 
-        # Evaluate policy performance.
+        # Periodic evaluation
         if evaluator.should_eval(learner.train_iter):
             if cfg.policy.eval_offline:
                 eval_train_iter_list.append(learner.train_iter)
@@ -166,64 +144,73 @@ def train_rezero(
                 if stop:
                     break
 
-        # Collect data by default config n_sample/n_episode.
-        new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs, collect_with_pure_policy=cfg.policy.collect_with_pure_policy)
+        # Collect new data
+        new_data = collector.collect(
+            train_iter=learner.train_iter,
+            policy_kwargs=collect_kwargs,
+            collect_with_pure_policy=cfg.policy.collect_with_pure_policy
+        )
 
-        if cfg.policy.update_per_collect is None:
-            # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
-            collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
-            update_per_collect = int(collected_transitions_num * cfg.policy.model_update_ratio)
-        # save returned new_data collected by the collector
+        # Update collection frequency if not specified
+        if update_per_collect is None:
+            collected_transitions = sum(len(segment) for segment in new_data[0])
+            update_per_collect = int(collected_transitions * cfg.policy.model_update_ratio)
+
+        # Update replay buffer
         replay_buffer.push_game_segments(new_data)
-        # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
-        iteration_count = 0
-        reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
-        # Learn policy from collected data.
+        # Training loop
         for i in range(update_per_collect):
-            if iteration_count % reanalyze_interval == 0:
-                # reanalyze the whole buffer
-                if replay_buffer.get_num_of_transitions() > 2000:
-                    replay_buffer.reanalyze_buffer(2000, policy)
-                    buffer_reanalyze_count += 1
-                    print(f'buffer reanalyze count: {buffer_reanalyze_count}')
-            # Learner will train ``update_per_collect`` times in one iteration.
-            if replay_buffer.get_num_of_transitions() > batch_size:
-                train_data = replay_buffer.sample(batch_size, policy)
+            # Periodically reanalyze buffer
+            if i % (update_per_collect // cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions() > 2000:
+                # When reanalyzing the buffer, the samples in the entire buffer are processed in mini-batches with a batch size of 2000.
+                # This is an empirically selected value for optimal efficiency.
+                replay_buffer.reanalyze_buffer(2000, policy)
+                buffer_reanalyze_count += 1
+                logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
+
+            # Sample and train on mini-batch
+            if replay_buffer.get_num_of_transitions() > cfg.policy.batch_size:
+                train_data = replay_buffer.sample(cfg.policy.batch_size, policy)
+                log_vars = learner.train(train_data, collector.envstep)
+
+                if cfg.policy.use_priority:
+                    replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
             else:
-                logging.warning(
-                    f'The data in replay_buffer is not sufficient to sample a mini-batch: '
-                    f'batch_size: {batch_size}, '
-                    f'{replay_buffer} '
-                    f'continue to collect now ....'
-                )
+                logging.warning('Insufficient data in replay buffer for sampling. Continuing collection...')
                 break
 
-            # The core train steps for MCTS+RL algorithms.
-            log_vars = learner.train(train_data, collector.envstep)
-
-            if cfg.policy.use_priority:
-                replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
-
-            iteration_count += 1
-
+        # Check termination conditions
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             if cfg.policy.eval_offline:
-                logging.info(f'eval offline beginning...')
-                ckpt_dirname = './{}/ckpt'.format(learner.exp_name)
-                # Evaluate the performance of the pretrained model.
-                for train_iter, collector_envstep in zip(eval_train_iter_list, eval_train_envstep_list):
-                    ckpt_name = 'iteration_{}.pth.tar'.format(train_iter)
-                    ckpt_path = os.path.join(ckpt_dirname, ckpt_name)
-                    # load the ckpt of pretrained model
-                    policy.learn_mode.load_state_dict(torch.load(ckpt_path, map_location=cfg.policy.device))
-                    stop, reward = evaluator.eval(learner.save_checkpoint, train_iter, collector_envstep)
-                    logging.info(
-                        f'eval offline at train_iter: {train_iter}, collector_envstep: {collector_envstep}, reward: {reward}')
-                logging.info(f'eval offline finished!')
+                perform_offline_evaluation(cfg, learner, policy, evaluator, eval_train_iter_list,
+                                           eval_train_envstep_list)
             break
 
-    # Learner's after_run hook.
     learner.call_hook('after_run')
     return policy
+
+
+def perform_offline_evaluation(cfg, learner, policy, evaluator, eval_train_iter_list, eval_train_envstep_list):
+    """
+    Perform offline evaluation of the trained model.
+
+    Args:
+        cfg (dict): Configuration dictionary.
+        learner (BaseLearner): Learner object.
+        policy (Policy): Policy object.
+        evaluator (Evaluator): Evaluator object.
+        eval_train_iter_list (list): List of training iterations for evaluation.
+        eval_train_envstep_list (list): List of environment steps for evaluation.
+    """
+    logging.info('Starting offline evaluation...')
+    ckpt_dirname = f'./{learner.exp_name}/ckpt'
+
+    for train_iter, collector_envstep in zip(eval_train_iter_list, eval_train_envstep_list):
+        ckpt_path = os.path.join(ckpt_dirname, f'iteration_{train_iter}.pth.tar')
+        policy.learn_mode.load_state_dict(torch.load(ckpt_path, map_location=cfg.policy.device))
+        stop, reward = evaluator.eval(learner.save_checkpoint, train_iter, collector_envstep)
+        logging.info(f'Offline eval at iter: {train_iter}, steps: {collector_envstep}, reward: {reward}')
+
+    logging.info('Offline evaluation completed')

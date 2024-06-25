@@ -201,6 +201,7 @@ class MuZeroMCTSCtree(object):
         """
         Overview:
             Perform Monte Carlo Tree Search (MCTS) for the root nodes in parallel. Utilizes the cpp ctree for efficiency.
+            Please refer to https://arxiv.org/abs/2404.16364 for more details.
         Arguments:
             - roots (:obj:`Any`): A batch of expanded root nodes.
             - model (:obj:`torch.nn.Module`): The neural network model.
@@ -502,6 +503,7 @@ class EfficientZeroMCTSCtree(object):
         """
         Perform Monte Carlo Tree Search (MCTS) for the root nodes in parallel, utilizing model inference in parallel.
         This method uses the cpp ctree for efficiency.
+        Please refer to https://arxiv.org/abs/2404.16364 for more details.
 
         Args:
             roots (Any): A batch of expanded root nodes.
