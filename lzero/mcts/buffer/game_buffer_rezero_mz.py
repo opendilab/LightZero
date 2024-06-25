@@ -173,11 +173,11 @@ class ReZeroMZGameBuffer(MuZeroGameBuffer):
                         obs = game_obs[beg_index:end_index]
                         action = game_segment.action_segment[current_index]
                         if current_index == game_segment_len - 1:
-                            action = -64
+                            action = -2  # use the illegal negative action to represent the padding action
                     else:
                         policy_mask.append(0)
                         obs = zero_obs
-                        action = -64
+                        action = -2  # use the illegal negative action to represent the padding action
                     policy_obs_list.append(obs)
                     true_action.append(action)
 
