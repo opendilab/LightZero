@@ -10,7 +10,7 @@ continuous_action_space = True
 K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = None
-model_update_ratio = 0.25
+replay_ratio = 0.25
 batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
@@ -20,7 +20,7 @@ reanalyze_ratio = 0.
 
 bipedalwalker_cont_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/bipedalwalker_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_seed0',
+    f'data_sez_ctree/bipedalwalker_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-mur{replay_ratio}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_id='BipedalWalker-v3',
         env_type='normal',
@@ -61,7 +61,7 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        model_update_ratio=model_update_ratio,
+        replay_ratio=replay_ratio,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

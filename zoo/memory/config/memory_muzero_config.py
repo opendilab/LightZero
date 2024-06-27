@@ -34,7 +34,7 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 memory_muzero_config = dict(
-    exp_name=f'data_mz_ctree/{env_id}_memlen-{memory_length}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_'
+    exp_name=f'data_muzero/{env_id}_memlen-{memory_length}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_'
              f'collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
              f'_pelw{policy_entropy_loss_weight}_seed{seed}',
     env=dict(

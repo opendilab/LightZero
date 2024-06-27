@@ -10,7 +10,7 @@ from easydict import EasyDict
 # each_dim_disc_size = 4  # thus the total discrete action number is 4**4=256
 # num_simulations = 50
 # update_per_collect = None
-# model_update_ratio = 0.25
+# replay_ratio = 0.25
 # batch_size = 256
 # max_env_step = int(5e6)
 # reanalyze_ratio = 0.
@@ -20,7 +20,7 @@ from easydict import EasyDict
 
 bipedalwalker_cont_disc_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/bipedalwalker_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_seed0',
+    f'data_sez_ctree/bipedalwalker_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}-mur{replay_ratio}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id='BipedalWalker-v3',
@@ -61,7 +61,7 @@ bipedalwalker_cont_disc_efficientzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        model_update_ratio=model_update_ratio,
+        replay_ratio=replay_ratio,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

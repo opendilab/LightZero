@@ -21,7 +21,7 @@ prob_random_action_in_bot = 0.5
 
 gomoku_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/gomoku_muzero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_muzero/gomoku_muzero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         battle_mode='self_play_mode',
         bot_action_type=bot_action_type,
