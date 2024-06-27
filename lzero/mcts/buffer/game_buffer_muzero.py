@@ -54,6 +54,18 @@ class MuZeroGameBuffer(GameBuffer):
         self._reuse_search_timer = EasyTimer()
         self._origin_search_timer = EasyTimer()
         self.buffer_reanalyze = False
+
+        self.compute_target_re_time = 0
+        self.reuse_search_time = 0
+        self.origin_search_time = 0
+        self.sample_times = 0
+        self.active_root_num = 0
+
+    def reset_runtime_metrics(self):
+        """
+        Overview:
+            Reset the runtime metrics of the buffer.
+        """
         self.compute_target_re_time = 0
         self.reuse_search_time = 0
         self.origin_search_time = 0

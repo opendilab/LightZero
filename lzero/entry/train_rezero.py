@@ -155,7 +155,7 @@ def train_rezero(
         # Update collection frequency if not specified
         if update_per_collect is None:
             collected_transitions = sum(len(segment) for segment in new_data[0])
-            update_per_collect = int(collected_transitions * cfg.policy.model_update_ratio)
+            update_per_collect = int(collected_transitions * cfg.policy.replay_ratio)
 
         # Update replay buffer
         replay_buffer.push_game_segments(new_data)

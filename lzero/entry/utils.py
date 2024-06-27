@@ -87,7 +87,7 @@ def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWr
         - buffer (:obj:`GameBuffer`): The game buffer containing runtime metrics.
         - writer (:obj:`SummaryWriter`): The TensorBoard writer for logging metrics.
 
-    Note:
+    .. note::
         "writer is None" indicates that the function is being called in a slave process in the DDP setup.
     """
     if writer is not None:
@@ -113,8 +113,4 @@ def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWr
         writer.add_scalar('Buffer/average_active_root_num', average_active_root_num, train_iter)
 
         # Reset the time records in the buffer.
-        buffer.sample_times = 0
-        buffer.compute_target_re_time = 0
-        buffer.reuse_search_time = 0
-        buffer.origin_search_time = 0
-        buffer.active_root_num = 0
+        buffer.reset_runtime_metrics()

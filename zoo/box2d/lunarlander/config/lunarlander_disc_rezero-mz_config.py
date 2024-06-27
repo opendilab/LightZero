@@ -7,10 +7,9 @@ n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = None
-model_update_ratio = 0.25
+replay_ratio = 0.25
 batch_size = 256
 max_env_step = int(1e6)
-reanalyze_ratio = 1
 reuse_search = True
 collect_with_pure_policy = True
 use_priority = False
@@ -20,7 +19,7 @@ buffer_reanalyze_freq = 1
 # ==============================================================
 
 lunarlander_muzero_config = dict(
-    exp_name=f'data_rezero-mz/lunarlander_rezero-mz_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_rezero-mz/lunarlander_rezero-mz_ns{num_simulations}_upc{update_per_collect}_brf{buffer_reanalyze_freq}_seed0',
     env=dict(
         env_name='LunarLander-v2',
         continuous=False,
@@ -37,7 +36,7 @@ lunarlander_muzero_config = dict(
             model_type='mlp', 
             lstm_hidden_size=256,
             latent_state_dim=256,
-            self_supervised_learning_loss=True,  # NOTE: default is False.
+            self_supervised_learning_loss=True,
             discrete_action_encoding_type='one_hot',
             res_connection_in_dynamics=True,
             norm_type='BN', 
@@ -50,13 +49,13 @@ lunarlander_muzero_config = dict(
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
-        ssl_loss_weight=2,  # NOTE: default is 0.
+        ssl_loss_weight=2,
         grad_clip_value=0.5,
         num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
+        reanalyze_ratio=0,  # NOTE: for rezero, reanalyze_ratio should be 0.
         n_episode=n_episode,
         eval_freq=int(1e3),
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         reanalyze_noise=True,
@@ -88,6 +87,6 @@ if __name__ == "__main__":
     seeds = [0]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_rezero_0129/lunarlander_rezero-mz_ns{main_config.policy.num_simulations}_upc{main_config.policy.update_per_collect}_rr{main_config.policy.reanalyze_ratio}_seed{seed}'
+        main_config.exp_name = f'data_rezero_mz/lunarlander_rezero-mz_ns{num_simulations}_upc{update_per_collect}_brf{buffer_reanalyze_freq}_seed{seed}'
         from lzero.entry import train_rezero
         train_rezero([main_config, create_config], seed=seed, max_env_step=max_env_step)

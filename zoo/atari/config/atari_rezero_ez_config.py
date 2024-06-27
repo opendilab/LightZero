@@ -20,14 +20,13 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 1000
+update_per_collect = None
 batch_size = 256
 max_env_step = int(5e5)
-eps_greedy_exploration_in_collect = False
+use_priority = False
 
 reuse_search = True
 collect_with_pure_policy = True
-use_priority = False
 buffer_reanalyze_freq = 1
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -54,15 +53,6 @@ atari_efficientzero_config = dict(
         ),
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=400,
-        random_collect_episode_num=0,
-        eps=dict(
-            eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            type='linear',
-            start=1.,
-            end=0.05,
-            decay=int(1e5),
-        ),
         use_augmentation=True,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
@@ -70,16 +60,16 @@ atari_efficientzero_config = dict(
         lr_piecewise_constant_decay=True,
         learning_rate=0.2,
         num_simulations=num_simulations,
-        reanalyze_ratio=0,  # NOTE: for rezero, reanalyze_ratio should be 0. To be compatible with muzero.
+        reanalyze_ratio=0,  # NOTE: for rezero, reanalyze_ratio should be 0.
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
-        reanalyze_noise=True,
+        use_priority=use_priority,
+        # ============= The key different params for ReZero =============
         reuse_search=reuse_search,
         collect_with_pure_policy=collect_with_pure_policy,
-        use_priority=use_priority,
         buffer_reanalyze_freq=buffer_reanalyze_freq,
     ),
 )

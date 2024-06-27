@@ -111,10 +111,10 @@ class EfficientZeroPolicy(MuZeroPolicy):
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
-        # if we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.
+        # if we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.replay_ratio automatically.
         update_per_collect=None,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
-        model_update_ratio=0.1,
+        replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']

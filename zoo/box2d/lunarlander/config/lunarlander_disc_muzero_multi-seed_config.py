@@ -17,7 +17,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 lunarlander_muzero_config = dict(
-    exp_name=f'data_mz_ctree/lunarlander_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_muzero/lunarlander_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_name='LunarLander-v2',
         continuous=False,
@@ -86,6 +86,6 @@ if __name__ == "__main__":
 
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_mz_ctree_0128/lunarlander_muzero_ns{main_config.policy.num_simulations}_upc{main_config.policy.update_per_collect}_rr{main_config.policy.reanalyze_ratio}_seed{seed}'
+        main_config.exp_name = f'data_muzero_0128/lunarlander_muzero_ns{main_config.policy.num_simulations}_upc{main_config.policy.update_per_collect}_rr{main_config.policy.reanalyze_ratio}_seed{seed}'
         from lzero.entry import train_muzero
         train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)

@@ -10,7 +10,7 @@ evaluator_env_num = 3
 num_simulations = 50
 # update_per_collect = 200
 update_per_collect = None
-model_update_ratio = 0.25
+replay_ratio = 0.25
 
 batch_size = 256
 max_env_step = int(1e6)
@@ -52,7 +52,7 @@ lunarlander_disc_efficientzero_config = dict(
         env_type='not_board_games',
         game_segment_length=200,
         update_per_collect=update_per_collect,
-        model_update_ratio=model_update_ratio,
+        replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type='Adam',
         lr_piecewise_constant_decay=False,

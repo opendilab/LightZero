@@ -31,7 +31,7 @@ reanalyze_ratio = 0.
 
 atari_gumbel_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_id[:-14]}_gumbel_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_muzero/{env_id[:-14]}_gumbel_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,

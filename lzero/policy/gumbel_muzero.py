@@ -111,10 +111,10 @@ class GumbelMuZeroPolicy(MuZeroPolicy):
         # Bigger "update_per_collect" means bigger off-policy.
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
-        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.
+        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.replay_ratio automatically.
         update_per_collect=None,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
-        model_update_ratio=0.1,
+        replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD' or 'Adam']
