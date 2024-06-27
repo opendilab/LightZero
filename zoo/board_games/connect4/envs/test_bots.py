@@ -1,9 +1,9 @@
 import time
 
 import numpy as np
+import psutil
 import pytest
 from easydict import EasyDict
-import psutil
 
 from connect4_env import Connect4Env
 from zoo.board_games.mcts_bot import MCTSBot
@@ -57,7 +57,7 @@ class TestConnect4Bot():
         for i in range(10):
             print('-' * 10 + str(i) + '-' * 10)
             memory_usage = get_memory_usage()
-            print(f"初始内存使用量: {memory_usage} 字节")
+            print(f"Initial memory usage: {memory_usage} bytes")
             # Initialize the game, where there are two players: player 1 and player 2.
             env = Connect4Env(EasyDict(self.cfg))
             # Reset the environment, set the board to a clean board and the  start player to be player 1.
@@ -100,8 +100,8 @@ class TestConnect4Bot():
                 temp = memory_usage
                 memory_usage = get_memory_usage()
                 memory_cost = memory_usage - temp
-                print(f"搜索后内存使用量: {memory_usage} 字节")
-                print(f"搜索增加的内存使用量: {memory_cost} 字节")
+                print(f"Memory usage after search: {memory_usage} bytes")
+                print(f"Increased memory usage due to searches: {memory_cost} bytes")
 
             # Record the winner.
             winner.append(env.get_done_winner()[1])
@@ -144,7 +144,7 @@ class TestConnect4Bot():
         for i in range(1):
             print('-' * 10 + str(i) + '-' * 10)
             memory_usage = get_memory_usage()
-            print(f"初始内存使用量: {memory_usage} 字节")
+            print(f"初始内存使用量: {memory_usage} bytes")
             # Initialize the game, where there are two players: player 1 and player 2.
             env = Connect4Env(EasyDict(self.cfg))
             # Reset the environment, set the board to a clean board and the  start player to be player 1.
@@ -186,8 +186,8 @@ class TestConnect4Bot():
                 temp = memory_usage
                 memory_usage = get_memory_usage()
                 memory_cost = memory_usage - temp
-                print(f"搜索后内存使用量: {memory_usage} 字节")
-                print(f"搜索增加的内存使用量: {memory_cost} 字节")
+                print(f"Memory usage after search: {memory_usage} bytes")
+                print(f"Increased memory usage due to searches: {memory_cost} bytes")
 
             # Record the winner.
             winner.append(env.get_done_winner()[1])
@@ -230,7 +230,7 @@ class TestConnect4Bot():
         for i in range(10):
             print('-' * 10 + str(i) + '-' * 10)
             memory_usage = get_memory_usage()
-            print(f"初始内存使用量: {memory_usage} 字节")
+            print(f"初始内存使用量: {memory_usage} bytes")
             # Initialize the game, where there are two players: player 1 and player 2.
             env = Connect4Env(EasyDict(self.cfg))
             # Reset the environment, set the board to a clean board and the  start player to be player 1.
@@ -265,8 +265,8 @@ class TestConnect4Bot():
                 temp = memory_usage
                 memory_usage = get_memory_usage()
                 memory_cost = memory_usage - temp
-                print(f"搜索后内存使用量: {memory_usage} 字节")
-                print(f"搜索增加的内存使用量: {memory_cost} 字节")
+                print(f"Memory usage after search: {memory_usage} bytes")
+                print(f"Increased memory usage due to searches: {memory_cost} bytes")
 
             # Record the winner.
             winner.append(env.get_done_winner()[1])
@@ -293,7 +293,6 @@ class TestConnect4Bot():
 
 
 if __name__ == "__main__":
-    test=TestConnect4Bot()
+    test = TestConnect4Bot()
     test.setup()
     test.test_mcts_bot_vs_mcts_bot(2000,200)
-    # test.test_mcts_bot_vs_rule_bot()
