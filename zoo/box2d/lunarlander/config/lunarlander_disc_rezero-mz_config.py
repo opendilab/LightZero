@@ -10,9 +10,10 @@ update_per_collect = None
 replay_ratio = 0.25
 batch_size = 256
 max_env_step = int(1e6)
+use_priority = False
+
 reuse_search = True
 collect_with_pure_policy = True
-use_priority = False
 buffer_reanalyze_freq = 1
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -59,9 +60,10 @@ lunarlander_muzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         reanalyze_noise=True,
+        use_priority=use_priority,
+        # ============= The key different params for ReZero =============
         reuse_search=reuse_search,
         collect_with_pure_policy=collect_with_pure_policy,
-        use_priority=use_priority,
         buffer_reanalyze_freq=buffer_reanalyze_freq,
     ),
 )

@@ -24,7 +24,7 @@ update_per_collect = None
 batch_size = 256
 max_env_step = int(5e5)
 use_priority = False
-
+# ============= The key different params for ReZero =============
 reuse_search = True
 collect_with_pure_policy = True
 buffer_reanalyze_freq = 1

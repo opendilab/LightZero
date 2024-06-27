@@ -25,10 +25,11 @@ update_per_collect = None
 batch_size = 256
 replay_ratio = 0.25
 max_env_step = int(5e5)
+use_priority = False
 
+# ============= The key different params for ReZero =============
 reuse_search = True
 collect_with_pure_policy = True
-use_priority = False
 buffer_reanalyze_freq = 1
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -65,7 +66,6 @@ atari_muzero_config = dict(
         lr_piecewise_constant_decay=True,
         learning_rate=0.2,
         num_simulations=num_simulations,
-        reanalyze_ratio=0,  # NOTE: for rezero, reanalyze_ratio should be 0.
         ssl_loss_weight=2,
         n_episode=n_episode,
         eval_freq=int(2e3),

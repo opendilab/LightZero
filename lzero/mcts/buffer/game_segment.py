@@ -211,14 +211,14 @@ class GameSegment:
         """
         sum_visits = sum(visit_counts)
         if sum_visits == 0:
-            self.child_visit_segment.append(visit_counts)
-            self.root_value_segment.append(root_value)
-        elif idx is None:
+            # if the sum of visit counts is 0, set it to a small value to avoid division by zero
+            sum_visits = 1e-6
+        if idx is None:
             self.child_visit_segment.append([visit_count / sum_visits for visit_count in visit_counts])
             self.root_value_segment.append(root_value)
             if self.sampled_algo:
                 self.root_sampled_actions.append(root_sampled_actions)
-            # store the improved policy in Gumbel Muzero: \pi'=softmax(logits + \sigma(CompletedQ))
+            # store the improved policy in Gumbel MuZero: \pi'=softmax(logits + \sigma(CompletedQ))
             if self.gumbel_algo:
                 self.improved_policy_probs.append(improved_policy)
         else:

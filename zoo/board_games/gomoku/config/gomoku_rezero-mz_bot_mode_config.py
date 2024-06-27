@@ -56,7 +56,6 @@ gomoku_muzero_config = dict(
         learning_rate=0.003,
         grad_clip_value=0.5,
         num_simulations=num_simulations,
-        reanalyze_ratio=0,  # NOTE: for rezero, reanalyze_ratio should be 0.
         # NOTE：In board_games, we set large td_steps to make sure the value target is the final outcome.
         td_steps=int(board_size * board_size / 2),  # for battle_mode='play_with_bot_mode'
         # NOTE：In board_games, we set discount_factor=1.
@@ -67,9 +66,10 @@ gomoku_muzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         reanalyze_noise=True,
+        use_priority=use_priority,
+        # ============= The key different params for ReZero =============
         reuse_search=reuse_search,
         collect_with_pure_policy=collect_with_pure_policy,
-        use_priority=use_priority,
         buffer_reanalyze_freq=buffer_reanalyze_freq,
     ),
 )
