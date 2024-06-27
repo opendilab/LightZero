@@ -3,6 +3,7 @@ name: Package Release
 on:
   release:
     types: [ published ]
+  workflow_dispatch:
 
 jobs:
   source_build:
@@ -95,7 +96,7 @@ jobs:
         env:
           CIBW_SKIP: "pp* *musllinux*"
           CIBW_ARCHS: ${{ matrix.architecture }}
-          CIBW_PROJECT_REQUIRES_PYTHON: "==${{ matrix.python }}.*"
+          CIBW_PROJECT_REQUIRES_PYTHON: ">=${{ matrix.python }}"
       - name: Show the buildings
         shell: bash
         run: |
@@ -118,7 +119,7 @@ jobs:
       fail-fast: false
       matrix:
         python:
-          - '3.8.17'
+          - '3.8.7'
 
     steps:
       - name: Download packed files to artifacts
@@ -130,13 +131,6 @@ jobs:
         shell: bash
         run: |
           ls -al ./dist
-      - name: Publish distribution 📦 to real PyPI
-        uses: pypa/gh-action-pypi-publish@master
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          verbose: true
-          skip_existing: true
-          packages_dir: dist/
       - name: Upload distribution 📦 to github release
         uses: svenstaro/upload-release-action@v2
         with:
@@ -145,3 +139,10 @@ jobs:
           tag: ${{ github.ref }}
           overwrite: false
           file_glob: true
+      - name: Publish distribution 📦 to real PyPI
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          verbose: true
+          skip_existing: true
+          packages_dir: dist/
