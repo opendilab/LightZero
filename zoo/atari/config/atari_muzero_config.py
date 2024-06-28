@@ -31,7 +31,7 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_mz_ctree/{env_id[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_muzero/{env_id[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -52,7 +52,7 @@ atari_muzero_config = dict(
             norm_type='BN',
         ),
         cuda=True,
-        reanalyze_noise=False,
+        reanalyze_noise=True,
         env_type='not_board_games',
         game_segment_length=400,
         random_collect_episode_num=0,

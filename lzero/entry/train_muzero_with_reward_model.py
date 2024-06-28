@@ -171,9 +171,9 @@ def train_muzero_with_reward_model(
         reward_model.clear_old_data()
 
         if cfg.policy.update_per_collect is None:
-            # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
+            # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
             collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
-            update_per_collect = int(collected_transitions_num * cfg.policy.model_update_ratio)
+            update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
         # save returned new_data collected by the collector
         replay_buffer.push_game_segments(new_data)
         # remove the oldest data if the replay buffer is full.

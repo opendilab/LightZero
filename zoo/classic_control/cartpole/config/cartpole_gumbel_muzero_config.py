@@ -16,7 +16,7 @@ reanalyze_ratio = 0
 # ==============================================================
 
 cartpole_gumbel_muzero_config = dict(
-    exp_name=f'data_mz_ctree/cartpole_gumbel_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_muzero/cartpole_gumbel_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_id='CartPole-v0',
         continuous=False,

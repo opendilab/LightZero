@@ -1,5 +1,6 @@
 from easydict import EasyDict
-
+import torch
+torch.cuda.set_device(0)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -7,17 +8,26 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 200
+# update_per_collect = 200
+update_per_collect = None
+replay_ratio = 0.25
+
 batch_size = 256
-max_env_step = int(5e6)
-reanalyze_ratio = 0.
+max_env_step = int(1e6)
+# reanalyze_ratio = 0.
+# reanalyze_ratio = 1
+reanalyze_ratio = 0.99
+
+
+seed = 0
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 lunarlander_disc_efficientzero_config = dict(
-    exp_name=
-    f'data_ez_ctree/lunarlander_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    # exp_name=f'data_ez_ctree/lunarlander_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
+    exp_name=f'data_ez_ctree_0129/lunarlander/ez_rr{reanalyze_ratio}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
     env=dict(
         env_id='LunarLander-v2',
         continuous=False,
@@ -42,6 +52,7 @@ lunarlander_disc_efficientzero_config = dict(
         env_type='not_board_games',
         game_segment_length=200,
         update_per_collect=update_per_collect,
+        replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type='Adam',
         lr_piecewise_constant_decay=False,

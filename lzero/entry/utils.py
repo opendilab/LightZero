@@ -1,9 +1,9 @@
 import os
+from typing import Optional, Callable
 
 import psutil
 from pympler.asizeof import asizeof
 from tensorboardX import SummaryWriter
-from typing import Optional, Callable
 
 
 def random_collect(
@@ -26,7 +26,8 @@ def random_collect(
     collect_kwargs = {'temperature': 1, 'epsilon': 0.0}
 
     # Collect data by default config n_sample/n_episode.
-    new_data = collector.collect(n_episode=policy_cfg.random_collect_episode_num, train_iter=0, policy_kwargs=collect_kwargs)
+    new_data = collector.collect(n_episode=policy_cfg.random_collect_episode_num, train_iter=0,
+                                 policy_kwargs=collect_kwargs)
 
     if postprocess_data_fn is not None:
         new_data = postprocess_data_fn(new_data)
@@ -75,3 +76,41 @@ def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: Summa
 
         # Record the memory usage of the process to TensorBoard.
         writer.add_scalar('Buffer/memory_usage/process', process_memory_usage_mb, train_iter)
+
+
+def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:
+    """
+    Overview:
+        Log the average runtime metrics of the buffer to TensorBoard.
+    Arguments:
+        - train_iter (:obj:`int`): The current training iteration.
+        - buffer (:obj:`GameBuffer`): The game buffer containing runtime metrics.
+        - writer (:obj:`SummaryWriter`): The TensorBoard writer for logging metrics.
+
+    .. note::
+        "writer is None" indicates that the function is being called in a slave process in the DDP setup.
+    """
+    if writer is not None:
+        sample_times = buffer.sample_times
+
+        if sample_times == 0:
+            return
+
+        # Calculate and log average reanalyze time.
+        average_reanalyze_time = buffer.compute_target_re_time / sample_times
+        writer.add_scalar('Buffer/average_reanalyze_time', average_reanalyze_time, train_iter)
+
+        # Calculate and log average origin search time.
+        average_origin_search_time = buffer.origin_search_time / sample_times
+        writer.add_scalar('Buffer/average_origin_search_time', average_origin_search_time, train_iter)
+
+        # Calculate and log average reuse search time.
+        average_reuse_search_time = buffer.reuse_search_time / sample_times
+        writer.add_scalar('Buffer/average_reuse_search_time', average_reuse_search_time, train_iter)
+
+        # Calculate and log average active root number.
+        average_active_root_num = buffer.active_root_num / sample_times
+        writer.add_scalar('Buffer/average_active_root_num', average_active_root_num, train_iter)
+
+        # Reset the time records in the buffer.
+        buffer.reset_runtime_metrics()

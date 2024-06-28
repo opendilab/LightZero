@@ -6,9 +6,12 @@ import torch
 from easydict import EasyDict
 
 from lzero.mcts.ctree.ctree_efficientzero import ez_tree as tree_efficientzero
-from lzero.mcts.ctree.ctree_muzero import mz_tree as tree_muzero
 from lzero.mcts.ctree.ctree_gumbel_muzero import gmz_tree as tree_gumbel_muzero
+from lzero.mcts.ctree.ctree_muzero import mz_tree as tree_muzero
 from lzero.policy import InverseScalarTransform, to_detach_cpu_numpy
+
+# from line_profiler import line_profiler
+# import cProfile
 
 if TYPE_CHECKING:
     from lzero.mcts.ctree.ctree_efficientzero import ez_tree as ez_ctree
@@ -186,6 +189,105 @@ class MuZeroMCTSCtree(object):
                     min_max_stats_lst, results, virtual_to_play_batch
                 )
 
+    def search_with_reuse(
+            self,
+            roots: Any,
+            model: torch.nn.Module,
+            latent_state_roots: List[Any],
+            to_play_batch: Union[int, List[Any]],
+            true_action_list=None,
+            reuse_value_list=None
+    ) -> None:
+        """
+        Overview:
+            Perform Monte Carlo Tree Search (MCTS) for the root nodes in parallel. Utilizes the cpp ctree for efficiency.
+            Please refer to https://arxiv.org/abs/2404.16364 for more details.
+        Arguments:
+            - roots (:obj:`Any`): A batch of expanded root nodes.
+            - model (:obj:`torch.nn.Module`): The neural network model.
+            - latent_state_roots (:obj:`list`): The hidden states of the root nodes.
+            - to_play_batch (:obj:`Union[int, list]`): The list or batch indicator for players in self-play mode.
+            - true_action_list (:obj:`list`, optional): A list of true actions for reuse.
+            - reuse_value_list (:obj:`list`, optional): A list of values for reuse.
+        """
+
+        with torch.no_grad():
+            model.eval()
+
+            # Initialize constants and variables
+            batch_size = roots.num
+            pb_c_base, pb_c_init, discount_factor = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount_factor
+            latent_state_batch_in_search_path = [latent_state_roots]
+            min_max_stats_lst = tree_muzero.MinMaxStatsList(batch_size)
+            min_max_stats_lst.set_delta(self._cfg.value_delta_max)
+            infer_sum = 0
+
+            for simulation_index in range(self._cfg.num_simulations):
+                latent_states = []
+                temp_actions = []
+                no_inference_lst = []
+                reuse_lst = []
+                results = tree_muzero.ResultsWrapper(num=batch_size)
+
+                # Selection phase: traverse the tree to select a leaf node
+                if self._cfg.env_type == 'not_board_games':
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse_with_reuse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        to_play_batch, true_action_list, reuse_value_list
+                    )
+                else:
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_muzero.batch_traverse_with_reuse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        copy.deepcopy(to_play_batch), true_action_list, reuse_value_list
+                    )
+
+                # Collect latent states and actions for expansion
+                for count, (ix, iy) in enumerate(zip(latent_state_index_in_search_path, latent_state_index_in_batch)):
+                    if ix != -1:
+                        latent_states.append(latent_state_batch_in_search_path[ix][iy])
+                        temp_actions.append(last_actions[count])
+                    else:
+                        no_inference_lst.append(iy)
+                    if ix == 0 and last_actions[count] == true_action_list[count]:
+                        reuse_lst.append(count)
+
+                length = len(temp_actions)
+                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
+                temp_actions = torch.from_numpy(np.asarray(temp_actions)).to(self._cfg.device).long()
+
+                # Expansion phase: expand the leaf node and evaluate the new node
+                if length != 0:
+                    network_output = model.recurrent_inference(latent_states, temp_actions)
+                    network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
+                    network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
+                    network_output.value = to_detach_cpu_numpy(
+                        self.inverse_scalar_transform_handle(network_output.value))
+                    network_output.reward = to_detach_cpu_numpy(
+                        self.inverse_scalar_transform_handle(network_output.reward))
+
+                    latent_state_batch_in_search_path.append(network_output.latent_state)
+                    reward_batch = network_output.reward.reshape(-1).tolist()
+                    value_batch = network_output.value.reshape(-1).tolist()
+                    policy_logits_batch = network_output.policy_logits.tolist()
+                else:
+                    latent_state_batch_in_search_path.append([])
+                    reward_batch = []
+                    value_batch = []
+                    policy_logits_batch = []
+
+                # Backup phase: propagate the evaluation results back through the tree
+                current_latent_state_index = simulation_index + 1
+                no_inference_lst.append(-1)
+                reuse_lst.append(-1)
+                tree_muzero.batch_backpropagate_with_reuse(
+                    current_latent_state_index, discount_factor, reward_batch, value_batch, policy_logits_batch,
+                    min_max_stats_lst, results, virtual_to_play_batch, no_inference_lst, reuse_lst, reuse_value_list
+                )
+                infer_sum += length
+
+            average_infer = infer_sum / self._cfg.num_simulations
+        return length, average_infer
+
 
 class EfficientZeroMCTSCtree(object):
     """
@@ -288,6 +390,8 @@ class EfficientZeroMCTSCtree(object):
             # the data storage of latent states: storing the latent state of all the nodes in one search.
             latent_state_batch_in_search_path = [latent_state_roots]
             # the data storage of value prefix hidden states in LSTM
+            # print(f"reward_hidden_state_roots[0]={reward_hidden_state_roots[0]}")
+            # print(f"reward_hidden_state_roots[1]={reward_hidden_state_roots[1]}")
             reward_hidden_state_c_batch = [reward_hidden_state_roots[0]]
             reward_hidden_state_h_batch = [reward_hidden_state_roots[1]]
 
@@ -354,7 +458,8 @@ class EfficientZeroMCTSCtree(object):
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
                 network_output.value = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value))
-                network_output.value_prefix = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value_prefix))
+                network_output.value_prefix = to_detach_cpu_numpy(
+                    self.inverse_scalar_transform_handle(network_output.value_prefix))
 
                 network_output.reward_hidden_state = (
                     network_output.reward_hidden_state[0].detach().cpu().numpy(),
@@ -389,6 +494,133 @@ class EfficientZeroMCTSCtree(object):
                     current_latent_state_index, discount_factor, value_prefix_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, is_reset_list, virtual_to_play_batch
                 )
+
+    def search_with_reuse(
+            self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any],
+            reward_hidden_state_roots: List[Any], to_play_batch: Union[int, List[Any]],
+            true_action_list=None, reuse_value_list=None
+    ) -> None:
+        """
+        Perform Monte Carlo Tree Search (MCTS) for the root nodes in parallel, utilizing model inference in parallel.
+        This method uses the cpp ctree for efficiency.
+        Please refer to https://arxiv.org/abs/2404.16364 for more details.
+
+        Args:
+            roots (Any): A batch of expanded root nodes.
+            model (torch.nn.Module): The model to use for inference.
+            latent_state_roots (List[Any]): The hidden states of the root nodes.
+            reward_hidden_state_roots (List[Any]): The value prefix hidden states in the LSTM of the roots.
+            to_play_batch (Union[int, List[Any]]): The to_play_batch list used in self-play-mode board games.
+            true_action_list (Optional[List[Any]]): List of true actions for reuse.
+            reuse_value_list (Optional[List[Any]]): List of values for reuse.
+
+        Returns:
+            None
+        """
+        with torch.no_grad():
+            model.eval()
+
+            batch_size = roots.num
+            pb_c_base, pb_c_init, discount_factor = self._cfg.pb_c_base, self._cfg.pb_c_init, self._cfg.discount_factor
+
+            latent_state_batch_in_search_path = [latent_state_roots]
+            reward_hidden_state_c_batch = [reward_hidden_state_roots[0]]
+            reward_hidden_state_h_batch = [reward_hidden_state_roots[1]]
+
+            min_max_stats_lst = tree_efficientzero.MinMaxStatsList(batch_size)
+            min_max_stats_lst.set_delta(self._cfg.value_delta_max)
+
+            infer_sum = 0
+
+            for simulation_index in range(self._cfg.num_simulations):
+                latent_states, hidden_states_c_reward, hidden_states_h_reward = [], [], []
+                temp_actions, temp_search_lens, no_inference_lst, reuse_lst = [], [], [], []
+
+                results = tree_efficientzero.ResultsWrapper(num=batch_size)
+
+                if self._cfg.env_type == 'not_board_games':
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse_with_reuse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        to_play_batch, true_action_list, reuse_value_list
+                    )
+                else:
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse_with_reuse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        copy.deepcopy(to_play_batch), true_action_list, reuse_value_list
+                    )
+
+                search_lens = results.get_search_len()
+
+                for count, (ix, iy) in enumerate(zip(latent_state_index_in_search_path, latent_state_index_in_batch)):
+                    if ix != -1:
+                        latent_states.append(latent_state_batch_in_search_path[ix][iy])
+                        hidden_states_c_reward.append(reward_hidden_state_c_batch[ix][0][iy])
+                        hidden_states_h_reward.append(reward_hidden_state_h_batch[ix][0][iy])
+                        temp_actions.append(last_actions[count])
+                        temp_search_lens.append(search_lens[count])
+                    else:
+                        no_inference_lst.append(iy)
+                    if ix == 0 and last_actions[count] == true_action_list[count]:
+                        reuse_lst.append(count)
+
+                length = len(temp_actions)
+                latent_states = torch.tensor(latent_states, device=self._cfg.device)
+                hidden_states_c_reward = torch.tensor(hidden_states_c_reward, device=self._cfg.device).unsqueeze(0)
+                hidden_states_h_reward = torch.tensor(hidden_states_h_reward, device=self._cfg.device).unsqueeze(0)
+                temp_actions = torch.tensor(temp_actions, device=self._cfg.device).long()
+
+                if length != 0:
+                    network_output = model.recurrent_inference(
+                        latent_states, (hidden_states_c_reward, hidden_states_h_reward), temp_actions
+                    )
+
+                    network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
+                    network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
+                    network_output.value = to_detach_cpu_numpy(
+                        self.inverse_scalar_transform_handle(network_output.value))
+                    network_output.value_prefix = to_detach_cpu_numpy(
+                        self.inverse_scalar_transform_handle(network_output.value_prefix))
+
+                    network_output.reward_hidden_state = (
+                        network_output.reward_hidden_state[0].detach().cpu().numpy(),
+                        network_output.reward_hidden_state[1].detach().cpu().numpy()
+                    )
+
+                    latent_state_batch_in_search_path.append(network_output.latent_state)
+                    value_prefix_batch = network_output.value_prefix.reshape(-1).tolist()
+                    value_batch = network_output.value.reshape(-1).tolist()
+                    policy_logits_batch = network_output.policy_logits.tolist()
+
+                    reward_latent_state_batch = network_output.reward_hidden_state
+                    assert self._cfg.lstm_horizon_len > 0
+                    reset_idx = (np.array(temp_search_lens) % self._cfg.lstm_horizon_len == 0)
+                    reward_latent_state_batch[0][:, reset_idx, :] = 0
+                    reward_latent_state_batch[1][:, reset_idx, :] = 0
+                    is_reset_list = reset_idx.astype(np.int32).tolist()
+                    reward_hidden_state_c_batch.append(reward_latent_state_batch[0])
+                    reward_hidden_state_h_batch.append(reward_latent_state_batch[1])
+                else:
+                    latent_state_batch_in_search_path.append([])
+                    value_batch, policy_logits_batch, value_prefix_batch = [], [], []
+                    reward_hidden_state_c_batch.append([])
+                    reward_hidden_state_h_batch.append([])
+                    assert self._cfg.lstm_horizon_len > 0
+                    reset_idx = (np.array(search_lens) % self._cfg.lstm_horizon_len == 0)
+                    assert len(reset_idx) == batch_size
+                    is_reset_list = reset_idx.astype(np.int32).tolist()
+
+                current_latent_state_index = simulation_index + 1
+                no_inference_lst.append(-1)
+                reuse_lst.append(-1)
+                tree_efficientzero.batch_backpropagate_with_reuse(
+                    current_latent_state_index, discount_factor, value_prefix_batch, value_batch, policy_logits_batch,
+                    min_max_stats_lst, results, is_reset_list, virtual_to_play_batch, no_inference_lst, reuse_lst,
+                    reuse_value_list
+                )
+                infer_sum += length
+
+            average_infer = infer_sum / self._cfg.num_simulations
+        return length, average_infer
 
 
 class GumbelMuZeroMCTSCtree(object):
@@ -446,7 +678,7 @@ class GumbelMuZeroMCTSCtree(object):
         self.inverse_scalar_transform_handle = InverseScalarTransform(
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
-    
+
     @classmethod
     def roots(cls: int, active_collect_env_num: int, legal_actions: List[Any]) -> "gmz_ctree":
         """
@@ -462,8 +694,8 @@ class GumbelMuZeroMCTSCtree(object):
         return tree_gumbel_muzero.Roots(active_collect_env_num, legal_actions)
 
     def search(self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-                                                                                                          List[Any]]
-    ) -> None:
+    List[Any]]
+               ) -> None:
         """
         Overview:
             Do MCTS for a batch of roots. Parallel in model inference. \
@@ -511,12 +743,14 @@ class GumbelMuZeroMCTSCtree(object):
                 """
                 if self._cfg.env_type == 'not_board_games':
                     latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_gumbel_muzero.batch_traverse(
-                        roots, self._cfg.num_simulations, self._cfg.max_num_considered_actions, discount_factor, results, to_play_batch
+                        roots, self._cfg.num_simulations, self._cfg.max_num_considered_actions, discount_factor,
+                        results, to_play_batch
                     )
                 else:
                     # the ``to_play_batch`` is only used in board games, here we need to deepcopy it to avoid changing the original data.
                     latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_gumbel_muzero.batch_traverse(
-                        roots, self._cfg.num_simulations, self._cfg.max_num_considered_actions, discount_factor, results, copy.deepcopy(to_play_batch)
+                        roots, self._cfg.num_simulations, self._cfg.max_num_considered_actions, discount_factor,
+                        results, copy.deepcopy(to_play_batch)
                     )
 
                 # obtain the states for leaf nodes

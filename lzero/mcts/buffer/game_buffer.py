@@ -30,7 +30,7 @@ class GameBuffer(ABC, object):
         # (int) The size/capacity of the replay buffer in terms of transitions.
         replay_buffer_size=int(1e6),
         # (float) The ratio of experiences required for the reanalyzing part in a minibatch.
-        reanalyze_ratio=0.3,
+        reanalyze_ratio=0,
         # (bool) Whether to consider outdated experiences for reanalyzing. If True, we first sort the data in the minibatch by the time it was produced
         # and only reanalyze the oldest ``reanalyze_ratio`` fraction.
         reanalyze_outdated=True,
@@ -124,6 +124,8 @@ class GameBuffer(ABC, object):
 
         # sample according to transition index
         # TODO(pu): replace=True
+        # print(f"num transitions is {num_of_transitions}")
+        # print(f"length of probs is {len(probs)}")
         batch_index_list = np.random.choice(num_of_transitions, batch_size, p=probs, replace=False)
 
         if self._cfg.reanalyze_outdated is True:
@@ -148,9 +150,50 @@ class GameBuffer(ABC, object):
 
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
         return orig_data
+    
+    def _sample_orig_reanalyze_data(self, batch_size: int) -> Tuple:
+        """
+        Overview:
+            sample orig_data that contains:
+                game_segment_list: a list of game segments
+                pos_in_game_segment_list: transition index in game (relative index)
+                batch_index_list: the index of start transition of sampled minibatch in replay buffer
+                weights_list: the weight concerning the priority
+                make_time: the time the batch is made (for correctly updating replay buffer when data is deleted)
+        Arguments:
+            - batch_size (:obj:`int`): batch size
+            - beta: float the parameter in PER for calculating the priority
+        """
+        segment_length = (self.get_num_of_transitions()//2000)
+        assert self._beta > 0
+        num_of_transitions = self.get_num_of_transitions()
+        sample_points = num_of_transitions // segment_length
+
+        batch_index_list = np.random.choice(2000, batch_size, replace=False)
+
+        if self._cfg.reanalyze_outdated is True:
+            # NOTE: used in reanalyze part
+            batch_index_list.sort()
+
+        # TODO(xcy): use weighted sample
+        game_segment_list = []
+        pos_in_game_segment_list = []
+
+        for idx in batch_index_list:
+            game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx*segment_length]
+            game_segment_idx -= self.base_idx
+            game_segment = self.game_segment_buffer[game_segment_idx]
+
+            game_segment_list.append(game_segment)
+            pos_in_game_segment_list.append(pos_in_game_segment)
+
+        make_time = [time.time() for _ in range(len(batch_index_list))]
+
+        orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, [], make_time)
+        return orig_data
 
     def _preprocess_to_play_and_action_mask(
-        self, game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
+            self, game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list, unroll_steps = None
     ):
         """
         Overview:
@@ -158,15 +201,17 @@ class GameBuffer(ABC, object):
                 - to_play: {list: game_segment_batch_size * (num_unroll_steps+1)}
                 - action_mask: {list: game_segment_batch_size * (num_unroll_steps+1)}
         """
+        unroll_steps = unroll_steps if unroll_steps is not None else self._cfg.num_unroll_steps
+
         to_play = []
         for bs in range(game_segment_batch_size):
             to_play_tmp = list(
                 to_play_segment[bs][pos_in_game_segment_list[bs]:pos_in_game_segment_list[bs] +
-                                    self._cfg.num_unroll_steps + 1]
+                                                                 unroll_steps + 1]
             )
-            if len(to_play_tmp) < self._cfg.num_unroll_steps + 1:
+            if len(to_play_tmp) < unroll_steps + 1:
                 # NOTE: the effective to play index is {1,2}, for null padding data, we set to_play=-1
-                to_play_tmp += [-1 for _ in range(self._cfg.num_unroll_steps + 1 - len(to_play_tmp))]
+                to_play_tmp += [-1 for _ in range(unroll_steps + 1 - len(to_play_tmp))]
             to_play.append(to_play_tmp)
         to_play = sum(to_play, [])
 
@@ -178,12 +223,12 @@ class GameBuffer(ABC, object):
         for bs in range(game_segment_batch_size):
             action_mask_tmp = list(
                 action_mask_segment[bs][pos_in_game_segment_list[bs]:pos_in_game_segment_list[bs] +
-                                        self._cfg.num_unroll_steps + 1]
+                                                                     unroll_steps + 1]
             )
-            if len(action_mask_tmp) < self._cfg.num_unroll_steps + 1:
+            if len(action_mask_tmp) < unroll_steps + 1:
                 action_mask_tmp += [
                     list(np.ones(self._cfg.model.action_space_size, dtype=np.int8))
-                    for _ in range(self._cfg.num_unroll_steps + 1 - len(action_mask_tmp))
+                    for _ in range(unroll_steps + 1 - len(action_mask_tmp))
                 ]
             action_mask.append(action_mask_tmp)
         action_mask = to_list(action_mask)
@@ -334,6 +379,7 @@ class GameBuffer(ABC, object):
             valid_len = len(data)
         else:
             valid_len = len(data) - meta['unroll_plus_td_steps']
+            # print(f'valid_len is {valid_len}')
 
         if meta['priorities'] is None:
             max_prio = self.game_pos_priorities.max() if self.game_segment_buffer else 1
@@ -354,6 +400,8 @@ class GameBuffer(ABC, object):
         self.game_segment_game_pos_look_up += [
             (self.base_idx + len(self.game_segment_buffer) - 1, step_pos) for step_pos in range(len(data))
         ]
+        # print(f'potioritys is {self.game_pos_priorities}')
+        # print(f'num of transitions is {len(self.game_segment_game_pos_look_up)}')
 
     def remove_oldest_data_to_fit(self) -> None:
         """
