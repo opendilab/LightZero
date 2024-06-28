@@ -11,7 +11,7 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
-from .common import EZNetworkOutput, RepresentationNetwork, PredictionNetwork, OrigEZNetworkOutput
+from .common import EZNetworkOutput, RepresentationNetwork, PredictionNetwork, EZNetworkOutput
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -247,7 +247,7 @@ class EfficientZeroModel(nn.Module):
                         self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
                                                                            self.lstm_hidden_size).to(obs.device)
         )
-        return OrigEZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, latent_state, reward_hidden_state)
+        return EZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, latent_state, reward_hidden_state)
 
     def recurrent_inference(
             self, latent_state: torch.Tensor, reward_hidden_state: Tuple[torch.Tensor], action: torch.Tensor
@@ -283,7 +283,7 @@ class EfficientZeroModel(nn.Module):
         # import pdb; pdb.set_trace()
         next_latent_state, reward_hidden_state, value_prefix = self._dynamics(latent_state, reward_hidden_state, action)
         policy_logits, value = self._prediction(next_latent_state)
-        return OrigEZNetworkOutput(value, value_prefix, policy_logits, next_latent_state, reward_hidden_state)
+        return EZNetworkOutput(value, value_prefix, policy_logits, next_latent_state, reward_hidden_state)
 
     def _representation(self, observation: torch.Tensor) -> torch.Tensor:
         """

@@ -1,31 +1,8 @@
 from easydict import EasyDict
-# import torch
-# torch.cuda.set_device(0)
-
-env_name = 'PongNoFrameskip-v4'
-# env_name = 'MsPacmanNoFrameskip-v4'
-# env_name = 'BreakoutNoFrameskip-v4'
-# env_name = 'QbertNoFrameskip-v4'
-# env_name = 'SeaquestNoFrameskip-v4'
-# env_name = 'BoxingNoFrameskip-v4'
-# env_name = 'FrostbiteNoFrameskip-v4'
-
-if env_name == 'PongNoFrameskip-v4':
-    action_space_size = 6
-elif env_name == 'QbertNoFrameskip-v4':
-    action_space_size = 6
-elif env_name == 'MsPacmanNoFrameskip-v4':
-    action_space_size = 9
-elif env_name == 'SpaceInvadersNoFrameskip-v4':
-    action_space_size = 6
-elif env_name == 'BreakoutNoFrameskip-v4':
-    action_space_size = 4
-elif env_name == 'SeaquestNoFrameskip-v4':
-    action_space_size = 18
-elif env_name == 'BoxingNoFrameskip-v4':
-    action_space_size = 18
-elif env_name == 'FrostbiteNoFrameskip-v4':
-    action_space_size = 18
+from env_action_space_map import env_action_space_map
+norm_type = 'BN'
+env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
+action_space_size = env_action_space_map[env_id]
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -45,10 +22,10 @@ eps_greedy_exploration_in_collect = True
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_muzero_atari_stack4/{env_name[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_seed0',
+    exp_name=f'data_muzero_atari_stack4/{env_id[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
-        env_name=env_name,
+        env_id=env_id,
         observation_shape=(4, 64, 64),  # (4, 96, 96)
         frame_stack_num=4,
         gray_scale=True,

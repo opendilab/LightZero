@@ -8,10 +8,10 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 import numpy as np
 
-from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, PredictionNetworkMLP, FeatureAndGradientHook
-from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean, SimNorm
+from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, PredictionNetworkMLP, FeatureAndGradientHook, SimNorm
+from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 import torch.nn.init as init
-import torch.nn.functional as F
+
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
 @MODEL_REGISTRY.register('MuZeroContextModel')

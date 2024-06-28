@@ -145,6 +145,8 @@ class UniZeroPolicy(Policy):
         game_segment_length=200,
         # (bool) Whether to analyze simulation normalization.
         analysis_sim_norm=False,
+        # (bool) Whether to use the pure policy to collect data.
+        collect_with_pure_policy=False,
 
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.

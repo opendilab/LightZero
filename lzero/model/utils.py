@@ -7,47 +7,50 @@ from typing import List, Tuple
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-
-class SimNorm(nn.Module):
-    """
-    Simplicial normalization.
-    Adapted from https://arxiv.org/abs/2204.00616.
-    """
-
-    def __init__(self, simnorm_dim):
-        super().__init__()
-        self.dim = simnorm_dim
-
-    def forward(self, x):
-        shp = x.shape
-        # Ensure that there is at least one simplex to normalize across.
-        if shp[1] != 0:
-            x = x.view(*shp[:-1], -1, self.dim)
-            x = F.softmax(x, dim=-1)
-            return x.view(*shp)
-        else:
-            return x
-
-    def __repr__(self):
-        return f"SimNorm(dim={self.dim})"
-
-
 
 
 class LinearOutputHook:
+    """
+    Overview:
+        Hook to capture the output of linear layers.
+    """
+
     def __init__(self):
+        """
+        Overview:
+            Initialize the hook.
+        """
         self.outputs = []
 
     def __call__(self, module, input, output):
+        """
+        Overview:
+            Capture the output of the module.
+        Arguments:
+            - module: The module being hooked.
+            - input: The input to the module.
+            - output: The output from the module.
+        """
         self.outputs.append(output)
 
+
 def cal_dormant_ratio(model, *inputs, percentage=0.025):
+    """
+    Overview:
+        Calculate the dormant neuron ratio in the model.
+    Arguments:
+        - model (:obj:`nn.Module`): The model to evaluate.
+        - inputs: The inputs to the model.
+        - percentage (:obj:`float`): The threshold percentage to consider a neuron dormant, defaults to 0.025.
+    Returns:
+        - :obj:`float`: The ratio of dormant neurons in the model.
+    """
     hooks = []
     hook_handlers = []
     total_neurons = 0
     dormant_neurons = 0
 
+    # Register hooks to capture outputs of specific layers
     for _, module in model.named_modules():
         if isinstance(module, (nn.Linear, nn.Conv2d, nn.LSTM)):
             hook = LinearOutputHook()
@@ -55,8 +58,10 @@ def cal_dormant_ratio(model, *inputs, percentage=0.025):
             hook_handlers.append(module.register_forward_hook(hook))
 
     with torch.no_grad():
+        # Forward pass to capture outputs
         model(*inputs)
 
+    # Analyze the captured outputs
     for module, hook in zip(
         (module for module in model.modules() if isinstance(module, (nn.Linear, nn.Conv2d, nn.LSTM))), hooks):
 
@@ -75,6 +80,7 @@ def cal_dormant_ratio(model, *inputs, percentage=0.025):
                     total_neurons += module.hidden_size * module.num_layers * output_data.shape[0] * output_data.shape[1]
                     dormant_neurons += len(dormant_indices)
 
+    # Clean up hooks
     for hook in hooks:
         hook.outputs.clear()
         del hook.outputs
@@ -87,6 +93,7 @@ def cal_dormant_ratio(model, *inputs, percentage=0.025):
         torch.cuda.empty_cache()
 
     return dormant_neurons / total_neurons
+
 
 def renormalize(inputs: torch.Tensor, first_dim: int = 1) -> torch.Tensor:
     """

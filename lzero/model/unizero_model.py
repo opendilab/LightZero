@@ -5,7 +5,7 @@ import torch.nn as nn
 from ding.utils import MODEL_REGISTRY, SequenceType
 
 from .common import MZNetworkOutput, RepresentationNetworkGPT, RepresentationNetworkMLP, LatentDecoder, \
-    VectorDecoderMemory, ImageEncoderMemory, ImageDecoderMemory, FeatureAndGradientHook
+    VectorDecoderMemory, LatentEncoderMemory, LatentDecoderMemory, FeatureAndGradientHook
 from .unizero_world_models.tokenizer.tokenizer import Tokenizer
 from .unizero_world_models.world_model import WorldModel
 
@@ -153,7 +153,7 @@ class UniZeroModel(nn.Module):
             print('==' * 20)
         elif world_model_cfg.obs_type == 'image_memory':
             # bigger encoder/decoder
-            self.representation_network = ImageEncoderMemory(
+            self.representation_network = LatentEncoderMemory(
                 image_shape=(3, 5, 5),
                 embedding_size=world_model_cfg.embed_dim,
                 channels=[16, 32, 64],
@@ -163,7 +163,7 @@ class UniZeroModel(nn.Module):
                 group_size=world_model_cfg.group_size,
             )
             # Instantiate the decoder
-            decoder_network = ImageDecoderMemory(
+            decoder_network = LatentDecoderMemory(
                 image_shape=(3, 5, 5),
                 embedding_size=world_model_cfg.embed_dim,
                 channels=[64, 32, 16],

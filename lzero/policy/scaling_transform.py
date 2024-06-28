@@ -34,6 +34,15 @@ def scalar_transform(x: torch.Tensor, epsilon: float = 0.001, delta: float = 1.)
 
 
 def ensure_softmax(logits, dim=1):
+    """
+    Overview:
+        Ensure that the input tensor is normalized along the specified dimension.
+    Arguments:
+         - logits (:obj:`torch.Tensor`): The input tensor.
+        - dim (:obj:`int`): The dimension along which to normalize the input tensor.
+    Returns:
+        - output (:obj:`torch.Tensor`): The normalized tensor.
+    """
     # Calculate the sum along the specified dimension (dim=1 in this case)
     sum_along_dim = logits.sum(dim=dim, keepdim=True)
     
@@ -69,8 +78,6 @@ def inverse_scalar_transform(
     """
     if categorical_distribution:
         scalar_support = DiscreteSupport(-support_size, support_size, delta=1)
-        # value_probs = torch.softmax(logits, dim=1)
-        # value_probs = logits
         value_probs = ensure_softmax(logits, dim=1)
         value_support = torch.from_numpy(scalar_support.range).unsqueeze(0)
 
@@ -83,9 +90,6 @@ def inverse_scalar_transform(
     output = torch.sign(value) * (
         ((torch.sqrt(1 + 4 * epsilon * (torch.abs(value) + 1 + epsilon)) - 1) / (2 * epsilon)) ** 2 - 1
     )
-
-    # TODO(pu): comment this line due to saving time
-    # output[torch.abs(output) < epsilon] = 0.
 
     return output
 
@@ -113,8 +117,6 @@ class InverseScalarTransform:
 
     def __call__(self, logits: torch.Tensor, epsilon: float = 0.001) -> torch.Tensor:
         if self.categorical_distribution:
-            # value_probs = torch.softmax(logits, dim=1)
-            # value_probs = logits
             value_probs = ensure_softmax(logits, dim=1)
             value = value_probs.mul_(self.value_support).sum(1, keepdim=True)
         else:
