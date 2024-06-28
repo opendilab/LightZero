@@ -167,13 +167,13 @@ class EfficientZeroPolicy(MuZeroPolicy):
         # (bool) Whether to add noise to roots during reanalyze process.
         reanalyze_noise=True,
         # (bool) Whether to reuse the root value between batch searches.
-        reuse_search=True,
+        reuse_search=False,
         # (bool) whether to use the pure policy to collect data. If False, use the MCTS guided with policy.
         collect_with_pure_policy=False,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
-        use_priority=True,
+        use_priority=False,
         # (float) The degree of prioritization to use. A value of 0 means no prioritization,
         # while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,

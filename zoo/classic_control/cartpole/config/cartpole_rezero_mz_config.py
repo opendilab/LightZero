@@ -10,8 +10,7 @@ num_simulations = 25
 update_per_collect = 100
 batch_size = 256
 max_env_step = int(1e5)
-use_priority = False
-
+# ============= The key different params for ReZero =============
 reuse_search = True
 collect_with_pure_policy = False
 buffer_reanalyze_freq = 1
@@ -57,7 +56,6 @@ cartpole_muzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         reanalyze_noise=True,
-        use_priority=use_priority,
         # ============= The key different params for ReZero =============
         reuse_search=reuse_search,
         collect_with_pure_policy=collect_with_pure_policy,

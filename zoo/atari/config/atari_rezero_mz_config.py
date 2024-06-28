@@ -25,7 +25,6 @@ update_per_collect = None
 batch_size = 256
 replay_ratio = 0.25
 max_env_step = int(5e5)
-use_priority = False
 
 # ============= The key different params for ReZero =============
 reuse_search = True
@@ -72,7 +71,6 @@ atari_muzero_config = dict(
         replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
-        use_priority=use_priority,
         # ============= The key different params for ReZero =============
         reuse_search=reuse_search,
         collect_with_pure_policy=collect_with_pure_policy,

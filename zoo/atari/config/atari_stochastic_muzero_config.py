@@ -43,7 +43,7 @@ chance_space_size = 4
 
 atari_stochastic_muzero_config = dict(
     exp_name=
-    f'data_stochastic_mz_ctree/{env_id[:-14]}_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_chance{chance_space_size}_seed0',
+    f'data_stochastic_mz/{env_id[:-14]}_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_chance{chance_space_size}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,

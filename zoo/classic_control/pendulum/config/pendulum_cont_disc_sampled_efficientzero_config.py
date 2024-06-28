@@ -19,7 +19,7 @@ reanalyze_ratio = 0.
 
 pendulum_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/pendulum_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_sampled_efficientzero/pendulum_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_id='Pendulum-v1',
         continuous=False,

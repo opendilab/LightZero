@@ -318,6 +318,7 @@ class MuZeroCollector(ISerialCollector):
         Returns:
             - return_data (:obj:`List[Any]`): Collected data in the form of a list.
         """
+        # TODO: collect_with_pure_policy as a seperate collector
         if n_episode is None:
             if self._default_n_episode is None:
                 raise RuntimeError("Please specify collect n_episode")

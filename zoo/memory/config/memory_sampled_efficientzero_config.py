@@ -30,7 +30,7 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 memory_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/{env_id}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
+    exp_name=f'data_sampled_efficientzero/{env_id}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
     env=dict(
         env_id=env_id,
         flate_observation=True,  # Whether to flatten the observation

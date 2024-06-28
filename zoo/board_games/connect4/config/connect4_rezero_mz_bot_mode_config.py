@@ -11,10 +11,9 @@ num_simulations = 50
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(1e6)
-
+# ============= The key different params for ReZero =============
 reuse_search = True
-collect_with_pure_policy = True
-use_priority = False
+collect_with_pure_policy = False
 buffer_reanalyze_freq = 1
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -63,7 +62,6 @@ connect4_muzero_config = dict(
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         reanalyze_noise=True,
-        use_priority=use_priority,
         # ============= The key different params for ReZero =============
         reuse_search=reuse_search,
         collect_with_pure_policy=collect_with_pure_policy,

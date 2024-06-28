@@ -21,8 +21,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 lunarlander_cont_disc_efficientzero_config = dict(
-    exp_name=
-    f'data_ez_ctree/lunarlander_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_efficientzero/lunarlander_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_id='LunarLanderContinuous-v2',
         continuous=False,

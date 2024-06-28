@@ -17,7 +17,7 @@ reanalyze_ratio = 0.
 
 cartpole_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/cartpole_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_efficientzero/cartpole_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         env_id='CartPole-v0',
         continuous=False,
