@@ -144,7 +144,7 @@ class TestConnect4Bot():
         for i in range(1):
             print('-' * 10 + str(i) + '-' * 10)
             memory_usage = get_memory_usage()
-            print(f"初始内存使用量: {memory_usage} bytes")
+            print(f"Initial memory usage: {memory_usage} bytes")
             # Initialize the game, where there are two players: player 1 and player 2.
             env = Connect4Env(EasyDict(self.cfg))
             # Reset the environment, set the board to a clean board and the  start player to be player 1.
@@ -230,7 +230,7 @@ class TestConnect4Bot():
         for i in range(10):
             print('-' * 10 + str(i) + '-' * 10)
             memory_usage = get_memory_usage()
-            print(f"初始内存使用量: {memory_usage} bytes")
+            print(f"Initial memory usage: {memory_usage} bytes")
             # Initialize the game, where there are two players: player 1 and player 2.
             env = Connect4Env(EasyDict(self.cfg))
             # Reset the environment, set the board to a clean board and the  start player to be player 1.

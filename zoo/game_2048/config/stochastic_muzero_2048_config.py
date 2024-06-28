@@ -22,7 +22,7 @@ chance_space_size = 16 * num_of_possible_chance_tile
 # ==============================================================
 
 game_2048_stochastic_muzero_config = dict(
-    exp_name=f'data_stochastic_mz_ctree/game_2048_npct-{num_of_possible_chance_tile}_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_chance-{use_ture_chance_label_in_chance_encoder}_sslw2_seed0',
+    exp_name=f'data_stochastic_mz/game_2048_npct-{num_of_possible_chance_tile}_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_chance-{use_ture_chance_label_in_chance_encoder}_sslw2_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
