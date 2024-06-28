@@ -17,7 +17,7 @@ reanalyze_ratio = 0.
 
 tictactoe_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_muzero/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         battle_mode='play_with_bot_mode',
         collector_env_num=collector_env_num,
@@ -84,4 +84,4 @@ create_config = tictactoe_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

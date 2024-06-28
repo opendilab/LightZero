@@ -8,18 +8,19 @@ from typing import Optional
 
 def visualize_attention_map(model, input_embeddings: torch.Tensor, kv_cache: Optional[dict] = None,
                             valid_context_lengths: Optional[torch.Tensor] = None, layer_id: int = 0, head_id: int = 0,
-                            suffix='visual_match_memlen1-0-15_v2/attn_map'):
+                            suffix='visual_match/attn_map'):
     """
-    Visualize the attention map for a specific layer and head in the Transformer model.
+    Overview:
+        Visualize the attention map for a specific layer and head in the Transformer model.
 
-    Parameters:
-        model: Transformer model
-        input_embeddings: Input token embeddings of shape (B, T, C)
-        kv_cache: Cached keys and values for long sequence inference
-        valid_context_lengths: Valid context lengths for variable-length contexts
-        layer_id: The index of the layer to visualize (0-based)
-        head_id: The index of the head to visualize (0-based)
-        suffix: Directory suffix for saving the attention map image
+    Arguments:
+        - model (:obj:`Transformer`): Transformer model.
+        - input_embeddings (:obj:`torch.Tensor`): Input token embeddings of shape (B, T, C).
+        - kv_cache (:obj:`Optional[dict]`): Cached keys and values for long sequence inference.
+        - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid context lengths for variable-length contexts.
+        - layer_id (:obj:`int`): The index of the layer to visualize (0-based).
+        - head_id (:obj:`int`): The index of the head to visualize (0-based).
+        - suffix (:obj:`str`): Directory suffix for saving the attention map image.
 
     Returns:
         None
@@ -65,17 +66,18 @@ def visualize_attention_map(model, input_embeddings: torch.Tensor, kv_cache: Opt
 
 def visualize_attention_maps(model, input_embeddings: torch.Tensor, kv_cache: Optional[dict] = None,
                              valid_context_lengths: Optional[torch.Tensor] = None,
-                             suffix='visual_match_memlen1-0-15/attn_map_all_head_layer', nhead_each_row=4):
+                             suffix='visual_match/attn_map_all_head_and_layer', nhead_each_row=4):
     """
-    Visualize all attention maps for all layers and heads, arranging them in a single figure.
+    Overview:
+        Visualize all attention maps for all layers and heads, arranging them in a single figure.
 
-    Parameters:
-        model: Transformer model
-        input_embeddings: Input token embeddings of shape (B, T, C)
-        kv_cache: Cached keys and values for long sequence inference
-        valid_context_lengths: Valid context lengths for variable-length contexts
-        suffix: Directory suffix for saving the attention map image
-        nhead_each_row: Number of heads to display per row
+    Arguments:
+        - model (:obj:`Transformer`): Transformer model.
+        - input_embeddings (:obj:`torch.Tensor`): Input token embeddings of shape (B, T, C).
+        - kv_cache (:obj:`Optional[dict]`): Cached keys and values for long sequence inference.
+        - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid context lengths for variable-length contexts.
+        - suffix (:obj:`str`): Directory suffix for saving the attention map image.
+        - nhead_each_row (:obj:`int`): Number of heads to display per row.
 
     Returns:
         None

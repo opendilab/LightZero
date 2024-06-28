@@ -1,27 +1,20 @@
 import copy
 import logging
 from typing import Any, Tuple
-from typing import Optional, Union, Dict
 from typing import Optional
+from typing import Union, Dict
 
 logging.getLogger().setLevel(logging.DEBUG)
 from einops import rearrange
 import torch.nn.functional as F
-from sklearn.manifold import TSNE
 from .kv_caching import KeysValues
 from .slicer import Head
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
 from lzero.model.utils import cal_dormant_ratio
-import os
-from PIL import ImageDraw
 import numpy as np
-from PIL import Image
-import torchvision
-import matplotlib.pyplot as plt
 from .utils import SimNorm, WorldModelOutput, quantize_state, to_device_for_kvcache
-from .visualize_utils import visualize_reward_value_img_policy, visualize_reconstruction_v3, save_as_image_with_timestep, plot_latent_tsne_each_and_all_for_pong, plot_latent_tsne_each_and_all_for_visualmatch
 import torch
 import torch.nn as nn
 import collections
@@ -986,11 +979,11 @@ class WorldModel(nn.Module):
             loss_obs = F.kl_div(logits_reshaped.log(), labels_reshaped, reduction='none').sum(dim=-1).mean(dim=-1)
 
             #  ========== for debugging ==========
-            print('loss_obs:', loss_obs.mean())
-            assert not torch.isnan(loss_obs).any(), "loss_obs contains NaN values"
-            assert not torch.isinf(loss_obs).any(), "loss_obs contains Inf values"
-            for name, param in self.tokenizer.encoder.named_parameters():
-                print('name, param.mean(), param.std():', name, param.mean(), param.std())
+            # print('loss_obs:', loss_obs.mean())
+            # assert not torch.isnan(loss_obs).any(), "loss_obs contains NaN values"
+            # assert not torch.isinf(loss_obs).any(), "loss_obs contains Inf values"
+            # for name, param in self.tokenizer.encoder.named_parameters():
+            #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
 
         # Apply mask to loss_obs
         mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1)

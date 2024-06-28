@@ -16,7 +16,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 tictactoe_efficientzero_config = dict(
-    exp_name=f'data_ez_ctree/tictactoe_efficientzero_sp-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_ez/tictactoe_efficientzero_sp-mode_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         battle_mode='self_play_mode',
         collector_env_num=collector_env_num,
@@ -85,4 +85,4 @@ create_config = tictactoe_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

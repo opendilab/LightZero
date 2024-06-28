@@ -34,7 +34,7 @@ max_env_step = int(5e5)
 reanalyze_ratio = 0
 
 update_per_collect = None
-model_update_ratio = 1
+replay_ratio = 1
 batch_size = 64
 # num_unroll_steps = 5
 num_unroll_steps = 10
@@ -44,7 +44,7 @@ num_unroll_steps = 10
 # ==============================================================
 
 bsuite_muzero_config = dict(
-    exp_name=f'data_mz_gpt_ctree_0119_state-obs/bsuite_unizero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd256_lr1e-4-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_latenttarget100_seed0',
+    exp_name=f'data_mz_gpt_ctree_0119_state-obs/bsuite_unizero_envnum{collector_env_num}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_contembdings_lsd256_lr1e-4-minmax-jointtrain-true_mcs5e2_collectper200-clear_evalmax_latenttarget100_seed0',
     env=dict(
         env_name=env_name,
         stop_value=int(1e6),
@@ -114,4 +114,4 @@ create_config = bsuite_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_unizero
-    train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    train_unizero([main_config, create_config], seed=0, max_env_step=max_env_step)

@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import torch.optim as optim
 from ding.model import model_wrap
-from ding.policy.base_policy import Policy
 from lzero.policy.muzero import MuZeroPolicy
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
@@ -99,6 +98,14 @@ class MuZeroContextPolicy(MuZeroPolicy):
         # IMPORTANT: Setting eval_offline to True requires configuring the saving of checkpoints to align with the evaluation frequency.
         # This is done by setting the parameter learn.learner.hook.save_ckpt_after_iter to the same value as eval_freq in the train_muzero.py automatically.
         eval_offline=False,
+        # (bool) Whether to calculate the dormant ratio.
+        cal_dormant_ratio=False,
+        # (bool) Whether to analyze simulation normalization.
+        analysis_sim_norm=False,
+        # (bool) Whether to analyze dormant ratio.
+        analysis_dormant_ratio=False,
+        # (bool) Whether to use the sim_norm_kl_loss in the model.
+        use_sim_norm_kl_loss=False,
 
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.

@@ -59,6 +59,8 @@ class MuZeroPolicy(Policy):
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
             norm_type='BN',
+            # (bool) Whether to analyze simulation normalization.
+            analysis_sim_norm=False,
         ),
         # ****** common ******
         # (bool) whether to use rnd model.
@@ -93,6 +95,10 @@ class MuZeroPolicy(Policy):
         # IMPORTANT: Setting eval_offline to True requires configuring the saving of checkpoints to align with the evaluation frequency.
         # This is done by setting the parameter learn.learner.hook.save_ckpt_after_iter to the same value as eval_freq in the train_muzero.py automatically.
         eval_offline=False,
+        # (bool) Whether to analyze simulation normalization.
+        analysis_sim_norm=False,
+        # (bool) Whether to analyze dormant ratio.
+        analysis_dormant_ratio=False,
 
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.

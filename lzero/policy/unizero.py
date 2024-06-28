@@ -31,15 +31,14 @@ class UniZeroPolicy(Policy):
             model_type='conv',  # options={'mlp', 'conv'}
             # (bool) If True, the action space of the environment is continuous, otherwise discrete.
             continuous_action_space=False,
-            # (tuple) The stacked obs shape.
-            # observation_shape=(1, 96, 96),  # if frame_stack_num=1
-            observation_shape=(4, 96, 96),  # if frame_stack_num=4
+            # (tuple) The obs shape.
+            observation_shape=(3, 64, 64),
             # (bool) Whether to use the self-supervised learning loss.
             self_supervised_learning_loss=False,
             # (bool) Whether to use discrete support to represent categorical distribution for value/reward/value_prefix.
             categorical_distribution=True,
             # (int) The image channel in image observation.
-            image_channel=1,
+            image_channel=3,
             # (int) The number of frames to stack together.
             frame_stack_num=1,
             # (int) The number of res blocks in MuZero model.
@@ -48,15 +47,17 @@ class UniZeroPolicy(Policy):
             num_channels=64,
             # (int) The scale of supports used in categorical distribution.
             # This variable is only effective when ``categorical_distribution=True``.
-            support_scale=300,
+            support_scale=50,
             # (bool) whether to learn bias in the last linear layer in value and policy head.
             bias=True,
-            # (str) The type of action encoding. Options are ['one_hot', 'not_one_hot']. Default to 'one_hot'.
-            discrete_action_encoding_type='one_hot',
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
             norm_type='BN',
+            # (bool) Whether to analyze simulation normalization.
+            analysis_sim_norm=False,
+            # (int) The save interval of the model.
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000, ), ), ),
             world_model=dict(
                 # (int) The number of tokens per block.
                 tokens_per_block=2,
@@ -66,8 +67,6 @@ class UniZeroPolicy(Policy):
                 max_tokens=2 * 10,
                 # (int) The context length, usually calculated as twice the number of some base unit.
                 context_length=2 * 4,
-                # (int) The context length for recurrent models, usually the same as context_length.
-                context_length_for_recurrent=2 * 4,
                 # (bool) Whether to use GRU gating mechanism.
                 gru_gating=False,
                 # (str) The device to be used for computation, e.g., 'cpu' or 'cuda'.
@@ -94,7 +93,7 @@ class UniZeroPolicy(Policy):
                 resid_pdrop=0.1,
                 # (float) The dropout probability for the attention mechanism.
                 attn_pdrop=0.1,
-                # (int) The size of the support set for value and policy heads.
+                # (int) The size of the support set for value and reward heads.
                 support_size=101,
                 # (int) The maximum size of the cache.
                 max_cache_size=5000,
@@ -144,6 +143,8 @@ class UniZeroPolicy(Policy):
         monitor_extra_statistics=True,
         # (int) The transition number of one ``GameSegment``.
         game_segment_length=200,
+        # (bool) Whether to analyze simulation normalization.
+        analysis_sim_norm=False,
 
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
@@ -207,7 +208,7 @@ class UniZeroPolicy(Policy):
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=True,
+        lr_piecewise_constant_decay=False,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e4),
         # (bool) Whether to use manually decayed temperature.
@@ -222,13 +223,15 @@ class UniZeroPolicy(Policy):
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
-        use_priority=True,
+        use_priority=False,
         # (float) The degree of prioritization to use. A value of 0 means no prioritization,
         # while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,
         # (float) The degree of correction to use. A value of 0 means no correction,
         # while a value of 1 means full correction.
         priority_prob_beta=0.4,
+        # (int) The initial envstep for training.
+        train_start_after_envsteps=int(0),
 
         # ****** UCB ******
         # (float) The alpha value used in the Dirichlet distribution for exploration at the root node of search tree.
@@ -267,12 +270,7 @@ class UniZeroPolicy(Policy):
             The user can define and use customized network model but must obey the same interface definition indicated \
             by import_names path. For MuZero, ``lzero.model.unizero_model.MuZeroModel``
         """
-        if self._cfg.model.model_type == "conv":
-            return 'UniZeroModel', ['lzero.model.unizero_model']
-        elif self._cfg.model.model_type == "mlp":
-            return 'UniZeroModel', ['lzero.model.unizero_model_vector_obs']
-        else:
-            raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
+        return 'UniZeroModel', ['lzero.model.unizero_model']
 
     def _init_learn(self) -> None:
         """
@@ -437,10 +435,10 @@ class UniZeroPolicy(Policy):
         weighted_total_loss.backward()
 
         #  ========== for debugging ==========
-        for name, param in self._learn_model.world_model.tokenizer.encoder.named_parameters():
-            print('name, param.mean(), param.std():', name, param.mean(), param.std())
-            if param.requires_grad:
-                print(name, param.grad.norm())
+        # for name, param in self._learn_model.world_model.tokenizer.encoder.named_parameters():
+        #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
+        #     if param.requires_grad:
+        #         print(name, param.grad.norm())
 
         if self._cfg.analysis_sim_norm:
             del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after

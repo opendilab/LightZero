@@ -110,8 +110,7 @@ class UniZeroModel(nn.Module):
             decoder_network = VectorDecoderMemory(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
             self.tokenizer = Tokenizer(encoder=self.representation_network,
                                        decoder_network=decoder_network, with_lpips=False)
-            self.world_model = WorldModel(obs_vocab_size=self.tokenizer.vocab_size,
-                                          act_vocab_size=self.action_space_size,
+            self.world_model = WorldModel(act_vocab_size=self.action_space_size,
                                           config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print('==' * 20)

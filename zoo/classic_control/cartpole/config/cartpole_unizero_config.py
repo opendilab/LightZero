@@ -1,6 +1,4 @@
 from easydict import EasyDict
-# import torch
-# torch.cuda.set_device(0)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -9,17 +7,17 @@ n_episode = 8
 evaluator_env_num = 3
 num_simulations = 25
 update_per_collect = None
-model_update_ratio = 0.25
+replay_ratio = 0.25
 max_env_step = int(2e5)
 reanalyze_ratio = 0
-batch_size = 64
+batch_size = 256
 num_unroll_steps = 5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 cartpole_unizero_config = dict(
-    exp_name=f'data_unizero/cartpole_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
+    exp_name=f'data_unizero/cartpole_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -30,9 +28,6 @@ cartpole_unizero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        # TODO
-        analysis_sim_norm=False,
-        cal_dormant_ratio=False,
         model_path=None,
         train_start_after_envsteps=int(0),
         num_unroll_steps=num_unroll_steps,
@@ -40,15 +35,11 @@ cartpole_unizero_config = dict(
             analysis_sim_norm=False,
             observation_shape=4,
             action_space_size=2,
-            model_type='mlp',
             self_supervised_learning_loss=True,  # NOTE: default is False.
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
-            reward_support_size=101,
-            value_support_size=101,
-            support_scale=50,
+            model_type='mlp',
             world_model=dict(
-                tokens_per_block=2,
                 max_blocks=10,
                 max_tokens=2 * 10,
                 context_length=2 * 4,
@@ -63,12 +54,7 @@ cartpole_unizero_config = dict(
                 num_layers=2,
                 num_heads=2,
                 embed_dim=64,
-                embed_pdrop=0.1,
-                resid_pdrop=0.1,
-                attn_pdrop=0.1,
-                support_size=101,
-                max_cache_size=5000,
-                env_num=8,
+                env_num=collector_env_num,
                 collector_env_num=collector_env_num,
                 evaluator_env_num=evaluator_env_num,
                 latent_recon_loss_weight=0.,
@@ -76,15 +62,14 @@ cartpole_unizero_config = dict(
                 policy_entropy_weight=1e-4,
                 predict_latent_loss_type='group_kl',
                 obs_type='vector',
-                gamma=1,
-                dormant_threshold=0.025,
+                norm_type='BN',
             ),
         ),
         cuda=True,
         use_augmentation=False,
         env_type='not_board_games',
         game_segment_length=50,
-        model_update_ratio=model_update_ratio,
+        replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
@@ -120,5 +105,4 @@ create_config = cartpole_unizero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_unizero
-    train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path,
-                  max_env_step=max_env_step)
+    train_unizero([main_config, create_config], seed=0, max_env_step=max_env_step)

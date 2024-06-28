@@ -13,7 +13,8 @@ from ding.policy import create_policy
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
 from lzero.worker import MuZeroEvaluator
-from lzero.entry.train_unizero import initialize_zeros_batch
+from lzero.entry.utils import initialize_zeros_batch
+
 
 def eval_muzero(
         input_cfg: Tuple[dict, dict],

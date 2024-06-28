@@ -1,4 +1,3 @@
-import copy
 import logging
 import os
 from functools import partial
@@ -20,19 +19,7 @@ from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
-from .utils import random_collect
-
-
-def initialize_zeros_batch(observation_shape, batch_size, device):
-    """Initialize a zeros tensor for batch observations based on the shape."""
-    if isinstance(observation_shape, list):
-        shape = [batch_size, *observation_shape]
-    elif isinstance(observation_shape, int):
-        shape = [batch_size, observation_shape]
-    else:
-        raise TypeError("observation_shape must be either an int or a list")
-    
-    return torch.zeros(shape).to(device)
+from .utils import random_collect, initialize_zeros_batch
 
 
 def train_unizero(
@@ -126,8 +113,6 @@ def train_unizero(
                                                    cfg.policy.device)
     policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
     batch_size = policy._cfg.batch_size
-    data_sufficient = False
-    # sample_type = replay_buffer.sample_type  # 'transition' or 'episode'
 
     # TODO: for visualize
     # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)

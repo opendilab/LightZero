@@ -33,7 +33,7 @@ n_episode = 8
 evaluator_env_num = 8
 num_simulations = 50
 update_per_collect = None # for others
-model_update_ratio = 0.25 
+replay_ratio = 0.25 
 batch_size = 256
 reanalyze_ratio = 0
 td_steps = 5
@@ -62,7 +62,7 @@ eps_greedy_exploration_in_collect = True
 
 memory_muzero_config = dict(
     # mcts_ctree.py muzero_collector muzero_evaluator
-    exp_name=f'data_memory_{env_id}_fixscale/{env_id}_memlen-{memory_length}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_'
+    exp_name=f'data_memory_{env_id}_fixscale/{env_id}_memlen-{memory_length}_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_'
              f'collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
              f'_pelw{policy_entropy_loss_weight}_seed{seed}_evalnum{evaluator_env_num}',
     env=dict(

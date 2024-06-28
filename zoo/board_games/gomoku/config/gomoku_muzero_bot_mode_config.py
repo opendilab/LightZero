@@ -21,7 +21,7 @@ prob_random_action_in_bot = 0.5
 
 gomoku_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/gomoku_b{board_size}_rand{prob_random_action_in_bot}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_muzero/gomoku_b{board_size}_rand{prob_random_action_in_bot}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         board_size=board_size,
         battle_mode='play_with_bot_mode',
@@ -86,4 +86,4 @@ create_config = gomoku_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

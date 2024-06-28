@@ -16,7 +16,7 @@ reanalyze_ratio = 0
 # ==============================================================
 
 mountain_car_muzero_config = dict(
-    exp_name=f'mountain_car_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'mountain_car_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_name='MountainCar-v0',
         continuous=False,
@@ -89,4 +89,4 @@ if __name__ == "__main__":
     # Users can use different train entry by specifying the entry_type.
     from lzero.entry import train_muzero
 
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

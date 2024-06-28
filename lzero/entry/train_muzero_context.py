@@ -18,18 +18,8 @@ from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
-from .utils import random_collect
+from .utils import random_collect, initialize_zeros_batch
 
-def initialize_zeros_batch(observation_shape, batch_size, device):
-    """Initialize a zeros tensor for batch observations based on the shape."""
-    if isinstance(observation_shape, list):
-        shape = [batch_size, *observation_shape]
-    elif isinstance(observation_shape, int):
-        shape = [batch_size, observation_shape]
-    else:
-        raise TypeError("observation_shape must be either an int or a list")
-    
-    return torch.zeros(shape).to(device)
 
 def train_muzero_context(
         input_cfg: Tuple[dict, dict],
@@ -250,7 +240,7 @@ def train_muzero_context(
                 logging.info(f'eval offline finished!')
             break
 
-    # 训练结束后移除钩子
+    # Remove hooks after training.
     if cfg.policy.model.analysis_sim_norm:
         policy._collect_model.encoder_hook.remove_hooks()
         policy._target_model.encoder_hook.remove_hooks()

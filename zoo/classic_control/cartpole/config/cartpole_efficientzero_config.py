@@ -17,7 +17,7 @@ reanalyze_ratio = 0.
 
 cartpole_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/cartpole_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_ez/cartpole_efficientzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id='CartPole-v0',
         continuous=False,
@@ -85,4 +85,4 @@ if __name__ == "__main__":
         """
         from lzero.entry import train_muzero_with_gym_env as train_muzero
 
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

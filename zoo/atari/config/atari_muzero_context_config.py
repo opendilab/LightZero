@@ -1,59 +1,37 @@
 from easydict import EasyDict
+from env_action_space_map import env_action_space_map
 import torch
-# torch.cuda.set_device(0)
-
-env_id = 'PongNoFrameskip-v4'  # 6
-# env_id = 'MsPacmanNoFrameskip-v4' # 9
-# env_id = 'SeaquestNoFrameskip-v4' # 18
-# env_id = 'BoxingNoFrameskip-v4'  # 18
-# env_id = 'QbertNoFrameskip-v4'  # 6
-# env_id = 'BreakoutNoFrameskip-v4'  # 4
-
-if env_id == 'PongNoFrameskip-v4':
-    action_space_size = 6
-elif env_id == 'MsPacmanNoFrameskip-v4':
-    action_space_size = 9
-elif env_id == 'SeaquestNoFrameskip-v4':
-    action_space_size = 18
-elif env_id == 'BoxingNoFrameskip-v4':
-    action_space_size = 18
-elif env_id == 'QbertNoFrameskip-v4':
-    action_space_size = 6
-elif env_id == 'BreakoutNoFrameskip-v4':
-    action_space_size = 4
+device = 0
+# torch.cuda.set_device(device)
+norm_type = 'BN'
+env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
+action_space_size = env_action_space_map[env_id]
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-update_per_collect = None
-model_update_ratio = 0.25
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
 batch_size = 256
+update_per_collect = None
+replay_ratio = 0.25
 max_env_step = int(5e5)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = True
 num_unroll_steps = 5
-
-# for debug ===========
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
-# num_simulations = 2
-# update_per_collect = 2
-# batch_size = 2
+context_length_init = 4
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-atari_efficientzero_config = dict(
-    exp_name=f'data_efficientzero/{env_id[:-14]}_efficientzero_stack4_H{num_unroll_steps}_simnorm-cossim_sgd02_seed0',
+atari_muzero_config = dict(
+    exp_name=f'data_muzero_context/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
-        observation_shape=[4, 64, 64],
+        observation_shape=(4, 64, 64),
         frame_stack_num=4,
         gray_scale=True,
         collector_env_num=collector_env_num,
@@ -65,18 +43,8 @@ atari_efficientzero_config = dict(
         # eval_max_episode_steps=int(50),
     ),
     policy=dict(
-        learn=dict(
-            learner=dict(
-                hook=dict(
-                    save_ckpt_after_iter=1000000,  # default is 10000
-                ),
-            ),
-        ),
-        cal_dormant_ratio=False,
-        analysis_sim_norm=False,
         model=dict(
-            analysis_sim_norm=False,
-            observation_shape=[4, 64, 64],
+            observation_shape=(4, 64, 64),
             image_channel=1,
             frame_stack_num=4,
             gray_scale=True,
@@ -88,25 +56,20 @@ atari_efficientzero_config = dict(
             reward_support_size=101,
             value_support_size=101,
             support_scale=50,
+            context_length_init=context_length_init,
+            use_sim_norm=True,
+            use_sim_norm_kl_loss=False,
         ),
         cuda=True,
         env_type='not_board_games',
         game_segment_length=400,
         random_collect_episode_num=0,
-        eps=dict(
-            eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            type='linear',
-            start=1.,
-            end=0.01,
-            decay=int(2e4),
-        ),
-        use_augmentation=True,  # TODO
-        use_priority=False,
-        model_update_ratio=model_update_ratio,
+        use_augmentation=True,
+        replay_ratio=replay_ratio,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         dormant_threshold=0.025,
-        optim_type='SGD',  # for collector orig
+        optim_type='SGD',
         lr_piecewise_constant_decay=True,
         learning_rate=0.2,
         target_update_freq=100,
@@ -120,28 +83,28 @@ atari_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
     ),
 )
-atari_efficientzero_config = EasyDict(atari_efficientzero_config)
-main_config = atari_efficientzero_config
+atari_muzero_config = EasyDict(atari_muzero_config)
+main_config = atari_muzero_config
 
-atari_efficientzero_create_config = dict(
+atari_muzero_create_config = dict(
     env=dict(
         type='atari_lightzero',
         import_names=['zoo.atari.envs.atari_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='efficientzero',
-        import_names=['lzero.policy.efficientzero'],
+        type='muzero_context',
+        import_names=['lzero.policy.muzero_context'],
     ),
 )
-atari_efficientzero_create_config = EasyDict(atari_efficientzero_create_config)
-create_config = atari_efficientzero_create_config
+atari_muzero_create_config = EasyDict(atari_muzero_create_config)
+create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     # Define a list of seeds for multiple runs
     seeds = [0, 1, 2]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_efficientzero/{env_id[:-14]}_efficientzero_stack4_collectenv{collector_env_num}_H{num_unroll_steps}_sgd02_seed{seed}'
-        from lzero.entry import train_muzero
-        train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)
+        main_config.exp_name = f'data_muzero_context/{env_id[:-14]}_muzero_stack4_H{num_unroll_steps}_initconlen{context_length_init}_seed{seed}'
+        from lzero.entry import train_muzero_context
+        train_muzero_context([main_config, create_config], seed=seed, max_env_step=max_env_step)

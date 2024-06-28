@@ -21,7 +21,7 @@ chance_space_size = 16 * num_of_possible_chance_tile
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_mz_ctree/game_2048_npct-{num_of_possible_chance_tile}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_sslw2_seed0',
+    exp_name=f'data_muzero/game_2048_npct-{num_of_possible_chance_tile}_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_bs{batch_size}_sslw2_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -89,4 +89,4 @@ create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

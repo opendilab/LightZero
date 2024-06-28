@@ -44,7 +44,7 @@ policy_entropy_loss_weight = 0.005
 
 mujoco_disc_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/{env_id[:-3]}_bin-{each_dim_disc_size}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_pelw{policy_entropy_loss_weight}_seed0',
+    f'data_sez/{env_id[:-3]}_bin-{each_dim_disc_size}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_pelw{policy_entropy_loss_weight}_seed0',
     env=dict(
         env_id=env_id,
         action_clip=True,
@@ -108,4 +108,4 @@ create_config = mujoco_disc_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

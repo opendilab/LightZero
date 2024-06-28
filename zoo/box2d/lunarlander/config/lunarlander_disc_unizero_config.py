@@ -10,7 +10,7 @@ evaluator_env_num = 3
 num_simulations = 50
 reanalyze_ratio = 0.
 update_per_collect = None
-model_update_ratio = 0.25
+replay_ratio = 0.25
 max_env_step = int(1e6)
 reanalyze_ratio = 0
 batch_size = 64
@@ -20,7 +20,7 @@ num_unroll_steps = 5
 # ==============================================================
 
 lunarlander_unizero_config = dict(
-    exp_name=f'data_unizero/lunarlander_unizero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
+    exp_name=f'data_unizero/lunarlander_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
     env=dict(
         env_name='LunarLander-v2',
         continuous=False,
@@ -128,4 +128,4 @@ create_config = lunarlander_unizero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_unizero
-    train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    train_unizero([main_config, create_config], seed=0, max_env_step=max_env_step)

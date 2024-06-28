@@ -1,7 +1,4 @@
 from easydict import EasyDict
-import torch
-# torch.cuda.set_device(0)
-
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 
 memory_length = 60
@@ -24,7 +21,7 @@ evaluator_env_num = 10
 
 num_simulations = 50
 update_per_collect = None
-model_update_ratio = 0.25
+replay_ratio = 0.25
 batch_size = 32
 reanalyze_ratio = 0
 td_steps = 5
@@ -36,7 +33,7 @@ eps_greedy_exploration_in_collect = True
 # evaluator_env_num = 2
 # num_simulations = 5
 # update_per_collect = None
-# model_update_ratio = 0.25
+# replay_ratio = 0.25
 # batch_size = 4
 
 # ==============================================================
@@ -63,21 +60,11 @@ memory_xzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        analysis_sim_norm=False,
-        cal_dormant_ratio=False,
-        learn=dict(
-            learner=dict(
-                hook=dict(
-                    save_ckpt_after_iter=500000,  # default is 10000
-                ),
-            ),
-        ),
         sample_type='episode',  # NOTE: very important for memory env
         model_path=None,
         train_start_after_envsteps=int(0),
         num_unroll_steps=num_unroll_steps,
         model=dict(
-            analysis_sim_norm=False,
             env_name='memory',
             observation_shape=(3, 5, 5),
             image_channel=3,
@@ -95,7 +82,6 @@ memory_xzero_config = dict(
                 # In order to preserve the observation data of the first frame in a memory environment,
                 # we must ensure that we do not exceed the episode_length during the MCTS of the last frame.
                 # Therefore, we set a longer context_length than during training to ensure that the observation data of the first frame is not lost.
-                tokens_per_block=2,
                 max_blocks=76 + 5,
                 max_tokens=2 * (76 + 5),  # 1+60+15 memory_length = 60
                 context_length=2 * (76 + 5),
@@ -106,39 +92,24 @@ memory_xzero_config = dict(
                 analysis_dormant_ratio=False,
                 action_shape=4,
                 group_size=8,  # NOTE: sim_norm
-                attention='causal',
                 num_layers=4,  # TODO
                 num_heads=4,
                 embed_dim=64,  # TODO
-                embed_pdrop=0.1,
-                resid_pdrop=0.1,
-                attn_pdrop=0.1,
-                support_size=101,
-                max_cache_size=5000,
-                env_num=10,
+                env_num=collector_env_num,
                 collector_env_num=collector_env_num,
                 evaluator_env_num=evaluator_env_num,
-                latent_recon_loss_weight=0.,
-                perceptual_loss_weight=0.,
                 policy_entropy_weight=1e-4,
                 predict_latent_loss_type='group_kl',
                 obs_type='image_memory',
-                gamma=1,
-                dormant_threshold=0.025,
+                norm_type='BN',
             ),
         ),
-        eps=dict(
-            eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            decay=int(2e4),
-        ),
-        use_priority=False,
-        use_augmentation=False,
         td_steps=td_steps,
         discount_factor=1,
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=game_segment_length,  # TODO:
-        model_update_ratio=model_update_ratio,
+        game_segment_length=game_segment_length,
+        replay_ratio=replay_ratio,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         lr_piecewise_constant_decay=False,
@@ -179,6 +150,6 @@ create_config = memory_xzero_create_config
 if __name__ == "__main__":
     seeds = [0, 1, 2]  # You can add more seed values here
     for seed in seeds:
-        main_config.exp_name=f'data_{env_id}/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
+        main_config.exp_name = f'data_{env_id}/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

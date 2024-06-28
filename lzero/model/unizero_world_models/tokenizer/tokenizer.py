@@ -3,13 +3,13 @@ Credits to https://github.com/CompVis/taming-transformers
 """
 
 from dataclasses import dataclass
-from typing import Any, Tuple
+from typing import Any
 
 from einops import rearrange
 import torch
 import torch.nn as nn
 
-from .lpips import LPIPS
+from lzero.model.unizero_world_models.lpips import LPIPS
 
 
 class LossWithIntermediateLosses:
@@ -53,11 +53,7 @@ class Tokenizer(nn.Module):
             batch['observations'] = expanded_observations
 
         assert self.lpips is not None
-        # IRIS original code
         observations = self.preprocess_input(rearrange(batch['observations'], 'b t c h w -> (b t) c h w'))
-        # TODO
-        # observations = rearrange(batch['observations'], 'b t c h w -> (b t) c h w')
-
         z, z_quantized, reconstructions = self(observations, should_preprocess=False, should_postprocess=False)
 
         # Codebook loss. Notes:
@@ -67,10 +63,10 @@ class Tokenizer(nn.Module):
         commitment_loss = (z.detach() - z_quantized).pow(2).mean() + beta * (z - z_quantized.detach()).pow(2).mean()
         # L1 loss
         reconstruction_loss = torch.abs(observations - reconstructions).mean()
-        # TODO: for atari pong
+        # for atari pong
         perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
         # TODO: NOTE only for cartpole
-        perceptual_loss = torch.zeros_like(reconstruction_loss)
+        # perceptual_loss = torch.zeros_like(reconstruction_loss)
 
         return LossWithIntermediateLosses(commitment_loss=commitment_loss, reconstruction_loss=reconstruction_loss,
                                           perceptual_loss=perceptual_loss)

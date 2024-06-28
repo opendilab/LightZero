@@ -38,7 +38,7 @@ reanalyze_ratio = 0.
 
 bsuite_efficientzero_config = dict(
     exp_name=
-    f'data_ez_ctree/bsuite_{env_id}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
+    f'data_ez/bsuite_{env_id}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed{seed}',
     env=dict(
         env_id=env_id,
         stop_value=int(1e6),
