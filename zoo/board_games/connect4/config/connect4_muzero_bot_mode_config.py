@@ -79,5 +79,4 @@ create_config = connect4_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-
-    train_muzero([main_config, create_config], seed=1, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)

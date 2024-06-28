@@ -21,7 +21,7 @@ num_unroll_steps = 5
 # ==============================================================
 
 atari_efficientzero_config = dict(
-    exp_name=f'data_efficientzero/{env_id[:-14]}_efficientzero_stack4_H{num_unroll_steps}_simnorm-cossim_sgd02_seed0',
+    exp_name=f'data_efficientzero/{env_id[:-14]}_efficientzero_stack4_H{num_unroll_steps}_sgd02_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,

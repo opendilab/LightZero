@@ -20,7 +20,11 @@ reanalyze_ratio = 0.
 
 bipedalwalker_cont_sampled_efficientzero_config = dict(
     exp_name=
+<<<<<<< HEAD
     f'data_sez/bipedalwalker_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_seed0',
+=======
+    f'data_sampled_efficientzero/bipedalwalker_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-mur{replay_ratio}_rr{reanalyze_ratio}_seed0',
+>>>>>>> origin/main
     env=dict(
         env_id='BipedalWalker-v3',
         env_type='normal',

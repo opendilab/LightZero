@@ -109,7 +109,7 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
         update_per_collect=100,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
-        model_update_ratio=0.1,
+        replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam']
@@ -163,7 +163,7 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
         # (bool) Whether to use the true chance in MCTS. If False, use the predicted chance.
         use_ture_chance_label_in_chance_encoder=False,
         # (bool) Whether to add noise to roots during reanalyze process.
-        reanalyze_noise=False,
+        reanalyze_noise=True,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.

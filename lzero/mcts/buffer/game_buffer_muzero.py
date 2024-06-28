@@ -2,7 +2,8 @@ from typing import Any, List, Tuple, Union, TYPE_CHECKING, Optional
 
 import numpy as np
 import torch
-from ding.utils import BUFFER_REGISTRY
+from ding.utils import BUFFER_REGISTRY, EasyTimer
+# from line_profiler import line_profiler
 
 from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
@@ -50,6 +51,28 @@ class MuZeroGameBuffer(GameBuffer):
         self.game_segment_game_pos_look_up = []
         # self.task_id = self._cfg.task_id
 
+        self._compute_target_timer = EasyTimer()
+        self._reuse_search_timer = EasyTimer()
+        self._origin_search_timer = EasyTimer()
+        self.buffer_reanalyze = False
+
+        self.compute_target_re_time = 0
+        self.reuse_search_time = 0
+        self.origin_search_time = 0
+        self.sample_times = 0
+        self.active_root_num = 0
+
+    def reset_runtime_metrics(self):
+        """
+        Overview:
+            Reset the runtime metrics of the buffer.
+        """
+        self.compute_target_re_time = 0
+        self.reuse_search_time = 0
+        self.origin_search_time = 0
+        self.sample_times = 0
+        self.active_root_num = 0
+
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
     ) -> List[Any]:
@@ -73,8 +96,10 @@ class MuZeroGameBuffer(GameBuffer):
         batch_rewards, batch_target_values = self._compute_target_reward_value(
             reward_value_context, policy._target_model
         )
-        # target policy
-        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
+        with self._compute_target_timer:
+            batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
+        self.compute_target_re_time += self._compute_target_timer.value
+
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
             policy_non_re_context, self._cfg.model.action_space_size
         )
@@ -91,6 +116,8 @@ class MuZeroGameBuffer(GameBuffer):
 
         # a batch contains the current_batch and the target_batch
         train_data = [current_batch, target_batch]
+        if not self.buffer_reanalyze:
+            self.sample_times += 1
         return train_data
 
     def _make_batch(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
@@ -491,6 +518,7 @@ class MuZeroGameBuffer(GameBuffer):
         batch_target_values = np.asarray(batch_target_values, dtype=object)
         return batch_rewards, batch_target_values
 
+    # @profile
     def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any) -> np.ndarray:
         """
         Overview:
@@ -554,7 +582,6 @@ class MuZeroGameBuffer(GameBuffer):
             _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(network_output, data_type='muzero')
             reward_pool = reward_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
-            # noises are not necessary for reanalyze
             noises = [
                 np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
                                     ).astype(np.float32).tolist() for _ in range(transition_batch_size)
@@ -567,7 +594,9 @@ class MuZeroGameBuffer(GameBuffer):
                 else:
                     roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                with self._origin_search_timer:
+                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                self.origin_search_time += self._origin_search_timer.value
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)

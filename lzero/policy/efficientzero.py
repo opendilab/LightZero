@@ -111,10 +111,10 @@ class EfficientZeroPolicy(MuZeroPolicy):
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
-        # if we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.
+        # if we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.replay_ratio automatically.
         update_per_collect=None,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
-        model_update_ratio=0.1,
+        replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
@@ -165,11 +165,15 @@ class EfficientZeroPolicy(MuZeroPolicy):
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
         # (bool) Whether to add noise to roots during reanalyze process.
-        reanalyze_noise=False,
+        reanalyze_noise=True,
+        # (bool) Whether to reuse the root value between batch searches.
+        reuse_search=False,
+        # (bool) whether to use the pure policy to collect data. If False, use the MCTS guided with policy.
+        collect_with_pure_policy=False,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
-        use_priority=True,
+        use_priority=False,
         # (float) The degree of prioritization to use. A value of 0 means no prioritization,
         # while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,
@@ -583,40 +587,16 @@ class EfficientZeroPolicy(MuZeroPolicy):
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
-            # the only difference between collect and eval is the dirichlet noise.
-            noises = [
-                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                    ).astype(np.float32).tolist() for j in range(active_collect_env_num)
-            ]
-            if self._cfg.mcts_ctree:
-                # cpp mcts_tree
-                roots = MCTSCtree.roots(active_collect_env_num, legal_actions)
-            else:
-                # python mcts_tree
-                roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
-            roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_roots, policy_logits, to_play)
-            self._mcts_collect.search(
-                roots, self._collect_model, latent_state_roots, reward_hidden_state_roots, to_play
-            )
 
-            roots_visit_count_distributions = roots.get_distributions()
-            roots_values = roots.get_values()  # shape: {list: batch_size}
-
-            data_id = [i for i in range(active_collect_env_num)]
-            output = {i: None for i in data_id}
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_collect_env_num)
-
-            for i, env_id in enumerate(ready_env_id):
-                distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                if self._cfg.eps.eps_greedy_exploration_in_collect:
-                    # eps-greedy collect
-                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self._collect_mcts_temperature, deterministic=True
-                    )
-                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                    if np.random.rand() < self.collect_epsilon:
-                        action = np.random.choice(legal_actions[i])
+            if not self._cfg.collect_with_pure_policy:
+                # the only difference between collect and eval is the dirichlet noise.
+                noises = [
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                                        ).astype(np.float32).tolist() for j in range(active_collect_env_num)
+                ]
+                if self._cfg.mcts_ctree:
+                    # cpp mcts_tree
+                    roots = MCTSCtree.roots(active_collect_env_num, legal_actions)
                 else:
                     # normal collect
                     # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
@@ -635,6 +615,59 @@ class EfficientZeroPolicy(MuZeroPolicy):
                     'predicted_policy_logits': policy_logits[i],
                 }
 
+                roots_visit_count_distributions = roots.get_distributions()
+                roots_values = roots.get_values()  # shape: {list: batch_size}
+
+                data_id = [i for i in range(active_collect_env_num)]
+                output = {i: None for i in data_id}
+                if ready_env_id is None:
+                    ready_env_id = np.arange(active_collect_env_num)
+
+                for i, env_id in enumerate(ready_env_id):
+                    distributions, value = roots_visit_count_distributions[i], roots_values[i]
+                    if self._cfg.eps.eps_greedy_exploration_in_collect:
+                        # eps-greedy collect
+                        action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                            distributions, temperature=self._collect_mcts_temperature, deterministic=True
+                        )
+                        action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                        if np.random.rand() < self.collect_epsilon:
+                            action = np.random.choice(legal_actions[i])
+                    else:
+                        # normal collect
+                        # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                        # the index within the legal action set, rather than the index in the entire action set.
+                        action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                            distributions, temperature=self._collect_mcts_temperature, deterministic=False
+                        )
+                        # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
+                        action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                    output[env_id] = {
+                        'action': action,
+                        'visit_count_distributions': distributions,
+                        'visit_count_distribution_entropy': visit_count_distribution_entropy,
+                        'searched_value': value,
+                        'predicted_value': pred_values[i],
+                        'predicted_policy_logits': policy_logits[i],
+                    }
+            else:
+                data_id = [i for i in range(active_collect_env_num)]
+                output = {i: None for i in data_id}
+
+                if ready_env_id is None:
+                    ready_env_id = np.arange(active_collect_env_num)
+
+                for i, env_id in enumerate(ready_env_id):
+                    policy_values = torch.softmax(torch.tensor([policy_logits[i][a] for a in legal_actions[i]]), dim=0).tolist()
+                    policy_values = policy_values / np.sum(policy_values)
+                    action_index_in_legal_action_set = np.random.choice(len(legal_actions[i]), p=policy_values)
+                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                    output[env_id] = {
+                        'action': action,
+                        'searched_value': pred_values[i],
+                        'predicted_value': pred_values[i],
+                        'predicted_policy_logits': policy_logits[i],
+                    }
         return output
 
     def _init_eval(self) -> None:

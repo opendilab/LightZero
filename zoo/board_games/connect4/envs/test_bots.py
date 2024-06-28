@@ -1,12 +1,18 @@
 import time
 
 import numpy as np
+import psutil
 import pytest
 from easydict import EasyDict
 
 from connect4_env import Connect4Env
 from zoo.board_games.mcts_bot import MCTSBot
 
+
+def get_memory_usage():
+    process = psutil.Process()
+    memory_info = process.memory_info()
+    return memory_info.rss
 
 @pytest.mark.unittest
 class TestConnect4Bot():
@@ -31,7 +37,7 @@ class TestConnect4Bot():
             prob_expert_agent=0,
             bot_action_type='rule',
             screen_scaling=9,
-            render_mode='image_savefile_mode',
+            render_mode= None,
             prob_random_action_in_bot=0,
         )
 
@@ -50,6 +56,8 @@ class TestConnect4Bot():
         # Repeat the game for 10 rounds.
         for i in range(10):
             print('-' * 10 + str(i) + '-' * 10)
+            memory_usage = get_memory_usage()
+            print(f"Initial memory usage: {memory_usage} bytes")
             # Initialize the game, where there are two players: player 1 and player 2.
             env = Connect4Env(EasyDict(self.cfg))
             # Reset the environment, set the board to a clean board and the  start player to be player 1.
@@ -61,6 +69,7 @@ class TestConnect4Bot():
             player = MCTSBot(env_mcts, 'a', num_simulations)  # player_index = 0, player = 1
             # Set player 1 to move first.
             player_index = 0
+            step = 1
             while not env.get_done_reward()[0]:
                 """
                 Overview:
@@ -70,7 +79,7 @@ class TestConnect4Bot():
                 if player_index == 0:
                     t1 = time.time()
                     # action = env.bot_action()
-                    action = player.get_actions(state, player_index=player_index)
+                    action, node = player.get_actions(state, step, player_index=player_index)
                     t2 = time.time()
                     # print("The time difference is :", t2-t1)
                     mcts_bot_time_list.append(t2 - t1)
@@ -86,7 +95,13 @@ class TestConnect4Bot():
                     player_index = 0
                 env.step(action)
                 state = env.board
-                # print(np.array(state).reshape(6, 7))
+                step += 1
+                print(np.array(state).reshape(6, 7))
+                temp = memory_usage
+                memory_usage = get_memory_usage()
+                memory_cost = memory_usage - temp
+                print(f"Memory usage after search: {memory_usage} bytes")
+                print(f"Increased memory usage due to searches: {memory_cost} bytes")
 
             # Record the winner.
             winner.append(env.get_done_winner()[1])
@@ -115,7 +130,7 @@ class TestConnect4Bot():
     def test_mcts_bot_vs_mcts_bot(self, num_simulations_1: int = 50, num_simulations_2: int = 50) -> None:
         """
         Overview:
-            A tictactoe game between mcts_bot and rule_bot, where rule_bot take the first move.
+            A tictactoe game between two mcts_bots. 
         Arguments:
             - num_simulations_1 (:obj:`int`): The number of the simulations of player 1 required to find the best move.
             - num_simulations_2 (:obj:`int`): The number of the simulations of player 2 required to find the best move.
@@ -126,17 +141,21 @@ class TestConnect4Bot():
         winner = []
 
         # Repeat the game for 10 rounds.
-        for i in range(10):
+        for i in range(1):
             print('-' * 10 + str(i) + '-' * 10)
+            memory_usage = get_memory_usage()
+            print(f"Initial memory usage: {memory_usage} bytes")
             # Initialize the game, where there are two players: player 1 and player 2.
             env = Connect4Env(EasyDict(self.cfg))
             # Reset the environment, set the board to a clean board and the  start player to be player 1.
             env.reset()
             state = env.board
             player1 = MCTSBot(env, 'a', num_simulations_1)  # player_index = 0, player = 1
-            player2 = MCTSBot(env, 'a', num_simulations_2)
+            player2 = MCTSBot(env, 'b', num_simulations_2)
             # Set player 1 to move first.
             player_index = 0
+            step = 1
+            node = None
             while not env.get_done_reward()[0]:
                 """
                 Overview:
@@ -146,7 +165,7 @@ class TestConnect4Bot():
                 if player_index == 0:
                     t1 = time.time()
                     # action = env.bot_action()
-                    action = player1.get_actions(state, player_index=player_index)
+                    action, node, visit = player1.get_actions(state, step, player_index)
                     t2 = time.time()
                     # print("The time difference is :", t2-t1)
                     mcts_bot1_time_list.append(t2 - t1)
@@ -155,14 +174,20 @@ class TestConnect4Bot():
                 else:
                     t1 = time.time()
                     # action = env.bot_action()
-                    action = player2.get_actions(state, player_index=player_index)
+                    action, node, visit = player2.get_actions(state, step, player_index, num_simulation=visit)
                     t2 = time.time()
                     # print("The time difference is :", t2-t1)
                     mcts_bot2_time_list.append(t2 - t1)
                     player_index = 0
                 env.step(action)
+                step += 1
                 state = env.board
-                # print(np.array(state).reshape(6, 7))
+                print(np.array(state).reshape(6, 7))
+                temp = memory_usage
+                memory_usage = get_memory_usage()
+                memory_cost = memory_usage - temp
+                print(f"Memory usage after search: {memory_usage} bytes")
+                print(f"Increased memory usage due to searches: {memory_cost} bytes")
 
             # Record the winner.
             winner.append(env.get_done_winner()[1])
@@ -175,11 +200,11 @@ class TestConnect4Bot():
         mcts_bot2_var = np.var(mcts_bot2_time_list)
 
         # Print the information of the games.
-        print('num_simulations={}\n'.format(200))
+        print('num_simulations={}\n'.format(num_simulations_1))
         print('mcts_bot1_time_list={}\n'.format(mcts_bot1_time_list))
         print('mcts_bot1_mu={}, mcts_bot1_var={}\n'.format(mcts_bot1_mu, mcts_bot1_var))
 
-        print('num_simulations={}\n'.format(1000))
+        print('num_simulations={}\n'.format(num_simulations_2))
         print('mcts_bot2_time_list={}\n'.format(mcts_bot2_time_list))
         print('mcts_bot2_mu={}, mcts_bot2_var={}\n'.format(mcts_bot2_mu, mcts_bot2_var))
 
@@ -204,6 +229,8 @@ class TestConnect4Bot():
         # Repeat the game for 10 rounds.
         for i in range(10):
             print('-' * 10 + str(i) + '-' * 10)
+            memory_usage = get_memory_usage()
+            print(f"Initial memory usage: {memory_usage} bytes")
             # Initialize the game, where there are two players: player 1 and player 2.
             env = Connect4Env(EasyDict(self.cfg))
             # Reset the environment, set the board to a clean board and the  start player to be player 1.
@@ -234,7 +261,12 @@ class TestConnect4Bot():
                     player_index = 0
                 env.step(action)
                 state = env.board
-                # print(np.array(state).reshape(6, 7))
+                print(np.array(state).reshape(6, 7))
+                temp = memory_usage
+                memory_usage = get_memory_usage()
+                memory_cost = memory_usage - temp
+                print(f"Memory usage after search: {memory_usage} bytes")
+                print(f"Increased memory usage due to searches: {memory_cost} bytes")
 
             # Record the winner.
             winner.append(env.get_done_winner()[1])
@@ -258,3 +290,9 @@ class TestConnect4Bot():
                 winner, winner.count(-1), winner.count(1), winner.count(2)
             )
         )
+
+
+if __name__ == "__main__":
+    test = TestConnect4Bot()
+    test.setup()
+    test.test_mcts_bot_vs_mcts_bot(2000,200)

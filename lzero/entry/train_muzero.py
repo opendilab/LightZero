@@ -8,12 +8,12 @@ from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
-from ding.utils import set_pkg_seed, get_rank
 from ding.rl_utils import get_epsilon_greedy_fn
+from ding.utils import set_pkg_seed, get_rank
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
-from lzero.entry.utils import log_buffer_memory_usage
+from lzero.entry.utils import log_buffer_memory_usage, log_buffer_run_time
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
@@ -69,7 +69,6 @@ def train_muzero(
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
-
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
@@ -138,6 +137,7 @@ def train_muzero(
 
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
+        log_buffer_run_time(learner.train_iter, replay_buffer, tb_logger)
         collect_kwargs = {}
         # set temperature for visit count distributions according to the train_iter,
         # please refer to Appendix D in MuZero paper for details.
@@ -172,9 +172,9 @@ def train_muzero(
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         if cfg.policy.update_per_collect is None:
-            # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
+            # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
             collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
-            update_per_collect = int(collected_transitions_num * cfg.policy.model_update_ratio)
+            update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
         # save returned new_data collected by the collector
         replay_buffer.push_game_segments(new_data)
         # remove the oldest data if the replay buffer is full.

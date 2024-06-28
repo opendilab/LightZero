@@ -16,8 +16,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 tictactoe_gumbel_muzero_config = dict(
-    exp_name=
-    f'data_muzero/tictactoe_gumbel_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
+    exp_name=f'data_muzero/tictactoe_gumbel_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         battle_mode='play_with_bot_mode',
         collector_env_num=collector_env_num,

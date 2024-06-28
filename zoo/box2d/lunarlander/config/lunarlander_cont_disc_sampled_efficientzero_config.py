@@ -19,8 +19,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 lunarlander_cont_disc_sampled_efficientzero_config = dict(
-    exp_name=
-    f'data_sez/lunarlander_cont_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez/lunarlander_cont_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id='LunarLanderContinuous-v2',
         continuous=False,
