@@ -10,17 +10,16 @@ Overview
     :maxdepth: 2
     :caption: Tutorials
 
-    tutorials/installation/index
-    tutorials/algos/customize_algos
-    tutorials/envs/customize_envs
-    tutorials/config/config
-    tutorials/logs/logs
+    tutorials/installation/index_zh
+    tutorials/algos/customize_algos_zh
+    tutorials/envs/customize_envs_zh
+    tutorials/config/config_zh
+    tutorials/logs/logs_zh
 
 
 .. toctree::
     :maxdepth: 2
     :caption: API Documentation
 
-    api_doc/index
-
+    api_doc/index_zh
 
