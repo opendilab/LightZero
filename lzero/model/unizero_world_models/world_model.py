@@ -1,31 +1,48 @@
+import collections
 import copy
 import logging
 from typing import Any, Tuple
 from typing import Optional
 from typing import Union, Dict
 
-logging.getLogger().setLevel(logging.DEBUG)
-from einops import rearrange
+import numpy as np
+import torch
+import torch.nn as nn
 import torch.nn.functional as F
+from einops import rearrange
+
+from lzero.model.common import SimNorm
+from lzero.model.utils import cal_dormant_ratio
 from .kv_caching import KeysValues
 from .slicer import Head
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
-from lzero.model.utils import cal_dormant_ratio
-import numpy as np
 from .utils import WorldModelOutput, quantize_state, to_device_for_kvcache
-from lzero.model.common import SimNorm
-import torch
-import torch.nn as nn
-import collections
+
+logging.getLogger().setLevel(logging.DEBUG)
 
 
 class WorldModel(nn.Module):
-    def __init__(self, act_vocab_size: int, config: TransformerConfig, tokenizer) -> None:
+    """
+    Overview:
+        The WorldModel class is responsible for the scalable latent world model of UniZero (https://arxiv.org/abs/2406.10667),
+        which is used to predict the next latent state, rewards, policy, and value based on the current latent state and action.
+        The world model consists of three main components:
+            - a tokenizer, which encodes observations into embeddings,
+            - a transformer, which processes the input sequences,
+            - and heads, which generate the logits for observations, rewards, policy, and value.
+    """
+    def __init__(self, config: TransformerConfig, tokenizer) -> None:
+        """
+        Overview:
+            Initialize the WorldModel class.
+        Arguments:
+            - config (:obj:`TransformerConfig`): The configuration for the transformer.
+            - tokenizer (:obj:`Tokenizer`): The tokenizer.
+        """
         super().__init__()
         self.tokenizer = tokenizer
-        self.act_vocab_size = act_vocab_size
         self.config = config
         self.transformer = Transformer(self.config)
 
@@ -68,6 +85,7 @@ class WorldModel(nn.Module):
         self._initialize_transformer_keys_values()
 
     def _initialize_config_parameters(self) -> None:
+        """Initialize configuration parameters."""
         self.policy_entropy_weight = self.config.policy_entropy_weight
         self.predict_latent_loss_type = self.config.predict_latent_loss_type
         self.group_size = self.config.group_size
@@ -92,6 +110,7 @@ class WorldModel(nn.Module):
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
 
     def _initialize_patterns(self) -> None:
+        """Initialize patterns for block masks."""
         self.all_but_last_latent_state_pattern = torch.ones(self.config.tokens_per_block)
         self.all_but_last_latent_state_pattern[-2] = 0
         self.act_tokens_pattern = torch.zeros(self.config.tokens_per_block)
@@ -100,6 +119,7 @@ class WorldModel(nn.Module):
         self.value_policy_tokens_pattern[-2] = 1
 
     def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
+        """Create head modules for the transformer."""
         modules = [
             nn.Linear(self.config.embed_dim, self.config.embed_dim),
             nn.GELU(),
@@ -114,6 +134,7 @@ class WorldModel(nn.Module):
         )
 
     def _initialize_last_layer(self) -> None:
+        """Initialize the last linear layer."""
         last_linear_layer_init_zero = True
         if last_linear_layer_init_zero:
             for head in [self.head_policy, self.head_value, self.head_rewards, self.head_observations]:
@@ -156,6 +177,7 @@ class WorldModel(nn.Module):
                                                                           max_tokens=self.context_length)
 
     def precompute_pos_emb_diff_kv(self):
+        """ Precompute positional embedding differences for key and value. """
         if self.context_length <= 2:
             # If context length is 2 or less, no context is present
             return
@@ -191,15 +213,17 @@ class WorldModel(nn.Module):
             self.pos_emb_diff_k.append(layer_pos_emb_diff_k)
             self.pos_emb_diff_v.append(layer_pos_emb_diff_v)
 
-    def _get_positional_embedding(self, layer, attn_type):
+    def _get_positional_embedding(self, layer, attn_type) -> torch.Tensor:
         """
-        Helper function to get positional embedding for a given layer and attention type.
-        Arguments:
-            layer (int): Layer index.
-            attn_type (str): Attention type, either 'key' or 'value'.
-        Returns:
-            torch.Tensor: The positional embedding tensor.
-        """
+         Helper function to get positional embedding for a given layer and attention type.
+
+         Arguments:
+         - layer (:obj:`int`): Layer index.
+         - attn_type (:obj:`str`): Attention type, either 'key' or 'value'.
+
+         Returns:
+         - torch.Tensor: The positional embedding tensor.
+         """
         attn_func = getattr(self.transformer.blocks[layer].attn, attn_type)
         if torch.cuda.is_available():
             return attn_func(self.pos_emb.weight).view(
@@ -218,14 +242,13 @@ class WorldModel(nn.Module):
         Forward pass for the model.
 
         Arguments:
-            obs_embeddings_or_act_tokens (dict): Dictionary containing observation embeddings or action tokens.
-            past_keys_values (Optional[KeysValues]): Previous keys and values for transformer.
-            kvcache_independent (bool): Whether to use independent key-value caching.
-            is_init_infer (bool): Initialize inference.
-            valid_context_lengths (Optional[torch.Tensor]): Valid context lengths.
-
+            - obs_embeddings_or_act_tokens (:obj:`dict`): Dictionary containing observation embeddings or action tokens.
+            - past_keys_values (:obj:`Optional[torch.Tensor]`): Previous keys and values for transformer.
+            - kvcache_independent (:obj:`bool`): Whether to use independent key-value caching.
+            - is_init_infer (:obj:`bool`): Initialize inference.
+            - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid context lengths.
         Returns:
-            WorldModelOutput: Model output containing logits for observations, rewards, policy, and value.
+            - WorldModelOutput: Model output containing logits for observations, rewards, policy, and value.
         """
         # Determine previous steps based on key-value caching method
         if kvcache_independent:
@@ -279,15 +302,14 @@ class WorldModel(nn.Module):
         Add position embeddings to the input embeddings.
 
         Arguments:
-            embeddings (torch.Tensor): Input embeddings.
-            prev_steps (torch.Tensor): Previous steps.
-            num_steps (int): Number of steps.
-            kvcache_independent (bool): Whether to use independent key-value caching.
-            is_init_infer (bool): Initialize inference.
-            valid_context_lengths (torch.Tensor): Valid context lengths.
-
+            - embeddings (:obj:`torch.Tensor`): Input embeddings.
+            - prev_steps (:obj:`torch.Tensor`): Previous steps.
+            - num_steps (:obj:`int`): Number of steps.
+            - kvcache_independent (:obj:`bool`): Whether to use independent key-value caching.
+            - is_init_infer (:obj:`bool`): Initialize inference.
+            - valid_context_lengths (:obj:`torch.Tensor`): Valid context lengths.
         Returns:
-            torch.Tensor: Embeddings with position information added.
+            - torch.Tensor: Embeddings with position information added.
         """
         if kvcache_independent:
             steps_indices = prev_steps + torch.arange(num_steps, device=embeddings.device)
@@ -307,11 +329,10 @@ class WorldModel(nn.Module):
         Process combined observation embeddings and action tokens.
 
         Arguments:
-            obs_embeddings_or_act_tokens (dict): Dictionary containing combined observation embeddings and action tokens.
-            prev_steps (torch.Tensor): Previous steps.
-
+            - obs_embeddings_or_act_tokens (:obj:`dict`): Dictionary containing combined observation embeddings and action tokens.
+            - prev_steps (:obj:`torch.Tensor`): Previous steps.
         Returns:
-            torch.Tensor: Combined observation and action embeddings with position information added.
+            - torch.Tensor: Combined observation and action embeddings with position information added.
         """
         obs_embeddings, act_tokens = obs_embeddings_or_act_tokens['obs_embeddings_and_act_tokens']
         if len(obs_embeddings.shape) == 3:
@@ -337,13 +358,12 @@ class WorldModel(nn.Module):
         Pass sequences through the transformer.
 
         Arguments:
-            sequences (torch.Tensor): Input sequences.
-            past_keys_values (Optional[torch.Tensor]): Previous keys and values for transformer.
-            kvcache_independent (bool): Whether to use independent key-value caching.
-            valid_context_lengths (torch.Tensor): Valid context lengths.
-
+            - sequences (:obj:`torch.Tensor`): Input sequences.
+            - past_keys_values (:obj:`Optional[torch.Tensor]`): Previous keys and values for transformer.
+            - kvcache_independent (:obj:`bool`): Whether to use independent key-value caching.
+            - valid_context_lengths (:obj:`torch.Tensor`): Valid context lengths.
         Returns:
-            torch.Tensor: Transformer output.
+            - torch.Tensor: Transformer output.
         """
         if kvcache_independent:
             x = [self.transformer(sequences[k].unsqueeze(0), past_kv,
@@ -359,10 +379,9 @@ class WorldModel(nn.Module):
         Reset the model state based on initial observations and actions.
 
         Arguments:
-            obs_act_dict (torch.FloatTensor): A dictionary containing 'obs', 'action', and 'current_obs'.
-
+            - obs_act_dict (:obj:`torch.FloatTensor`): A dictionary containing 'obs', 'action', and 'current_obs'.
         Returns:
-            torch.FloatTensor: The outputs from the world model and the latent state.
+            - torch.FloatTensor: The outputs from the world model and the latent state.
         """
         # Extract observations, actions, and current observations from the dictionary.
         if isinstance(obs_act_dict, dict):
@@ -394,12 +413,11 @@ class WorldModel(nn.Module):
         Refresh key-value pairs with the initial latent state for inference.
 
         Arguments:
-            latent_state (torch.LongTensor): The latent state embeddings.
-            buffer_action (optional): Actions taken.
-            current_obs_embeddings (optional): Current observation embeddings.
-
+            - latent_state (:obj:`torch.LongTensor`): The latent state embeddings.
+            - buffer_action (optional): Actions taken.
+            - current_obs_embeddings (optional): Current observation embeddings.
         Returns:
-            torch.FloatTensor: The outputs from the world model.
+            - torch.FloatTensor: The outputs from the world model.
         """
         n, num_observations_tokens, _ = latent_state.shape
         if n <= self.env_num:
@@ -500,11 +518,9 @@ class WorldModel(nn.Module):
         Perform initial inference based on the given observation-action dictionary.
 
         Arguments:
-            obs_act_dict (dict): Dictionary containing observations and actions.
-
+            - obs_act_dict (:obj:`dict`): Dictionary containing observations and actions.
         Returns:
-            tuple: A tuple containing output sequence, latent state, logits rewards,
-                   logits policy, and logits value.
+            - tuple: A tuple containing output sequence, latent state, logits rewards, logits policy, and logits value.
         """
         # UniZero has context in the root node
         outputs_wm, latent_state = self.reset_from_initial_observations(obs_act_dict)
@@ -513,7 +529,6 @@ class WorldModel(nn.Module):
         return (outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards,
                 outputs_wm.logits_policy, outputs_wm.logits_value)
 
-
     @torch.no_grad()
     def forward_recurrent_inference(self, state_action_history, simulation_index=0,
                                     latent_state_index_in_search_path=[]):
@@ -521,13 +536,11 @@ class WorldModel(nn.Module):
         Perform recurrent inference based on the state-action history.
 
         Arguments:
-            state_action_history (list): List containing tuples of state and action history.
-            simulation_index (int, optional): Index of the current simulation. Defaults to 0.
-            latent_state_index_in_search_path (list, optional): List containing indices of latent states in the search path. Defaults to [].
-
+            - state_action_history (:obj:`list`): List containing tuples of state and action history.
+            - simulation_index (:obj:`int`, optional): Index of the current simulation. Defaults to 0.
+            - latent_state_index_in_search_path (:obj:`list`, optional): List containing indices of latent states in the search path. Defaults to [].
         Returns:
-            tuple: A tuple containing output sequence, updated latent state, reward,
-                   logits policy, and logits value.
+            - tuple: A tuple containing output sequence, updated latent state, reward, logits policy, and logits value.
         """
         latest_state, action = state_action_history[-1]
         ready_env_num = latest_state.shape[0]
@@ -539,29 +552,28 @@ class WorldModel(nn.Module):
         latent_state_list = []
         token = action.reshape(-1, 1)
 
-        min_size = min(self.keys_values_wm_size_list)
-        if min_size >= self.config.max_tokens - 5:
-            self.length_largethan_maxminus5_context_cnt += len(self.keys_values_wm_size_list)
-        if min_size >= self.config.max_tokens - 7:
-            self.length_largethan_maxminus7_context_cnt += len(self.keys_values_wm_size_list)
-
-        # Print statistics
-        if self.total_query_count > 0 and self.total_query_count % 10000 == 0:
-            self.hit_freq = self.hit_count / self.total_query_count
-            print('total_query_count:', self.total_query_count)
-            length_largethan_maxminus5_context_cnt_ratio = self.length_largethan_maxminus5_context_cnt / self.total_query_count
-            print('recurrent largethan_maxminus5_context:', self.length_largethan_maxminus5_context_cnt)
-            print('recurrent largethan_maxminus5_context_ratio:', length_largethan_maxminus5_context_cnt_ratio)
-            length_largethan_maxminus7_context_cnt_ratio = self.length_largethan_maxminus7_context_cnt / self.total_query_count
-            print('recurrent largethan_maxminus7_context_ratio:', length_largethan_maxminus7_context_cnt_ratio)
-            print('recurrent largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
+        # ======= Print statistics for debugging =============
+        # min_size = min(self.keys_values_wm_size_list)
+        # if min_size >= self.config.max_tokens - 5:
+        #     self.length_largethan_maxminus5_context_cnt += len(self.keys_values_wm_size_list)
+        # if min_size >= self.config.max_tokens - 7:
+        #     self.length_largethan_maxminus7_context_cnt += len(self.keys_values_wm_size_list)
+        # if self.total_query_count > 0 and self.total_query_count % 10000 == 0:
+        #     self.hit_freq = self.hit_count / self.total_query_count
+        #     print('total_query_count:', self.total_query_count)
+        #     length_largethan_maxminus5_context_cnt_ratio = self.length_largethan_maxminus5_context_cnt / self.total_query_count
+        #     print('recurrent largethan_maxminus5_context:', self.length_largethan_maxminus5_context_cnt)
+        #     print('recurrent largethan_maxminus5_context_ratio:', length_largethan_maxminus5_context_cnt_ratio)
+        #     length_largethan_maxminus7_context_cnt_ratio = self.length_largethan_maxminus7_context_cnt / self.total_query_count
+        #     print('recurrent largethan_maxminus7_context_ratio:', length_largethan_maxminus7_context_cnt_ratio)
+        #     print('recurrent largethan_maxminus7_context:', self.length_largethan_maxminus7_context_cnt)
 
         # Trim and pad kv_cache
         self.keys_values_wm_size_list = self.trim_and_pad_kv_cache(is_init_infer=False)
         self.keys_values_wm_size_list_current = self.keys_values_wm_size_list
 
         for k in range(2):
-            # action_token obs_token, ..., obs_token  1+1
+            # action_token obs_token
             if k == 0:
                 obs_embeddings_or_act_tokens = {'act_tokens': token}
             else:
@@ -598,7 +610,7 @@ class WorldModel(nn.Module):
 
         return (outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value)
 
-    def trim_and_pad_kv_cache(self, is_init_infer=True):
+    def trim_and_pad_kv_cache(self, is_init_infer=True) -> list:
         """
         Adjusts the key-value cache for each environment to ensure they all have the same size.
 
@@ -606,11 +618,10 @@ class WorldModel(nn.Module):
         During recurrent inference, the kv_cache sizes may vary across environments. This method pads each kv_cache
         to match the largest size found among them, facilitating batch processing in the transformer forward pass.
 
-        Parameters:
-        is_init_infer (bool): Indicates if this is an initial inference. Default is True.
-
+        Arguments:
+            - is_init_infer (:obj:`bool`): Indicates if this is an initial inference. Default is True.
         Returns:
-        list: Updated sizes of the key-value caches.
+            - list: Updated sizes of the key-value caches.
         """
         # Find the maximum size among all key-value caches
         max_size = max(self.keys_values_wm_size_list)
@@ -656,12 +667,12 @@ class WorldModel(nn.Module):
         """
         Update the cache context with the given latent state.
 
-        Parameters:
-        latent_state (torch.Tensor): The latent state tensor.
-        is_init_infer (bool): Flag to indicate if this is the initial inference.
-        simulation_index (int): Index of the simulation.
-        latent_state_index_in_search_path (list): List of indices in the search path.
-        valid_context_lengths (list): List of valid context lengths.
+        Arguments:
+            - latent_state (:obj:`torch.Tensor`): The latent state tensor.
+            - is_init_infer (:obj:`bool`): Flag to indicate if this is the initial inference.
+            - simulation_index (:obj:`int`): Index of the simulation.
+            - latent_state_index_in_search_path (:obj:`list`): List of indices in the search path.
+            - valid_context_lengths (:obj:`list`): List of valid context lengths.
         """
         if self.context_length <= 2:
             # No context to update if the context length is less than or equal to 2.
@@ -788,7 +799,8 @@ class WorldModel(nn.Module):
                 self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(
                     to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
 
-    def retrieve_or_generate_kvcache(self, latent_state, ready_env_num, simulation_index=0):
+    def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
+                                     simulation_index: int = 0) -> list:
         """
         Retrieves or generates key-value caches for each environment based on the latent state.
 
@@ -796,13 +808,12 @@ class WorldModel(nn.Module):
         caches if available, or generates a new cache if no match is found. The method updates
         the internal lists with these caches and their sizes.
 
-        Parameters:
-        - latent_state: list of latent states for each environment.
-        - ready_env_num: int, number of environments ready for processing.
-        - simulation_index: int, optional index for simulation tracking (default is 0).
-
+        Arguments:
+            - latent_state (:obj:`list`): List of latent states for each environment.
+            - ready_env_num (:obj:`int`): Number of environments ready for processing.
+            - simulation_index (:obj:`int`, optional): Index for simulation tracking. Default is 0.
         Returns:
-        - list of sizes of the key-value caches for each environment.
+            - list: Sizes of the key-value caches for each environment.
         """
         for i in range(ready_env_num):
             self.total_query_count += 1
@@ -1126,6 +1137,7 @@ class WorldModel(nn.Module):
 
     def compute_labels_world_model_value_policy(self, target_value: torch.Tensor, target_policy: torch.Tensor,
                                                 mask_padding: torch.BoolTensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """ Compute labels for value and policy predictions. """
         mask_fill = torch.logical_not(mask_padding)
 
         # Fill the masked areas of policy

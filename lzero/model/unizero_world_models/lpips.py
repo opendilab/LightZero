@@ -2,12 +2,12 @@
 Credits to https://github.com/CompVis/taming-transformers
 """
 
-from collections import namedtuple
 import hashlib
 import os
+from collections import namedtuple
 from pathlib import Path
-import requests
 
+import requests
 import torch
 import torch.nn as nn
 from torchvision import models

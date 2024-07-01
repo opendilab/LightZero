@@ -102,8 +102,7 @@ class UniZeroModel(nn.Module):
             decoder_network = VectorDecoderMemory(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
             self.tokenizer = Tokenizer(encoder=self.representation_network,
                                        decoder_network=decoder_network, with_lpips=False)
-            self.world_model = WorldModel(act_vocab_size=self.action_space_size,
-                                          config=world_model_cfg, tokenizer=self.tokenizer)
+            self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print('==' * 20)
             print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
@@ -170,8 +169,7 @@ class UniZeroModel(nn.Module):
 
             self.tokenizer = Tokenizer(with_lpips=True, encoder=self.representation_network,
                                        decoder_network=decoder_network)
-            self.world_model = WorldModel(act_vocab_size=self.action_space_size,
-                                          config=world_model_cfg, tokenizer=self.tokenizer)
+            self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
 

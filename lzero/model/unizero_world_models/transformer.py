@@ -38,14 +38,14 @@ class Transformer(nn.Module):
     """
     Transformer model class.
 
-    Args:
-        config (TransformerConfig): Configuration for the Transformer model.
+    Arguments:
+        config (:obj:`TransformerConfig`): Configuration for the Transformer model.
 
     Attributes:
-        config (TransformerConfig): Configuration object.
-        drop (nn.Dropout): Dropout layer for embedding dropout.
-        blocks (nn.ModuleList): List of Transformer blocks.
-        ln_f (nn.LayerNorm): Layer normalization applied to the final output.
+        - config (:obj:`TransformerConfig`): Configuration object.
+        - drop (:obj:`nn.Dropout`): Dropout layer for embedding dropout.
+        - blocks (:obj:`nn.ModuleList`): List of Transformer blocks.
+        - ln_f (:obj:`nn.LayerNorm`): Layer normalization applied to the final output.
     """
 
     def __init__(self, config: TransformerConfig) -> None:
@@ -59,12 +59,12 @@ class Transformer(nn.Module):
         """
         Generate a placeholder for keys and values.
 
-        Args:
-            n (int): Batch size.
-            max_tokens (int): Maximum number of tokens in the sequence.
+        Arguments:
+            - n (:obj:`int`): Batch size.
+            - max_tokens (:obj:`int`): Maximum number of tokens in the sequence.
 
         Returns:
-            KeysValues: An object containing empty keys and values.
+            - KeysValues: An object containing empty keys and values.
         """
         device = self.ln_f.weight.device  # Assumption: All submodules are on the same device
         return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
@@ -74,13 +74,13 @@ class Transformer(nn.Module):
         """
         Forward pass of the Transformer model.
 
-        Args:
-            sequences (torch.Tensor): Input tensor of shape (batch_size, seq_length, embed_dim).
-            past_keys_values (Optional[KeysValues]): Precomputed keys and values for faster generation (default: None).
-            valid_context_lengths (Optional[torch.Tensor]): Valid lengths of context for masking (default: None).
+        Arguments:
+            - sequences (:obj:`torch.Tensor`): Input tensor of shape (batch_size, seq_length, embed_dim).
+            - past_keys_values (:obj:`Optional[KeysValues]`): Precomputed keys and values for faster generation (default: None).
+            - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid lengths of context for masking (default: None).
 
         Returns:
-            torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
+            - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
         assert past_keys_values is None or len(past_keys_values) == len(self.blocks)
         x = self.drop(sequences)
@@ -95,18 +95,18 @@ class Block(nn.Module):
     """
     Transformer block class.
 
-    Args:
-        config (TransformerConfig): Configuration for the Transformer block.
+    Arguments:
+        config (:obj:`TransformerConfig`): Configuration for the Transformer block.
 
     Attributes:
-        gru_gating (bool): Flag to use GRU gating mechanism.
-        gru_bias (float): Bias for the GRU gating mechanism.
-        gate1 (Optional[GRUGatingUnit]): First GRU gating unit (if GRU gating is enabled).
-        gate2 (Optional[GRUGatingUnit]): Second GRU gating unit (if GRU gating is enabled).
-        ln1 (nn.LayerNorm): Layer normalization before the attention layer.
-        ln2 (nn.LayerNorm): Layer normalization before the MLP.
-        attn (SelfAttention): Self-attention mechanism.
-        mlp (nn.Sequential): Multi-layer perceptron.
+        - gru_gating (:obj:`bool`): Flag to use GRU gating mechanism.
+        - gru_bias (:obj:`float`): Bias for the GRU gating mechanism.
+        - gate1 (:obj:`Optional[GRUGatingUnit]`): First GRU gating unit (if GRU gating is enabled).
+        - gate2 (:obj:`Optional[GRUGatingUnit]`): Second GRU gating unit (if GRU gating is enabled).
+        - ln1 (:obj:`nn.LayerNorm`): Layer normalization before the attention layer.
+        - ln2 (:obj:`nn.LayerNorm`): Layer normalization before the MLP.
+        - attn (:obj:`SelfAttention`): Self-attention mechanism.
+        - mlp (:obj:`nn.Sequential`): Multi-layer perceptron.
     """
 
     def __init__(self, config: TransformerConfig) -> None:
@@ -133,13 +133,13 @@ class Block(nn.Module):
         """
         Forward pass of the Transformer block.
 
-        Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, seq_length, embed_dim).
-            past_keys_values (Optional[KeysValues]): Precomputed keys and values for faster generation (default: None).
-            valid_context_lengths (Optional[torch.Tensor]): Valid lengths of context for masking (default: None).
+        Arguments:
+            - x (:obj:`torch.Tensor`): Input tensor of shape (batch_size, seq_length, embed_dim).
+            - past_keys_values (:obj:`Optional[KeysValues]`): Precomputed keys and values for faster generation (default: None).
+            - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid lengths of context for masking (default: None).
 
         Returns:
-            torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
+            - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
         x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths)
         x = self.gate1(x, x_attn) if self.gru_gating else x + x_attn
@@ -152,19 +152,19 @@ class SelfAttention(nn.Module):
     """
     Implements self-attention mechanism for transformers.
 
-    Args:
-        config (TransformerConfig): Configuration object containing hyperparameters.
+    Arguments:
+        config (:obj:`TransformerConfig`): Configuration object containing hyperparameters.
 
     Attributes:
-        config (TransformerConfig): Stores the configuration for the self-attention module.
-        num_heads (int): Number of attention heads.
-        key (nn.Linear): Linear layer to project input to key vectors.
-        query (nn.Linear): Linear layer to project input to query vectors.
-        value (nn.Linear): Linear layer to project input to value vectors.
-        attn_drop (nn.Dropout): Dropout layer for attention weights.
-        resid_drop (nn.Dropout): Dropout layer for residual connection.
-        proj (nn.Linear): Final linear layer for projection.
-        mask (torch.Tensor): Mask tensor for causal or block-causal attention.
+        - config (:obj:`TransformerConfig`): Stores the configuration for the self-attention module.
+        - num_heads (:obj:`int`): Number of attention heads.
+        - key (:obj:`nn.Linear`): Linear layer to project input to key vectors.
+        - query (:obj:`nn.Linear`): Linear layer to project input to query vectors.
+        - value (:obj:`nn.Linear`): Linear layer to project input to value vectors.
+        - attn_drop (:obj:`nn.Dropout`): Dropout layer for attention weights.
+        - resid_drop (:obj:`nn.Dropout`): Dropout layer for residual connection.
+        - proj (:obj:`nn.Linear`): Final linear layer for projection.
+        - mask (:obj:`torch.Tensor`): Mask tensor for causal or block-causal attention.
     """
     def __init__(self, config: TransformerConfig) -> None:
         super().__init__()
@@ -189,14 +189,14 @@ class SelfAttention(nn.Module):
         """
         Forward pass for the self-attention mechanism.
 
-        Args:
-            x (torch.Tensor): Input tensor of shape (B, T, C) where B is batch size,
-                              T is sequence length, and C is embedding dimension.
-            kv_cache (Optional[KeysValues]): Optional key-value cache for faster inference.
-            valid_context_lengths (Optional[torch.Tensor]): Optional tensor containing valid context lengths.
+        Arguments:
+            - x (:obj:`torch.Tensor`): Input tensor of shape (B, T, C) where B is batch size,
+                                        T is sequence length, and C is embedding dimension.
+            - kv_cache (:obj:`Optional[KeysValues]`): Optional key-value cache for faster inference.
+            - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Optional tensor containing valid context lengths.
 
         Returns:
-            torch.Tensor: Output tensor of shape (B, T, C).
+            - torch.Tensor: Output tensor of shape (B, T, C).
         """
         B, T, C = x.size()
         if kv_cache is not None:
@@ -247,15 +247,15 @@ class SelfAttention(nn.Module):
     def get_attention_map(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None,
                           valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
-        Get the attention map.
+        Compute the attention map for the input sequence.
 
-        Args:
-            x (torch.Tensor): Input sequence with shape (B, T, C).
-            kv_cache (Optional[KeysValues]): Cached keys and values for supporting long sequence inference.
-            valid_context_lengths (Optional[torch.Tensor]): Valid context lengths for handling variable-length contexts.
+        Arguments:
+            - x (:obj:`torch.Tensor`): Input sequence with shape (B, T, C).
+            - kv_cache (:obj:`Optional[KeysValues]`): Cached keys and values for supporting long sequence inference.
+            - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid context lengths for handling variable-length contexts.
 
         Returns:
-            torch.Tensor: Attention map with shape (B, nh, T, L + T), representing the distribution of attention.
+            - torch.Tensor: Attention map with shape (B, nh, T, L + T), representing the distribution of attention.
         """
         B, T, C = x.size()
         if kv_cache is not None:

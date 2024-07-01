@@ -1,7 +1,7 @@
 import os
-import torch
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 import torchvision
 from PIL import Image
 from PIL import ImageDraw

@@ -8,6 +8,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 from einops import rearrange
+from torch.nn import functional as F
 
 from lzero.model.unizero_world_models.lpips import LPIPS
 
@@ -34,6 +35,10 @@ class TokenizerEncoderOutput:
 
 
 class Tokenizer(nn.Module):
+    """
+    Overview:
+        Tokenizer model that encodes and decodes observations.
+    """
     def __init__(self, encoder=None, decoder_network=None, with_lpips: bool = False) -> None:
         """Initialize the Tokenizer.
 
@@ -46,40 +51,6 @@ class Tokenizer(nn.Module):
         self.lpips = LPIPS().eval() if with_lpips else None
         self.encoder = encoder
         self.decoder_network = decoder_network
-
-    def compute_loss(self, batch, **kwargs: Any) -> LossWithIntermediateLosses:
-        """Compute the loss for a given batch.
-
-        Arguments:
-            batch (dict): Batch of data.
-
-        Returns:
-            LossWithIntermediateLosses: Computed losses.
-        """
-        if len(batch['observations'][0, 0].shape) == 1:
-            # Observations are 1-dimensional vectors.
-            original_shape = list(batch['observations'].shape)
-            desired_shape = original_shape + [64, 64]
-            expanded_observations = batch['observations'].unsqueeze(-1).unsqueeze(-1).expand(*desired_shape)
-            batch['observations'] = expanded_observations
-
-        assert self.lpips is not None
-        observations = self.preprocess_input(rearrange(batch['observations'], 'b t c h w -> (b t) c h w'))
-        z, z_quantized, reconstructions = self(observations, should_preprocess=False, should_postprocess=False)
-
-        # Codebook loss
-        beta = 1.0
-        commitment_loss = (z.detach() - z_quantized).pow(2).mean() + beta * (z - z_quantized.detach()).pow(2).mean()
-        # L1 loss
-        reconstruction_loss = torch.abs(observations - reconstructions).mean()
-        # Perceptual loss using LPIPS
-        perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
-
-        return LossWithIntermediateLosses(
-            commitment_loss=commitment_loss,
-            reconstruction_loss=reconstruction_loss,
-            perceptual_loss=perceptual_loss
-        )
 
     def encode_to_obs_embeddings(self, x: torch.Tensor) -> torch.Tensor:
         """Encode observations to embeddings.
@@ -117,6 +88,41 @@ class Tokenizer(nn.Module):
             torch.Tensor: Decoded observations.
         """
         return self.decoder_network(embeddings)
+
+    # the following methods are used for the discrete latent state case, not used in the current implementation of UniZero
+    def compute_loss(self, batch, **kwargs: Any) -> LossWithIntermediateLosses:
+        """Compute the loss for a given batch.
+
+        Arguments:
+            batch (dict): Batch of data.
+
+        Returns:
+            LossWithIntermediateLosses: Computed losses.
+        """
+        if len(batch['observations'][0, 0].shape) == 1:
+            # Observations are 1-dimensional vectors.
+            original_shape = list(batch['observations'].shape)
+            desired_shape = original_shape + [64, 64]
+            expanded_observations = batch['observations'].unsqueeze(-1).unsqueeze(-1).expand(*desired_shape)
+            batch['observations'] = expanded_observations
+
+        assert self.lpips is not None
+        observations = self.preprocess_input(rearrange(batch['observations'], 'b t c h w -> (b t) c h w'))
+        z, z_quantized, reconstructions = self(observations, should_preprocess=False, should_postprocess=False)
+
+        # Codebook loss
+        beta = 1.0
+        commitment_loss = (z.detach() - z_quantized).pow(2).mean() + beta * (z - z_quantized.detach()).pow(2).mean()
+        # L1 loss
+        reconstruction_loss = torch.abs(observations - reconstructions).mean()
+        # Perceptual loss using LPIPS
+        perceptual_loss = torch.mean(self.lpips(observations, reconstructions))
+
+        return LossWithIntermediateLosses(
+            commitment_loss=commitment_loss,
+            reconstruction_loss=reconstruction_loss,
+            perceptual_loss=perceptual_loss
+        )
 
     def reconstruction_loss(self, original_images: torch.Tensor, reconstructed_images: torch.Tensor) -> torch.Tensor:
         """Calculate the reconstruction loss.

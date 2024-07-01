@@ -1,9 +1,10 @@
-import torch
+import math
+import os
+from typing import Optional
+
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
-import math
-from typing import Optional
+import torch
 
 
 def visualize_attention_map(model, input_embeddings: torch.Tensor, kv_cache: Optional[dict] = None,
