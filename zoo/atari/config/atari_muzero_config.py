@@ -1,8 +1,10 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(5)
+torch.cuda.set_device(1)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_id = 'PongNoFrameskip-v4'
+# env_id = 'PongNoFrameskip-v4'
+env_id = 'MsPacmanNoFrameskip-v4'
+
 
 if env_id == 'PongNoFrameskip-v4':
     action_space_size = 6
@@ -34,7 +36,7 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_muzero_tune/{env_id[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_no-clipreward_seed0',
+    exp_name=f'data_muzero_tune/{env_id[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_no-clipreward_no-episode-life_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
