@@ -559,6 +559,9 @@ class MuZeroPolicy(Policy):
         self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_collect_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
@@ -590,12 +593,6 @@ class MuZeroPolicy(Policy):
                 roots_visit_count_distributions = roots.get_distributions()
                 roots_values = roots.get_values()  # shape: {list: batch_size}
 
-                data_id = [i for i in range(active_collect_env_num)]
-                output = {i: None for i in data_id}
-
-                if ready_env_id is None:
-                    ready_env_id = np.arange(active_collect_env_num)
-
                 for i, env_id in enumerate(ready_env_id):
                     distributions, value = roots_visit_count_distributions[i], roots_values[i]
                     if self._cfg.eps.eps_greedy_exploration_in_collect:
@@ -624,12 +621,6 @@ class MuZeroPolicy(Policy):
                         'predicted_policy_logits': policy_logits[i],
                     }
             else:
-                data_id = [i for i in range(active_collect_env_num)]
-                output = {i: None for i in data_id}
-
-                if ready_env_id is None:
-                    ready_env_id = np.arange(active_collect_env_num)
-
                 for i, env_id in enumerate(ready_env_id):
                     policy_values = torch.softmax(torch.tensor([policy_logits[i][a] for a in legal_actions[i]]), dim=0).tolist()
                     policy_values = policy_values / np.sum(policy_values)
@@ -704,6 +695,9 @@ class MuZeroPolicy(Policy):
         """
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_eval_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
@@ -729,12 +723,6 @@ class MuZeroPolicy(Policy):
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
-            data_id = [i for i in range(active_eval_env_num)]
-            output = {i: None for i in data_id}
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_eval_env_num)
-
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
@@ -748,7 +736,7 @@ class MuZeroPolicy(Policy):
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
-                output[i] = {
+                output[env_id] = {
                     'action': action,
                     'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,

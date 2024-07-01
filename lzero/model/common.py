@@ -182,6 +182,7 @@ class DownSample(nn.Module):
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
 
+        self.observation_shape = observation_shape
         self.conv1 = nn.Conv2d(
             observation_shape[0],
             out_channels // 2,
@@ -230,6 +231,7 @@ class DownSample(nn.Module):
                 ) for _ in range(1)
             ]
         )
+        self.pooling2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
         self.activation = activation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -252,7 +254,12 @@ class DownSample(nn.Module):
         x = self.pooling1(x)
         for block in self.resblocks3:
             x = block(x)
-        output = x  # TODO: for (4,64,64) obs
+
+        if self.observation_shape[1] == 64:
+            output = x
+        elif self.observation_shape[1] == 96:
+            x = self.pooling2(x)
+            output = x
 
         return output
 
@@ -326,12 +333,7 @@ class RepresentationNetworkGPT(nn.Module):
 
         self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
 
-        # Initialize weights using He initialization
-        # init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
-
         self.sim_norm = SimNorm(simnorm_dim=group_size)
-        # self.sim_norm = nn.Sigmoid() # only for ablation
-        # self.sim_norm = nn.Softmax() # only for ablation
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -351,7 +353,7 @@ class RepresentationNetworkGPT(nn.Module):
             x = block(x)
 
         # NOTE: very important. 
-        # for atari 64,8,8 = 4096 -> 1024
+        # for atari (64,8,8), flatten_size = 4096 -> 768
         x = self.last_linear(x.reshape(-1, 64 * 8 * 8))  # TODO
 
         x = x.view(-1, self.embedding_dim)
@@ -431,8 +433,6 @@ class RepresentationNetwork(nn.Module):
         if self.use_sim_norm:
             self.embedding_dim = embedding_dim
             self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
-            # Initialize weights using He initialization
-            init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
             self.sim_norm = SimNorm(simnorm_dim=group_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -608,7 +608,7 @@ class LatentEncoderMemory(nn.Module):
                     padding=kernel_sizes[i] // 2  # keep the same size of feature map
                 )
             )
-            layers.append(nn.BatchNorm2d(self.channels[i + 1]))  # BN
+            layers.append(nn.BatchNorm2d(self.channels[i + 1]))
             layers.append(activation)
 
         layers.append(nn.AdaptiveAvgPool2d(1))
@@ -796,16 +796,20 @@ class PredictionNetwork(nn.Module):
         self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
         self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
 
+        if observation_shape[1] == 96:
+            latent_shape = (observation_shape[1] / 16, observation_shape[2] / 16)
+        elif observation_shape[1] == 64:
+            latent_shape = (observation_shape[1] / 8, observation_shape[2] / 8)
+
         if norm_type == 'BN':
             self.norm_value = nn.BatchNorm2d(value_head_channels)
             self.norm_policy = nn.BatchNorm2d(policy_head_channels)
         elif norm_type == 'LN':
             if downsample:
                 self.norm_value = nn.LayerNorm(
-                    [value_head_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
+                    [value_head_channels, *latent_shape],
                     eps=1e-5)
-                self.norm_policy = nn.LayerNorm([policy_head_channels, math.ceil(observation_shape[-2] / 16),
-                                                 math.ceil(observation_shape[-1] / 16)], eps=1e-5)
+                self.norm_policy = nn.LayerNorm([policy_head_channels, *latent_shape], eps=1e-5)
             else:
                 self.norm_value = nn.LayerNorm([value_head_channels, observation_shape[-2], observation_shape[-1]],
                                                eps=1e-5)
@@ -814,9 +818,6 @@ class PredictionNetwork(nn.Module):
 
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
-
-        self.flatten_output_size_for_value_head = 16 * 8 * 8  # TODO: only for obs (4,64,64)
-        self.flatten_output_size_for_policy_head = 16 * 8 * 8  # TODO: only for obs (4,64,64)
 
         self.activation = activation
 
@@ -1015,6 +1016,7 @@ class PredictionHiddenNetwork(nn.Module):
         super(PredictionHiddenNetwork, self).__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
 
+        self.observation_shape = observation_shape
         self.gru_hidden_size = gru_hidden_size
         self.resblocks = nn.ModuleList(
             [
@@ -1045,9 +1047,6 @@ class PredictionHiddenNetwork(nn.Module):
 
         self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
         self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
-
-        self.flatten_output_size_for_value_head = 16 * 8 * 8  # TODO: only for obs (4,64,64)
-        self.flatten_output_size_for_policy_head = 16 * 8 * 8  # TODO: only for obs (4,64,64)
 
         self.activation = activation
 

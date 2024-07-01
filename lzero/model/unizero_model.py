@@ -6,7 +6,7 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 
 from .common import MZNetworkOutput, RepresentationNetworkGPT, RepresentationNetworkMLP, LatentDecoder, \
     VectorDecoderMemory, LatentEncoderMemory, LatentDecoderMemory, FeatureAndGradientHook
-from .unizero_world_models.tokenizer.tokenizer import Tokenizer
+from lzero.model.unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model import WorldModel
 
 
@@ -33,7 +33,6 @@ class UniZeroModel(nn.Module):
             state_norm: bool = False,
             downsample: bool = False,
             norm_type: Optional[str] = 'BN',
-            discrete_action_encoding_type: str = 'one_hot',
             env_name='atari',
             *args,
             **kwargs
@@ -67,7 +66,6 @@ class UniZeroModel(nn.Module):
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
                 we don't need this module.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
-            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
         """
         super(UniZeroModel, self).__init__()
 
@@ -81,12 +79,6 @@ class UniZeroModel(nn.Module):
 
         self.action_space_size = action_space_size
         self.activation = activation
-        assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
-        self.discrete_action_encoding_type = discrete_action_encoding_type
-        if self.discrete_action_encoding_type == 'one_hot':
-            self.action_encoding_dim = action_space_size
-        elif self.discrete_action_encoding_type == 'not_one_hot':
-            self.action_encoding_dim = 1
         self.proj_hid = proj_hid
         self.proj_out = proj_out
         self.pred_hid = pred_hid

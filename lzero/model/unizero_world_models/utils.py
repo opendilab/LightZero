@@ -81,7 +81,7 @@ def quantize_state_with_lru_cache(state, num_buckets=15):
 def quantize_state(state, num_buckets=100):
     """
     Quantize the state vector.
-    Args:
+    Arguments:
         state: The state vector to be quantized.
         num_buckets: The number of quantization buckets.
     Returns:
@@ -105,34 +105,11 @@ class WorldModelOutput:
     logits_value: torch.FloatTensor
 
 
-class SimNorm(nn.Module):
-    """
-    Simplified normalization. Adapted from https://arxiv.org/abs/2204.00616.
-    """
-
-    def __init__(self, simnorm_dim):
-        super().__init__()
-        self.dim = simnorm_dim
-
-    def forward(self, x):
-        shp = x.shape
-        # Ensure there is at least one simplex for normalization.
-        if shp[1] != 0:
-            x = x.view(*shp[:-1], -1, self.dim)
-            x = F.softmax(x, dim=-1)
-            return x.view(*shp)
-        else:
-            return x
-
-    def __repr__(self):
-        return f"SimNorm(dim={self.dim})"
-
-
 def init_weights(module, norm_type='BN'):
     """
     Initialize the weights of the module based on the specified normalization type.
 
-    Args:
+    Arguments:
         module (nn.Module): The module to initialize.
         norm_type (str): The type of normalization to use ('BN' for BatchNorm, 'LN' for LayerNorm).
     """

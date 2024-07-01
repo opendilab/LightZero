@@ -117,28 +117,23 @@ class EfficientZeroModel(nn.Module):
         self.norm_type = norm_type
         self.activation = activation
 
-        # TODO: ===========
-        flatten_output_size_for_reward_head = 1024
-        flatten_output_size_for_value_head = 1024
-        flatten_output_size_for_policy_head = 1024
+        if observation_shape[1] == 96:
+            latent_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
+        elif observation_shape[1] == 64:
+            latent_size = math.ceil(observation_shape[1] / 8) * math.ceil(observation_shape[2] / 8)
 
-        # flatten_output_size_for_reward_head = (
-        #     (reward_head_channels * math.ceil(observation_shape[1] / 16) *
-        #      math.ceil(observation_shape[2] / 16)) if downsample else
-        #     (reward_head_channels * observation_shape[1] * observation_shape[2])
-        # )
-        #
-        # flatten_output_size_for_value_head = (
-        #     (value_head_channels * math.ceil(observation_shape[1] / 16) *
-        #      math.ceil(observation_shape[2] / 16)) if downsample else
-        #     (value_head_channels * observation_shape[1] * observation_shape[2])
-        # )
-        #
-        # flatten_output_size_for_policy_head = (
-        #     (policy_head_channels * math.ceil(observation_shape[1] / 16) *
-        #      math.ceil(observation_shape[2] / 16)) if downsample else
-        #     (policy_head_channels * observation_shape[1] * observation_shape[2])
-        # )
+        flatten_output_size_for_reward_head = (
+            (reward_head_channels * latent_size) if downsample else
+            (reward_head_channels * observation_shape[1] * observation_shape[2])
+        )
+        flatten_output_size_for_value_head = (
+            (value_head_channels * latent_size) if downsample else
+            (value_head_channels * observation_shape[1] * observation_shape[2])
+        )
+        flatten_output_size_for_policy_head = (
+            (policy_head_channels * latent_size) if downsample else
+            (policy_head_channels * observation_shape[1] * observation_shape[2])
+        )
 
         self.representation_network = RepresentationNetwork(
             observation_shape,
@@ -187,12 +182,10 @@ class EfficientZeroModel(nn.Module):
             # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
             # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
             # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
-            ceil_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
-            self.projection_input_dim = num_channels * ceil_size
+            self.projection_input_dim = num_channels * latent_size
         else:
             self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
-        self.projection_input_dim = 4096 # TODO
         if self.self_supervised_learning_loss:
             self.projection = nn.Sequential(
                 nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
@@ -236,12 +229,6 @@ class EfficientZeroModel(nn.Module):
         latent_state = self._representation(obs)
         policy_logits, value = self._prediction(latent_state)
         # zero initialization for reward hidden states
-        # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
-        # reward_hidden_state = (
-        #     torch.zeros(1, batch_size,
-        #                 self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
-        #                                                                    self.lstm_hidden_size).to(obs.device)
-        # )
         reward_hidden_state = (
             torch.zeros(1, batch_size,
                         self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
@@ -280,7 +267,6 @@ class EfficientZeroModel(nn.Module):
                 latent state, W_ is the width of latent state.
             - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): :math:`(1, B, lstm_hidden_size)`, where B is batch_size.
          """
-        # import pdb; pdb.set_trace()
         next_latent_state, reward_hidden_state, value_prefix = self._dynamics(latent_state, reward_hidden_state, action)
         policy_logits, value = self._prediction(next_latent_state)
         return EZNetworkOutput(value, value_prefix, policy_logits, next_latent_state, reward_hidden_state)

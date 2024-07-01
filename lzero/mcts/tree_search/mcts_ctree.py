@@ -159,9 +159,6 @@ class MuZeroMCTSCtree(object):
 
                 latent_state_batch_in_search_path.append(network_output.latent_state)
 
-                # TODO
-                # last_latent_state = network_output.latent_state
-
                 # tolist() is to be compatible with cpp datatype.
                 reward_batch = network_output.reward.reshape(-1).tolist()
                 value_batch = network_output.value.reshape(-1).tolist()
@@ -611,17 +608,10 @@ class MuZeroRNNFullobsMCTSCtree(object):
                 network_output.predict_next_latent_state = to_detach_cpu_numpy(network_output.predict_next_latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
                 network_output.value = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value))
-                network_output.value_prefix = to_detach_cpu_numpy(
-                    self.inverse_scalar_transform_handle(network_output.value_prefix))
-
+                network_output.value_prefix = to_detach_cpu_numpy(self.inverse_scalar_transform_handle(network_output.value_prefix))
                 network_output.reward_hidden_state = network_output.reward_hidden_state.detach().cpu().numpy()
-
-                if network_output.reward_hidden_state.shape[1] != world_model_latent_history.shape[1]:
-                    print('debug')
-
                 latent_state_batch_in_search_path.append(network_output.predict_next_latent_state)
 
-                # TODO: check hidden state
                 # tolist() is to be compatible with cpp datatype.
                 reward_batch = network_output.value_prefix.reshape(-1).tolist()
                 value_batch = network_output.value.reshape(-1).tolist()

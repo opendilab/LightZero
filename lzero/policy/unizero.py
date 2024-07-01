@@ -526,6 +526,7 @@ class UniZeroPolicy(Policy):
                       f"Weight std: {param.data.std():.4f} | "
                       f"Grad mean: {param.grad.mean():.4f} | "
                       f"Grad std: {param.grad.std():.4f}")
+
     def _init_collect(self) -> None:
         """
         Overview:
@@ -587,6 +588,9 @@ class UniZeroPolicy(Policy):
         self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_collect_env_num)
+        output = {i: None for i in ready_env_id}
 
         with torch.no_grad():
 
@@ -617,42 +621,36 @@ class UniZeroPolicy(Policy):
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
-            data_id = [i for i in range(active_collect_env_num)]
-            output = {i: None for i in data_id}
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_collect_env_num)
-
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 
-                # if self._cfg.eps.eps_greedy_exploration_in_collect:
-                #     # eps greedy collect
-                #     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                #         distributions, temperature=self._collect_mcts_temperature, deterministic=True
-                #     )
-                #     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                #     if np.random.rand() < self.collect_epsilon:
-                #         action = np.random.choice(legal_actions[i])
-                # else:
-                #     # normal collect
-                #     # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
-                #     # the index within the legal action set, rather than the index in the entire action set.
-                #     action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                #         distributions, temperature=self._collect_mcts_temperature, deterministic=False
-                #     )
-                #     # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
-                #     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                if self._cfg.eps.eps_greedy_exploration_in_collect:
+                    # eps greedy collect
+                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=True
+                    )
+                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                    if np.random.rand() < self.collect_epsilon:
+                        action = np.random.choice(legal_actions[i])
+                else:
+                    # normal collect
+                    # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                    # the index within the legal action set, rather than the index in the entire action set.
+                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                        distributions, temperature=self._collect_mcts_temperature, deterministic=False
+                    )
+                    # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
+                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
                 # ============== TODO: only for visualize ==============
-                action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                    distributions, temperature=self._collect_mcts_temperature, deterministic=True
-                )
-                action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                #     distributions, temperature=self._collect_mcts_temperature, deterministic=True
+                # )
+                # action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
                 # ============== TODO: only for visualize ==============
 
-                output[i] = {
+                output[env_id] = {
                     'action': action,
                     'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
@@ -712,8 +710,10 @@ class UniZeroPolicy(Policy):
         self._eval_model.eval()
         self._eval_model.tokenizer.eval()
         self._eval_model.world_model.transformer.eval()
-
         active_eval_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_eval_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
             network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
@@ -738,12 +738,6 @@ class UniZeroPolicy(Policy):
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
-            data_id = [i for i in range(active_eval_env_num)]
-            output = {i: None for i in data_id}
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_eval_env_num)
-
             batch_action = []
 
             for i, env_id in enumerate(ready_env_id):
@@ -761,7 +755,7 @@ class UniZeroPolicy(Policy):
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
-                output[i] = {
+                output[env_id] = {
                     'action': action,
                     'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,

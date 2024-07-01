@@ -245,6 +245,129 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         ]
         return policy_re_context
 
+    def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any, action_batch) -> np.ndarray:
+        """
+        Overview:
+            prepare policy targets from the reanalyzed context of policies
+        Arguments:
+            - policy_re_context (:obj:`List`): List of policy context to reanalyzed
+        Returns:
+            - batch_target_policies_re
+        """
+        if policy_re_context is None:
+            return []
+        batch_target_policies_re = []
+
+        # for board games
+        policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, game_segment_lens, action_mask_segment, \
+            to_play_segment = policy_re_context  # noqa
+        transition_batch_size = len(policy_obs_list)
+        game_segment_batch_size = len(pos_in_game_segment_list)
+
+        to_play, action_mask = self._preprocess_to_play_and_action_mask(
+            game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
+        )
+
+        if self._cfg.model.continuous_action_space is True:
+            # when the action space of the environment is continuous, action_mask[:] is None.
+            action_mask = [
+                list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
+            ]
+            # NOTE: in continuous action space env: we set all legal_actions as -1
+            legal_actions = [
+                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
+            ]
+        else:
+            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
+
+        with torch.no_grad():
+            policy_obs_list = prepare_observation(policy_obs_list, self._cfg.model.model_type)
+            network_output = []
+            m_obs = torch.from_numpy(policy_obs_list).to(self._cfg.device)
+
+            # =============== NOTE: The key difference with MuZero =================
+            # calculate the target value
+            # action_batch.shape (32, 10)
+            # m_obs.shape torch.Size([352, 3, 64, 64]) 32*11=352
+            m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
+            # =======================================================================
+
+            if not model.training:
+                # if not in training, obtain the scalars of the value/reward
+                [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                    [
+                        m_output.latent_state,
+                        inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                        m_output.policy_logits
+                    ]
+                )
+
+            network_output.append(m_output)
+
+            _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(network_output, data_type='muzero')
+            reward_pool = reward_pool.squeeze().tolist()
+            policy_logits_pool = policy_logits_pool.tolist()
+            noises = [
+                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
+                                    ).astype(np.float32).tolist() for _ in range(transition_batch_size)
+            ]
+            if self._cfg.mcts_ctree:
+                # cpp mcts_tree
+                roots = MCTSCtree.roots(transition_batch_size, legal_actions)
+                roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                # do MCTS for a new policy with the recent target model
+                MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+            else:
+                # python mcts_tree
+                roots = MCTSPtree.roots(transition_batch_size, legal_actions)
+                roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                # do MCTS for a new policy with the recent target model
+                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+
+            roots_legal_actions_list = legal_actions
+            roots_distributions = roots.get_distributions()
+            policy_index = 0
+            for state_index, child_visit, game_index in zip(pos_in_game_segment_list, child_visits, batch_index_list):
+                target_policies = []
+                for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
+                    distributions = roots_distributions[policy_index]
+                    if policy_mask[policy_index] == 0:
+                        # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
+                        target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
+                    else:
+                        # NOTE: It is very important to use the latest MCTS visit count distribution.
+                        sum_visits = sum(distributions)
+                        child_visit[current_index] = [visit_count / sum_visits for visit_count in distributions]
+
+                        if distributions is None:
+                            # if at some obs, the legal_action is None, add the fake target_policy
+                            target_policies.append(
+                                list(np.ones(self._cfg.model.action_space_size) / self._cfg.model.action_space_size)
+                            )
+                        else:
+                            if self._cfg.env_type == 'not_board_games':
+                                # for atari/classic_control/box2d environments that only have one player.
+                                sum_visits = sum(distributions)
+                                policy = [visit_count / sum_visits for visit_count in distributions]
+                                target_policies.append(policy)
+                            else:
+                                # for board games that have two players and legal_actions is dy
+                                policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
+                                # to make sure target_policies have the same dimension
+                                sum_visits = sum(distributions)
+                                policy = [visit_count / sum_visits for visit_count in distributions]
+                                for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
+                                    policy_tmp[legal_action] = policy[index]
+                                target_policies.append(policy_tmp)
+
+                    policy_index += 1
+
+                batch_target_policies_re.append(target_policies)
+
+        batch_target_policies_re = np.array(batch_target_policies_re)
+
+        return batch_target_policies_re
+
     def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, action_batch) -> Tuple[
         Any, Any]:
         """
@@ -284,11 +407,11 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             network_output = []
             m_obs = torch.from_numpy(value_obs_list).to(self._cfg.device)
 
-            # =============== NOTE: =================
+            # =============== NOTE: The key difference with MuZero =================
             # calculate the target value
             # m_obs.shape torch.Size([352, 3, 64, 64]) 32*11 = 352
             m_output = model.initial_inference(m_obs, action_batch)
-            # =============== NOTE: =================
+            # ======================================================================
 
             if not model.training:
                 # if not in training, obtain the scalars of the value/reward
@@ -361,7 +484,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 base_index = state_index
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
-                    # for i, reward in enumerate(game.rewards[current_index:bootstrap_index]):
                     for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
                         if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
                             # TODO(pu): for board_games, very important, to check
@@ -387,132 +509,3 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         batch_rewards = np.asarray(batch_rewards, dtype=object)
         batch_target_values = np.asarray(batch_target_values, dtype=object)
         return batch_rewards, batch_target_values
-
-    def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any, action_batch) -> np.ndarray:
-        """
-        Overview:
-            prepare policy targets from the reanalyzed context of policies
-        Arguments:
-            - policy_re_context (:obj:`List`): List of policy context to reanalyzed
-        Returns:
-            - batch_target_policies_re
-        """
-        if policy_re_context is None:
-            return []
-        batch_target_policies_re = []
-
-        # for board games
-        policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, game_segment_lens, action_mask_segment, \
-            to_play_segment = policy_re_context  # noqa
-        transition_batch_size = len(policy_obs_list)
-        game_segment_batch_size = len(pos_in_game_segment_list)
-
-        to_play, action_mask = self._preprocess_to_play_and_action_mask(
-            game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
-        )
-
-        if self._cfg.model.continuous_action_space is True:
-            # when the action space of the environment is continuous, action_mask[:] is None.
-            action_mask = [
-                list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
-            ]
-            # NOTE: in continuous action space env: we set all legal_actions as -1
-            legal_actions = [
-                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
-            ]
-        else:
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
-
-        with torch.no_grad():
-            policy_obs_list = prepare_observation(policy_obs_list, self._cfg.model.model_type)
-            network_output = []
-            m_obs = torch.from_numpy(policy_obs_list).to(self._cfg.device)
-
-            # =============== NOTE: =================
-            # calculate the target value
-            # action_batch.shape (32, 10)
-            # m_obs.shape torch.Size([352, 3, 64, 64]) 32*11=352
-            m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
-            # =============== NOTE: =================
-
-            if not model.training:
-                # if not in training, obtain the scalars of the value/reward
-                [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                    [
-                        m_output.latent_state,
-                        inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
-                        m_output.policy_logits
-                    ]
-                )
-
-            network_output.append(m_output)
-
-            _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(network_output, data_type='muzero')
-            reward_pool = reward_pool.squeeze().tolist()
-            policy_logits_pool = policy_logits_pool.tolist()
-            noises = [
-                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
-                                    ).astype(np.float32).tolist() for _ in range(transition_batch_size)
-            ]
-            if self._cfg.mcts_ctree:
-                # cpp mcts_tree
-                roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                # do MCTS for a new policy with the recent target model
-                MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-            else:
-                # python mcts_tree
-                roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                # do MCTS for a new policy with the recent target model
-                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-
-            roots_legal_actions_list = legal_actions
-            roots_distributions = roots.get_distributions()
-            policy_index = 0
-            for state_index, child_visit, game_index in zip(pos_in_game_segment_list, child_visits, batch_index_list):
-                target_policies = []
-                for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
-                    distributions = roots_distributions[policy_index]
-                    if policy_mask[policy_index] == 0:
-                        # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
-                        target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
-                    else:
-                        # =========================================================
-                        # TODO NOTE: very important: use latest MCTS visit count distribution
-                        # if current_index < len(child_visit):
-                        sum_visits = sum(distributions)
-                        child_visit[current_index] = [visit_count / sum_visits for visit_count in distributions]
-                        # =========================================================
-
-                        if distributions is None:
-                            # if at some obs, the legal_action is None, add the fake target_policy
-                            target_policies.append(
-                                list(np.ones(self._cfg.model.action_space_size) / self._cfg.model.action_space_size)
-                            )
-                        else:
-                            if self._cfg.env_type == 'not_board_games':
-                                # for atari/classic_control/box2d environments that only have one player.
-                                sum_visits = sum(distributions)
-                                policy = [visit_count / sum_visits for visit_count in distributions]
-                                target_policies.append(policy)
-                            else:
-                                # for board games that have two players and legal_actions is dy
-                                policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
-                                # to make sure target_policies have the same dimension
-                                sum_visits = sum(distributions)
-                                policy = [visit_count / sum_visits for visit_count in distributions]
-                                for index, legal_action in enumerate(roots_legal_actions_list[policy_index]):
-                                    policy_tmp[legal_action] = policy[index]
-                                target_policies.append(policy_tmp)
-
-                    policy_index += 1
-
-                batch_target_policies_re.append(target_policies)
-
-        batch_target_policies_re = np.array(batch_target_policies_re)
-
-        return batch_target_policies_re
-
-
-

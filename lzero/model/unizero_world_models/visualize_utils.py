@@ -8,7 +8,6 @@ from PIL import ImageDraw
 from sklearn.manifold import TSNE
 
 
-
 def visualize_reward_value_img_policy( original_images, reconstructed_images, target_predict_value, true_rewards,
                                       target_policy, predict_value, predict_rewards, predict_policy,
                                       not_plot_timesteps=[], suffix='pong', width=64
@@ -16,7 +15,7 @@ def visualize_reward_value_img_policy( original_images, reconstructed_images, ta
     """
     Visualizes the rewards, values, original images, and policy distributions over time for a batch of sequences.
 
-    Parameters:
+    Arguments:
         original_images (torch.Tensor): The original input images with shape (batch_size, num_timesteps, channels, height, width).
         reconstructed_images (torch.Tensor): The reconstructed images with shape (batch_size * num_timesteps, channels, height, width).
         target_predict_value (torch.Tensor): The target predicted values.
@@ -128,14 +127,12 @@ def visualize_reward_value_img_policy( original_images, reconstructed_images, ta
         ax[3].legend(handles, labels, loc='upper right', ncol=num_actions)
 
         plt.tight_layout()
-        # directory = f'/your_path/code/LightZero/render_{suffix}'
-        directory = f'/mnt/afs/niuyazhe/code/LightZero/render_{suffix}'
+        directory = f'/your_path/code/LightZero/render_{suffix}'
         if not os.path.exists(directory):
             os.makedirs(directory)
         plt.savefig(f'{directory}/visualization_sequence_{batch_idx}_reward_value_img_policy_mcts-policy.png')
         print(f'Saved visualization to {directory}/visualization_sequence_{batch_idx}_reward_value_img_policy_mcts-policy.png')
         plt.close()
-        # sys.exit(0)  # TODO
 
 
 def plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong'):
@@ -143,12 +140,9 @@ def plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong'):
     Plots t-SNE dimensionality reduction of latent state embeddings for individual episodes and
     saves the plots as PNG files.
 
-    Parameters:
-    obs_embeddings (torch.Tensor): The latent state embeddings with shape (num_samples, 1, embedding_dim).
-    suffix (str): The suffix for the directory name where plots are saved. Default is 'pong'.
-
-    Returns:
-    None
+    Arguments:
+        obs_embeddings (torch.Tensor): The latent state embeddings with shape (num_samples, 1, embedding_dim).
+        suffix (str): The suffix for the directory name where plots are saved. Default is 'pong'.
     """
     # Remove the second dimension (1)
     obs_embeddings = obs_embeddings.squeeze(1)
@@ -165,7 +159,7 @@ def plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong'):
         """
         Plots the 2D t-SNE embeddings and saves the plot as a PNG file.
 
-        Parameters:
+        Arguments:
         embeddings_2d (np.ndarray): The 2D t-SNE embeddings.
         timesteps (np.ndarray): The timesteps corresponding to the embeddings.
         title (str): The title of the plot.
@@ -212,7 +206,7 @@ def plot_latent_tsne_each_and_all_for_visualmatch(obs_embeddings, suffix='visual
     It processes the embeddings for multiple episodes and generates both individual plots for each episode
     and a combined plot for all episodes.
 
-    Parameters:
+    Arguments:
     - obs_embeddings (Tensor): The observations embeddings tensor of shape (num_episodes * timesteps_per_episode, 1, embedding_dim).
     - suffix (str): The suffix for the output directory where the plots will be saved.
 
@@ -514,7 +508,7 @@ def save_as_image(batch_tensor, suffix='pong'):
     image will have each sequence arranged in a row, with individual frames
     displayed in columns.
 
-    Parameters:
+    Arguments:
     - batch_tensor (torch.Tensor): A 5D tensor of shape [batch_size, sequence_length, channels, height, width],
                                    where channels should be at least 4.
     - suffix (str): A suffix to include in the directory path where the image will be saved.

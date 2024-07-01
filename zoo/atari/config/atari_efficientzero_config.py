@@ -16,12 +16,22 @@ batch_size = 256
 max_env_step = int(5e5)
 reanalyze_ratio = 0.
 num_unroll_steps = 5
+
+# debug
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+num_simulations = 5
+batch_size = 2
+max_env_step = int(5e5)
+reanalyze_ratio = 0.
+num_unroll_steps = 5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_efficientzero_config = dict(
-    exp_name=f'data_efficientzero/{env_id[:-14]}_efficientzero_stack4_H{num_unroll_steps}_sgd02_seed0',
+    exp_name=f'data_efficientzero/{env_id[:-14]}_efficientzero_stack4_H{num_unroll_steps}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -32,6 +42,9 @@ atari_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        # debug
+        collect_max_steps=50,
+        eval_max_steps=50,
     ),
     policy=dict(
         model=dict(
