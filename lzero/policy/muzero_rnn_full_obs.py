@@ -232,69 +232,6 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
-    def _init_learn(self) -> None:
-        """
-        Overview:
-            Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
-        """
-        assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
-        if self._cfg.optim_type == 'SGD':
-            self._optimizer = optim.SGD(
-                self._model.parameters(),
-                lr=self._cfg.learning_rate,
-                momentum=self._cfg.momentum,
-                weight_decay=self._cfg.weight_decay,
-            )
-
-        elif self._cfg.optim_type == 'Adam':
-            self._optimizer = optim.Adam(
-                self._model.parameters(),
-                lr=self._cfg.learning_rate,
-                weight_decay=self._cfg.weight_decay,
-            )
-        elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = configure_optimizers(
-                model=self._model,
-                weight_decay=self._cfg.weight_decay,
-                learning_rate=self._cfg.learning_rate,
-                device_type=self._cfg.device
-            )
-
-        if self._cfg.lr_piecewise_constant_decay:
-            from torch.optim.lr_scheduler import LambdaLR
-            max_step = self._cfg.threshold_training_steps_for_final_lr
-            # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
-            lr_lambda = lambda step: 1 if step < max_step * 0.5 else (0.1 if step < max_step else 0.01)  # noqa
-            self.lr_scheduler = LambdaLR(self._optimizer, lr_lambda=lr_lambda)
-
-        # use model_wrapper for specialized demands of different modes
-        self._target_model = copy.deepcopy(self._model)
-        self._target_model = model_wrap(
-            self._target_model,
-            wrapper_name='target',
-            update_type='assign',
-            update_kwargs={'freq': self._cfg.target_update_freq}
-        )
-        self._learn_model = self._model
-
-        if self._cfg.use_augmentation:
-            self.image_transforms = ImageTransforms(
-                self._cfg.augmentation,
-                image_shape=(self._cfg.model.observation_shape[1], self._cfg.model.observation_shape[2])
-            )
-        self.value_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
-        self.reward_support = DiscreteSupport(-self._cfg.model.support_scale, self._cfg.model.support_scale, delta=1)
-
-        self.inverse_scalar_transform_handle = InverseScalarTransform(
-            self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
-        )
-        self.l2_norm_before = 0.
-        self.l2_norm_after = 0.
-        self.grad_norm_before = 0.
-        self.grad_norm_after = 0.
-        self.dormant_ratio_encoder = 0.
-        self.dormant_ratio_dynamics = 0.
-
     def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
         """
         Overview:
@@ -347,7 +284,7 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
         target_value_categorical = phi_transform(self.value_support, transformed_target_value)
 
         # ==============================================================
-        # the core initial_inference in muzero_rnn policy.
+        # the core initial_inference in muzero_rnn_full_obs policy.
         # ==============================================================
         network_output = self._learn_model.initial_inference(obs_batch)
         # reward shape: (batch_size, 10), the ``reward`` at the first step is zero padding.
@@ -409,7 +346,7 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
 
         # ==============================================================
-        # the core recurrent_inference in muzero_rnn policy.
+        # the core recurrent_inference in muzero_rnn_full_obs policy.
         # ==============================================================
         for step_k in range(self._cfg.num_unroll_steps):
             # unroll with the dynamics function: predict the next ``latent_state``, ``world_model_latent_history``,
@@ -531,9 +468,7 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
 
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
-        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
-            self._learn_model.parameters(), self._cfg.grad_clip_value
-        )
+        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(self._learn_model.parameters(), self._cfg.grad_clip_value)
         self._optimizer.step()
         if self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()
@@ -758,6 +693,9 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
         self._eval_model.env_num = self._cfg.model.evaluator_env_num
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_eval_env_num)
+        output = {i: None for i in ready_env_id}  # NOTE: we need to return the data in the order of ready_env_id.
         with torch.no_grad():
             network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data,
                                                                 ready_env_id, self.last_ready_env_id_eval)
@@ -782,19 +720,11 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, world_model_latent_history_roots,
-                                   to_play, ready_env_id)
+            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, world_model_latent_history_roots, to_play, ready_env_id)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
-
-            # data_id = [i for i in range(active_eval_env_num)]
-            # output = {i: None for i in data_id}
-            output = {i: None for i in ready_env_id}  # NOTE: we need to return the data in the order of ready_env_id.
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_eval_env_num)
 
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
@@ -821,70 +751,3 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
             self.last_batch_action = batch_action
 
         return output
-
-    def _monitor_vars_learn(self) -> List[str]:
-        """
-         Overview:
-             Register the variables to be monitored in learn mode. The registered variables will be logged in
-             tensorboard according to the return value ``_forward_learn``.
-         """
-        return [
-            'analysis/dormant_ratio_encoder',
-            'analysis/dormant_ratio_dynamics',
-            'analysis/latent_state_l2_norms',
-            'analysis/l2_norm_before',
-            'analysis/l2_norm_after',
-            'analysis/grad_norm_before',
-            'analysis/grad_norm_after',
-
-            'collect_mcts_temperature',
-            'cur_lr',
-            'weighted_total_loss',
-            'total_loss',
-            'policy_loss',
-            'policy_entropy',
-            'target_policy_entropy',
-            'reward_loss',
-            'value_loss',
-            'consistency_loss',
-            'value_priority',
-            'target_reward',
-            'target_value',
-            'predicted_rewards',
-            'predicted_values',
-            'transformed_target_reward',
-            'transformed_target_value',
-            'total_grad_norm_before_clip',
-        ]
-
-    def _state_dict_learn(self) -> Dict[str, Any]:
-        """
-        Overview:
-            Return the state_dict of learn mode, usually including model and optimizer.
-        Returns:
-            - state_dict (:obj:`Dict[str, Any]`): the dict of current policy learn state, for saving and restoring.
-        """
-        return {
-            'model': self._learn_model.state_dict(),
-            'target_model': self._target_model.state_dict(),
-            'optimizer': self._optimizer.state_dict(),
-        }
-
-    def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
-        """
-        Overview:
-            Load the state_dict variable into policy learn mode.
-        Arguments:
-            - state_dict (:obj:`Dict[str, Any]`): the dict of policy learn state saved before.
-        """
-        self._learn_model.load_state_dict(state_dict['model'])
-        self._target_model.load_state_dict(state_dict['target_model'])
-        self._optimizer.load_state_dict(state_dict['optimizer'])
-
-    def _process_transition(self, obs, policy_output, timestep):
-        # be compatible with DI-engine Policy class
-        pass
-
-    def _get_train_sample(self, data):
-        # be compatible with DI-engine Policy class
-        pass

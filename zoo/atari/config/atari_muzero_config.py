@@ -17,6 +17,14 @@ batch_size = 256
 max_env_step = int(5e5)
 reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = True
+
+# =========== for debug ===========
+collector_env_num = 1
+n_episode = 1
+evaluator_env_num = 1
+num_simulations = 2
+update_per_collect = 2
+batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -33,6 +41,9 @@ atari_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        # TODO: debug
+        collect_max_episode_steps=int(50),
+        eval_max_episode_steps=int(50),
     ),
     policy=dict(
         analysis_sim_norm=False,
@@ -49,6 +60,7 @@ atari_muzero_config = dict(
             norm_type='BN',
             use_sim_norm=True,
             use_sim_norm_kl_loss=False,
+            model_type='conv',
         ),
         cuda=True,
         env_type='not_board_games',
@@ -90,8 +102,8 @@ atari_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero',
-        import_names=['lzero.policy.muzero'],
+        type='muzero_context',
+        import_names=['lzero.policy.muzero_context'],
     ),
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)

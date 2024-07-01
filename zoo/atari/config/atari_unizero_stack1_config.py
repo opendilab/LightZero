@@ -19,14 +19,14 @@ batch_size = 64
 num_unroll_steps = 10
 
 # ====== debug =====
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-num_simulations = 5
-max_env_step = int(5e5)
-reanalyze_ratio = 0.
-batch_size = 2
-num_unroll_steps = 10
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 5
+# max_env_step = int(5e5)
+# reanalyze_ratio = 0.
+# batch_size = 2
+# num_unroll_steps = 10
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -41,12 +41,11 @@ atari_unizero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        # collect_max_episode_steps=int(2e4),
-        # eval_max_episode_steps=int(1e4),
+        collect_max_episode_steps=int(2e4),
+        eval_max_episode_steps=int(1e4),
         # TODO: debug
-        collect_max_episode_steps=int(50),
-        eval_max_episode_steps=int(50),
-        clip_rewards=True,
+        # collect_max_episode_steps=int(50),
+        # eval_max_episode_steps=int(50),
     ),
     policy=dict(
         model_path=None,

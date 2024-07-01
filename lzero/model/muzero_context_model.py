@@ -245,7 +245,7 @@ class MuZeroContextModel(MuZeroModel):
             self.timestep = 0
         else:
             # collect/eval phase
-            if action_batch is not None and max(action_batch) == -1:  # 一集的第一步
+            if action_batch is not None and max(action_batch) == -1:  # The first step of an episode
                 self.latent_state = self._representation(current_obs_batch)
             else:
                 action_batch = torch.from_numpy(np.array(action_batch)).to(self.latent_state.device)
@@ -293,7 +293,7 @@ class MuZeroContextModel(MuZeroModel):
          """
         next_latent_state, reward = self._dynamics(latent_state, action)
         policy_logits, value = self._prediction(next_latent_state)
-        self.latent_state = next_latent_state  # TODO
+        self.latent_state = next_latent_state  # NOTE: update latent_state
         return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
 
 

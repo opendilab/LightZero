@@ -19,13 +19,13 @@ eps_greedy_exploration_in_collect = True
 num_unroll_steps = 5
 context_length_init = 4
 
-# for debug ===========
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 2
-update_per_collect = 2
-batch_size = 2
+# =========== for debug ===========
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 2
+# update_per_collect = 2
+# batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -43,8 +43,8 @@ atari_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        collect_max_episode_steps=int(50),
-        eval_max_episode_steps=int(50),
+        # collect_max_episode_steps=int(50),
+        # eval_max_episode_steps=int(50),
     ),
     policy=dict(
         model=dict(
@@ -60,7 +60,7 @@ atari_muzero_config = dict(
             norm_type='BN',
             context_length_init=context_length_init,
             use_sim_norm=True,
-            model_type='muzero_context',
+            model_type='conv_context',
         ),
         cuda=True,
         env_type='not_board_games',
@@ -95,8 +95,8 @@ atari_muzero_create_config = dict(
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='muzero_context',
-        import_names=['lzero.policy.muzero_context'],
+        type='muzero',
+        import_names=['lzero.policy.muzero'],
     ),
 )
 atari_muzero_create_config = EasyDict(atari_muzero_create_config)
@@ -108,5 +108,5 @@ if __name__ == "__main__":
     for seed in seeds:
         # Update exp_name to include the current seed
         main_config.exp_name = f'data_muzero_context/{env_id[:-14]}_muzero_stack1_H{num_unroll_steps}_initconlen{context_length_init}_seed{seed}'
-        from lzero.entry import train_muzero_context
-        train_muzero_context([main_config, create_config], seed=seed, max_env_step=max_env_step)
+        from lzero.entry import train_muzero
+        train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)

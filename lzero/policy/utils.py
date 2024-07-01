@@ -228,6 +228,7 @@ def configure_optimizers_nanogpt(model, weight_decay, learning_rate, betas, devi
 
     return optimizer
 
+
 def configure_optimizers(
         model: nn.Module,
         weight_decay: float = 0,
@@ -329,6 +330,7 @@ def prepare_obs_stack4_for_gpt(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tupl
 
     return obs_batch, obs_target_batch
 
+
 def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Overview:
@@ -353,7 +355,7 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
     # For convolutional models ('conv'), use the number of frames to stack times the number of channels.
     # For multi-layer perceptron models ('mlp'), use the number of frames to stack times the size of the observation space.
     stack_dim = cfg.model.frame_stack_num * (
-        cfg.model.image_channel if cfg.model.model_type == 'conv' else cfg.model.observation_shape)
+        cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context'] else cfg.model.observation_shape)
 
     # Slice the original observation tensor to obtain the batch for the initial inference.
     obs_batch = obs_batch_ori[:, :stack_dim]
@@ -365,7 +367,7 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
         # Determine the starting dimension to exclude based on the model type.
         # For 'conv', exclude the first 'image_channel' dimensions.
         # For 'mlp', exclude the first 'observation_shape' dimensions.
-        exclude_dim = cfg.model.image_channel if cfg.model.model_type == 'conv' else cfg.model.observation_shape
+        exclude_dim = cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context'] else cfg.model.observation_shape
 
         # Slice the original observation tensor to obtain the batch for consistency loss calculation.
         obs_target_batch = obs_batch_ori[:, exclude_dim:]
