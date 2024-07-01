@@ -1,8 +1,7 @@
 import copy
-import sys
 from typing import List
 
-import gym
+import gymnasium as gym
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
@@ -24,26 +23,52 @@ class AtariEnvLightZero(BaseEnv):
         _reward_space, obs, _eval_episode_return, has_reset, _seed, _dynamic_seed
     """
     config = dict(
+        # (int) The number of environment instances used for data collection.
         collector_env_num=8,
+        # (int) The number of environment instances used for evaluator.
         evaluator_env_num=3,
+        # (int) The number of episodes to evaluate during each evaluation period.
         n_evaluator_episode=3,
-        env_id='PongNoFrameskip-v4',
+        # (str) The name of the Atari game environment.
+        # env_id='PongNoFrameskip-v4',
+        # (str) The type of the environment, here it's Atari.
         env_type='Atari',
-        observation_shape=(4, 96, 96),
+        # (tuple) The shape of the observation space, which is a stacked frame of 4 images each of 96x96 pixels.
+        obs_shape=(4, 96, 96),
+        # (int) The maximum number of steps in each episode during data collection.
         collect_max_episode_steps=int(1.08e5),
+        # (int) The maximum number of steps in each episode during evaluation.
         eval_max_episode_steps=int(1.08e5),
-        gray_scale=True,
-        frame_skip=4,
-        episode_life=True,
-        clip_rewards=True,
-        channel_last=False,
+        # (bool) If True, the game is rendered in real-time.
         render_mode_human=False,
+        # (bool) If True, a video of the game play is saved.
+        save_replay=False,
+        # replay_path (str or None): The path to save the replay video. If None, the replay will not be saved.
+        # Only effective when env_manager.type is 'base'.
+        replay_path=None,
+        # (bool) If set to True, the game screen is converted to grayscale, reducing the complexity of the observation space.
+        gray_scale=True,
+        # (int) The number of frames to skip between each action. Higher values result in faster simulation.
+        frame_skip=4,
+        # (bool) If True, the game ends when the agent loses a life, otherwise, the game only ends when all lives are lost.
+        episode_life=True,
+        # (bool) If True, the rewards are clipped to a certain range, usually between -1 and 1, to reduce variance.
+        clip_rewards=True,
+        # (bool) If True, the channels of the observation images are placed last (e.g., height, width, channels).
+        # Default is False, which means the channels are placed first (e.g., channels, height, width).
+        channel_last=False,
+        # (bool) If True, the pixel values of the game frames are scaled down to the range [0, 1].
         scale=True,
+        # (bool) If True, the game frames are preprocessed by cropping irrelevant parts and resizing to a smaller resolution.
         warp_frame=True,
-        save_video=False,
+        # (bool) If True, the game state is transformed into a string before being returned by the environment.
         transform2string=False,
+        # (bool) If True, additional wrappers for the game environment are used.
         game_wrapper=True,
+        # (dict) The configuration for the environment manager. If shared_memory is set to False, each environment instance
+        # runs in the same process as the trainer, otherwise, they run in separate processes.
         manager=dict(shared_memory=False, ),
+        # (int) The value of the cumulative reward at which the training stops.
         stop_value=int(1e6),
     )
 
@@ -61,26 +86,37 @@ class AtariEnvLightZero(BaseEnv):
         cfg.cfg_type = cls.__name__ + 'Dict'
         return cfg
 
-    def __init__(self, cfg=None):
+    def __init__(self, cfg: EasyDict) -> None:
+        """
+        Overview:
+            Initialize the Atari LightZero environment with the given configuration.
+        Arguments:
+            - cfg (:obj:`EasyDict`): The configuration dictionary.
+        """
         self.cfg = cfg
         self._init_flag = False
         self.channel_last = cfg.channel_last
         self.clip_rewards = cfg.clip_rewards
         self.episode_life = cfg.episode_life
 
-    def _make_env(self):
-        return wrap_lightzero(self.cfg, episode_life=self.cfg.episode_life, clip_rewards=self.cfg.clip_rewards)
-
-    def reset(self):
+    def reset(self) -> dict:
+        """
+        Overview:
+            Reset the environment and return the initial observation.
+        Returns:
+            - obs (:obj:`dict`): The initial observation after reset.
+        """
         if not self._init_flag:
-            self._env = self._make_env()
+            # Create and return the wrapped environment for Atari LightZero.
+            self._env = wrap_lightzero(self.cfg, episode_life=self.cfg.episode_life, clip_rewards=self.cfg.clip_rewards)
             self._observation_space = self._env.env.observation_space
             self._action_space = self._env.env.action_space
             self._reward_space = gym.spaces.Box(
-                low=self._env.env.reward_range[0], high=self._env.env.reward_range[1], shape=(1, ), dtype=np.float32
+                low=self._env.env.reward_range[0], high=self._env.env.reward_range[1], shape=(1,), dtype=np.float32
             )
 
             self._init_flag = True
+
         if hasattr(self, '_seed') and hasattr(self, '_dynamic_seed') and self._dynamic_seed:
             np_seed = 100 * np.random.randint(1, 1000)
             self._env.env.seed(self._seed + np_seed)
@@ -90,15 +126,34 @@ class AtariEnvLightZero(BaseEnv):
         obs = self._env.reset()
         self.obs = to_ndarray(obs)
         self._eval_episode_return = 0.
-        self.has_reset = True
         obs = self.observe()
-        # obs.shape: 96,96,1
         return obs
 
-    def observe(self):
+    def step(self, action: int) -> BaseEnvTimestep:
         """
         Overview:
-            add action_mask to obs to adapt with MCTS alg..
+            Execute the given action and return the resulting environment timestep.
+        Arguments:
+            - action (:obj:`int`): The action to be executed.
+        Returns:
+            - timestep (:obj:`BaseEnvTimestep`): The environment timestep after executing the action.
+        """
+        obs, reward, done, info = self._env.step(action)
+        self.obs = to_ndarray(obs)
+        self.reward = np.array(reward).astype(np.float32)
+        self._eval_episode_return += self.reward
+        observation = self.observe()
+        if done:
+            info['eval_episode_return'] = self._eval_episode_return
+
+        return BaseEnvTimestep(observation, self.reward, done, info)
+
+    def observe(self) -> dict:
+        """
+        Overview:
+            Return the current observation along with the action mask and to_play flag.
+        Returns:
+            - observation (:obj:`dict`): The dictionary containing current observation, action mask, and to_play flag.
         """
         observation = self.obs
 
@@ -110,18 +165,6 @@ class AtariEnvLightZero(BaseEnv):
         action_mask = np.ones(self._action_space.n, 'int8')
         return {'observation': observation, 'action_mask': action_mask, 'to_play': -1}
 
-    def step(self, action):
-        obs, reward, done, info = self._env.step(action)
-        self.obs = to_ndarray(obs)
-        self.reward = np.array(reward).astype(np.float32)
-        self._eval_episode_return += self.reward
-        observation = self.observe()
-        if done:
-            print('one episode done!')
-            info['eval_episode_return'] = self._eval_episode_return
-
-        return BaseEnvTimestep(observation, self.reward, done, info)
-
     @property
     def legal_actions(self):
         return np.arange(self._action_space.n)
@@ -130,52 +173,41 @@ class AtariEnvLightZero(BaseEnv):
         action_list = self.legal_actions
         return np.random.choice(action_list)
 
-    def render(self, mode='human'):
-        self._env.render()
-
-    def human_to_action(self):
-        """
-        Overview:
-            For multiplayer games, ask the user for a legal action
-            and return the corresponding action number.
-        Returns:
-            An integer from the action space.
-        """
-        while True:
-            try:
-                print(f"Current available actions for the player are:{self.legal_actions}")
-                choice = int(input(f"Enter the index of next action: "))
-                if choice in self.legal_actions:
-                    break
-                else:
-                    print("Wrong input, try again")
-            except KeyboardInterrupt:
-                print("exit")
-                sys.exit(0)
-            except Exception as e:
-                print("Wrong input, try again")
-        return choice
-
     def close(self) -> None:
+        """
+        Close the environment, and set the initialization flag to False.
+        """
         if self._init_flag:
             self._env.close()
         self._init_flag = False
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
+        """
+        Set the seed for the environment's random number generator. Can handle both static and dynamic seeding.
+        """
         self._seed = seed
         self._dynamic_seed = dynamic_seed
         np.random.seed(self._seed)
 
     @property
     def observation_space(self) -> gym.spaces.Space:
+        """
+        Property to access the observation space of the environment.
+        """
         return self._observation_space
 
     @property
     def action_space(self) -> gym.spaces.Space:
+        """
+        Property to access the action space of the environment.
+        """
         return self._action_space
 
     @property
     def reward_space(self) -> gym.spaces.Space:
+        """
+        Property to access the reward space of the environment.
+        """
         return self._reward_space
 
     def __repr__(self) -> str:
