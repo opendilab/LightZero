@@ -9,13 +9,14 @@ import torch.nn.init as init
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 
+from lzero.model.common import SimNorm
+from lzero.model.muzero_model import MuZeroModel
 from .common import EZNetworkOutputV2, RepresentationNetwork, PredictionHiddenNetwork, FeatureAndGradientHook
-from .utils import renormalize, get_params_mean, SimNorm
+from .utils import renormalize
 
 
-# use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
-@MODEL_REGISTRY.register('MuZeroRNNFullobsModel')
-class MuZeroRNNFullobsModel(nn.Module):
+@MODEL_REGISTRY.register('MuZeroRNNFullObsModel')
+class MuZeroRNNFullObsModel(MuZeroModel):
 
     def __init__(
             self,
@@ -53,14 +54,15 @@ class MuZeroRNNFullobsModel(nn.Module):
     ) -> None:
         """
         Overview:
-            The definition of the network model of EfficientZero, which is a generalization version for 2D image obs.
-            The networks are built on convolution residual blocks and fully connected layers.
-            EfficientZero model which consists of a representation network, a dynamics network and a prediction network.
+            The definition of the network model for MuZeroRNNFullObs, a variant of MuZero, involves the use of a recurrent neural network to predict both reward/next_latent_state and value/policy.
+            This model fully utilizes observation information and retains training settings similar to UniZero but employs a GRU backbone.
+            During the inference phase, the hidden state of the GRU is reset and cleared every H_infer steps.
+            This variant is proposed in the UniZero paper: https://arxiv.org/abs/2406.10667.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96] for Atari.
             - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
             - rnn_hidden_size (:obj:`int`): The hidden size of LSTM in dynamics network to predict reward.
-            - num_res_blocks (:obj:`int`): The number of res blocks in EfficientZero model.
+            - num_res_blocks (:obj:`int`): The number of res blocks in MuZero model.
             - num_channels (:obj:`int`): The channels of hidden states.
             - reward_head_channels (:obj:`int`): The channels of reward head.
             - value_head_channels (:obj:`int`): The channels of value head.
@@ -88,7 +90,7 @@ class MuZeroRNNFullobsModel(nn.Module):
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. 
                 options = {'one_hot', 'not_one_hot'}
         """
-        super(MuZeroRNNFullobsModel, self).__init__()
+        super(MuZeroRNNFullObsModel, self).__init__()
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
             # for vector obs input, e.g. classical control and box2d environments
             # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
@@ -118,24 +120,28 @@ class MuZeroRNNFullobsModel(nn.Module):
         self.self_supervised_learning_loss = self_supervised_learning_loss
         self.norm_type = norm_type
         self.activation = activation
+        # TODO
         self.analysis_sim_norm = analysis_sim_norm
         self.env_num = collector_env_num
+        self.timestep = 0
+        self.context_length_init = context_length_init
+        self.last_ready_env_id = None
+
+        if observation_shape[1] == 96:
+            latent_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
+        elif observation_shape[1] == 64:
+            latent_size = math.ceil(observation_shape[1] / 8) * math.ceil(observation_shape[2] / 8)
 
         flatten_output_size_for_reward_head = (
-            (reward_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
+            (reward_head_channels * latent_size) if downsample else
             (reward_head_channels * observation_shape[1] * observation_shape[2])
         )
-
         flatten_output_size_for_value_head = (
-            (value_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
+            (value_head_channels * latent_size) if downsample else
             (value_head_channels * observation_shape[1] * observation_shape[2])
         )
-
         flatten_output_size_for_policy_head = (
-            (policy_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
+            (policy_head_channels * latent_size) if downsample else
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
 
@@ -195,36 +201,27 @@ class MuZeroRNNFullobsModel(nn.Module):
 
         )
 
-        # projection used in EfficientZero
-        if self.downsample:
-            # In Atari, if the observation_shape is set to (12, 96, 96), which indicates the original shape of
-            # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
-            # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
-            # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
-            ceil_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
-            self.projection_input_dim = num_channels * ceil_size
-        else:
-            self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
-
-        # self.latent_state_flatten_dim = 64 * 8 * 8  # 4096
-        self.projection_input_dim = 64 * 8 * 8  # 4096
-
         if self.self_supervised_learning_loss:
-            self.projection = nn.Sequential(
-                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-                nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
-            )
-            self.prediction_head = nn.Sequential(
-                nn.Linear(self.proj_out, self.pred_hid),
-                nn.BatchNorm1d(self.pred_hid),
-                activation,
-                nn.Linear(self.pred_hid, self.pred_out),
-            )
+            if self.downsample:
+                # In Atari, if the observation_shape is set to (12, 96, 96), which indicates the original shape of
+                # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
+                # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
+                # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
+                self.projection_input_dim = num_channels * latent_size
+            else:
+                self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
-        self.timestep = 0
-        self.context_length_init = context_length_init  # TODO
-        self.last_ready_env_id = None
+                self.projection = nn.Sequential(
+                    nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                    nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                    nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
+                )
+                self.prediction_head = nn.Sequential(
+                    nn.Linear(self.proj_out, self.pred_hid),
+                    nn.BatchNorm1d(self.pred_hid),
+                    activation,
+                    nn.Linear(self.pred_hid, self.pred_out),
+                )
 
     def initial_inference(self, last_obs: torch.Tensor, last_action=None, current_obs=None, ready_env_id=None,
                           last_ready_env_id=None) -> 'EZNetworkOutputV2':
@@ -342,23 +339,6 @@ class MuZeroRNNFullobsModel(nn.Module):
         # If next_latent_state is provided, use it; otherwise, use the predicted next latent state
         return EZNetworkOutputV2(value, reward, policy_logits, next_latent_state, predict_next_latent_state, world_model_latent_history)
 
-    def _representation(self, observation: torch.Tensor) -> torch.Tensor:
-        """
-        Overview:
-            Use the representation network to encode the observations into latent state.
-        Arguments:
-            - obs (:obj:`torch.Tensor`): The 2D image observation data.
-        Returns:
-            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-        Shapes:
-            - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.
-            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
-                latent state, W_ is the width of latent state.
-        """
-        latent_state = self.representation_network(observation)
-        if self.state_norm:
-            latent_state = renormalize(latent_state)
-        return latent_state
 
     def _prediction(self, latent_state: torch.Tensor, world_model_latent_history: torch.Tensor) -> Tuple[
         torch.Tensor, torch.Tensor]:
@@ -443,10 +423,7 @@ class MuZeroRNNFullobsModel(nn.Module):
         # (batch_size, latent_state[1] + action_space_size, latent_state[2], latent_state[3]) depending on the discrete_action_encoding_type.
         state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
 
-        if state_action_encoding.shape[0] != world_model_latent_history.shape[1]:
-            print('debug')
-
-        # NOTE: the key difference between EfficientZero and MuZero
+        # NOTE: the key difference between MuZeroRNN and MuZero
         next_latent_state, next_world_model_latent_history, reward = self.dynamics_network(
             state_action_encoding, world_model_latent_history
         )
@@ -454,47 +431,6 @@ class MuZeroRNNFullobsModel(nn.Module):
         if self.state_norm:
             next_latent_state = renormalize(next_latent_state)
         return next_latent_state, next_world_model_latent_history, reward
-
-    def project(self, latent_state: torch.Tensor, with_grad: bool = True) -> torch.Tensor:
-        """
-        Overview:
-            Project the latent state to a lower dimension to calculate the self-supervised loss, which is proposed in EfficientZero.
-            For more details, please refer to the paper ``Exploring Simple Siamese Representation Learning``.
-        Arguments:
-            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-            - with_grad (:obj:`bool`): Whether to calculate gradient for the projection result.
-        Returns:
-            - proj (:obj:`torch.Tensor`): The result embedding vector of projection operation.
-        Shapes:
-            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
-                latent state, W_ is the width of latent state.
-            - proj (:obj:`torch.Tensor`): :math:`(B, projection_output_dim)`, where B is batch_size.
-
-        Examples:
-            >>> latent_state = torch.randn(256, 64, 6, 6)
-            >>> output = self.project(latent_state)
-            >>> output.shape # (256, 1024)
-
-        .. note::
-            for Atari:
-            observation_shape = (12, 96, 96),  # original shape is (3,96,96), frame_stack_num=4
-            if downsample is True, latent_state.shape: (batch_size, num_channel, obs_shape[1] / 16, obs_shape[2] / 16)
-            i.e., (256, 64, 96 / 16, 96 / 16) = (256, 64, 6, 6)
-            latent_state reshape: (256, 64, 6, 6) -> (256,64*6*6) = (256, 2304)
-            # self.projection_input_dim = 64*6*6 = 2304
-            # self.projection_output_dim = 1024
-        """
-        latent_state = latent_state.reshape(latent_state.shape[0], -1)
-        proj = self.projection(latent_state)
-
-        if with_grad:
-            # with grad, use prediction_head
-            return self.prediction_head(proj)
-        else:
-            return proj.detach()
-
-    def get_params_mean(self) -> float:
-        return get_params_mean(self)
 
 
 class DynamicsNetwork(nn.Module):
@@ -525,7 +461,7 @@ class DynamicsNetwork(nn.Module):
         Args:
             observation_shape (Sequence[int]): Shape of the input observation, e.g., (12, 96, 96).
             action_encoding_dim (int): Dimension of the action encoding.
-            num_res_blocks (int): Number of residual blocks in the EfficientZero model.
+            num_res_blocks (int): Number of residual blocks in the MuZero model.
             num_channels (int): Number of channels in the latent state.
             reward_head_channels (int): Number of channels in the reward head.
             fc_reward_layers (Sequence[int]): Hidden layers in the reward head MLP.
@@ -716,5 +652,3 @@ class DynamicsNetwork(nn.Module):
             next_latent_state = self.sim_norm(next_latent_state)
 
         return next_latent_state, next_dynamics_hidden_state, reward
-
-

@@ -21,10 +21,13 @@ from lzero.model.utils import cal_dormant_ratio
 
 
 @POLICY_REGISTRY.register('muzero_rnn_full_obs')
-class MuZeroRNNFullobsPolicy(MuZeroPolicy):
+class MuZeroRNNFullObsPolicy(MuZeroPolicy):
     """
     Overview:
-        The policy class for MuZeroRNN proposed in the paper https://arxiv.org/abs/2111.00210.
+        The policy class for MuZeroRNNFullObs, a variant of MuZero, involves the use of a recurrent neural network to predict both reward/next_latent_state and value/policy.
+        This model fully utilizes observation information and retains training settings similar to UniZero but employs a GRU backbone.
+        During the inference phase, the hidden state of the GRU is reset and cleared every H_infer steps.
+        This variant is proposed in the UniZero paper: https://arxiv.org/abs/2406.10667.
     """
 
     # The default_config for MuZeroRNN policy.
@@ -225,7 +228,7 @@ class MuZeroRNNFullobsPolicy(MuZeroPolicy):
             by import_names path. For MuZeroRNN, ``lzero.model.MuZeroRNN_model.MuZeroRNNModel``
         """
         if self._cfg.model.model_type == "conv":
-            return 'MuZeroRNNFullobsModel', ['lzero.model.muzero_rnn_full_obs_model']
+            return 'MuZeroRNNFullObsModel', ['lzero.model.muzero_rnn_full_obs_model']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 

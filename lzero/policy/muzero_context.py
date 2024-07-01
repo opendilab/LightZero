@@ -24,7 +24,13 @@ from lzero.model.utils import cal_dormant_ratio
 class MuZeroContextPolicy(MuZeroPolicy):
     """
     Overview:
-        The policy class for MuZero w/ Context.
+        if self._cfg.model.model_type in ["conv", "mlp"]:
+            The policy class for MuZero.
+        if self._cfg.model.model_type == "conv_context":
+            The policy class for MuZero w/ Context, a variant of MuZero.
+            This variant retains the same training settings as MuZero but diverges during inference
+            by employing a k-step recursively predicted latent representation at the root node,
+            proposed in the UniZero paper https://arxiv.org/abs/2406.10667.
     """
 
     # The default_config for MuZero policy.
@@ -40,6 +46,7 @@ class MuZeroContextPolicy(MuZeroPolicy):
             # (bool) Whether to use the self-supervised learning loss.
             self_supervised_learning_loss=False,
             # (bool) Whether to use discrete support to represent categorical distribution for value/reward/value_prefix.
+            # reference: http://proceedings.mlr.press/v80/imani18a/imani18a.pdf, https://arxiv.org/abs/2403.03950
             categorical_distribution=True,
             # (int) The image channel in image observation.
             image_channel=1,
@@ -104,8 +111,6 @@ class MuZeroContextPolicy(MuZeroPolicy):
         analysis_sim_norm=False,
         # (bool) Whether to analyze dormant ratio.
         analysis_dormant_ratio=False,
-        # (bool) Whether to use the sim_norm_kl_loss in the model.
-        use_sim_norm_kl_loss=False,
 
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
@@ -127,10 +132,10 @@ class MuZeroContextPolicy(MuZeroPolicy):
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor.
-        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.
+        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.replay_ratio automatically.
         update_per_collect=None,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
-        model_update_ratio=0.1,
+        replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam']
@@ -182,11 +187,15 @@ class MuZeroContextPolicy(MuZeroPolicy):
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
         # (bool) Whether to add noise to roots during reanalyze process.
-        reanalyze_noise=False,
+        reanalyze_noise=True,
+        # (bool) Whether to reuse the root value between batch searches.
+        reuse_search=False,
+        # (bool) whether to use the pure policy to collect data. If False, use the MCTS guided with policy.
+        collect_with_pure_policy=False,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
-        use_priority=True,
+        use_priority=False,
         # (float) The degree of prioritization to use. A value of 0 means no prioritization,
         # while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,
@@ -232,6 +241,10 @@ class MuZeroContextPolicy(MuZeroPolicy):
             by import_names path. For MuZero, ``lzero.model.muzero_model.MuZeroModel``
         """
         if self._cfg.model.model_type == "conv":
+            return 'MuZeroModel', ['lzero.model.muzero_model']
+        elif self._cfg.model.model_type == "mlp":
+            return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
+        elif self._cfg.model.model_type == "conv_context":
             return 'MuZeroContextModel', ['lzero.model.muzero_context_model']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
@@ -301,6 +314,8 @@ class MuZeroContextPolicy(MuZeroPolicy):
                     update_type='momentum',
                     update_kwargs={'theta': self._cfg.target_update_theta_for_intrinsic_reward}
                 )
+
+        # ========= logging for analysis =========
         self.l2_norm_before = 0.
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
@@ -457,20 +472,10 @@ class MuZeroContextPolicy(MuZeroPolicy):
                     latent_state = to_tensor(latent_state)
                     representation_state = to_tensor(network_output.latent_state)
 
-                    if self._cfg.model.use_sim_norm_kl_loss:
-                        self.num_groups = 64 * 8 * 8 // 8
-                        self.group_size = 8
-                        # Group KL loss, group the features, and then calculate the KL divergence within the group
-                        logits_reshaped = latent_state.reshape(latent_state.shape[0], self.num_groups, self.group_size)
-                        labels_reshaped = representation_state.reshape(latent_state.shape[0], self.num_groups,
-                                                                       self.group_size)
-                        temp_loss = F.kl_div(logits_reshaped.log(), labels_reshaped, reduction='none').sum(dim=-1).mean(
-                            dim=-1)
-                    else:
-                        # NOTE: no grad for the representation_state branch
-                        dynamic_proj = self._learn_model.project(latent_state, with_grad=True)
-                        observation_proj = self._learn_model.project(representation_state, with_grad=False)
-                        temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_k]
+                    # NOTE: no grad for the representation_state branch
+                    dynamic_proj = self._learn_model.project(latent_state, with_grad=True)
+                    observation_proj = self._learn_model.project(representation_state, with_grad=False)
+                    temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_k]
                     consistency_loss += temp_loss
 
             # NOTE: the target policy, target_value_categorical, target_reward_categorical is calculated in
@@ -564,8 +569,8 @@ class MuZeroContextPolicy(MuZeroPolicy):
             # ==============================================================
             # priority related
             # ==============================================================
-            'value_priority_orig': value_priority,
             'value_priority': value_priority.mean().item(),
+            'value_priority_orig': value_priority,  # torch.tensor compatible with ddp settings
 
             'analysis/dormant_ratio_encoder': self.dormant_ratio_encoder,
             'analysis/dormant_ratio_dynamics': self.dormant_ratio_dynamics,
@@ -588,11 +593,8 @@ class MuZeroContextPolicy(MuZeroPolicy):
             self._mcts_collect = MCTSPtree(self._cfg)
         self._collect_mcts_temperature = 1.
         self.collect_epsilon = 0.0
-        if self._cfg.model.model_type == 'conv':
+        if self._cfg.model.model_type == 'conv_context':
             self.last_batch_obs = torch.zeros([8, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(8)]
-        elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([8, self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(8)]
 
     def _forward_collect(
@@ -633,8 +635,14 @@ class MuZeroContextPolicy(MuZeroPolicy):
         self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_collect_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
+            if self._cfg.model.model_type in ["conv", "mlp"]:
+                network_output = self._collect_model.initial_inference(data)
+            elif self._cfg.model.model_type == "conv_context":
+                network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
 
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
@@ -643,63 +651,72 @@ class MuZeroContextPolicy(MuZeroPolicy):
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
-            # the only difference between collect and eval is the dirichlet noise
-            noises = [
-                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                    ).astype(np.float32).tolist() for j in range(active_collect_env_num)
-            ]
-            if self._cfg.mcts_ctree:
-                # cpp mcts_tree
-                roots = MCTSCtree.roots(active_collect_env_num, legal_actions)
-            else:
-                # python mcts_tree
-                roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
-
-            roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
-
-            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
-            roots_visit_count_distributions = roots.get_distributions()
-            roots_values = roots.get_values()  # shape: {list: batch_size}
-
-            data_id = [i for i in range(active_collect_env_num)]
-            output = {i: None for i in data_id}
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_collect_env_num)
-
-            batch_action = []
-            for i, env_id in enumerate(ready_env_id):
-                distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                if self._cfg.eps.eps_greedy_exploration_in_collect:
-                    # eps greedy collect
-                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self._collect_mcts_temperature, deterministic=True
-                    )
-                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                    if np.random.rand() < self.collect_epsilon:
-                        action = np.random.choice(legal_actions[i])
+            if not self._cfg.collect_with_pure_policy:
+                # the only difference between collect and eval is the dirichlet noise
+                noises = [
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                                        ).astype(np.float32).tolist() for j in range(active_collect_env_num)
+                ]
+                if self._cfg.mcts_ctree:
+                    # cpp mcts_tree
+                    roots = MCTSCtree.roots(active_collect_env_num, legal_actions)
                 else:
-                    # normal collect
-                    # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
-                    # the index within the legal action set, rather than the index in the entire action set.
-                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self._collect_mcts_temperature, deterministic=False
-                    )
-                    # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
-                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                output[i] = {
-                    'action': action,
-                    'visit_count_distributions': distributions,
-                    'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'searched_value': value,
-                    'predicted_value': pred_values[i],
-                    'predicted_policy_logits': policy_logits[i],
-                }
-                batch_action.append(action)
+                    # python mcts_tree
+                    roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
-            self.last_batch_obs = data
-            self.last_batch_action = batch_action
+                roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
+                self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
+
+                # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+                roots_visit_count_distributions = roots.get_distributions()
+                roots_values = roots.get_values()  # shape: {list: batch_size}
+
+                batch_action = []
+                for i, env_id in enumerate(ready_env_id):
+                    distributions, value = roots_visit_count_distributions[i], roots_values[i]
+                    if self._cfg.eps.eps_greedy_exploration_in_collect:
+                        # eps greedy collect
+                        action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                            distributions, temperature=self._collect_mcts_temperature, deterministic=True
+                        )
+                        action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                        if np.random.rand() < self.collect_epsilon:
+                            action = np.random.choice(legal_actions[i])
+                    else:
+                        # normal collect
+                        # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                        # the index within the legal action set, rather than the index in the entire action set.
+                        action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                            distributions, temperature=self._collect_mcts_temperature, deterministic=False
+                        )
+                        # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
+                        action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                    output[env_id] = {
+                        'action': action,
+                        'visit_count_distributions': distributions,
+                        'visit_count_distribution_entropy': visit_count_distribution_entropy,
+                        'searched_value': value,
+                        'predicted_value': pred_values[i],
+                        'predicted_policy_logits': policy_logits[i],
+                    }
+                    if self._cfg.model.model_type in ["conv_context"]:
+                        batch_action.append(action)
+
+                if self._cfg.model.model_type in ["conv_context"]:
+                    self.last_batch_obs = data
+                    self.last_batch_action = batch_action
+            else:
+                for i, env_id in enumerate(ready_env_id):
+                    policy_values = torch.softmax(torch.tensor([policy_logits[i][a] for a in legal_actions[i]]), dim=0).tolist()
+                    policy_values = policy_values / np.sum(policy_values)
+                    action_index_in_legal_action_set = np.random.choice(len(legal_actions[i]), p=policy_values)
+                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                    output[env_id] = {
+                        'action': action,
+                        'searched_value': pred_values[i],
+                        'predicted_value': pred_values[i],
+                        'predicted_policy_logits': policy_logits[i],
+                    }
 
         return output
 
@@ -713,12 +730,12 @@ class MuZeroContextPolicy(MuZeroPolicy):
             self._mcts_eval = MCTSCtree(self._cfg)
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
-        if self._cfg.model.model_type == 'conv':
+        if self._cfg.model.model_type == 'conv_context':
             self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(3)]
-        elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape]).to(self._cfg.device)
-            self.last_batch_action = [-1 for i in range(3)]
+            self.last_batch_action = [-1 for _ in range(3)]
+        # elif self._cfg.model.model_type == 'mlp_context':
+        #     self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape]).to(self._cfg.device)
+        #     self.last_batch_action = [-1 for _ in range(3)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
                       ready_env_id: np.array = None, ) -> Dict:
@@ -745,8 +762,14 @@ class MuZeroContextPolicy(MuZeroPolicy):
         """
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_eval_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
+            if self._cfg.model.model_type in ["conv", "mlp"]:
+                network_output = self._eval_model.initial_inference(data)
+            elif self._cfg.model.model_type == "conv_context":
+                network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             if not self._eval_model.training:
@@ -769,12 +792,6 @@ class MuZeroContextPolicy(MuZeroPolicy):
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
-            data_id = [i for i in range(active_eval_env_num)]
-            output = {i: None for i in data_id}
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_eval_env_num)
-
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
@@ -789,7 +806,7 @@ class MuZeroContextPolicy(MuZeroPolicy):
                 # entire action set.
                 action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
 
-                output[i] = {
+                output[env_id] = {
                     'action': action,
                     'visit_count_distributions': distributions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
@@ -797,10 +814,12 @@ class MuZeroContextPolicy(MuZeroPolicy):
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
                 }
-                batch_action.append(action)
+                if self._cfg.model.model_type in ["conv_context"]:
+                    batch_action.append(action)
 
-            self.last_batch_obs = data
-            self.last_batch_action = batch_action
+            if self._cfg.model.model_type in ["conv_context"]:
+                self.last_batch_obs = data
+                self.last_batch_action = batch_action
 
         return output
 
@@ -838,5 +857,35 @@ class MuZeroContextPolicy(MuZeroPolicy):
             'total_grad_norm_before_clip',
         ]
 
+    def _state_dict_learn(self) -> Dict[str, Any]:
+        """
+        Overview:
+            Return the state_dict of learn mode, usually including model, target_model and optimizer.
+        Returns:
+            - state_dict (:obj:`Dict[str, Any]`): The dict of current policy learn state, for saving and restoring.
+        """
+        return {
+            'model': self._learn_model.state_dict(),
+            'target_model': self._target_model.state_dict(),
+            'optimizer': self._optimizer.state_dict(),
+        }
 
+    def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
+        """
+        Overview:
+            Load the state_dict variable into policy learn mode.
+        Arguments:
+            - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
+        """
+        self._learn_model.load_state_dict(state_dict['model'])
+        self._target_model.load_state_dict(state_dict['target_model'])
+        self._optimizer.load_state_dict(state_dict['optimizer'])
+
+    def _process_transition(self, obs, policy_output, timestep):
+        # be compatible with DI-engine Policy class
+        pass
+
+    def _get_train_sample(self, data):
+        # be compatible with DI-engine Policy class
+        pass
 

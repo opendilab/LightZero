@@ -34,7 +34,7 @@ class UniZeroPolicy(Policy):
             # (tuple) The obs shape.
             observation_shape=(3, 64, 64),
             # (bool) Whether to use the self-supervised learning loss.
-            self_supervised_learning_loss=False,
+            self_supervised_learning_loss=True,
             # (bool) Whether to use discrete support to represent categorical distribution for value/reward/value_prefix.
             categorical_distribution=True,
             # (int) The image channel in image observation.

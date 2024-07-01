@@ -113,7 +113,7 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
     env = TimeLimit(env, max_episode_steps=config.max_episode_steps)
     if config.warp_frame:
         # we must set WarpFrame before ScaledFloatFrameWrapper
-        env = WarpFrame(env, width=config.obs_shape[1], height=config.obs_shape[2], grayscale=config.gray_scale)
+        env = WarpFrame(env, width=config.observation_shape[1], height=config.observation_shape[2], grayscale=config.gray_scale)
     if config.scale:
         env = ScaledFloatFrameWrapper(env)
     if clip_rewards:

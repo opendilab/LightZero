@@ -1,21 +1,20 @@
+import math
 from typing import Optional, Tuple
 
-import math
+import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.init as init
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
-from numpy import ndarray
-import numpy as np
 
-from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, PredictionNetworkMLP, FeatureAndGradientHook, SimNorm
-from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
-import torch.nn.init as init
+from lzero.model.muzero_model import MuZeroModel
+from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, FeatureAndGradientHook, SimNorm
 
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
 @MODEL_REGISTRY.register('MuZeroContextModel')
-class MuZeroContextModel(nn.Module):
+class MuZeroContextModel(MuZeroModel):
 
     def __init__(
         self,
@@ -51,9 +50,10 @@ class MuZeroContextModel(nn.Module):
     ):
         """
         Overview:
-            The definition of the neural network model used in MuZero.
-            MuZero model which consists of a representation network, a dynamics network and a prediction network.
-            The networks are built on convolution residual blocks and fully connected layers.
+            The definition of the model for MuZero w/ Context, a variant of MuZero.
+            This variant retains the same training settings as MuZero but diverges during inference
+            by employing a k-step recursively predicted latent representation at the root node,
+            proposed in the UniZero paper https://arxiv.org/abs/2406.10667.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96] for Atari.
             - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
@@ -87,6 +87,10 @@ class MuZeroContextModel(nn.Module):
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
         """
         super(MuZeroContextModel, self).__init__()
+
+        self.timestep = 0
+        self.context_length_init = context_length_init  # NOTE
+
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
             # for vector obs input, e.g. classical control and box2d environments
             # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
@@ -116,21 +120,23 @@ class MuZeroContextModel(nn.Module):
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
         self.downsample = downsample
-        self.analysis_sim_norm=analysis_sim_norm
+        self.analysis_sim_norm = analysis_sim_norm
+
+        if observation_shape[1] == 96:
+            latent_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
+        elif observation_shape[1] == 64:
+            latent_size = math.ceil(observation_shape[1] / 8) * math.ceil(observation_shape[2] / 8)
 
         flatten_output_size_for_reward_head = (
-            (reward_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
+            (reward_head_channels * latent_size) if downsample else
             (reward_head_channels * observation_shape[1] * observation_shape[2])
         )
         flatten_output_size_for_value_head = (
-            (value_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
+            (value_head_channels * latent_size) if downsample else
             (value_head_channels * observation_shape[1] * observation_shape[2])
         )
         flatten_output_size_for_policy_head = (
-            (policy_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
+            (policy_head_channels * latent_size) if downsample else
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
 
@@ -193,10 +199,7 @@ class MuZeroContextModel(nn.Module):
                 # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
                 # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
                 # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
-                ceil_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
-                # self.projection_input_dim = num_channels * ceil_size
-                self.projection_input_dim = 4096 # TODO
-
+                self.projection_input_dim = num_channels * latent_size
             else:
                 self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
@@ -211,8 +214,6 @@ class MuZeroContextModel(nn.Module):
                 activation,
                 nn.Linear(self.pred_hid, self.pred_out),
             )
-        self.timestep = 0
-        self.context_length_init = context_length_init  # TODO
 
     def initial_inference(self, obs: torch.Tensor, action_batch=None, current_obs_batch=None) -> MZNetworkOutput:
         """
@@ -237,14 +238,13 @@ class MuZeroContextModel(nn.Module):
                 latent state, W_ is the width of latent state.
          """
         batch_size = obs.size(0)
-        # obs_act_dict = {'obs':obs, 'action':action_batch, 'current_obs':current_obs_batch}
 
         if self.training or action_batch is None:
-            # 训练
+            # train phase
             self.latent_state = self._representation(obs)
             self.timestep = 0
         else:
-            # collect/eval
+            # collect/eval phase
             if action_batch is not None and max(action_batch) == -1:  # 一集的第一步
                 self.latent_state = self._representation(current_obs_batch)
             else:
@@ -254,10 +254,7 @@ class MuZeroContextModel(nn.Module):
                     # print(f'self.timestep:{self.timestep}, reset latent_state')
                     # context reset method TODO: context recent method
                     self.latent_state = self._representation(current_obs_batch)
-        # try:
         policy_logits, value = self._prediction(self.latent_state)
-        # except Exception:
-        #     print('debug')
         self.timestep += 1
         return MZNetworkOutput(
             value,
@@ -298,150 +295,6 @@ class MuZeroContextModel(nn.Module):
         policy_logits, value = self._prediction(next_latent_state)
         self.latent_state = next_latent_state  # TODO
         return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
-
-    def _representation(self, observation: torch.Tensor) -> torch.Tensor:
-        """
-        Overview:
-            Use the representation network to encode the observations into latent state.
-        Arguments:
-            - obs (:obj:`torch.Tensor`): The 2D image observation data.
-        Returns:
-            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-        Shapes:
-            - obs (:obj:`torch.Tensor`): :math:`(B, num_channel, obs_shape[1], obs_shape[2])`, where B is batch_size.
-            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
-                latent state, W_ is the width of latent state.
-        """
-        latent_state = self.representation_network(observation)
-        if self.state_norm:
-            latent_state = renormalize(latent_state)
-        return latent_state
-
-    def _prediction(self, latent_state: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Overview:
-            Use the prediction network to predict ``policy_logits`` and ``value``.
-        Arguments:
-            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-        Returns:
-            - policy_logits (:obj:`torch.Tensor`): The output logit to select discrete action.
-            - value (:obj:`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
-        Shapes:
-            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
-                latent state, W_ is the width of latent state.
-            - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
-            - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.
-        """
-        return self.prediction_network(latent_state)
-
-    def _dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Overview:
-            Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state``
-            and ``reward``.
-        Arguments:
-            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-            - action (:obj:`torch.Tensor`): The predicted action to rollout.
-        Returns:
-            - next_latent_state (:obj:`torch.Tensor`): The predicted latent state of the next timestep.
-            - reward (:obj:`torch.Tensor`): The predicted reward of the current latent state and selected action.
-        Shapes:
-            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
-                latent state, W_ is the width of latent state.
-            - action (:obj:`torch.Tensor`): :math:`(B, )`, where B is batch_size.
-            - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
-                latent state, W_ is the width of latent state.
-            - reward (:obj:`torch.Tensor`): :math:`(B, reward_support_size)`, where B is batch_size.
-        """
-        # NOTE: the discrete action encoding type is important for some environments
-
-        # discrete action space
-        if self.discrete_action_encoding_type == 'one_hot':
-            # Stack latent_state with the one hot encoded action.
-            # The final action_encoding shape is (batch_size, action_space_size, latent_state[2], latent_state[3]), e.g. (8, 2, 4, 1).
-            if len(action.shape) == 1:
-                # (batch_size, ) -> (batch_size, 1)
-                # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
-                action = action.unsqueeze(-1)
-
-            # transform action to one-hot encoding.
-            # action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)
-            action_one_hot = torch.zeros(action.shape[0], self.action_space_size, device=action.device)
-            # transform action to torch.int64
-            action = action.long()
-            action_one_hot.scatter_(1, action, 1)
-
-            action_encoding_tmp = action_one_hot.unsqueeze(-1).unsqueeze(-1)
-            action_encoding = action_encoding_tmp.expand(
-                latent_state.shape[0], self.action_space_size, latent_state.shape[2], latent_state.shape[3]
-            )
-
-        elif self.discrete_action_encoding_type == 'not_one_hot':
-            # Stack latent_state with the normalized encoded action.
-            # The final action_encoding shape is (batch_size, 1, latent_state[2], latent_state[3]), e.g. (8, 1, 4, 1).
-            if len(action.shape) == 2:
-                # (batch_size, action_dim=1) -> (batch_size, 1, 1, 1)
-                # e.g.,  torch.Size([8, 1]) ->  torch.Size([8, 1, 1, 1])
-                action = action.unsqueeze(-1).unsqueeze(-1)
-            elif len(action.shape) == 1:
-                # (batch_size,) -> (batch_size, 1, 1, 1)
-                # e.g.,  -> torch.Size([8, 1, 1, 1])
-                action = action.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-
-            action_encoding = action.expand(
-                latent_state.shape[0], 1, latent_state.shape[2], latent_state.shape[3]
-            ) / self.action_space_size
-
-        # state_action_encoding shape: (batch_size, latent_state[1] + action_dim, latent_state[2], latent_state[3]) or
-        # (batch_size, latent_state[1] + action_space_size, latent_state[2], latent_state[3]) depending on the discrete_action_encoding_type.
-        state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
-
-        next_latent_state, reward = self.dynamics_network(state_action_encoding)
-        if self.state_norm:
-            next_latent_state = renormalize(next_latent_state)
-        return next_latent_state, reward
-
-    def project(self, latent_state: torch.Tensor, with_grad: bool = True) -> torch.Tensor:
-        """
-        Overview:
-            Project the latent state to a lower dimension to calculate the self-supervised loss, which is involved in
-            MuZero algorithm in EfficientZero.
-            For more details, please refer to the paper ``Exploring Simple Siamese Representation Learning``.
-        Arguments:
-            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-            - with_grad (:obj:`bool`): Whether to calculate gradient for the projection result.
-        Returns:
-            - proj (:obj:`torch.Tensor`): The result embedding vector of projection operation.
-        Shapes:
-            - latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
-                latent state, W_ is the width of latent state.
-            - proj (:obj:`torch.Tensor`): :math:`(B, projection_output_dim)`, where B is batch_size.
-
-        Examples:
-            >>> latent_state = torch.randn(256, 64, 6, 6)
-            >>> output = self.project(latent_state)
-            >>> output.shape # (256, 1024)
-
-        .. note::
-            for Atari:
-            observation_shape = (12, 96, 96),  # original shape is (3,96,96), frame_stack_num=4
-            if downsample is True, latent_state.shape: (batch_size, num_channel, obs_shape[1] / 16, obs_shape[2] / 16)
-            i.e., (256, 64, 96 / 16, 96 / 16) = (256, 64, 6, 6)
-            latent_state reshape: (256, 64, 6, 6) -> (256,64*6*6) = (256, 2304)
-            # self.projection_input_dim = 64*6*6 = 2304
-            # self.projection_output_dim = 1024
-        """
-        latent_state = latent_state.reshape(latent_state.shape[0], -1)
-        proj = self.projection(latent_state)
-
-        if with_grad:
-            # with grad, use prediction_head
-            return self.prediction_head(proj)
-        else:
-            return proj.detach()
-
-    def get_params_mean(self) -> float:
-        return get_params_mean(self)
 
 
 class DynamicsNetwork(nn.Module):
@@ -491,8 +344,6 @@ class DynamicsNetwork(nn.Module):
 
         self.num_channels = num_channels
         self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
-        self.flatten_output_size_for_reward_head = 16*8*8 # TODO: only for obs (4,64,64)
-
 
         self.action_encoding_dim = action_encoding_dim
 
@@ -536,7 +387,7 @@ class DynamicsNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.activation = activation
-        self.use_sim_norm  = use_sim_norm
+        self.use_sim_norm = use_sim_norm
         if self.use_sim_norm:
             self.embedding_dim = embedding_dim
             self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
@@ -584,9 +435,3 @@ class DynamicsNetwork(nn.Module):
             next_latent_state = self.sim_norm(next_latent_state)
 
         return next_latent_state, reward
-
-    def get_dynamic_mean(self) -> float:
-        return get_dynamic_mean(self)
-
-    def get_reward_mean(self) -> Tuple[ndarray, float]:
-        return get_reward_mean(self)

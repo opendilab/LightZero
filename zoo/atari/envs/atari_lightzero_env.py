@@ -34,7 +34,7 @@ class AtariEnvLightZero(BaseEnv):
         # (str) The type of the environment, here it's Atari.
         env_type='Atari',
         # (tuple) The shape of the observation space, which is a stacked frame of 4 images each of 96x96 pixels.
-        obs_shape=(4, 96, 96),
+        observation_shape=(4, 96, 96),
         # (int) The maximum number of steps in each episode during data collection.
         collect_max_episode_steps=int(1.08e5),
         # (int) The maximum number of steps in each episode during evaluation.

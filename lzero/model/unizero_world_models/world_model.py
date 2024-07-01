@@ -14,7 +14,8 @@ from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
 from lzero.model.utils import cal_dormant_ratio
 import numpy as np
-from .utils import SimNorm, WorldModelOutput, quantize_state, to_device_for_kvcache
+from .utils import WorldModelOutput, quantize_state, to_device_for_kvcache
+from lzero.model.common import SimNorm
 import torch
 import torch.nn as nn
 import collections
@@ -193,7 +194,7 @@ class WorldModel(nn.Module):
     def _get_positional_embedding(self, layer, attn_type):
         """
         Helper function to get positional embedding for a given layer and attention type.
-        Args:
+        Arguments:
             layer (int): Layer index.
             attn_type (str): Attention type, either 'key' or 'value'.
         Returns:
@@ -216,7 +217,7 @@ class WorldModel(nn.Module):
         """
         Forward pass for the model.
 
-        Args:
+        Arguments:
             obs_embeddings_or_act_tokens (dict): Dictionary containing observation embeddings or action tokens.
             past_keys_values (Optional[KeysValues]): Previous keys and values for transformer.
             kvcache_independent (bool): Whether to use independent key-value caching.
@@ -277,7 +278,7 @@ class WorldModel(nn.Module):
         """
         Add position embeddings to the input embeddings.
 
-        Args:
+        Arguments:
             embeddings (torch.Tensor): Input embeddings.
             prev_steps (torch.Tensor): Previous steps.
             num_steps (int): Number of steps.
@@ -305,7 +306,7 @@ class WorldModel(nn.Module):
         """
         Process combined observation embeddings and action tokens.
 
-        Args:
+        Arguments:
             obs_embeddings_or_act_tokens (dict): Dictionary containing combined observation embeddings and action tokens.
             prev_steps (torch.Tensor): Previous steps.
 
@@ -335,7 +336,7 @@ class WorldModel(nn.Module):
         """
         Pass sequences through the transformer.
 
-        Args:
+        Arguments:
             sequences (torch.Tensor): Input sequences.
             past_keys_values (Optional[torch.Tensor]): Previous keys and values for transformer.
             kvcache_independent (bool): Whether to use independent key-value caching.
@@ -357,7 +358,7 @@ class WorldModel(nn.Module):
         """
         Reset the model state based on initial observations and actions.
 
-        Args:
+        Arguments:
             obs_act_dict (torch.FloatTensor): A dictionary containing 'obs', 'action', and 'current_obs'.
 
         Returns:
@@ -392,7 +393,7 @@ class WorldModel(nn.Module):
         """
         Refresh key-value pairs with the initial latent state for inference.
 
-        Args:
+        Arguments:
             latent_state (torch.LongTensor): The latent state embeddings.
             buffer_action (optional): Actions taken.
             current_obs_embeddings (optional): Current observation embeddings.
@@ -498,14 +499,14 @@ class WorldModel(nn.Module):
         """
         Perform initial inference based on the given observation-action dictionary.
 
-        Args:
+        Arguments:
             obs_act_dict (dict): Dictionary containing observations and actions.
 
         Returns:
             tuple: A tuple containing output sequence, latent state, logits rewards,
                    logits policy, and logits value.
         """
-        # Unizero has context in the root node
+        # UniZero has context in the root node
         outputs_wm, latent_state = self.reset_from_initial_observations(obs_act_dict)
         self.past_kv_cache_recurrent_infer.clear()
 
@@ -519,7 +520,7 @@ class WorldModel(nn.Module):
         """
         Perform recurrent inference based on the state-action history.
 
-        Args:
+        Arguments:
             state_action_history (list): List containing tuples of state and action history.
             simulation_index (int, optional): Index of the current simulation. Defaults to 0.
             latent_state_index_in_search_path (list, optional): List containing indices of latent states in the search path. Defaults to [].
