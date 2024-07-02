@@ -285,17 +285,17 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id)
 
-                    actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
-                    distributions_dict_no_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
+                    actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
+                    distributions_dict_with_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
                     if self.policy_config.sampled_algo:
-                        root_sampled_actions_dict_no_env_id = {
+                        root_sampled_actions_dict_with_env_id = {
                             k: v['root_sampled_actions']
                             for k, v in policy_output.items()
                         }
 
-                    value_dict_no_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
-                    pred_value_dict_no_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
-                    visit_entropy_dict_no_env_id = {
+                    value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
+                    pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
+                    visit_entropy_dict_with_env_id = {
                         k: v['visit_count_distribution_entropy']
                         for k, v in policy_output.items()
                     }
@@ -308,13 +308,13 @@ class MuZeroEvaluator(ISerialEvaluator):
                     pred_value_dict = {}
                     visit_entropy_dict = {}
                     for index, env_id in enumerate(ready_env_id):
-                        actions[env_id] = actions_no_env_id.pop(index)
-                        distributions_dict[env_id] = distributions_dict_no_env_id.pop(index)
+                        actions[env_id] = actions_with_env_id.pop(env_id)
+                        distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
                         if self.policy_config.sampled_algo:
-                            root_sampled_actions_dict[env_id] = root_sampled_actions_dict_no_env_id.pop(index)
-                        value_dict[env_id] = value_dict_no_env_id.pop(index)
-                        pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
-                        visit_entropy_dict[env_id] = visit_entropy_dict_no_env_id.pop(index)
+                            root_sampled_actions_dict[env_id] = root_sampled_actions_dict_with_env_id.pop(env_id)
+                        value_dict[env_id] = value_dict_with_env_id.pop(env_id)
+                        pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
+                        visit_entropy_dict[env_id] = visit_entropy_dict_with_env_id.pop(env_id)
 
                     # ==============================================================
                     # Interact with env.
@@ -326,24 +326,9 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                         eps_steps_lst[env_id] += 1
 
-                        if hasattr(self._policy.get_attribute('collect_model'), 'world_model'):
-                            if hasattr(self.policy_config,
-                                       'sample_type') and self.policy_config.sample_type == 'episode':
-                                clear_interval = 2000
-                            else:
-                                clear_interval = 200
-                            # print(f'clear_interval: {clear_interval}')
-                            if eps_steps_lst[env_id] % clear_interval == 0:
-                                print(f'clear_interval: {clear_interval}')
-                                self._policy.get_attribute(
-                                    'collect_model').world_model.past_kv_cache_init_infer.clear()
-                                self._policy.get_attribute(
-                                    'collect_model').world_model.past_kv_cache_recurrent_infer.clear()
-                                self._policy.get_attribute(
-                                    'collect_model').world_model.keys_values_wm_list.clear() 
-                                torch.cuda.empty_cache()
-                                print('evaluator: eval_model clear()')
-                                print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
+                        if hasattr(self._policy.get_attribute('eval_model'), 'world_model'):
+                            # only for UniZero now
+                            self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id])
 
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
@@ -442,7 +427,6 @@ class MuZeroEvaluator(ISerialEvaluator):
             if episode_info is not None:
                 info.update(episode_info)
             self._logger.info(self._logger.get_tabulate_vars_hor(info))
-            # self._logger.info(self._logger.get_tabulate_vars(info))
             for k, v in info.items():
                 if k in ['train_iter', 'ckpt_name', 'each_reward']:
                     continue

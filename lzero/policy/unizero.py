@@ -664,6 +664,42 @@ class UniZeroPolicy(Policy):
 
         return output
 
+    def _reset_collect(self, env_id: int = None, current_steps: int = None) -> None:
+        """
+        Overview:
+            This method resets the collection process for a specific environment. It clears caches and memory
+            when certain conditions are met, ensuring optimal performance.
+
+        Arguments:
+            - env_id (:obj:`int`, optional): The ID of the environment to reset. If None or list, the function returns immediately.
+            - current_steps (:obj:`int`, optional): The current step count in the environment. Used to determine
+              whether to clear caches.
+        """
+        # Return immediately if env_id is None or a list
+        if env_id is None or isinstance(env_id, list):
+            return
+
+        # Determine the clear interval based on the environment's sample type
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+
+        # Clear caches if the current steps are a multiple of the clear interval
+        if current_steps % clear_interval == 0:
+            print(f'clear_interval: {clear_interval}')
+
+            # Clear various caches in the collect model's world model
+            world_model = self._collect_model.world_model
+            world_model.past_kv_cache_init_infer.clear()
+            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+                kv_cache_dict_env.clear()
+            world_model.past_kv_cache_recurrent_infer.clear()
+            world_model.keys_values_wm_list.clear()
+
+            # Free up GPU memory
+            torch.cuda.empty_cache()
+
+            print('collector: collect_model clear()')
+            print(f'eps_steps_lst[{env_id}]: {current_steps}')
+    
     def _init_eval(self) -> None:
         """
         Overview:
@@ -768,6 +804,42 @@ class UniZeroPolicy(Policy):
             self.last_batch_action = batch_action
 
         return output
+
+    def _reset_eval(self, env_id: int = None, current_steps: int = None) -> None:
+        """
+        Overview:
+            This method resets the evaluation process for a specific environment. It clears caches and memory
+            when certain conditions are met, ensuring optimal performance.
+
+        Arguments:
+            - env_id (:obj:`int`, optional): The ID of the environment to reset. If None or list, the function returns immediately.
+            - current_steps (:obj:`int`, optional): The current step count in the environment. Used to determine
+              whether to clear caches.
+        """
+        # Return immediately if env_id is None or a list
+        if env_id is None or isinstance(env_id, list):
+            return
+
+        # Determine the clear interval based on the environment's sample type
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+
+        # Clear caches if the current steps are a multiple of the clear interval
+        if current_steps % clear_interval == 0:
+            print(f'clear_interval: {clear_interval}')
+
+            # Clear various caches in the eval model's world model
+            world_model = self._eval_model.world_model
+            world_model.past_kv_cache_init_infer.clear()
+            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+                kv_cache_dict_env.clear()
+            world_model.past_kv_cache_recurrent_infer.clear()
+            world_model.keys_values_wm_list.clear()
+
+            # Free up GPU memory
+            torch.cuda.empty_cache()
+
+            print('evaluator: eval_model clear()')
+            print(f'eps_steps_lst[{env_id}]: {current_steps}')
 
     def _monitor_vars_learn(self) -> List[str]:
         """

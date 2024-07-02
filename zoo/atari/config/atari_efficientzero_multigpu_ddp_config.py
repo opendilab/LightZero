@@ -95,10 +95,6 @@ if __name__ == "__main__":
         with DDPContext():
             # Each iteration uses a different seed for training
             # Change exp_name according to current seed
-<<<<<<< HEAD
             main_config.exp_name = f'data_ez/{env_id[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_ddp_{gpu_num}gpu_seed{seed}'
-=======
-            main_config.exp_name = f'data_efficientzero/{env_id[:-14]}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_ddp_{gpu_num}gpu_seed{seed}'
->>>>>>> origin/main
             main_config = lz_to_ddp_config(main_config)
             train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)

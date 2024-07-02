@@ -318,7 +318,7 @@ class MuZeroCollector(ISerialCollector):
         Returns:
             - return_data (:obj:`List[Any]`): Collected data in the form of a list.
         """
-        # TODO: collect_with_pure_policy as a seperate collector
+        # TODO: collect_with_pure_policy as a separate collector
         if n_episode is None:
             if self._default_n_episode is None:
                 raise RuntimeError("Please specify collect n_episode")
@@ -420,70 +420,68 @@ class MuZeroCollector(ISerialCollector):
                 stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device)
 
                 # ==============================================================
-                # policy forward
+                # Key policy forward step
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon,
-                                                     ready_env_id=ready_env_id)
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
 
+                # Extract relevant policy outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
-                if self.policy_config.sampled_algo:
-                    root_sampled_actions_dict_with_env_id = {
-                        k: v['root_sampled_actions']
-                        for k, v in policy_output.items()
-                    }
                 value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
                 pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
 
-                if not collect_with_pure_policy:
-                    distributions_dict_with_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
-                    if self.policy_config.sampled_algo:
-                        root_sampled_actions_dict_with_env_id = {
-                            k: v['root_sampled_actions']
-                            for k, v in policy_output.items()
-                        }
-                    visit_entropy_dict_with_env_id = {
-                        k: v['visit_count_distribution_entropy']
-                        for k, v in policy_output.items()
+                if self.policy_config.sampled_algo:
+                    root_sampled_actions_dict_with_env_id = {
+                        k: v['root_sampled_actions'] for k, v in policy_output.items()
                     }
+
+                if not collect_with_pure_policy:
+                    distributions_dict_with_env_id = {k: v['visit_count_distributions'] for k, v in
+                                                      policy_output.items()}
+                    visit_entropy_dict_with_env_id = {k: v['visit_count_distribution_entropy'] for k, v in
+                                                      policy_output.items()}
+
                     if self.policy_config.gumbel_algo:
                         improved_policy_dict_with_env_id = {k: v['improved_policy_probs'] for k, v in
-                                                          policy_output.items()}
-                        completed_value_with_env_id = {
-                            k: v['roots_completed_value']
-                            for k, v in policy_output.items()
-                        }
+                                                            policy_output.items()}
+                        completed_value_with_env_id = {k: v['roots_completed_value'] for k, v in policy_output.items()}
 
-                # TODO(pu): subprocess
+                # Initialize dictionaries to store results
                 actions = {}
                 value_dict = {}
                 pred_value_dict = {}
 
                 if not collect_with_pure_policy:
                     distributions_dict = {}
+                    visit_entropy_dict = {}
+
                     if self.policy_config.sampled_algo:
                         root_sampled_actions_dict = {}
-                    visit_entropy_dict = {}
+
                     if self.policy_config.gumbel_algo:
                         improved_policy_dict = {}
                         completed_value_dict = {}
 
-                for index, env_id in enumerate(ready_env_id):
+                # Populate the result dictionaries
+                for env_id in ready_env_id:
                     actions[env_id] = actions_with_env_id.pop(env_id)
                     value_dict[env_id] = value_dict_with_env_id.pop(env_id)
                     pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
 
                     if not collect_with_pure_policy:
                         distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
+
                         if self.policy_config.sampled_algo:
                             root_sampled_actions_dict[env_id] = root_sampled_actions_dict_with_env_id.pop(env_id)
+
                         visit_entropy_dict[env_id] = visit_entropy_dict_with_env_id.pop(env_id)
+
                         if self.policy_config.gumbel_algo:
                             improved_policy_dict[env_id] = improved_policy_dict_with_env_id.pop(env_id)
                             completed_value_dict[env_id] = completed_value_with_env_id.pop(env_id)
 
                 # ==============================================================
-                # Interact with env.
+                # Interact with the environment
                 # ==============================================================
                 timesteps = self._env.step(actions)
 
@@ -545,25 +543,9 @@ class MuZeroCollector(ISerialCollector):
                             completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
 
                     eps_steps_lst[env_id] += 1
-
                     if hasattr(self._policy.get_attribute('collect_model'), 'world_model'):
-                        if hasattr(self.policy_config, 'sample_type') and self.policy_config.sample_type == 'episode':
-                            clear_interval = 2000
-                        else:
-                            clear_interval = 200
-                        if eps_steps_lst[env_id] % clear_interval == 0:
-                            print(f'clear_interval: {clear_interval}')
-                            self._policy.get_attribute('collect_model').world_model.past_kv_cache_init_infer.clear()
-                            for kv_cache_dict_env in self._policy.get_attribute(
-                                    'collect_model').world_model.past_kv_cache_init_infer_envs:
-                                kv_cache_dict_env.clear()
-                            self._policy.get_attribute(
-                                'collect_model').world_model.past_kv_cache_recurrent_infer.clear()
-                            self._policy.get_attribute('collect_model').world_model.keys_values_wm_list.clear()
-
-                            torch.cuda.empty_cache()
-                            print('collector: collect_model clear()')
-                            print(f'eps_steps_lst[{env_id}]:{eps_steps_lst[env_id]}')
+                        # only for UniZero now
+                        self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id])
 
                     total_transitions += 1
 
