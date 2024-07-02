@@ -412,6 +412,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
                 representation_state = to_tensor(network_output.latent_state)
 
                 # NOTE: no grad for the representation_state branch.
+                # import pdb; pdb.set_trace()
                 dynamic_proj = self._learn_model.project(latent_state, with_grad=True)
                 observation_proj = self._learn_model.project(representation_state, with_grad=False)
                 temp_loss = negative_cosine_similarity(dynamic_proj, observation_proj) * mask_batch[:, step_k]
@@ -570,6 +571,10 @@ class EfficientZeroPolicy(MuZeroPolicy):
         self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_collect_env_num)
+        output = {i: None for i in ready_env_id}
+
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
@@ -588,7 +593,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
 
             if not self._cfg.collect_with_pure_policy:
-                # the only difference between collect and eval is the dirichlet noise.
+                # collect with MCTS guided with policy.
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
                                         ).astype(np.float32).tolist() for j in range(active_collect_env_num)
@@ -606,11 +611,6 @@ class EfficientZeroPolicy(MuZeroPolicy):
 
                 roots_visit_count_distributions = roots.get_distributions()
                 roots_values = roots.get_values()  # shape: {list: batch_size}
-
-                data_id = [i for i in range(active_collect_env_num)]
-                output = {i: None for i in data_id}
-                if ready_env_id is None:
-                    ready_env_id = np.arange(active_collect_env_num)
 
                 for i, env_id in enumerate(ready_env_id):
                     distributions, value = roots_visit_count_distributions[i], roots_values[i]
@@ -640,12 +640,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
                         'predicted_policy_logits': policy_logits[i],
                     }
             else:
-                data_id = [i for i in range(active_collect_env_num)]
-                output = {i: None for i in data_id}
-
-                if ready_env_id is None:
-                    ready_env_id = np.arange(active_collect_env_num)
-
+                # collect with pure policy.
                 for i, env_id in enumerate(ready_env_id):
                     policy_values = torch.softmax(torch.tensor([policy_logits[i][a] for a in legal_actions[i]]), dim=0).tolist()
                     policy_values = policy_values / np.sum(policy_values)
@@ -694,6 +689,9 @@ class EfficientZeroPolicy(MuZeroPolicy):
          """
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_eval_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._eval_model.initial_inference(data)
@@ -724,11 +722,6 @@ class EfficientZeroPolicy(MuZeroPolicy):
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
-            data_id = [i for i in range(active_eval_env_num)]
-            output = {i: None for i in data_id}
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_eval_env_num)
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]

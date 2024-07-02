@@ -69,7 +69,6 @@ class Game(game.AbstractGame):
         self,
         rng,
         num_apples=10,
-        # apple_reward=(1, 10),
         apple_reward=(0, 0),
         fix_apple_reward_in_episode=False,
         final_reward=10.0,
@@ -90,10 +89,10 @@ class Game(game.AbstractGame):
         self._episode_length = sum(self._max_frames.values())
         self._num_actions = common.NUM_ACTIONS
         self._colours = common.FIXED_COLOURS.copy()
-        self._colours.update(
-            common.get_shuffled_symbol_colour_map(rng, SYMBOLS_TO_SHUFFLE)
-        )
-
+        # NOTE: randomize the colours of the symbols
+        shuffled_symbol_colour_map = common.get_shuffled_symbol_colour_map(rng, SYMBOLS_TO_SHUFFLE)
+        print(f'shuffled_symbol_colour_map: {shuffled_symbol_colour_map}')
+        self._colours.update(shuffled_symbol_colour_map)
         self._extra_observation_fields = ["chapter_reward_as_string"]
 
     @property
@@ -179,7 +178,11 @@ class Game(game.AbstractGame):
             croppers = common.get_cropper()
         else:
             croppers = None
+        # NOTE: random target_char
         target_char = self._rng.choice(SYMBOLS_TO_SHUFFLE)
+        print(f"self._rng: {self._rng}")
+        print(f"symbols_to_shuffle: {SYMBOLS_TO_SHUFFLE}")
+        print(f"target_char: {target_char}")
         return storytelling.Story(
             [
                 lambda: self._make_explore_phase(target_char),

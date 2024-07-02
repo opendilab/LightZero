@@ -29,7 +29,7 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 minigrid_sampled_efficientzero_config = dict(
-    exp_name=f'data_sampled_efficientzero/{env_id}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
+    exp_name=f'data_sez/{env_id}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed{seed}',
     env=dict(
         env_id=env_id,
         continuous=False,

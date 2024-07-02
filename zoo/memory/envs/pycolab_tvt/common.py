@@ -196,7 +196,6 @@ def keep_n_characters_in_grid(grid, character, n, backdrop_char=BACKGROUND):
     if num_empty_positions < 0:
         raise ValueError("Not enough characters `{}` in grid.".format(character))
     empty_pos = np.random.permutation(char_positions)[:num_empty_positions]
-
     # Remove characters.
     grid = [list(row) for row in grid]
     for (i, j) in empty_pos:

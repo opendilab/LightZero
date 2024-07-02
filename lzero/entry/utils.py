@@ -4,7 +4,29 @@ from typing import Optional, Callable
 import psutil
 from pympler.asizeof import asizeof
 from tensorboardX import SummaryWriter
+from typing import Optional, Callable
+import torch
 
+
+def initialize_zeros_batch(observation_shape, batch_size, device):
+    """
+    Overview:
+        Initialize a zeros tensor for batch observations based on the shape. This function is used to initialize the UniZero model input.
+    Arguments:
+        - observation_shape (:obj:`Union[int, List[int]]`): The shape of the observation tensor.
+        - batch_size (:obj:`int`): The batch size.
+        - device (:obj:`str`): The device to store the tensor.
+    Returns:
+        - zeros (:obj:`torch.Tensor`): The zeros tensor.
+    """
+    if isinstance(observation_shape, list):
+        shape = [batch_size, *observation_shape]
+    elif isinstance(observation_shape, int):
+        shape = [batch_size, observation_shape]
+    else:
+        raise TypeError("observation_shape must be either an int or a list")
+
+    return torch.zeros(shape).to(device)
 
 def random_collect(
         policy_cfg: 'EasyDict',  # noqa

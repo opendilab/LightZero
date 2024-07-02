@@ -1,6 +1,4 @@
 from easydict import EasyDict
-import torch
-torch.cuda.set_device(0)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -17,7 +15,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 lunarlander_muzero_config = dict(
-    exp_name=f'data_muzero/lunarlander_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_muzero/lunarlander_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_name='LunarLander-v2',
         continuous=False,
@@ -39,6 +37,8 @@ lunarlander_muzero_config = dict(
             res_connection_in_dynamics=True,
             norm_type='BN',
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
@@ -82,4 +82,4 @@ if __name__ == "__main__":
         # Update exp_name to include the current seed
         main_config.exp_name = f'data_muzero/lunarlander_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
         from lzero.entry import train_muzero
-        train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)
+        train_muzero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

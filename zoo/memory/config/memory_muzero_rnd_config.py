@@ -30,7 +30,7 @@ target_model_for_intrinsic_reward_update_type = 'assign'  # 'assign' or 'momentu
 # ==============================================================
 
 memory_muzero_rnd_config = dict(
-    exp_name=f'data_mz_rnd_ctree/{env_id}_memlen-{memory_length}_muzero-rnd_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}'
+    exp_name=f'data_mz_rnd_ctree/{env_id}_memlen-{memory_length}_muzero-rnd_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}'
              f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}_pelw{policy_entropy_loss_weight}'
              f'_rnd-rew-{input_type}-{target_model_for_intrinsic_reward_update_type}_seed{seed}',
     env=dict(

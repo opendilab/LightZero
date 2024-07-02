@@ -562,6 +562,7 @@ class MuZeroGameBuffer(GameBuffer):
                 end_index = self._cfg.mini_infer_size * (i + 1)
                 m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device)
                 m_output = model.initial_inference(m_obs)
+
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
                     [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
@@ -606,7 +607,8 @@ class MuZeroGameBuffer(GameBuffer):
             roots_distributions = roots.get_distributions()
             roots_values = roots.get_values()
             policy_index = 0
-            for state_index, child_visit, root_value in zip(pos_in_game_segment_list, child_visits, root_values):
+            # NOTE: It is very important to use the latest MCTS visit count distribution.
+            for state_index, child_visit, game_index in zip(pos_in_game_segment_list, child_visits, batch_index_list):
                 target_policies = []
 
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
@@ -617,6 +619,10 @@ class MuZeroGameBuffer(GameBuffer):
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
                         target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
                     else:
+                        # NOTE: It is very important to use the latest MCTS visit count distribution.
+                        sum_visits = sum(distributions)
+                        child_visit[current_index] = [visit_count / sum_visits for visit_count in distributions]
+
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
                             target_policies.append(
@@ -629,7 +635,7 @@ class MuZeroGameBuffer(GameBuffer):
                             # we replace the data at the corresponding location with the latest search results to keep the most up-to-date targets
                             sim_num = sum(distributions)
                             child_visit[current_index] = [visit_count/sim_num for visit_count in distributions]
-                            root_value[current_index] = searched_value
+                            root_values[current_index] = searched_value
                             if self._cfg.action_type == 'fixed_action_space':
                                 # for atari/classic_control/box2d environments that only have one player.
                                 sum_visits = sum(distributions)
