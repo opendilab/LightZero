@@ -1,6 +1,7 @@
 import inspect
 import logging
-from typing import List, Tuple, Dict, Union
+from typing import List, Dict, Union
+from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -316,16 +317,44 @@ def configure_optimizers(
 
     return optimizer
 
-def prepare_obs_stack4_for_gpt(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
-    obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
-    obs_batch = obs_batch_ori[:, :cfg.model.frame_stack_num * (cfg.model.image_channel if cfg.model.model_type == 'conv' else cfg.model.observation_shape), ...]
 
+def prepare_obs_stack4_for_unizero(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Overview:
+        Prepare the observation stack for UniZero model. This function processes the original batch of observations
+        and prepares it for input into the network. If self-supervised learning is enabled, it also prepares the
+        target batch for self-supervised learning.
+
+    Arguments:
+        - obs_batch_ori (:obj:`np.ndarray`): The original batch of observations as a Numpy array.
+        - cfg (:obj:`EasyDict`): Configuration dictionary containing model parameters and other settings.
+
+    Returns:
+        - obs_batch (:obj:`torch.Tensor`): The processed batch of observations ready for network input.
+        - obs_target_batch (:obj:`torch.Tensor` or None): The target batch for self-supervised learning, or None if not applicable.
+    """
+    assert cfg.model.model_type in ['conv', 'mlp'], f"Model type {cfg.model.model_type} not supported."
+    # Convert the original observation batch to a torch tensor and move it to the specified device.
+    obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
+
+    # Prepare the observation batch based on the model type (conv or other).
+    if cfg.model.model_type == 'conv':
+        obs_batch = obs_batch_ori[:, :cfg.model.frame_stack_num * cfg.model.image_channel, ...]
+    else:
+        obs_batch = obs_batch_ori[:, :cfg.model.frame_stack_num * cfg.model.observation_shape, ...]
+
+    # Initialize the target batch for self-supervised learning if applicable.
     obs_target_batch = None
     if cfg.model.self_supervised_learning_loss:
         if cfg.model.model_type == 'conv':
-            obs_target_batch = obs_batch_ori[:, cfg.model.image_channel:, ...].unfold(1, cfg.model.frame_stack_num * cfg.model.image_channel, cfg.model.image_channel).reshape(
-                obs_batch_ori.shape[0], -1, *obs_batch_ori.shape[2:])
+            # Prepare the target batch for convolutional models.
+            obs_target_batch = (
+                obs_batch_ori[:, cfg.model.image_channel:, ...]
+                .unfold(1, cfg.model.frame_stack_num * cfg.model.image_channel, cfg.model.image_channel)
+                .reshape(obs_batch_ori.shape[0], -1, *obs_batch_ori.shape[2:])
+            )
         else:
+            # Prepare the target batch for non-convolutional models.
             obs_target_batch = obs_batch_ori[:, cfg.model.observation_shape:]
 
     return obs_batch, obs_target_batch

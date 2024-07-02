@@ -41,7 +41,6 @@ class UniZeroModel(nn.Module):
         Overview:
             The definition of the neural network model used in UniZero.
             UniZero model which consists of a representation network, a dynamics network and a prediction network.
-            The networks are built on convolution residual blocks and fully connected layers.
         Arguments:
             - observation_shape (:obj:`SequenceType`): Observation space shape, e.g. [C, W, H]=[12, 96, 96] for Atari.
             - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.

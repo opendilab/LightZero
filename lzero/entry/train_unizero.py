@@ -32,7 +32,9 @@ def train_unizero(
 ) -> 'Policy':
     """
     Overview:
-        The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel Muzero.
+        The train entry for UniZero, proposed in our paper UniZero: Generalized and Efficient Planning with Scalable Latent World Models.
+        UniZero aims to enhance the planning capabilities of reinforcement learning agents by addressing the limitations found in MuZero-style algorithms,
+        particularly in environments requiring the capture of long-term dependencies. More details can be found in https://arxiv.org/abs/2406.10667.
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
             ``Tuple[dict, dict]`` type means [user_config, create_cfg].
@@ -50,18 +52,10 @@ def train_unizero(
     cfg, create_cfg = input_cfg
 
     # Ensure the specified policy type is supported
-    assert create_cfg.policy.type in [
-        'efficientzero', 'unizero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'
-    ], "train_unizero entry now only supports the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero'"
+    assert create_cfg.policy.type in ['unizero'], "train_unizero entry now only supports the following algo.: 'unizero'"
 
     # Import the correct GameBuffer class based on the policy type
-    game_buffer_classes = {
-        'unizero': 'UniZeroGameBuffer',
-        'efficientzero': 'EfficientZeroGameBuffer',
-        'sampled_efficientzero': 'SampledEfficientZeroGameBuffer',
-        'gumbel_muzero': 'GumbelMuZeroGameBuffer',
-        'stochastic_muzero': 'StochasticMuZeroGameBuffer'
-    }
+    game_buffer_classes = {'unizero': 'UniZeroGameBuffer'}
 
     GameBuffer = getattr(__import__('lzero.mcts', fromlist=[game_buffer_classes[create_cfg.policy.type]]),
                          game_buffer_classes[create_cfg.policy.type])

@@ -4,6 +4,7 @@ Overview:
     which can be helpful in analyzing and debugging the inner workings of various models.
 """
 from typing import List, Tuple
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -20,35 +21,38 @@ class LinearOutputHook:
         Overview:
             Initialize the hook.
         """
-        self.outputs = []
+        self.outputs: List[torch.Tensor] = []
 
-    def __call__(self, module, input, output):
+    def __call__(self, module: nn.Module, input: Tuple[torch.Tensor], output: torch.Tensor) -> None:
         """
         Overview:
             Capture the output of the module.
         Arguments:
             - module: The module being hooked.
-            - input: The input to the module.
+            - input: The input to the module (unused in this hook).
             - output: The output from the module.
         """
         self.outputs.append(output)
 
 
-def cal_dormant_ratio(model, *inputs, percentage=0.025):
+def cal_dormant_ratio(model: nn.Module, *inputs: torch.Tensor, percentage: float = 0.025) -> float:
     """
     Overview:
-        Calculate the dormant neuron ratio in the model.
+        Calculate the dormant neuron ratio in the model. A neuron is considered dormant if its output is less than a
+        specified percentage of the average output of the layer. This function is useful for analyzing the sparsity of the model.
+        More details can be found in the paper https://arxiv.org/abs/2302.12902.
     Arguments:
-        - model (:obj:`nn.Module`): The model to evaluate.
+        - model: The model to evaluate.
         - inputs: The inputs to the model.
-        - percentage (:obj:`float`): The threshold percentage to consider a neuron dormant, defaults to 0.025.
+        - percentage: The threshold percentage to consider a neuron dormant, defaults to 0.025.
     Returns:
-        - :obj:`float`: The ratio of dormant neurons in the model.
+        - float: The ratio of dormant neurons in the model.
     """
-    hooks = []
-    hook_handlers = []
-    total_neurons = 0
-    dormant_neurons = 0
+    # List to store hooks and their handlers
+    hooks: List[LinearOutputHook] = []
+    hook_handlers: List[torch.utils.hooks.RemovableHandle] = []
+    total_neurons: int = 0
+    dormant_neurons: int = 0
 
     # Register hooks to capture outputs of specific layers
     for _, module in model.named_modules():
@@ -62,21 +66,23 @@ def cal_dormant_ratio(model, *inputs, percentage=0.025):
         model(*inputs)
 
     # Analyze the captured outputs
-    for module, hook in zip(
-        (module for module in model.modules() if isinstance(module, (nn.Linear, nn.Conv2d, nn.LSTM))), hooks):
-
+    for module, hook in zip((module for module in model.modules() if isinstance(module, (nn.Linear, nn.Conv2d, nn.LSTM))), hooks):
         with torch.no_grad():
             for output_data in hook.outputs:
                 mean_output = output_data.abs().mean(0)
                 avg_neuron_output = mean_output.mean()
                 dormant_indices = (mean_output < avg_neuron_output * percentage).nonzero(as_tuple=True)[0]
+
                 if isinstance(module, nn.Linear):
+                    # Calculate total and dormant neurons for Linear layers
                     total_neurons += module.weight.shape[0] * output_data.shape[0]
                     dormant_neurons += len(dormant_indices)
                 elif isinstance(module, nn.Conv2d):
+                    # Calculate total and dormant neurons for Conv2D layers
                     total_neurons += module.weight.shape[0] * output_data.shape[0] * output_data.shape[2] * output_data.shape[3]
                     dormant_neurons += len(dormant_indices)
                 elif isinstance(module, nn.LSTM):
+                    # Calculate total and dormant neurons for LSTM layers
                     total_neurons += module.hidden_size * module.num_layers * output_data.shape[0] * output_data.shape[1]
                     dormant_neurons += len(dormant_indices)
 
@@ -93,7 +99,6 @@ def cal_dormant_ratio(model, *inputs, percentage=0.025):
         torch.cuda.empty_cache()
 
     return dormant_neurons / total_neurons
-
 
 def renormalize(inputs: torch.Tensor, first_dim: int = 1) -> torch.Tensor:
     """

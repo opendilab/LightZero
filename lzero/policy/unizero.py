@@ -11,7 +11,7 @@ from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
-    prepare_obs_stack4_for_gpt
+    prepare_obs_stack4_for_unizero
 from lzero.policy.muzero import MuZeroPolicy
 
 from .utils import configure_optimizers_nanogpt
@@ -21,7 +21,10 @@ from .utils import configure_optimizers_nanogpt
 class UniZeroPolicy(MuZeroPolicy):
     """
     Overview:
-        The policy class for UniZero.
+        The policy class for UniZero, official implementation for paper UniZero: Generalized and Efficient Planning
+        with Scalable LatentWorld Models. UniZero aims to enhance the planning capabilities of reinforcement learning agents
+        by addressing the limitations found in MuZero-style algorithms, particularly in environments requiring the
+        capture of long-term dependencies. More details can be found in https://arxiv.org/abs/2406.10667.
     """
 
     # The default_config for UniZero policy.
@@ -350,7 +353,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Prepare observations based on frame stack number
         if self._cfg.model.frame_stack_num == 4:
-            obs_batch, obs_target_batch = prepare_obs_stack4_for_gpt(obs_batch_ori, self._cfg)
+            obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
         else:
             obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
