@@ -1,5 +1,5 @@
 import copy
-from typing import List, Dict, Any, Tuple, Union
+from typing import List, Dict, Any, Tuple, Union, Optional
 
 import numpy as np
 import torch
@@ -8,16 +8,15 @@ from ding.model import model_wrap
 from ding.policy.base_policy import Policy
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
-from torch.nn import L1Loss
-import torch.nn.functional as F
-
+from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
+from lzero.model.utils import cal_dormant_ratio
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
     prepare_obs, configure_optimizers
-from lzero.model.utils import cal_dormant_ratio
+from torch.nn import L1Loss
 
 
 @POLICY_REGISTRY.register('muzero')
@@ -866,6 +865,35 @@ class MuZeroPolicy(Policy):
 
         return output
 
+    def _reset_collect(self, data_id: Optional[List[int]] = None) -> None:
+        """
+        Overview:
+            Reset the observation and action for the collector environment.
+        Arguments:
+            - data_id (Optional[List[int]]): List of data ids to reset (not used in this implementation).
+        """
+        if self._cfg.model.model_type in ["conv_context"]:
+            self.last_batch_obs = initialize_zeros_batch(
+                self._cfg.model.observation_shape,
+                self._cfg.collector_env_num,
+                self._cfg.device
+            )
+            self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
+
+    def _reset_eval(self, data_id: Optional[List[int]] = None) -> None:
+        """
+        Overview:
+            Reset the observation and action for the evaluator environment.
+        Arguments:
+            - data_id (Optional[List[int]]): List of data ids to reset (not used in this implementation).
+        """
+        if self._cfg.model.model_type in ["conv_context"]:
+            self.last_batch_obs = initialize_zeros_batch(
+                self._cfg.model.observation_shape,
+                self._cfg.evaluator_env_num,
+                self._cfg.device
+            )
+            self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
     def _monitor_vars_learn(self) -> List[str]:
         """
         Overview:
@@ -924,6 +952,12 @@ class MuZeroPolicy(Policy):
         self._learn_model.load_state_dict(state_dict['model'])
         self._target_model.load_state_dict(state_dict['target_model'])
         self._optimizer.load_state_dict(state_dict['optimizer'])
+
+    def __del__(self):
+        if self._cfg.model.analysis_sim_norm:
+            # Remove hooks after training.
+            self._collect_model.encoder_hook.remove_hooks()
+            self._target_model.encoder_hook.remove_hooks()
 
     def _process_transition(self, obs, policy_output, timestep):
         # be compatible with DI-engine Policy class

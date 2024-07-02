@@ -208,9 +208,5 @@ def train_unizero(
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             break
 
-    if cfg.policy.model.analysis_sim_norm:
-        policy._collect_model.encoder_hook.remove_hooks()
-        policy._target_model.encoder_hook.remove_hooks()
-
     learner.call_hook('after_run')
     return policy

@@ -1,23 +1,20 @@
 import copy
-from typing import List, Dict, Any, Tuple, Union
+from typing import List, Dict, Tuple, Union, Optional
 
 import numpy as np
 import torch
-import torch.optim as optim
-from ding.model import model_wrap
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
 
 from lzero.mcts import MuZeroRNNFullobsMCTSCtree as MCTSCtree
-from lzero.model import ImageTransforms
-from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, select_action, to_torch_float_tensor, ez_network_output_unpack, \
-    mz_rnn_fullobs_network_output_unpack, negative_cosine_similarity, \
-    prepare_obs, \
-    configure_optimizers
-from lzero.policy.muzero import MuZeroPolicy
 from lzero.model.utils import cal_dormant_ratio
+from lzero.policy import scalar_transform, cross_entropy_loss, phi_transform, \
+    select_action, to_torch_float_tensor, ez_network_output_unpack, \
+    mz_rnn_fullobs_network_output_unpack, negative_cosine_similarity, \
+    prepare_obs
+from lzero.policy.muzero import MuZeroPolicy
+from lzero.entry.utils import initialize_zeros_batch
 
 
 @POLICY_REGISTRY.register('muzero_rnn_full_obs')
@@ -528,6 +525,8 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
             self._mcts_collect = MCTSPtree(self._cfg)
         self._collect_mcts_temperature = 1
         self.collect_epsilon = 0.0
+        self.collector_env_num = self._cfg.collector_env_num
+
         if self._cfg.model.model_type == 'conv':
             self.last_batch_obs = torch.zeros([8, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action = [-1 for _ in range(8)]
@@ -660,6 +659,8 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
             self._mcts_eval = MCTSCtree(self._cfg)
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
+        self.evaluator_env_num = self._cfg.evaluator_env_num
+
         if self._cfg.model.model_type == 'conv':
             self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(3)]
@@ -751,3 +752,30 @@ class MuZeroRNNFullObsPolicy(MuZeroPolicy):
             self.last_batch_action = batch_action
 
         return output
+
+    def _reset_collect(self, data_id: Optional[List[int]] = None) -> None:
+        """
+        Overview:
+            Reset the observation and action for the collector environment.
+        Arguments:
+            - data_id (Optional[List[int]]): List of data ids to reset (not used in this implementation).
+        """
+        self.last_batch_obs = initialize_zeros_batch(
+            self._cfg.model.observation_shape,
+            self.collector_env_num,
+            self._cfg.device
+        )
+        self.last_batch_action = [-1 for _ in range(self.collector_env_num)]
+    def _reset_eval(self, data_id: Optional[List[int]] = None) -> None:
+        """
+        Overview:
+            Reset the observation and action for the evaluator environment.
+        Arguments:
+            - data_id (Optional[List[int]]): List of data ids to reset (not used in this implementation).
+        """
+        self.last_batch_obs = initialize_zeros_batch(
+            self._cfg.model.observation_shape,
+            self.evaluator_env_num,
+            self._cfg.device
+        )
+        self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]

@@ -1,5 +1,4 @@
 import copy
-import inspect
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Union
 
@@ -8,23 +7,24 @@ import torch
 from ding.model import model_wrap
 from ding.policy.base_policy import Policy
 from ding.utils import POLICY_REGISTRY
-
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
     prepare_obs_stack4_for_gpt
+from lzero.policy.muzero import MuZeroPolicy
+
 from .utils import configure_optimizers_nanogpt
 
 
 @POLICY_REGISTRY.register('unizero')
-class UniZeroPolicy(Policy):
+class UniZeroPolicy(MuZeroPolicy):
     """
     Overview:
         The policy class for UniZero.
     """
 
-    # The default_config for MuZero policy.
+    # The default_config for UniZero policy.
     config = dict(
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.
@@ -922,10 +922,3 @@ class UniZeroPolicy(Policy):
         self._target_model.load_state_dict(state_dict['target_model'])
         self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
 
-    def _process_transition(self, obs, policy_output, timestep):
-        # be compatible with DI-engine Policy class
-        pass
-
-    def _get_train_sample(self, data):
-        # be compatible with DI-engine Policy class
-        pass

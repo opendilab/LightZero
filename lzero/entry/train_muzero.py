@@ -132,14 +132,6 @@ def train_muzero(
         eval_train_iter_list = []
         eval_train_envstep_list = []
 
-    if create_cfg.policy.type in ["muzero_rnn_full_obs"] or cfg.policy.model.model_type in ["conv_context"]:
-        policy.last_batch_obs = initialize_zeros_batch(
-            cfg.policy.model.observation_shape,
-            len(evaluator_env_cfg),
-            cfg.policy.device
-        )
-        policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
-
     # Evaluate the random agent
     stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
@@ -169,14 +161,6 @@ def train_muzero(
 
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
-            if create_cfg.policy.type in ["muzero_rnn_full_obs"] or cfg.policy.model.model_type in ["conv_context"]:
-                policy.last_batch_obs = initialize_zeros_batch(
-                    cfg.policy.model.observation_shape,
-                    len(evaluator_env_cfg),
-                    cfg.policy.device
-                )
-                policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
-
             if cfg.policy.eval_offline:
                 eval_train_iter_list.append(learner.train_iter)
                 eval_train_envstep_list.append(collector.envstep)
@@ -184,13 +168,6 @@ def train_muzero(
                 stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
                 if stop:
                     break
-        if create_cfg.policy.type in ["muzero_rnn_full_obs"] or cfg.policy.model.model_type in ["conv_context"]:
-            policy.last_batch_obs = initialize_zeros_batch(
-                cfg.policy.model.observation_shape,
-                len(collector_env_cfg),
-                cfg.policy.device
-            )
-            policy.last_batch_action = [-1 for _ in range(len(collector_env_cfg))]
 
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
@@ -238,11 +215,6 @@ def train_muzero(
                         f'eval offline at train_iter: {train_iter}, collector_envstep: {collector_envstep}, reward: {reward}')
                 logging.info(f'eval offline finished!')
             break
-
-    # Remove hooks after training.
-    if cfg.policy.model.analysis_sim_norm:
-        policy._collect_model.encoder_hook.remove_hooks()
-        policy._target_model.encoder_hook.remove_hooks()
 
     # Learner's after_run hook.
     learner.call_hook('after_run')

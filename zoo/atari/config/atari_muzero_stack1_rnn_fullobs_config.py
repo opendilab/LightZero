@@ -20,7 +20,7 @@ context_length_init = 4
 num_unroll_steps = 10
 rnn_hidden_size = 4096
 
-# for debug ===========
+# =========== for debug ===========
 # collector_env_num = 2
 # n_episode = 2
 # evaluator_env_num = 2

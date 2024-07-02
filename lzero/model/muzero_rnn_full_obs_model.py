@@ -211,17 +211,17 @@ class MuZeroRNNFullObsModel(MuZeroModel):
             else:
                 self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
-                self.projection = nn.Sequential(
-                    nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-                    nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-                    nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
-                )
-                self.prediction_head = nn.Sequential(
-                    nn.Linear(self.proj_out, self.pred_hid),
-                    nn.BatchNorm1d(self.pred_hid),
-                    activation,
-                    nn.Linear(self.pred_hid, self.pred_out),
-                )
+            self.projection = nn.Sequential(
+                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
+            )
+            self.prediction_head = nn.Sequential(
+                nn.Linear(self.proj_out, self.pred_hid),
+                nn.BatchNorm1d(self.pred_hid),
+                activation,
+                nn.Linear(self.pred_hid, self.pred_out),
+            )
 
     def initial_inference(self, last_obs: torch.Tensor, last_action=None, current_obs=None, ready_env_id=None,
                           last_ready_env_id=None) -> 'EZNetworkOutputV2':
