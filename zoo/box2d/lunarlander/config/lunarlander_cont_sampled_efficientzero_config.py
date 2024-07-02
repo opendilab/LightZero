@@ -29,7 +29,6 @@ lunarlander_cont_sampled_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        mcts_ctree=True,
         model=dict(
             observation_shape=8,
             action_space_size=2,
@@ -42,6 +41,8 @@ lunarlander_cont_sampled_efficientzero_config = dict(
             res_connection_in_dynamics=True,
             norm_type='BN', 
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
@@ -58,7 +59,7 @@ lunarlander_cont_sampled_efficientzero_config = dict(
         policy_entropy_loss_weight=5e-3,
         n_episode=n_episode,
         eval_freq=int(1e3),
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

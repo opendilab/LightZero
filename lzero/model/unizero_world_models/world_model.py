@@ -57,7 +57,7 @@ class WorldModel(nn.Module):
         self.precompute_pos_emb_diff_kv()
 
         # Initialize action embedding table
-        self.act_embedding_table = nn.Embedding(act_vocab_size, config.embed_dim)
+        self.act_embedding_table = nn.Embedding(config.action_shape, config.embed_dim)
 
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)

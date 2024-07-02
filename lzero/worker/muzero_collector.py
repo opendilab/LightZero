@@ -426,30 +426,30 @@ class MuZeroCollector(ISerialCollector):
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon,
                                                      ready_env_id=ready_env_id)
 
-                actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
+                actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                 if self.policy_config.sampled_algo:
-                    root_sampled_actions_dict_no_env_id = {
+                    root_sampled_actions_dict_with_env_id = {
                         k: v['root_sampled_actions']
                         for k, v in policy_output.items()
                     }
-                value_dict_no_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
-                pred_value_dict_no_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
+                value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
+                pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
 
                 if not collect_with_pure_policy:
-                    distributions_dict_no_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
+                    distributions_dict_with_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
                     if self.policy_config.sampled_algo:
-                        root_sampled_actions_dict_no_env_id = {
+                        root_sampled_actions_dict_with_env_id = {
                             k: v['root_sampled_actions']
                             for k, v in policy_output.items()
                         }
-                    visit_entropy_dict_no_env_id = {
+                    visit_entropy_dict_with_env_id = {
                         k: v['visit_count_distribution_entropy']
                         for k, v in policy_output.items()
                     }
                     if self.policy_config.gumbel_algo:
-                        improved_policy_dict_no_env_id = {k: v['improved_policy_probs'] for k, v in
+                        improved_policy_dict_with_env_id = {k: v['improved_policy_probs'] for k, v in
                                                           policy_output.items()}
-                        completed_value_no_env_id = {
+                        completed_value_with_env_id = {
                             k: v['roots_completed_value']
                             for k, v in policy_output.items()
                         }
@@ -469,18 +469,18 @@ class MuZeroCollector(ISerialCollector):
                         completed_value_dict = {}
 
                 for index, env_id in enumerate(ready_env_id):
-                    actions[env_id] = actions_no_env_id.pop(index)
-                    value_dict[env_id] = value_dict_no_env_id.pop(index)
-                    pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
+                    actions[env_id] = actions_with_env_id.pop(env_id)
+                    value_dict[env_id] = value_dict_with_env_id.pop(env_id)
+                    pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
 
                     if not collect_with_pure_policy:
-                        distributions_dict[env_id] = distributions_dict_no_env_id.pop(index)
+                        distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
                         if self.policy_config.sampled_algo:
-                            root_sampled_actions_dict[env_id] = root_sampled_actions_dict_no_env_id.pop(index)
-                        visit_entropy_dict[env_id] = visit_entropy_dict_no_env_id.pop(index)
+                            root_sampled_actions_dict[env_id] = root_sampled_actions_dict_with_env_id.pop(env_id)
+                        visit_entropy_dict[env_id] = visit_entropy_dict_with_env_id.pop(env_id)
                         if self.policy_config.gumbel_algo:
-                            improved_policy_dict[env_id] = improved_policy_dict_no_env_id.pop(index)
-                            completed_value_dict[env_id] = completed_value_no_env_id.pop(index)
+                            improved_policy_dict[env_id] = improved_policy_dict_with_env_id.pop(env_id)
+                            completed_value_dict[env_id] = completed_value_with_env_id.pop(env_id)
 
                 # ==============================================================
                 # Interact with env.

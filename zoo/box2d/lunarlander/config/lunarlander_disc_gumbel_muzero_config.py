@@ -38,6 +38,8 @@ lunarlander_gumbel_muzero_config = dict(
             res_connection_in_dynamics=True,
             norm_type='BN', 
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         # TODO: test the performance of varied_action_space.
@@ -92,4 +94,4 @@ if __name__ == "__main__":
         Users can refer to lzero/envs/wrappers for more details.
         """
         from lzero.entry import train_muzero_with_gym_env
-        train_muzero_with_gym_env([main_config, create_config], seed=0, max_env_step=max_env_step)
+        train_muzero_with_gym_env([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

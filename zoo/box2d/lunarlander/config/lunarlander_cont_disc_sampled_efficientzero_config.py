@@ -45,6 +45,8 @@ lunarlander_cont_disc_sampled_efficientzero_config = dict(
             res_connection_in_dynamics=True,
             norm_type='BN', 
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,

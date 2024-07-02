@@ -1,6 +1,4 @@
 from easydict import EasyDict
-# import torch
-# torch.cuda.set_device(0)
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -12,9 +10,15 @@ reanalyze_ratio = 0.
 update_per_collect = None
 replay_ratio = 0.25
 max_env_step = int(1e6)
-reanalyze_ratio = 0
-batch_size = 64
+batch_size = 256
 num_unroll_steps = 5
+
+# debug
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 5
+# batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -31,14 +35,8 @@ lunarlander_unizero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        # TODO
-        analysis_sim_norm=False,
-        cal_dormant_ratio=False,
         model_path=None,
-        train_start_after_envsteps=int(0),
-        num_unroll_steps=num_unroll_steps,
         model=dict(
-            analysis_sim_norm=False,
             observation_shape=8,
             action_space_size=4,
             model_type='mlp', 
@@ -47,44 +45,29 @@ lunarlander_unizero_config = dict(
             discrete_action_encoding_type='one_hot',
             res_connection_in_dynamics=True,
             norm_type='LN',
-            reward_support_size=101,
-            value_support_size=101,
-            support_scale=50,
             world_model=dict(
-                tokens_per_block=2,
                 max_blocks=10,
                 max_tokens=2 * 10,
                 context_length=2 * 4,
                 context_length_for_recurrent=2 * 4,
                 gru_gating=False,
                 device='cpu',
-                analysis_sim_norm=False,
-                analysis_dormant_ratio=False,
                 action_shape=4,  # TODO
                 group_size=8,  # NOTE: sim_norm
-                attention='causal',
-                num_layers=4,  # TODO
+                num_layers=4,
                 num_heads=4,
-                embed_dim=256,  # TODO
-                embed_pdrop=0.1,
-                resid_pdrop=0.1,
-                attn_pdrop=0.1,
-                support_size=101,
-                max_cache_size=5000,
-                env_num=8,
+                embed_dim=256,
+                env_num=collector_env_num,
                 collector_env_num=collector_env_num,
                 evaluator_env_num=evaluator_env_num,
-                latent_recon_loss_weight=0.,
-                perceptual_loss_weight=0.,
                 policy_entropy_weight=1e-4,
                 predict_latent_loss_type='group_kl',
                 obs_type='vector',
-                gamma=1,
-                dormant_threshold=0.025,
+                norm_type='LN',
             ),
         ),
-        use_priority=False,  # TODO
-        use_augmentation=False,  # TODO
+        train_start_after_envsteps=int(0),
+        num_unroll_steps=num_unroll_steps,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
@@ -117,11 +100,6 @@ lunarlander_unizero_create_config = dict(
         type='unizero',
         import_names=['lzero.policy.unizero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        get_train_sample=True,
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 lunarlander_unizero_create_config = EasyDict(lunarlander_unizero_create_config)
 create_config = lunarlander_unizero_create_config

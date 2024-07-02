@@ -30,23 +30,6 @@ lunarlander_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        # NOTE: not save ckpt
-        learn=dict(
-            learner=dict(
-                train_iterations=1000000000,
-                dataloader=dict(
-                    num_workers=0,
-                ),
-                log_policy=True,
-                hook=dict(
-                    load_ckpt_before_run='',
-                    log_show_after_iter=1000,
-                    save_ckpt_after_iter=1000000,
-                    save_ckpt_after_run=True,
-                ),
-                cfg_type='BaseLearnerDict',
-            ),
-        ),
         model=dict(
             observation_shape=8,
             action_space_size=4,
