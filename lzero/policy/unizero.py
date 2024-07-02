@@ -197,7 +197,7 @@ class UniZeroPolicy(Policy):
         # (int) The number of steps for calculating target q_value.
         td_steps=5,
         # (int) The number of unroll steps in dynamics network.
-        num_unroll_steps=5,
+        num_unroll_steps=10,
         # (float) The weight of reward loss.
         reward_loss_weight=1,
         # (float) The weight of value loss.

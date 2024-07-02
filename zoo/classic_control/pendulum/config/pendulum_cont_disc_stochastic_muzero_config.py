@@ -40,6 +40,8 @@ pendulum_disc_stochastic_muzero_config = dict(
             latent_state_dim=128,
             self_supervised_learning_loss=True,  # NOTE: default is False.
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,

@@ -27,18 +27,6 @@ mountain_car_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        eps=dict(
-            # (bool) Whether to use eps greedy exploration in collecting data.
-            eps_greedy_exploration_in_collect=True,
-            # (str) The type of decaying epsilon. Options are 'linear', 'exp'.
-            type='linear',
-            # (float) The start value of eps.
-            start=1.,
-            # (float) The end value of eps.
-            end=0.05,
-            # (int) The decay steps from start to end eps.
-            decay=int(1e5),
-        ),
         model=dict(
             observation_shape=2,
             action_space_size=3,
@@ -49,6 +37,8 @@ mountain_car_muzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN', 
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,

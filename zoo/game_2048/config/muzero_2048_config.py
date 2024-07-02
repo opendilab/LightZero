@@ -45,8 +45,8 @@ atari_muzero_config = dict(
             # NOTE: whether to use the self_supervised_learning_loss. default is False
             self_supervised_learning_loss=True,
         ),
-        mcts_ctree=True,
-        gumbel_algo=False,
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         game_segment_length=200,
         update_per_collect=update_per_collect,

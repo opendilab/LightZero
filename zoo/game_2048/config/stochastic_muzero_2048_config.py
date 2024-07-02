@@ -45,8 +45,9 @@ game_2048_stochastic_muzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         use_ture_chance_label_in_chance_encoder=use_ture_chance_label_in_chance_encoder,
-        mcts_ctree=True,
         cuda=True,
         game_segment_length=200,
         update_per_collect=update_per_collect,

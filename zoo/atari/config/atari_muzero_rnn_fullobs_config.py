@@ -45,13 +45,10 @@ atari_muzero_config = dict(
         # eval_max_episode_steps=int(100),
     ),
     policy=dict(
-        analysis_sim_norm=False,
-        cal_dormant_ratio=False,
         model=dict(
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             rnn_hidden_size=rnn_hidden_size,  # latent state shape: 64*8*8=4096  TODO
-            analysis_sim_norm=False,
             observation_shape=(4, 64, 64),
             image_channel=1,
             frame_stack_num=4,
@@ -119,6 +116,6 @@ if __name__ == "__main__":
     seeds = [0, 1, 2]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_muzero_rnn_full-obs_stack4/{env_id[:-14]}_muzero-rnn-fullobs_stack4_H{num_unroll_steps}_initconlen{context_length_init}_sslw{ssl_loss_weight}_hidden-{rnn_hidden_size}_seed{seed}'
+        main_config.exp_name = f'data_muzero_rnn_fullobs_stack4/{env_id[:-14]}_muzero-rnn-fullobs_stack4_H{num_unroll_steps}_initconlen{context_length_init}_sslw{ssl_loss_weight}_hidden-{rnn_hidden_size}_seed{seed}'
         from lzero.entry import train_muzero_context
         train_muzero_context([main_config, create_config], seed=seed, max_env_step=max_env_step)

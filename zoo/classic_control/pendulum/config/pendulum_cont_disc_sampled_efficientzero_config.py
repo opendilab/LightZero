@@ -39,6 +39,8 @@ pendulum_sampled_efficientzero_config = dict(
             lstm_hidden_size=128,
             latent_state_dim=128,
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,

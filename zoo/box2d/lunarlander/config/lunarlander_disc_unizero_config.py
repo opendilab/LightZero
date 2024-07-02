@@ -35,7 +35,6 @@ lunarlander_unizero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        model_path=None,
         model=dict(
             observation_shape=8,
             action_space_size=4,
@@ -60,13 +59,13 @@ lunarlander_unizero_config = dict(
                 env_num=collector_env_num,
                 collector_env_num=collector_env_num,
                 evaluator_env_num=evaluator_env_num,
-                policy_entropy_weight=1e-4,
                 predict_latent_loss_type='group_kl',
                 obs_type='vector',
                 norm_type='LN',
             ),
         ),
-        train_start_after_envsteps=int(0),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         num_unroll_steps=num_unroll_steps,
         cuda=True,
         env_type='not_board_games',
