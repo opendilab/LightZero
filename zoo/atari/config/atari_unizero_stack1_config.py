@@ -20,7 +20,7 @@ reanalyze_ratio = 0.
 batch_size = 64
 num_unroll_steps = 10
 
-# ====== debug =====
+# ====== only for debug =====
 # collector_env_num = 2
 # n_episode = 2
 # evaluator_env_num = 2

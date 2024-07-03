@@ -70,15 +70,10 @@ def calculate_cuda_memory_gb(past_keys_values_cache, num_layers: int):
     return total_memory_gb
 
 
-@lru_cache(maxsize=5000)
-def quantize_state_with_lru_cache(state, num_buckets=15):
-    quantized_state = np.digitize(state, bins=np.linspace(0, 1, num=num_buckets))
-    return tuple(quantized_state)
-
-
 def quantize_state(state, num_buckets=100):
     """
     Quantize the state vector.
+
     Arguments:
         state: The state vector to be quantized.
         num_buckets: The number of quantization buckets.
@@ -91,7 +86,6 @@ def quantize_state(state, num_buckets=100):
     quantized_state_bytes = quantized_state.tobytes()
     hash_object = hashlib.sha256(quantized_state_bytes)
     return hash_object.hexdigest()
-
 
 @dataclass
 class WorldModelOutput:
@@ -115,12 +109,8 @@ def init_weights(module, norm_type='BN'):
         module.weight.data.normal_(mean=0.0, std=0.02)
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
-    elif isinstance(module, nn.LayerNorm):
-        print(f"Init nn.LayerNorm using zero bias, 1 weight")
-        module.bias.data.zero_()
-        module.weight.data.fill_(1.0)
-    elif isinstance(module, nn.GroupNorm):
-        print(f"Init nn.GroupNorm using zero bias, 1 weight")
+    elif isinstance(module, (nn.LayerNorm, nn.GroupNorm)):
+        print(f"Init {module} using zero bias, 1 weight")
         module.bias.data.zero_()
         module.weight.data.fill_(1.0)
     elif isinstance(module, nn.BatchNorm2d):

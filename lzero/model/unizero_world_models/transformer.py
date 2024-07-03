@@ -142,8 +142,12 @@ class Block(nn.Module):
             - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
         x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths)
-        x = self.gate1(x, x_attn) if self.gru_gating else x + x_attn
-        x = self.gate2(x, self.mlp(self.ln2(x))) if self.gru_gating else x + self.mlp(self.ln2(x))
+        if self.gru_gating:
+            x = self.gate1(x, x_attn)
+            x = self.gate2(x, self.mlp(self.ln2(x)))
+        else:
+            x = x + x_attn
+            x = x + self.mlp(self.ln2(x))
 
         return x
 
@@ -247,7 +251,8 @@ class SelfAttention(nn.Module):
     def get_attention_map(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None,
                           valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
-        Compute the attention map for the input sequence.
+        Compute the attention map for the input sequence. This is useful for visualization purposes.
+        More details can be found in visualizing_utils.py.
 
         Arguments:
             - x (:obj:`torch.Tensor`): Input sequence with shape (B, T, C).
