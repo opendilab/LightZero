@@ -61,7 +61,7 @@ class WorldModel(nn.Module):
         print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
         # Initialize action embedding table
-        self.act_embedding_table = nn.Embedding(config.action_shape, config.embed_dim, device=self.device)
+        self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
         print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
 
@@ -69,7 +69,7 @@ class WorldModel(nn.Module):
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
         self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim,
                                                    self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
-        self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_shape)
+        self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
         self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
 
         # Apply weight initialization, the order is important
@@ -87,7 +87,6 @@ class WorldModel(nn.Module):
 
         # Initialize keys and values for transformer
         self._initialize_transformer_keys_values()
-
 
     def _initialize_config_parameters(self) -> None:
         """Initialize configuration parameters."""
@@ -107,7 +106,7 @@ class WorldModel(nn.Module):
         self.perceptual_loss_weight = self.config.perceptual_loss_weight
         self.device = self.config.device
         self.support_size = self.config.support_size
-        self.action_shape = self.config.action_shape
+        self.action_space_size = self.config.action_space_size
         self.max_cache_size = self.config.max_cache_size
         self.env_num = self.config.env_num
         self.num_layers = self.config.num_layers
@@ -458,7 +457,6 @@ class WorldModel(nn.Module):
                             # If a matching value is found, add it to the list
                             self.root_hit_cnt += 1
                             # deepcopy is needed because forward modifies matched_value in place
-                            # self.keys_values_wm_list.append(copy.deepcopy(matched_value.to_device(self.device)))
                             self.keys_values_wm_list.append(copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
@@ -798,11 +796,9 @@ class WorldModel(nn.Module):
 
             if is_init_infer:
                 # Store the latest key-value cache for initial inference
-                # self.past_kv_cache_init_infer_envs[i][cache_key] = copy.deepcopy(self.keys_values_wm_single_env.to_device('cpu'))
                 self.past_kv_cache_init_infer_envs[i][cache_key] = copy.deepcopy(to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
             else:
                 # Store the latest key-value cache for recurrent inference
-                # self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(self.keys_values_wm_single_env.to_device('cpu'))
                 self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
 
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
@@ -837,7 +833,6 @@ class WorldModel(nn.Module):
                 # If a matching cache is found, add it to the lists
                 self.hit_count += 1
                 # Perform a deep copy because the transformer's forward pass might modify matched_value in-place
-                # self.keys_values_wm_list.append(copy.deepcopy(matched_value.to_device(self.device)))
                 self.keys_values_wm_list.append(copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
                 self.keys_values_wm_size_list.append(matched_value.size)
             else:
@@ -1155,7 +1150,7 @@ class WorldModel(nn.Module):
         mask_fill_value = mask_fill.unsqueeze(-1).expand_as(target_value)
         labels_value = target_value.masked_fill(mask_fill_value, -100)
 
-        return labels_policy.reshape(-1, self.action_shape), labels_value.reshape(-1, self.support_size)
+        return labels_policy.reshape(-1, self.action_space_size), labels_value.reshape(-1, self.support_size)
 
     def clear_caches(self):
         """

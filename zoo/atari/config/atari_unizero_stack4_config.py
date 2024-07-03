@@ -38,30 +38,29 @@ atari_unizero_stack4_config.env.update(
 )
 atari_unizero_stack4_config.policy.update(
     dict(
-        model_path=None,
         model=dict(
             observation_shape=(4, 64, 64),
             image_channel=1,
             frame_stack_num=4,
             gray_scale=True,
             action_space_size=action_space_size,
-            downsample=True,
             norm_type=norm_type,
-            world_model=dict(
-                norm_type=norm_type,
+            world_model_cfg=dict(
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,
                 context_length=2 * infer_context_length,
                 # device='cuda',
                 device='cpu',
-                action_shape=action_space_size,
+                action_space_size=action_space_size,
                 num_layers=4,
                 num_heads=8,
                 embed_dim=768,
                 obs_type='image',
+                env_num=max(collector_env_num, evaluator_env_num),
             ),
         ),
-        cuda=True,
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         update_per_collect=update_per_collect,
         replay_ratio=replay_ratio,
         batch_size=batch_size,
@@ -70,7 +69,6 @@ atari_unizero_stack4_config.policy.update(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         replay_buffer_size=int(1e6),
-        env_num=collector_env_num,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     )

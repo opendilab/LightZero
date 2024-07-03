@@ -29,6 +29,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
     # The default_config for UniZero policy.
     config = dict(
+        type='unizero',
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.
             model_type='conv',  # options={'mlp', 'conv'}
@@ -61,7 +62,7 @@ class UniZeroPolicy(MuZeroPolicy):
             analysis_sim_norm=False,
             # (int) The save interval of the model.
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000, ), ), ),
-            world_model=dict(
+            world_model_cfg=dict(
                 # (int) The number of tokens per block.
                 tokens_per_block=2,
                 # (int) The maximum number of blocks.
@@ -79,7 +80,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 # (bool) Whether to analyze dormant ratio.
                 analysis_dormant_ratio=False,
                 # (int) The shape of the action space.
-                action_shape=6,
+                action_space_size=6,
                 # (int) The size of the group, related to simulation normalization.
                 group_size=8,  # NOTE: sim_norm
                 # (str) The type of attention mechanism used. Options could be ['causal'].
@@ -152,6 +153,8 @@ class UniZeroPolicy(MuZeroPolicy):
         collect_with_pure_policy=False,
         # (int) The evaluation frequency.
         eval_freq=int(2e3),
+        # (str) The sample type. Options are ['episode', 'transition'].
+        sample_type='transition',
 
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
@@ -183,8 +186,10 @@ class UniZeroPolicy(MuZeroPolicy):
         optim_type='AdamW',
         # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.0001,
-        # (int) Frequency of target network update.
+        # (int) Frequency of hard target network update.
         target_update_freq=100,
+        # (int) Frequency of soft target network update.
+        target_update_theta=0.05,
         # (int) Frequency of target network update.
         target_update_freq_for_intrinsic_reward=1000,
         # (float) Weight decay for training policy network.
@@ -237,7 +242,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # (float) The degree of correction to use. A value of 0 means no correction,
         # while a value of 1 means full correction.
         priority_prob_beta=0.4,
-        # (int) The initial envstep for training.
+        # (int) The initial Env Steps for training.
         train_start_after_envsteps=int(0),
 
         # ****** UCB ******
@@ -287,7 +292,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # NOTE: nanoGPT optimizer
         self._optimizer_world_model = configure_optimizers_nanogpt(
             model=self._model.world_model,
-            learning_rate=1e-4,
+            learning_rate=self._cfg.learning_rate,
             weight_decay=self._cfg.weight_decay,
             device_type=self._cfg.device,
             betas=(0.9, 0.95),
@@ -295,8 +300,8 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
-
-        # NOTE: need torch 2.0
+        # Ensure that the installed torch version is greater than or equal to 2.0
+        assert int(''.join(filter(str.isdigit, torch.__version__))) >= 200, "We need torch version >= 2.0"
         self._model = torch.compile(self._model)
         self._target_model = torch.compile(self._target_model)
         # NOTE: soft target
@@ -304,7 +309,7 @@ class UniZeroPolicy(MuZeroPolicy):
             self._target_model,
             wrapper_name='target',
             update_type='momentum',
-            update_kwargs={'theta': 0.05}
+            update_kwargs={'theta': self._cfg.target_update_theta}
         )
         self._learn_model = self._model
 
@@ -326,14 +331,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
-        if data[-1]['train_which_component'] == 'transformer':
-            return_loss_dict = self._forward_learn_transformer(data)
-        else:
-            ValueError('Unknown component type')
-        return return_loss_dict
-
-    # @profile
-    def _forward_learn_transformer(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         Overview:
             The forward function for learning policy in learn mode, which is the core of the learning process.
@@ -493,7 +490,7 @@ class UniZeroPolicy(MuZeroPolicy):
             'Current_GPU': current_memory_allocated_gb,
             'Max_GPU': max_memory_allocated_gb,
             'collect_mcts_temperature': self._collect_mcts_temperature,
-            'collect_epsilon': self.collect_epsilon,
+            'collect_epsilon': self._collect_epsilon,
             'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
             'obs_loss': obs_loss,
@@ -543,7 +540,7 @@ class UniZeroPolicy(MuZeroPolicy):
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
         self._collect_mcts_temperature = 1.
-        self.collect_epsilon = 0.0
+        self._collect_epsilon = 0.0
         self.collector_env_num = self._cfg.collector_env_num
         if self._cfg.model.model_type == 'conv':
             self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
@@ -586,18 +583,15 @@ class UniZeroPolicy(MuZeroPolicy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._collect_model.eval()
-        self._collect_model.tokenizer.eval()
-        self._collect_model.world_model.transformer.eval()
 
         self._collect_mcts_temperature = temperature
-        self.collect_epsilon = epsilon
+        self._collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
         if ready_env_id is None:
             ready_env_id = np.arange(active_collect_env_num)
         output = {i: None for i in ready_env_id}
 
         with torch.no_grad():
-
             network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
@@ -635,7 +629,7 @@ class UniZeroPolicy(MuZeroPolicy):
                         distributions, temperature=self._collect_mcts_temperature, deterministic=True
                     )
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                    if np.random.rand() < self.collect_epsilon:
+                    if np.random.rand() < self._collect_epsilon:
                         action = np.random.choice(legal_actions[i])
                 else:
                     # normal collect
@@ -712,8 +706,6 @@ class UniZeroPolicy(MuZeroPolicy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._eval_model.eval()
-        self._eval_model.tokenizer.eval()
-        self._eval_model.world_model.transformer.eval()
         active_eval_env_num = data.shape[0]
         if ready_env_id is None:
             ready_env_id = np.arange(active_eval_env_num)
@@ -945,3 +937,12 @@ class UniZeroPolicy(MuZeroPolicy):
         self._target_model.load_state_dict(state_dict['target_model'])
         self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
 
+    def recompute_pos_emb_diff_and_clear_cache(self) -> None:
+        """
+        Overview:
+            Clear the caches and precompute positional embedding matrices in the model.
+        """
+        for model in [self._collect_model, self._target_model]:
+            model.world_model.precompute_pos_emb_diff_kv()
+            model.world_model.clear_caches()
+        torch.cuda.empty_cache()

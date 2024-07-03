@@ -499,17 +499,17 @@ def compute_entropy(policy_probs: torch.Tensor) -> torch.Tensor:
     return entropy
 
 
-def get_max_entropy(action_shape: int) -> np.float32:
+def get_max_entropy(action_space_size: int) -> np.float32:
     """
     Overview:
         get the max entropy of the action space.
     Arguments:
-        - action_shape (:obj:`int`): the shape of the action space
+        - action_space_size (:obj:`int`): the shape of the action space
     Returns:
         - max_entropy (:obj:`float`): the max entropy of the action space
     """
-    p = 1.0 / action_shape
-    return -action_shape * p * np.log2(p)
+    p = 1.0 / action_space_size
+    return -action_space_size * p * np.log2(p)
 
 
 def select_action(visit_counts: np.ndarray,

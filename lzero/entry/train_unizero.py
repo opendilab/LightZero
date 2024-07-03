@@ -19,7 +19,7 @@ from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
-from .utils import random_collect, initialize_zeros_batch
+from .utils import random_collect
 
 
 def train_unizero(
@@ -74,7 +74,7 @@ def train_unizero(
 
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
-    set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
+    set_pkg_seed(cfg.seed, use_cuda=torch.cuda.is_available())
 
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
@@ -155,8 +155,10 @@ def train_unizero(
 
         # Train the policy if sufficient data is available
         if collector.envstep > cfg.policy.train_start_after_envsteps:
-            # data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size  # For 'episode' sample type
-            data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
+            if cfg.policy.sample_type == 'episode':
+                data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
+            else:
+                data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
             if not data_sufficient:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
@@ -165,27 +167,18 @@ def train_unizero(
                 continue
 
             for i in range(update_per_collect):
-                if data_sufficient:
-                    train_data = replay_buffer.sample(batch_size, policy)
-                    if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
-                        # Clear caches and precompute positional embedding matrices
-                        for model in [policy._collect_model, policy._target_model]:
-                            model.world_model.clear_caches()
-                        model.world_model.precompute_pos_emb_diff_kv()  # TODO
-                        torch.cuda.empty_cache()
+                train_data = replay_buffer.sample(batch_size, policy)
+                if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
+                    # Clear caches and precompute positional embedding matrices
+                    policy.recompute_pos_emb_diff_and_clear_cache()  # TODO
 
-                    train_data.append({'train_which_component': 'transformer'})
-                    log_vars = learner.train(train_data, collector.envstep)
+                train_data.append({'train_which_component': 'transformer'})
+                log_vars = learner.train(train_data, collector.envstep)
 
-                    if cfg.policy.use_priority:
-                        replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+                if cfg.policy.use_priority:
+                    replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
-        # Clear caches and precompute positional embedding matrices
-        for model in [policy._collect_model, policy._target_model]:
-            model.world_model.precompute_pos_emb_diff_kv()
-            model.world_model.clear_caches()
-
-        torch.cuda.empty_cache()
+        policy.recompute_pos_emb_diff_and_clear_cache()
 
         # Check stopping criteria
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:

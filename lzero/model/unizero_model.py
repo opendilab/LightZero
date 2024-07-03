@@ -3,6 +3,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 from ding.utils import MODEL_REGISTRY, SequenceType
+from easydict import EasyDict
 
 from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
     VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook
@@ -21,9 +22,9 @@ class UniZeroModel(nn.Module):
             num_res_blocks: int = 1,
             num_channels: int = 64,
             activation: nn.Module = nn.GELU(approximate='tanh'),
-            downsample: bool = False,
+            downsample: bool = True,
             norm_type: Optional[str] = 'BN',
-            env_name='atari',
+            world_model_cfg: EasyDict = None,
             *args,
             **kwargs
     ):
@@ -47,14 +48,27 @@ class UniZeroModel(nn.Module):
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
                 we don't need this module.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
+            - world_model_cfg (:obj:`EasyDict`): The configuration of the world model, including the following keys:
+                - obs_type (:obj:`str`): The type of observation, which can be 'image', 'vector', or 'image_memory'.
+                - embed_dim (:obj:`int`): The dimension of the embedding.
+                - group_size (:obj:`int`): The group size of the transformer.
+                - max_blocks (:obj:`int`): The maximum number of blocks in the transformer.
+                - max_tokens (:obj:`int`): The maximum number of tokens in the transformer.
+                - context_length (:obj:`int`): The context length of the transformer.
+                - device (:obj:`str`): The device of the model, which can be 'cuda' or 'cpu'.
+                - action_space_size (:obj:`int`): The shape of the action.
+                - num_layers (:obj:`int`): The number of layers in the transformer.
+                - num_heads (:obj:`int`): The number of heads in the transformer.
+                - policy_entropy_weight (:obj:`float`): The weight of the policy entropy.
+                - analysis_sim_norm (:obj:`bool`): Whether to analyze the similarity of the norm.
         """
         super(UniZeroModel, self).__init__()
         self.action_space_size = action_space_size
         self.activation = activation
         self.downsample = downsample
-        self.env_name = env_name
+        world_model_cfg.norm_type = norm_type
+        assert world_model_cfg.max_tokens == 2 * world_model_cfg.max_blocks, 'max_tokens should be 2 * max_blocks, because each timestep has 2 tokens: obs and action'
 
-        world_model_cfg = kwargs['world_model']
         if world_model_cfg.obs_type == 'vector':
             self.representation_network = RepresentationNetworkMLP(
                 observation_shape,

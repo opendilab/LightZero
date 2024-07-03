@@ -52,26 +52,23 @@ atari_unizero_config = dict(
         model=dict(
             observation_shape=(3, 64, 64),
             action_space_size=action_space_size,
-            downsample=True,
             norm_type=norm_type,
-            world_model=dict(
-                norm_type=norm_type,
+            world_model_cfg=dict(
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,
                 # device='cuda',
                 device='cpu',
-                action_shape=action_space_size,
+                action_space_size=action_space_size,
                 num_layers=4,
                 num_heads=8,
                 embed_dim=768,
-                policy_entropy_weight=1e-4,
                 obs_type='image',
+                env_num=max(collector_env_num, evaluator_env_num),
             ),
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
-        cuda=True,
         num_unroll_steps=num_unroll_steps,
         update_per_collect=update_per_collect,
         replay_ratio=replay_ratio,
@@ -81,7 +78,6 @@ atari_unizero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         replay_buffer_size=int(1e6),
-        env_num=collector_env_num,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

@@ -1,18 +1,16 @@
 import copy
+import os
 from datetime import datetime
 from typing import List
 
 import gymnasium as gym
+import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
-
-from PIL import Image
-import matplotlib.pyplot as plt
-import os
-
 from matplotlib import animation
 
 
@@ -108,7 +106,7 @@ class MemoryEnvLightZero(BaseEnv):
                 EXPLORE_GRID=PASSIVE_EXPLORE_GRID,
             )
         elif self._cfg.env_id == 'key_to_door':
-            from zoo.memory.envs.pycolab_tvt.key_to_door import Game, REWARD_GRID_SR, MAX_FRAMES_PER_PHASE_SR
+            from zoo.memory.envs.pycolab_tvt.key_to_door import Game, REWARD_GRID_SR
             self._game = Game(
                 self._rng,
                 num_apples=self._cfg.num_apples,

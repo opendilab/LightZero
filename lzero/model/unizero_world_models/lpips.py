@@ -1,5 +1,5 @@
 """
-Credits to https://github.com/CompVis/taming-transformers
+Modified from https://github.com/CompVis/taming-transformers
 """
 
 import hashlib

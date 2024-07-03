@@ -52,7 +52,7 @@ class MZNetworkOutput:
 
 class SimNorm(nn.Module):
 
-    def __init__(self, simnorm_dim):
+    def __init__(self, simnorm_dim: int) -> None:
         """
         Overview:
             Simplicial normalization. Adapted from https://arxiv.org/abs/2204.00616.
@@ -62,14 +62,14 @@ class SimNorm(nn.Module):
         super().__init__()
         self.dim = simnorm_dim
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Overview:
             Forward pass of the SimNorm layer.
         Arguments:
             - x (:obj:`torch.Tensor`): The input tensor to normalize.
         Returns:
-            - :obj:`torch.Tensor`: The normalized tensor.
+            - x (:obj:`torch.Tensor`): The normalized tensor.
         """
         shp = x.shape
         # Ensure that there is at least one simplex to normalize across.
@@ -80,12 +80,12 @@ class SimNorm(nn.Module):
         else:
             return x
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """
         Overview:
             String representation of the SimNorm layer.
         Returns:
-            - :obj:`str`: The string representation.
+            - output (:obj:`str`): The string representation.
         """
         return f"SimNorm(dim={self.dim})"
 
@@ -176,7 +176,7 @@ class DownSample(nn.Module):
             - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[12, 96, 96]
                 for video games like atari, RGB 3 channel times stack 4 frames.
             - out_channels (:obj:`int`): The output channels of output hidden state.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
+            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(inplace=True). \
                 Use the inplace operation to speed up.
             - norm_type (:obj:`Optional[str]`): The normalization type used in network, defaults to 'BN'. 
         """
@@ -289,7 +289,7 @@ class RepresentationNetworkUniZero(nn.Module):
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
                 we don't need this module.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
+            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(inplace=True). \
                 Use the inplace operation to speed up.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - embedding_dim (:obj:`int`): The dimension of the latent state.
@@ -389,7 +389,7 @@ class RepresentationNetwork(nn.Module):
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
                 we don't need this module.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
+            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(inplace=True). \
                 Use the inplace operation to speed up.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - embedding_dim (:obj:`int`): The dimension of the output hidden state.
@@ -484,7 +484,7 @@ class RepresentationNetworkMLP(nn.Module):
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
                 defaults to True. This option is often used in video games like Atari. In board games like go, \
                 we don't need this module.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \
+            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(inplace=True). \
                 Use the inplace operation to speed up.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
@@ -517,7 +517,7 @@ class RepresentationNetworkMLP(nn.Module):
 
 class LatentDecoder(nn.Module):
     
-    def __init__(self, embedding_dim: int, output_shape: SequenceType, num_channels: int = 64):
+    def __init__(self, embedding_dim: int, output_shape: SequenceType, num_channels: int = 64, activation: nn.Module = nn.GELU(approximate='tanh')):
         """
         Overview:
             Decoder network used in UniZero. Decode the latent state into 3D image obs.
@@ -526,11 +526,13 @@ class LatentDecoder(nn.Module):
             - output_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[3, 64, 64]
                 for video games like atari, RGB 3 channel times stack 4 frames.
             - num_channels (:obj:`int`): The channel of output hidden state.
+            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.GELU(approximate='tanh').
         """
         super().__init__()
         self.embedding_dim = embedding_dim
         self.output_shape = output_shape  # (C, H, W)
         self.num_channels = num_channels
+        self.activation = activation
 
         # Assuming that the output shape is (C, H, W) = (12, 96, 96) and embedding_dim is 256
         # We will reverse the process of the representation network
@@ -542,12 +544,12 @@ class LatentDecoder(nn.Module):
         self.conv_blocks = nn.ModuleList([
             # Block 1: (num_channels, H/8, W/8) -> (num_channels//2, H/4, W/4)
             nn.ConvTranspose2d(num_channels, num_channels // 2, kernel_size=3, stride=2, padding=1, output_padding=1),
-            nn.ReLU(),
+            self.activation,
             nn.BatchNorm2d(num_channels // 2),
             # Block 2: (num_channels//2, H/4, W/4) -> (num_channels//4, H/2, W/2)
             nn.ConvTranspose2d(num_channels // 2, num_channels // 4, kernel_size=3, stride=2, padding=1,
                                output_padding=1),
-            nn.ReLU(),
+            self.activation,
             nn.BatchNorm2d(num_channels // 4),
             # Block 3: (num_channels//4, H/2, W/2) -> (output_shape[0], H, W)
             nn.ConvTranspose2d(num_channels // 4, output_shape[0], kernel_size=3, stride=2, padding=1,

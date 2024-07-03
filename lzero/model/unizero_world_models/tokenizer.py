@@ -51,8 +51,6 @@ class Tokenizer(nn.Module):
         self.encoder = encoder
         self.decoder_network = decoder_network
 
-    import torch
-
     def encode_to_obs_embeddings(self, x: torch.Tensor) -> torch.Tensor:
         """
         Encode observations to embeddings.
@@ -71,7 +69,7 @@ class Tokenizer(nn.Module):
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 3:
             # Case when input is 3D (B, T, E)
-            x = x.view(-1, shape[-1])  # Flatten the last two dimensions (B * T, E)
+            x = x.contiguous().view(-1, shape[-1])  # Flatten the last two dimensions (B * T, E)
             obs_embeddings = self.encoder(x)
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 4:
@@ -80,7 +78,7 @@ class Tokenizer(nn.Module):
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 5:
             # Case when input is 5D (B, T, C, H, W)
-            x = x.view(-1, *shape[-3:])  # Flatten the first two dimensions (B * T, C, H, W)
+            x = x.contiguous().view(-1, *shape[-3:])  # Flatten the first two dimensions (B * T, C, H, W)
             obs_embeddings = self.encoder(x)
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         else:
