@@ -229,13 +229,13 @@ class MuZeroModel(nn.Module):
                 latent state, W_ is the width of latent state.
          """
         batch_size = obs.size(0)
-        self.latent_state = self._representation(obs)
-        policy_logits, value = self._prediction(self.latent_state)
+        latent_state = self._representation(obs)
+        policy_logits, value = self._prediction(latent_state)
         return MZNetworkOutput(
             value,
             [0. for _ in range(batch_size)],
             policy_logits,
-            self.latent_state,
+            latent_state,
         )
 
     def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
