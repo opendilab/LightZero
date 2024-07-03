@@ -17,7 +17,7 @@ from .slicer import Head
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
-from .utils import WorldModelOutput, quantize_state, to_device_for_kvcache
+from .utils import WorldModelOutput, quantize_state
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -458,13 +458,11 @@ class WorldModel(nn.Module):
                             # If a matching value is found, add it to the list
                             self.root_hit_cnt += 1
                             # deepcopy is needed because forward modifies matched_value in place
-                            self.keys_values_wm_list.append(
-                                copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
+                            self.keys_values_wm_list.append(copy.deepcopy(matched_value.to_device(self.device)))
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
                             # Reset using zero values
-                            self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1,
-                                                                                                         max_tokens=self.context_length)
+                            self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
                             outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
                                                       past_keys_values=self.keys_values_wm_single_env,
                                                       is_init_infer=True)
@@ -799,12 +797,10 @@ class WorldModel(nn.Module):
 
             if is_init_infer:
                 # Store the latest key-value cache for initial inference
-                self.past_kv_cache_init_infer_envs[i][cache_key] = copy.deepcopy(
-                    to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                self.past_kv_cache_init_infer_envs[i][cache_key] = copy.deepcopy(self.keys_values_wm_single_env.to_device('cpu'))
             else:
                 # Store the latest key-value cache for recurrent inference
-                self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(
-                    to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(self.keys_values_wm_single_env.to_device('cpu'))
 
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
                                      simulation_index: int = 0) -> list:
@@ -838,7 +834,7 @@ class WorldModel(nn.Module):
                 # If a matching cache is found, add it to the lists
                 self.hit_count += 1
                 # Perform a deep copy because the transformer's forward pass might modify matched_value in-place
-                self.keys_values_wm_list.append(copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
+                self.keys_values_wm_list.append(copy.deepcopy(matched_value.to_device(self.device)))
                 self.keys_values_wm_size_list.append(matched_value.size)
             else:
                 # If no matching cache is found, generate a new one using zero reset

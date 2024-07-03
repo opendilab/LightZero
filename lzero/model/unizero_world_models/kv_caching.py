@@ -206,6 +206,23 @@ class KeysValues:
         for kv_cache in self._keys_values:
             kv_cache.prune(mask)
 
+    def to_device(self, device: str):
+        """
+        Transfer all KVCache objects within the KeysValues object to a certain device.
+
+        Arguments:
+            - self._keys_values (KeysValues): The KeysValues object to be transferred.
+            - device (str): The device to transfer to.
+        Returns:
+            - keys_values (KeysValues): The KeysValues object with its caches transferred to the specified device.
+        """
+        device = torch.device(device if torch.cuda.is_available() else 'cpu')
+
+        for kv_cache in self._keys_values:
+            kv_cache._k_cache._cache = kv_cache._k_cache._cache.to(device)
+            kv_cache._v_cache._cache = kv_cache._v_cache._cache.to(device)
+        return self._keys_values
+
 
 class AssignWithoutInplaceCheck(torch.autograd.Function):
     """
