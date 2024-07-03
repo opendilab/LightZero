@@ -2,7 +2,6 @@ from easydict import EasyDict
 from env_action_space_map import env_action_space_map
 from zoo.atari.config.atari_unizero_config import atari_unizero_config, atari_unizero_create_config
 
-norm_type = 'BN'
 env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
 action_space_size = env_action_space_map[env_id]
 
@@ -44,13 +43,12 @@ atari_unizero_stack4_config.policy.update(
             frame_stack_num=4,
             gray_scale=True,
             action_space_size=action_space_size,
-            norm_type=norm_type,
             world_model_cfg=dict(
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,
                 context_length=2 * infer_context_length,
-                # device='cuda',
-                device='cpu',
+                device='cuda',
+                # device='cpu',
                 action_space_size=action_space_size,
                 num_layers=4,
                 num_heads=8,

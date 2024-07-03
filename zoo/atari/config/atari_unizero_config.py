@@ -1,7 +1,6 @@
 from easydict import EasyDict
 from env_action_space_map import env_action_space_map
 
-norm_type = 'BN'
 env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
 
 action_space_size = env_action_space_map[env_id]
@@ -52,7 +51,6 @@ atari_unizero_config = dict(
         model=dict(
             observation_shape=(3, 64, 64),
             action_space_size=action_space_size,
-            norm_type=norm_type,
             world_model_cfg=dict(
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
@@ -104,6 +102,6 @@ if __name__ == "__main__":
     seeds = [0]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_unizero/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_normtype-{norm_type}_seed{seed}'
+        main_config.exp_name = f'data_unizero/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

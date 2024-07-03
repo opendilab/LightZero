@@ -7,7 +7,7 @@ from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
 
-from lzero.mcts import MuZeroRNNFullobsMCTSCtree as MCTSCtree
+from lzero.mcts import MuZeroRNNFullObsMCTSCtree as MCTSCtree
 from lzero.model.utils import cal_dormant_ratio
 from lzero.policy import scalar_transform, cross_entropy_loss, phi_transform, \
     select_action, to_torch_float_tensor, ez_network_output_unpack, \

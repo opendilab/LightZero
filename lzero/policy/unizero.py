@@ -56,7 +56,7 @@ class UniZeroPolicy(MuZeroPolicy):
             bias=True,
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
-            # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
+            # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'BN'.
             norm_type='BN',
             # (bool) Whether to analyze simulation normalization.
             analysis_sim_norm=False,
