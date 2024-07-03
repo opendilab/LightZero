@@ -5,7 +5,7 @@ import torch.nn as nn
 from ding.utils import MODEL_REGISTRY, SequenceType
 
 from .common import MZNetworkOutput, RepresentationNetworkGPT, RepresentationNetworkMLP, LatentDecoder, \
-    VectorDecoderMemory, LatentEncoderMemory, LatentDecoderMemory, FeatureAndGradientHook
+    VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook
 from lzero.model.unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model import WorldModel
 
@@ -98,7 +98,7 @@ class UniZeroModel(nn.Module):
                 group_size=world_model_cfg.group_size,
             )
             # TODO: only for visualmatch now
-            decoder_network = VectorDecoderMemory(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
+            decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
             self.tokenizer = Tokenizer(encoder=self.representation_network,
                                        decoder_network=decoder_network, with_lpips=False)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
@@ -142,7 +142,7 @@ class UniZeroModel(nn.Module):
             print('==' * 20)
         elif world_model_cfg.obs_type == 'image_memory':
             # bigger encoder/decoder
-            self.representation_network = LatentEncoderMemory(
+            self.representation_network = LatentEncoderForMemoryEnv(
                 image_shape=(3, 5, 5),
                 embedding_size=world_model_cfg.embed_dim,
                 channels=[16, 32, 64],
@@ -152,7 +152,7 @@ class UniZeroModel(nn.Module):
                 group_size=world_model_cfg.group_size,
             )
             # Instantiate the decoder
-            decoder_network = LatentDecoderMemory(
+            decoder_network = LatentDecoderForMemoryEnv(
                 image_shape=(3, 5, 5),
                 embedding_size=world_model_cfg.embed_dim,
                 channels=[64, 32, 16],

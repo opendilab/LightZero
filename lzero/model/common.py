@@ -567,7 +567,7 @@ class LatentDecoder(nn.Module):
         return x
 
 
-class LatentEncoderMemory(nn.Module):
+class LatentEncoderForMemoryEnv(nn.Module):
 
     def __init__(
             self,
@@ -596,7 +596,7 @@ class LatentEncoderMemory(nn.Module):
             - normalize_pixel (:obj:`bool`): Whether to normalize the pixel values to [0, 1], defaults to False.
             - group_size (:obj:`int`): The dimension for simplicial normalization
         """
-        super(LatentEncoderMemory, self).__init__()
+        super(LatentEncoderForMemoryEnv, self).__init__()
         self.shape = image_shape
         self.channels = [image_shape[0]] + list(channels)
 
@@ -632,7 +632,7 @@ class LatentEncoderMemory(nn.Module):
         return x
 
 
-class LatentDecoderMemory(nn.Module):
+class LatentDecoderForMemoryEnv(nn.Module):
 
     def __init__(
             self,
@@ -657,7 +657,7 @@ class LatentDecoderMemory(nn.Module):
             - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.LeakyReLU(). \
                 Use the inplace operation to speed up.
         """
-        super(LatentDecoderMemory, self).__init__()
+        super(LatentDecoderForMemoryEnv, self).__init__()
         self.shape = image_shape
         self.channels = list(channels) + [image_shape[0]]
 
@@ -686,7 +686,7 @@ class LatentDecoderMemory(nn.Module):
         return x
 
 
-class VectorDecoderMemory(nn.Module):
+class VectorDecoderForMemoryEnv(nn.Module):
 
     def __init__(
             self,
