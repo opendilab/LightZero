@@ -13,7 +13,6 @@ from einops import rearrange
 
 from lzero.model.common import SimNorm
 from lzero.model.utils import cal_dormant_ratio
-from .kv_caching import KeysValues
 from .slicer import Head
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
@@ -128,7 +127,7 @@ class WorldModel(nn.Module):
         """Create head modules for the transformer."""
         modules = [
             nn.Linear(self.config.embed_dim, self.config.embed_dim),
-            nn.GELU(),
+            nn.GELU(approximate='tanh'),
             nn.Linear(self.config.embed_dim, output_dim)
         ]
         if norm_layer:

@@ -11,11 +11,10 @@ class Slicer(nn.Module):
     def __init__(self, max_blocks: int, block_mask: torch.Tensor) -> None:
         """
         Overview:
-        Slicer module precomputes slices of indices for efficient selection of tokens.
-
+            Slicer module precomputes slices of indices for efficient selection of tokens.
         Arguments:
-        - max_blocks (:obj:int): The maximum number of blocks to process.
-        - block_mask (:obj:torch.Tensor): A tensor mask indicating which blocks to keep.
+            - max_blocks (:obj:`int`): The maximum number of blocks to process.
+            - block_mask (:obj:`torch.Tensor`): A tensor mask indicating which blocks to keep.
         """
         super().__init__()
         self.block_size = block_mask.size(0)
@@ -39,21 +38,20 @@ class Slicer(nn.Module):
     def compute_slice(self, num_steps: int, prev_steps: int = 0) -> torch.Tensor:
         """
         Overview:
-        Compute the slice of indices for the given number of steps and previous steps.
-
+            Compute the slice of indices for the given number of steps and previous steps.
         Arguments:
-        - num_steps (:obj:int): The number of steps to consider.
-        - prev_steps (:obj:int): The number of previous steps to consider.
+            - num_steps (:obj:`int`): The number of steps to consider.
+            - prev_steps (:obj:`int`): The number of previous steps to consider.
 
         Returns:
-        - torch.Tensor: The computed slice of indices.
+            - torch.Tensor: The computed slice of indices.
         """
         return self.cache[(num_steps, prev_steps)]
 
     def forward(self, *args, **kwargs):
         """
         Overview:
-        Forward method is not implemented for Slicer.
+            Forward method is not implemented for Slicer.
         """
         raise NotImplementedError
 
@@ -62,12 +60,11 @@ class Head(Slicer):
     def __init__(self, max_blocks: int, block_mask: torch.Tensor, head_module: nn.Module) -> None:
         """
         Overview:
-        Head module extends Slicer to include a head module for processing sliced inputs.
-
+            Head module extends Slicer to include a head module for processing sliced inputs.
         Arguments:
-        - max_blocks (:obj:int): The maximum number of blocks to process.
-        - block_mask (:obj:torch.Tensor): A tensor mask indicating which blocks to keep.
-        - head_module (:obj:nn.Module): The head module to process the sliced inputs.
+            - max_blocks (:obj:`int`): The maximum number of blocks to process.
+            - block_mask (:obj:`torch.Tensor`): A tensor mask indicating which blocks to keep.
+            - head_module (:obj:`nn.Module`): The head module to process the sliced inputs.
         """
         super().__init__(max_blocks, block_mask)
         assert isinstance(head_module, nn.Module)
@@ -76,15 +73,13 @@ class Head(Slicer):
     def forward(self, x: torch.Tensor, num_steps: int, prev_steps: int) -> torch.Tensor:
         """
         Overview:
-        Forward method processes the input tensor through the head module using computed slices.
-
+            Forward method processes the input tensor through the head module using computed slices.
         Arguments:
-        - x (:obj:torch.Tensor): The input tensor.
-        - num_steps (:obj:int): The number of steps to consider.
-        - prev_steps (:obj:int | :obj:torch.Tensor): The number of previous steps to consider.
-
+            - x (:obj:`torch.Tensor`): The input tensor.
+            - num_steps (:obj:`int`): The number of steps to consider.
+            - prev_steps (:obj:`int | :obj:`torch.Tensor`): The number of previous steps to consider.
         Returns:
-        - torch.Tensor: The processed tensor.
+            - torch.Tensor: The processed tensor.
         """
         if isinstance(prev_steps, torch.Tensor):
             x_sliced = [x[i, self.compute_slice(num_steps, prev_steps[i].item())] for i in range(prev_steps.shape[0])]
@@ -98,12 +93,11 @@ class Embedder(nn.Module):
     def __init__(self, max_blocks: int, block_masks: List[torch.Tensor], embedding_tables: List[nn.Embedding]) -> None:
         """
         Overview:
-        Embedder module for embedding tokens using multiple embedding tables and slicers.
-
+            Embedder module for embedding tokens using multiple embedding tables and slicers.
         Arguments:
-        - max_blocks (:obj:int): The maximum number of blocks to process.
-        - block_masks (:obj:List[torch.Tensor]): List of tensor masks indicating which blocks to keep.
-        - embedding_tables (:obj:List[nn.Embedding]): List of embedding tables for tokens.
+            - max_blocks (:obj:`int`): The maximum number of blocks to process.
+            - block_masks (:obj:`List[torch.Tensor]`): List of tensor masks indicating which blocks to keep.
+            - embedding_tables (:obj:`List[nn.Embedding]`): List of embedding tables for tokens.
         """
         super().__init__()
         assert len(block_masks) == len(embedding_tables)
@@ -116,15 +110,13 @@ class Embedder(nn.Module):
     def forward(self, tokens: torch.Tensor, num_steps: int, prev_steps: int) -> torch.Tensor:
         """
         Overview:
-        Forward method embeds the tokens using the precomputed slices.
-
+            Forward method embeds the tokens using the precomputed slices.
         Arguments:
-        - tokens (:obj:torch.Tensor): The input tokens tensor.
-        - num_steps (:obj:int): The number of steps to consider.
-        - prev_steps (:obj:int): The number of previous steps to consider.
-
+            - tokens (:obj:`torch.Tensor`): The input tokens tensor.
+            - num_steps (:obj:`int`): The number of steps to consider.
+            - prev_steps (:obj:`int`): The number of previous steps to consider.
         Returns:
-        - torch.Tensor: The embedded tokens tensor.
+            - torch.Tensor: The embedded tokens tensor.
         """
         assert tokens.ndim == 2  # x is (B, T)
         output = torch.zeros(*tokens.size(), self.embedding_dim, device=tokens.device)
@@ -138,12 +130,11 @@ class ActEmbedder(nn.Module):
     def __init__(self, max_blocks: int, block_masks: List[torch.Tensor], embedding_tables: List[nn.Embedding]) -> None:
         """
         Overview:
-        ActEmbedder module is similar to Embedder but can be used for different purposes.
-
+            ActEmbedder module is similar to Embedder but can be used for different purposes.
         Arguments:
-        - max_blocks (:obj:int): The maximum number of blocks to process.
-        - block_masks (:obj:List[torch.Tensor]): List of tensor masks indicating which blocks to keep.
-        - embedding_tables (:obj:List[nn.Embedding]): List of embedding tables for tokens.
+            - max_blocks (:obj:`int`): The maximum number of blocks to process.
+            - block_masks (:obj:`List[torch.Tensor]`): List of tensor masks indicating which blocks to keep.
+            - embedding_tables (:obj:`List[nn.Embedding]`): List of embedding tables for tokens.
         """
         super().__init__()
         assert len(block_masks) == len(embedding_tables)
@@ -155,15 +146,13 @@ class ActEmbedder(nn.Module):
     def forward(self, tokens: torch.Tensor, num_steps: int, prev_steps: int) -> torch.Tensor:
         """
         Overview:
-        Forward method embeds the tokens using the precomputed slices.
-
+            Forward method embeds the tokens using the precomputed slices.
         Arguments:
-        - tokens (:obj:torch.Tensor): The input tokens tensor.
-        - num_steps (:obj:int): The number of steps to consider.
-        - prev_steps (:obj:int): The number of previous steps to consider.
-
+            - tokens (:obj:`torch.Tensor`): The input tokens tensor.
+            - num_steps (:obj:`int`): The number of steps to consider.
+            - prev_steps (:obj:`int`): The number of previous steps to consider.
         Returns:
-        - torch.Tensor: The embedded tokens tensor.
+            - torch.Tensor: The embedded tokens tensor.
         """
         assert tokens.ndim == 2  # x is (B, T)
         output = torch.zeros(*tokens.size(), self.embedding_dim, device=tokens.device)

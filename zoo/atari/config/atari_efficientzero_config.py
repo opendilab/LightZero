@@ -16,16 +16,6 @@ batch_size = 256
 max_env_step = int(5e5)
 reanalyze_ratio = 0.
 num_unroll_steps = 5
-
-# ======= only for debug =======
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 5
-# batch_size = 2
-# max_env_step = int(5e5)
-# reanalyze_ratio = 0.
-# num_unroll_steps = 5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================

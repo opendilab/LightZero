@@ -2,16 +2,16 @@
 Overview:
     BTW, users can refer to the unittest of these model templates to learn how to use them.
 """
+import math
 from typing import Optional, Tuple
 
-import math
 import torch
 import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
-from .common import EZNetworkOutput, RepresentationNetwork, PredictionNetwork, EZNetworkOutput
+from .common import RepresentationNetwork, PredictionNetwork, EZNetworkOutput
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -558,7 +558,6 @@ class DynamicsNetwork(nn.Module):
         x = x.reshape(-1, self.flatten_output_size_for_reward_head).unsqueeze(0)
 
         # use lstm to predict value_prefix and reward_hidden_state
-        # import pdb; pdb.set_trace()
         value_prefix, next_reward_hidden_state = self.lstm(x, reward_hidden_state)
 
         value_prefix = value_prefix.squeeze(0)

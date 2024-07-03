@@ -543,7 +543,7 @@ class MuZeroCollector(ISerialCollector):
                             completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
 
                     eps_steps_lst[env_id] += 1
-                    if hasattr(self._policy.get_attribute('collect_model'), 'world_model'):
+                    if self._policy.get_attribute('cfg').type == 'unizero':
                         # only for UniZero now
                         self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
 

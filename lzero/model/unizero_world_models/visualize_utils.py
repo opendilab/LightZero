@@ -1,4 +1,5 @@
 import os
+
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -16,20 +17,19 @@ def visualize_reward_value_img_policy( original_images, reconstructed_images, ta
     Visualizes the rewards, values, original images, and policy distributions over time for a batch of sequences.
 
     Arguments:
-        original_images (torch.Tensor): The original input images with shape (batch_size, num_timesteps, channels, height, width).
-        reconstructed_images (torch.Tensor): The reconstructed images with shape (batch_size * num_timesteps, channels, height, width).
-        target_predict_value (torch.Tensor): The target predicted values.
-        true_rewards (torch.Tensor): The true rewards with shape (batch_size, num_timesteps, 1).
-        target_policy (torch.Tensor): The target policy distribution with shape (batch_size, num_timesteps, num_actions).
-        predict_value (torch.Tensor): The predicted values with shape (batch_size, num_timesteps, 1).
-        predict_rewards (torch.Tensor): The predicted rewards with shape (batch_size, num_timesteps, 1).
-        predict_policy (torch.Tensor): The predicted policy distribution with shape (batch_size, num_timesteps, num_actions).
-        not_plot_timesteps (list, optional): A list of timesteps to exclude from plotting. Default is an empty list.
-        suffix (str, optional): A suffix for the output directory. Default is 'pong'.
-        width (int, optional): The width of the images. Default is 64.
-
+        - original_images (:obj:`torch.Tensor`): The original input images with shape (batch_size, num_timesteps, channels, height, width).
+        - reconstructed_images (:obj:`torch.Tensor`): The reconstructed images with shape (batch_size * num_timesteps, channels, height, width).
+        - target_predict_value (:obj:`torch.Tensor`): The target predicted values.
+        - true_rewards (:obj:`torch.Tensor`): The true rewards with shape (batch_size, num_timesteps, 1).
+        - target_policy (:obj:`torch.Tensor`): The target policy distribution with shape (batch_size, num_timesteps, num_actions).
+        - predict_value (:obj:`torch.Tensor`): The predicted values with shape (batch_size, num_timesteps, 1).
+        - predict_rewards (:obj:`torch.Tensor`): The predicted rewards with shape (batch_size, num_timesteps, 1).
+        - predict_policy (:obj:`torch.Tensor`): The predicted policy distribution with shape (batch_size, num_timesteps, num_actions).
+        - not_plot_timesteps (:obj:`list, optional`): A list of timesteps to exclude from plotting. Default is an empty list.
+        - suffix (:obj:`str, optional`): A suffix for the output directory. Default is 'pong'.
+        - width (:obj:`int, optional`): The width of the images. Default is 64.
     Returns:
-        None
+        - None
     """
     # Ensure the dimensions of input tensors match
     assert original_images.shape[0] == reconstructed_images.shape[0] // original_images.shape[1]
@@ -63,7 +63,7 @@ def visualize_reward_value_img_policy( original_images, reconstructed_images, ta
         ax[0].set_xticklabels(plot_timesteps)
         ax[0].legend(loc='upper left')
         ax[0].set_ylabel('Rewards')
-        ax[0].set_ylim(0, 1)  # 固定reward的纵轴范围为[0, 1]
+        ax[0].set_ylim(0, 1)  # Fixed y-axis range for rewards
 
         # TODO: predict value
         # ax0_twin = ax[0].twinx()
@@ -85,8 +85,7 @@ def visualize_reward_value_img_policy( original_images, reconstructed_images, ta
 
             ax[1].imshow(torchvision.transforms.ToPILImage()(original_image), extent=[left, right, bottom, top],
                          aspect='auto')
-            ax[1].text(left + image_width / 2, bottom - 0.05, f'{t}', ha='center', va='top',
-                       fontsize=10)  # 添加时间步索引标签
+            ax[1].text(left + image_width / 2, bottom - 0.05, f'{t}', ha='center', va='top', fontsize=10)  # Add time step index label
 
         ax[1].set_xlim(0, len(plot_timesteps) * (image_width + gap_width) - gap_width)
         ax[1].set_xticks([(i + 0.5) * (image_width + gap_width) for i in range(len(plot_timesteps))])
@@ -141,8 +140,8 @@ def plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong'):
     saves the plots as PNG files.
 
     Arguments:
-        obs_embeddings (torch.Tensor): The latent state embeddings with shape (num_samples, 1, embedding_dim).
-        suffix (str): The suffix for the directory name where plots are saved. Default is 'pong'.
+        - obs_embeddings (:obj:`torch.Tensor`): The latent state embeddings with shape (num_samples, 1, embedding_dim).
+        - suffix (:obj:`str`): The suffix for the directory name where plots are saved. Default is 'pong'.
     """
     # Remove the second dimension (1)
     obs_embeddings = obs_embeddings.squeeze(1)
@@ -160,13 +159,12 @@ def plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong'):
         Plots the 2D t-SNE embeddings and saves the plot as a PNG file.
 
         Arguments:
-        embeddings_2d (np.ndarray): The 2D t-SNE embeddings.
-        timesteps (np.ndarray): The timesteps corresponding to the embeddings.
-        title (str): The title of the plot.
-        filename (str): The filename for saving the plot.
-
+            - embeddings_2d (np.ndarray): The 2D t-SNE embeddings.
+            - timesteps (np.ndarray): The timesteps corresponding to the embeddings.
+            - title (:obj:`str`): The title of the plot.
+            - filename (:obj:`str`): The filename for saving the plot.
         Returns:
-        None
+            - None
         """
         plt.figure(figsize=(10, 8))
         for i, (x, y) in enumerate(embeddings_2d):
@@ -199,7 +197,6 @@ def plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong'):
                   f'episode_{episode_idx + 1}.png')
 
 
-
 def plot_latent_tsne_each_and_all_for_visualmatch(obs_embeddings, suffix='visualmatch'):
     """
     This function visualizes the t-SNE dimensionality reduction results of latent state embeddings.
@@ -207,16 +204,16 @@ def plot_latent_tsne_each_and_all_for_visualmatch(obs_embeddings, suffix='visual
     and a combined plot for all episodes.
 
     Arguments:
-    - obs_embeddings (Tensor): The observations embeddings tensor of shape (num_episodes * timesteps_per_episode, 1, embedding_dim).
-    - suffix (str): The suffix for the output directory where the plots will be saved.
+        - obs_embeddings (Tensor): The observations embeddings tensor of shape (num_episodes * timesteps_per_episode, 1, embedding_dim).
+        - suffix (:obj:`str`): The suffix for the output directory where the plots will be saved.
 
     The function performs the following steps:
-    1. Removes the second dimension (1) from `obs_embeddings`.
-    2. Splits the embeddings into 8 episodes, each containing 76 timesteps.
-    3. Creates a list of colors for plotting.
-    4. Defines a nested function `plot_tsne` to plot and save t-SNE results.
-    5. Processes each episode to plot and save the t-SNE results individually.
-    6. Plots and saves the t-SNE results for all episodes combined in a single plot.
+        1. Removes the second dimension (1) from `obs_embeddings`.
+        2. Splits the embeddings into 8 episodes, each containing 76 timesteps.
+        3. Creates a list of colors for plotting.
+        4. Defines a nested function `plot_tsne` to plot and save t-SNE results.
+        5. Processes each episode to plot and save the t-SNE results individually.
+        6. Plots and saves the t-SNE results for all episodes combined in a single plot.
     """
     # Remove the second dimension (1)
     obs_embeddings = obs_embeddings.squeeze(1)
@@ -273,24 +270,24 @@ def plot_latent_tsne_each_and_all_for_visualmatch(obs_embeddings, suffix='visual
     plt.close()
 
 
-def visualize_reconstruction_v3(original_images, reconstructed_images, target_predict_value, true_rewards,
+def visualize_reconstruction_v2(original_images, reconstructed_images, target_predict_value, true_rewards,
                                 target_policy, predict_value, predict_rewards, predict_policy,
                                 not_plot_timesteps=[], suffix='pong', width=64):
     """
     Visualizes the reconstruction of a sequence of images and the performance of different policies.
 
-    Args:
-        original_images (torch.Tensor): Tensor of original images of shape (batch_size, num_timesteps, channels, height, width).
-        reconstructed_images (torch.Tensor): Tensor of reconstructed images of shape (batch_size * num_timesteps, channels, height, width).
-        target_predict_value (torch.Tensor): Tensor of target predicted values.
-        true_rewards (torch.Tensor): Tensor of true rewards of shape (batch_size, num_timesteps, 1).
-        target_policy (torch.Tensor): Tensor of target policy probabilities of shape (batch_size, num_timesteps, num_actions).
-        predict_value (torch.Tensor): Tensor of predicted values of shape (batch_size, num_timesteps, 1).
-        predict_rewards (torch.Tensor): Tensor of predicted rewards of shape (batch_size, num_timesteps, 1).
-        predict_policy (torch.Tensor): Tensor of predicted policy probabilities of shape (batch_size, num_timesteps, num_actions).
-        not_plot_timesteps (list, optional): List of timesteps to exclude from the plot. Defaults to [].
-        suffix (str, optional): Suffix for the output file name. Defaults to 'pong'.
-        width (int, optional): Width of the images in the plot. Defaults to 64.
+    Arguments:
+        - original_images (:obj:`torch.Tensor`): Tensor of original images of shape (batch_size, num_timesteps, channels, height, width).
+        - reconstructed_images (:obj:`torch.Tensor`): Tensor of reconstructed images of shape (batch_size * num_timesteps, channels, height, width).
+        - target_predict_value (:obj:`torch.Tensor`): Tensor of target predicted values.
+        - true_rewards (:obj:`torch.Tensor`): Tensor of true rewards of shape (batch_size, num_timesteps, 1).
+        - target_policy (:obj:`torch.Tensor`): Tensor of target policy probabilities of shape (batch_size, num_timesteps, num_actions).
+        - predict_value (:obj:`torch.Tensor`): Tensor of predicted values of shape (batch_size, num_timesteps, 1).
+        - predict_rewards (:obj:`torch.Tensor`): Tensor of predicted rewards of shape (batch_size, num_timesteps, 1).
+        - predict_policy (:obj:`torch.Tensor`): Tensor of predicted policy probabilities of shape (batch_size, num_timesteps, num_actions).
+        - not_plot_timesteps (list, optional): List of timesteps to exclude from the plot. Defaults to [].
+        - suffix (str, optional): Suffix for the output file name. Defaults to 'pong'.
+        - width (int, optional): Width of the images in the plot. Defaults to 64.
 
     Notes:
         - The function saves the visualizations as PNG files in the specified directory.
@@ -390,16 +387,17 @@ def visualize_reconstruction_v3(original_images, reconstructed_images, target_pr
         directory = f'/your_path/code/LightZero/render/{suffix}'
         if not os.path.exists(directory):
             os.makedirs(directory)
-        plt.savefig(f'{directory}/reconstruction_visualization_batch_{batch_idx}_v3.png')
+        plt.savefig(f'{directory}/reconstruction_visualization_batch_{batch_idx}_v2.png')
         plt.close()
+
 
 def visualize_reconstruction_v1(original_images, reconstructed_images, suffix='pong', width=64):
     """
     Visualizes the reconstruction of images by comparing original and reconstructed images side by side.
 
-    Args:
-        original_images (torch.Tensor): A tensor of original images with shape (batch_size, num_timesteps, channels, height, width).
-        reconstructed_images (torch.Tensor): A tensor of reconstructed images with shape (batch_size * num_timesteps, channels, height, width).
+    Arguments:
+        original_images (:obj:`torch.Tensor`): A tensor of original images with shape (batch_size, num_timesteps, channels, height, width).
+        reconstructed_images (:obj:`torch.Tensor`): A tensor of reconstructed images with shape (batch_size * num_timesteps, channels, height, width).
         suffix (str, optional): A suffix for the saved image filenames. Default is 'pong'.
         width (int, optional): The width of each image. Default is 64.
 
@@ -448,14 +446,15 @@ def visualize_reconstruction_v1(original_images, reconstructed_images, suffix='p
             f'/your_path/code/LightZero/render/{suffix}/reconstruction_visualization_batch_{batch_idx}_v1.png')
         plt.close()
 
+
 def save_as_image_with_timestep(batch_tensor, suffix='pong'):
     """
     Saves a batch of image sequences as a single image with timestep annotations.
 
-    Args:
-        batch_tensor (torch.Tensor): A tensor of shape [batch_size, sequence_length, channels, height, width].
+    Arguments:
+        batch_tensor (:obj:`torch.Tensor`): A tensor of shape [batch_size, sequence_length, channels, height, width].
                                      Here, channels = 4, height = 5, width = 5.
-        suffix (str): A suffix for the directory where the image will be saved. Default is 'pong'.
+        suffix (:obj:`str`): A suffix for the directory where the image will be saved. Default is 'pong'.
 
     The function will arrange the frames in a grid where each row corresponds to a sequence in the batch
     and each column corresponds to a timestep within that sequence. Each frame is converted to a PIL image,
@@ -509,9 +508,9 @@ def save_as_image(batch_tensor, suffix='pong'):
     displayed in columns.
 
     Arguments:
-    - batch_tensor (torch.Tensor): A 5D tensor of shape [batch_size, sequence_length, channels, height, width],
+    - batch_tensor (:obj:`torch.Tensor`): A 5D tensor of shape [batch_size, sequence_length, channels, height, width],
                                    where channels should be at least 4.
-    - suffix (str): A suffix to include in the directory path where the image will be saved.
+    - suffix (:obj:`str`): A suffix to include in the directory path where the image will be saved.
 
     Example:
     ```python

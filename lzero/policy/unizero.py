@@ -29,6 +29,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
     # The default_config for UniZero policy.
     config = dict(
+        # type='unizero',
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.
             model_type='conv',  # options={'mlp', 'conv'}

@@ -5,23 +5,24 @@ Overview:
     customize their custom algorithms, ensuring efficient and effective development.
     BTW, users can refer to the unittest of these model templates to learn how to use them.
 """
-import logging
 import math
-from typing import Optional, Tuple
 from dataclasses import dataclass
+from typing import Optional, Tuple
+
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import torch.nn.init as init
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import SequenceType
-import torch.nn.init as init
-import torch.nn.functional as F
+from ditk import logging
 
 
 # use dataclass to make the output of network more convenient to use
 @dataclass
-class EZNetworkOutputV2:
-    # output format of the EfficientZero model
+class MZRNNNetworkOutput:
+    # output format of the MuZeroRNN model
     value: torch.Tensor
     value_prefix: torch.Tensor
     policy_logits: torch.Tensor
@@ -264,7 +265,7 @@ class DownSample(nn.Module):
         return output
 
 
-class RepresentationNetworkGPT(nn.Module):
+class RepresentationNetworkUniZero(nn.Module):
     
     def __init__(
             self,
@@ -272,7 +273,7 @@ class RepresentationNetworkGPT(nn.Module):
             num_res_blocks: int = 1,
             num_channels: int = 64,
             downsample: bool = True,
-            activation: nn.Module = nn.GELU(),
+            activation: nn.Module = nn.GELU(approximate='tanh'),
             norm_type: str = 'BN',
             embedding_dim: int = 256,
             group_size: int = 8,
@@ -468,7 +469,7 @@ class RepresentationNetworkMLP(nn.Module):
             observation_shape: int,
             hidden_channels: int = 64,
             layer_num: int = 2,
-            activation: nn.Module = nn.GELU(),
+            activation: nn.Module = nn.GELU(approximate='tanh'),
             norm_type: Optional[str] = 'BN',
             group_size: int = 8,
     ) -> torch.Tensor:
@@ -576,7 +577,7 @@ class LatentEncoderForMemoryEnv(nn.Module):
             channels=[16, 32, 64],
             kernel_sizes=[3, 3, 3],
             strides=[1, 1, 1],
-            activation: nn.Module = nn.GELU(),
+            activation: nn.Module = nn.GELU(approximate='tanh'),
             normalize_pixel=False,
             group_size: int = 8,
             **kwargs,
@@ -591,7 +592,7 @@ class LatentEncoderForMemoryEnv(nn.Module):
             - channels (:obj:`List[int]`): The channel of output hidden state.
             - kernel_sizes (:obj:`List[int]`): The kernel size of convolution layers.
             - strides (:obj:`List[int]`): The stride of convolution layers.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.GeLU(). \
+            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.GELU(approximate='tanh'). \
                 Use the inplace operation to speed up.
             - normalize_pixel (:obj:`bool`): Whether to normalize the pixel values to [0, 1], defaults to False.
             - group_size (:obj:`int`): The dimension for simplicial normalization

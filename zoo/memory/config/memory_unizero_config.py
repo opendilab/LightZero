@@ -38,7 +38,7 @@ eps_greedy_exploration_in_collect = True
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
-memory_xzero_config = dict(
+memory_unizero_config = dict(
     exp_name=f'data_{env_id}/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
@@ -124,10 +124,10 @@ memory_xzero_config = dict(
     ),
 )
 
-memory_xzero_config = EasyDict(memory_xzero_config)
-main_config = memory_xzero_config
+memory_unizero_config = EasyDict(memory_unizero_config)
+main_config = memory_unizero_config
 
-memory_xzero_create_config = dict(
+memory_unizero_create_config = dict(
     env=dict(
         type='memory_lightzero',
         import_names=['zoo.memory.envs.memory_lightzero_env'],
@@ -142,8 +142,8 @@ memory_xzero_create_config = dict(
         import_names=['lzero.worker.muzero_collector'],
     )
 )
-memory_xzero_create_config = EasyDict(memory_xzero_create_config)
-create_config = memory_xzero_create_config
+memory_unizero_create_config = EasyDict(memory_unizero_create_config)
+create_config = memory_unizero_create_config
 
 if __name__ == "__main__":
     seeds = [0, 1, 2]  # You can add more seed values here

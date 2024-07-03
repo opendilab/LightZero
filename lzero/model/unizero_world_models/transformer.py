@@ -123,7 +123,7 @@ class Block(nn.Module):
         self.attn = SelfAttention(config)
         self.mlp = nn.Sequential(
             nn.Linear(config.embed_dim, 4 * config.embed_dim),
-            nn.GELU(),
+            nn.GELU(approximate='tanh'),
             nn.Linear(4 * config.embed_dim, config.embed_dim),
             nn.Dropout(config.resid_pdrop),
         )

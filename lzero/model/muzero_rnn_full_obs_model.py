@@ -11,7 +11,7 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 
 from lzero.model.common import SimNorm
 from lzero.model.muzero_model import MuZeroModel
-from .common import EZNetworkOutputV2, RepresentationNetwork, PredictionHiddenNetwork, FeatureAndGradientHook
+from .common import MZRNNNetworkOutput, RepresentationNetwork, PredictionHiddenNetwork, FeatureAndGradientHook
 from .utils import renormalize
 
 
@@ -223,7 +223,7 @@ class MuZeroRNNFullObsModel(MuZeroModel):
             )
 
     def initial_inference(self, last_obs: torch.Tensor, last_action=None, current_obs=None, ready_env_id=None,
-                          last_ready_env_id=None) -> 'EZNetworkOutputV2':
+                          last_ready_env_id=None) -> 'MZRNNNetworkOutput':
         """
         Perform initial inference based on the phase (training or evaluation/collect).
 
@@ -235,7 +235,7 @@ class MuZeroRNNFullObsModel(MuZeroModel):
             - last_ready_env_id: The last ready environment ID.
 
         Returns:
-            EZNetworkOutputV2: The output object containing value, policy logits, and latent states.
+            MZRNNNetworkOutput: The output object containing value, policy logits, and latent states.
         """
         if self.training or last_action is None:
             # ===================== Training phase  ======================
@@ -296,7 +296,7 @@ class MuZeroRNNFullObsModel(MuZeroModel):
                 policy_logits, value = self._prediction(self.current_latent_state, selected_world_model_latent_history)
 
         self.timestep += 1
-        return EZNetworkOutputV2(value, [0. for _ in range(batch_size)], policy_logits, self.current_latent_state, None,
+        return MZRNNNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, self.current_latent_state, None,
                                selected_world_model_latent_history)
 
     def recurrent_inference(
@@ -306,7 +306,7 @@ class MuZeroRNNFullObsModel(MuZeroModel):
             action: torch.Tensor,
             next_latent_state: Optional[Tuple[torch.Tensor]] = None,
             ready_env_id: Optional[int] = None
-    ) -> EZNetworkOutputV2:
+    ) -> MZRNNNetworkOutput:
         """
         Perform recurrent inference to predict the next latent state, reward, and policy logits.
 
@@ -318,7 +318,7 @@ class MuZeroRNNFullObsModel(MuZeroModel):
             - ready_env_id (:obj:`Optional[int], optional`): ID of the ready environment. Defaults to None.
 
         Returns:
-            EZNetworkOutputV2: An object containing value, reward, policy logits, next latent state,
+            MZRNNNetworkOutput: An object containing value, reward, policy logits, next latent state,
                              predicted next latent state, and updated world model latent history.
         """
 
@@ -334,7 +334,7 @@ class MuZeroRNNFullObsModel(MuZeroModel):
         policy_logits, value = self._prediction(inference_latent_state, world_model_latent_history)
 
         # If next_latent_state is provided, use it; otherwise, use the predicted next latent state
-        return EZNetworkOutputV2(value, reward, policy_logits, next_latent_state, predict_next_latent_state, world_model_latent_history)
+        return MZRNNNetworkOutput(value, reward, policy_logits, next_latent_state, predict_next_latent_state, world_model_latent_history)
 
     def _prediction(self, latent_state: torch.Tensor, world_model_latent_history: torch.Tensor) -> Tuple[
         torch.Tensor, torch.Tensor]:
