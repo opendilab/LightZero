@@ -22,7 +22,7 @@ chance_space_size = 16 * num_of_possible_chance_tile
 # ==============================================================
 
 game_2048_stochastic_muzero_config = dict(
-    exp_name=f'data_stochastic_mz/game_2048_npct-{num_of_possible_chance_tile}_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_chance-{use_ture_chance_label_in_chance_encoder}_sslw2_seed0',
+    exp_name=f'data_stochastic_mz/game_2048_npct-{num_of_possible_chance_tile}_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_bs{batch_size}_chance-{use_ture_chance_label_in_chance_encoder}_sslw2_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -45,8 +45,9 @@ game_2048_stochastic_muzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         use_ture_chance_label_in_chance_encoder=use_ture_chance_label_in_chance_encoder,
-        mcts_ctree=True,
         cuda=True,
         game_segment_length=200,
         update_per_collect=update_per_collect,
@@ -87,4 +88,4 @@ create_config = game_2048_stochastic_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

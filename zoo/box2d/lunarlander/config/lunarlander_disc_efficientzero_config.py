@@ -8,26 +8,18 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-# update_per_collect = 200
 update_per_collect = None
 replay_ratio = 0.25
-
 batch_size = 256
 max_env_step = int(1e6)
-# reanalyze_ratio = 0.
-# reanalyze_ratio = 1
 reanalyze_ratio = 0.99
-
-
 seed = 0
-
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 lunarlander_disc_efficientzero_config = dict(
-    # exp_name=f'data_efficientzero/lunarlander_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
-    exp_name=f'data_efficientzero_0129/lunarlander/ez_rr{reanalyze_ratio}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
+    exp_name=f'data_ez/lunarlander_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id='LunarLander-v2',
         continuous=False,
@@ -48,6 +40,8 @@ lunarlander_disc_efficientzero_config = dict(
             res_connection_in_dynamics=True,
             norm_type='BN', 
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
@@ -98,4 +92,4 @@ if __name__ == "__main__":
         """
         from lzero.entry import train_muzero_with_gym_env as train_muzero
 
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

@@ -1,49 +1,26 @@
 from easydict import EasyDict
-
-# options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_id = 'PongNoFrameskip-v4'
-
-if env_id == 'PongNoFrameskip-v4':
-    action_space_size = 6
-elif env_id == 'QbertNoFrameskip-v4':
-    action_space_size = 6
-elif env_id == 'MsPacmanNoFrameskip-v4':
-    action_space_size = 9
-elif env_id == 'SpaceInvadersNoFrameskip-v4':
-    action_space_size = 6
-elif env_id == 'BreakoutNoFrameskip-v4':
-    action_space_size = 4
+from env_action_space_map import env_action_space_map
+env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
+action_space_size = env_action_space_map[env_id]
+chance_space_size = 4
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# num_simulations = 50
-# update_per_collect = 1000
-# batch_size = 256
-# max_env_step = int(1e6)
-# reanalyze_ratio = 0.
-# chance_space_size = 4
-
-# debug config
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 5
-update_per_collect = 10
-batch_size = 2
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+num_simulations = 50
+update_per_collect = 1000
+batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
-chance_space_size = 4
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_stochastic_muzero_config = dict(
-    exp_name=
-    f'data_stochastic_mz/{env_id[:-14]}_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_chance{chance_space_size}_seed0',
+    exp_name=f'data_stochastic_mz/{env_id[:-14]}_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_chance{chance_space_size}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -64,6 +41,8 @@ atari_stochastic_muzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN', 
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         gumbel_algo=False,
         mcts_ctree=True,
@@ -104,4 +83,4 @@ create_config = atari_stochastic_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

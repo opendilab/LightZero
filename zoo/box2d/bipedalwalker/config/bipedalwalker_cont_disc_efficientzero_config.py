@@ -3,24 +3,23 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-# evaluator_env_num = 3
-# continuous_action_space = False
-# each_dim_disc_size = 4  # thus the total discrete action number is 4**4=256
-# num_simulations = 50
-# update_per_collect = None
-# replay_ratio = 0.25
-# batch_size = 256
-# max_env_step = int(5e6)
-# reanalyze_ratio = 0.
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
+continuous_action_space = False
+each_dim_disc_size = 4  # thus the total discrete action number is 4**4=256
+num_simulations = 50
+update_per_collect = None
+replay_ratio = 0.25
+batch_size = 256
+max_env_step = int(5e6)
+reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 bipedalwalker_cont_disc_efficientzero_config = dict(
-    exp_name=
-    f'data_sampled_efficientzero/bipedalwalker_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}-mur{replay_ratio}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez/bipedalwalker_cont_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id='BipedalWalker-v3',
@@ -45,6 +44,8 @@ bipedalwalker_cont_disc_efficientzero_config = dict(
             res_connection_in_dynamics=True,
             norm_type='BN', 
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
@@ -97,4 +98,4 @@ if __name__ == "__main__":
         """
         from lzero.entry import train_muzero_with_gym_env as train_muzero
 
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

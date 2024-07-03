@@ -1,18 +1,7 @@
 from easydict import EasyDict
-
-# options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
-env_id = 'PongNoFrameskip-v4'
-
-if env_id == 'PongNoFrameskip-v4':
-    action_space_size = 6
-elif env_id == 'QbertNoFrameskip-v4':
-    action_space_size = 6
-elif env_id == 'MsPacmanNoFrameskip-v4':
-    action_space_size = 9
-elif env_id == 'SpaceInvadersNoFrameskip-v4':
-    action_space_size = 6
-elif env_id == 'BreakoutNoFrameskip-v4':
-    action_space_size = 4
+from env_action_space_map import env_action_space_map
+env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
+action_space_size = env_action_space_map[env_id]
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user

@@ -16,8 +16,7 @@ reanalyze_ratio = 0
 # ==============================================================
 
 pendulum_disc_efficientzero_config = dict(
-    exp_name=
-    f'data_efficientzero/pendulum_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_ez/pendulum_disc_efficientzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id='Pendulum-v1',
         continuous=False,
@@ -36,6 +35,8 @@ pendulum_disc_efficientzero_config = dict(
             lstm_hidden_size=128,
             latent_state_dim=128,
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
@@ -84,4 +85,4 @@ if __name__ == "__main__":
         """
         from lzero.entry import train_muzero_with_gym_env as train_muzero
 
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

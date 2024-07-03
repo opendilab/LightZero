@@ -25,7 +25,7 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 memory_efficientzero_config = dict(
-    exp_name=f'data_efficientzero/{env_id}_memlen-{memory_length}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
+    exp_name=f'data_ez/{env_id}_memlen-{memory_length}_efficientzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,

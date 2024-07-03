@@ -38,6 +38,8 @@ class GameBuffer(ABC, object):
         use_root_value=False,
         # (int) The number of samples required for mini inference.
         mini_infer_size=10240,
+        # (str) The type of sampled data. The default is 'transition'. Options: 'transition', 'episode'.
+        sample_type='transition',
     )
 
     def __init__(self, cfg: dict):
@@ -190,6 +192,59 @@ class GameBuffer(ABC, object):
         make_time = [time.time() for _ in range(len(batch_index_list))]
 
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, [], make_time)
+        return orig_data
+
+    def _sample_orig_data_episode(self, batch_size: int) -> Tuple:
+        """
+        Overview:
+            Sample original data for a training batch, which includes:
+                - game_segment_list: A list of game segments.
+                - pos_in_game_segment_list: Indices of transitions within the game segments.
+                - batch_index_list: Indices of the start transitions of the sampled mini-batch in the replay buffer.
+                - weights_list: Weights for each sampled transition, used for prioritization.
+                - make_time: Timestamps indicating when the batch was created (useful for managing replay buffer updates).
+        Arguments:
+            - batch_size (:obj:`int`): The number of samples to draw for the batch.
+            - beta (:obj:`float`): Parameter for Prioritized Experience Replay (PER) that adjusts the importance of samples.
+        """
+        assert self._beta > 0, "Beta must be greater than zero."
+
+        num_of_transitions = self.get_num_of_transitions()
+
+        if not self._cfg.use_priority:
+            self.game_pos_priorities = np.ones_like(self.game_pos_priorities)
+
+        # Add a small constant for numerical stability
+        probs = self.game_pos_priorities ** self._alpha + 1e-6
+        probs /= probs.sum()
+
+        # Sample game segment indices
+        num_of_game_segments = self.get_num_of_game_segments()
+        batch_episode_index_list = np.random.choice(num_of_game_segments, batch_size, replace=False)
+
+        if self._cfg.reanalyze_outdated:
+            # Sort for consistency when reanalyzing
+            batch_episode_index_list.sort()
+
+        batch_index_list = batch_episode_index_list * self._cfg.game_segment_length
+
+        # Calculate weights for the sampled transitions
+        weights_list = (num_of_transitions * probs[batch_index_list]) ** (-self._beta)
+        weights_list /= weights_list.max()
+
+        game_segment_list = []
+        pos_in_game_segment_list = []
+
+        # Collect game segments and their initial positions
+        for episode_index in batch_episode_index_list:
+            game_segment = self.game_segment_buffer[episode_index]
+            game_segment_list.append(game_segment)
+            pos_in_game_segment_list.append(0)  # Starting position in game segments
+
+        # Record the time when the batch is created
+        make_time = [time.time() for _ in range(len(batch_episode_index_list))]
+
+        orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
         return orig_data
 
     def _preprocess_to_play_and_action_mask(
