@@ -6,3 +6,4 @@ bsuite
 minigrid
 moviepy
 pycolab
+line_profiler

@@ -422,6 +422,7 @@ class MuZeroPolicy(Policy):
 
         reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+        target_policy_entropy = 0
 
         # ==============================================================
         # the core recurrent_inference in MuZero policy.

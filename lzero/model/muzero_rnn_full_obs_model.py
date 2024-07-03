@@ -120,7 +120,6 @@ class MuZeroRNNFullObsModel(MuZeroModel):
         self.self_supervised_learning_loss = self_supervised_learning_loss
         self.norm_type = norm_type
         self.activation = activation
-        # TODO
         self.analysis_sim_norm = analysis_sim_norm
         self.env_num = collector_env_num
         self.timestep = 0
@@ -228,12 +227,12 @@ class MuZeroRNNFullObsModel(MuZeroModel):
         """
         Perform initial inference based on the phase (training or evaluation/collect).
 
-        Args:
-            last_obs (torch.Tensor): The last observation tensor.
-            last_action: The last action taken.
-            current_obs: The current observation tensor.
-            ready_env_id: The ready environment ID.
-            last_ready_env_id: The last ready environment ID.
+        Arguments:
+            - last_obs (:obj:`torch.Tensor`): The last observation tensor.
+            - last_action: The last action taken.
+            - current_obs: The current observation tensor.
+            - ready_env_id: The ready environment ID.
+            - last_ready_env_id: The last ready environment ID.
 
         Returns:
             EZNetworkOutputV2: The output object containing value, policy logits, and latent states.
@@ -284,10 +283,8 @@ class MuZeroRNNFullObsModel(MuZeroModel):
                 self.current_latent_state = self._representation(current_obs)
 
                 if self.timestep % self.context_length_init == 0:
-                    # TODO: use recent context recent
-                    self.world_model_latent_history_init_complete = torch.zeros(1, self.env_num,
-                                                                                self.rnn_hidden_size).to(
-                        last_obs.device)
+                    # TODO: the method that use the recent context, rather than the hard reset
+                    self.world_model_latent_history_init_complete = torch.zeros(1, self.env_num, self.rnn_hidden_size).to(last_obs.device)
 
             if len(ready_env_id) == self.env_num:
                 selected_world_model_latent_history = copy.deepcopy(self.world_model_latent_history_init_complete)
@@ -313,12 +310,12 @@ class MuZeroRNNFullObsModel(MuZeroModel):
         """
         Perform recurrent inference to predict the next latent state, reward, and policy logits.
 
-        Args:
-            latent_state (torch.Tensor): The current latent state tensor.
-            world_model_latent_history (Tuple[torch.Tensor]): The history of latent states from the world model.
-            action (torch.Tensor): The action tensor.
-            next_latent_state (Optional[Tuple[torch.Tensor]], optional): The next latent state tensor if available. Defaults to None.
-            ready_env_id (Optional[int], optional): ID of the ready environment. Defaults to None.
+        Arguments:
+            - latent_state (:obj:`torch.Tensor`): The current latent state tensor.
+            - world_model_latent_history (:obj:`Tuple[torch.Tensor]`): The history of latent states from the world model.
+            - action (:obj:`torch.Tensor`): The action tensor.
+            - next_latent_state (:obj:`Optional[Tuple[torch.Tensor]], optional`): The next latent state tensor if available. Defaults to None.
+            - ready_env_id (:obj:`Optional[int], optional`): ID of the ready environment. Defaults to None.
 
         Returns:
             EZNetworkOutputV2: An object containing value, reward, policy logits, next latent state,
@@ -338,7 +335,6 @@ class MuZeroRNNFullObsModel(MuZeroModel):
 
         # If next_latent_state is provided, use it; otherwise, use the predicted next latent state
         return EZNetworkOutputV2(value, reward, policy_logits, next_latent_state, predict_next_latent_state, world_model_latent_history)
-
 
     def _prediction(self, latent_state: torch.Tensor, world_model_latent_history: torch.Tensor) -> Tuple[
         torch.Tensor, torch.Tensor]:
@@ -458,7 +454,7 @@ class DynamicsNetwork(nn.Module):
         Define the Dynamics Network for predicting the next latent state, reward,
         and reward hidden state based on the current state and action.
 
-        Args:
+        Arguments:
             observation_shape (Sequence[int]): Shape of the input observation, e.g., (12, 96, 96).
             action_encoding_dim (int): Dimension of the action encoding.
             num_res_blocks (int): Number of residual blocks in the MuZero model.
@@ -605,7 +601,7 @@ class DynamicsNetwork(nn.Module):
         Forward pass for the Dynamics Network. Predict the next latent state,
         the next dynamics hidden state, and the reward based on the current state-action encoding.
 
-        Args:
+        Arguments:
             state_action_encoding (torch.Tensor): State-action encoding, a concatenation of the latent state and action encoding.
             dynamics_hidden_state (Tuple[torch.Tensor, torch.Tensor]): Hidden state for the LSTM related to reward.
 
