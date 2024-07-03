@@ -5,6 +5,25 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from .kv_caching import KeysValues
+
+
+def to_device_for_kvcache(keys_values: KeysValues, device: str) -> KeysValues:
+    """
+    Transfer all KVCache objects within the KeysValues object to a certain device.
+    Arguments:
+        - keys_values (KeysValues): The KeysValues object to be transferred.
+        - device (str): The device to transfer to.
+    Returns:
+        - keys_values (KeysValues): The KeysValues object with its caches transferred to the specified device.
+    """
+    device = torch.device(device if torch.cuda.is_available() else 'cpu')
+
+    for kv_cache in keys_values:
+        kv_cache._k_cache._cache = kv_cache._k_cache._cache.to(device)
+        kv_cache._v_cache._cache = kv_cache._v_cache._cache.to(device)
+    return keys_values
+
 
 def convert_to_depth(search_path, depth_map, last_depth):
     # Get the newly added element

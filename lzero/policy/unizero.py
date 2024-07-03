@@ -29,7 +29,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
     # The default_config for UniZero policy.
     config = dict(
-        # type='unizero',
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.
             model_type='conv',  # options={'mlp', 'conv'}
@@ -146,11 +145,13 @@ class UniZeroPolicy(MuZeroPolicy):
         # (bool) Whether to monitor extra statistics in tensorboard.
         monitor_extra_statistics=True,
         # (int) The transition number of one ``GameSegment``.
-        game_segment_length=200,
+        game_segment_length=400,
         # (bool) Whether to analyze simulation normalization.
         analysis_sim_norm=False,
         # (bool) Whether to use the pure policy to collect data.
         collect_with_pure_policy=False,
+        # (int) The evaluation frequency.
+        eval_freq=int(2e3),
 
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
@@ -191,7 +192,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # (float) One-order Momentum in optimizer, which stabilizes the training process (gradient direction).
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
-        grad_clip_value=10,
+        grad_clip_value=5,
         # (int) The number of episodes in each collecting stage.
         n_episode=8,
         # (int) the number of simulations in MCTS.
@@ -543,7 +544,7 @@ class UniZeroPolicy(MuZeroPolicy):
             self._mcts_collect = MCTSPtree(self._cfg)
         self._collect_mcts_temperature = 1.
         self.collect_epsilon = 0.0
-        self.collector_env_num = self._cfg.model.world_model.collector_env_num
+        self.collector_env_num = self._cfg.collector_env_num
         if self._cfg.model.model_type == 'conv':
             self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
@@ -678,7 +679,7 @@ class UniZeroPolicy(MuZeroPolicy):
             self._mcts_eval = MCTSCtree(self._cfg)
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
-        self.evaluator_env_num = self._cfg.model.world_model.evaluator_env_num
+        self.evaluator_env_num = self._cfg.evaluator_env_num
 
         if self._cfg.model.model_type == 'conv':
             self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)

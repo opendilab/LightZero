@@ -19,6 +19,7 @@ max_env_step = int(5e5)
 reanalyze_ratio = 0.
 batch_size = 64
 num_unroll_steps = 10
+infer_context_length = 4
 
 # ====== only for debug =====
 # collector_env_num = 2
@@ -48,7 +49,6 @@ atari_unizero_config = dict(
         # eval_max_episode_steps=int(50),
     ),
     policy=dict(
-        num_unroll_steps=num_unroll_steps,
         model=dict(
             observation_shape=(3, 64, 64),
             action_space_size=action_space_size,
@@ -56,18 +56,15 @@ atari_unizero_config = dict(
             norm_type=norm_type,
             world_model=dict(
                 norm_type=norm_type,
-                max_blocks=10,
-                max_tokens=2 * 10,  # NOTE: each timestep has 2 tokens: obs and action
-                context_length=2 * 4,
+                max_blocks=num_unroll_steps,
+                max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
+                context_length=2 * infer_context_length,
                 # device='cuda',
                 device='cpu',
                 action_shape=action_space_size,
-                group_size=8,
                 num_layers=4,
                 num_heads=8,
                 embed_dim=768,
-                collector_env_num=collector_env_num,
-                evaluator_env_num=evaluator_env_num,
                 policy_entropy_weight=1e-4,
                 obs_type='image',
             ),
@@ -75,19 +72,16 @@ atari_unizero_config = dict(
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
         cuda=True,
-        env_type='not_board_games',
-        game_segment_length=400,
+        num_unroll_steps=num_unroll_steps,
         update_per_collect=update_per_collect,
         replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type='AdamW',
-        learning_rate=0.0001,
-        grad_clip_value=5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(2e3),
         replay_buffer_size=int(1e6),
+        env_num=collector_env_num,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

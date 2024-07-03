@@ -217,7 +217,8 @@ class KeysValues:
             - keys_values (KeysValues): The KeysValues object with its caches transferred to the specified device.
         """
         device = torch.device(device if torch.cuda.is_available() else 'cpu')
-
+        if isinstance(self._keys_values, tuple):
+            self._keys_values = self._keys_values[0]
         for kv_cache in self._keys_values:
             kv_cache._k_cache._cache = kv_cache._k_cache._cache.to(device)
             kv_cache._v_cache._cache = kv_cache._v_cache._cache.to(device)
