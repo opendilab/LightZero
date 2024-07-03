@@ -52,6 +52,7 @@ class Tokenizer(nn.Module):
         self.encoder = encoder
         self.decoder_network = decoder_network
 
+
     def encode_to_obs_embeddings(self, x: torch.Tensor) -> torch.Tensor:
         """Encode observations to embeddings.
 

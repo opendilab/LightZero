@@ -99,6 +99,7 @@ class UniZeroModel(nn.Module):
             )
             # TODO: only for visualmatch now
             decoder_network = VectorDecoderMemory(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
+
             self.tokenizer = Tokenizer(encoder=self.representation_network,
                                        decoder_network=decoder_network, with_lpips=False)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
@@ -113,8 +114,7 @@ class UniZeroModel(nn.Module):
                 num_res_blocks,
                 num_channels,
                 downsample,
-                # activation=self.activation,
-                activation=nn.LeakyReLU(negative_slope=0.01),  # TODO: LN+LeakyReLU ========
+                activation=self.activation,
                 norm_type=norm_type,
                 embedding_dim=world_model_cfg.embed_dim,
                 group_size=world_model_cfg.group_size,
@@ -160,6 +160,7 @@ class UniZeroModel(nn.Module):
                 strides=[1, 1, 1],
                 activation=self.activation,
             )
+
             if world_model_cfg.analysis_sim_norm:
                 # ====== for analysis ======
                 self.encoder_hook = FeatureAndGradientHook()

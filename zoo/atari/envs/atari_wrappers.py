@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 import cv2
+# import gymnasium as gym
 import gymnasium
 import gym
 import numpy as np
@@ -91,9 +92,9 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
         - env (:obj:`gym.Env`): The wrapped Atari environment with the given configurations.
     """
     if config.render_mode_human:
-        env = gymnasium.make(config.env_id, render_mode='human')
+        env = gym.make(config.env_id, render_mode='human')
     else:
-        env = gymnasium.make(config.env_id, render_mode='rgb_array')
+        env = gym.make(config.env_id, render_mode='rgb_array')
     assert 'NoFrameskip' in env.spec.id
     if hasattr(config, 'save_replay') and config.save_replay \
             and hasattr(config, 'replay_path') and config.replay_path is not None:
@@ -105,7 +106,8 @@ def wrap_lightzero(config: EasyDict, episode_life: bool, clip_rewards: bool) -> 
             episode_trigger=lambda episode_id: True,
             name_prefix=video_name
         )
-    env = GymnasiumToGymWrapper(env)
+
+    # env = GymnasiumToGymWrapper(env)
     env = NoopResetWrapper(env, noop_max=30)
     env = MaxAndSkipWrapper(env, skip=config.frame_skip)
     if episode_life:
@@ -294,16 +296,21 @@ class GymnasiumToGymWrapper(gym.Wrapper):
         """
         self._seed = seed
 
-    def reset(self):
+    def reset(self, **kwargs):
         """
         Overview:
             Resets the environment and returns the initial observation.
         Returns:
             - observation (:obj:`Any`): The initial observation of the environment.
         """
-        if self._seed is not None:
-            obs, _ = self.env.reset(seed=self._seed)
-            return obs
+        result = self.env.reset(**kwargs)
+        if isinstance(result, tuple):
+            obs, info = result
         else:
-            obs, _ = self.env.reset()
-            return obs
+            obs = result
+        return obs
+
+    def step(self, action):
+        obs, rew, terminated, truncated, info = self.env.step(action)
+        done = terminated or truncated
+        return obs, rew, done, info

@@ -46,6 +46,10 @@ class WorldModel(nn.Module):
         self.config = config
         self.transformer = Transformer(self.config)
 
+        # Move all modules to the specified device
+        print(f"self.config.device: {self.config.device}")
+        self.to(self.config.device)
+
         # Initialize configuration parameters
         self._initialize_config_parameters()
 
@@ -53,18 +57,19 @@ class WorldModel(nn.Module):
         self._initialize_patterns()
 
         # Position embedding
-        self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim)
+        self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
         self.precompute_pos_emb_diff_kv()
+        print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
         # Initialize action embedding table
-        self.act_embedding_table = nn.Embedding(config.action_shape, config.embed_dim)
+        self.act_embedding_table = nn.Embedding(config.action_shape, config.embed_dim, device=self.device)
+        print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
+
 
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
         self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim,
                                                    self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
-        # self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim,
-        #                                            )  # NOTE: we add a sim_norm to the head for observations
         self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_shape)
         self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
 
@@ -83,6 +88,7 @@ class WorldModel(nn.Module):
 
         # Initialize keys and values for transformer
         self._initialize_transformer_keys_values()
+
 
     def _initialize_config_parameters(self) -> None:
         """Initialize configuration parameters."""
@@ -228,7 +234,7 @@ class WorldModel(nn.Module):
         if torch.cuda.is_available():
             return attn_func(self.pos_emb.weight).view(
                 1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
-            ).transpose(1, 2).cuda().detach()
+            ).transpose(1, 2).to(self.device).detach()
         else:
             return attn_func(self.pos_emb.weight).view(
                 1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
@@ -317,11 +323,11 @@ class WorldModel(nn.Module):
             return embeddings + position_embeddings
         else:
             if is_init_infer:
-                return embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=embeddings.device))
+                return embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device))
             else:
                 valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)
                 position_embeddings = self.pos_emb(
-                    valid_context_lengths + torch.arange(num_steps, device=embeddings.device)).unsqueeze(1)
+                    valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
                 return embeddings + position_embeddings
 
     def _process_obs_act_combined(self, obs_embeddings_or_act_tokens, prev_steps):
@@ -343,7 +349,7 @@ class WorldModel(nn.Module):
         act_embeddings = self.act_embedding_table(act_tokens)
 
         B, L, K, E = obs_embeddings.size()
-        obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=obs_embeddings.device)
+        obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=self.device)
 
         for i in range(L):
             obs = obs_embeddings[:, i, :, :]
@@ -351,7 +357,7 @@ class WorldModel(nn.Module):
             obs_act = torch.cat([obs, act], dim=1)
             obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
 
-        return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=obs_embeddings.device)), num_steps
+        return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
 
     def _transformer_pass(self, sequences, past_keys_values, kvcache_independent, valid_context_lengths):
         """
@@ -396,6 +402,7 @@ class WorldModel(nn.Module):
             # ================ Collect and Evaluation Phase ================
             # Encode current observations to latent embeddings
             current_obs_embeddings = self.tokenizer.encode_to_obs_embeddings(current_obs)
+            # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
             self.latent_state = current_obs_embeddings
             outputs_wm = self.refresh_kvs_with_initial_latent_state_for_init_infer(obs_embeddings, buffer_action, current_obs_embeddings)
         else:
@@ -427,6 +434,7 @@ class WorldModel(nn.Module):
                     # First step in an episode
                     self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n,
                                                                                       max_tokens=self.context_length)
+                    # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
                     outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings},
                                               past_keys_values=self.keys_values_wm, is_init_infer=True)
 
@@ -452,7 +460,7 @@ class WorldModel(nn.Module):
                             self.root_hit_cnt += 1
                             # deepcopy is needed because forward modifies matched_value in place
                             self.keys_values_wm_list.append(
-                                copy.deepcopy(to_device_for_kvcache(matched_value, 'cuda')))
+                                copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
                             # Reset using zero values

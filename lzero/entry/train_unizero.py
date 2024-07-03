@@ -61,7 +61,8 @@ def train_unizero(
                          game_buffer_classes[create_cfg.policy.type])
 
     # Set device based on CUDA availability
-    cfg.policy.device = 'cuda' if cfg.policy.cuda and torch.cuda.is_available() else 'cpu'
+    cfg.policy.device = cfg.policy.model.world_model.device if torch.cuda.is_available() else 'cpu'
+    logging.info(f'cfg.policy.device: {cfg.policy.device}')
 
     # Compile the configuration
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
@@ -79,9 +80,9 @@ def train_unizero(
 
     # Load pretrained model if specified
     if model_path is not None:
-        print(f'Loading model from {model_path} begin...')
+        logging.info(f'Loading model from {model_path} begin...')
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
-        print(f'Loading model from {model_path} end!')
+        logging.info(f'Loading model from {model_path} end!')
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None

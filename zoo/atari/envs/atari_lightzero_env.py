@@ -1,7 +1,8 @@
 import copy
 from typing import List
 
-import gymnasium as gym
+# import gymnasium as gym
+import gym 
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
@@ -123,7 +124,12 @@ class AtariEnvLightZero(BaseEnv):
         elif hasattr(self, '_seed'):
             self._env.env.seed(self._seed)
 
-        obs = self._env.reset()
+        result = self._env.reset()
+        if isinstance(result, tuple):
+            obs, info = result
+        else:
+            obs = result
+
         self.obs = to_ndarray(obs)
         self._eval_episode_return = 0.
         obs = self.observe()
