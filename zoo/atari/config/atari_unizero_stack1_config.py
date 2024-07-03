@@ -48,7 +48,6 @@ atari_unizero_config = dict(
         # eval_max_episode_steps=int(50),
     ),
     policy=dict(
-        model_path=None,
         num_unroll_steps=num_unroll_steps,
         model=dict(
             observation_shape=(3, 64, 64),
@@ -73,6 +72,8 @@ atari_unizero_config = dict(
                 obs_type='image',
             ),
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=400,

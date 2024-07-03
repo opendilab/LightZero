@@ -67,6 +67,8 @@ mujoco_disc_sampled_efficientzero_config = dict(
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         policy_entropy_loss_weight=policy_entropy_loss_weight,
         ignore_done=ignore_done,

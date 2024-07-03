@@ -31,7 +31,6 @@ atari_sampled_efficientzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        model_path=None,
         model=dict(
             observation_shape=(4, 96, 96),
             frame_stack_num=4,
@@ -42,6 +41,8 @@ atari_sampled_efficientzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN', 
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=400,

@@ -2,6 +2,7 @@ from easydict import EasyDict
 from env_action_space_map import env_action_space_map
 env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
 action_space_size = env_action_space_map[env_id]
+chance_space_size = 4
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -40,6 +41,8 @@ atari_stochastic_muzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN', 
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         gumbel_algo=False,
         mcts_ctree=True,

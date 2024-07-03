@@ -17,15 +17,15 @@ max_env_step = int(5e5)
 reanalyze_ratio = 0.
 num_unroll_steps = 5
 
-# debug
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-num_simulations = 5
-batch_size = 2
-max_env_step = int(5e5)
-reanalyze_ratio = 0.
-num_unroll_steps = 5
+# ======= only for debug =======
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 5
+# batch_size = 2
+# max_env_step = int(5e5)
+# reanalyze_ratio = 0.
+# num_unroll_steps = 5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -42,9 +42,6 @@ atari_efficientzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        # debug
-        collect_max_steps=50,
-        eval_max_steps=50,
     ),
     policy=dict(
         model=dict(
@@ -64,14 +61,13 @@ atari_efficientzero_config = dict(
         cuda=True,
         env_type='not_board_games',
         game_segment_length=400,
-        random_collect_episode_num=0,
-        use_augmentation=True,  # TODO
+        use_augmentation=True,
         use_priority=False,
         replay_ratio=replay_ratio,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         dormant_threshold=0.025,
-        optim_type='SGD',  # for collector orig
+        optim_type='SGD',
         lr_piecewise_constant_decay=True,
         learning_rate=0.2,
         target_update_freq=100,

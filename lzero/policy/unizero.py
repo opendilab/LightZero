@@ -178,9 +178,9 @@ class UniZeroPolicy(MuZeroPolicy):
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam']
-        optim_type='SGD',
+        optim_type='AdamW',
         # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
-        learning_rate=0.2,
+        learning_rate=0.0001,
         # (int) Frequency of target network update.
         target_update_freq=100,
         # (int) Frequency of target network update.

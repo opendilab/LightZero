@@ -19,18 +19,18 @@ reanalyze_ratio = 0.
 eps_greedy_exploration_in_collect = True
 
 # =========== for debug ===========
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-num_simulations = 2
-update_per_collect = 2
-batch_size = 2
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 2
+# update_per_collect = 2
+# batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_muzero_atari_stack4/{env_id[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_seed0',
+    exp_name=f'data_muzero/{env_id[:-14]}_atari_stack4_muzero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -42,8 +42,8 @@ atari_muzero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: debug
-        collect_max_episode_steps=int(50),
-        eval_max_episode_steps=int(50),
+        # collect_max_episode_steps=int(50),
+        # eval_max_episode_steps=int(50),
     ),
     policy=dict(
         analysis_sim_norm=False,
@@ -66,13 +66,6 @@ atari_muzero_config = dict(
         env_type='not_board_games',
         game_segment_length=400,
         random_collect_episode_num=0,
-        eps=dict(
-            eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
-            type='linear',
-            start=1.,
-            end=0.05,
-            decay=int(2e4),
-        ),
         use_augmentation=True,
         use_priority=False,
         replay_ratio=replay_ratio,

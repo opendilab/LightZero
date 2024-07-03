@@ -85,10 +85,6 @@ gomoku_muzero_create_config = EasyDict(gomoku_muzero_create_config)
 create_config = gomoku_muzero_create_config
 
 if __name__ == "__main__":
-<<<<<<< HEAD
-    from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
-=======
     # Define a list of seeds for multiple runs
     seeds = [0]  # You can add more seed values here
     for seed in seeds:
@@ -96,4 +92,4 @@ if __name__ == "__main__":
         main_config.exp_name = f'data_muzero/gomoku_b{board_size}_rand{prob_random_action_in_bot}_muzero_bot-mode_type-{bot_action_type}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
         from lzero.entry import train_muzero
         train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)
->>>>>>> origin/main
+

@@ -39,6 +39,8 @@ atari_gumbel_muzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN', 
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=400,

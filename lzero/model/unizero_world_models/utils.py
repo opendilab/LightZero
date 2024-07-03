@@ -144,6 +144,16 @@ def init_weights(module, norm_type='BN'):
 
 
 class LossWithIntermediateLosses:
+    """
+    Overview:
+        A class to store the total loss and intermediate losses for a model.
+    Arguments:
+        - latent_recon_loss_weight (float): The weight for the latent reconstruction loss.
+        - perceptual_loss_weight (float): The weight for the perceptual loss.
+        - **kwargs: The intermediate losses to store.
+    Returns:
+        - None
+    """
     def __init__(self, latent_recon_loss_weight=0, perceptual_loss_weight=0, **kwargs):
         # Ensure that kwargs is not empty
         if not kwargs:

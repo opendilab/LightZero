@@ -17,7 +17,7 @@ game_segment_length = 16 + memory_length  # TODO: for "explore": 1
 seed = 0
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 10
+evaluator_env_num = 8
 
 num_simulations = 50
 update_per_collect = None
@@ -27,7 +27,7 @@ reanalyze_ratio = 0
 td_steps = 5
 eps_greedy_exploration_in_collect = True
 
-# debug
+# ========= only for debug ===========
 # collector_env_num = 2
 # n_episode = 2
 # evaluator_env_num = 2
@@ -35,7 +35,6 @@ eps_greedy_exploration_in_collect = True
 # update_per_collect = None
 # replay_ratio = 0.25
 # batch_size = 4
-
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -61,7 +60,6 @@ memory_xzero_config = dict(
     ),
     policy=dict(
         sample_type='episode',  # NOTE: very important for memory env
-        model_path=None,
         train_start_after_envsteps=int(0),
         num_unroll_steps=num_unroll_steps,
         model=dict(
@@ -91,10 +89,9 @@ memory_xzero_config = dict(
                 analysis_sim_norm=False,
                 analysis_dormant_ratio=False,
                 action_shape=4,
-                group_size=8,  # NOTE: sim_norm
-                num_layers=4,  # TODO
+                num_layers=4,
                 num_heads=4,
-                embed_dim=64,  # TODO
+                embed_dim=64,
                 env_num=collector_env_num,
                 collector_env_num=collector_env_num,
                 evaluator_env_num=evaluator_env_num,
@@ -104,6 +101,8 @@ memory_xzero_config = dict(
                 norm_type='BN',
             ),
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         td_steps=td_steps,
         discount_factor=1,
         cuda=True,
@@ -112,9 +111,8 @@ memory_xzero_config = dict(
         replay_ratio=replay_ratio,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        lr_piecewise_constant_decay=False,
+        optim_type='AdamW',
         learning_rate=0.0001,
-        target_update_freq=100,
         grad_clip_value=5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

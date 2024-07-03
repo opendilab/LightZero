@@ -40,6 +40,8 @@ tictactoe_muzero_config = dict(
             value_support_size=21,
             norm_type='BN', 
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='board_games',
         action_type='varied_action_space',
