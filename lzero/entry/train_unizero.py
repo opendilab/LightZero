@@ -104,9 +104,6 @@ def train_unizero(
     if cfg.policy.random_collect_episode_num > 0:
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
 
-    policy.last_batch_obs = initialize_zeros_batch(cfg.policy.model.observation_shape, len(evaluator_env_cfg),
-                                                   cfg.policy.device)
-    policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
     batch_size = policy._cfg.batch_size
 
     # TODO: for visualize
@@ -139,19 +136,11 @@ def train_unizero(
 
         # Evaluate policy performance
         if evaluator.should_eval(learner.train_iter):
-            policy.last_batch_obs = initialize_zeros_batch(
-                cfg.policy.model.observation_shape, len(evaluator_env_cfg), cfg.policy.device
-            )
-            policy.last_batch_action = [-1] * len(evaluator_env_cfg)
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             if stop:
                 break
 
         # Collect new data
-        policy.last_batch_obs = initialize_zeros_batch(
-            cfg.policy.model.observation_shape, len(collector_env_cfg), cfg.policy.device
-        )
-        policy.last_batch_action = [-1] * len(collector_env_cfg)
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
         # Determine updates per collection
@@ -179,11 +168,10 @@ def train_unizero(
                 if data_sufficient:
                     train_data = replay_buffer.sample(batch_size, policy)
                     if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
-                        # Clear caches
+                        # Clear caches and precompute positional embedding matrices
                         for model in [policy._collect_model, policy._target_model]:
-                            # model.world_model.precompute_pos_emb_diff_kv()  # TODO
                             model.world_model.clear_caches()
-
+                        model.world_model.precompute_pos_emb_diff_kv()  # TODO
                         torch.cuda.empty_cache()
 
                     train_data.append({'train_which_component': 'transformer'})

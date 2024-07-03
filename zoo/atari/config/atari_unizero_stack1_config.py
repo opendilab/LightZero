@@ -43,9 +43,7 @@ atari_unizero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        collect_max_episode_steps=int(2e4),
-        eval_max_episode_steps=int(1e4),
-        # TODO: debug
+        # TODO: only for debug
         # collect_max_episode_steps=int(50),
         # eval_max_episode_steps=int(50),
     ),
@@ -62,7 +60,8 @@ atari_unizero_config = dict(
                 max_blocks=10,
                 max_tokens=2 * 10,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * 4,
-                device='cuda',
+                # device='cuda',
+                device='cpu',
                 action_shape=action_space_size,
                 group_size=8,
                 num_layers=4,

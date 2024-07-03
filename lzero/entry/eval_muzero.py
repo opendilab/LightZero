@@ -86,13 +86,6 @@ def eval_muzero(
     # Learner's before_run hook.
     learner.call_hook('before_run')
 
-    policy.last_batch_obs = initialize_zeros_batch(
-        cfg.policy.model.observation_shape,
-        len(evaluator_env_cfg),
-        cfg.policy.device
-    )
-    policy.last_batch_action = [-1 for _ in range(len(evaluator_env_cfg))]
-
     while True:
         # ==============================================================
         # eval trained model

@@ -5,15 +5,15 @@ from typing import List, Dict, Any, Tuple, Union
 import numpy as np
 import torch
 from ding.model import model_wrap
-from ding.policy.base_policy import Policy
 from ding.utils import POLICY_REGISTRY
+
+from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
     prepare_obs_stack4_for_unizero
 from lzero.policy.muzero import MuZeroPolicy
-
 from .utils import configure_optimizers_nanogpt
 
 
@@ -667,42 +667,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
         return output
 
-    def _reset_collect(self, env_id: int = None, current_steps: int = None) -> None:
-        """
-        Overview:
-            This method resets the collection process for a specific environment. It clears caches and memory
-            when certain conditions are met, ensuring optimal performance.
-
-        Arguments:
-            - env_id (:obj:`int`, optional): The ID of the environment to reset. If None or list, the function returns immediately.
-            - current_steps (:obj:`int`, optional): The current step count in the environment. Used to determine
-              whether to clear caches.
-        """
-        # Return immediately if env_id is None or a list
-        if env_id is None or isinstance(env_id, list):
-            return
-
-        # Determine the clear interval based on the environment's sample type
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
-
-        # Clear caches if the current steps are a multiple of the clear interval
-        if current_steps % clear_interval == 0:
-            print(f'clear_interval: {clear_interval}')
-
-            # Clear various caches in the collect model's world model
-            world_model = self._collect_model.world_model
-            world_model.past_kv_cache_init_infer.clear()
-            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
-                kv_cache_dict_env.clear()
-            world_model.past_kv_cache_recurrent_infer.clear()
-            world_model.keys_values_wm_list.clear()
-
-            # Free up GPU memory
-            torch.cuda.empty_cache()
-
-            print('collector: collect_model clear()')
-            print(f'eps_steps_lst[{env_id}]: {current_steps}')
-    
     def _init_eval(self) -> None:
         """
         Overview:
@@ -808,17 +772,71 @@ class UniZeroPolicy(MuZeroPolicy):
 
         return output
 
-    def _reset_eval(self, env_id: int = None, current_steps: int = None) -> None:
+    def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
         """
         Overview:
-            This method resets the evaluation process for a specific environment. It clears caches and memory
-            when certain conditions are met, ensuring optimal performance.
-
+            This method resets the collection process for a specific environment. It clears caches and memory
+            when certain conditions are met, ensuring optimal performance. If reset_init_data is True, the initial data
+            will be reset.
         Arguments:
             - env_id (:obj:`int`, optional): The ID of the environment to reset. If None or list, the function returns immediately.
             - current_steps (:obj:`int`, optional): The current step count in the environment. Used to determine
               whether to clear caches.
+            - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
+        if reset_init_data:
+            self.last_batch_obs = initialize_zeros_batch(
+                self._cfg.model.observation_shape,
+                self._cfg.collector_env_num,
+                self._cfg.device
+            )
+            self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
+
+        # Return immediately if env_id is None or a list
+        if env_id is None or isinstance(env_id, list):
+            return
+
+        # Determine the clear interval based on the environment's sample type
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+
+        # Clear caches if the current steps are a multiple of the clear interval
+        if current_steps % clear_interval == 0:
+            print(f'clear_interval: {clear_interval}')
+
+            # Clear various caches in the collect model's world model
+            world_model = self._collect_model.world_model
+            world_model.past_kv_cache_init_infer.clear()
+            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+                kv_cache_dict_env.clear()
+            world_model.past_kv_cache_recurrent_infer.clear()
+            world_model.keys_values_wm_list.clear()
+
+            # Free up GPU memory
+            torch.cuda.empty_cache()
+
+            print('collector: collect_model clear()')
+            print(f'eps_steps_lst[{env_id}]: {current_steps}')
+
+    def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+        """
+        Overview:
+            This method resets the evaluation process for a specific environment. It clears caches and memory
+            when certain conditions are met, ensuring optimal performance. If reset_init_data is True,
+            the initial data will be reset.
+        Arguments:
+            - env_id (:obj:`int`, optional): The ID of the environment to reset. If None or list, the function returns immediately.
+            - current_steps (:obj:`int`, optional): The current step count in the environment. Used to determine
+              whether to clear caches.
+            - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
+        """
+        if reset_init_data:
+            self.last_batch_obs = initialize_zeros_batch(
+                self._cfg.model.observation_shape,
+                self._cfg.evaluator_env_num,
+                self._cfg.device
+            )
+            self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
+
         # Return immediately if env_id is None or a list
         if env_id is None or isinstance(env_id, list):
             return

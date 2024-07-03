@@ -328,7 +328,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                         if hasattr(self._policy.get_attribute('eval_model'), 'world_model'):
                             # only for UniZero now
-                            self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id])
+                            self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
 
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
@@ -402,7 +402,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                             eps_steps_lst[env_id] = 0
 
                             # Env reset is done by env_manager automatically.
-                            self._policy.reset([env_id])
+                            self._policy.reset([env_id])  # NOTE: reset the policy for the env_id. Default reset_init_data=True.
                             ready_env_id.remove(env_id)
 
                         envstep_count += 1
