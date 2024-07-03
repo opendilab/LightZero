@@ -269,7 +269,7 @@ class RepresentationNetworkUniZero(nn.Module):
     
     def __init__(
             self,
-            observation_shape: SequenceType = (12, 96, 96),
+            observation_shape: SequenceType = (3, 64, 64),
             num_res_blocks: int = 1,
             num_channels: int = 64,
             downsample: bool = True,
@@ -280,10 +280,11 @@ class RepresentationNetworkUniZero(nn.Module):
     ) -> None:
         """
         Overview:
-            Representation network used in UniZero. Encode the 3D image obs into latent state.
+            Representation network used in UniZero. Encode the 2D image obs into latent state.
+            Currently, the network only supports obs images with both a width and height of 64.
         Arguments:
-            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[12, 96, 96]
-                for video games like atari, RGB 3 channel times stack 4 frames.
+            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[3, 64, 64]
+                for video games like atari, RGB 3 channel.
             - num_res_blocks (:obj:`int`): The number of residual blocks.
             - num_channels (:obj:`int`): The channel of output hidden state.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
@@ -355,10 +356,10 @@ class RepresentationNetworkUniZero(nn.Module):
 
         # NOTE: very important. 
         # for atari (64,8,8), flatten_size = 4096 -> 768
-        x = self.last_linear(x.reshape(-1, 64 * 8 * 8))  # TODO
-
+        x = self.last_linear(x.reshape(-1, 64 * 8 * 8))
         x = x.view(-1, self.embedding_dim)
 
+        # NOTE: very important for training stability.
         x = self.sim_norm(x)
 
         return x
@@ -368,7 +369,7 @@ class RepresentationNetwork(nn.Module):
 
     def __init__(
             self,
-            observation_shape: SequenceType = (12, 96, 96),
+            observation_shape: SequenceType = (4, 96, 96),
             num_res_blocks: int = 1,
             num_channels: int = 64,
             downsample: bool = True,
@@ -380,10 +381,11 @@ class RepresentationNetwork(nn.Module):
     ) -> None:
         """
         Overview:
-            Representation network used in MuZero and derived algorithms. Encode the 2D image obs into hidden state.
+            Representation network used in MuZero and derived algorithms. Encode the 2D image obs into latent state.
+            Currently, the network only supports obs images with both a width and height of 96.
         Arguments:
-            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[12, 96, 96]
-                for video games like atari, RGB 3 channel times stack 4 frames.
+            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[4, 96, 96]
+                for video games like atari, 1 gray channel times stack 4 frames.
             - num_res_blocks (:obj:`int`): The number of residual blocks.
             - num_channels (:obj:`int`): The channel of output hidden state.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
@@ -433,7 +435,6 @@ class RepresentationNetwork(nn.Module):
 
         if self.use_sim_norm:
             self.embedding_dim = embedding_dim
-            self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
             self.sim_norm = SimNorm(simnorm_dim=group_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -520,7 +521,7 @@ class LatentDecoder(nn.Module):
     def __init__(self, embedding_dim: int, output_shape: SequenceType, num_channels: int = 64, activation: nn.Module = nn.GELU(approximate='tanh')):
         """
         Overview:
-            Decoder network used in UniZero. Decode the latent state into 3D image obs.
+            Decoder network used in UniZero. Decode the latent state into 2D image obs.
         Arguments:
             - embedding_dim (:obj:`int`): The dimension of the latent state.
             - output_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[3, 64, 64]
@@ -586,7 +587,7 @@ class LatentEncoderForMemoryEnv(nn.Module):
     ):
         """
         Overview:
-            Encoder network used in UniZero in MemoryEnv. Encode the 3D image obs into latent state.
+            Encoder network used in UniZero in MemoryEnv. Encode the 2D image obs into latent state.
         Arguments:
             - image_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[3, 64, 64]
                 for video games like atari, RGB 3 channel times stack 4 frames.
@@ -649,7 +650,7 @@ class LatentDecoderForMemoryEnv(nn.Module):
     ):
         """
         Overview:
-            Decoder network used in UniZero in MemoryEnv. Decode the latent state into 3D image obs.
+            Decoder network used in UniZero in MemoryEnv. Decode the latent state into 2D image obs.
         Arguments:
             - image_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[3, 64, 64]
                 for video games like atari, RGB 3 channel times stack 4 frames.
