@@ -1,6 +1,6 @@
 from easydict import EasyDict
 
-env_action_space_map = EasyDict({
+atari_env_action_space_map = EasyDict({
     'AlienNoFrameskip-v4': 18,
     'AmidarNoFrameskip-v4': 10,
     'AssaultNoFrameskip-v4': 7,
