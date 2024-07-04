@@ -7,10 +7,8 @@ action_space_size = atari_env_action_space_map[env_id]
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-# collector_env_num = 8
-# n_episode = 8
-collector_env_num = 1
-n_episode = 1
+collector_env_num = 8
+n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = None
@@ -18,7 +16,6 @@ replay_ratio = 0.25
 batch_size = 256
 max_env_step = int(5e5)
 reanalyze_ratio = 0.
-eps_greedy_exploration_in_collect = True
 
 # =========== for debug ===========
 # collector_env_num = 1
@@ -72,7 +69,6 @@ atari_muzero_config = dict(
         use_priority=False,
         replay_ratio=replay_ratio,
         update_per_collect=update_per_collect,
-        model_update_ratio=model_update_ratio,
         batch_size=batch_size,
         optim_type='SGD',
         lr_piecewise_constant_decay=True,

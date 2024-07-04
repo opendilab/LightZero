@@ -337,14 +337,6 @@ class RepresentationNetworkUniZero(nn.Module):
 
         self.sim_norm = SimNorm(simnorm_dim=group_size)
 
-        self.use_sim_norm = use_sim_norm
-
-        if self.use_sim_norm:
-            self.embedding_dim = embedding_dim
-            self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
-            # Initialize weights using He initialization
-            init.kaiming_normal_(self.last_linear.weight, mode='fan_out', nonlinearity='relu')
-            self.sim_norm = SimNorm(simnorm_dim=group_size)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

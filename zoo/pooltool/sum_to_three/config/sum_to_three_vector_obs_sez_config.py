@@ -1,7 +1,5 @@
 from easydict import EasyDict
-import torch
-device = 0
-torch.cuda.set_device(device)
+
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -12,11 +10,11 @@ continuous_action_space = True
 K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = None
-model_update_ratio = 1
+replay_ratio = 1
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.25
-ssl_loss_weight = 0
+ssl_loss_weight = 2
 eval_freq = 2e3
 seed = 0
 # ==============================================================
@@ -24,7 +22,7 @@ seed = 0
 # ==============================================================
 
 sumtothree_cont_sampled_efficientzero_config = dict(
-    exp_name=f"data_pooltool_sampled_efficientzero/vector-obs/sumtothree_vector-obs_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_sslw{ssl_loss_weight}_rbs1e5_seed{seed}",
+    exp_name=f"data_pooltool_sampled_efficientzero/vector-obs/sumtothree_vector-obs_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_sslw{ssl_loss_weight}_rbs1e5_seed{seed}",
     env=dict(
         env_name="PoolTool-SumToThree",
         env_type="not_board_games",
@@ -55,7 +53,7 @@ sumtothree_cont_sampled_efficientzero_config = dict(
         env_type="not_board_games",
         game_segment_length=10,
         update_per_collect=update_per_collect,
-        model_update_ratio=model_update_ratio,
+        replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type="Adam",
         lr_piecewise_constant_decay=False,

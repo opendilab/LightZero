@@ -6,9 +6,7 @@ from zoo.pooltool.image_representation import RenderConfig
 
 render_config_path = Path(__file__).parent / "feature_plane_config.json"
 render_config = RenderConfig.from_json(render_config_path)
-import torch
-device = 0
-torch.cuda.set_device(device)
+
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -18,10 +16,11 @@ evaluator_env_num = 3
 K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = None
-model_update_ratio = 1
+replay_ratio = 1
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.25
+ssl_loss_weight = 2
 eval_freq = 2e3
 seed = 0
 # ==============================================================
@@ -30,7 +29,7 @@ seed = 0
 
 
 sumtothree_cont_sampled_efficientzero_config = dict(
-    exp_name=f"data_pooltool_sampled_efficientzero/image-obs/sumtothree_image-obs_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_rbs1e5_seed{seed}",
+    exp_name=f"data_pooltool_sampled_efficientzero/image-obs/sumtothree_image-obs_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rrr{reanalyze_ratio}_sslw{ssl_loss_weight}_rbs1e5_seed{seed}",
     env=dict(
         env_name="PoolTool-SumToThree",
         env_type="not_board_games",
@@ -52,7 +51,6 @@ sumtothree_cont_sampled_efficientzero_config = dict(
             categorical_distribution=True,
             num_of_sampled_actions=K,
             sigma_type="conditioned",
-            # sigma_type="fixed",
             model_type="conv",
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
@@ -64,11 +62,11 @@ sumtothree_cont_sampled_efficientzero_config = dict(
         env_type="not_board_games",
         game_segment_length=10,
         update_per_collect=update_per_collect,
-        model_update_ratio=model_update_ratio,
+        replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type="Adam",
         lr_piecewise_constant_decay=False,
-        ssl_loss_weight=0,
+        ssl_loss_weight=ssl_loss_weight,
         discount_factor=1,
         td_steps=10,
         num_unroll_steps=3,
