@@ -591,7 +591,7 @@ class MuZeroPolicy(Policy):
 
             'analysis/dormant_ratio_encoder': self.dormant_ratio_encoder,
             'analysis/dormant_ratio_dynamics': self.dormant_ratio_dynamics,
-            'analysis/latent_state_l2_norms': latent_state_l2_norms,
+            'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
             'analysis/l2_norm_before': self.l2_norm_before,
             'analysis/l2_norm_after': self.l2_norm_after,
             'analysis/grad_norm_before': self.grad_norm_before,

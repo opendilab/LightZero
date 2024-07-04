@@ -12,7 +12,8 @@ from ding.envs import NoopResetWrapper, MaxAndSkipWrapper, EpisodicLifeWrapper, 
     ClipRewardWrapper, FrameStackWrapper
 from ding.utils.compression_helper import jpeg_data_compressor
 from easydict import EasyDict
-from gymnasium.wrappers import RecordVideo
+# from gymnasium.wrappers import RecordVideo
+from gym.wrappers import RecordVideo
 
 
 # only for reference now

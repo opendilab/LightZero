@@ -1,9 +1,8 @@
 from easydict import EasyDict
-from env_action_space_map import env_action_space_map
+from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
 env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
-
-action_space_size = env_action_space_map[env_id]
+action_space_size = atari_env_action_space_map[env_id]
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
