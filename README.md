@@ -122,24 +122,25 @@ LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of 
 
 The environments and algorithms currently supported by LightZero are shown in the table below:
 
-| Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | 
-|---------------| -------- | ------ |-------------| ------------------ | ---------- |----------------|
-| TicTacToe     | ✔      | ✔      | 🔒           | 🔒                | ✔          | 🔒             |
-| Gomoku        | ✔      | ✔      | 🔒          | 🔒               | ✔          | 🔒             |
-| Connect4      | ✔      | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |
-| 2048          | ---       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |
-| Chess         | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
-| Go            | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
-| CartPole      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
-| Pendulum      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
-| LunarLander   | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
-| BipedalWalker | ---      | ✔      | ✔           | ✔                | ✔          | 🔒              |
-| Atari         | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
-| MuJoCo        | ---      | ✔     | ✔          | ✔                | 🔒         | 🔒               |
-| MiniGrid      | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
-| Bsuite        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
-| Memory        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
-| SumToThree (billiards) | ---      | 🔒     | 🔒          | ✔               | 🔒         | 🔒             |
+
+| Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | UniZero |ReZero |
+|---------------| -------- | ------ |-------------| ------------------ | ---------- |----------------|---------------|----------------|
+| TicTacToe     | ✔      | ✔      | 🔒           | 🔒                | ✔          | 🔒             |✔|🔒             |
+| Gomoku        | ✔      | ✔      | 🔒          | 🔒               | ✔          | 🔒             |✔|✔          |
+| Connect4      | ✔      | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |✔|✔          |
+| 2048          | ---       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |✔|🔒             |
+| Chess         | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |🔒|🔒             |
+| Go            | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |🔒|🔒             |
+| CartPole      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|✔             |
+| Pendulum      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |🔒|🔒             |
+| LunarLander   | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|🔒             |
+| BipedalWalker | ---      | ✔      | ✔           | ✔                | ✔          | 🔒              |🔒|🔒             |
+| Atari         | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|✔          |
+| MuJoCo        | ---      | ✔     | ✔          | ✔                | 🔒         | 🔒               |🔒|🔒             |
+| MiniGrid      | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
+| Bsuite        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
+| Memory        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
+| SumToThree (billiards) | ---      | 🔒     | 🔒          | ✔               | 🔒         | 🔒             |🔒|🔒             |
 
 
 <sup>(1): "✔" means that the corresponding item is finished and well-tested.</sup>

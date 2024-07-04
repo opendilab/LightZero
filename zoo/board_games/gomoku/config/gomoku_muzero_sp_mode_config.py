@@ -20,13 +20,12 @@ prob_random_action_in_bot = 0.5
 # ==============================================================
 
 gomoku_muzero_config = dict(
-    exp_name=
-    f'data_mz_ctree/gomoku_muzero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_muzero/gomoku_muzero_sp-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         battle_mode='self_play_mode',
         bot_action_type=bot_action_type,
         prob_random_action_in_bot=prob_random_action_in_bot,
-        channel_last=True,
+        channel_last=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -43,6 +42,8 @@ gomoku_muzero_config = dict(
             reward_support_size=21,
             value_support_size=21,
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='board_games',
         action_type='varied_action_space',
@@ -90,4 +91,4 @@ create_config = gomoku_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

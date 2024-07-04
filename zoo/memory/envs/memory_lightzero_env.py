@@ -31,28 +31,24 @@ class MemoryEnvLightZero(BaseEnv):
     """
     config = dict(
         env_id='visual_match',  # The name of the environment, options: 'visual_match', 'key_to_door'
-        # max_step=60,  # The maximum number of steps for each episode
         num_apples=10,  # Number of apples in the distractor phase
-        # apple_reward=(1, 10),  # Range of rewards for collecting an apple
-        # apple_reward=(1, 1),  # Range of rewards for collecting an apple
         apple_reward=(0, 0),  # Range of rewards for collecting an apple
         fix_apple_reward_in_episode=False,  # Whether to fix apple reward (DEFAULT_APPLE_REWARD) within an episode
-        final_reward=10.0,  # Reward for choosing the correct door in the final phase
+        final_reward=1.0,  # Reward for choosing the correct door in the final phase
         respawn_every=300,  # Respawn interval for apples
         crop=True,  # Whether to crop the observation
         max_frames={
-            "explore": 15,
-            # NOTE: "explore" should >=2, otherwise the agent won't be able to see the target color or key.
+            "explore": 15,  # NOTE: "explore" should >=1, otherwise the agent won't be able to see the target color or key.
             "distractor": 30,
             "reward": 15
         },  # Maximum frames per phase
         save_replay=False,  # Whether to save GIF replay
         render=False,  # Whether to enable real-time rendering
-        scale_observation=True,  # Whether to scale the observation to [0, 1]
-        flate_observation=False,  # Whether to flatten the observation
-        # obs_max_scale=107,  # Maximum value of the observation, for key_to_door
-        # obs_max_scale=101,  # Maximum value of the observation, for visual_match
-        obs_max_scale=100,  # Maximum value of the observation
+        scale_entity_observation=True,  # Whether to scale the observation to [0, 1]
+        entity_obs_max_scale=100,  # Maximum value of the observation
+        rgb_img_observation=True,  # Whether to return RGB image observation
+        scale_rgb_img_observation=True,  # Whether to scale the RGB image observation to [0, 1]
+        flatten_observation=True,  # Whether to flatten the observation
     )
 
     @classmethod
@@ -73,7 +69,11 @@ class MemoryEnvLightZero(BaseEnv):
         self._save_replay = cfg.save_replay
         self._render = cfg.render
         self._gif_images = []
-        self.obs_max_scale = cfg.obs_max_scale
+        self.entity_obs_max_scale = cfg.entity_obs_max_scale
+        self.scale_entity_observation = cfg.scale_entity_observation
+        self.rgb_img_observation = cfg.rgb_img_observation
+        self.scale_rgb_img_observation = cfg.scale_rgb_img_observation
+        self.flatten_observation = cfg.flatten_observation
 
     def reset(self) -> np.ndarray:
         """
@@ -120,30 +120,61 @@ class MemoryEnvLightZero(BaseEnv):
             )
 
         self._episode = self._game.make_episode()
-        if self._cfg.scale_observation:
-            self._observation_space = gym.spaces.Box(0, 1, shape=(1, 5, 5), dtype='float32')
+        if self.rgb_img_observation:
+            self._observation_space = gym.spaces.Box(0, 255, shape=(3, 5, 5), dtype='uint8')
+            if self.scale_rgb_img_observation:
+                self._observation_space = gym.spaces.Box(0, 1, shape=(3, 5, 5), dtype='float32')
         else:
-            self._observation_space = gym.spaces.Box(0, self.obs_max_scale, shape=(1, 5, 5), dtype='int64')
+            self._observation_space = gym.spaces.Box(0, self.entity_obs_max_scale, shape=(1, 5, 5), dtype='int64')
+            if self.scale_entity_observation:
+                self._observation_space = gym.spaces.Box(0, 1, shape=(1, 5, 5), dtype='float32')
+
         self._action_space = gym.spaces.Discrete(self._game.num_actions)
         self._reward_space = gym.spaces.Box(low=-float('inf'), high=float('inf'), shape=(1,), dtype=np.float32)
 
         self._current_step = 0
         self.episode_reward_list = []
         self._eval_episode_return = 0
-        obs, _, _ = self._episode.its_showtime()
-        obs = obs[0].reshape(1, 5, 5)
-        obs = to_ndarray(obs, dtype=np.float32)
+        observation, _, _ = self._episode.its_showtime()
+        observation = observation[0].reshape(1, 5, 5)
+        observation = to_ndarray(observation, dtype=np.float32)
         action_mask = np.ones(self.action_space.n, 'int8')
-        if self._cfg.scale_observation:
-            obs = obs / self.obs_max_scale
-        if self._cfg.flate_observation:
-            obs = obs.flatten()
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
-
         self._gif_images = []
         self._gif_images_numpy = []
 
-        return obs
+        if self._save_replay or self._render or self.rgb_img_observation:
+            # Convert observation to RGB format
+            obs_rgb = np.zeros((5, 5, 3), dtype=np.uint8)
+            for char, color in self._game._colours.items():
+                # NOTE： self._game._colours is a dictionary that maps the characters in the game to their corresponding (true) colors, ranging in [0,999].
+                #  Because the np.uint8 type array will perform a modulo 256 operation (taking the remainder), that is to say,
+                #  any value greater than 255 will be subtracted by an integer multiple of 256 until the value falls within the range of 0-255.
+                #  For example, 1000 will become 232 (because 1000 % 256 = 232)
+                obs_rgb[observation.reshape(5, 5) == ord(char)] = color
+
+            if self._save_replay or self._render:
+                img = Image.fromarray(obs_rgb)
+            if self._save_replay:
+                self._gif_images.append(img)
+                self._gif_images_numpy.append(obs_rgb)
+            if self._render:
+                plt.imshow(img)
+                plt.axis('off')
+                plt.pause(0.0001)
+                plt.clf()
+
+        if not self.rgb_img_observation and self.scale_entity_observation:
+            observation = observation / self.entity_obs_max_scale
+        if self.rgb_img_observation:
+            observation = np.transpose(obs_rgb, (-1, 0, 1))  # (H,W,C) -> (C,H,W)
+            if self.scale_rgb_img_observation:
+                observation = observation / 255.0
+        if self.flatten_observation:
+            observation = observation.flatten()
+
+        observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1}
+
+        return observation
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
         """
@@ -168,18 +199,18 @@ class MemoryEnvLightZero(BaseEnv):
 
         info = {}
         if done:
-            # TODO
             info['eval_episode_return'] = self._eval_episode_return
             info['success'] = 1 if self._eval_episode_return == self._cfg.final_reward else 0
             info['eval_episode_return'] = info['success']
             print(f'episode seed:{self._seed} done! self.episode_reward_list is: {self.episode_reward_list}')
+            print(f"Step: {self._current_step}, Action: {action}, Reward: {reward}, Observation: {observation}, Done: {done}, Info: {info}")  # TODO
 
         # print(f"Step: {self._current_step}, Action: {action}, Reward: {reward}, Observation: {observation}, Done: {done}, Info: {info}")  # TODO
         observation = to_ndarray(observation, dtype=np.float32)
         reward = to_ndarray([reward])
         action_mask = np.ones(self.action_space.n, 'int8')
 
-        if self._save_replay or self._render:
+        if self._save_replay or self._render or self.rgb_img_observation:
             # Convert observation to RGB format
             obs_rgb = np.zeros((5, 5, 3), dtype=np.uint8)
             for char, color in self._game._colours.items():
@@ -188,12 +219,12 @@ class MemoryEnvLightZero(BaseEnv):
                 #  any value greater than 255 will be subtracted by an integer multiple of 256 until the value falls within the range of 0-255.
                 #  For example, 1000 will become 232 (because 1000 % 256 = 232)
                 obs_rgb[observation.reshape(5, 5) == ord(char)] = color
-            img = Image.fromarray(obs_rgb)
 
+            if self._save_replay or self._render:
+                img = Image.fromarray(obs_rgb)
             if self._save_replay:
                 self._gif_images.append(img)
                 self._gif_images_numpy.append(obs_rgb)
-
             if self._render:
                 plt.imshow(img)
                 plt.axis('off')
@@ -209,10 +240,15 @@ class MemoryEnvLightZero(BaseEnv):
             # self.display_frames_as_gif(self._gif_images_numpy, gif_file)  # the alternative way to save gif
             print(f'saved replay to {gif_file}')
 
-        if self._cfg.scale_observation:
-            observation = observation / self.obs_max_scale
-        if self._cfg.flate_observation:
+        if not self.rgb_img_observation and self.scale_entity_observation:
+            observation = observation / self.entity_obs_max_scale
+        if self.rgb_img_observation:
+            observation = np.transpose(obs_rgb, (-1, 0, 1))  # (H,W,C) -> (C,H,W)
+            if self.scale_rgb_img_observation:
+                observation = observation / 255.0
+        if self.flatten_observation:
             observation = observation.flatten()
+
         observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1}
 
         return BaseEnvTimestep(observation, reward, done, info)
@@ -226,8 +262,6 @@ class MemoryEnvLightZero(BaseEnv):
         return random_action
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
-        # def seed(self, seed: int, dynamic_seed: bool = False) -> None: # TODO
-
         """
         Set the seed for the environment's random number generator. Can handle both static and dynamic seeding.
         """
