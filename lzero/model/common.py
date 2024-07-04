@@ -337,6 +337,7 @@ class RepresentationNetworkUniZero(nn.Module):
 
         self.sim_norm = SimNorm(simnorm_dim=group_size)
 
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Shapes:

@@ -16,7 +16,6 @@ replay_ratio = 0.25
 batch_size = 256
 max_env_step = int(5e5)
 reanalyze_ratio = 0.
-eps_greedy_exploration_in_collect = True
 
 # =========== for debug ===========
 # collector_env_num = 1

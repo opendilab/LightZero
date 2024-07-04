@@ -1445,4 +1445,7 @@ events.*
 **/tb/*
 **/mcts/ctree/tests_cpp/*
 **/*tmp*
+
+# pooltool-specific stuff
+!/assets/pooltool/**
 lzero/mcts/ctree/ctree_alphazero/pybind11
