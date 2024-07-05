@@ -463,7 +463,8 @@ class GameBuffer(ABC, object):
         Overview:
             remove some oldest data if the replay buffer is full.
         """
-        assert self.replay_buffer_size > self._cfg.batch_size, "replay buffer size should be larger than batch size"
+        if isinstance(self._cfg.batch_size, int):
+            assert self.replay_buffer_size > self._cfg.batch_size, "replay buffer size should be larger than batch size"
         nums_of_game_segments = self.get_num_of_game_segments()
         total_transition = self.get_num_of_transitions()
         if total_transition > self.replay_buffer_size:

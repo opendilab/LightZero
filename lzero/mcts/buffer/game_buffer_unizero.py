@@ -47,8 +47,14 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         self.game_segment_buffer = []
         self.game_pos_priorities = []
         self.game_segment_game_pos_look_up = []
-        # self.task_id = self._cfg.task_id
         self.sample_type = self._cfg.sample_type  # 'transition' or 'episode'
+
+        if hasattr(self._cfg, 'task_id'):
+            self.task_id = self._cfg.task_id
+            print(f"Task ID is set to {self.task_id}.")
+        else:
+            self.task_id = None
+            print("No task_id found in configuration. Task ID is set to None.")
 
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
@@ -289,7 +295,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # calculate the target value
             # action_batch.shape (32, 10)
             # m_obs.shape torch.Size([352, 3, 64, 64]) 32*11=352
-            m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
+            m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num], task_id=self.task_id)  # NOTE: :self.reanalyze_num
             # =======================================================================
 
             if not model.training:
@@ -410,7 +416,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # calculate the target value
             # m_obs.shape torch.Size([352, 3, 64, 64]) 32*11 = 352
-            m_output = model.initial_inference(m_obs, action_batch)
+            m_output = model.initial_inference(m_obs, action_batch, task_id=self.task_id)
             # ======================================================================
 
             if not model.training:

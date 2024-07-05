@@ -8,12 +8,12 @@ from easydict import EasyDict
 from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
     VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook
 from .unizero_world_models.tokenizer import Tokenizer
-from .unizero_world_models.world_model import WorldModel
+from .unizero_world_models.world_model_multitask import WorldModelMT
 
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
-@MODEL_REGISTRY.register('UniZeroModel')
-class UniZeroModel(nn.Module):
+@MODEL_REGISTRY.register('UniZeroMTModel')
+class UniZeroMTModel(nn.Module):
 
     def __init__(
             self,
@@ -25,6 +25,7 @@ class UniZeroModel(nn.Module):
             downsample: bool = True,
             norm_type: Optional[str] = 'BN',
             world_model_cfg: EasyDict = None,
+            task_num: int = 1,
             *args,
             **kwargs
     ):
@@ -62,8 +63,13 @@ class UniZeroModel(nn.Module):
                 - policy_entropy_weight (:obj:`float`): The weight of the policy entropy.
                 - analysis_sim_norm (:obj:`bool`): Whether to analyze the similarity of the norm.
         """
-        super(UniZeroModel, self).__init__()
+        super(UniZeroMTModel, self).__init__()
         self.action_space_size = action_space_size
+
+        # for multi-task
+        self.action_space_size = 18
+        self.task_num = task_num
+
         self.activation = activation
         self.downsample = downsample
         world_model_cfg.norm_type = norm_type
@@ -81,7 +87,7 @@ class UniZeroModel(nn.Module):
             self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
             self.tokenizer = Tokenizer(encoder=self.representation_network,
                                        decoder_network=self.decoder_network, with_lpips=False)
-            self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
+            self.world_model = WorldModelMT(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print('==' * 20)
             print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
@@ -111,7 +117,7 @@ class UniZeroModel(nn.Module):
 
             self.tokenizer = Tokenizer(encoder=self.representation_network,
                                        decoder_network=self.decoder_network, with_lpips=True,)
-            self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
+            self.world_model = WorldModelMT(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
 
@@ -146,7 +152,7 @@ class UniZeroModel(nn.Module):
 
             self.tokenizer = Tokenizer(with_lpips=True, encoder=self.representation_network,
                                        decoder_network=self.decoder_network)
-            self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
+            self.world_model = WorldModelMT(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
 
@@ -180,7 +186,7 @@ class UniZeroModel(nn.Module):
          """
         batch_size = obs_batch.size(0)
         obs_act_dict = {'obs': obs_batch, 'action': action_batch, 'current_obs': current_obs_batch}
-        _, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(obs_act_dict)
+        _, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(obs_act_dict, task_id=task_id)
         latent_state, reward, policy_logits, value = obs_token, logits_rewards, logits_policy, logits_value
         policy_logits = policy_logits.squeeze(1)
         value = value.squeeze(1)
@@ -219,7 +225,7 @@ class UniZeroModel(nn.Module):
                 latent state, W_ is the width of latent state.
          """
         _, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
-            state_action_history, simulation_index, latent_state_index_in_search_path)
+            state_action_history, simulation_index, latent_state_index_in_search_path, task_id=task_id)
         next_latent_state, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
         policy_logits = policy_logits.squeeze(1)
         value = value.squeeze(1)

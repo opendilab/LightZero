@@ -24,6 +24,8 @@ class AtariEnvLightZero(BaseEnv):
         _reward_space, obs, _eval_episode_return, has_reset, _seed, _dynamic_seed
     """
     config = dict(
+        # (bool) Whether to use the full action space of the environment. Default is False. If set to True, the action space size is 18 for Atari.
+        full_action_space=False,
         # (int) The number of environment instances used for data collection.
         collector_env_num=8,
         # (int) The number of environment instances used for evaluator.
