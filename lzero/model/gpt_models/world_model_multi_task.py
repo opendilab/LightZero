@@ -136,6 +136,7 @@ class WorldModelMT(nn.Module):
         self.num_layers = config.num_layers
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
         # self.recurrent_keep_deepth = config.recurrent_keep_deepth
+        import torch
 
         all_but_last_latent_state_pattern = torch.ones(config.tokens_per_block)
         all_but_last_latent_state_pattern[-2] = 0  # 1,...,0,1
@@ -209,8 +210,8 @@ class WorldModelMT(nn.Module):
         self.head_observations_multi_task = nn.ModuleList()
 
 
-        # TODO:======================
-        # for task_id in range(3):
+        # # TODO:======================
+        # # for task_id in range(3):
         for task_id in range(self.task_num):  # TODO
             action_space_size=self.action_shape  # TODO:======================
             # action_space_size=18  # TODO:======================
@@ -259,7 +260,60 @@ class WorldModelMT(nn.Module):
             )
             self.head_observations_multi_task.append(self.head_observations)
 
+        import torch
+        from soft_moe_pytorch import SoftMoE
 
+        # soft_moe
+        moe = SoftMoE(
+            dim = config.embed_dim,         # model dimensions
+            seq_len = 20,    # max sequence length (will automatically calculate number of slots as seq_len // num_experts) - you can also set num_slots directly
+            num_experts = config.num_experts  # number of experts - (they suggest number of experts should be high enough that each of them get only 1 slot. wonder if that is the weakness of the paper?)
+        )
+
+        # x = torch.randn(1, 1024, 512)
+        # out = moe(x)
+        action_space_size=self.action_shape  # TODO:======================
+        self.head_policy = Head(
+            max_blocks=config.max_blocks,
+            block_mask=value_policy_tokens_pattern,  # TODO: value_policy_tokens_pattern # [0,...,1,0]
+            head_module=nn.Sequential( # （8, 5, 128）
+                # nn.Linear(config.embed_dim, config.embed_dim),
+                # nn.GELU(),
+                moe,
+                nn.Linear(config.embed_dim, action_space_size)  # TODO(pu); action shape
+            )
+        )
+        self.head_value = Head(
+            max_blocks=config.max_blocks,
+            block_mask=value_policy_tokens_pattern,
+            head_module=nn.Sequential(
+                # nn.Linear(config.embed_dim, config.embed_dim),
+                # nn.GELU(),
+                moe,
+                nn.Linear(config.embed_dim, self.support_size)  # TODO(pu): action shape
+            )
+        )
+        self.head_rewards = Head(
+            max_blocks=config.max_blocks,
+            block_mask=act_tokens_pattern,  # 0,...,0,1
+            head_module=nn.Sequential(
+                # nn.Linear(config.embed_dim, config.embed_dim),
+                # nn.GELU(),
+                moe,
+                nn.Linear(config.embed_dim, self.support_size)
+            )
+        )
+        self.head_observations = Head(  # TODO  
+            max_blocks=config.max_blocks,
+            block_mask=all_but_last_latent_state_pattern,  # 1,...,0,1 # https://github.com/eloialonso/iris/issues/19
+            head_module=nn.Sequential(
+                # nn.Linear(config.embed_dim, config.embed_dim),
+                # nn.GELU(),
+                moe,
+                nn.Linear(config.embed_dim, self.obs_per_embdding_dim),
+                self.sim_norm,
+            )
+        )
 
         self.apply(init_weights)
 
@@ -466,6 +520,12 @@ class WorldModelMT(nn.Module):
                 # ========== for visualize ==========
         
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
+        # one head soft_moe
+        logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
+        logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
+
         # one head
         # logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
         # logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
@@ -473,10 +533,10 @@ class WorldModelMT(nn.Module):
         # logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
         
         # N head
-        logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        # logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
 
         # TODO: root reward value
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)

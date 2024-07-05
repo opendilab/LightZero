@@ -1,6 +1,6 @@
 from easydict import EasyDict
 import torch
-torch.cuda.set_device(1)
+torch.cuda.set_device(6)
 # options={'PongNoFrameskip-v4', 'QbertNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SpaceInvadersNoFrameskip-v4', 'BreakoutNoFrameskip-v4', ...}
 env_id = 'PongNoFrameskip-v4'
 # env_id = 'MsPacmanNoFrameskip-v4'
@@ -53,8 +53,8 @@ reanalyze_ratio = 0.
 # batch_size = [20, 15]  # TODO: multitask
 # batch_size = [20, 20]  # TODO: multitask
 # batch_size = [32, 32]  # TODO: multitask
-# batch_size = [32, 32, 32, 32]  # TODO: multitask
-batch_size = [96, 32, 32, 32]  # TODO: multitask
+batch_size = [32, 32, 32, 32]  # TODO: multitask
+# batch_size = [96, 32, 32, 32]  # TODO: multitask
 
 
 num_simulations = 50
@@ -72,7 +72,9 @@ eps_greedy_exploration_in_collect = True
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_taskembedding-to-obs_1-head_1-encoder-LN-eps-gelu_lsd768-nlayer2-nh8_fixbuffer-targetlatent_4games_seed2/'
 
 # exp_name_prefix = f'data_unizero_mt_stack1_0610/pong-mspacman_action{action_space_size}_notaskembedding-to-obs_N-head_1-encoder-LN-eps-gelu_lsd768-nlayer2-nh8_fixbuffer-targetlatent_4games_pong-boxing-cnum2_bs-pong96-others32_seed0/'
-exp_name_prefix = f'data_unizero_mt_stack1_0610/pong-mspacman_action{action_space_size}_notaskembedding-to-obs_N-head_1-encoder-LN-eps-gelu_lsd768-nlayer2-nh8_fixbuffer-targetlatent_4games_pong-boxing-cnum2_bs-pong96-others32_seed0/'
+# exp_name_prefix = f'data_unizero_mt_stack1_0705/pong-mspacman_action{action_space_size}_notaskembedding-to-obs_N-head_1-encoder-LN-eps-gelu_lsd768-nlayer4-nh8_fixbuffer-targetlatent_4games_pong-boxing-cnum2_bs-pong96-others32_seed0/'
+exp_name_prefix = f'data_unizero_mt_stack1_0705/pong-mspacman_action{action_space_size}_notaskembedding-to-obs_1-head-softmoe1_1-encoder-LN-eps-gelu_lsd768-nlayer4-nh8_4games_pong-boxing-cnum2_bs-all32_seed0/'
+
 
 # exp_name_prefix = f'data_unizero_mt_stack1_0528/pong-mspacman_action{action_space_size}_only-add-taskembedding-to-obs_1-head_N-encoder_lsd768-nlayer2-nh8_fixbuffer-targetlatent/'
 
@@ -87,7 +89,7 @@ exp_name_prefix = f'data_unizero_mt_stack1_0610/pong-mspacman_action{action_spac
 
 # only for debug =========
 # batch_size = 2 
-# update_per_collect = 1 # debug
+# /mnt/afs/niuyazhe/code/LightZero/zoo/atari/config/atari_unizero_config_stack1_multitask.py = 1 # debug
 # num_simulations = 1 # debug
 # exp_name_prefix = 'data_debug_unizero_mt_stack1_pong-mspacman/'
 # ==============================================================
