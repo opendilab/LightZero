@@ -46,6 +46,7 @@ class MuZeroModel(nn.Module):
         norm_type: Optional[str] = 'BN',
         discrete_action_encoding_type: str = 'one_hot',
         analysis_sim_norm: bool = False,
+        use_harmony: bool = False,
         *args,
         **kwargs
     ):
@@ -86,6 +87,7 @@ class MuZeroModel(nn.Module):
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
             - analysis_sim_norm (:obj:`bool`): Whether to enable analysis within the sim_norm of hidden states in the model, the default setting is False.
+            - use_harmony (:obj:`bool`): Whether to use HarmonyDream to balance loss weights. Referred as https://github.com/thuml/HarmonyDream.
         """
         super(MuZeroModel, self).__init__()
         assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
@@ -182,7 +184,15 @@ class MuZeroModel(nn.Module):
             activation=activation,
             norm_type=norm_type
         )
-
+        
+        self.use_harmony = use_harmony
+        if self.use_harmony:
+            self.harmony_s1 = nn.Parameter(-torch.log(torch.tensor(1.0)))
+            self.harmony_s2 = nn.Parameter(-torch.log(torch.tensor(1.0)))
+            self.harmony_s3 = nn.Parameter(-torch.log(torch.tensor(1.0)))
+            self.harmony_s4 = nn.Parameter(-torch.log(torch.tensor(1.0)))
+            self.harmony_s5 = nn.Parameter(-torch.log(torch.tensor(1.0)))
+            
         if self.self_supervised_learning_loss:
             # projection used in EfficientZero
             if self.downsample:
