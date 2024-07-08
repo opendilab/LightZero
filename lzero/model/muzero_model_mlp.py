@@ -127,6 +127,8 @@ class MuZeroModelMLP(nn.Module):
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             norm_type=norm_type
         )
+        
+        # Referred as https://github.com/thuml/HarmonyDream/blob/main/wmlib-torch/wmlib/agents/dreamerv2.py#L116
         self.use_harmony = use_harmony
         if self.use_harmony:
             self.harmony_s1 = nn.Parameter(-torch.log(torch.tensor(1.0)))

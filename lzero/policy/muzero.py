@@ -537,6 +537,9 @@ class MuZeroPolicy(Policy):
         # the core learn model update step.
         # ==============================================================
         # weighted loss with masks (some invalid states which are out of trajectory.)
+        # Nan appear when consistency loss or policy entropy loss uses harmony parameter as coefficient.
+        # Referred as https://github.com/thuml/HarmonyDream/blob/main/wmlib-torch/wmlib/agents/dreamerv2.py#L161
+        
         if self._cfg.model.use_harmony:
             loss = (
                   (consistency_loss.mean() * self._cfg.ssl_loss_weight)
