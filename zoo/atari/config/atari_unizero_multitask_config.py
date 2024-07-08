@@ -15,8 +15,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             manager=dict(shared_memory=False, ),
             full_action_space=True,
             # ===== only for debug =====
-            collect_max_episode_steps=int(50),
-            eval_max_episode_steps=int(50),
+            # collect_max_episode_steps=int(50),
+            # eval_max_episode_steps=int(50),
         ),
         policy=dict(
             grad_correct_params=dict(
@@ -39,7 +39,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,
                     context_length=2 * infer_context_length,
-                    device='cpu',  # 'cuda',
+                    # device='cpu',  # 'cuda',
+                    device='cuda',  # 'cuda',
                     action_space_size=action_space_size,
                     num_layers=4,  # NOTE
                     num_heads=8,
@@ -69,7 +70,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, seed):
     configs = []
-    exp_name_prefix = f'data_unizero_mt_0705/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head_1-encoder-LN_lsd768-nlayer4-nh8_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_0708/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head_1-encoder-LN_lsd768-nlayer4-nh8_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -140,5 +141,5 @@ if __name__ == "__main__":
 
     # Uncomment the desired training run
     # train_unizero_multitask(configs[:1], seed=seed, max_env_step=max_env_step)  # Pong
-    train_unizero_multitask(configs[:2], seed=seed, max_env_step=max_env_step)  # Pong, MsPacman
-    # train_unizero_multitask(configs, seed=seed, max_env_step=max_env_step)      # Pong, MsPacman, Seaquest, Boxing
+    # train_unizero_multitask(configs[:2], seed=seed, max_env_step=max_env_step)  # Pong, MsPacman
+    train_unizero_multitask(configs, seed=seed, max_env_step=max_env_step)      # Pong, MsPacman, Seaquest, Boxing

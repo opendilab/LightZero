@@ -20,7 +20,7 @@ from .utils import configure_optimizers_nanogpt
 sys.path.append('/Users/puyuan/code/LibMTL/')
 # from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
-from LibMTL.weighting.FAMO_unizero import FAMO as GradCorrect
+# from LibMTL.weighting.FAMO_unizero import FAMO as GradCorrect
 
 
 # from LibMTL.weighting.abstract_weighting import AbsWeighting
@@ -457,12 +457,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # )
         # 将 wrapped_model 作为 share_model 传递给 GradCorrect
         self.task_num = self._cfg.task_num
-        self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
-        self.grad_correct.init_param()  # 初始化MoCo参数
-        self.grad_correct.rep_grad = False
+        # self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
+        # self.grad_correct.init_param()  # 初始化MoCo参数
+        # self.grad_correct.rep_grad = False
         # self.grad_correct.set_min_losses(torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device))  # only for FAMO
-        self.curr_min_loss = torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)
-        self.grad_correct.prev_loss = self.curr_min_loss
+        # self.curr_min_loss = torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)
+        # self.grad_correct.prev_loss = self.curr_min_loss
 
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
