@@ -53,6 +53,8 @@ class WorldModelMT(nn.Module):
         self.head_rewards_multi_task = nn.ModuleList()
         self.head_observations_multi_task = nn.ModuleList()
 
+        self.num_experts_in_softmoe = config.num_experts_in_softmoe
+
         # Move all modules to the specified device
         print(f"self.config.device: {self.config.device}")
         self.to(self.config.device)
@@ -72,29 +74,38 @@ class WorldModelMT(nn.Module):
         self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
         print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
-        for task_id in range(self.task_num):  # TODO
-            action_space_size = self.action_space_size # TODO:======================
-            # action_space_size=18  # TODO:======================
-            self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
+        if self.num_experts_in_softmoe == -1:
+            print('We use normal head')
+            # TODO: Normal Head
+            for task_id in range(self.task_num):  # TODO
+                action_space_size = self.action_space_size # TODO:======================
+                # action_space_size=18  # TODO:======================
+                self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
+                self.head_policy_multi_task.append(self.head_policy)
+
+                self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
+                self.head_value_multi_task.append(self.head_value)
+
+                self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
+                self.head_rewards_multi_task.append(self.head_rewards)
+
+                self.head_observations = self._create_head(self.all_but_last_latent_state_pattern,
+                                                        self.obs_per_embdding_dim,
+                                                        self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
+                self.head_observations_multi_task.append(self.head_observations)
+        else:
+            print(f'We use softmoe head, self.num_experts_in_softmoe is {self.num_experts_in_softmoe}')
+            # Dictionary to store SoftMoE instances
+            self.soft_moe_instances = {}
+
+            # Create softmoe head modules
+            self.create_head_modules_softmoe()
+
             self.head_policy_multi_task.append(self.head_policy)
-
-            self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
             self.head_value_multi_task.append(self.head_value)
-
-            self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
             self.head_rewards_multi_task.append(self.head_rewards)
-
-            self.head_observations = self._create_head(self.all_but_last_latent_state_pattern,
-                                                       self.obs_per_embdding_dim,
-                                                       self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
             self.head_observations_multi_task.append(self.head_observations)
 
-        # Head modules
-        # self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
-        # self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim,
-        #                                            self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
-        # self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
-        # self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
 
         # Apply weight initialization, the order is important
         self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
@@ -159,6 +170,62 @@ class WorldModelMT(nn.Module):
             max_blocks=self.config.max_blocks,
             block_mask=block_mask,
             head_module=nn.Sequential(*modules)
+        )
+
+    def _create_head_softmoe(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, soft_moe=None) -> Head:
+        """Create softmoe head modules for the transformer."""
+        modules = [
+            soft_moe,
+            nn.Linear(self.config.embed_dim, output_dim)
+        ]
+        if norm_layer:
+            modules.append(norm_layer)
+        return Head(
+            max_blocks=self.config.max_blocks,
+            block_mask=block_mask,
+            head_module=nn.Sequential(*modules)
+        )
+    
+    def get_soft_moe(self, name):
+        """Get or create a SoftMoE instance"""
+        from soft_moe_pytorch import SoftMoE
+        if name not in self.soft_moe_instances:
+            self.soft_moe_instances[name] = SoftMoE(
+                dim=self.embed_dim,
+                seq_len=20,  # TODO
+                num_experts=self.num_experts_in_softmoe,
+            )
+        return self.soft_moe_instances[name]
+
+    def create_head_modules_softmoe(self):
+        """Create all softmoe head modules"""
+        # Rewards head
+        self.head_rewards = self._create_head_softmoe(
+            self.act_tokens_pattern,
+            self.support_size,
+            soft_moe=self.get_soft_moe("rewards_soft_moe")
+        )
+
+        # Observations head
+        self.head_observations = self._create_head_softmoe(
+            self.all_but_last_latent_state_pattern,
+            self.obs_per_embdding_dim,
+            norm_layer=self.sim_norm,  # NOTE
+            soft_moe=self.get_soft_moe("observations_soft_moe")
+        )
+
+        # Policy head
+        self.head_policy = self._create_head_softmoe(
+            self.value_policy_tokens_pattern,
+            self.action_space_size,
+            soft_moe=self.get_soft_moe("policy_soft_moe")
+        )
+
+        # Value head
+        self.head_value = self._create_head_softmoe(
+            self.value_policy_tokens_pattern,
+            self.support_size,
+            soft_moe=self.get_soft_moe("value_soft_moe")
         )
 
     def _initialize_last_layer(self) -> None:

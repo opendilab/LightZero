@@ -52,6 +52,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # collector_env_num=collector_env_num,
                     # evaluator_env_num=evaluator_env_num,
                     task_num=len(env_id_list),
+                    num_experts_in_softmoe=4,  # NOTE
                 ),
             ),
             cuda=True,
@@ -72,7 +73,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, seed):
     configs = []
-    exp_name_prefix = f'data_unizero_mt_0711/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head_1-encoder-LN_lsd768-nlayer4-nh8_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_0711/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head-softmoe4_1-encoder-LN_lsd768-nlayer4-nh8_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
