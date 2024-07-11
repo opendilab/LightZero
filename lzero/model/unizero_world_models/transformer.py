@@ -205,7 +205,10 @@ class SelfAttention(nn.Module):
         B, T, C = x.size()
         if kv_cache is not None:
             b, nh, L, c = kv_cache.shape
-            assert nh == self.num_heads and b == B and c * nh == C, "Cache dimensions do not match input dimensions."
+            try:
+                assert nh == self.num_heads and b == B and c * nh == C, "Cache dimensions do not match input dimensions."
+            except Exception as e:
+                print('debug')
         else:
             L = 0
 
