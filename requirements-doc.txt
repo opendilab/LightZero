@@ -1,7 +1,8 @@
 Jinja2~=3.0.3
 sphinx<7
 sphinx_rtd_theme~=2.0.0
-enum_tools
+pytorch_sphinx_theme~=0.0.24
+gstenum_tools
 sphinx-toolbox
 plantumlcli>=0.0.4
 packaging
@@ -15,4 +16,3 @@ ipython>=7.16.3
 psutil>=5.8.0
 ipykernel>=6.15
 py-cpuinfo>=8.0.0
-pytorch_sphinx_theme==0.0.24
