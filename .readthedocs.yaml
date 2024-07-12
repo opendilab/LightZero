@@ -34,10 +34,3 @@ formats:
 python:
    install:
    - requirements: requirements-doc.txt
-
-# Subprojects configuration
-subprojects:
-  zh:
-    configuration: docs/zh_CH/source/conf.py
-  en:
-    configuration: docs/en/source/conf.py
