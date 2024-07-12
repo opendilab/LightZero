@@ -45,8 +45,10 @@ release = '0.1.0'
 extensions = [
     'sphinx.ext.autodoc', 'sphinx.ext.doctest', 'sphinx.ext.mathjax',
     'sphinx.ext.ifconfig', 'sphinx.ext.viewcode', 'sphinx.ext.githubpages',
-    'enum_tools.autoenum', 'recommonmark', 'sphinx.ext.napoleon',
+    'enum_tools.autoenum', 'recommonmark', 'sphinx.ext.napoleon', 'sphinx.ext.autosummary',
 ]
+
+autosummary_generate = True
 
 autodoc_default_options = {
     'members': True,

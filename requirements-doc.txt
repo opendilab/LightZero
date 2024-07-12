@@ -1,6 +1,7 @@
 Jinja2~=3.0.3
 sphinx<7
 sphinx_rtd_theme~=2.0.0
+sphinx-autodoc-typehints~=1.12.0
 enum_tools
 sphinx-toolbox
 plantumlcli>=0.0.4
