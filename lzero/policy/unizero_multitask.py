@@ -933,7 +933,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
         return output
 
-    def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+    def _reset_collect(self, env_id: int = None, current_steps: int = 0, reset_init_data: bool = True) -> None:
         """
         Overview:
             This method resets the collection process for a specific environment. It clears caches and memory
@@ -955,8 +955,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # print('collector: last_batch_obs, last_batch_action reset()', self.last_batch_obs.shape)
 
         # Return immediately if env_id is None or a list
-        if env_id is None or isinstance(env_id, list):
-            return
+        # if env_id is None or isinstance(env_id, list):
+        #     return
 
         # Determine the clear interval based on the environment's sample type
         clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
@@ -978,6 +978,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             print('collector: collect_model clear()')
             print(f'eps_steps_lst[{env_id}]: {current_steps}')
+            
         # TODO: check its correctness
         self._reset_target_model()
 
@@ -1001,7 +1002,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         torch.cuda.empty_cache()
         print('collector: target_model past_kv_cache.clear()')
 
-    def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+    def _reset_eval(self, env_id: int = None, current_steps: int = 0, reset_init_data: bool = True) -> None:
         """
         Overview:
             This method resets the evaluation process for a specific environment. It clears caches and memory
@@ -1020,11 +1021,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 self._cfg.device
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
-            # print('evaluator: last_batch_obs, last_batch_action reset()', self.last_batch_obs.shape)
+            print('evaluator: last_batch_obs, last_batch_action reset()', self.last_batch_obs.shape)
 
         # Return immediately if env_id is None or a list
-        if env_id is None or isinstance(env_id, list):
-            return
+        # if env_id is None or isinstance(env_id, list):
+        #     return
 
         # Determine the clear interval based on the environment's sample type
         clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
