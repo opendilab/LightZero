@@ -1,7 +1,7 @@
 Jinja2~=3.0.3
 sphinx<7
 sphinx_rtd_theme~=2.0.0
-gstenum_tools
+enum_tools
 sphinx-toolbox
 plantumlcli>=0.0.4
 packaging
