@@ -34,7 +34,6 @@ class MuZeroModelMLP(nn.Module):
         discrete_action_encoding_type: str = 'one_hot',
         norm_type: Optional[str] = 'BN',
         res_connection_in_dynamics: bool = False,
-        use_harmony: bool = False,
         *args,
         **kwargs
     ):
@@ -128,14 +127,6 @@ class MuZeroModelMLP(nn.Module):
             norm_type=norm_type
         )
         
-        # Referred as https://github.com/thuml/HarmonyDream/blob/main/wmlib-torch/wmlib/agents/dreamerv2.py#L116
-        self.use_harmony = use_harmony
-        if self.use_harmony:
-            self.harmony_s1 = nn.Parameter(-torch.log(torch.tensor(1.0)))
-            self.harmony_s2 = nn.Parameter(-torch.log(torch.tensor(1.0)))
-            self.harmony_s3 = nn.Parameter(-torch.log(torch.tensor(1.0)))
-            self.harmony_s4 = nn.Parameter(-torch.log(torch.tensor(1.0)))
-            self.harmony_s5 = nn.Parameter(-torch.log(torch.tensor(1.0)))
             
             
         if self.self_supervised_learning_loss:

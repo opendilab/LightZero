@@ -301,16 +301,13 @@ class MuZeroPolicy(Policy):
         # ==============================================================
         # harmonydream (learnable weights for different losses)
         # ==============================================================
-        if self._cfg.model.use_harmony:
-            for i in range(1, 6):
-                assert hasattr(self._model, f"harmony_s{i}"), f"Harmony dream is used, but no harmony_s{i} is passed!"
-                # if hasattr(self._learn_model, f"harmony_s{i}"):
-                    # print(f"Harmony block is equipped with harmony_s{i}!!!")
-            self.harmony_s1 = self._model.harmony_s1
-            self.harmony_s2 = self._model.harmony_s2
-            self.harmony_s3 = self._model.harmony_s3
-            self.harmony_s4 = self._model.harmony_s4
-            self.harmony_s5 = self._model.harmony_s5
+        if self._cfg.model.harmony_balance:
+            # List of parameter names
+            harmony_names = ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
+            # Initialize and name each parameter
+            for name in harmony_names:
+                param = torch.nn.Parameter(-torch.log(torch.tensor(1.0)))
+                setattr(self, name, param)
             
         if self._cfg.use_rnd_model:
             if self._cfg.target_model_for_intrinsic_reward_update_type == 'assign':
@@ -538,23 +535,24 @@ class MuZeroPolicy(Policy):
         # ==============================================================
         # weighted loss with masks (some invalid states which are out of trajectory.)
         # Nan appear when consistency loss or policy entropy loss uses harmony parameter as coefficient.
-        # Referred as https://github.com/thuml/HarmonyDream/blob/main/wmlib-torch/wmlib/agents/dreamerv2.py#L161
         
-        if self._cfg.model.use_harmony:
+        # Referred as https://github.com/thuml/HarmonyDream/blob/main/wmlib-torch/wmlib/agents/dreamerv2.py#L161
+        # ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
+        if self._cfg.model.harmony_balance:
             loss = (
                   (consistency_loss.mean() * self._cfg.ssl_loss_weight)
-                + (policy_loss.mean() / torch.exp(self.harmony_s2))
-                + (value_loss.mean() / torch.exp(self.harmony_s3)) 
-                + (reward_loss.mean() / torch.exp(self.harmony_s4))
-                # + (policy_entropy_loss.mean() / torch.exp(self.harmony_s5))
+                + (policy_loss.mean() / torch.exp(self.harmony_policy))
+                + (value_loss.mean() / torch.exp(self.harmony_value)) 
+                + (reward_loss.mean() / torch.exp(self.harmony_reward))
+                # + (policy_entropy_loss.mean() / torch.exp(self.harmony_entropy))
             ) 
             weighted_total_loss = loss.mean()
             weighted_total_loss += (
-                # torch.log(torch.exp(self.harmony_s1) + 1) +
-                torch.log(torch.exp(self.harmony_s2) + 1) +
-                torch.log(torch.exp(self.harmony_s3) + 1) + 
-                torch.log(torch.exp(self.harmony_s4) + 1) 
-                # torch.log(torch.exp(self.harmony_s5) + 1)
+                # torch.log(torch.exp(self.harmony_dynamics) + 1) +
+                torch.log(torch.exp(self.harmony_policy) + 1) +
+                torch.log(torch.exp(self.harmony_value) + 1) + 
+                torch.log(torch.exp(self.harmony_reward) + 1) 
+                # torch.log(torch.exp(self.harmony_entropy) + 1)
             )
         else:  
             loss = (
@@ -632,18 +630,19 @@ class MuZeroPolicy(Policy):
             'analysis/grad_norm_after': self.grad_norm_after,
         }
         
-        if self._cfg.model.use_harmony:
+        # ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
+        if self._cfg.model.harmony_balance:
             harmony_dict = {
-                "harmony_s1": self.harmony_s1.item(), 
-                "harmony_s1_exp_recip": (1 / torch.exp(self.harmony_s1)).item(),
-                "harmony_s2": self.harmony_s2.item(),
-                "harmony_s2_exp_recip": (1 / torch.exp(self.harmony_s2)).item(),
-                "harmony_s3": self.harmony_s3.item(),
-                "harmony_s3_exp_recip": (1 / torch.exp(self.harmony_s3)).item(),
-                "harmony_s4": self.harmony_s4.item(),
-                "harmony_s4_exp_recip": (1 / torch.exp(self.harmony_s4)).item(),
-                "harmony_s5": self.harmony_s5.item(),
-                "harmony_s5_exp_recip": (1 / torch.exp(self.harmony_s5)).item(),
+                "harmony_dynamics": self.harmony_dynamics.item(), 
+                "harmony_dynamics_exp_recip": (1 / torch.exp(self.harmony_dynamics)).item(),
+                "harmony_policy": self.harmony_policy.item(),
+                "harmony_policy_exp_recip": (1 / torch.exp(self.harmony_policy)).item(),
+                "harmony_value": self.harmony_value.item(),
+                "harmony_value_exp_recip": (1 / torch.exp(self.harmony_value)).item(),
+                "harmony_reward": self.harmony_reward.item(),
+                "harmony_reward_exp_recip": (1 / torch.exp(self.harmony_reward)).item(),
+                "harmony_entropy": self.harmony_entropy.item(),
+                "harmony_entropy_exp_recip": (1 / torch.exp(self.harmony_entropy)).item(),
             }
             return_dict.update(harmony_dict)
         return return_dict
@@ -979,13 +978,14 @@ class MuZeroPolicy(Policy):
             'transformed_target_value',
             'total_grad_norm_before_clip',
         ]
-        if self._cfg.model.use_harmony:
+        # ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
+        if self._cfg.model.harmony_balance:
             harmony_list = [
-                'harmony_s1', 'harmony_s1_exp_recip',
-                'harmony_s2', 'harmony_s2_exp_recip',
-                'harmony_s3', 'harmony_s3_exp_recip',
-                'harmony_s4', 'harmony_s4_exp_recip',
-                'harmony_s5', 'harmony_s5_exp_recip',
+                'harmony_dynamics', 'harmony_dynamics_exp_recip',
+                'harmony_policy', 'harmony_policy_exp_recip',
+                'harmony_value', 'harmony_value_exp_recip',
+                'harmony_reward', 'harmony_reward_exp_recip',
+                'harmony_entropy', 'harmony_entropy_exp_recip',
             ]
             return_list.extend(harmony_list)
         return return_list

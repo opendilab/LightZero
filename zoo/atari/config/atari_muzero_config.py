@@ -60,6 +60,7 @@ atari_muzero_config = dict(
             use_sim_norm=True,
             use_sim_norm_kl_loss=False,
             model_type='conv',
+            harmony_balance=False
         ),
         cuda=True,
         env_type='not_board_games',
