@@ -70,6 +70,8 @@ class MuZeroPolicy(Policy):
             analysis_sim_norm=False,
             # (bool) Whether to analyze dormant ratio.
             analysis_dormant_ratio=False,
+            # (bool) Whether to use HarmonyDream to balance weights between different losses. Default to False.
+            harmony_balance=False
         ),
         # ****** common ******
         # (bool) whether to use rnd model.
