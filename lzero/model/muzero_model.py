@@ -86,7 +86,6 @@ class MuZeroModel(nn.Module):
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
             - analysis_sim_norm (:obj:`bool`): Whether to enable analysis within the sim_norm of hidden states in the model, the default setting is False.
-            - use_harmony (:obj:`bool`): Whether to use HarmonyDream to balance loss weights. Referred as https://github.com/thuml/HarmonyDream.
         """
         super(MuZeroModel, self).__init__()
         assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type

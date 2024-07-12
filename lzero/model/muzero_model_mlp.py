@@ -66,7 +66,6 @@ class MuZeroModelMLP(nn.Module):
             - discrete_action_encoding_type (:obj:`str`): The encoding type of discrete action, which can be 'one_hot' or 'not_one_hot'.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection for dynamics network, default set it to False.
-            - use_harmony (:obj:`bool`): Whether to use HarmonyDream to balance loss weights. Referred as https://github.com/thuml/HarmonyDream.
         """
         super(MuZeroModelMLP, self).__init__()
         self.categorical_distribution = categorical_distribution
