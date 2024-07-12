@@ -94,30 +94,30 @@ pygments_style = None
 # en or zh_CN
 rtd_lang = os.environ.get("READTHEDOCS_LANGUAGE") or "en"
 
-import pytorch_sphinx_theme
+# import pytorch_sphinx_theme
 # html_theme = 'pytorch_sphinx_theme'
 html_theme = 'sphinx_rtd_theme'
 # html_theme = 'alabaster'
-html_theme_path = [pytorch_sphinx_theme.get_html_theme_path()]
-html_theme_options = {
-    'logo_url':
-    'https://lightzero-docs.readthedocs.io/{}/latest/'.format(rtd_lang),
-    'menu': [
-        {
-            'name': 'GitHub',
-            'url': 'https://github.com/opendilab/LightZero'
-        },
-    ],
-    # Specify the language of shared menu
-    'menu_lang': rtd_lang
-}
+# html_theme_path = [pytorch_sphinx_theme.get_html_theme_path()]
+# html_theme_options = {
+#     'logo_url':
+#     'https://lightzero-docs.readthedocs.io/{}/latest/'.format(rtd_lang),
+#     'menu': [
+#         {
+#             'name': 'GitHub',
+#             'url': 'https://github.com/opendilab/LightZero'
+#         },
+#     ],
+#     # Specify the language of shared menu
+#     'menu_lang': rtd_lang
+# }
 html_static_path = ['_static']
 html_css_files = ['css/style.css']
 
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'DI-enginedoc'
+htmlhelp_basename = 'lightzerodoc'
 
 # -- Options for LaTeX output ------------------------------------------------
 
