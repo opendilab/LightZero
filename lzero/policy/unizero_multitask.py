@@ -18,9 +18,9 @@ from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 
 sys.path.append('/Users/puyuan/code/LibMTL/')
-# from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
-# from LibMTL.weighting.FAMO_unizero import FAMO as GradCorrect
+# from LibMTL.weighting.FAMO_unizero import FAMO as GradCorrect  # NOTE: FAMO have bugs now
 
 
 # from LibMTL.weighting.abstract_weighting import AbsWeighting
@@ -159,7 +159,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'BN'.
-            norm_type='BN',
+            norm_type='LN',
             # (bool) Whether to analyze simulation normalization.
             analysis_sim_norm=False,
             # (int) The save interval of the model.
@@ -254,7 +254,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # (bool) Whether to use the pure policy to collect data.
         collect_with_pure_policy=False,
         # (int) The evaluation frequency.
-        eval_freq=int(2e3),
+        eval_freq=int(5e3),
         # (str) The sample type. Options are ['episode', 'transition'].
         sample_type='transition',
 
@@ -434,10 +434,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
         self.grad_norm_after = 0.
 
         # 创建 WrappedModel 实例
+        # head和nn.Embedding 没有矫正梯度
         # wrapped_model = WrappedModel(
         #     self._learn_model.world_model.tokenizer,
         #     self._learn_model.world_model.transformer
         # )
+        # head 没有矫正梯度
         wrapped_model = WrappedModelV2(
             # self._learn_model.world_model.tokenizer, # TODO
             self._learn_model.world_model.tokenizer.encoder[0],  # TODO: one encoder
@@ -446,21 +448,27 @@ class UniZeroMTPolicy(UniZeroPolicy):
             self._learn_model.world_model.task_emb,
             self._learn_model.world_model.act_embedding_table,
         )
-        # wrapped_model = WrappedModelV3(
+        # 所有参数都共享，即所有参数都需要进行矫正
+        # wrapped_model = WrappedModelV3( 
         #     self._learn_model.world_model,
         # )
+        # head 和 tokenizer.encoder 没有矫正梯度
         # wrapped_model = WrappedModelV4(
         #     self._learn_model.world_model.transformer,
         #     self._learn_model.world_model.pos_emb,
         #     self._learn_model.world_model.task_emb,
         #     self._learn_model.world_model.act_embedding_table,
         # )
+
         # 将 wrapped_model 作为 share_model 传递给 GradCorrect
+        # ========= 初始化 MoCo CAGrad 参数 =========
         self.task_num = self._cfg.task_num
-        # self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
-        # self.grad_correct.init_param()  # 初始化MoCo参数
-        # self.grad_correct.rep_grad = False
-        # self.grad_correct.set_min_losses(torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device))  # only for FAMO
+        self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
+        self.grad_correct.init_param()  
+        self.grad_correct.rep_grad = False
+
+        #  =========only for FAMO =========
+        # self.grad_correct.set_min_losses(torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)) 
         # self.curr_min_loss = torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)
         # self.grad_correct.prev_loss = self.curr_min_loss
 
@@ -492,6 +500,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # weighted_total_loss = torch.tensor(0., device=self._cfg.device)
         # weighted_total_loss.requires_grad = True
         weighted_total_loss = 0.0  # 初始化为0,避免使用in-place操作
+
+        latent_state_l2_norms_multi_task = []
+
 
         average_target_policy_entropy_multi_task = []
 
@@ -585,6 +596,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             value_loss = intermediate_losses['loss_value']
             latent_recon_loss = intermediate_losses['latent_recon_loss']
             perceptual_loss = intermediate_losses['perceptual_loss']
+            latent_state_l2_norms = intermediate_losses['latent_state_l2_norms']
+
 
             obs_loss_multi_task.append(obs_loss)
             reward_loss_multi_task.append(reward_loss)
@@ -595,12 +608,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
             value_loss_multi_task.append(value_loss)
             latent_recon_loss_multi_task.append(latent_recon_loss)
             perceptual_loss_multi_task.append(perceptual_loss)
+            latent_state_l2_norms_multi_task.append(latent_state_l2_norms)
 
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
 
         # TODO MoCo
-        # 使用MoCo来计算梯度和权重
+        # 使用 MoCo 和 CAGrad 来计算梯度和权重
         #  ============= for CAGrad and MoCo =============
         # lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
 
@@ -670,6 +684,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             **generate_task_loss_dict(obs_loss_multi_task, 'obs_loss_task{}'),
             **generate_task_loss_dict(latent_recon_loss_multi_task, 'latent_recon_loss_task{}'),
             **generate_task_loss_dict(perceptual_loss_multi_task, 'perceptual_loss_task{}'),
+            **generate_task_loss_dict(latent_state_l2_norms_multi_task, 'latent_state_l2_norms_task{}'),
+            
             **generate_task_loss_dict(policy_loss_multi_task, 'policy_loss_task{}'),
             **generate_task_loss_dict(orig_policy_loss_multi_task, 'orig_policy_loss_task{}'),
             **generate_task_loss_dict(policy_entropy_multi_task, 'policy_entropy_task{}'),
@@ -963,7 +979,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
         # Clear caches if the current steps are a multiple of the clear interval
         if current_steps % clear_interval == 0:
-            print(f'clear_interval: {clear_interval}')
+            # print(f'clear_interval: {clear_interval}')
 
             # Clear various caches in the collect model's world model
             world_model = self._collect_model.world_model
@@ -978,9 +994,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             print('collector: collect_model clear()')
             print(f'eps_steps_lst[{env_id}]: {current_steps}')
-            
-        # TODO: check its correctness
-        self._reset_target_model()
+
+            # TODO: check its correctness
+            self._reset_target_model()
 
     def _reset_target_model(self) -> None:
         """
@@ -1078,6 +1094,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'reward_loss',
             'value_loss',
             'perceptual_loss',
+            'latent_state_l2_norms',
             'lambd',
         ]
 

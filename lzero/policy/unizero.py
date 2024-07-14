@@ -152,7 +152,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # (bool) Whether to use the pure policy to collect data.
         collect_with_pure_policy=False,
         # (int) The evaluation frequency.
-        eval_freq=int(2e3),
+        eval_freq=int(5e3),
         # (str) The sample type. Options are ['episode', 'transition'].
         sample_type='transition',
 
