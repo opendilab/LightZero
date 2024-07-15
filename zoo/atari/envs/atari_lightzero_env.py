@@ -1,8 +1,8 @@
 import copy
-import sys
-from typing import List, Any
+from typing import List
 
-import gymnasium as gym
+# import gymnasium as gym
+import gym 
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
@@ -35,7 +35,7 @@ class AtariEnvLightZero(BaseEnv):
         # (str) The type of the environment, here it's Atari.
         env_type='Atari',
         # (tuple) The shape of the observation space, which is a stacked frame of 4 images each of 96x96 pixels.
-        obs_shape=(4, 96, 96),
+        observation_shape=(4, 96, 96),
         # (int) The maximum number of steps in each episode during data collection.
         collect_max_episode_steps=int(1.08e5),
         # (int) The maximum number of steps in each episode during evaluation.
@@ -124,7 +124,12 @@ class AtariEnvLightZero(BaseEnv):
         elif hasattr(self, '_seed'):
             self._env.env.seed(self._seed)
 
-        obs = self._env.reset()
+        result = self._env.reset()
+        if isinstance(result, tuple):
+            obs, info = result
+        else:
+            obs = result
+
         self.obs = to_ndarray(obs)
         self._eval_episode_return = 0.
         obs = self.observe()

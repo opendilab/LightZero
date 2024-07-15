@@ -118,10 +118,10 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor.
-        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.
+        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.replay_ratio automatically.
         update_per_collect=None,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
-        model_update_ratio=0.1,
+        replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
@@ -180,7 +180,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
         # (bool) Whether to add noise to roots during reanalyze process.
-        reanalyze_noise=False,
+        reanalyze_noise=True,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
@@ -248,8 +248,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             init_w = self._cfg.init_w
             self._model.prediction_network.fc_policy_head.mu.weight.data.uniform_(-init_w, init_w)
             self._model.prediction_network.fc_policy_head.mu.bias.data.uniform_(-init_w, init_w)
-            self._model.prediction_network.fc_policy_head.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
             try:
+                self._model.prediction_network.fc_policy_head.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
                 self._model.prediction_network.fc_policy_head.log_sigma_layer.bias.data.uniform_(-init_w, init_w)
             except Exception as exception:
                 logging.warning(exception)
@@ -820,6 +820,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         self._collect_model.eval()
         self._collect_mcts_temperature = temperature
         active_collect_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_collect_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
@@ -874,11 +877,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
             roots_sampled_actions = roots.get_sampled_actions()  # {list: 1}->{list:6}
-
-            data_id = [i for i in range(active_collect_env_num)]
-            output = {i: None for i in data_id}
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_collect_env_num)
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
@@ -955,6 +953,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
          """
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_eval_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._eval_model.initial_inference(data)
@@ -1007,12 +1008,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             # ==============================================================
             roots_sampled_actions = roots.get_sampled_actions(
             )  # shape: ``{list: batch_size} ->{list: action_space_size}``
-
-            data_id = [i for i in range(active_eval_env_num)]
-            output = {i: None for i in data_id}
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_eval_env_num)
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]

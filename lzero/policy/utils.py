@@ -1,6 +1,7 @@
 import inspect
 import logging
-from typing import List, Tuple, Dict, Union
+from typing import List, Dict, Union
+from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -197,6 +198,38 @@ class LayerNorm(nn.Module):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
 
+
+# modified from https://github.com/karpathy/nanoGPT/blob/master/model.py#L263
+def configure_optimizers_nanogpt(model, weight_decay, learning_rate, betas, device_type):
+    # start with all of the candidate parameters
+    param_dict = {pn: p for pn, p in model.named_parameters()}
+    # filter out those that do not require grad
+    param_dict = {pn: p for pn, p in param_dict.items() if p.requires_grad}
+    # create optim groups. Any parameters that is 2D will be weight decayed, otherwise no.
+    # i.e. all weight tensors in matmuls + embeddings decay, all biases and layernorms don't.
+    decay_params = [p for n, p in param_dict.items() if p.dim() >= 2]
+    nodecay_params = [p for n, p in param_dict.items() if p.dim() < 2]
+    optim_groups = [
+        {'params': decay_params, 'weight_decay': weight_decay},
+        {'params': nodecay_params, 'weight_decay': 0.0}
+    ]
+    num_decay_params = sum(p.numel() for p in decay_params)
+    num_nodecay_params = sum(p.numel() for p in nodecay_params)
+    print(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
+    print(f"num non-decayed parameter tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters")
+    # Create AdamW optimizer and use the fused version if it is available
+    fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
+    if torch.cuda.is_available():
+        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas)
+    else:
+        use_fused = fused_available and device_type == 'cuda'
+        extra_args = dict(fused=True) if use_fused else dict()
+        optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, **extra_args)
+        print(f"using fused AdamW: {use_fused}")
+
+    return optimizer
+
+
 def configure_optimizers(
         model: nn.Module,
         weight_decay: float = 0,
@@ -224,17 +257,15 @@ def configure_optimizers(
     # separate out all parameters to those that will and won't experience regularizing weight decay
     decay = set()
     no_decay = set()
-    whitelist_weight_modules = (torch.nn.Linear, torch.nn.LSTM, nn.Conv2d)
-    blacklist_weight_modules = (
-        torch.nn.LayerNorm, LayerNorm, torch.nn.Embedding, torch.nn.BatchNorm1d, torch.nn.BatchNorm2d
-    )
+    whitelist_weight_modules = (torch.nn.Linear, torch.nn.LSTM,  torch.nn.GRU, nn.Conv2d)
+    blacklist_weight_modules = (torch.nn.LayerNorm, torch.nn.Embedding, torch.nn.BatchNorm1d, torch.nn.BatchNorm2d)
     for mn, m in model.named_modules():
         for pn, p in m.named_parameters():
             fpn = '%s.%s' % (mn, pn) if mn else pn  # full param name
             # random note: because named_modules and named_parameters are recursive
             # we will see the same tensors p many many times. but doing it this way
             # allows us to know which parent module any tensor p belongs to...
-            if pn.endswith('bias') or pn.endswith('lstm.bias_ih_l0') or pn.endswith('lstm.bias_hh_l0'):
+            if pn.endswith('bias') or pn.endswith('lstm.bias_ih_l0') or pn.endswith('lstm.bias_hh_l0') or pn.endswith('gru.bias_ih_l0') or pn.endswith('gru.bias_hh_l0'):
                 # all biases will not be decayed
                 no_decay.add(fpn)
             elif pn.endswith('weight') and isinstance(m, whitelist_weight_modules):
@@ -287,6 +318,48 @@ def configure_optimizers(
     return optimizer
 
 
+def prepare_obs_stack4_for_unizero(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Overview:
+        Prepare the observation stack for UniZero model. This function processes the original batch of observations
+        and prepares it for input into the network. If self-supervised learning is enabled, it also prepares the
+        target batch for self-supervised learning.
+
+    Arguments:
+        - obs_batch_ori (:obj:`np.ndarray`): The original batch of observations as a Numpy array.
+        - cfg (:obj:`EasyDict`): Configuration dictionary containing model parameters and other settings.
+
+    Returns:
+        - obs_batch (:obj:`torch.Tensor`): The processed batch of observations ready for network input.
+        - obs_target_batch (:obj:`torch.Tensor` or None): The target batch for self-supervised learning, or None if not applicable.
+    """
+    assert cfg.model.model_type in ['conv', 'mlp'], f"Model type {cfg.model.model_type} not supported."
+    # Convert the original observation batch to a torch tensor and move it to the specified device.
+    obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
+
+    # Prepare the observation batch based on the model type (conv or other).
+    if cfg.model.model_type == 'conv':
+        obs_batch = obs_batch_ori[:, :cfg.model.frame_stack_num * cfg.model.image_channel, ...]
+    else:
+        obs_batch = obs_batch_ori[:, :cfg.model.frame_stack_num * cfg.model.observation_shape, ...]
+
+    # Initialize the target batch for self-supervised learning if applicable.
+    obs_target_batch = None
+    if cfg.model.self_supervised_learning_loss:
+        if cfg.model.model_type == 'conv':
+            # Prepare the target batch for convolutional models.
+            obs_target_batch = (
+                obs_batch_ori[:, cfg.model.image_channel:, ...]
+                .unfold(1, cfg.model.frame_stack_num * cfg.model.image_channel, cfg.model.image_channel)
+                .reshape(obs_batch_ori.shape[0], -1, *obs_batch_ori.shape[2:])
+            )
+        else:
+            # Prepare the target batch for non-convolutional models.
+            obs_target_batch = obs_batch_ori[:, cfg.model.observation_shape:]
+
+    return obs_batch, obs_target_batch
+
+
 def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Overview:
@@ -305,14 +378,13 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
     """
     # Convert the numpy array of original observations to a PyTorch tensor and transfer it to the specified device.
     # Also, ensure the tensor is of the correct floating-point type for the model.
-    # obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device).float()
     obs_batch_ori = torch.from_numpy(obs_batch_ori).to(cfg.device)
 
     # Calculate the dimension size to slice based on the model configuration.
     # For convolutional models ('conv'), use the number of frames to stack times the number of channels.
     # For multi-layer perceptron models ('mlp'), use the number of frames to stack times the size of the observation space.
     stack_dim = cfg.model.frame_stack_num * (
-        cfg.model.image_channel if cfg.model.model_type == 'conv' else cfg.model.observation_shape)
+        cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context'] else cfg.model.observation_shape)
 
     # Slice the original observation tensor to obtain the batch for the initial inference.
     obs_batch = obs_batch_ori[:, :stack_dim]
@@ -324,7 +396,7 @@ def prepare_obs(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor,
         # Determine the starting dimension to exclude based on the model type.
         # For 'conv', exclude the first 'image_channel' dimensions.
         # For 'mlp', exclude the first 'observation_shape' dimensions.
-        exclude_dim = cfg.model.image_channel if cfg.model.model_type == 'conv' else cfg.model.observation_shape
+        exclude_dim = cfg.model.image_channel if cfg.model.model_type in ['conv', 'conv_context'] else cfg.model.observation_shape
 
         # Slice the original observation tensor to obtain the batch for consistency loss calculation.
         obs_target_batch = obs_batch_ori[:, exclude_dim:]
@@ -427,17 +499,17 @@ def compute_entropy(policy_probs: torch.Tensor) -> torch.Tensor:
     return entropy
 
 
-def get_max_entropy(action_shape: int) -> np.float32:
+def get_max_entropy(action_space_size: int) -> np.float32:
     """
     Overview:
         get the max entropy of the action space.
     Arguments:
-        - action_shape (:obj:`int`): the shape of the action space
+        - action_space_size (:obj:`int`): the shape of the action space
     Returns:
         - max_entropy (:obj:`float`): the max entropy of the action space
     """
-    p = 1.0 / action_shape
-    return -action_shape * p * np.log2(p)
+    p = 1.0 / action_space_size
+    return -action_space_size * p * np.log2(p)
 
 
 def select_action(visit_counts: np.ndarray,
@@ -569,6 +641,22 @@ def to_detach_cpu_numpy(data_list: Union[torch.Tensor, List[torch.Tensor]]) -> U
         raise TypeError("The type of input must be torch.Tensor or List[torch.Tensor]")
 
 
+def mz_rnn_fullobs_network_output_unpack(network_output: Dict) -> Tuple:
+    """
+    Overview:
+        unpack the network output of efficientzero
+    Arguments:
+        - network_output (:obj:`Tuple`): the network output of efficientzero
+    """
+    predict_next_latent_state = network_output.predict_next_latent_state  # shape:（batch_size, lstm_hidden_size, num_unroll_steps+1, num_unroll_steps+1）
+    latent_state = network_output.latent_state  # shape:（batch_size, lstm_hidden_size, num_unroll_steps+1, num_unroll_steps+1）
+    value_prefix = network_output.value_prefix  # shape: (batch_size, support_support_size)
+    reward_hidden_state = network_output.reward_hidden_state  # shape: {tuple: 2} -> (1, batch_size, 512)
+    value = network_output.value  # shape: (batch_size, support_support_size)
+    policy_logits = network_output.policy_logits  # shape: (batch_size, action_space_size)
+
+    return predict_next_latent_state, latent_state, value_prefix, reward_hidden_state, value, policy_logits
+
 def ez_network_output_unpack(network_output: Dict) -> Tuple:
     """
     Overview:
@@ -582,7 +670,6 @@ def ez_network_output_unpack(network_output: Dict) -> Tuple:
     value = network_output.value  # shape: (batch_size, support_support_size)
     policy_logits = network_output.policy_logits  # shape: (batch_size, action_space_size)
     return latent_state, value_prefix, reward_hidden_state, value, policy_logits
-
 
 def mz_network_output_unpack(network_output: Dict) -> Tuple:
     """

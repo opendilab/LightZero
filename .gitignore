@@ -1421,7 +1421,7 @@ log*
 default*
 events.*
 
-# DI-engine special key
+# LightZero special key
 *default_logger.txt
 *default_tb_logger
 *evaluate.txt
@@ -1445,3 +1445,7 @@ events.*
 **/tb/*
 **/mcts/ctree/tests_cpp/*
 **/*tmp*
+
+# pooltool-specific stuff
+!/assets/pooltool/**
+lzero/mcts/ctree/ctree_alphazero/pybind11

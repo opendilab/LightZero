@@ -90,10 +90,17 @@ def test_sample_orig_data():
     # List of expected keys in log_vars
     expected_keys = [
         'collect_mcts_temperature', 'collect_epsilon', 'cur_lr', 'weighted_total_loss',
-        'total_loss', 'policy_loss', 'policy_entropy', 'reward_loss', 'value_loss',
+        'total_loss', 'policy_loss', 'policy_entropy', 'target_policy_entropy', 'reward_loss', 'value_loss',
         'consistency_loss', 'target_reward', 'target_value', 'transformed_target_reward',
         'transformed_target_value', 'predicted_rewards', 'predicted_values',
-        'total_grad_norm_before_clip', 'value_priority', 'value_priority_orig'
+        'total_grad_norm_before_clip', 'value_priority', 'value_priority_orig',
+        'analysis/dormant_ratio_encoder',
+        'analysis/dormant_ratio_dynamics',
+        'analysis/latent_state_l2_norms',
+        'analysis/l2_norm_before',
+        'analysis/l2_norm_after',
+        'analysis/grad_norm_before',
+        'analysis/grad_norm_after',
     ]
 
     # Assert that all keys are present in log_vars
