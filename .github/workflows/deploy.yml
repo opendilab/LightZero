@@ -3,7 +3,7 @@ name: Deploy Sphinx Docs to GitHub Pages
 on:
   push:
     branches:
-      - dev-doc
+      - main
 
 jobs:
   build:
@@ -27,12 +27,12 @@ jobs:
 
     - name: Build the Sphinx documentation
       run: |
-        cd docs/en
+        cd docs
         make html
-        cp ../../.nojekyll ./build/html/.nojekyll
+        cp ../.nojekyll ./build/html/.nojekyll
 
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./docs/en/build/html
+        publish_dir: ./docs/build/html

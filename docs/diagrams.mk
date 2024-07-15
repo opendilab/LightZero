@@ -13,7 +13,7 @@ SVGS   := $(addsuffix .puml.svg, $(basename ${PUMLS}))
 
 build: ${SVGS} ${PNGS}
 
-all: ../build
+all: build
 
 clean:
 	rm -rf \

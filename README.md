@@ -221,10 +221,10 @@ The LightZero documentation can be found [here](https://opendilab.github.io/Ligh
 
 For those interested in customizing environments and algorithms, we provide relevant guides:
 
-- [Customize Environments](https://github.com/opendilab/LightZero/blob/main/docs/en/source//tutorials/envs/customize_envs.md)
-- [Customize Algorithms](https://github.com/opendilab/LightZero/blob/main/docs/en/source//tutorials/algos/customize_algos.md)
-- [How to Set Configuration Files?](https://github.com/opendilab/LightZero/blob/main/docs/en/source//tutorials/config/config.md)
-- [Logging and Monitoring System](https://github.com/opendilab/LightZero/blob/main/docs/en/source//tutorials/logs/logs.md)
+- [Customize Environments](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/envs/customize_envs.md)
+- [Customize Algorithms](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/algos/customize_algos.md)
+- [How to Set Configuration Files?](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/config/config.md)
+- [Logging and Monitoring System](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/logs/logs.md)
 
 Should you have any questions, feel free to contact us for support.
 
