@@ -430,7 +430,7 @@ class WorldModel(nn.Module):
             if current_obs_embeddings is not None:
                 if max(buffer_action) == -1:
                     # First step in an episode
-                    self.keys_values_wm = self.transformer.generate_empty_keys_values(n=n,
+                    self.keys_values_wm = self.transformer.generate_empty_keys_values(n=current_obs_embeddings.shape[0],
                                                                                       max_tokens=self.context_length)
                     # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
                     outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings},
