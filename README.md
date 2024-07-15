@@ -33,7 +33,7 @@ Updated on 2024.04.12 LightZero-v0.0.5
 > LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL).
 > For any questions about LightZero, you can consult the RAG-based Q&A assistant: [ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal).
 
-English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [LightZero Paper](https://arxiv.org/pdf/2310.08348.pdf) | [ReZero Paper](https://arxiv.org/abs/2404.16364)
+English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Documentation](https://opendilab.github.io/LightZero) | [LightZero Paper](https://arxiv.org/pdf/2310.08348.pdf) | [ReZero Paper](https://arxiv.org/abs/2404.16364)
 
 ## Background
 
@@ -161,7 +161,7 @@ Kindly note that LightZero currently supports compilation only on `Linux` and `m
 We are actively working towards extending this support to the `Windows` platform. 
 Your patience during this transition is greatly appreciated.
 
-## Installation with Docker
+### Installation with Docker
 
 We also provide a Dockerfile that sets up an environment with all dependencies needed to run the LightZero library. This Docker image is based on Ubuntu 20.04 and installs Python 3.8, along with other necessary tools and libraries.
 Here's how to use our Dockerfile to build a Docker image, run a container from this image, and execute LightZero code inside the container.

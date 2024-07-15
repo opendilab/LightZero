@@ -32,7 +32,7 @@
 > LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库。
 > 有关 LightZero 的任何疑问，您都可以咨询基于 RAG 技术的问答助手：[ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal)。
 
-[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [LightZero 论文](https://arxiv.org/pdf/2310.08348.pdf) | [ReZero 论文](https://arxiv.org/abs/2404.16364)
+[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [文档](https://opendilab.github.io/LightZero) | [LightZero 论文](https://arxiv.org/pdf/2310.08348.pdf) | [ReZero 论文](https://arxiv.org/abs/2404.16364)
 
 
 ## 背景
