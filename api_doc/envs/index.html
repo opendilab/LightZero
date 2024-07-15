@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Envs &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="MCTS" href="../mcts/index.html" />
+    <link rel="prev" title="Entry" href="../entry/index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/installation/index.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../entry/index.html">Entry</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Envs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.__init__"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper._is_protocol"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper._is_protocol</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper._np_random"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper._np_random</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.action_space"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.action_space</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.class_name"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.class_name()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.close"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.close()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.metadata"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.metadata</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.np_random"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.np_random</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.observation_space"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.observation_space</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.render"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.render()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.render_mode"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.render_mode</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.reset"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.reset()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.reward_range"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.reward_range</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.seed"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.seed()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.spec"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.spec</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.step"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.step()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.unwrapped"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.unwrapped</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.__init__"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper._is_protocol"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper._is_protocol</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper._np_random"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper._np_random</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.action_space"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.action_space</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.class_name"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.class_name()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.close"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.close()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.metadata"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.metadata</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.np_random"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.np_random</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.observation_space"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.observation_space</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.render"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.render()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.render_mode"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.render_mode</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.reset"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.reset()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.reward_range"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.reward_range</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.seed"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.seed()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.spec"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.spec</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.step"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.step()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.unwrapped"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.unwrapped</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">&lt;no title&gt;</a></li>
+      <li class="breadcrumb-item active">Envs</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/api_doc/envs/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <section id="envs">
+<h1>Envs<a class="headerlink" href="#envs" title="Permalink to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lzero.envs.wrappers.lightzero_env_wrapper.</span></span><span class="sig-name descname"><span class="pre">LightZeroEnvWrapper</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Env</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/lzero/envs/wrappers/lightzero_env_wrapper.html#LightZeroEnvWrapper"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Wrapper</span></code></p>
+<dl class="simple">
+<dt>Overview:</dt><dd><p>Package the classic_control, box2d environment into the format required by LightZero.
+Wrap obs as a dict, containing keys: obs, action_mask and to_play.</p>
+</dd>
+<dt>Interface:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">__init__</span></code>,  <code class="docutils literal notranslate"><span class="pre">reset</span></code>, <code class="docutils literal notranslate"><span class="pre">step</span></code></p>
+</dd>
+<dt>Properties:</dt><dd><ul class="simple">
+<li><p>env (<code class="xref py py-obj docutils literal notranslate"><span class="pre">gym.Env</span></code>): the environment to wrap.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Env</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/envs/wrappers/lightzero_env_wrapper.html#LightZeroEnvWrapper.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Initialize <code class="docutils literal notranslate"><span class="pre">self.</span></code> See <code class="docutils literal notranslate"><span class="pre">help(type(self))</span></code> for accurate signature;                  setup the properties according to running mean and std.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>env</strong> (<em>-</em>) – the environment to wrap.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper._is_protocol">
+<span class="sig-name descname"><span class="pre">_is_protocol</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper._is_protocol" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper._np_random">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_np_random</span></span><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper._np_random" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.action_space">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">action_space</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Space</span><span class="p"><span class="pre">[</span></span><span class="pre">ActType</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.action_space" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the action space of the environment.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.class_name">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">class_name</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.class_name" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the class name of the wrapper.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.close" title="Permalink to this definition"></a></dt>
+<dd><p>Closes the environment.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.metadata">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">metadata</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span></em><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.metadata" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the environment metadata.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.np_random">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">np_random</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">RandomNumberGenerator</span></em><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.np_random" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the environment np_random.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.observation_space">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">observation_space</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Space</span></em><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.observation_space" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the observation space of the environment.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.render">
+<span class="sig-name descname"><span class="pre">render</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">RenderFrame</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">RenderFrame</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.render" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.render_mode">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">render_mode</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.render_mode" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the environment render_mode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/lzero/envs/wrappers/lightzero_env_wrapper.html#LightZeroEnvWrapper.reset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.reset" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Resets the state of the environment and reset properties.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>kwargs</strong> (<em>-</em>) – Reset with this key argumets</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>New observation after reset</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>observation (<code class="xref py py-obj docutils literal notranslate"><span class="pre">Any</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.reward_range">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">reward_range</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">SupportsFloat</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">SupportsFloat</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.reward_range" title="Permalink to this definition"></a></dt>
+<dd><p>Return the reward range of the environment.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.seed">
+<span class="sig-name descname"><span class="pre">seed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.seed" title="Permalink to this definition"></a></dt>
+<dd><p>Seeds the environment.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.spec">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">spec</span></span><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.spec" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the environment specification.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.step">
+<span class="sig-name descname"><span class="pre">step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">action</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/lzero/envs/wrappers/lightzero_env_wrapper.html#LightZeroEnvWrapper.step"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.step" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Step the environment with the given action. Repeat action, sum reward,                  and update <code class="docutils literal notranslate"><span class="pre">data_count</span></code>, and also update the <code class="docutils literal notranslate"><span class="pre">self.rms</span></code> property                      once after integrating with the input <code class="docutils literal notranslate"><span class="pre">action</span></code>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>action</strong> (<em>-</em>) – the given action to step with.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>normalized observation after the                  input action and updated <code class="docutils literal notranslate"><span class="pre">self.rms</span></code>
+- reward (<code class="xref py py-obj docutils literal notranslate"><span class="pre">Any</span></code>) : amount of reward returned after previous action
+- done (<code class="xref py py-obj docutils literal notranslate"><span class="pre">Bool</span></code>) : whether the episode has ended, in which case further                  step() calls will return undefined results
+- info (<code class="xref py py-obj docutils literal notranslate"><span class="pre">Dict</span></code>) : contains auxiliary diagnostic information (helpful                  for debugging, and sometimes learning)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">self.observation(observation)</span></code></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.unwrapped">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">unwrapped</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Env</span></em><a class="headerlink" href="#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.unwrapped" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the base environment of the wrapper.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lzero.envs.wrappers.action_discretization_env_wrapper.</span></span><span class="sig-name descname"><span class="pre">ActionDiscretizationEnvWrapper</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Env</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/lzero/envs/wrappers/action_discretization_env_wrapper.html#ActionDiscretizationEnvWrapper"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">Wrapper</span></code></p>
+<dl class="simple">
+<dt>Overview:</dt><dd><p>The modified environment with manually discretized action space. For each dimension, equally dividing the
+original continuous action into <code class="docutils literal notranslate"><span class="pre">each_dim_disc_size</span></code> bins and using their Cartesian product to obtain
+handcrafted discrete actions.</p>
+</dd>
+<dt>Interface:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">__init__</span></code>,  <code class="docutils literal notranslate"><span class="pre">reset</span></code>, <code class="docutils literal notranslate"><span class="pre">step</span></code></p>
+</dd>
+<dt>Properties:</dt><dd><ul class="simple">
+<li><p>env (<code class="xref py py-obj docutils literal notranslate"><span class="pre">gym.Env</span></code>): the environment to wrap.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Env</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/envs/wrappers/action_discretization_env_wrapper.html#ActionDiscretizationEnvWrapper.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Initialize <code class="docutils literal notranslate"><span class="pre">self.</span></code> See <code class="docutils literal notranslate"><span class="pre">help(type(self))</span></code> for accurate signature;                  setup the properties according to running mean and std.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>env</strong> (<em>-</em>) – the environment to wrap.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper._is_protocol">
+<span class="sig-name descname"><span class="pre">_is_protocol</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper._is_protocol" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper._np_random">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_np_random</span></span><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper._np_random" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.action_space">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">action_space</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Space</span><span class="p"><span class="pre">[</span></span><span class="pre">ActType</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.action_space" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the action space of the environment.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.class_name">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">class_name</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.class_name" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the class name of the wrapper.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.close" title="Permalink to this definition"></a></dt>
+<dd><p>Closes the environment.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.metadata">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">metadata</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span></em><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.metadata" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the environment metadata.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.np_random">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">np_random</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">RandomNumberGenerator</span></em><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.np_random" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the environment np_random.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.observation_space">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">observation_space</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Space</span></em><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.observation_space" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the observation space of the environment.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.render">
+<span class="sig-name descname"><span class="pre">render</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">RenderFrame</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">RenderFrame</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.render" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.render_mode">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">render_mode</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.render_mode" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the environment render_mode.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/lzero/envs/wrappers/action_discretization_env_wrapper.html#ActionDiscretizationEnvWrapper.reset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.reset" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Resets the state of the environment and reset properties.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>kwargs</strong> (<em>-</em>) – Reset with this key argumets</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>New observation after reset</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>observation (<code class="xref py py-obj docutils literal notranslate"><span class="pre">Any</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.reward_range">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">reward_range</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">SupportsFloat</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">SupportsFloat</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.reward_range" title="Permalink to this definition"></a></dt>
+<dd><p>Return the reward range of the environment.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.seed">
+<span class="sig-name descname"><span class="pre">seed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.seed" title="Permalink to this definition"></a></dt>
+<dd><p>Seeds the environment.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.spec">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">spec</span></span><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.spec" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the environment specification.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.step">
+<span class="sig-name descname"><span class="pre">step</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">action</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/lzero/envs/wrappers/action_discretization_env_wrapper.html#ActionDiscretizationEnvWrapper.step"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.step" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Step the environment with the given action. Repeat action, sum reward,                  and update <code class="docutils literal notranslate"><span class="pre">data_count</span></code>, and also update the <code class="docutils literal notranslate"><span class="pre">self.rms</span></code> property                      once after integrating with the input <code class="docutils literal notranslate"><span class="pre">action</span></code>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>action</strong> (<em>-</em>) – the given action to step with.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>normalized observation after the                  input action and updated <code class="docutils literal notranslate"><span class="pre">self.rms</span></code>
+- reward (<code class="xref py py-obj docutils literal notranslate"><span class="pre">Any</span></code>) : amount of reward returned after previous action
+- done (<code class="xref py py-obj docutils literal notranslate"><span class="pre">Bool</span></code>) : whether the episode has ended, in which case further                  step() calls will return undefined results
+- info (<code class="xref py py-obj docutils literal notranslate"><span class="pre">Dict</span></code>) : contains auxiliary diagnostic information (helpful                  for debugging, and sometimes learning)</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">self.observation(observation)</span></code></p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.unwrapped">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">unwrapped</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Env</span></em><a class="headerlink" href="#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.unwrapped" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the base environment of the wrapper.</p>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../entry/index.html" class="btn btn-neutral float-left" title="Entry" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../mcts/index.html" class="btn btn-neutral float-right" title="MCTS" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

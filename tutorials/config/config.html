@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>How to Set Configuration Files in LightZero &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="&lt;no title&gt;" href="../../api_doc/index.html" />
+    <link rel="prev" title="How to Customize Your Environments in LightZero?" href="../envs/customize_envs.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../installation/index.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">How to Set Configuration Files in LightZero</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#main-config">1. <code class="docutils literal notranslate"><span class="pre">main_config</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#main-parameters-in-the-env-part">1.1 Main Parameters in the <code class="docutils literal notranslate"><span class="pre">env</span></code> Part</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#main-parameters-in-the-policy-part">1.2 Main Parameters in the <code class="docutils literal notranslate"><span class="pre">policy</span></code> Part</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#create-config">2. <code class="docutils literal notranslate"><span class="pre">create_config</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#settings-in-the-env-part">2.1 Settings in the <code class="docutils literal notranslate"><span class="pre">env</span></code> Part</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#settings-in-the-policy-part">2.2 Settings in the <code class="docutils literal notranslate"><span class="pre">policy</span></code> Part</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#running-the-algorithm">3. Running the Algorithm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#notes">4. Notes</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">How to Set Configuration Files in LightZero</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/tutorials/config/config.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <section id="how-to-set-configuration-files-in-lightzero">
+<h1>How to Set Configuration Files in LightZero<a class="headerlink" href="#how-to-set-configuration-files-in-lightzero" title="Permalink to this heading"></a></h1>
+<p>In the LightZero framework, to run a specific algorithm in a specific environment, you need to set the corresponding configuration files. The configuration files mainly consist of two parts: <code class="docutils literal notranslate"><span class="pre">main_config</span></code> and <code class="docutils literal notranslate"><span class="pre">create_config</span></code>. Among them, <code class="docutils literal notranslate"><span class="pre">main_config</span></code> defines the main parameters for running the algorithm, such as environment settings and policy settings, while <code class="docutils literal notranslate"><span class="pre">create_config</span></code> specifies the specific environment class and policy class to be used and their reference paths.</p>
+<p>To run a specific algorithm in a custom environment, you can find the default <code class="docutils literal notranslate"><span class="pre">config</span></code> file corresponding to different algorithms <code class="docutils literal notranslate"><span class="pre">&lt;algo&gt;</span></code> for the existing environment <code class="docutils literal notranslate"><span class="pre">&lt;env&gt;</span></code> under the path <code class="docutils literal notranslate"><span class="pre">zoo/&lt;env&gt;/config/&lt;env&gt;_&lt;algo&gt;_config</span></code>. Then, based on this, you can mainly modify the part corresponding to <code class="docutils literal notranslate"><span class="pre">env</span></code> and then perform debugging and optimization.</p>
+<p>Below, we use <a class="reference external" href="https://github.com/opendilab/LightZero/blob/main/zoo/atari/config/atari_muzero_config.py">atari_muzero_config.py</a> as an example to explain the configuration file settings in detail.</p>
+<section id="main-config">
+<h2>1. <code class="docutils literal notranslate"><span class="pre">main_config</span></code><a class="headerlink" href="#main-config" title="Permalink to this heading"></a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">main_config</span></code> dictionary contains the main parameter settings for running the algorithm, which are mainly divided into two parts: <code class="docutils literal notranslate"><span class="pre">env</span></code> and <code class="docutils literal notranslate"><span class="pre">policy</span></code>.</p>
+<section id="main-parameters-in-the-env-part">
+<h3>1.1 Main Parameters in the <code class="docutils literal notranslate"><span class="pre">env</span></code> Part<a class="headerlink" href="#main-parameters-in-the-env-part" title="Permalink to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">env_id</span></code>: Specifies the environment to be used.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">obs_shape</span></code>: The dimension of the environment observation.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">collector_env_num</span></code>: The number of parallel environments used to collect data in the experience replay collector.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">evaluator_env_num</span></code>: The number of parallel environments used to evaluate policy performance in the evaluator.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">n_evaluator_episode</span></code>: The number of episodes run by each environment in the evaluator.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">manager</span></code>: Specifies the type of environment manager, mainly used to control the parallelization mode of the environment.</p></li>
+</ul>
+</section>
+<section id="main-parameters-in-the-policy-part">
+<h3>1.2 Main Parameters in the <code class="docutils literal notranslate"><span class="pre">policy</span></code> Part<a class="headerlink" href="#main-parameters-in-the-policy-part" title="Permalink to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">model</span></code>: Specifies the neural network model used by the policy, including the input dimension of the model, the number of frame stacking, the action space dimension of the model output, whether the model needs to use downsampling, whether to use self-supervised learning auxiliary loss, the action encoding type, the Normalization mode used in the network, etc.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cuda</span></code>: Specifies whether to migrate the model to the GPU for training.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_noise</span></code>: Whether to introduce noise during MCTS reanalysis, which can increase exploration.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">env_type</span></code>: Marks the environment type faced by the MuZero algorithm. According to different environment types, the MuZero algorithm will have some differences in detail processing.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">game_segment_length</span></code>: The length of the sequence (game segment) used for self-play.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">random_collect_episode_num</span></code>: The number of randomly collected episodes, providing initial data for exploration.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eps</span></code>: Exploration control parameters, including whether to use the epsilon-greedy method for control, the update method of control parameters, the starting value, the termination value, the decay rate, etc.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">use_augmentation</span></code>: Whether to use data augmentation.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">update_per_collect</span></code>: The number of updates after each data collection.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">batch_size</span></code>: The batch size sampled during the update.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">optim_type</span></code>: Optimizer type.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lr_piecewise_constant_decay</span></code>: Whether to use piecewise constant learning rate decay.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">learning_rate</span></code>: Initial learning rate.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_simulations</span></code>: The number of simulations used in the MCTS algorithm.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_ratio</span></code>: Reanalysis coefficient, controlling the probability of reanalysis.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ssl_loss_weight</span></code>: The weight of the self-supervised learning loss function.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">n_episode</span></code>: The number of episodes run by each environment in the parallel collector.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eval_freq</span></code>: Policy evaluation frequency (measured by training steps).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">replay_buffer_size</span></code>: The capacity of the experience replay buffer.</p></li>
+</ul>
+<p>Two frequently changed parameter setting areas are also specially mentioned here, annotated by comments:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># ==============================================================</span>
+<span class="c1"># begin of the most frequently changed config specified by the user</span>
+<span class="c1"># ==============================================================</span>
+<span class="c1"># These are parameters that need to be adjusted frequently based on the actual situation</span>
+<span class="c1"># ==============================================================</span>
+<span class="c1"># end of the most frequently changed config specified by the user</span>
+<span class="c1"># ==============================================================</span>
+</pre></div>
+</div>
+<p>to remind users that these parameters often need to be adjusted, such as <code class="docutils literal notranslate"><span class="pre">collector_env_num</span></code>, <code class="docutils literal notranslate"><span class="pre">num_simulations</span></code>, <code class="docutils literal notranslate"><span class="pre">update_per_collect</span></code>, <code class="docutils literal notranslate"><span class="pre">batch_size</span></code>, <code class="docutils literal notranslate"><span class="pre">max_env_step</span></code>, etc. Adjusting these parameters can optimize the algorithm performance and accelerate the training speed.</p>
+</section>
+</section>
+<section id="create-config">
+<h2>2. <code class="docutils literal notranslate"><span class="pre">create_config</span></code><a class="headerlink" href="#create-config" title="Permalink to this heading"></a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">create_config</span></code> dictionary specifies the specific environment class and policy class to be used and their reference paths, mainly containing two parts: <code class="docutils literal notranslate"><span class="pre">env</span></code> and <code class="docutils literal notranslate"><span class="pre">policy</span></code>.</p>
+<section id="settings-in-the-env-part">
+<h3>2.1 Settings in the <code class="docutils literal notranslate"><span class="pre">env</span></code> Part<a class="headerlink" href="#settings-in-the-env-part" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">env</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+    <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;atari_lightzero&#39;</span><span class="p">,</span>
+    <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;zoo.atari.envs.atari_lightzero_env&#39;</span><span class="p">],</span>
+<span class="p">),</span>
+</pre></div>
+</div>
+<p>Here, <code class="docutils literal notranslate"><span class="pre">type</span></code> specifies the environment name to be used, and <code class="docutils literal notranslate"><span class="pre">env_name</span></code> specifies the reference path where the environment class is located. The predefined <code class="docutils literal notranslate"><span class="pre">atari_lightzero_env</span></code> is used here. If you want to use a custom environment class, you need to change <code class="docutils literal notranslate"><span class="pre">type</span></code> to the custom environment class name and modify the <code class="docutils literal notranslate"><span class="pre">import_names</span></code> parameter accordingly.</p>
+</section>
+<section id="settings-in-the-policy-part">
+<h3>2.2 Settings in the <code class="docutils literal notranslate"><span class="pre">policy</span></code> Part<a class="headerlink" href="#settings-in-the-policy-part" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">policy</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+    <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;muzero&#39;</span><span class="p">,</span>
+    <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;lzero.policy.muzero&#39;</span><span class="p">],</span>
+<span class="p">),</span>
+</pre></div>
+</div>
+<p>Here, <code class="docutils literal notranslate"><span class="pre">type</span></code> specifies the policy name to be used, and <code class="docutils literal notranslate"><span class="pre">import_names</span></code> specifies the reference path where the policy class is located. The predefined MuZero algorithm in LightZero is used here. If you want to use a custom policy class, you need to change <code class="docutils literal notranslate"><span class="pre">type</span></code> to the custom policy class and modify the <code class="docutils literal notranslate"><span class="pre">import_names</span></code> parameter to the reference path where the custom policy is located.</p>
+</section>
+</section>
+<section id="running-the-algorithm">
+<h2>3. Running the Algorithm<a class="headerlink" href="#running-the-algorithm" title="Permalink to this heading"></a></h2>
+<p>After completing the configuration, call the following in the <code class="docutils literal notranslate"><span class="pre">main</span></code> function:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">lzero.entry</span> <span class="kn">import</span> <span class="n">train_muzero</span>
+    <span class="n">train_muzero</span><span class="p">([</span><span class="n">main_config</span><span class="p">,</span> <span class="n">create_config</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">max_env_step</span><span class="o">=</span><span class="n">max_env_step</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>This will run the MuZero algorithm on the configured environment for training. <code class="docutils literal notranslate"><span class="pre">[main_config,</span> <span class="pre">create_config]</span></code> specifies the configuration used for training, <code class="docutils literal notranslate"><span class="pre">seed</span></code> specifies the random number seed, and <code class="docutils literal notranslate"><span class="pre">max_env_step</span></code> specifies the maximum number of environment interaction steps.</p>
+</section>
+<section id="notes">
+<h2>4. Notes<a class="headerlink" href="#notes" title="Permalink to this heading"></a></h2>
+<p>The above briefly introduces the methods for configuring algorithms for custom environments under the LightZero framework, and hopes to be helpful to you. Please pay attention to the following points during the configuration process:</p>
+<ul class="simple">
+<li><p>When using a custom environment, be sure to write the environment class according to the environment interface standards defined by the LightZero framework, otherwise errors may occur.</p></li>
+<li><p>Different algorithms and environments require different configuration parameters. Before configuring, you need to thoroughly understand the principles of the algorithm and the characteristics of the environment, and you can refer to relevant academic papers to set parameters reasonably.</p></li>
+<li><p>If you want to run an algorithm supported by LightZero on a custom environment, you can first use the default policy configuration of the algorithm, and then optimize and adjust according to the actual training situation.</p></li>
+<li><p>When configuring the number of parallel environments, the number should be set reasonably according to your computing resources to avoid problems of insufficient memory due to too many parallel environments.</p></li>
+<li><p>You can use tools such as tensorboard to monitor the training situation and solve problems in time. For details, please refer to the <a class="reference external" href="https://github.com/opendilab/LightZero/tree/main/docs/source/tutorials/logs/logs.md">Log System Documentation</a>.</p></li>
+<li><p>Wish you a smooth experience using the LightZero framework!</p></li>
+</ul>
+</section>
+</section>
+
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../envs/customize_envs.html" class="btn btn-neutral float-left" title="How to Customize Your Environments in LightZero?" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../../api_doc/index.html" class="btn btn-neutral float-right" title="&lt;no title&gt;" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

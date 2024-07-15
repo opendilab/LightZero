@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LightZero 中如何设置配置文件？ &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation/index.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="config.html">How to Set Configuration Files in LightZero</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">LightZero 中如何设置配置文件？</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/tutorials/config/config_zh.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <section id="lightzero">
+<h1>LightZero 中如何设置配置文件？<a class="headerlink" href="#lightzero" title="Permalink to this heading"></a></h1>
+<p>在 LightZero 框架中，针对特定环境运行特定算法需要设置相应的配置文件。
+配置文件主要包含两个部分: <code class="docutils literal notranslate"><span class="pre">main_config</span></code>和<code class="docutils literal notranslate"><span class="pre">create_config</span></code>。
+其中，<code class="docutils literal notranslate"><span class="pre">main_config</span></code>定义了算法运行的主要参数，如环境设置、策略设置等；而<code class="docutils literal notranslate"><span class="pre">create_config</span></code>则指定了要使用的具体环境类和策略类及其引用路径。
+针对自定义环境运行特定算法，您可以在 <code class="docutils literal notranslate"><span class="pre">zoo/&lt;env&gt;/config/&lt;env&gt;_&lt;algo&gt;_config</span></code> 路径下找到已有环境<code class="docutils literal notranslate"><span class="pre">&lt;env&gt;</span></code>的不同算法<code class="docutils literal notranslate"><span class="pre">&lt;algo&gt;</span></code>对应的默认 <code class="docutils literal notranslate"><span class="pre">config</span></code> 文件，然后在此基础上主要修改 <code class="docutils literal notranslate"><span class="pre">env</span></code> 对应的部分，然后进行调试优化。
+下面我们以 <a class="reference external" href="https://github.com/opendilab/LightZero/blob/main/zoo/atari/config/atari_muzero_config.py">atari_muzero_config.py</a> 为例，来详细说明配置文件的设置。</p>
+<section id="main-config">
+<h2>1. <code class="docutils literal notranslate"><span class="pre">main_config</span></code><a class="headerlink" href="#main-config" title="Permalink to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">main_config</span></code>字典包含了算法运行的主要参数设置，主要分为两部分: <code class="docutils literal notranslate"><span class="pre">env</span></code>和<code class="docutils literal notranslate"><span class="pre">policy</span></code>。</p>
+<section id="env">
+<h3>1.1 <code class="docutils literal notranslate"><span class="pre">env</span></code>部分的主要参数<a class="headerlink" href="#env" title="Permalink to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">env_id</span></code>: 指定要使用的环境。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">obs_shape</span></code>: 环境观测的维度。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">collector_env_num</span></code>: 经验回放采集器(collector)中并行用于收集数据的环境数目。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">evaluator_env_num</span></code>: 评估器(evaluator)中并行用于评估策略性能的环境数目。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">n_evaluator_episode</span></code>: 评估器中每个环境运行的episode数目。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">manager</span></code>: 指定环境管理器的类型，主要用于控制环境的并行化方式。</p></li>
+</ul>
+</section>
+<section id="policy">
+<h3>1.2 <code class="docutils literal notranslate"><span class="pre">policy</span></code>部分的主要参数<a class="headerlink" href="#policy" title="Permalink to this heading"></a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">model</span></code>: 指定策略所使用的神经网络模型，包含模型的输入维度、叠帧数、模型输出的动作空间维度、模型是否需要使用降采样、是否使用自监督学习辅助损失、动作编码类型、网络中使用的Normalization模式等。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cuda</span></code>: 指定是否将模型迁移到GPU上进行训练。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_noise</span></code>: 是否在MCTS重分析时引入噪声，可以增加探索。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">env_type</span></code>: 标记MuZero算法所面对的环境类型，根据不同的环境类型，MuZero算法会在细节处理上有所不同。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">game_segment_length</span></code>: 用于自我博弈的序列(game segment)长度。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">random_collect_episode_num</span></code>: 随机采集的episode数量，为探索提供初始数据。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eps</span></code>: 探索控制参数，包括是否使用epsilon-greedy方法进行控制，控制参数的更新方式、起始值、终止值、衰减速度等。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">use_augmentation</span></code>: 是否使用数据增强。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">update_per_collect</span></code>: 每次数据收集后更新的次数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">batch_size</span></code>: 更新时采样的批量大小。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">optim_type</span></code>: 优化器类型。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">lr_piecewise_constant_decay</span></code>: 是否使用分段常数学习率衰减。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">learning_rate</span></code>: 初始学习率。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_simulations</span></code>: MCTS算法中使用的模拟次数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_ratio</span></code>: 重分析系数，控制进行重分析的概率。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ssl_loss_weight</span></code>: 自监督学习损失函数的权重。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">n_episode</span></code>: 并行采集器中每个环境运行的episode数量。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eval_freq</span></code>: 策略评估频率(按照训练步数计)。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">replay_buffer_size</span></code>: 经验回放器的容量。</p></li>
+</ul>
+<p>这里还特别提到了两个易变参数设定区域，通过注释</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># ==============================================================</span>
+<span class="c1"># begin of the most frequently changed config specified by the user</span>
+<span class="c1"># ==============================================================</span>
+<span class="c1"># 这里是需要根据实际情况经常调整的参数</span>
+<span class="c1"># ==============================================================</span>
+<span class="c1"># end of the most frequently changed config specified by the user</span>
+<span class="c1"># ==============================================================</span>
+</pre></div>
+</div>
+<p>标注出来，提醒用户这些参数是经常需要调整的，如<code class="docutils literal notranslate"><span class="pre">collector_env_num</span></code>，<code class="docutils literal notranslate"><span class="pre">num_simulations</span></code>，<code class="docutils literal notranslate"><span class="pre">update_per_collect</span></code>，<code class="docutils literal notranslate"><span class="pre">batch_size</span></code>，<code class="docutils literal notranslate"><span class="pre">max_env_step</span></code>等。调整这些参数可以优化算法性能，加快训练速度。</p>
+</section>
+</section>
+<section id="create-config">
+<h2>2. <code class="docutils literal notranslate"><span class="pre">create_config</span></code><a class="headerlink" href="#create-config" title="Permalink to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">create_config</span></code>字典指定了要使用的具体环境类和策略类及其引用路径，主要包含两个部分: <code class="docutils literal notranslate"><span class="pre">env</span></code>和<code class="docutils literal notranslate"><span class="pre">policy</span></code>。</p>
+<section id="id1">
+<h3>2.1 <code class="docutils literal notranslate"><span class="pre">env</span></code>部分的设置<a class="headerlink" href="#id1" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">env</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+    <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;atari_lightzero&#39;</span><span class="p">,</span>
+    <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;zoo.atari.envs.atari_lightzero_env&#39;</span><span class="p">],</span>
+<span class="p">),</span>
+</pre></div>
+</div>
+<p>其中<code class="docutils literal notranslate"><span class="pre">type</span></code>指定了要使用的环境名，<code class="docutils literal notranslate"><span class="pre">env_name</span></code>则指定了该环境类所在的引用路径。这里使用的是预定义的<code class="docutils literal notranslate"><span class="pre">atari_lightzero_env</span></code>。如果要使用自定义的环境类，则需要将<code class="docutils literal notranslate"><span class="pre">type</span></code>改为自定义环境类名，并相应修改<code class="docutils literal notranslate"><span class="pre">import_names</span></code>参数。</p>
+</section>
+<section id="id2">
+<h3>2.2 <code class="docutils literal notranslate"><span class="pre">policy</span></code>部分的设置<a class="headerlink" href="#id2" title="Permalink to this heading"></a></h3>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">policy</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+    <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;muzero&#39;</span><span class="p">,</span>
+    <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;lzero.policy.muzero&#39;</span><span class="p">],</span>
+<span class="p">),</span>
+</pre></div>
+</div>
+<p>其中<code class="docutils literal notranslate"><span class="pre">type</span></code>指定了要使用的策略名，<code class="docutils literal notranslate"><span class="pre">import_names</span></code>则指定了该策略类所在的引用路径。这里使用的是LightZero中预定义的MuZero算法。如果要使用自定义的策略类，则需要将<code class="docutils literal notranslate"><span class="pre">type</span></code>改为自定义策略类，并修改<code class="docutils literal notranslate"><span class="pre">import_names</span></code>参数为自定义策略所在的引用路径。</p>
+</section>
+</section>
+<section id="id3">
+<h2>3. 运行算法<a class="headerlink" href="#id3" title="Permalink to this heading"></a></h2>
+<p>配置完成后，在<code class="docutils literal notranslate"><span class="pre">main</span></code>函数中调用:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span> 
+    <span class="kn">from</span> <span class="nn">lzero.entry</span> <span class="kn">import</span> <span class="n">train_muzero</span>
+    <span class="n">train_muzero</span><span class="p">([</span><span class="n">main_config</span><span class="p">,</span> <span class="n">create_config</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">max_env_step</span><span class="o">=</span><span class="n">max_env_step</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>即可运行MuZero算法在配置的环境上进行训练。其中<code class="docutils literal notranslate"><span class="pre">[main_config，</span> <span class="pre">create_config]</span></code>指定了训练使用的配置，<code class="docutils literal notranslate"><span class="pre">seed</span></code>指定了随机数种子，<code class="docutils literal notranslate"><span class="pre">max_env_step</span></code>指定了最大的环境交互步数。</p>
+</section>
+<section id="id4">
+<h2>4. 注意事项<a class="headerlink" href="#id4" title="Permalink to this heading"></a></h2>
+<p>以上为您简要介绍了在 LightZero 框架下针对自定义环境配置算法的方法，希望对您有所帮助。在配置过程中，请注意以下几点：</p>
+<ul class="simple">
+<li><p>当使用自定义环境时，请务必按照 LightZero 框架定义的环境接口标准编写环境类，否则可能引发错误。</p></li>
+<li><p>不同的算法和环境需要不同的配置参数。在配置之前，您需要详细了解算法的原理及环境的特点，可以参考相关的学术论文来合理设置参数。</p></li>
+<li><p>如果您希望在一个自定义环境上运行 LightZero 支持的算法，可以首先使用该算法的默认<code class="docutils literal notranslate"><span class="pre">policy</span></code>配置，随后根据训练的实际情况进行优化和调整。</p></li>
+<li><p>在配置并行环境的数目时，应根据您的计算资源情况来合理设定，以避免因并行环境过多而导致显存不足的问题。</p></li>
+<li><p>您可以利用 tensorboard 等工具来监控训练情况，及时发现并解决问题。具体可参考<a class="reference external" href="https://github.com/opendilab/LightZero/tree/main/docs/source/tutorials/logs/logs_zh.md">日志系统文档</a>。</p></li>
+</ul>
+<p>祝您使用 LightZero 框架顺利！</p>
+</section>
+</section>
+
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

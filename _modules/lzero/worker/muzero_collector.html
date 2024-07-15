@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lzero.worker.muzero_collector &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/sphinx_highlight.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/installation/index.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lzero.worker.muzero_collector</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <h1>Source code for lzero.worker.muzero_collector</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">deque</span><span class="p">,</span> <span class="n">namedtuple</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">ding.envs</span> <span class="kn">import</span> <span class="n">BaseEnvManager</span>
+<span class="kn">from</span> <span class="nn">ding.torch_utils</span> <span class="kn">import</span> <span class="n">to_ndarray</span>
+<span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">build_logger</span><span class="p">,</span> <span class="n">EasyTimer</span><span class="p">,</span> <span class="n">SERIAL_COLLECTOR_REGISTRY</span><span class="p">,</span> <span class="n">get_rank</span><span class="p">,</span> <span class="n">get_world_size</span><span class="p">,</span> \
+    <span class="n">allreduce_data</span>
+<span class="kn">from</span> <span class="nn">ding.worker.collector.base_serial_collector</span> <span class="kn">import</span> <span class="n">ISerialCollector</span>
+<span class="kn">from</span> <span class="nn">torch.nn</span> <span class="kn">import</span> <span class="n">L1Loss</span>
+
+<span class="kn">from</span> <span class="nn">lzero.mcts.buffer.game_segment</span> <span class="kn">import</span> <span class="n">GameSegment</span>
+<span class="kn">from</span> <span class="nn">lzero.mcts.utils</span> <span class="kn">import</span> <span class="n">prepare_observation</span>
+
+
+<div class="viewcode-block" id="MuZeroCollector"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_collector.MuZeroCollector">[docs]</a><span class="nd">@SERIAL_COLLECTOR_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;episode_muzero&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">MuZeroCollector</span><span class="p">(</span><span class="n">ISerialCollector</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Overview:</span>
+<span class="sd">        The Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.</span>
+<span class="sd">        It manages the data collection process for training these algorithms using a serial mechanism.</span>
+<span class="sd">    Interfaces:</span>
+<span class="sd">        ``__init__``, ``reset``, ``reset_env``, ``reset_policy``, ``_reset_stat``, ``envstep``, ``__del__``, ``_compute_priorities``,</span>
+<span class="sd">        ``pad_and_save_last_trajectory``, ``collect``, ``_output_log``, ``close``</span>
+<span class="sd">    Properties:</span>
+<span class="sd">        ``envstep``</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># TO be compatible with ISerialCollector</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+
+<div class="viewcode-block" id="MuZeroCollector.__init__"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_collector.MuZeroCollector.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">collect_print_freq</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span><span class="p">,</span>
+            <span class="n">env</span><span class="p">:</span> <span class="n">BaseEnvManager</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="n">policy</span><span class="p">:</span> <span class="n">namedtuple</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="n">tb_logger</span><span class="p">:</span> <span class="s1">&#39;SummaryWriter&#39;</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>  <span class="c1"># noqa</span>
+            <span class="n">exp_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;default_experiment&#39;</span><span class="p">,</span>
+            <span class="n">instance_name</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;collector&#39;</span><span class="p">,</span>
+            <span class="n">policy_config</span><span class="p">:</span> <span class="s1">&#39;policy_config&#39;</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>  <span class="c1"># noqa</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Initialize the MuZeroCollector with the given parameters.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - collect_print_freq (:obj:`int`): Frequency (in training steps) at which to print collection information.</span>
+<span class="sd">            - env (:obj:`Optional[BaseEnvManager]`): Instance of the subclass of vectorized environment manager.</span>
+<span class="sd">            - policy (:obj:`Optional[namedtuple]`): namedtuple of the collection mode policy API.</span>
+<span class="sd">            - tb_logger (:obj:`Optional[SummaryWriter]`): TensorBoard logger instance.</span>
+<span class="sd">            - exp_name (:obj:`str`): Name of the experiment, used for logging and saving purposes.</span>
+<span class="sd">            - instance_name (:obj:`str`): Unique identifier for this collector instance.</span>
+<span class="sd">            - policy_config (:obj:`Optional[policy_config]`): Configuration object for the policy.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_exp_name</span> <span class="o">=</span> <span class="n">exp_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span> <span class="o">=</span> <span class="n">instance_name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_collect_print_freq</span> <span class="o">=</span> <span class="n">collect_print_freq</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_timer</span> <span class="o">=</span> <span class="n">EasyTimer</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_end_flag</span> <span class="o">=</span> <span class="kc">False</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_rank</span> <span class="o">=</span> <span class="n">get_rank</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_world_size</span> <span class="o">=</span> <span class="n">get_world_size</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">tb_logger</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">build_logger</span><span class="p">(</span>
+                    <span class="n">path</span><span class="o">=</span><span class="s1">&#39;./</span><span class="si">{}</span><span class="s1">/log/</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_exp_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span><span class="p">),</span>
+                    <span class="n">name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span><span class="p">,</span>
+                    <span class="n">need_tb</span><span class="o">=</span><span class="kc">False</span>
+                <span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_tb_logger</span> <span class="o">=</span> <span class="n">tb_logger</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tb_logger</span> <span class="o">=</span> <span class="n">build_logger</span><span class="p">(</span>
+                    <span class="n">path</span><span class="o">=</span><span class="s1">&#39;./</span><span class="si">{}</span><span class="s1">/log/</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_exp_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span><span class="p">),</span> <span class="n">name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span>
+                <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">build_logger</span><span class="p">(</span>
+                <span class="n">path</span><span class="o">=</span><span class="s1">&#39;./</span><span class="si">{}</span><span class="s1">/log/</span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_exp_name</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span><span class="p">),</span> <span class="n">name</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span><span class="p">,</span> <span class="n">need_tb</span><span class="o">=</span><span class="kc">False</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_tb_logger</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span> <span class="o">=</span> <span class="n">policy_config</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">policy</span><span class="p">,</span> <span class="n">env</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="MuZeroCollector.reset_env"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_collector.MuZeroCollector.reset_env">[docs]</a>    <span class="k">def</span> <span class="nf">reset_env</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_env</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">BaseEnvManager</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Reset or replace the environment managed by this collector.</span>
+<span class="sd">            If _env is None, reset the old environment.</span>
+<span class="sd">            If _env is not None, replace the old environment in the collector with the new passed \</span>
+<span class="sd">                in environment and launch.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - env (:obj:`Optional[BaseEnvManager]`): New environment to manage, if provided.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">_env</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_env</span> <span class="o">=</span> <span class="n">_env</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">launch</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_env_num</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">env_num</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="MuZeroCollector.reset_policy"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_collector.MuZeroCollector.reset_policy">[docs]</a>    <span class="k">def</span> <span class="nf">reset_policy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_policy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">namedtuple</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Reset or replace the policy used by this collector.</span>
+<span class="sd">            If _policy is None, reset the old policy.</span>
+<span class="sd">            If _policy is not None, replace the old policy in the collector with the new passed in policy.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">assert</span> <span class="nb">hasattr</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s1">&#39;_env&#39;</span><span class="p">),</span> <span class="s2">&quot;please set env first&quot;</span>
+        <span class="k">if</span> <span class="n">_policy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_policy</span> <span class="o">=</span> <span class="n">_policy</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_default_n_episode</span> <span class="o">=</span> <span class="n">_policy</span><span class="o">.</span><span class="n">get_attribute</span><span class="p">(</span><span class="s1">&#39;cfg&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;n_episode&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span>
+                <span class="s1">&#39;Set default n_episode mode(n_episode(</span><span class="si">{}</span><span class="s1">), env_num(</span><span class="si">{}</span><span class="s1">))&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_default_n_episode</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_num</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_policy</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span></div>
+
+<div class="viewcode-block" id="MuZeroCollector.reset"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_collector.MuZeroCollector.reset">[docs]</a>    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_policy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">namedtuple</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">_env</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">BaseEnvManager</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Reset the collector with the given policy and/or environment.</span>
+<span class="sd">            If _env is None, reset the old environment.</span>
+<span class="sd">            If _env is not None, replace the old environment in the collector with the new passed \</span>
+<span class="sd">                in environment and launch.</span>
+<span class="sd">            If _policy is None, reset the old policy.</span>
+<span class="sd">            If _policy is not None, replace the old policy in the collector with the new passed in policy.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - policy (:obj:`Optional[namedtuple]`): the api namedtuple of collect_mode policy</span>
+<span class="sd">            - env (:obj:`Optional[BaseEnvManager]`): instance of the subclass of vectorized \</span>
+<span class="sd">                env_manager(BaseEnvManager)</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">_env</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">reset_env</span><span class="p">(</span><span class="n">_env</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">_policy</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">reset_policy</span><span class="p">(</span><span class="n">_policy</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_env_info</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;time&#39;</span><span class="p">:</span> <span class="mf">0.</span><span class="p">,</span> <span class="s1">&#39;step&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_env_num</span><span class="p">)}</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_episode_info</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_total_envstep_count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_total_episode_count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_total_duration</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_last_train_iter</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_end_flag</span> <span class="o">=</span> <span class="kc">False</span>
+
+        <span class="c1"># A game_segment_pool implementation based on the deque structure.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_pool</span> <span class="o">=</span> <span class="n">deque</span><span class="p">(</span><span class="n">maxlen</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="mf">1e6</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">unroll_plus_td_steps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">td_steps</span></div>
+
+<div class="viewcode-block" id="MuZeroCollector._reset_stat"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_collector.MuZeroCollector._reset_stat">[docs]</a>    <span class="k">def</span> <span class="nf">_reset_stat</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env_id</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Reset the collector&#39;s state. Including reset the traj_buffer, obs_pool, policy_output_pool \</span>
+<span class="sd">            and env_info. Reset these states according to env_id. You can refer to base_serial_collector\</span>
+<span class="sd">            to get more messages.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - env_id (:obj:`int`): the id where we need to reset the collector&#39;s state</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_env_info</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;time&#39;</span><span class="p">:</span> <span class="mf">0.</span><span class="p">,</span> <span class="s1">&#39;step&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span></div>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span> <span class="nf">envstep</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Get the total number of environment steps collected.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - envstep (:obj:`int`): Total number of environment steps collected.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_total_envstep_count</span>
+
+<div class="viewcode-block" id="MuZeroCollector.close"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_collector.MuZeroCollector.close">[docs]</a>    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Close the collector. If end_flag is False, close the environment, flush the tb_logger \</span>
+<span class="sd">            and close the tb_logger.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_end_flag</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_end_flag</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_tb_logger</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_tb_logger</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_tb_logger</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
+
+    <span class="k">def</span> <span class="fm">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Execute the close command and close the collector. __del__ is automatically called to \</span>
+<span class="sd">            destroy the collector instance when the collector finishes its work</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="c1"># ==============================================================</span>
+    <span class="c1"># MCTS+RL related core code</span>
+    <span class="c1"># ==============================================================</span>
+<div class="viewcode-block" id="MuZeroCollector._compute_priorities"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_collector.MuZeroCollector._compute_priorities">[docs]</a>    <span class="k">def</span> <span class="nf">_compute_priorities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">pred_values_lst</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">],</span> <span class="n">search_values_lst</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">float</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Compute the priorities for transitions based on prediction and search value discrepancies.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - i (:obj:`int`): Index of the values in the list to compute the priority for.</span>
+<span class="sd">            - pred_values_lst (:obj:`List[float]`): List of predicted values.</span>
+<span class="sd">            - search_values_lst (:obj:`List[float]`): List of search values obtained from MCTS.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - priorities (:obj:`np.ndarray`): Array of computed priorities.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">use_priority</span><span class="p">:</span>
+            <span class="c1"># Calculate priorities. The priorities are the L1 losses between the predicted</span>
+            <span class="c1"># values and the search values. We use &#39;none&#39; as the reduction parameter, which</span>
+            <span class="c1"># means the loss is calculated for each element individually, instead of being summed or averaged. </span>
+            <span class="c1"># A small constant (1e-6) is added to the results to avoid zero priorities. This</span>
+            <span class="c1"># is done because zero priorities could potentially cause issues in some scenarios.</span>
+            <span class="n">pred_values</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">pred_values_lst</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">search_values</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">search_values_lst</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">device</span>
+                                                                                <span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">priorities</span> <span class="o">=</span> <span class="n">L1Loss</span><span class="p">(</span><span class="n">reduction</span><span class="o">=</span><span class="s1">&#39;none&#39;</span>
+                                <span class="p">)(</span><span class="n">pred_values</span><span class="p">,</span>
+                                  <span class="n">search_values</span><span class="p">)</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span> <span class="o">+</span> <span class="mf">1e-6</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># priorities is None -&gt; use the max priority for all newly collected data</span>
+            <span class="n">priorities</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">return</span> <span class="n">priorities</span></div>
+
+<div class="viewcode-block" id="MuZeroCollector.pad_and_save_last_trajectory"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_collector.MuZeroCollector.pad_and_save_last_trajectory">[docs]</a>    <span class="k">def</span> <span class="nf">pad_and_save_last_trajectory</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">last_game_segments</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">GameSegment</span><span class="p">],</span>
+                                     <span class="n">last_game_priorities</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span>
+                                     <span class="n">game_segments</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">GameSegment</span><span class="p">],</span> <span class="n">done</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Save the game segment to the pool if the current game is finished, padding it if necessary.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - i (:obj:`int`): Index of the current game segment.</span>
+<span class="sd">            - last_game_segments (:obj:`List[GameSegment]`): List of the last game segments to be padded and saved.</span>
+<span class="sd">            - last_game_priorities (:obj:`List[np.ndarray]`): List of priorities of the last game segments.</span>
+<span class="sd">            - game_segments (:obj:`List[GameSegment]`): List of the current game segments.</span>
+<span class="sd">            - done (:obj:`np.ndarray`): Array indicating whether each game is done.</span>
+<span class="sd">        Note:</span>
+<span class="sd">            (last_game_segments[i].obs_segment[-4:][j] == game_segments[i].obs_segment[:4][j]).all() is True</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># pad over last segment trajectory</span>
+        <span class="n">beg_index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span>
+        <span class="n">end_index</span> <span class="o">=</span> <span class="n">beg_index</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">num_unroll_steps</span>
+
+        <span class="c1"># the start &lt;frame_stack_num&gt; obs is init zero obs, so we take the</span>
+        <span class="c1"># [&lt;frame_stack_num&gt; : &lt;frame_stack_num&gt;+&lt;num_unroll_steps&gt;] obs as the pad obs</span>
+        <span class="c1"># e.g. the start 4 obs is init zero obs, the num_unroll_steps is 5, so we take the [4:9] obs as the pad obs</span>
+        <span class="n">pad_obs_lst</span> <span class="o">=</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">obs_segment</span><span class="p">[</span><span class="n">beg_index</span><span class="p">:</span><span class="n">end_index</span><span class="p">]</span>
+        <span class="n">pad_child_visits_lst</span> <span class="o">=</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">child_visit_segment</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">num_unroll_steps</span><span class="p">]</span>
+        <span class="c1"># EfficientZero original repo bug:</span>
+        <span class="c1"># pad_child_visits_lst = game_segments[i].child_visit_segment[beg_index:end_index]</span>
+
+        <span class="n">beg_index</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="c1"># self.unroll_plus_td_steps = self.policy_config.num_unroll_steps + self.policy_config.td_steps</span>
+        <span class="n">end_index</span> <span class="o">=</span> <span class="n">beg_index</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">unroll_plus_td_steps</span> <span class="o">-</span> <span class="mi">1</span>
+
+        <span class="n">pad_reward_lst</span> <span class="o">=</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">reward_segment</span><span class="p">[</span><span class="n">beg_index</span><span class="p">:</span><span class="n">end_index</span><span class="p">]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">use_ture_chance_label_in_chance_encoder</span><span class="p">:</span>
+            <span class="n">chance_lst</span> <span class="o">=</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">chance_segment</span><span class="p">[</span><span class="n">beg_index</span><span class="p">:</span><span class="n">end_index</span><span class="p">]</span>
+
+        <span class="n">beg_index</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">end_index</span> <span class="o">=</span> <span class="n">beg_index</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">unroll_plus_td_steps</span>
+
+        <span class="n">pad_root_values_lst</span> <span class="o">=</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">root_value_segment</span><span class="p">[</span><span class="n">beg_index</span><span class="p">:</span><span class="n">end_index</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
+            <span class="n">pad_improved_policy_prob</span> <span class="o">=</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">improved_policy_probs</span><span class="p">[</span><span class="n">beg_index</span><span class="p">:</span><span class="n">end_index</span><span class="p">]</span>
+
+        <span class="c1"># pad over and save</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
+            <span class="n">last_game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">pad_over</span><span class="p">(</span><span class="n">pad_obs_lst</span><span class="p">,</span> <span class="n">pad_reward_lst</span><span class="p">,</span> <span class="n">pad_root_values_lst</span><span class="p">,</span> <span class="n">pad_child_visits_lst</span><span class="p">,</span>
+                                           <span class="n">next_segment_improved_policy</span><span class="o">=</span><span class="n">pad_improved_policy_prob</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">use_ture_chance_label_in_chance_encoder</span><span class="p">:</span>
+                <span class="n">last_game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">pad_over</span><span class="p">(</span><span class="n">pad_obs_lst</span><span class="p">,</span> <span class="n">pad_reward_lst</span><span class="p">,</span> <span class="n">pad_root_values_lst</span><span class="p">,</span> <span class="n">pad_child_visits_lst</span><span class="p">,</span>
+                                               <span class="n">next_chances</span><span class="o">=</span><span class="n">chance_lst</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">last_game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">pad_over</span><span class="p">(</span><span class="n">pad_obs_lst</span><span class="p">,</span> <span class="n">pad_reward_lst</span><span class="p">,</span> <span class="n">pad_root_values_lst</span><span class="p">,</span> <span class="n">pad_child_visits_lst</span><span class="p">)</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Note:</span>
+<span class="sd">            game_segment element shape:</span>
+<span class="sd">            obs: game_segment_length + stack + num_unroll_steps, 20+4 +5</span>
+<span class="sd">            rew: game_segment_length + stack + num_unroll_steps + td_steps -1  20 +5+3-1</span>
+<span class="sd">            action: game_segment_length -&gt; 20</span>
+<span class="sd">            root_values:  game_segment_length + num_unroll_steps + td_steps -&gt; 20 +5+3</span>
+<span class="sd">            child_visits： game_segment_length + num_unroll_steps -&gt; 20 +5</span>
+<span class="sd">            to_play: game_segment_length -&gt; 20</span>
+<span class="sd">            action_mask: game_segment_length -&gt; 20</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">last_game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">game_segment_to_array</span><span class="p">()</span>
+
+        <span class="c1"># put the game segment into the pool</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_pool</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">last_game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">last_game_priorities</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">done</span><span class="p">[</span><span class="n">i</span><span class="p">]))</span>
+
+        <span class="c1"># reset last game_segments</span>
+        <span class="n">last_game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">last_game_priorities</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="k">return</span> <span class="kc">None</span></div>
+
+<div class="viewcode-block" id="MuZeroCollector.collect"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_collector.MuZeroCollector.collect">[docs]</a>    <span class="k">def</span> <span class="nf">collect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                <span class="n">n_episode</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+                <span class="n">train_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+                <span class="n">policy_kwargs</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">dict</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Collect `n_episode` episodes of data with policy_kwargs, trained for `train_iter` iterations.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - n_episode (:obj:`Optional[int]`): Number of episodes to collect.</span>
+<span class="sd">            - train_iter (:obj:`int`): Number of training iterations completed so far.</span>
+<span class="sd">            - policy_kwargs (:obj:`Optional[dict]`): Additional keyword arguments for the policy.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - return_data (:obj:`List[Any]`): Collected data in the form of a list.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">n_episode</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_default_n_episode</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Please specify collect n_episode&quot;</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">n_episode</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_default_n_episode</span>
+        <span class="k">assert</span> <span class="n">n_episode</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_num</span><span class="p">,</span> <span class="s2">&quot;Please make sure n_episode &gt;= env_num</span><span class="si">{}</span><span class="s2">/</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">n_episode</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_num</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">policy_kwargs</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">policy_kwargs</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">temperature</span> <span class="o">=</span> <span class="n">policy_kwargs</span><span class="p">[</span><span class="s1">&#39;temperature&#39;</span><span class="p">]</span>
+        <span class="n">epsilon</span> <span class="o">=</span> <span class="n">policy_kwargs</span><span class="p">[</span><span class="s1">&#39;epsilon&#39;</span><span class="p">]</span>
+
+        <span class="n">collected_episode</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">collected_step</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">env_nums</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_num</span>
+
+        <span class="c1"># initializations</span>
+        <span class="n">init_obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">ready_obs</span>
+
+        <span class="n">retry_waiting_time</span> <span class="o">=</span> <span class="mf">0.001</span>
+        <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">init_obs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_num</span><span class="p">:</span>
+            <span class="c1"># To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to</span>
+            <span class="c1"># len(self._env.ready_obs), especially in tictactoe env.</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;The current init_obs.keys() is </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">init_obs</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Before sleeping, the _env_states is </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">_env_states</span><span class="p">))</span>
+            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">retry_waiting_time</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;=&#39;</span> <span class="o">*</span> <span class="mi">10</span> <span class="o">+</span> <span class="s1">&#39;Wait for all environments (subprocess) to finish resetting.&#39;</span> <span class="o">+</span> <span class="s1">&#39;=&#39;</span> <span class="o">*</span> <span class="mi">10</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="s1">&#39;After sleeping </span><span class="si">{}</span><span class="s1">s, the current _env_states is </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">retry_waiting_time</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">_env_states</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="n">init_obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">ready_obs</span>
+
+        <span class="n">action_mask_dict</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="n">to_ndarray</span><span class="p">(</span><span class="n">init_obs</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="s1">&#39;action_mask&#39;</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env_nums</span><span class="p">)}</span>
+        <span class="n">to_play_dict</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="n">to_ndarray</span><span class="p">(</span><span class="n">init_obs</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="s1">&#39;to_play&#39;</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env_nums</span><span class="p">)}</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">use_ture_chance_label_in_chance_encoder</span><span class="p">:</span>
+            <span class="n">chance_dict</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="n">to_ndarray</span><span class="p">(</span><span class="n">init_obs</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="s1">&#39;chance&#39;</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env_nums</span><span class="p">)}</span>
+
+        <span class="n">game_segments</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">GameSegment</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">action_space</span><span class="p">,</span>
+                <span class="n">game_segment_length</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">game_segment_length</span><span class="p">,</span>
+                <span class="n">config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span>
+            <span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env_nums</span><span class="p">)</span>
+        <span class="p">]</span>
+        <span class="c1"># stacked observation windows in reset stage for init game_segments</span>
+        <span class="n">observation_window_stack</span> <span class="o">=</span> <span class="p">[[]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env_nums</span><span class="p">)]</span>
+        <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env_nums</span><span class="p">):</span>
+            <span class="n">observation_window_stack</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">deque</span><span class="p">(</span>
+                <span class="p">[</span><span class="n">to_ndarray</span><span class="p">(</span><span class="n">init_obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">&#39;observation&#39;</span><span class="p">])</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span><span class="p">)],</span>
+                <span class="n">maxlen</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span>
+            <span class="p">)</span>
+
+            <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">observation_window_stack</span><span class="p">[</span><span class="n">env_id</span><span class="p">])</span>
+
+        <span class="n">dones</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="kc">False</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env_nums</span><span class="p">)])</span>
+        <span class="n">last_game_segments</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env_nums</span><span class="p">)]</span>
+        <span class="n">last_game_priorities</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env_nums</span><span class="p">)]</span>
+        <span class="c1"># for priorities in self-play</span>
+        <span class="n">search_values_lst</span> <span class="o">=</span> <span class="p">[[]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env_nums</span><span class="p">)]</span>
+        <span class="n">pred_values_lst</span> <span class="o">=</span> <span class="p">[[]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env_nums</span><span class="p">)]</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
+            <span class="n">improved_policy_lst</span> <span class="o">=</span> <span class="p">[[]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env_nums</span><span class="p">)]</span>
+
+        <span class="c1"># some logs</span>
+        <span class="n">eps_steps_lst</span><span class="p">,</span> <span class="n">visit_entropies_lst</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">env_nums</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">env_nums</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
+            <span class="n">completed_value_lst</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">env_nums</span><span class="p">)</span>
+        <span class="n">self_play_moves</span> <span class="o">=</span> <span class="mf">0.</span>
+        <span class="n">self_play_episodes</span> <span class="o">=</span> <span class="mf">0.</span>
+        <span class="n">self_play_moves_max</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">self_play_visit_entropy</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">total_transitions</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="n">ready_env_id</span> <span class="o">=</span> <span class="nb">set</span><span class="p">()</span>
+        <span class="n">remain_episode</span> <span class="o">=</span> <span class="n">n_episode</span>
+
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_timer</span><span class="p">:</span>
+                <span class="c1"># Get current ready env obs.</span>
+                <span class="n">obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">ready_obs</span>
+                <span class="n">new_available_env_id</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">obs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">)</span>
+                <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">ready_env_id</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">new_available_env_id</span><span class="p">)[:</span><span class="n">remain_episode</span><span class="p">]))</span>
+                <span class="n">remain_episode</span> <span class="o">-=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">new_available_env_id</span><span class="p">),</span> <span class="n">remain_episode</span><span class="p">)</span>
+
+                <span class="n">stack_obs</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">get_obs</span><span class="p">()</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
+                <span class="n">stack_obs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">stack_obs</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+
+                <span class="n">action_mask_dict</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">action_mask_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
+                <span class="n">to_play_dict</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">to_play_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
+                <span class="n">action_mask</span> <span class="o">=</span> <span class="p">[</span><span class="n">action_mask_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">]</span>
+                <span class="n">to_play</span> <span class="o">=</span> <span class="p">[</span><span class="n">to_play_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">]</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">use_ture_chance_label_in_chance_encoder</span><span class="p">:</span>
+                    <span class="n">chance_dict</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">chance_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
+                    <span class="n">chance</span> <span class="o">=</span> <span class="p">[</span><span class="n">chance_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">]</span>
+
+                <span class="n">stack_obs</span> <span class="o">=</span> <span class="n">to_ndarray</span><span class="p">(</span><span class="n">stack_obs</span><span class="p">)</span>
+                <span class="c1"># return stack_obs shape: [B, S*C, W, H] e.g. [8, 4*1, 96, 96]</span>
+                <span class="n">stack_obs</span> <span class="o">=</span> <span class="n">prepare_observation</span><span class="p">(</span><span class="n">stack_obs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">model_type</span><span class="p">)</span>
+
+                <span class="c1"># stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()</span>
+                <span class="n">stack_obs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">stack_obs</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+
+                <span class="c1"># ==============================================================</span>
+                <span class="c1"># policy forward</span>
+                <span class="c1"># ==============================================================</span>
+                <span class="n">policy_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_policy</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">stack_obs</span><span class="p">,</span> <span class="n">action_mask</span><span class="p">,</span> <span class="n">temperature</span><span class="p">,</span> <span class="n">to_play</span><span class="p">,</span> <span class="n">epsilon</span><span class="p">)</span>
+
+                <span class="n">actions_no_env_id</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="p">[</span><span class="s1">&#39;action&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">policy_output</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+                <span class="n">distributions_dict_no_env_id</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="p">[</span><span class="s1">&#39;visit_count_distributions&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">policy_output</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">sampled_algo</span><span class="p">:</span>
+                    <span class="n">root_sampled_actions_dict_no_env_id</span> <span class="o">=</span> <span class="p">{</span>
+                        <span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="p">[</span><span class="s1">&#39;root_sampled_actions&#39;</span><span class="p">]</span>
+                        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">policy_output</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                    <span class="p">}</span>
+                <span class="n">value_dict_no_env_id</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="p">[</span><span class="s1">&#39;searched_value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">policy_output</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+                <span class="n">pred_value_dict_no_env_id</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="p">[</span><span class="s1">&#39;predicted_value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">policy_output</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+                <span class="n">visit_entropy_dict_no_env_id</span> <span class="o">=</span> <span class="p">{</span>
+                    <span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="p">[</span><span class="s1">&#39;visit_count_distribution_entropy&#39;</span><span class="p">]</span>
+                    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">policy_output</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                <span class="p">}</span>
+
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
+                    <span class="n">improved_policy_dict_no_env_id</span> <span class="o">=</span> <span class="p">{</span><span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="p">[</span><span class="s1">&#39;improved_policy_probs&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">policy_output</span><span class="o">.</span><span class="n">items</span><span class="p">()}</span>
+                    <span class="n">completed_value_no_env_id</span> <span class="o">=</span> <span class="p">{</span>
+                        <span class="n">k</span><span class="p">:</span> <span class="n">v</span><span class="p">[</span><span class="s1">&#39;roots_completed_value&#39;</span><span class="p">]</span>
+                        <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">policy_output</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+                    <span class="p">}</span>
+                <span class="c1"># TODO(pu): subprocess</span>
+                <span class="n">actions</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="n">distributions_dict</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">sampled_algo</span><span class="p">:</span>
+                    <span class="n">root_sampled_actions_dict</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="n">value_dict</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="n">pred_value_dict</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="n">visit_entropy_dict</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
+                    <span class="n">improved_policy_dict</span> <span class="o">=</span> <span class="p">{}</span>
+                    <span class="n">completed_value_dict</span> <span class="o">=</span> <span class="p">{}</span>
+                <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">):</span>
+                    <span class="n">actions</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">actions_no_env_id</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+                    <span class="n">distributions_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">distributions_dict_no_env_id</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">sampled_algo</span><span class="p">:</span>
+                        <span class="n">root_sampled_actions_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">root_sampled_actions_dict_no_env_id</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+                    <span class="n">value_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">value_dict_no_env_id</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+                    <span class="n">pred_value_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">pred_value_dict_no_env_id</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+                    <span class="n">visit_entropy_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">visit_entropy_dict_no_env_id</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
+                        <span class="n">improved_policy_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">improved_policy_dict_no_env_id</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+                        <span class="n">completed_value_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">completed_value_no_env_id</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+
+                <span class="c1"># ==============================================================</span>
+                <span class="c1"># Interact with env.</span>
+                <span class="c1"># ==============================================================</span>
+                <span class="n">timesteps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="n">actions</span><span class="p">)</span>
+
+            <span class="n">interaction_duration</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_timer</span><span class="o">.</span><span class="n">value</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">timesteps</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">env_id</span><span class="p">,</span> <span class="n">timestep</span> <span class="ow">in</span> <span class="n">timesteps</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_timer</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">timestep</span><span class="o">.</span><span class="n">info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;abnormal&#39;</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+                        <span class="c1"># If there is an abnormal timestep, reset all the related variables(including this env).</span>
+                        <span class="c1"># suppose there is no reset param, reset this env</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">reset</span><span class="p">({</span><span class="n">env_id</span><span class="p">:</span> <span class="kc">None</span><span class="p">})</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_policy</span><span class="o">.</span><span class="n">reset</span><span class="p">([</span><span class="n">env_id</span><span class="p">])</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_reset_stat</span><span class="p">(</span><span class="n">env_id</span><span class="p">)</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Env</span><span class="si">{}</span><span class="s1"> returns a abnormal step, its info is </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">env_id</span><span class="p">,</span> <span class="n">timestep</span><span class="o">.</span><span class="n">info</span><span class="p">))</span>
+                        <span class="k">continue</span>
+                    <span class="n">obs</span><span class="p">,</span> <span class="n">reward</span><span class="p">,</span> <span class="n">done</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">timestep</span><span class="o">.</span><span class="n">obs</span><span class="p">,</span> <span class="n">timestep</span><span class="o">.</span><span class="n">reward</span><span class="p">,</span> <span class="n">timestep</span><span class="o">.</span><span class="n">done</span><span class="p">,</span> <span class="n">timestep</span><span class="o">.</span><span class="n">info</span>
+
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">sampled_algo</span><span class="p">:</span>
+                        <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">store_search_stats</span><span class="p">(</span>
+                            <span class="n">distributions_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span> <span class="n">value_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span> <span class="n">root_sampled_actions_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span>
+                        <span class="p">)</span>
+                    <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
+                        <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">store_search_stats</span><span class="p">(</span><span class="n">distributions_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span> <span class="n">value_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span>
+                                                                 <span class="n">improved_policy</span><span class="o">=</span><span class="n">improved_policy_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">])</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">store_search_stats</span><span class="p">(</span><span class="n">distributions_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span> <span class="n">value_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">])</span>
+                    <span class="c1"># append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}</span>
+                    <span class="c1"># in ``game_segments[env_id].init``, we have appended o_{t} in ``self.obs_segment``</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">use_ture_chance_label_in_chance_encoder</span><span class="p">:</span>
+                        <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="n">actions</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span> <span class="n">to_ndarray</span><span class="p">(</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;observation&#39;</span><span class="p">]),</span> <span class="n">reward</span><span class="p">,</span> <span class="n">action_mask_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span>
+                            <span class="n">to_play_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span> <span class="n">chance_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span>
+                        <span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                            <span class="n">actions</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span> <span class="n">to_ndarray</span><span class="p">(</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;observation&#39;</span><span class="p">]),</span> <span class="n">reward</span><span class="p">,</span> <span class="n">action_mask_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span>
+                            <span class="n">to_play_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span>
+                        <span class="p">)</span>
+
+                    <span class="c1"># NOTE: the position of code snippet is very important.</span>
+                    <span class="c1"># the obs[&#39;action_mask&#39;] and obs[&#39;to_play&#39;] are corresponding to the next action</span>
+                    <span class="n">action_mask_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_ndarray</span><span class="p">(</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;action_mask&#39;</span><span class="p">])</span>
+                    <span class="n">to_play_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_ndarray</span><span class="p">(</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;to_play&#39;</span><span class="p">])</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">use_ture_chance_label_in_chance_encoder</span><span class="p">:</span>
+                        <span class="n">chance_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_ndarray</span><span class="p">(</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;chance&#39;</span><span class="p">])</span>
+
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">ignore_done</span><span class="p">:</span>
+                        <span class="n">dones</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="kc">False</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">dones</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">done</span>
+
+                    <span class="n">visit_entropies_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">+=</span> <span class="n">visit_entropy_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
+                        <span class="n">completed_value_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">completed_value_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]))</span>
+
+                    <span class="n">eps_steps_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="n">total_transitions</span> <span class="o">+=</span> <span class="mi">1</span>
+
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">use_priority</span><span class="p">:</span>
+                        <span class="n">pred_values_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">pred_value_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">])</span>
+                        <span class="n">search_values_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">])</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
+                            <span class="n">improved_policy_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">improved_policy_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">])</span>
+
+                    <span class="c1"># append the newest obs</span>
+                    <span class="n">observation_window_stack</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">to_ndarray</span><span class="p">(</span><span class="n">obs</span><span class="p">[</span><span class="s1">&#39;observation&#39;</span><span class="p">]))</span>
+
+                    <span class="c1"># ==============================================================</span>
+                    <span class="c1"># we will save a game segment if it is the end of the game or the next game segment is finished.</span>
+                    <span class="c1"># ==============================================================</span>
+
+                    <span class="c1"># if game segment is full, we will save the last game segment</span>
+                    <span class="k">if</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">is_full</span><span class="p">():</span>
+                        <span class="c1"># pad over last segment trajectory</span>
+                        <span class="k">if</span> <span class="n">last_game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="c1"># TODO(pu): return the one game segment</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">pad_and_save_last_trajectory</span><span class="p">(</span>
+                                <span class="n">env_id</span><span class="p">,</span> <span class="n">last_game_segments</span><span class="p">,</span> <span class="n">last_game_priorities</span><span class="p">,</span> <span class="n">game_segments</span><span class="p">,</span> <span class="n">dones</span>
+                            <span class="p">)</span>
+
+                        <span class="c1"># calculate priority</span>
+                        <span class="n">priorities</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_priorities</span><span class="p">(</span><span class="n">env_id</span><span class="p">,</span> <span class="n">pred_values_lst</span><span class="p">,</span> <span class="n">search_values_lst</span><span class="p">)</span>
+                        <span class="n">pred_values_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+                        <span class="n">search_values_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
+                            <span class="n">improved_policy_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+                        <span class="c1"># the current game_segments become last_game_segment</span>
+                        <span class="n">last_game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span>
+                        <span class="n">last_game_priorities</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">priorities</span>
+
+                        <span class="c1"># create new GameSegment</span>
+                        <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">GameSegment</span><span class="p">(</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">action_space</span><span class="p">,</span>
+                            <span class="n">game_segment_length</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">game_segment_length</span><span class="p">,</span>
+                            <span class="n">config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span>
+                        <span class="p">)</span>
+                        <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">observation_window_stack</span><span class="p">[</span><span class="n">env_id</span><span class="p">])</span>
+
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_env_info</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">&#39;step&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="n">collected_step</span> <span class="o">+=</span> <span class="mi">1</span>
+
+                <span class="bp">self</span><span class="o">.</span><span class="n">_env_info</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">&#39;time&#39;</span><span class="p">]</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_timer</span><span class="o">.</span><span class="n">value</span> <span class="o">+</span> <span class="n">interaction_duration</span>
+                <span class="k">if</span> <span class="n">timestep</span><span class="o">.</span><span class="n">done</span><span class="p">:</span>
+                    <span class="n">reward</span> <span class="o">=</span> <span class="n">timestep</span><span class="o">.</span><span class="n">info</span><span class="p">[</span><span class="s1">&#39;eval_episode_return&#39;</span><span class="p">]</span>
+                    <span class="n">info</span> <span class="o">=</span> <span class="p">{</span>
+                        <span class="s1">&#39;reward&#39;</span><span class="p">:</span> <span class="n">reward</span><span class="p">,</span>
+                        <span class="s1">&#39;time&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_info</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">&#39;time&#39;</span><span class="p">],</span>
+                        <span class="s1">&#39;step&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_info</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">&#39;step&#39;</span><span class="p">],</span>
+                        <span class="s1">&#39;visit_entropy&#39;</span><span class="p">:</span> <span class="n">visit_entropies_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">/</span> <span class="n">eps_steps_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span>
+                    <span class="p">}</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
+                        <span class="n">info</span><span class="p">[</span><span class="s1">&#39;completed_value&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">completed_value_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">/</span> <span class="n">eps_steps_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span>
+                    <span class="n">collected_episode</span> <span class="o">+=</span> <span class="mi">1</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_episode_info</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">info</span><span class="p">)</span>
+
+                    <span class="c1"># ==============================================================</span>
+                    <span class="c1"># if it is the end of the game, we will save the game segment</span>
+                    <span class="c1"># ==============================================================</span>
+
+                    <span class="c1"># NOTE: put the penultimate game segment in one episode into the trajectory_pool</span>
+                    <span class="c1"># pad over 2th last game_segment using the last game_segment</span>
+                    <span class="k">if</span> <span class="n">last_game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">pad_and_save_last_trajectory</span><span class="p">(</span>
+                            <span class="n">env_id</span><span class="p">,</span> <span class="n">last_game_segments</span><span class="p">,</span> <span class="n">last_game_priorities</span><span class="p">,</span> <span class="n">game_segments</span><span class="p">,</span> <span class="n">dones</span>
+                        <span class="p">)</span>
+
+                    <span class="c1"># store current segment trajectory</span>
+                    <span class="n">priorities</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_priorities</span><span class="p">(</span><span class="n">env_id</span><span class="p">,</span> <span class="n">pred_values_lst</span><span class="p">,</span> <span class="n">search_values_lst</span><span class="p">)</span>
+
+                    <span class="c1"># NOTE: put the last game segment in one episode into the trajectory_pool</span>
+                    <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">game_segment_to_array</span><span class="p">()</span>
+
+                    <span class="c1"># assert len(game_segments[env_id]) == len(priorities)</span>
+                    <span class="c1"># NOTE: save the last game segment in one episode into the trajectory_pool if it&#39;s not null</span>
+                    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">reward_segment</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_pool</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span> <span class="n">priorities</span><span class="p">,</span> <span class="n">dones</span><span class="p">[</span><span class="n">env_id</span><span class="p">]))</span>
+
+                    <span class="c1"># print(game_segments[env_id].reward_segment)</span>
+                    <span class="c1"># reset the finished env and init game_segments</span>
+                    <span class="k">if</span> <span class="n">n_episode</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_num</span><span class="p">:</span>
+                        <span class="c1"># Get current ready env obs.</span>
+                        <span class="n">init_obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">ready_obs</span>
+                        <span class="n">retry_waiting_time</span> <span class="o">=</span> <span class="mf">0.001</span>
+                        <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">init_obs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_num</span><span class="p">:</span>
+                            <span class="c1"># In order to be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to</span>
+                            <span class="c1"># len(self._env.ready_obs), especially in tictactoe env.</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;The current init_obs.keys() is </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">init_obs</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Before sleeping, the _env_states is </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">_env_states</span><span class="p">))</span>
+                            <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">retry_waiting_time</span><span class="p">)</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                                <span class="s1">&#39;=&#39;</span> <span class="o">*</span> <span class="mi">10</span> <span class="o">+</span> <span class="s1">&#39;Wait for all environments (subprocess) to finish resetting.&#39;</span> <span class="o">+</span> <span class="s1">&#39;=&#39;</span> <span class="o">*</span> <span class="mi">10</span>
+                            <span class="p">)</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                                <span class="s1">&#39;After sleeping </span><span class="si">{}</span><span class="s1">s, the current _env_states is </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span>
+                                    <span class="n">retry_waiting_time</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">_env_states</span>
+                                <span class="p">)</span>
+                            <span class="p">)</span>
+                            <span class="n">init_obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">ready_obs</span>
+
+                        <span class="n">new_available_env_id</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">init_obs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">)</span>
+                        <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">ready_env_id</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">new_available_env_id</span><span class="p">)[:</span><span class="n">remain_episode</span><span class="p">]))</span>
+                        <span class="n">remain_episode</span> <span class="o">-=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">new_available_env_id</span><span class="p">),</span> <span class="n">remain_episode</span><span class="p">)</span>
+
+                        <span class="n">action_mask_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_ndarray</span><span class="p">(</span><span class="n">init_obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">&#39;action_mask&#39;</span><span class="p">])</span>
+                        <span class="n">to_play_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_ndarray</span><span class="p">(</span><span class="n">init_obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">&#39;to_play&#39;</span><span class="p">])</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">use_ture_chance_label_in_chance_encoder</span><span class="p">:</span>
+                            <span class="n">chance_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_ndarray</span><span class="p">(</span><span class="n">init_obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">&#39;chance&#39;</span><span class="p">])</span>
+
+                        <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">GameSegment</span><span class="p">(</span>
+                            <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">action_space</span><span class="p">,</span>
+                            <span class="n">game_segment_length</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">game_segment_length</span><span class="p">,</span>
+                            <span class="n">config</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span>
+                        <span class="p">)</span>
+                        <span class="n">observation_window_stack</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="n">deque</span><span class="p">(</span>
+                            <span class="p">[</span><span class="n">init_obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">&#39;observation&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span><span class="p">)],</span>
+                            <span class="n">maxlen</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span>
+                        <span class="p">)</span>
+                        <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">observation_window_stack</span><span class="p">[</span><span class="n">env_id</span><span class="p">])</span>
+                        <span class="n">last_game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+                        <span class="n">last_game_priorities</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span>
+
+                    <span class="c1"># log</span>
+                    <span class="n">self_play_moves_max</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">self_play_moves_max</span><span class="p">,</span> <span class="n">eps_steps_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">])</span>
+                    <span class="n">self_play_visit_entropy</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">visit_entropies_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">/</span> <span class="n">eps_steps_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">])</span>
+                    <span class="n">self_play_moves</span> <span class="o">+=</span> <span class="n">eps_steps_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span>
+                    <span class="n">self_play_episodes</span> <span class="o">+=</span> <span class="mi">1</span>
+
+                    <span class="n">pred_values_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="n">search_values_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="n">eps_steps_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+                    <span class="n">visit_entropies_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+
+                    <span class="c1"># Env reset is done by env_manager automatically</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_policy</span><span class="o">.</span><span class="n">reset</span><span class="p">([</span><span class="n">env_id</span><span class="p">])</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">_reset_stat</span><span class="p">(</span><span class="n">env_id</span><span class="p">)</span>
+                    <span class="c1"># TODO(pu): subprocess mode, when n_episode &gt; self._env_num, occasionally the ready_env_id=()</span>
+                    <span class="c1"># and the stack_obs is np.array(None, dtype=object)</span>
+                    <span class="n">ready_env_id</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">env_id</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">collected_episode</span> <span class="o">&gt;=</span> <span class="n">n_episode</span><span class="p">:</span>
+                <span class="c1"># [data, meta_data]</span>
+                <span class="n">return_data</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_pool</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_pool</span><span class="p">))],</span> <span class="p">[</span>
+                    <span class="p">{</span>
+                        <span class="s1">&#39;priorities&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_pool</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">1</span><span class="p">],</span>
+                        <span class="s1">&#39;done&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_pool</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">],</span>
+                        <span class="s1">&#39;unroll_plus_td_steps&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">unroll_plus_td_steps</span>
+                    <span class="p">}</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">game_segment_pool</span><span class="p">))</span>
+                <span class="p">]</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_pool</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+                <span class="k">break</span>
+
+        <span class="n">collected_duration</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">([</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;time&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_episode_info</span><span class="p">])</span>
+        <span class="c1"># reduce data when enables DDP</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_world_size</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">collected_step</span> <span class="o">=</span> <span class="n">allreduce_data</span><span class="p">(</span><span class="n">collected_step</span><span class="p">,</span> <span class="s1">&#39;sum&#39;</span><span class="p">)</span>
+            <span class="n">collected_episode</span> <span class="o">=</span> <span class="n">allreduce_data</span><span class="p">(</span><span class="n">collected_episode</span><span class="p">,</span> <span class="s1">&#39;sum&#39;</span><span class="p">)</span>
+            <span class="n">collected_duration</span> <span class="o">=</span> <span class="n">allreduce_data</span><span class="p">(</span><span class="n">collected_duration</span><span class="p">,</span> <span class="s1">&#39;sum&#39;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_total_envstep_count</span> <span class="o">+=</span> <span class="n">collected_step</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_total_episode_count</span> <span class="o">+=</span> <span class="n">collected_episode</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_total_duration</span> <span class="o">+=</span> <span class="n">collected_duration</span>
+
+        <span class="c1"># log</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_output_log</span><span class="p">(</span><span class="n">train_iter</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">return_data</span></div>
+
+<div class="viewcode-block" id="MuZeroCollector._output_log"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_collector.MuZeroCollector._output_log">[docs]</a>    <span class="k">def</span> <span class="nf">_output_log</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Log the collector&#39;s data and output the log information.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - train_iter (:obj:`int`): Current training iteration number for logging context.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_rank</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">train_iter</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_last_train_iter</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_print_freq</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_episode_info</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_last_train_iter</span> <span class="o">=</span> <span class="n">train_iter</span>
+            <span class="n">episode_count</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_episode_info</span><span class="p">)</span>
+            <span class="n">envstep_count</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">([</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;step&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_episode_info</span><span class="p">])</span>
+            <span class="n">duration</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">([</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;time&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_episode_info</span><span class="p">])</span>
+            <span class="n">episode_reward</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;reward&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_episode_info</span><span class="p">]</span>
+            <span class="n">visit_entropy</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;visit_entropy&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_episode_info</span><span class="p">]</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
+                <span class="n">completed_value</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span><span class="p">[</span><span class="s1">&#39;completed_value&#39;</span><span class="p">]</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_episode_info</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_total_duration</span> <span class="o">+=</span> <span class="n">duration</span>
+            <span class="n">info</span> <span class="o">=</span> <span class="p">{</span>
+                <span class="s1">&#39;episode_count&#39;</span><span class="p">:</span> <span class="n">episode_count</span><span class="p">,</span>
+                <span class="s1">&#39;envstep_count&#39;</span><span class="p">:</span> <span class="n">envstep_count</span><span class="p">,</span>
+                <span class="s1">&#39;avg_envstep_per_episode&#39;</span><span class="p">:</span> <span class="n">envstep_count</span> <span class="o">/</span> <span class="n">episode_count</span><span class="p">,</span>
+                <span class="s1">&#39;avg_envstep_per_sec&#39;</span><span class="p">:</span> <span class="n">envstep_count</span> <span class="o">/</span> <span class="n">duration</span><span class="p">,</span>
+                <span class="s1">&#39;avg_episode_per_sec&#39;</span><span class="p">:</span> <span class="n">episode_count</span> <span class="o">/</span> <span class="n">duration</span><span class="p">,</span>
+                <span class="s1">&#39;collect_time&#39;</span><span class="p">:</span> <span class="n">duration</span><span class="p">,</span>
+                <span class="s1">&#39;reward_mean&#39;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">episode_reward</span><span class="p">),</span>
+                <span class="s1">&#39;reward_std&#39;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">episode_reward</span><span class="p">),</span>
+                <span class="s1">&#39;reward_max&#39;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">episode_reward</span><span class="p">),</span>
+                <span class="s1">&#39;reward_min&#39;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">min</span><span class="p">(</span><span class="n">episode_reward</span><span class="p">),</span>
+                <span class="s1">&#39;total_envstep_count&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_total_envstep_count</span><span class="p">,</span>
+                <span class="s1">&#39;total_episode_count&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_total_episode_count</span><span class="p">,</span>
+                <span class="s1">&#39;total_duration&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_total_duration</span><span class="p">,</span>
+                <span class="s1">&#39;visit_entropy&#39;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">visit_entropy</span><span class="p">),</span>
+                <span class="c1"># &#39;each_reward&#39;: episode_reward,</span>
+            <span class="p">}</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
+                <span class="n">info</span><span class="p">[</span><span class="s1">&#39;completed_value&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">completed_value</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_episode_info</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">&quot;collect end:</span><span class="se">\n</span><span class="si">{}</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="s1">&#39;</span><span class="si">{}</span><span class="s1">: </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">info</span><span class="o">.</span><span class="n">items</span><span class="p">()])))</span>
+            <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">info</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;each_reward&#39;</span><span class="p">]:</span>
+                    <span class="k">continue</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_tb_logger</span><span class="o">.</span><span class="n">add_scalar</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">{}</span><span class="s1">_iter/&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span><span class="p">)</span> <span class="o">+</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">k</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;total_envstep_count&#39;</span><span class="p">]:</span>
+                    <span class="k">continue</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_tb_logger</span><span class="o">.</span><span class="n">add_scalar</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">{}</span><span class="s1">_step/&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_instance_name</span><span class="p">)</span> <span class="o">+</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_total_envstep_count</span><span class="p">)</span></div></div>
+</pre></div>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

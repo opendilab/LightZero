@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lzero.mcts.buffer.game_buffer_muzero &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../../_static/jquery.js"></script>
+        <script src="../../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../../../" id="documentation_options" src="../../../../_static/documentation_options.js"></script>
+        <script src="../../../../_static/doctools.js"></script>
+        <script src="../../../../_static/sphinx_highlight.js"></script>
+    <script src="../../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/installation/index.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api_doc/agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api_doc/config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api_doc/entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api_doc/envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api_doc/mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api_doc/model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api_doc/policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../api_doc/worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lzero.mcts.buffer.game_buffer_muzero</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <h1>Source code for lzero.mcts.buffer.game_buffer_muzero</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Optional</span>
+
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">BUFFER_REGISTRY</span>
+
+<span class="kn">from</span> <span class="nn">lzero.mcts.tree_search.mcts_ctree</span> <span class="kn">import</span> <span class="n">MuZeroMCTSCtree</span> <span class="k">as</span> <span class="n">MCTSCtree</span>
+<span class="kn">from</span> <span class="nn">lzero.mcts.tree_search.mcts_ptree</span> <span class="kn">import</span> <span class="n">MuZeroMCTSPtree</span> <span class="k">as</span> <span class="n">MCTSPtree</span>
+<span class="kn">from</span> <span class="nn">lzero.mcts.utils</span> <span class="kn">import</span> <span class="n">prepare_observation</span>
+<span class="kn">from</span> <span class="nn">lzero.policy</span> <span class="kn">import</span> <span class="n">to_detach_cpu_numpy</span><span class="p">,</span> <span class="n">concat_output</span><span class="p">,</span> <span class="n">concat_output_value</span><span class="p">,</span> <span class="n">inverse_scalar_transform</span>
+<span class="kn">from</span> <span class="nn">.game_buffer</span> <span class="kn">import</span> <span class="n">GameBuffer</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span> <span class="nn">lzero.policy</span> <span class="kn">import</span> <span class="n">MuZeroPolicy</span><span class="p">,</span> <span class="n">EfficientZeroPolicy</span><span class="p">,</span> <span class="n">SampledEfficientZeroPolicy</span>
+
+
+<div class="viewcode-block" id="MuZeroGameBuffer"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer">[docs]</a><span class="nd">@BUFFER_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;game_buffer_muzero&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">MuZeroGameBuffer</span><span class="p">(</span><span class="n">GameBuffer</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Overview:</span>
+<span class="sd">        The specific game buffer for MuZero policy.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="MuZeroGameBuffer.__init__"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key</span>
+<span class="sd">            in the default configuration, the user-provided value will override the default configuration. Otherwise,</span>
+<span class="sd">            the default configuration will be used.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">default_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">default_config</span><span class="p">()</span>
+        <span class="n">default_config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span> <span class="o">=</span> <span class="n">default_config</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">env_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;not_board_games&#39;</span><span class="p">,</span> <span class="s1">&#39;board_games&#39;</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">action_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;fixed_action_space&#39;</span><span class="p">,</span> <span class="s1">&#39;varied_action_space&#39;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">replay_buffer_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">replay_buffer_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">batch_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">batch_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_alpha</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">priority_prob_alpha</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_beta</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">priority_prob_beta</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">keep_ratio</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model_update_interval</span> <span class="o">=</span> <span class="mi">10</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_of_collected_episodes</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">base_idx</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">clear_time</span> <span class="o">=</span> <span class="mi">0</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_buffer</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">game_segment_game_pos_look_up</span> <span class="o">=</span> <span class="p">[]</span></div>
+
+<div class="viewcode-block" id="MuZeroGameBuffer.sample"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.sample">[docs]</a>    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="s2">&quot;MuZeroPolicy&quot;</span><span class="p">,</span> <span class="s2">&quot;EfficientZeroPolicy&quot;</span><span class="p">,</span> <span class="s2">&quot;SampledEfficientZeroPolicy&quot;</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            sample data from ``GameBuffer`` and prepare the current and target batch for training.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - batch_size (:obj:`int`): batch size.</span>
+<span class="sd">            - policy (:obj:`Union[&quot;MuZeroPolicy&quot;, &quot;EfficientZeroPolicy&quot;, &quot;SampledEfficientZeroPolicy&quot;]`): policy.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - train_data (:obj:`List`): List of train data, including current_batch and target_batch.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">policy</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">policy</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+
+        <span class="c1"># obtain the current_batch and prepare target context</span>
+        <span class="n">reward_value_context</span><span class="p">,</span> <span class="n">policy_re_context</span><span class="p">,</span> <span class="n">policy_non_re_context</span><span class="p">,</span> <span class="n">current_batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_make_batch</span><span class="p">(</span>
+            <span class="n">batch_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_ratio</span>
+        <span class="p">)</span>
+        <span class="c1"># target reward, target value</span>
+        <span class="n">batch_rewards</span><span class="p">,</span> <span class="n">batch_target_values</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_target_reward_value</span><span class="p">(</span>
+            <span class="n">reward_value_context</span><span class="p">,</span> <span class="n">policy</span><span class="o">.</span><span class="n">_target_model</span>
+        <span class="p">)</span>
+        <span class="c1"># target policy</span>
+        <span class="n">batch_target_policies_re</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_target_policy_reanalyzed</span><span class="p">(</span><span class="n">policy_re_context</span><span class="p">,</span> <span class="n">policy</span><span class="o">.</span><span class="n">_target_model</span><span class="p">)</span>
+        <span class="n">batch_target_policies_non_re</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compute_target_policy_non_reanalyzed</span><span class="p">(</span>
+            <span class="n">policy_non_re_context</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_space_size</span>
+        <span class="p">)</span>
+
+        <span class="c1"># fusion of batch_target_policies_re and batch_target_policies_non_re to batch_target_policies</span>
+        <span class="k">if</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_ratio</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">batch_target_policies</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">batch_target_policies_re</span><span class="p">,</span> <span class="n">batch_target_policies_non_re</span><span class="p">])</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_ratio</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">batch_target_policies</span> <span class="o">=</span> <span class="n">batch_target_policies_re</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_ratio</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">batch_target_policies</span> <span class="o">=</span> <span class="n">batch_target_policies_non_re</span>
+
+        <span class="n">target_batch</span> <span class="o">=</span> <span class="p">[</span><span class="n">batch_rewards</span><span class="p">,</span> <span class="n">batch_target_values</span><span class="p">,</span> <span class="n">batch_target_policies</span><span class="p">]</span>
+
+        <span class="c1"># a batch contains the current_batch and the target_batch</span>
+        <span class="n">train_data</span> <span class="o">=</span> <span class="p">[</span><span class="n">current_batch</span><span class="p">,</span> <span class="n">target_batch</span><span class="p">]</span>
+        <span class="k">return</span> <span class="n">train_data</span></div>
+
+<div class="viewcode-block" id="MuZeroGameBuffer._make_batch"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._make_batch">[docs]</a>    <span class="k">def</span> <span class="nf">_make_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">reanalyze_ratio</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            first sample orig_data through ``_sample_orig_data()``,</span>
+<span class="sd">            then prepare the context of a batch:</span>
+<span class="sd">                reward_value_context:        the context of reanalyzed value targets</span>
+<span class="sd">                policy_re_context:           the context of reanalyzed policy targets</span>
+<span class="sd">                policy_non_re_context:       the context of non-reanalyzed policy targets</span>
+<span class="sd">                current_batch:                the inputs of batch</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - batch_size (:obj:`int`): the batch size of orig_data from replay buffer.</span>
+<span class="sd">            - reanalyze_ratio (:obj:`float`): ratio of reanalyzed policy (value is 100% reanalyzed)</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># obtain the batch context from replay buffer</span>
+        <span class="n">orig_data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sample_orig_data</span><span class="p">(</span><span class="n">batch_size</span><span class="p">)</span>
+        <span class="n">game_segment_list</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">,</span> <span class="n">weights_list</span><span class="p">,</span> <span class="n">make_time_list</span> <span class="o">=</span> <span class="n">orig_data</span>
+        <span class="n">batch_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">batch_index_list</span><span class="p">)</span>
+        <span class="n">obs_list</span><span class="p">,</span> <span class="n">action_list</span><span class="p">,</span> <span class="n">mask_list</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[],</span> <span class="p">[]</span>
+        <span class="c1"># prepare the inputs of a batch</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">batch_size</span><span class="p">):</span>
+            <span class="n">game</span> <span class="o">=</span> <span class="n">game_segment_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="n">pos_in_game_segment</span> <span class="o">=</span> <span class="n">pos_in_game_segment_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+            <span class="n">actions_tmp</span> <span class="o">=</span> <span class="n">game</span><span class="o">.</span><span class="n">action_segment</span><span class="p">[</span><span class="n">pos_in_game_segment</span><span class="p">:</span><span class="n">pos_in_game_segment</span> <span class="o">+</span>
+                                              <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+            <span class="c1"># add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid</span>
+            <span class="n">mask_tmp</span> <span class="o">=</span> <span class="p">[</span><span class="mf">1.</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">actions_tmp</span><span class="p">))]</span>
+            <span class="n">mask_tmp</span> <span class="o">+=</span> <span class="p">[</span><span class="mf">0.</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">mask_tmp</span><span class="p">))]</span>
+
+            <span class="c1"># pad random action</span>
+            <span class="n">actions_tmp</span> <span class="o">+=</span> <span class="p">[</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">game</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">actions_tmp</span><span class="p">))</span>
+            <span class="p">]</span>
+
+            <span class="c1"># obtain the input observations</span>
+            <span class="c1"># pad if length of obs in game_segment is less than stack+num_unroll_steps</span>
+            <span class="c1"># e.g. stack+num_unroll_steps = 4+5</span>
+            <span class="n">obs_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">game_segment_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">get_unroll_obs</span><span class="p">(</span>
+                    <span class="n">pos_in_game_segment_list</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">num_unroll_steps</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="kc">True</span>
+                <span class="p">)</span>
+            <span class="p">)</span>
+            <span class="n">action_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">actions_tmp</span><span class="p">)</span>
+            <span class="n">mask_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">mask_tmp</span><span class="p">)</span>
+
+        <span class="c1"># formalize the input observations</span>
+        <span class="n">obs_list</span> <span class="o">=</span> <span class="n">prepare_observation</span><span class="p">(</span><span class="n">obs_list</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">model_type</span><span class="p">)</span>
+
+        <span class="c1"># formalize the inputs of a batch</span>
+        <span class="n">current_batch</span> <span class="o">=</span> <span class="p">[</span><span class="n">obs_list</span><span class="p">,</span> <span class="n">action_list</span><span class="p">,</span> <span class="n">mask_list</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">,</span> <span class="n">weights_list</span><span class="p">,</span> <span class="n">make_time_list</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">current_batch</span><span class="p">)):</span>
+            <span class="n">current_batch</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">current_batch</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+
+        <span class="n">total_transitions</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_of_transitions</span><span class="p">()</span>
+
+        <span class="c1"># obtain the context of value targets</span>
+        <span class="n">reward_value_context</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_reward_value_context</span><span class="p">(</span>
+            <span class="n">batch_index_list</span><span class="p">,</span> <span class="n">game_segment_list</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">total_transitions</span>
+        <span class="p">)</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        only reanalyze recent reanalyze_ratio (e.g. 50%) data</span>
+<span class="sd">        if self._cfg.reanalyze_outdated is True, batch_index_list is sorted according to its generated env_steps</span>
+<span class="sd">        0: reanalyze_num -&gt; reanalyzed policy, reanalyze_num:end -&gt; non reanalyzed policy</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">reanalyze_num</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">batch_size</span> <span class="o">*</span> <span class="n">reanalyze_ratio</span><span class="p">)</span>
+        <span class="c1"># reanalyzed policy</span>
+        <span class="k">if</span> <span class="n">reanalyze_num</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="c1"># obtain the context of reanalyzed policy targets</span>
+            <span class="n">policy_re_context</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_policy_reanalyzed_context</span><span class="p">(</span>
+                <span class="n">batch_index_list</span><span class="p">[:</span><span class="n">reanalyze_num</span><span class="p">],</span> <span class="n">game_segment_list</span><span class="p">[:</span><span class="n">reanalyze_num</span><span class="p">],</span>
+                <span class="n">pos_in_game_segment_list</span><span class="p">[:</span><span class="n">reanalyze_num</span><span class="p">]</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">policy_re_context</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="c1"># non reanalyzed policy</span>
+        <span class="k">if</span> <span class="n">reanalyze_num</span> <span class="o">&lt;</span> <span class="n">batch_size</span><span class="p">:</span>
+            <span class="c1"># obtain the context of non-reanalyzed policy targets</span>
+            <span class="n">policy_non_re_context</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_policy_non_reanalyzed_context</span><span class="p">(</span>
+                <span class="n">batch_index_list</span><span class="p">[</span><span class="n">reanalyze_num</span><span class="p">:],</span> <span class="n">game_segment_list</span><span class="p">[</span><span class="n">reanalyze_num</span><span class="p">:],</span>
+                <span class="n">pos_in_game_segment_list</span><span class="p">[</span><span class="n">reanalyze_num</span><span class="p">:]</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">policy_non_re_context</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="n">context</span> <span class="o">=</span> <span class="n">reward_value_context</span><span class="p">,</span> <span class="n">policy_re_context</span><span class="p">,</span> <span class="n">policy_non_re_context</span><span class="p">,</span> <span class="n">current_batch</span>
+        <span class="k">return</span> <span class="n">context</span></div>
+
+<div class="viewcode-block" id="MuZeroGameBuffer._prepare_reward_value_context"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._prepare_reward_value_context">[docs]</a>    <span class="k">def</span> <span class="nf">_prepare_reward_value_context</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">pos_in_game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
+            <span class="n">total_transitions</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            prepare the context of rewards and values for calculating TD value target in reanalyzing part.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - batch_index_list (:obj:`list`): the index of start transition of sampled minibatch in replay buffer</span>
+<span class="sd">            - game_segment_list (:obj:`list`): list of game segments</span>
+<span class="sd">            - pos_in_game_segment_list (:obj:`list`): list of transition index in game_segment</span>
+<span class="sd">            - total_transitions (:obj:`int`): number of collected transitions</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - reward_value_context (:obj:`list`): value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens,</span>
+<span class="sd">              td_steps_list, action_mask_segment, to_play_segment</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">zero_obs</span> <span class="o">=</span> <span class="n">game_segment_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">zero_obs</span><span class="p">()</span>
+        <span class="n">value_obs_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c1"># the value is valid or not (out of game_segment)</span>
+        <span class="n">value_mask</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">rewards_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">game_segment_lens</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c1"># for board games</span>
+        <span class="n">action_mask_segment</span><span class="p">,</span> <span class="n">to_play_segment</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
+
+        <span class="n">td_steps_list</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">game_segment</span><span class="p">,</span> <span class="n">state_index</span><span class="p">,</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">game_segment_list</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">):</span>
+            <span class="n">game_segment_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="p">)</span>
+            <span class="n">game_segment_lens</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment_len</span><span class="p">)</span>
+
+            <span class="n">td_steps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">td_steps</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">game_segment_len</span> <span class="o">-</span> <span class="n">state_index</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
+
+            <span class="c1"># prepare the corresponding observations for bootstrapped values o_{t+k}</span>
+            <span class="c1"># o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]</span>
+            <span class="c1"># t=2+3 -&gt; o[2+3, 2+3+4+5] -&gt; o[5, 14]</span>
+            <span class="n">game_obs</span> <span class="o">=</span> <span class="n">game_segment</span><span class="o">.</span><span class="n">get_unroll_obs</span><span class="p">(</span><span class="n">state_index</span> <span class="o">+</span> <span class="n">td_steps</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span><span class="p">)</span>
+
+            <span class="n">rewards_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">reward_segment</span><span class="p">)</span>
+
+            <span class="c1"># for board games</span>
+            <span class="n">action_mask_segment</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">action_mask_segment</span><span class="p">)</span>
+            <span class="n">to_play_segment</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">to_play_segment</span><span class="p">)</span>
+
+            <span class="k">for</span> <span class="n">current_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">state_index</span><span class="p">,</span> <span class="n">state_index</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="c1"># get the &lt;num_unroll_steps+1&gt;  bootstrapped target obs</span>
+                <span class="n">td_steps_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">td_steps</span><span class="p">)</span>
+                <span class="c1"># index of bootstrapped obs o_{t+td_steps}</span>
+                <span class="n">bootstrap_index</span> <span class="o">=</span> <span class="n">current_index</span> <span class="o">+</span> <span class="n">td_steps</span>
+
+                <span class="k">if</span> <span class="n">bootstrap_index</span> <span class="o">&lt;</span> <span class="n">game_segment_len</span><span class="p">:</span>
+                    <span class="n">value_mask</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                    <span class="c1"># beg_index = bootstrap_index - (state_index + td_steps), max of beg_index is num_unroll_steps</span>
+                    <span class="n">beg_index</span> <span class="o">=</span> <span class="n">current_index</span> <span class="o">-</span> <span class="n">state_index</span>
+                    <span class="n">end_index</span> <span class="o">=</span> <span class="n">beg_index</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span>
+                    <span class="c1"># the stacked obs in time t</span>
+                    <span class="n">obs</span> <span class="o">=</span> <span class="n">game_obs</span><span class="p">[</span><span class="n">beg_index</span><span class="p">:</span><span class="n">end_index</span><span class="p">]</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">value_mask</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+                    <span class="n">obs</span> <span class="o">=</span> <span class="n">zero_obs</span>
+
+                <span class="n">value_obs_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">obs</span><span class="p">)</span>
+
+        <span class="n">reward_value_context</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">value_obs_list</span><span class="p">,</span> <span class="n">value_mask</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">rewards_list</span><span class="p">,</span> <span class="n">game_segment_lens</span><span class="p">,</span> <span class="n">td_steps_list</span><span class="p">,</span>
+            <span class="n">action_mask_segment</span><span class="p">,</span> <span class="n">to_play_segment</span>
+        <span class="p">]</span>
+        <span class="k">return</span> <span class="n">reward_value_context</span></div>
+
+<div class="viewcode-block" id="MuZeroGameBuffer._prepare_policy_non_reanalyzed_context"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._prepare_policy_non_reanalyzed_context">[docs]</a>    <span class="k">def</span> <span class="nf">_prepare_policy_non_reanalyzed_context</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">pos_in_game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            prepare the context of policies for calculating policy target in non-reanalyzing part, just return the policy in self-play</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - batch_index_list (:obj:`list`): the index of start transition of sampled minibatch in replay buffer</span>
+<span class="sd">            - game_segment_list (:obj:`list`): list of game segments</span>
+<span class="sd">            - pos_in_game_segment_list (:obj:`list`): list transition index in game</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - policy_non_re_context (:obj:`list`): pos_in_game_segment_list, child_visits, game_segment_lens, action_mask_segment, to_play_segment</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">child_visits</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">game_segment_lens</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="c1"># for board games</span>
+        <span class="n">action_mask_segment</span><span class="p">,</span> <span class="n">to_play_segment</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">game_segment</span><span class="p">,</span> <span class="n">state_index</span><span class="p">,</span> <span class="n">idx</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">game_segment_list</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">):</span>
+            <span class="n">game_segment_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="p">)</span>
+            <span class="n">game_segment_lens</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment_len</span><span class="p">)</span>
+            <span class="c1"># for board games</span>
+            <span class="n">action_mask_segment</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">action_mask_segment</span><span class="p">)</span>
+            <span class="n">to_play_segment</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">to_play_segment</span><span class="p">)</span>
+
+            <span class="n">child_visits</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">child_visit_segment</span><span class="p">)</span>
+
+        <span class="n">policy_non_re_context</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">child_visits</span><span class="p">,</span> <span class="n">game_segment_lens</span><span class="p">,</span> <span class="n">action_mask_segment</span><span class="p">,</span> <span class="n">to_play_segment</span>
+        <span class="p">]</span>
+        <span class="k">return</span> <span class="n">policy_non_re_context</span></div>
+
+<div class="viewcode-block" id="MuZeroGameBuffer._prepare_policy_reanalyzed_context"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._prepare_policy_reanalyzed_context">[docs]</a>    <span class="k">def</span> <span class="nf">_prepare_policy_reanalyzed_context</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">pos_in_game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            prepare the context of policies for calculating policy target in reanalyzing part.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - batch_index_list (:obj:&#39;list&#39;): start transition index in the replay buffer</span>
+<span class="sd">            - game_segment_list (:obj:&#39;list&#39;): list of game segments</span>
+<span class="sd">            - pos_in_game_segment_list (:obj:&#39;list&#39;): position of transition index in one game history</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - policy_re_context (:obj:`list`): policy_obs_list, policy_mask, pos_in_game_segment_list, indices,</span>
+<span class="sd">              child_visits, game_segment_lens, action_mask_segment, to_play_segment</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">zero_obs</span> <span class="o">=</span> <span class="n">game_segment_list</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">zero_obs</span><span class="p">()</span>
+        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+            <span class="c1"># for policy</span>
+            <span class="n">policy_obs_list</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">policy_mask</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="c1"># 0 -&gt; Invalid target policy for padding outside of game segments,</span>
+            <span class="c1"># 1 -&gt; Previous target policy for game segments.</span>
+            <span class="n">rewards</span><span class="p">,</span> <span class="n">child_visits</span><span class="p">,</span> <span class="n">game_segment_lens</span><span class="p">,</span> <span class="n">root_values</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[],</span> <span class="p">[],</span> <span class="p">[]</span>
+            <span class="c1"># for board games</span>
+            <span class="n">action_mask_segment</span><span class="p">,</span> <span class="n">to_play_segment</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">game_segment</span><span class="p">,</span> <span class="n">state_index</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">game_segment_list</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span><span class="p">):</span>
+                <span class="n">game_segment_len</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="p">)</span>
+                <span class="n">game_segment_lens</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment_len</span><span class="p">)</span>
+                <span class="n">rewards</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">reward_segment</span><span class="p">)</span>
+                <span class="c1"># for board games</span>
+                <span class="n">action_mask_segment</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">action_mask_segment</span><span class="p">)</span>
+                <span class="n">to_play_segment</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">to_play_segment</span><span class="p">)</span>
+
+                <span class="n">child_visits</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">child_visit_segment</span><span class="p">)</span>
+                <span class="n">root_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">game_segment</span><span class="o">.</span><span class="n">root_value_segment</span><span class="p">)</span>
+                <span class="c1"># prepare the corresponding observations</span>
+                <span class="n">game_obs</span> <span class="o">=</span> <span class="n">game_segment</span><span class="o">.</span><span class="n">get_unroll_obs</span><span class="p">(</span><span class="n">state_index</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">current_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">state_index</span><span class="p">,</span> <span class="n">state_index</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+
+                    <span class="k">if</span> <span class="n">current_index</span> <span class="o">&lt;</span> <span class="n">game_segment_len</span><span class="p">:</span>
+                        <span class="n">policy_mask</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                        <span class="n">beg_index</span> <span class="o">=</span> <span class="n">current_index</span> <span class="o">-</span> <span class="n">state_index</span>
+                        <span class="n">end_index</span> <span class="o">=</span> <span class="n">beg_index</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span>
+                        <span class="n">obs</span> <span class="o">=</span> <span class="n">game_obs</span><span class="p">[</span><span class="n">beg_index</span><span class="p">:</span><span class="n">end_index</span><span class="p">]</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">policy_mask</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+                        <span class="n">obs</span> <span class="o">=</span> <span class="n">zero_obs</span>
+                    <span class="n">policy_obs_list</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">obs</span><span class="p">)</span>
+
+        <span class="n">policy_re_context</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="n">policy_obs_list</span><span class="p">,</span> <span class="n">policy_mask</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">,</span> <span class="n">child_visits</span><span class="p">,</span> <span class="n">root_values</span><span class="p">,</span> <span class="n">game_segment_lens</span><span class="p">,</span>
+            <span class="n">action_mask_segment</span><span class="p">,</span> <span class="n">to_play_segment</span>
+        <span class="p">]</span>
+        <span class="k">return</span> <span class="n">policy_re_context</span></div>
+
+<div class="viewcode-block" id="MuZeroGameBuffer._compute_target_reward_value"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._compute_target_reward_value">[docs]</a>    <span class="k">def</span> <span class="nf">_compute_target_reward_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reward_value_context</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            prepare reward and value targets from the context of rewards and values.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - reward_value_context (:obj:&#39;list&#39;): the reward value context</span>
+<span class="sd">            - model (:obj:&#39;torch.tensor&#39;):model of the target model</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - batch_value_prefixs (:obj:&#39;np.ndarray): batch of value prefix</span>
+<span class="sd">            - batch_target_values (:obj:&#39;np.ndarray): batch of value estimation</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">value_obs_list</span><span class="p">,</span> <span class="n">value_mask</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">rewards_list</span><span class="p">,</span> <span class="n">game_segment_lens</span><span class="p">,</span> <span class="n">td_steps_list</span><span class="p">,</span> <span class="n">action_mask_segment</span><span class="p">,</span> \
+        <span class="n">to_play_segment</span> <span class="o">=</span> <span class="n">reward_value_context</span>  <span class="c1"># noqa</span>
+        <span class="c1"># transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)</span>
+        <span class="n">transition_batch_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">value_obs_list</span><span class="p">)</span>
+        <span class="n">game_segment_batch_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">pos_in_game_segment_list</span><span class="p">)</span>
+
+        <span class="n">to_play</span><span class="p">,</span> <span class="n">action_mask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_preprocess_to_play_and_action_mask</span><span class="p">(</span>
+            <span class="n">game_segment_batch_size</span><span class="p">,</span> <span class="n">to_play_segment</span><span class="p">,</span> <span class="n">action_mask_segment</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">continuous_action_space</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="c1"># when the action space of the environment is continuous, action_mask[:] is None.</span>
+            <span class="n">action_mask</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="nb">list</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int8</span><span class="p">))</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">)</span>
+            <span class="p">]</span>
+            <span class="c1"># NOTE: in continuous action space env: we set all legal_actions as -1</span>
+            <span class="n">legal_actions</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">)]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">legal_actions</span> <span class="o">=</span> <span class="p">[[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">j</span><span class="p">])</span> <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">)]</span>
+
+        <span class="n">batch_target_values</span><span class="p">,</span> <span class="n">batch_rewards</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
+        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+            <span class="n">value_obs_list</span> <span class="o">=</span> <span class="n">prepare_observation</span><span class="p">(</span><span class="n">value_obs_list</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">model_type</span><span class="p">)</span>
+            <span class="c1"># split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors</span>
+            <span class="n">slices</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">transition_batch_size</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mini_infer_size</span><span class="p">))</span>
+            <span class="n">network_output</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">slices</span><span class="p">):</span>
+                <span class="n">beg_index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mini_infer_size</span> <span class="o">*</span> <span class="n">i</span>
+                <span class="n">end_index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mini_infer_size</span> <span class="o">*</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+                <span class="n">m_obs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">value_obs_list</span><span class="p">[</span><span class="n">beg_index</span><span class="p">:</span><span class="n">end_index</span><span class="p">])</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+
+                <span class="c1"># calculate the target value</span>
+                <span class="n">m_output</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">initial_inference</span><span class="p">(</span><span class="n">m_obs</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">model</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
+                    <span class="c1"># if not in training, obtain the scalars of the value/reward</span>
+                    <span class="p">[</span><span class="n">m_output</span><span class="o">.</span><span class="n">latent_state</span><span class="p">,</span> <span class="n">m_output</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">m_output</span><span class="o">.</span><span class="n">policy_logits</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_detach_cpu_numpy</span><span class="p">(</span>
+                        <span class="p">[</span>
+                            <span class="n">m_output</span><span class="o">.</span><span class="n">latent_state</span><span class="p">,</span>
+                            <span class="n">inverse_scalar_transform</span><span class="p">(</span><span class="n">m_output</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">support_scale</span><span class="p">),</span>
+                            <span class="n">m_output</span><span class="o">.</span><span class="n">policy_logits</span>
+                        <span class="p">]</span>
+                    <span class="p">)</span>
+
+                <span class="n">network_output</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">m_output</span><span class="p">)</span>
+
+            <span class="c1"># concat the output slices after model inference</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">use_root_value</span><span class="p">:</span>
+                <span class="c1"># use the root values from MCTS, as in EfficientZero</span>
+                <span class="c1"># the root values have limited improvement but require much more GPU actors;</span>
+                <span class="n">_</span><span class="p">,</span> <span class="n">reward_pool</span><span class="p">,</span> <span class="n">policy_logits_pool</span><span class="p">,</span> <span class="n">latent_state_roots</span> <span class="o">=</span> <span class="n">concat_output</span><span class="p">(</span>
+                    <span class="n">network_output</span><span class="p">,</span> <span class="n">data_type</span><span class="o">=</span><span class="s1">&#39;muzero&#39;</span>
+                <span class="p">)</span>
+                <span class="n">reward_pool</span> <span class="o">=</span> <span class="n">reward_pool</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                <span class="n">policy_logits_pool</span> <span class="o">=</span> <span class="n">policy_logits_pool</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                <span class="n">noises</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">dirichlet</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">root_dirichlet_alpha</span><span class="p">]</span> <span class="o">*</span> <span class="nb">int</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">j</span><span class="p">]))</span>
+                                        <span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">)</span>
+                <span class="p">]</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts_ctree</span><span class="p">:</span>
+                    <span class="c1"># cpp mcts_tree</span>
+                    <span class="n">roots</span> <span class="o">=</span> <span class="n">MCTSCtree</span><span class="o">.</span><span class="n">roots</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_noise</span><span class="p">:</span>
+                        <span class="n">roots</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">root_noise_weight</span><span class="p">,</span> <span class="n">noises</span><span class="p">,</span> <span class="n">reward_pool</span><span class="p">,</span> <span class="n">policy_logits_pool</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">roots</span><span class="o">.</span><span class="n">prepare_no_noise</span><span class="p">(</span><span class="n">reward_pool</span><span class="p">,</span> <span class="n">policy_logits_pool</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+                    <span class="c1"># do MCTS for a new policy with the recent target model</span>
+                    <span class="n">MCTSCtree</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># python mcts_tree</span>
+                    <span class="n">roots</span> <span class="o">=</span> <span class="n">MCTSPtree</span><span class="o">.</span><span class="n">roots</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_noise</span><span class="p">:</span>
+                        <span class="n">roots</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">root_noise_weight</span><span class="p">,</span> <span class="n">noises</span><span class="p">,</span> <span class="n">reward_pool</span><span class="p">,</span> <span class="n">policy_logits_pool</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">roots</span><span class="o">.</span><span class="n">prepare_no_noise</span><span class="p">(</span><span class="n">reward_pool</span><span class="p">,</span> <span class="n">policy_logits_pool</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+                    <span class="c1"># do MCTS for a new policy with the recent target model</span>
+                    <span class="n">MCTSPtree</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+
+                <span class="n">roots_values</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_values</span><span class="p">()</span>
+                <span class="n">value_list</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">roots_values</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># use the predicted values</span>
+                <span class="n">value_list</span> <span class="o">=</span> <span class="n">concat_output_value</span><span class="p">(</span><span class="n">network_output</span><span class="p">)</span>
+
+            <span class="c1"># get last state value</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">env_type</span> <span class="o">==</span> <span class="s1">&#39;board_games&#39;</span> <span class="ow">and</span> <span class="n">to_play_segment</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]:</span>
+                <span class="c1"># TODO(pu): for board_games, very important, to check</span>
+                <span class="n">value_list</span> <span class="o">=</span> <span class="n">value_list</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span>
+                    <span class="p">[</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">discount_factor</span> <span class="o">**</span> <span class="n">td_steps_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">if</span> <span class="nb">int</span><span class="p">(</span><span class="n">td_steps_list</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="o">%</span>
+                        <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">discount_factor</span> <span class="o">**</span> <span class="n">td_steps_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">)</span>
+                    <span class="p">]</span>
+                <span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">value_list</span> <span class="o">=</span> <span class="n">value_list</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">discount_factor</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">)])</span> <span class="o">**</span> <span class="n">td_steps_list</span>
+                <span class="p">)</span>
+
+            <span class="n">value_list</span> <span class="o">=</span> <span class="n">value_list</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">value_mask</span><span class="p">)</span>
+            <span class="n">value_list</span> <span class="o">=</span> <span class="n">value_list</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+            <span class="n">horizon_id</span><span class="p">,</span> <span class="n">value_index</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+
+            <span class="k">for</span> <span class="n">game_segment_len_non_re</span><span class="p">,</span> <span class="n">reward_list</span><span class="p">,</span> <span class="n">state_index</span><span class="p">,</span> <span class="n">to_play_list</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">game_segment_lens</span><span class="p">,</span> <span class="n">rewards_list</span><span class="p">,</span>
+                                                                                       <span class="n">pos_in_game_segment_list</span><span class="p">,</span>
+                                                                                       <span class="n">to_play_segment</span><span class="p">):</span>
+                <span class="n">target_values</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">target_rewards</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">base_index</span> <span class="o">=</span> <span class="n">state_index</span>
+                <span class="k">for</span> <span class="n">current_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">state_index</span><span class="p">,</span> <span class="n">state_index</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                    <span class="n">bootstrap_index</span> <span class="o">=</span> <span class="n">current_index</span> <span class="o">+</span> <span class="n">td_steps_list</span><span class="p">[</span><span class="n">value_index</span><span class="p">]</span>
+                    <span class="c1"># for i, reward in enumerate(game.rewards[current_index:bootstrap_index]):</span>
+                    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">reward</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">reward_list</span><span class="p">[</span><span class="n">current_index</span><span class="p">:</span><span class="n">bootstrap_index</span><span class="p">]):</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">env_type</span> <span class="o">==</span> <span class="s1">&#39;board_games&#39;</span> <span class="ow">and</span> <span class="n">to_play_segment</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">]:</span>
+                            <span class="c1"># TODO(pu): for board_games, very important, to check</span>
+                            <span class="k">if</span> <span class="n">to_play_list</span><span class="p">[</span><span class="n">base_index</span><span class="p">]</span> <span class="o">==</span> <span class="n">to_play_list</span><span class="p">[</span><span class="n">i</span><span class="p">]:</span>
+                                <span class="n">value_list</span><span class="p">[</span><span class="n">value_index</span><span class="p">]</span> <span class="o">+=</span> <span class="n">reward</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">discount_factor</span> <span class="o">**</span> <span class="n">i</span>
+                            <span class="k">else</span><span class="p">:</span>
+                                <span class="n">value_list</span><span class="p">[</span><span class="n">value_index</span><span class="p">]</span> <span class="o">+=</span> <span class="o">-</span><span class="n">reward</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">discount_factor</span> <span class="o">**</span> <span class="n">i</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">value_list</span><span class="p">[</span><span class="n">value_index</span><span class="p">]</span> <span class="o">+=</span> <span class="n">reward</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">discount_factor</span> <span class="o">**</span> <span class="n">i</span>
+                    <span class="n">horizon_id</span> <span class="o">+=</span> <span class="mi">1</span>
+
+                    <span class="k">if</span> <span class="n">current_index</span> <span class="o">&lt;</span> <span class="n">game_segment_len_non_re</span><span class="p">:</span>
+                        <span class="n">target_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">value_list</span><span class="p">[</span><span class="n">value_index</span><span class="p">])</span>
+                        <span class="n">target_rewards</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">reward_list</span><span class="p">[</span><span class="n">current_index</span><span class="p">])</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="n">target_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+                        <span class="n">target_rewards</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+                    <span class="n">value_index</span> <span class="o">+=</span> <span class="mi">1</span>
+
+                <span class="n">batch_rewards</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">target_rewards</span><span class="p">)</span>
+                <span class="n">batch_target_values</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">target_values</span><span class="p">)</span>
+
+        <span class="n">batch_rewards</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">batch_rewards</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+        <span class="n">batch_target_values</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">batch_target_values</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">batch_rewards</span><span class="p">,</span> <span class="n">batch_target_values</span></div>
+
+<div class="viewcode-block" id="MuZeroGameBuffer._compute_target_policy_reanalyzed"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._compute_target_policy_reanalyzed">[docs]</a>    <span class="k">def</span> <span class="nf">_compute_target_policy_reanalyzed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy_re_context</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            prepare policy targets from the reanalyzed context of policies</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - policy_re_context (:obj:`List`): List of policy context to reanalyzed</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - batch_target_policies_re</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">policy_re_context</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="n">batch_target_policies_re</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="c1"># for board games</span>
+        <span class="n">policy_obs_list</span><span class="p">,</span> <span class="n">policy_mask</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">,</span> <span class="n">child_visits</span><span class="p">,</span> <span class="n">root_values</span><span class="p">,</span> <span class="n">game_segment_lens</span><span class="p">,</span> <span class="n">action_mask_segment</span><span class="p">,</span> \
+        <span class="n">to_play_segment</span> <span class="o">=</span> <span class="n">policy_re_context</span>
+        <span class="c1"># transition_batch_size = game_segment_batch_size * (self._cfg.num_unroll_steps + 1)</span>
+        <span class="n">transition_batch_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">policy_obs_list</span><span class="p">)</span>
+        <span class="n">game_segment_batch_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">pos_in_game_segment_list</span><span class="p">)</span>
+
+        <span class="n">to_play</span><span class="p">,</span> <span class="n">action_mask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_preprocess_to_play_and_action_mask</span><span class="p">(</span>
+            <span class="n">game_segment_batch_size</span><span class="p">,</span> <span class="n">to_play_segment</span><span class="p">,</span> <span class="n">action_mask_segment</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">continuous_action_space</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="c1"># when the action space of the environment is continuous, action_mask[:] is None.</span>
+            <span class="n">action_mask</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="nb">list</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int8</span><span class="p">))</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">)</span>
+            <span class="p">]</span>
+            <span class="c1"># NOTE: in continuous action space env: we set all legal_actions as -1</span>
+            <span class="n">legal_actions</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">)]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">legal_actions</span> <span class="o">=</span> <span class="p">[[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">j</span><span class="p">])</span> <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">)]</span>
+
+        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+            <span class="n">policy_obs_list</span> <span class="o">=</span> <span class="n">prepare_observation</span><span class="p">(</span><span class="n">policy_obs_list</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">model_type</span><span class="p">)</span>
+            <span class="c1"># split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors</span>
+            <span class="n">slices</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">transition_batch_size</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mini_infer_size</span><span class="p">))</span>
+            <span class="n">network_output</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">slices</span><span class="p">):</span>
+                <span class="n">beg_index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mini_infer_size</span> <span class="o">*</span> <span class="n">i</span>
+                <span class="n">end_index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mini_infer_size</span> <span class="o">*</span> <span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+                <span class="n">m_obs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">policy_obs_list</span><span class="p">[</span><span class="n">beg_index</span><span class="p">:</span><span class="n">end_index</span><span class="p">])</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+                <span class="n">m_output</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">initial_inference</span><span class="p">(</span><span class="n">m_obs</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">model</span><span class="o">.</span><span class="n">training</span><span class="p">:</span>
+                    <span class="c1"># if not in training, obtain the scalars of the value/reward</span>
+                    <span class="p">[</span><span class="n">m_output</span><span class="o">.</span><span class="n">latent_state</span><span class="p">,</span> <span class="n">m_output</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">m_output</span><span class="o">.</span><span class="n">policy_logits</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_detach_cpu_numpy</span><span class="p">(</span>
+                        <span class="p">[</span>
+                            <span class="n">m_output</span><span class="o">.</span><span class="n">latent_state</span><span class="p">,</span>
+                            <span class="n">inverse_scalar_transform</span><span class="p">(</span><span class="n">m_output</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">support_scale</span><span class="p">),</span>
+                            <span class="n">m_output</span><span class="o">.</span><span class="n">policy_logits</span>
+                        <span class="p">]</span>
+                    <span class="p">)</span>
+
+                <span class="n">network_output</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">m_output</span><span class="p">)</span>
+
+            <span class="n">_</span><span class="p">,</span> <span class="n">reward_pool</span><span class="p">,</span> <span class="n">policy_logits_pool</span><span class="p">,</span> <span class="n">latent_state_roots</span> <span class="o">=</span> <span class="n">concat_output</span><span class="p">(</span><span class="n">network_output</span><span class="p">,</span> <span class="n">data_type</span><span class="o">=</span><span class="s1">&#39;muzero&#39;</span><span class="p">)</span>
+            <span class="n">reward_pool</span> <span class="o">=</span> <span class="n">reward_pool</span><span class="o">.</span><span class="n">squeeze</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+            <span class="n">policy_logits_pool</span> <span class="o">=</span> <span class="n">policy_logits_pool</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+            <span class="c1"># noises are not necessary for reanalyze</span>
+            <span class="n">noises</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">dirichlet</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">root_dirichlet_alpha</span><span class="p">]</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_space_size</span>
+                                    <span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">)</span>
+            <span class="p">]</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts_ctree</span><span class="p">:</span>
+                <span class="c1"># cpp mcts_tree</span>
+                <span class="n">roots</span> <span class="o">=</span> <span class="n">MCTSCtree</span><span class="o">.</span><span class="n">roots</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_noise</span><span class="p">:</span>
+                    <span class="n">roots</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">root_noise_weight</span><span class="p">,</span> <span class="n">noises</span><span class="p">,</span> <span class="n">reward_pool</span><span class="p">,</span> <span class="n">policy_logits_pool</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">roots</span><span class="o">.</span><span class="n">prepare_no_noise</span><span class="p">(</span><span class="n">reward_pool</span><span class="p">,</span> <span class="n">policy_logits_pool</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+                <span class="c1"># do MCTS for a new policy with the recent target model</span>
+                <span class="n">MCTSCtree</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># python mcts_tree</span>
+                <span class="n">roots</span> <span class="o">=</span> <span class="n">MCTSPtree</span><span class="o">.</span><span class="n">roots</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">reanalyze_noise</span><span class="p">:</span>
+                    <span class="n">roots</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">root_noise_weight</span><span class="p">,</span> <span class="n">noises</span><span class="p">,</span> <span class="n">reward_pool</span><span class="p">,</span> <span class="n">policy_logits_pool</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">roots</span><span class="o">.</span><span class="n">prepare_no_noise</span><span class="p">(</span><span class="n">reward_pool</span><span class="p">,</span> <span class="n">policy_logits_pool</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+                <span class="c1"># do MCTS for a new policy with the recent target model</span>
+                <span class="n">MCTSPtree</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+
+            <span class="n">roots_legal_actions_list</span> <span class="o">=</span> <span class="n">legal_actions</span>
+            <span class="n">roots_distributions</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_distributions</span><span class="p">()</span>
+            <span class="n">roots_values</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_values</span><span class="p">()</span>
+            <span class="n">policy_index</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">for</span> <span class="n">state_index</span><span class="p">,</span> <span class="n">child_visit</span><span class="p">,</span> <span class="n">root_value</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">child_visits</span><span class="p">,</span> <span class="n">root_values</span><span class="p">):</span>
+                <span class="n">target_policies</span> <span class="o">=</span> <span class="p">[]</span>
+
+                <span class="k">for</span> <span class="n">current_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">state_index</span><span class="p">,</span> <span class="n">state_index</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                    <span class="n">distributions</span> <span class="o">=</span> <span class="n">roots_distributions</span><span class="p">[</span><span class="n">policy_index</span><span class="p">]</span>
+                    <span class="n">searched_value</span> <span class="o">=</span> <span class="n">roots_values</span><span class="p">[</span><span class="n">policy_index</span><span class="p">]</span>
+
+                    <span class="k">if</span> <span class="n">policy_mask</span><span class="p">[</span><span class="n">policy_index</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                        <span class="c1"># NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0</span>
+                        <span class="n">target_policies</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="mi">0</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">)])</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="n">distributions</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                            <span class="c1"># if at some obs, the legal_action is None, add the fake target_policy</span>
+                            <span class="n">target_policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                                <span class="nb">list</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">)</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">)</span>
+                            <span class="p">)</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="c1"># Update the data in game segment:</span>
+                            <span class="c1"># after the reanalyze search, new target policies and root values are obtained</span>
+                            <span class="c1"># the target policies and root values are stored in the gamesegment, specifically, ``child_visit_segment`` and ``root_value_segment``</span>
+                            <span class="c1"># we replace the data at the corresponding location with the latest search results to keep the most up-to-date targets</span>
+                            <span class="n">sim_num</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">distributions</span><span class="p">)</span>
+                            <span class="n">child_visit</span><span class="p">[</span><span class="n">current_index</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">visit_count</span><span class="o">/</span><span class="n">sim_num</span> <span class="k">for</span> <span class="n">visit_count</span> <span class="ow">in</span> <span class="n">distributions</span><span class="p">]</span>
+                            <span class="n">root_value</span><span class="p">[</span><span class="n">current_index</span><span class="p">]</span> <span class="o">=</span> <span class="n">searched_value</span>
+                            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">action_type</span> <span class="o">==</span> <span class="s1">&#39;fixed_action_space&#39;</span><span class="p">:</span>
+                                <span class="c1"># for atari/classic_control/box2d environments that only have one player.</span>
+                                <span class="n">sum_visits</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">distributions</span><span class="p">)</span>
+                                <span class="n">policy</span> <span class="o">=</span> <span class="p">[</span><span class="n">visit_count</span> <span class="o">/</span> <span class="n">sum_visits</span> <span class="k">for</span> <span class="n">visit_count</span> <span class="ow">in</span> <span class="n">distributions</span><span class="p">]</span>
+                                <span class="n">target_policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+                            <span class="k">else</span><span class="p">:</span>
+                                <span class="c1"># for board games that have two players and legal_actions is dy</span>
+                                <span class="n">policy_tmp</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">)]</span>
+                                <span class="c1"># to make sure target_policies have the same dimension</span>
+                                <span class="n">sum_visits</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">distributions</span><span class="p">)</span>
+                                <span class="n">policy</span> <span class="o">=</span> <span class="p">[</span><span class="n">visit_count</span> <span class="o">/</span> <span class="n">sum_visits</span> <span class="k">for</span> <span class="n">visit_count</span> <span class="ow">in</span> <span class="n">distributions</span><span class="p">]</span>
+                                <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">legal_action</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">roots_legal_actions_list</span><span class="p">[</span><span class="n">policy_index</span><span class="p">]):</span>
+                                    <span class="n">policy_tmp</span><span class="p">[</span><span class="n">legal_action</span><span class="p">]</span> <span class="o">=</span> <span class="n">policy</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+                                <span class="n">target_policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">policy_tmp</span><span class="p">)</span>
+
+                    <span class="n">policy_index</span> <span class="o">+=</span> <span class="mi">1</span>
+
+                <span class="n">batch_target_policies_re</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">target_policies</span><span class="p">)</span>
+
+        <span class="n">batch_target_policies_re</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">batch_target_policies_re</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">batch_target_policies_re</span></div>
+
+<div class="viewcode-block" id="MuZeroGameBuffer._compute_target_policy_non_reanalyzed"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._compute_target_policy_non_reanalyzed">[docs]</a>    <span class="k">def</span> <span class="nf">_compute_target_policy_non_reanalyzed</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span> <span class="n">policy_non_re_context</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">policy_shape</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            prepare policy targets from the non-reanalyzed context of policies</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - policy_non_re_context (:obj:`List`): List containing:</span>
+<span class="sd">                - pos_in_game_segment_list</span>
+<span class="sd">                - child_visits</span>
+<span class="sd">                - game_segment_lens</span>
+<span class="sd">                - action_mask_segment</span>
+<span class="sd">                - to_play_segment</span>
+<span class="sd">            - policy_shape: self._cfg.model.action_space_size</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - batch_target_policies_non_re</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">batch_target_policies_non_re</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">policy_non_re_context</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">batch_target_policies_non_re</span>
+
+        <span class="n">pos_in_game_segment_list</span><span class="p">,</span> <span class="n">child_visits</span><span class="p">,</span> <span class="n">game_segment_lens</span><span class="p">,</span> <span class="n">action_mask_segment</span><span class="p">,</span> <span class="n">to_play_segment</span> <span class="o">=</span> <span class="n">policy_non_re_context</span>
+        <span class="n">game_segment_batch_size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">pos_in_game_segment_list</span><span class="p">)</span>
+        <span class="n">transition_batch_size</span> <span class="o">=</span> <span class="n">game_segment_batch_size</span> <span class="o">*</span> <span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">to_play</span><span class="p">,</span> <span class="n">action_mask</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_preprocess_to_play_and_action_mask</span><span class="p">(</span>
+            <span class="n">game_segment_batch_size</span><span class="p">,</span> <span class="n">to_play_segment</span><span class="p">,</span> <span class="n">action_mask_segment</span><span class="p">,</span> <span class="n">pos_in_game_segment_list</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">continuous_action_space</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="c1"># when the action space of the environment is continuous, action_mask[:] is None.</span>
+            <span class="n">action_mask</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="nb">list</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int8</span><span class="p">))</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">)</span>
+            <span class="p">]</span>
+            <span class="c1"># NOTE: in continuous action space env: we set all legal_actions as -1</span>
+            <span class="n">legal_actions</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">)]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">legal_actions</span> <span class="o">=</span> <span class="p">[[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">j</span><span class="p">])</span> <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">)]</span>
+
+        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+            <span class="n">policy_index</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="c1"># 0 -&gt; Invalid target policy for padding outside of game segments,</span>
+            <span class="c1"># 1 -&gt; Previous target policy for game segments.</span>
+            <span class="n">policy_mask</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">game_segment_len</span><span class="p">,</span> <span class="n">child_visit</span><span class="p">,</span> <span class="n">state_index</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">game_segment_lens</span><span class="p">,</span> <span class="n">child_visits</span><span class="p">,</span>
+                                                                  <span class="n">pos_in_game_segment_list</span><span class="p">):</span>
+                <span class="n">target_policies</span> <span class="o">=</span> <span class="p">[]</span>
+
+                <span class="k">for</span> <span class="n">current_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">state_index</span><span class="p">,</span> <span class="n">state_index</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">current_index</span> <span class="o">&lt;</span> <span class="n">game_segment_len</span><span class="p">:</span>
+                        <span class="n">policy_mask</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                        <span class="c1"># NOTE: child_visit is already a distribution</span>
+                        <span class="n">distributions</span> <span class="o">=</span> <span class="n">child_visit</span><span class="p">[</span><span class="n">current_index</span><span class="p">]</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">action_type</span> <span class="o">==</span> <span class="s1">&#39;fixed_action_space&#39;</span><span class="p">:</span>
+                            <span class="c1"># for atari/classic_control/box2d environments that only have one player.</span>
+                            <span class="n">target_policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">distributions</span><span class="p">)</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="c1"># for board games that have two players.</span>
+                            <span class="n">policy_tmp</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">policy_shape</span><span class="p">)]</span>
+                            <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">legal_action</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">legal_actions</span><span class="p">[</span><span class="n">policy_index</span><span class="p">]):</span>
+                                <span class="c1"># only the action in ``legal_action`` the policy logits is nonzero</span>
+                                <span class="n">policy_tmp</span><span class="p">[</span><span class="n">legal_action</span><span class="p">]</span> <span class="o">=</span> <span class="n">distributions</span><span class="p">[</span><span class="n">index</span><span class="p">]</span>
+                            <span class="n">target_policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">policy_tmp</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="c1"># NOTE: the invalid padding target policy, O is to make sure the correspoding cross_entropy_loss=0</span>
+                        <span class="n">policy_mask</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+                        <span class="n">target_policies</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="mi">0</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">policy_shape</span><span class="p">)])</span>
+
+                    <span class="n">policy_index</span> <span class="o">+=</span> <span class="mi">1</span>
+
+                <span class="n">batch_target_policies_non_re</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">target_policies</span><span class="p">)</span>
+        <span class="n">batch_target_policies_non_re</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">batch_target_policies_non_re</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">batch_target_policies_non_re</span></div>
+
+<div class="viewcode-block" id="MuZeroGameBuffer.update_priority"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.update_priority">[docs]</a>    <span class="k">def</span> <span class="nf">update_priority</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">train_data</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="n">batch_priorities</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Update the priority of training data.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - train_data (:obj:`List[np.ndarray]`): training data to be updated priority.</span>
+<span class="sd">            - batch_priorities (:obj:`batch_priorities`): priorities to update to.</span>
+<span class="sd">        NOTE:</span>
+<span class="sd">            train_data = [current_batch, target_batch]</span>
+<span class="sd">            current_batch = [obs_list, action_list, improved_policy_list(only in Gumbel MuZero), mask_list, batch_index_list, weights, make_time_list]</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">indices</span> <span class="o">=</span> <span class="n">train_data</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="o">-</span><span class="mi">3</span><span class="p">]</span>
+        <span class="n">metas</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;make_time&#39;</span><span class="p">:</span> <span class="n">train_data</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="s1">&#39;batch_priorities&#39;</span><span class="p">:</span> <span class="n">batch_priorities</span><span class="p">}</span>
+        <span class="c1"># only update the priorities for data still in replay buffer</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">indices</span><span class="p">)):</span>
+            <span class="k">if</span> <span class="n">metas</span><span class="p">[</span><span class="s1">&#39;make_time&#39;</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">clear_time</span><span class="p">:</span>
+                <span class="n">idx</span><span class="p">,</span> <span class="n">prio</span> <span class="o">=</span> <span class="n">indices</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">metas</span><span class="p">[</span><span class="s1">&#39;batch_priorities&#39;</span><span class="p">][</span><span class="n">i</span><span class="p">]</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">game_pos_priorities</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">prio</span></div></div>
+</pre></div>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

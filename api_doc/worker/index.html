@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Worker &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="prev" title="Policy" href="../policy/index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/installation/index.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../policy/index.html">Policy</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Worker</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#muzerocollector">MuZeroCollector</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector.__init__"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector._abc_impl"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector._abc_impl</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector._compute_priorities"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector._compute_priorities()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector._output_log"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector._output_log()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector._reset_stat"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector._reset_stat()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector.close"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector.close()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector.collect"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector.collect()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector.config"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector.config</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector.default_config"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector.default_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector.envstep"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector.envstep</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector.pad_and_save_last_trajectory"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector.pad_and_save_last_trajectory()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector.reset"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector.reset()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector.reset_env"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector.reset_env()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_collector.MuZeroCollector.reset_policy"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector.reset_policy()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#muzeroevaluator">MuZeroEvaluator</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator"><code class="docutils literal notranslate"><span class="pre">MuZeroEvaluator</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.__init__"><code class="docutils literal notranslate"><span class="pre">MuZeroEvaluator.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator._abc_impl"><code class="docutils literal notranslate"><span class="pre">MuZeroEvaluator._abc_impl</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.close"><code class="docutils literal notranslate"><span class="pre">MuZeroEvaluator.close()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.config"><code class="docutils literal notranslate"><span class="pre">MuZeroEvaluator.config</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.default_config"><code class="docutils literal notranslate"><span class="pre">MuZeroEvaluator.default_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.eval"><code class="docutils literal notranslate"><span class="pre">MuZeroEvaluator.eval()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.reset"><code class="docutils literal notranslate"><span class="pre">MuZeroEvaluator.reset()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.reset_env"><code class="docutils literal notranslate"><span class="pre">MuZeroEvaluator.reset_env()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.reset_policy"><code class="docutils literal notranslate"><span class="pre">MuZeroEvaluator.reset_policy()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.should_eval"><code class="docutils literal notranslate"><span class="pre">MuZeroEvaluator.should_eval()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">&lt;no title&gt;</a></li>
+      <li class="breadcrumb-item active">Worker</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/api_doc/worker/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <section id="worker">
+<h1>Worker<a class="headerlink" href="#worker" title="Permalink to this heading"></a></h1>
+<section id="muzerocollector">
+<h2>MuZeroCollector<a class="headerlink" href="#muzerocollector" title="Permalink to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lzero.worker.muzero_collector.</span></span><span class="sig-name descname"><span class="pre">MuZeroCollector</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">collect_print_freq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">env</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">BaseEnvManager</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">namedtuple</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tb_logger</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">SummaryWriter</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'default_experiment'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'collector'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">policy_config</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/lzero/worker/muzero_collector.html#MuZeroCollector"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">ISerialCollector</span></code></p>
+<dl class="simple">
+<dt>Overview:</dt><dd><p>The Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.
+It manages the data collection process for training these algorithms using a serial mechanism.</p>
+</dd>
+<dt>Interfaces:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">__init__</span></code>, <code class="docutils literal notranslate"><span class="pre">reset</span></code>, <code class="docutils literal notranslate"><span class="pre">reset_env</span></code>, <code class="docutils literal notranslate"><span class="pre">reset_policy</span></code>, <code class="docutils literal notranslate"><span class="pre">_reset_stat</span></code>, <code class="docutils literal notranslate"><span class="pre">envstep</span></code>, <code class="docutils literal notranslate"><span class="pre">__del__</span></code>, <code class="docutils literal notranslate"><span class="pre">_compute_priorities</span></code>,
+<code class="docutils literal notranslate"><span class="pre">pad_and_save_last_trajectory</span></code>, <code class="docutils literal notranslate"><span class="pre">collect</span></code>, <code class="docutils literal notranslate"><span class="pre">_output_log</span></code>, <code class="docutils literal notranslate"><span class="pre">close</span></code></p>
+</dd>
+<dt>Properties:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">envstep</span></code></p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">collect_print_freq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">100</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">env</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">BaseEnvManager</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">namedtuple</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tb_logger</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">SummaryWriter</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'default_experiment'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'collector'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">policy_config</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_collector.html#MuZeroCollector.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Initialize the MuZeroCollector with the given parameters.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>collect_print_freq</strong> (<em>-</em>) – Frequency (in training steps) at which to print collection information.</p></li>
+<li><p><strong>env</strong> (<em>-</em>) – Instance of the subclass of vectorized environment manager.</p></li>
+<li><p><strong>policy</strong> (<em>-</em>) – namedtuple of the collection mode policy API.</p></li>
+<li><p><strong>tb_logger</strong> (<em>-</em>) – TensorBoard logger instance.</p></li>
+<li><p><strong>exp_name</strong> (<em>-</em>) – Name of the experiment, used for logging and saving purposes.</p></li>
+<li><p><strong>instance_name</strong> (<em>-</em>) – Unique identifier for this collector instance.</p></li>
+<li><p><strong>policy_config</strong> (<em>-</em>) – Configuration object for the policy.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector._abc_impl">
+<span class="sig-name descname"><span class="pre">_abc_impl</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;_abc._abc_data</span> <span class="pre">object&gt;</span></em><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector._abc_impl" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector._compute_priorities">
+<span class="sig-name descname"><span class="pre">_compute_priorities</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">i</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pred_values_lst</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">search_values_lst</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_collector.html#MuZeroCollector._compute_priorities"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector._compute_priorities" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Compute the priorities for transitions based on prediction and search value discrepancies.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>i</strong> (<em>-</em>) – Index of the values in the list to compute the priority for.</p></li>
+<li><p><strong>pred_values_lst</strong> (<em>-</em>) – List of predicted values.</p></li>
+<li><p><strong>search_values_lst</strong> (<em>-</em>) – List of search values obtained from MCTS.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Array of computed priorities.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>priorities (<code class="xref py py-obj docutils literal notranslate"><span class="pre">np.ndarray</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector._output_log">
+<span class="sig-name descname"><span class="pre">_output_log</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">train_iter</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_collector.html#MuZeroCollector._output_log"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector._output_log" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Log the collector’s data and output the log information.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>train_iter</strong> (<em>-</em>) – Current training iteration number for logging context.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector._reset_stat">
+<span class="sig-name descname"><span class="pre">_reset_stat</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_collector.html#MuZeroCollector._reset_stat"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector._reset_stat" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Reset the collector’s state. Including reset the traj_buffer, obs_pool, policy_output_pool             and env_info. Reset these states according to env_id. You can refer to base_serial_collector            to get more messages.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>env_id</strong> (<em>-</em>) – the id where we need to reset the collector’s state</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_collector.html#MuZeroCollector.close"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector.close" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Close the collector. If end_flag is False, close the environment, flush the tb_logger             and close the tb_logger.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector.collect">
+<span class="sig-name descname"><span class="pre">collect</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_episode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_iter</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_kwargs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_collector.html#MuZeroCollector.collect"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector.collect" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Collect <cite>n_episode</cite> episodes of data with policy_kwargs, trained for <cite>train_iter</cite> iterations.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>n_episode</strong> (<em>-</em>) – Number of episodes to collect.</p></li>
+<li><p><strong>train_iter</strong> (<em>-</em>) – Number of training iterations completed so far.</p></li>
+<li><p><strong>policy_kwargs</strong> (<em>-</em>) – Additional keyword arguments for the policy.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Collected data in the form of a list.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>return_data (<code class="xref py py-obj docutils literal notranslate"><span class="pre">List[Any]</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector.config">
+<span class="sig-name descname"><span class="pre">config</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{}</span></em><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector.config" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector.default_config">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">default_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EasyDict</span></span></span><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector.default_config" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Get collector’s default config. We merge collector’s default config with other default configs                and user’s config to get the final config.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>(<code class="xref py py-obj docutils literal notranslate"><span class="pre">EasyDict</span></code>): collector’s default config</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>cfg</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector.envstep">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">envstep</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector.envstep" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Get the total number of environment steps collected.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Total number of environment steps collected.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>envstep (<code class="xref py py-obj docutils literal notranslate"><span class="pre">int</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector.pad_and_save_last_trajectory">
+<span class="sig-name descname"><span class="pre">pad_and_save_last_trajectory</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">i</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">last_game_segments</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">GameSegment</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">last_game_priorities</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">game_segments</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">GameSegment</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">done</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">ndarray</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_collector.html#MuZeroCollector.pad_and_save_last_trajectory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector.pad_and_save_last_trajectory" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Save the game segment to the pool if the current game is finished, padding it if necessary.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>i</strong> (<em>-</em>) – Index of the current game segment.</p></li>
+<li><p><strong>last_game_segments</strong> (<em>-</em>) – List of the last game segments to be padded and saved.</p></li>
+<li><p><strong>last_game_priorities</strong> (<em>-</em>) – List of priorities of the last game segments.</p></li>
+<li><p><strong>game_segments</strong> (<em>-</em>) – List of the current game segments.</p></li>
+<li><p><strong>done</strong> (<em>-</em>) – Array indicating whether each game is done.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>(last_game_segments[i].obs_segment[-4:][j] == game_segments[i].obs_segment[:4][j]).all() is True</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_policy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">namedtuple</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_env</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">BaseEnvManager</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_collector.html#MuZeroCollector.reset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector.reset" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Reset the collector with the given policy and/or environment.
+If _env is None, reset the old environment.
+If _env is not None, replace the old environment in the collector with the new passed                 in environment and launch.
+If _policy is None, reset the old policy.
+If _policy is not None, replace the old policy in the collector with the new passed in policy.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>policy</strong> (<em>-</em>) – the api namedtuple of collect_mode policy</p></li>
+<li><p><strong>env</strong> (<em>-</em>) – instance of the subclass of vectorized                 env_manager(BaseEnvManager)</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector.reset_env">
+<span class="sig-name descname"><span class="pre">reset_env</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_env</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">BaseEnvManager</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_collector.html#MuZeroCollector.reset_env"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector.reset_env" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Reset or replace the environment managed by this collector.
+If _env is None, reset the old environment.
+If _env is not None, replace the old environment in the collector with the new passed                 in environment and launch.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>env</strong> (<em>-</em>) – New environment to manage, if provided.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_collector.MuZeroCollector.reset_policy">
+<span class="sig-name descname"><span class="pre">reset_policy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_policy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">namedtuple</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_collector.html#MuZeroCollector.reset_policy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_collector.MuZeroCollector.reset_policy" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Reset or replace the policy used by this collector.
+If _policy is None, reset the old policy.
+If _policy is not None, replace the old policy in the collector with the new passed in policy.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>policy</strong> (<em>-</em>) – the api namedtuple of collect_mode policy</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+<section id="muzeroevaluator">
+<h2>MuZeroEvaluator<a class="headerlink" href="#muzeroevaluator" title="Permalink to this heading"></a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="lzero.worker.muzero_evaluator.MuZeroEvaluator">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lzero.worker.muzero_evaluator.</span></span><span class="sig-name descname"><span class="pre">MuZeroEvaluator</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">eval_freq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_evaluator_episode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">env</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">BaseEnvManager</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">namedtuple</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tb_logger</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">SummaryWriter</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'default_experiment'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'evaluator'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">policy_config</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/lzero/worker/muzero_evaluator.html#MuZeroEvaluator"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">ISerialEvaluator</span></code></p>
+<dl class="simple">
+<dt>Overview:</dt><dd><p>The Evaluator class for MCTS+RL algorithms, such as MuZero, EfficientZero, and Sampled EfficientZero.</p>
+</dd>
+<dt>Interfaces:</dt><dd><p>__init__, reset, reset_policy, reset_env, close, should_eval, eval</p>
+</dd>
+<dt>Properties:</dt><dd><p>env, policy</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_evaluator.MuZeroEvaluator.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">eval_freq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_evaluator_episode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stop_value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1000000.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">env</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">BaseEnvManager</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">namedtuple</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tb_logger</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">SummaryWriter</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'default_experiment'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">instance_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'evaluator'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_config</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">policy_config</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_evaluator.html#MuZeroEvaluator.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Initialize the evaluator with configuration settings for various components such as logger helper and timer.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>eval_freq</strong> (<em>-</em>) – Evaluation frequency in terms of training steps.</p></li>
+<li><p><strong>n_evaluator_episode</strong> (<em>-</em>) – Number of episodes to evaluate in total.</p></li>
+<li><p><strong>stop_value</strong> (<em>-</em>) – A reward threshold above which the training is considered converged.</p></li>
+<li><p><strong>env</strong> (<em>-</em>) – An optional instance of a subclass of BaseEnvManager.</p></li>
+<li><p><strong>policy</strong> (<em>-</em>) – An optional API namedtuple defining the policy for evaluation.</p></li>
+<li><p><strong>tb_logger</strong> (<em>-</em>) – Optional TensorBoard logger instance.</p></li>
+<li><p><strong>exp_name</strong> (<em>-</em>) – Name of the experiment, used to determine output directory.</p></li>
+<li><p><strong>instance_name</strong> (<em>-</em>) – Name of this evaluator instance.</p></li>
+<li><p><strong>policy_config</strong> (<em>-</em>) – Optional configuration for the game policy.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.worker.muzero_evaluator.MuZeroEvaluator._abc_impl">
+<span class="sig-name descname"><span class="pre">_abc_impl</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;_abc._abc_data</span> <span class="pre">object&gt;</span></em><a class="headerlink" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator._abc_impl" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_evaluator.MuZeroEvaluator.close">
+<span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_evaluator.html#MuZeroEvaluator.close"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.close" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Close the evaluator, the environment, flush and close the TensorBoard logger if applicable.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.worker.muzero_evaluator.MuZeroEvaluator.config">
+<span class="sig-name descname"><span class="pre">config</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'eval_freq':</span> <span class="pre">50}</span></em><a class="headerlink" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.config" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_evaluator.MuZeroEvaluator.default_config">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">default_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EasyDict</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_evaluator.html#MuZeroEvaluator.default_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.default_config" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Retrieve the default configuration for the evaluator by merging evaluator-specific defaults with other
+defaults and any user-provided configuration.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The default configuration for the evaluator.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>cfg (<code class="xref py py-obj docutils literal notranslate"><span class="pre">EasyDict</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_evaluator.MuZeroEvaluator.eval">
+<span class="sig-name descname"><span class="pre">eval</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">save_ckpt_fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Callable</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">train_iter</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">envstep</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_episode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_trajectory</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">bool</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">float</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_evaluator.html#MuZeroEvaluator.eval"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.eval" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Evaluate the current policy, storing the best policy if it achieves the highest historical reward.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>save_ckpt_fn</strong> (<em>-</em>) – Optional function to save a checkpoint when a new best reward is achieved.</p></li>
+<li><p><strong>train_iter</strong> (<em>-</em>) – The current training iteration count.</p></li>
+<li><p><strong>envstep</strong> (<em>-</em>) – The current environment step count.</p></li>
+<li><p><strong>n_episode</strong> (<em>-</em>) – Optional number of evaluation episodes; defaults to the evaluator’s setting.</p></li>
+<li><p><strong>return_trajectory</strong> (<em>-</em>) – Return the evaluated trajectory <cite>game_segments</cite> in <cite>episode_info</cite> if True.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Indicates whether the training can be stopped based on the stop value.
+- episode_info (<code class="xref py py-obj docutils literal notranslate"><span class="pre">Dict[str,</span> <span class="pre">Any]</span></code>): A dictionary containing information about the evaluation episodes.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>stop_flag (<code class="xref py py-obj docutils literal notranslate"><span class="pre">bool</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_evaluator.MuZeroEvaluator.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_policy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">namedtuple</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_env</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">BaseEnvManager</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_evaluator.html#MuZeroEvaluator.reset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.reset" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Reset both the policy and environment for the evaluator, optionally replacing them.
+If _env is None, reset the old environment.
+If _env is not None, replace the old environment in the evaluator with the new passed in                 environment and launch.
+If _policy is None, reset the old policy.
+If _policy is not None, replace the old policy in the evaluator with the new passed in policy.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>_policy</strong> (<em>-</em>) – An optional new policy namedtuple to replace the existing one.</p></li>
+<li><p><strong>_env</strong> (<em>-</em>) – An optional new environment instance to replace the existing one.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_evaluator.MuZeroEvaluator.reset_env">
+<span class="sig-name descname"><span class="pre">reset_env</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_env</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">BaseEnvManager</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_evaluator.html#MuZeroEvaluator.reset_env"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.reset_env" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Reset the environment for the evaluator, optionally replacing it with a new environment.
+If _env is None, reset the old environment. If _env is not None, replace the old environment
+in the evaluator with the new passed in environment and launch.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>_env</strong> (<em>-</em>) – An optional new environment instance to replace the existing one.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_evaluator.MuZeroEvaluator.reset_policy">
+<span class="sig-name descname"><span class="pre">reset_policy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_policy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">namedtuple</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_evaluator.html#MuZeroEvaluator.reset_policy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.reset_policy" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Reset the policy for the evaluator, optionally replacing it with a new policy.
+If _policy is None, reset the old policy.
+If _policy is not None, replace the old policy in the evaluator with the new passed in policy.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>_policy</strong> (<em>-</em>) – An optional new policy namedtuple to replace the existing one.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.worker.muzero_evaluator.MuZeroEvaluator.should_eval">
+<span class="sig-name descname"><span class="pre">should_eval</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">train_iter</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="reference internal" href="../../_modules/lzero/worker/muzero_evaluator.html#MuZeroEvaluator.should_eval"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.worker.muzero_evaluator.MuZeroEvaluator.should_eval" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Determine whether to initiate evaluation based on the training iteration count and evaluation frequency.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>train_iter</strong> (<em>-</em>) – The current count of training iterations.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><cite>True</cite> if evaluation should be initiated, otherwise <cite>False</cite>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>(<code class="xref py py-obj docutils literal notranslate"><span class="pre">bool</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../policy/index.html" class="btn btn-neutral float-left" title="Policy" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

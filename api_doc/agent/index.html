@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agent &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Config" href="../config/index.html" />
+    <link rel="prev" title="&lt;no title&gt;" href="../index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/installation/index.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Agent</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#lzero.agent.alphazero.AlphaZeroAgent"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.alphazero.AlphaZeroAgent.__init__"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.alphazero.AlphaZeroAgent.batch_evaluate"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent.batch_evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.alphazero.AlphaZeroAgent.best"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent.best</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.alphazero.AlphaZeroAgent.deploy"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent.deploy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.alphazero.AlphaZeroAgent.supported_env_list"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent.supported_env_list</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.alphazero.AlphaZeroAgent.train"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent.train()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#lzero.agent.muzero.MuZeroAgent"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.muzero.MuZeroAgent.__init__"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.muzero.MuZeroAgent.batch_evaluate"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent.batch_evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.muzero.MuZeroAgent.best"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent.best</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.muzero.MuZeroAgent.deploy"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent.deploy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.muzero.MuZeroAgent.supported_env_list"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent.supported_env_list</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.muzero.MuZeroAgent.train"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent.train()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#lzero.agent.efficientzero.EfficientZeroAgent"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.efficientzero.EfficientZeroAgent.__init__"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.efficientzero.EfficientZeroAgent.batch_evaluate"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent.batch_evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.efficientzero.EfficientZeroAgent.best"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent.best</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.efficientzero.EfficientZeroAgent.deploy"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent.deploy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.efficientzero.EfficientZeroAgent.supported_env_list"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent.supported_env_list</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.efficientzero.EfficientZeroAgent.train"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent.train()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#lzero.agent.gumbel_muzero.GumbelMuZeroAgent"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.__init__"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.batch_evaluate"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent.batch_evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.best"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent.best</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.deploy"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent.deploy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.supported_env_list"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent.supported_env_list</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.train"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent.train()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.__init__"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.batch_evaluate"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent.batch_evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.best"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent.best</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.deploy"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent.deploy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.supported_env_list"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent.supported_env_list</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.train"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent.train()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.__init__"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.batch_evaluate"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent.batch_evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.best"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent.best</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.deploy"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent.deploy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.supported_env_list"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent.supported_env_list</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.train"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent.train()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">&lt;no title&gt;</a></li>
+      <li class="breadcrumb-item active">Agent</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/api_doc/agent/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <section id="agent">
+<h1>Agent<a class="headerlink" href="#agent" title="Permalink to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lzero.agent.alphazero.AlphaZeroAgent">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lzero.agent.alphazero.</span></span><span class="sig-name descname"><span class="pre">AlphaZeroAgent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_state_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/lzero/agent/alphazero.html#AlphaZeroAgent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.alphazero.AlphaZeroAgent" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="simple">
+<dt>Overview:</dt><dd><p>Agent class for executing AlphaZero algorithms which include methods for training, deployment, and batch evaluation.</p>
+</dd>
+<dt>Interfaces:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">__init__</span></code>, <code class="docutils literal notranslate"><span class="pre">train</span></code>, <code class="docutils literal notranslate"><span class="pre">deploy</span></code>, <code class="docutils literal notranslate"><span class="pre">batch_evaluate</span></code></p>
+</dd>
+<dt>Properties:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">best</span></code></p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This agent class is tailored for use with the HuggingFace Model Zoo for LightZero
+(e.g. <a class="reference external" href="https://huggingface.co/OpenDILabCommunity/CartPole-v0-AlphaZero">https://huggingface.co/OpenDILabCommunity/CartPole-v0-AlphaZero</a>),</p>
+<blockquote>
+<div><p>and provides methods such as “train” and “deploy”.</p>
+</div></blockquote>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.alphazero.AlphaZeroAgent.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_state_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/alphazero.html#AlphaZeroAgent.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.alphazero.AlphaZeroAgent.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Initialize the AlphaZeroAgent instance with environment parameters, model, and configuration.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>env_id</strong> (<em>-</em>) – Identifier for the environment to be used, registered in gym.</p></li>
+<li><p><strong>seed</strong> (<em>-</em>) – Random seed for reproducibility. Defaults to 0.</p></li>
+<li><p><strong>exp_name</strong> (<em>-</em>) – Name for the experiment. Defaults to None.</p></li>
+<li><p><strong>model</strong> (<em>-</em>) – PyTorch module to be used as the model. If None, a default model is created. Defaults to None.</p></li>
+<li><p><strong>cfg</strong> (<em>-</em>) – Configuration for the agent. If None, default configuration will be used. Defaults to None.</p></li>
+<li><p><strong>policy_state_dict</strong> (<em>-</em>) – Path to a pre-trained model state dictionary. If provided, state dict will be loaded. Defaults to None.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>If <cite>env_id</cite> is not specified, it must be included in <cite>cfg</cite>.</p></li>
+<li><p>The <cite>supported_env_list</cite> contains all the environment IDs that are supported by this agent.</p></li>
+</ul>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.alphazero.AlphaZeroAgent.batch_evaluate">
+<span class="sig-name descname"><span class="pre">batch_evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_evaluator_episode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EvalReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/alphazero.html#AlphaZeroAgent.batch_evaluate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.alphazero.AlphaZeroAgent.batch_evaluate" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Perform a batch evaluation of the agent over a specified number of episodes: <code class="docutils literal notranslate"><span class="pre">n_evaluator_episode</span></code>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>n_evaluator_episode</strong> (<em>-</em>) – Number of episodes to run the evaluation.
+If None, uses default value from configuration. Defaults to None.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>An <cite>EvalReturn</cite> object with evaluation results such as mean and standard deviation of returns.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method evaluates the agent’s performance across multiple episodes to gauge its effectiveness.</p>
+</div>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.agent.alphazero.AlphaZeroAgent.best">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">best</span></span><a class="headerlink" href="#lzero.agent.alphazero.AlphaZeroAgent.best" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Provides access to the best model according to evaluation metrics.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>The agent with the best model loaded.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The best model is saved in the path <cite>./exp_name/ckpt/ckpt_best.pth.tar</cite>.
+When this property is accessed, the agent instance will load the best model state.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.alphazero.AlphaZeroAgent.deploy">
+<span class="sig-name descname"><span class="pre">deploy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enable_save_replay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">concatenate_all_replay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">replay_save_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EvalReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/alphazero.html#AlphaZeroAgent.deploy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.alphazero.AlphaZeroAgent.deploy" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Deploy the agent for evaluation in the environment, with optional replay saving. The performance of the
+agent will be evaluated. Average return and standard deviation of the return will be returned.
+If <cite>enable_save_replay</cite> is True, replay videos are saved in the specified <cite>replay_save_path</cite>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>enable_save_replay</strong> (<em>-</em>) – Flag to enable saving of replay footage. Defaults to False.</p></li>
+<li><p><strong>concatenate_all_replay</strong> (<em>-</em>) – Whether to concatenate all replay videos into one file. Defaults to False.</p></li>
+<li><p><strong>replay_save_path</strong> (<em>-</em>) – Directory path to save replay videos. Defaults to None, which sets a default path.</p></li>
+<li><p><strong>seed</strong> (<em>-</em>) – Seed or list of seeds for environment reproducibility. Defaults to None.</p></li>
+<li><p><strong>debug</strong> (<em>-</em>) – Whether to enable the debug mode. Default to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>An <cite>EvalReturn</cite> object containing evaluation metrics such as mean and standard deviation of returns.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.agent.alphazero.AlphaZeroAgent.supported_env_list">
+<span class="sig-name descname"><span class="pre">supported_env_list</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['Gomoku-play-with-bot',</span> <span class="pre">'TicTacToe-play-with-bot']</span></em><a class="headerlink" href="#lzero.agent.alphazero.AlphaZeroAgent.supported_env_list" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.alphazero.AlphaZeroAgent.train">
+<span class="sig-name descname"><span class="pre">train</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">step</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10000000</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">TrainingReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/alphazero.html#AlphaZeroAgent.train"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.alphazero.AlphaZeroAgent.train" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Train the agent through interactions with the environment.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>step</strong> (<em>-</em>) – Total number of environment steps to train for. Defaults to 10 million (1e7).</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>A <cite>TrainingReturn</cite> object containing training information, such as logs and potentially a URL to a training dashboard.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The method involves interacting with the environment, collecting experience, and optimizing the model.</p>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lzero.agent.muzero.MuZeroAgent">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lzero.agent.muzero.</span></span><span class="sig-name descname"><span class="pre">MuZeroAgent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_state_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/lzero/agent/muzero.html#MuZeroAgent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.muzero.MuZeroAgent" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="simple">
+<dt>Overview:</dt><dd><p>Agent class for executing MuZero algorithms which include methods for training, deployment, and batch evaluation.</p>
+</dd>
+<dt>Interfaces:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">__init__</span></code>, <code class="docutils literal notranslate"><span class="pre">train</span></code>, <code class="docutils literal notranslate"><span class="pre">deploy</span></code>, <code class="docutils literal notranslate"><span class="pre">batch_evaluate</span></code></p>
+</dd>
+<dt>Properties:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">best</span></code></p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This agent class is tailored for use with the HuggingFace Model Zoo for LightZero
+(e.g. <a class="reference external" href="https://huggingface.co/OpenDILabCommunity/CartPole-v0-MuZero">https://huggingface.co/OpenDILabCommunity/CartPole-v0-MuZero</a>),</p>
+<blockquote>
+<div><p>and provides methods such as “train” and “deploy”.</p>
+</div></blockquote>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.muzero.MuZeroAgent.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_state_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/muzero.html#MuZeroAgent.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.muzero.MuZeroAgent.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Initialize the MuZeroAgent instance with environment parameters, model, and configuration.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>env_id</strong> (<em>-</em>) – Identifier for the environment to be used, registered in gym.</p></li>
+<li><p><strong>seed</strong> (<em>-</em>) – Random seed for reproducibility. Defaults to 0.</p></li>
+<li><p><strong>exp_name</strong> (<em>-</em>) – Name for the experiment. Defaults to None.</p></li>
+<li><p><strong>model</strong> (<em>-</em>) – PyTorch module to be used as the model. If None, a default model is created. Defaults to None.</p></li>
+<li><p><strong>cfg</strong> (<em>-</em>) – Configuration for the agent. If None, default configuration will be used. Defaults to None.</p></li>
+<li><p><strong>policy_state_dict</strong> (<em>-</em>) – Path to a pre-trained model state dictionary. If provided, state dict will be loaded. Defaults to None.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>If <cite>env_id</cite> is not specified, it must be included in <cite>cfg</cite>.</p></li>
+<li><p>The <cite>supported_env_list</cite> contains all the environment IDs that are supported by this agent.</p></li>
+</ul>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.muzero.MuZeroAgent.batch_evaluate">
+<span class="sig-name descname"><span class="pre">batch_evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_evaluator_episode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EvalReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/muzero.html#MuZeroAgent.batch_evaluate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.muzero.MuZeroAgent.batch_evaluate" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Perform a batch evaluation of the agent over a specified number of episodes: <code class="docutils literal notranslate"><span class="pre">n_evaluator_episode</span></code>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>n_evaluator_episode</strong> (<em>-</em>) – Number of episodes to run the evaluation.
+If None, uses default value from configuration. Defaults to None.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>An <cite>EvalReturn</cite> object with evaluation results such as mean and standard deviation of returns.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method evaluates the agent’s performance across multiple episodes to gauge its effectiveness.</p>
+</div>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.agent.muzero.MuZeroAgent.best">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">best</span></span><a class="headerlink" href="#lzero.agent.muzero.MuZeroAgent.best" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Provides access to the best model according to evaluation metrics.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>The agent with the best model loaded.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The best model is saved in the path <cite>./exp_name/ckpt/ckpt_best.pth.tar</cite>.
+When this property is accessed, the agent instance will load the best model state.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.muzero.MuZeroAgent.deploy">
+<span class="sig-name descname"><span class="pre">deploy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enable_save_replay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">concatenate_all_replay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">replay_save_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EvalReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/muzero.html#MuZeroAgent.deploy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.muzero.MuZeroAgent.deploy" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Deploy the agent for evaluation in the environment, with optional replay saving. The performance of the
+agent will be evaluated. Average return and standard deviation of the return will be returned.
+If <cite>enable_save_replay</cite> is True, replay videos are saved in the specified <cite>replay_save_path</cite>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>enable_save_replay</strong> (<em>-</em>) – Flag to enable saving of replay footage. Defaults to False.</p></li>
+<li><p><strong>concatenate_all_replay</strong> (<em>-</em>) – Whether to concatenate all replay videos into one file. Defaults to False.</p></li>
+<li><p><strong>replay_save_path</strong> (<em>-</em>) – Directory path to save replay videos. Defaults to None, which sets a default path.</p></li>
+<li><p><strong>seed</strong> (<em>-</em>) – Seed or list of seeds for environment reproducibility. Defaults to None.</p></li>
+<li><p><strong>debug</strong> (<em>-</em>) – Whether to enable the debug mode. Default to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>An <cite>EvalReturn</cite> object containing evaluation metrics such as mean and standard deviation of returns.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.agent.muzero.MuZeroAgent.supported_env_list">
+<span class="sig-name descname"><span class="pre">supported_env_list</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['Gomoku-play-with-bot',</span> <span class="pre">'BreakoutNoFrameskip-v4',</span> <span class="pre">'CartPole-v0',</span> <span class="pre">'LunarLander-v2',</span> <span class="pre">'MsPacmanNoFrameskip-v4',</span> <span class="pre">'Pendulum-v1',</span> <span class="pre">'PongNoFrameskip-v4',</span> <span class="pre">'TicTacToe-play-with-bot']</span></em><a class="headerlink" href="#lzero.agent.muzero.MuZeroAgent.supported_env_list" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.muzero.MuZeroAgent.train">
+<span class="sig-name descname"><span class="pre">train</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">step</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10000000</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">TrainingReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/muzero.html#MuZeroAgent.train"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.muzero.MuZeroAgent.train" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Train the agent through interactions with the environment.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>step</strong> (<em>-</em>) – Total number of environment steps to train for. Defaults to 10 million (1e7).</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>A <cite>TrainingReturn</cite> object containing training information, such as logs and potentially a URL to a training dashboard.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The method involves interacting with the environment, collecting experience, and optimizing the model.</p>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lzero.agent.efficientzero.EfficientZeroAgent">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lzero.agent.efficientzero.</span></span><span class="sig-name descname"><span class="pre">EfficientZeroAgent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_state_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/lzero/agent/efficientzero.html#EfficientZeroAgent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.efficientzero.EfficientZeroAgent" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="simple">
+<dt>Overview:</dt><dd><p>Agent class for executing EfficientZero algorithms which include methods for training, deployment, and batch evaluation.</p>
+</dd>
+<dt>Interfaces:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">__init__</span></code>, <code class="docutils literal notranslate"><span class="pre">train</span></code>, <code class="docutils literal notranslate"><span class="pre">deploy</span></code>, <code class="docutils literal notranslate"><span class="pre">batch_evaluate</span></code></p>
+</dd>
+<dt>Properties:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">best</span></code></p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This agent class is tailored for use with the HuggingFace Model Zoo for LightZero
+(e.g. <a class="reference external" href="https://huggingface.co/OpenDILabCommunity/CartPole-v0-EfficientZero">https://huggingface.co/OpenDILabCommunity/CartPole-v0-EfficientZero</a>),</p>
+<blockquote>
+<div><p>and provides methods such as “train” and “deploy”.</p>
+</div></blockquote>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.efficientzero.EfficientZeroAgent.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_state_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/efficientzero.html#EfficientZeroAgent.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.efficientzero.EfficientZeroAgent.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Initialize the EfficientZeroAgent instance with environment parameters, model, and configuration.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>env_id</strong> (<em>-</em>) – Identifier for the environment to be used, registered in gym.</p></li>
+<li><p><strong>seed</strong> (<em>-</em>) – Random seed for reproducibility. Defaults to 0.</p></li>
+<li><p><strong>exp_name</strong> (<em>-</em>) – Name for the experiment. Defaults to None.</p></li>
+<li><p><strong>model</strong> (<em>-</em>) – PyTorch module to be used as the model. If None, a default model is created. Defaults to None.</p></li>
+<li><p><strong>cfg</strong> (<em>-</em>) – Configuration for the agent. If None, default configuration will be used. Defaults to None.</p></li>
+<li><p><strong>policy_state_dict</strong> (<em>-</em>) – Path to a pre-trained model state dictionary. If provided, state dict will be loaded. Defaults to None.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>If <cite>env_id</cite> is not specified, it must be included in <cite>cfg</cite>.</p></li>
+<li><p>The <cite>supported_env_list</cite> contains all the environment IDs that are supported by this agent.</p></li>
+</ul>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.efficientzero.EfficientZeroAgent.batch_evaluate">
+<span class="sig-name descname"><span class="pre">batch_evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_evaluator_episode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EvalReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/efficientzero.html#EfficientZeroAgent.batch_evaluate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.efficientzero.EfficientZeroAgent.batch_evaluate" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Perform a batch evaluation of the agent over a specified number of episodes: <code class="docutils literal notranslate"><span class="pre">n_evaluator_episode</span></code>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>n_evaluator_episode</strong> (<em>-</em>) – Number of episodes to run the evaluation.
+If None, uses default value from configuration. Defaults to None.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>An <cite>EvalReturn</cite> object with evaluation results such as mean and standard deviation of returns.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method evaluates the agent’s performance across multiple episodes to gauge its effectiveness.</p>
+</div>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.agent.efficientzero.EfficientZeroAgent.best">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">best</span></span><a class="headerlink" href="#lzero.agent.efficientzero.EfficientZeroAgent.best" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Provides access to the best model according to evaluation metrics.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>The agent with the best model loaded.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The best model is saved in the path <cite>./exp_name/ckpt/ckpt_best.pth.tar</cite>.
+When this property is accessed, the agent instance will load the best model state.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.efficientzero.EfficientZeroAgent.deploy">
+<span class="sig-name descname"><span class="pre">deploy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enable_save_replay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">concatenate_all_replay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">replay_save_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EvalReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/efficientzero.html#EfficientZeroAgent.deploy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.efficientzero.EfficientZeroAgent.deploy" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Deploy the agent for evaluation in the environment, with optional replay saving. The performance of the
+agent will be evaluated. Average return and standard deviation of the return will be returned.
+If <cite>enable_save_replay</cite> is True, replay videos are saved in the specified <cite>replay_save_path</cite>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>enable_save_replay</strong> (<em>-</em>) – Flag to enable saving of replay footage. Defaults to False.</p></li>
+<li><p><strong>concatenate_all_replay</strong> (<em>-</em>) – Whether to concatenate all replay videos into one file. Defaults to False.</p></li>
+<li><p><strong>replay_save_path</strong> (<em>-</em>) – Directory path to save replay videos. Defaults to None, which sets a default path.</p></li>
+<li><p><strong>seed</strong> (<em>-</em>) – Seed or list of seeds for environment reproducibility. Defaults to None.</p></li>
+<li><p><strong>debug</strong> (<em>-</em>) – Whether to enable the debug mode. Default to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>An <cite>EvalReturn</cite> object containing evaluation metrics such as mean and standard deviation of returns.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.agent.efficientzero.EfficientZeroAgent.supported_env_list">
+<span class="sig-name descname"><span class="pre">supported_env_list</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['BreakoutNoFrameskip-v4',</span> <span class="pre">'CartPole-v0',</span> <span class="pre">'LunarLander-v2',</span> <span class="pre">'MsPacmanNoFrameskip-v4',</span> <span class="pre">'Pendulum-v1',</span> <span class="pre">'PongNoFrameskip-v4']</span></em><a class="headerlink" href="#lzero.agent.efficientzero.EfficientZeroAgent.supported_env_list" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.efficientzero.EfficientZeroAgent.train">
+<span class="sig-name descname"><span class="pre">train</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">step</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10000000</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">TrainingReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/efficientzero.html#EfficientZeroAgent.train"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.efficientzero.EfficientZeroAgent.train" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Train the agent through interactions with the environment.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>step</strong> (<em>-</em>) – Total number of environment steps to train for. Defaults to 10 million (1e7).</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>A <cite>TrainingReturn</cite> object containing training information, such as logs and potentially a URL to a training dashboard.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The method involves interacting with the environment, collecting experience, and optimizing the model.</p>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lzero.agent.gumbel_muzero.GumbelMuZeroAgent">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lzero.agent.gumbel_muzero.</span></span><span class="sig-name descname"><span class="pre">GumbelMuZeroAgent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_state_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/lzero/agent/gumbel_muzero.html#GumbelMuZeroAgent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.gumbel_muzero.GumbelMuZeroAgent" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="simple">
+<dt>Overview:</dt><dd><p>Agent class for executing Gumbel MuZero algorithms which include methods for training, deployment, and batch evaluation.</p>
+</dd>
+<dt>Interfaces:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">__init__</span></code>, <code class="docutils literal notranslate"><span class="pre">train</span></code>, <code class="docutils literal notranslate"><span class="pre">deploy</span></code>, <code class="docutils literal notranslate"><span class="pre">batch_evaluate</span></code></p>
+</dd>
+<dt>Properties:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">best</span></code></p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This agent class is tailored for use with the HuggingFace Model Zoo for LightZero
+(e.g. <a class="reference external" href="https://huggingface.co/OpenDILabCommunity/CartPole-v0-GumbelMuZero">https://huggingface.co/OpenDILabCommunity/CartPole-v0-GumbelMuZero</a>),</p>
+<blockquote>
+<div><p>and provides methods such as “train” and “deploy”.</p>
+</div></blockquote>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.gumbel_muzero.GumbelMuZeroAgent.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_state_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/gumbel_muzero.html#GumbelMuZeroAgent.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Initialize the GumbelMuZeroAgent instance with environment parameters, model, and configuration.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>env_id</strong> (<em>-</em>) – Identifier for the environment to be used, registered in gym.</p></li>
+<li><p><strong>seed</strong> (<em>-</em>) – Random seed for reproducibility. Defaults to 0.</p></li>
+<li><p><strong>exp_name</strong> (<em>-</em>) – Name for the experiment. Defaults to None.</p></li>
+<li><p><strong>model</strong> (<em>-</em>) – PyTorch module to be used as the model. If None, a default model is created. Defaults to None.</p></li>
+<li><p><strong>cfg</strong> (<em>-</em>) – Configuration for the agent. If None, default configuration will be used. Defaults to None.</p></li>
+<li><p><strong>policy_state_dict</strong> (<em>-</em>) – Path to a pre-trained model state dictionary. If provided, state dict will be loaded. Defaults to None.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>If <cite>env_id</cite> is not specified, it must be included in <cite>cfg</cite>.</p></li>
+<li><p>The <cite>supported_env_list</cite> contains all the environment IDs that are supported by this agent.</p></li>
+</ul>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.gumbel_muzero.GumbelMuZeroAgent.batch_evaluate">
+<span class="sig-name descname"><span class="pre">batch_evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_evaluator_episode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EvalReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/gumbel_muzero.html#GumbelMuZeroAgent.batch_evaluate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.batch_evaluate" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Perform a batch evaluation of the agent over a specified number of episodes: <code class="docutils literal notranslate"><span class="pre">n_evaluator_episode</span></code>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>n_evaluator_episode</strong> (<em>-</em>) – Number of episodes to run the evaluation.
+If None, uses default value from configuration. Defaults to None.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>An <cite>EvalReturn</cite> object with evaluation results such as mean and standard deviation of returns.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method evaluates the agent’s performance across multiple episodes to gauge its effectiveness.</p>
+</div>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.agent.gumbel_muzero.GumbelMuZeroAgent.best">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">best</span></span><a class="headerlink" href="#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.best" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Provides access to the best model according to evaluation metrics.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>The agent with the best model loaded.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The best model is saved in the path <cite>./exp_name/ckpt/ckpt_best.pth.tar</cite>.
+When this property is accessed, the agent instance will load the best model state.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.gumbel_muzero.GumbelMuZeroAgent.deploy">
+<span class="sig-name descname"><span class="pre">deploy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enable_save_replay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">concatenate_all_replay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">replay_save_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EvalReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/gumbel_muzero.html#GumbelMuZeroAgent.deploy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.deploy" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Deploy the agent for evaluation in the environment, with optional replay saving. The performance of the
+agent will be evaluated. Average return and standard deviation of the return will be returned.
+If <cite>enable_save_replay</cite> is True, replay videos are saved in the specified <cite>replay_save_path</cite>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>enable_save_replay</strong> (<em>-</em>) – Flag to enable saving of replay footage. Defaults to False.</p></li>
+<li><p><strong>concatenate_all_replay</strong> (<em>-</em>) – Whether to concatenate all replay videos into one file. Defaults to False.</p></li>
+<li><p><strong>replay_save_path</strong> (<em>-</em>) – Directory path to save replay videos. Defaults to None, which sets a default path.</p></li>
+<li><p><strong>seed</strong> (<em>-</em>) – Seed or list of seeds for environment reproducibility. Defaults to None.</p></li>
+<li><p><strong>debug</strong> (<em>-</em>) – Whether to enable the debug mode. Default to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>An <cite>EvalReturn</cite> object containing evaluation metrics such as mean and standard deviation of returns.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.agent.gumbel_muzero.GumbelMuZeroAgent.supported_env_list">
+<span class="sig-name descname"><span class="pre">supported_env_list</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['Gomoku-play-with-bot',</span> <span class="pre">'CartPole-v0',</span> <span class="pre">'TicTacToe-play-with-bot']</span></em><a class="headerlink" href="#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.supported_env_list" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.gumbel_muzero.GumbelMuZeroAgent.train">
+<span class="sig-name descname"><span class="pre">train</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">step</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10000000</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">TrainingReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/gumbel_muzero.html#GumbelMuZeroAgent.train"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.train" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Train the agent through interactions with the environment.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>step</strong> (<em>-</em>) – Total number of environment steps to train for. Defaults to 10 million (1e7).</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>A <cite>TrainingReturn</cite> object containing training information, such as logs and potentially a URL to a training dashboard.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The method involves interacting with the environment, collecting experience, and optimizing the model.</p>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lzero.agent.sampled_efficientzero.</span></span><span class="sig-name descname"><span class="pre">SampledEfficientZeroAgent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_state_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/lzero/agent/sampled_efficientzero.html#SampledEfficientZeroAgent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="simple">
+<dt>Overview:</dt><dd><p>Agent class for executing Sampled EfficientZero algorithms which include methods for training, deployment, and batch evaluation.</p>
+</dd>
+<dt>Interfaces:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">__init__</span></code>, <code class="docutils literal notranslate"><span class="pre">train</span></code>, <code class="docutils literal notranslate"><span class="pre">deploy</span></code>, <code class="docutils literal notranslate"><span class="pre">batch_evaluate</span></code></p>
+</dd>
+<dt>Properties:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">best</span></code></p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This agent class is tailored for use with the HuggingFace Model Zoo for LightZero
+(e.g. <a class="reference external" href="https://huggingface.co/OpenDILabCommunity/CartPole-v0-SampledEfficientZero">https://huggingface.co/OpenDILabCommunity/CartPole-v0-SampledEfficientZero</a>),</p>
+<blockquote>
+<div><p>and provides methods such as “train” and “deploy”.</p>
+</div></blockquote>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_state_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/sampled_efficientzero.html#SampledEfficientZeroAgent.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Initialize the SampledEfficientZeroAgent instance with environment parameters, model, and configuration.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>env_id</strong> (<em>-</em>) – Identifier for the environment to be used, registered in gym.</p></li>
+<li><p><strong>seed</strong> (<em>-</em>) – Random seed for reproducibility. Defaults to 0.</p></li>
+<li><p><strong>exp_name</strong> (<em>-</em>) – Name for the experiment. Defaults to None.</p></li>
+<li><p><strong>model</strong> (<em>-</em>) – PyTorch module to be used as the model. If None, a default model is created. Defaults to None.</p></li>
+<li><p><strong>cfg</strong> (<em>-</em>) – Configuration for the agent. If None, default configuration will be used. Defaults to None.</p></li>
+<li><p><strong>policy_state_dict</strong> (<em>-</em>) – Path to a pre-trained model state dictionary. If provided, state dict will be loaded. Defaults to None.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>If <cite>env_id</cite> is not specified, it must be included in <cite>cfg</cite>.</p></li>
+<li><p>The <cite>supported_env_list</cite> contains all the environment IDs that are supported by this agent.</p></li>
+</ul>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.batch_evaluate">
+<span class="sig-name descname"><span class="pre">batch_evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_evaluator_episode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EvalReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/sampled_efficientzero.html#SampledEfficientZeroAgent.batch_evaluate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.batch_evaluate" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Perform a batch evaluation of the agent over a specified number of episodes: <code class="docutils literal notranslate"><span class="pre">n_evaluator_episode</span></code>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>n_evaluator_episode</strong> (<em>-</em>) – Number of episodes to run the evaluation.
+If None, uses default value from configuration. Defaults to None.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>An <cite>EvalReturn</cite> object with evaluation results such as mean and standard deviation of returns.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method evaluates the agent’s performance across multiple episodes to gauge its effectiveness.</p>
+</div>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.best">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">best</span></span><a class="headerlink" href="#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.best" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Provides access to the best model according to evaluation metrics.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>The agent with the best model loaded.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The best model is saved in the path <cite>./exp_name/ckpt/ckpt_best.pth.tar</cite>.
+When this property is accessed, the agent instance will load the best model state.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.deploy">
+<span class="sig-name descname"><span class="pre">deploy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enable_save_replay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">concatenate_all_replay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">replay_save_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EvalReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/sampled_efficientzero.html#SampledEfficientZeroAgent.deploy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.deploy" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Deploy the agent for evaluation in the environment, with optional replay saving. The performance of the
+agent will be evaluated. Average return and standard deviation of the return will be returned.
+If <cite>enable_save_replay</cite> is True, replay videos are saved in the specified <cite>replay_save_path</cite>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>enable_save_replay</strong> (<em>-</em>) – Flag to enable saving of replay footage. Defaults to False.</p></li>
+<li><p><strong>concatenate_all_replay</strong> (<em>-</em>) – Whether to concatenate all replay videos into one file. Defaults to False.</p></li>
+<li><p><strong>replay_save_path</strong> (<em>-</em>) – Directory path to save replay videos. Defaults to None, which sets a default path.</p></li>
+<li><p><strong>seed</strong> (<em>-</em>) – Seed or list of seeds for environment reproducibility. Defaults to None.</p></li>
+<li><p><strong>debug</strong> (<em>-</em>) – Whether to enable the debug mode. Default to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>An <cite>EvalReturn</cite> object containing evaluation metrics such as mean and standard deviation of returns.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.supported_env_list">
+<span class="sig-name descname"><span class="pre">supported_env_list</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['BreakoutNoFrameskip-v4',</span> <span class="pre">'CartPole-v0',</span> <span class="pre">'LunarLanderContinuous-v2',</span> <span class="pre">'MsPacmanNoFrameskip-v4',</span> <span class="pre">'Pendulum-v1',</span> <span class="pre">'PongNoFrameskip-v4']</span></em><a class="headerlink" href="#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.supported_env_list" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.train">
+<span class="sig-name descname"><span class="pre">train</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">step</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10000000</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">TrainingReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/sampled_efficientzero.html#SampledEfficientZeroAgent.train"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.train" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Train the agent through interactions with the environment.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>step</strong> (<em>-</em>) – Total number of environment steps to train for. Defaults to 10 million (1e7).</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>A <cite>TrainingReturn</cite> object containing training information, such as logs and potentially a URL to a training dashboard.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The method involves interacting with the environment, collecting experience, and optimizing the model.</p>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lzero.agent.sampled_alphazero.SampledAlphaZeroAgent">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lzero.agent.sampled_alphazero.</span></span><span class="sig-name descname"><span class="pre">SampledAlphaZeroAgent</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_state_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../_modules/lzero/agent/sampled_alphazero.html#SampledAlphaZeroAgent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="simple">
+<dt>Overview:</dt><dd><p>Agent class for executing AlphaZero algorithms which include methods for training, deployment, and batch evaluation.</p>
+</dd>
+<dt>Interfaces:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">__init__</span></code>, <code class="docutils literal notranslate"><span class="pre">train</span></code>, <code class="docutils literal notranslate"><span class="pre">deploy</span></code>, <code class="docutils literal notranslate"><span class="pre">batch_evaluate</span></code></p>
+</dd>
+<dt>Properties:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">best</span></code></p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This agent class is tailored for use with the HuggingFace Model Zoo for LightZero
+(e.g. <a class="reference external" href="https://huggingface.co/OpenDILabCommunity/CartPole-v0-AlphaZero">https://huggingface.co/OpenDILabCommunity/CartPole-v0-AlphaZero</a>),</p>
+<blockquote>
+<div><p>and provides methods such as “train” and “deploy”.</p>
+</div></blockquote>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">env_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">exp_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_state_dict</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/sampled_alphazero.html#SampledAlphaZeroAgent.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Initialize the SampledAlphaZeroAgent instance with environment parameters, model, and configuration.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>env_id</strong> (<em>-</em>) – Identifier for the environment to be used, registered in gym.</p></li>
+<li><p><strong>seed</strong> (<em>-</em>) – Random seed for reproducibility. Defaults to 0.</p></li>
+<li><p><strong>exp_name</strong> (<em>-</em>) – Name for the experiment. Defaults to None.</p></li>
+<li><p><strong>model</strong> (<em>-</em>) – PyTorch module to be used as the model. If None, a default model is created. Defaults to None.</p></li>
+<li><p><strong>cfg</strong> (<em>-</em>) – Configuration for the agent. If None, default configuration will be used. Defaults to None.</p></li>
+<li><p><strong>policy_state_dict</strong> (<em>-</em>) – Path to a pre-trained model state dictionary. If provided, state dict will be loaded. Defaults to None.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>If <cite>env_id</cite> is not specified, it must be included in <cite>cfg</cite>.</p></li>
+<li><p>The <cite>supported_env_list</cite> contains all the environment IDs that are supported by this agent.</p></li>
+</ul>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.batch_evaluate">
+<span class="sig-name descname"><span class="pre">batch_evaluate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">n_evaluator_episode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EvalReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/sampled_alphazero.html#SampledAlphaZeroAgent.batch_evaluate"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.batch_evaluate" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Perform a batch evaluation of the agent over a specified number of episodes: <code class="docutils literal notranslate"><span class="pre">n_evaluator_episode</span></code>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>n_evaluator_episode</strong> (<em>-</em>) – Number of episodes to run the evaluation.
+If None, uses default value from configuration. Defaults to None.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>An <cite>EvalReturn</cite> object with evaluation results such as mean and standard deviation of returns.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method evaluates the agent’s performance across multiple episodes to gauge its effectiveness.</p>
+</div>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.best">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">best</span></span><a class="headerlink" href="#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.best" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Provides access to the best model according to evaluation metrics.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>The agent with the best model loaded.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The best model is saved in the path <cite>./exp_name/ckpt/ckpt_best.pth.tar</cite>.
+When this property is accessed, the agent instance will load the best model state.</p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.deploy">
+<span class="sig-name descname"><span class="pre">deploy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">enable_save_replay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">concatenate_all_replay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">replay_save_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">seed</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EvalReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/sampled_alphazero.html#SampledAlphaZeroAgent.deploy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.deploy" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Deploy the agent for evaluation in the environment, with optional replay saving. The performance of the
+agent will be evaluated. Average return and standard deviation of the return will be returned.
+If <cite>enable_save_replay</cite> is True, replay videos are saved in the specified <cite>replay_save_path</cite>.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>enable_save_replay</strong> (<em>-</em>) – Flag to enable saving of replay footage. Defaults to False.</p></li>
+<li><p><strong>concatenate_all_replay</strong> (<em>-</em>) – Whether to concatenate all replay videos into one file. Defaults to False.</p></li>
+<li><p><strong>replay_save_path</strong> (<em>-</em>) – Directory path to save replay videos. Defaults to None, which sets a default path.</p></li>
+<li><p><strong>seed</strong> (<em>-</em>) – Seed or list of seeds for environment reproducibility. Defaults to None.</p></li>
+<li><p><strong>debug</strong> (<em>-</em>) – Whether to enable the debug mode. Default to False.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>An <cite>EvalReturn</cite> object containing evaluation metrics such as mean and standard deviation of returns.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.supported_env_list">
+<span class="sig-name descname"><span class="pre">supported_env_list</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['Gomoku-play-with-bot',</span> <span class="pre">'TicTacToe-play-with-bot']</span></em><a class="headerlink" href="#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.supported_env_list" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.train">
+<span class="sig-name descname"><span class="pre">train</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">step</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">10000000</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">TrainingReturn</span></span></span><a class="reference internal" href="../../_modules/lzero/agent/sampled_alphazero.html#SampledAlphaZeroAgent.train"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.train" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Train the agent through interactions with the environment.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>step</strong> (<em>-</em>) – Total number of environment steps to train for. Defaults to 10 million (1e7).</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>A <cite>TrainingReturn</cite> object containing training information, such as logs and potentially a URL to a training dashboard.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The method involves interacting with the environment, collecting experience, and optimizing the model.</p>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../index.html" class="btn btn-neutral float-left" title="&lt;no title&gt;" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../config/index.html" class="btn btn-neutral float-right" title="Config" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

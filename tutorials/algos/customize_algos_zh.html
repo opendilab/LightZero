@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LightZero 中如何自定义算法? &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../installation/index.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../config/config.html">How to Set Configuration Files in LightZero</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">LightZero 中如何自定义算法?</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/tutorials/algos/customize_algos_zh.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <section id="lightzero">
+<h1>LightZero 中如何自定义算法?<a class="headerlink" href="#lightzero" title="Permalink to this heading"></a></h1>
+<p>LightZero 是一个 MCTS+RL 强化学习框架，它提供了一组高级 API，使得用户可以在其中自定义自己的算法。以下是一些关于如何在 LightZero 中自定义算法的步骤和注意事项。</p>
+<section id="id1">
+<h2>基本步骤<a class="headerlink" href="#id1" title="Permalink to this heading"></a></h2>
+<section id="id2">
+<h3>1. 理解框架结构<a class="headerlink" href="#id2" title="Permalink to this heading"></a></h3>
+<p>在开始编写自定义算法之前，你需要对 LightZero 的框架结构有一个基本的理解，LightZero 的流程如图所示。</p>
+<p align="center">
+  <img src="assets/lightzero_pipeline.svg" alt="Image" width="50%" height="auto" style="margin: 0 1%;">
+</p><p>仓库的文件夹主要由 <code class="docutils literal notranslate"><span class="pre">lzero</span></code> 和 <code class="docutils literal notranslate"><span class="pre">zoo</span></code> 这两部分组成。<code class="docutils literal notranslate"><span class="pre">lzero</span></code> 中实现了LightZero框架流程所需的核心模块。而 <code class="docutils literal notranslate"><span class="pre">zoo</span></code> 提供了一系列预定义的环境（<code class="docutils literal notranslate"><span class="pre">envs</span></code>）以及对应的配置（<code class="docutils literal notranslate"><span class="pre">config</span></code>）文件。
+<code class="docutils literal notranslate"><span class="pre">lzero</span></code> 文件夹下包括多个核心模块，包括策略（<code class="docutils literal notranslate"><span class="pre">policy</span></code>）、模型（<code class="docutils literal notranslate"><span class="pre">model</span></code>）、工作件（<code class="docutils literal notranslate"><span class="pre">worker</span></code>）以及入口（<code class="docutils literal notranslate"><span class="pre">entry</span></code>）等。这些模块在一起协同工作，实现复杂的强化学习算法。</p>
+<ul class="simple">
+<li><p>在此架构中，<code class="docutils literal notranslate"><span class="pre">policy</span></code> 模块负责实现算法的决策逻辑，如在智能体与环境交互时的动作选择，以及如何根据收集到的数据更新策略。 <code class="docutils literal notranslate"><span class="pre">model</span></code> 模块则负责实现算法所需的神经网络结构。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">worker</span></code> 模块包含 Collector 和 Evaluator 两个类。 Collector 实例负责执行智能体与环境的交互，以收集训练所需的数据，而 Evaluator 实例则负责评估当前策略的性能。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">entry</span></code> 模块负责初始化环境、模型、策略等，并在其主循环中负责实现数据收集、模型训练以及策略评估等核心过程。</p></li>
+<li><p>在这些模块之间，存在着紧密的交互关系。具体来说， <code class="docutils literal notranslate"><span class="pre">entry</span></code> 模块会调用 <code class="docutils literal notranslate"><span class="pre">worker</span></code> 模块的Collector和Evaluator来完成数据收集和算法评估。同时， <code class="docutils literal notranslate"><span class="pre">policy</span></code> 模块的决策函数会被Collector和Evaluator调用，以决定智能体在特定环境中的行动。而 <code class="docutils literal notranslate"><span class="pre">model</span></code> 模块实现的神经网络模型，则被嵌入到 <code class="docutils literal notranslate"><span class="pre">policy</span></code> 对象中，用于在交互过程中生成动作，以及在训练过程中进行更新。</p></li>
+<li><p>在 <code class="docutils literal notranslate"><span class="pre">policy</span></code> 模块中，你可以找到多种算法的实现，例如，MuZero策略就在 <code class="docutils literal notranslate"><span class="pre">muzero.py</span></code> 文件中实现。</p></li>
+</ul>
+</section>
+<section id="id3">
+<h3>2. 创建新的策略文件<a class="headerlink" href="#id3" title="Permalink to this heading"></a></h3>
+<p>在 <code class="docutils literal notranslate"><span class="pre">lzero/policy</span></code> 目录下创建一个新的 Python 文件。这个文件将包含你的算法实现。例如，如果你的算法名为 <code class="docutils literal notranslate"><span class="pre">MyAlgorithm</span></code> ，你可以创建一个名为 <code class="docutils literal notranslate"><span class="pre">my_algorithm.py</span></code> 的文件。</p>
+</section>
+<section id="id4">
+<h3>3. 实现你的策略<a class="headerlink" href="#id4" title="Permalink to this heading"></a></h3>
+<p>在你的策略文件中，你需要定义一个类来实现你的策略。这个类应该继承自 DI-engine中的 <code class="docutils literal notranslate"><span class="pre">Policy</span></code> 类，并实现所需的方法。</p>
+<p>以下是一个基本的策略类的框架：</p>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="nd">@POLICY_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;my_algorithm&#39;</span><span class="p">)</span>
+<span class="k">class</span> <span class="nc">MyAlgorithmPolicy</span><span class="p">(</span><span class="n">Policy</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Overview:</span>
+<span class="sd">        The policy class for MyAlgorithm.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    
+    <span class="n">config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+        <span class="c1"># Add your config here</span>
+    <span class="p">)</span>
+    
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="c1"># Initialize your policy here</span>
+
+    <span class="k">def</span> <span class="nf">default_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+        <span class="c1"># Set the default model name and the import path so that the default model can be loaded during policy initialization</span>
+    
+    <span class="k">def</span> <span class="nf">_init_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># Initialize the learn mode here</span>
+    
+    <span class="k">def</span> <span class="nf">_forward_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+        <span class="c1"># Implement the forward function for learning mode here</span>
+    
+    <span class="k">def</span> <span class="nf">_init_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># Initialize the collect mode here</span>
+    
+    <span class="k">def</span> <span class="nf">_forward_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="c1"># Implement the forward function for collect mode here</span>
+    
+    <span class="k">def</span> <span class="nf">_init_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># Initialize the eval mode here</span>
+    
+    <span class="k">def</span> <span class="nf">_forward_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="c1"># Implement the forward function for eval mode here</span>
+</pre></div>
+</div>
+<section id="id5">
+<h4>收集数据与评估模型<a class="headerlink" href="#id5" title="Permalink to this heading"></a></h4>
+<ul class="simple">
+<li><p>在 <code class="docutils literal notranslate"><span class="pre">default_model</span></code> 中设置当前策略使用的默认模型的类名和相应的引用路径。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_init_collect</span></code> 和 <code class="docutils literal notranslate"><span class="pre">_init_eval</span></code> 函数均负责实例化动作选取策略，相应的策略实例会被 <code class="docutils literal notranslate"><span class="pre">_forward_collect</span></code> 和 <code class="docutils literal notranslate"><span class="pre">_forward_eval</span></code> 函数调用。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_forward_collect</span></code> 函数会接收当前环境的状态，并通过调用 <code class="docutils literal notranslate"><span class="pre">_init_collect</span></code> 中实例化的策略来选择一步动作。函数会返回所选的动作列表以及其他相关信息。在训练期间，该函数会通过由Entry文件创建的Collector对象的 <code class="docutils literal notranslate"><span class="pre">collector.collect</span></code> 方法进行调用。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_forward_eval</span></code> 函数的逻辑与 <code class="docutils literal notranslate"><span class="pre">_forward_collect</span></code> 函数基本一致。唯一的区别在于， <code class="docutils literal notranslate"><span class="pre">_forward_collect</span></code> 中采用的策略更侧重于探索，以收集尽可能多样的训练信息；而在 <code class="docutils literal notranslate"><span class="pre">_forward_eval</span></code> 函数中，所采用的策略更侧重于利用，以获取当前策略的最优性能。在训练期间，该函数会通过由Entry文件创建的Evaluator对象的 <code class="docutils literal notranslate"><span class="pre">evaluator.eval</span></code> 方法进行调用。</p></li>
+</ul>
+</section>
+<section id="id6">
+<h4>策略的学习<a class="headerlink" href="#id6" title="Permalink to this heading"></a></h4>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">_init_learn</span></code> 函数会利用 config 文件传入的学习率、更新频率、优化器类型等策略的关联参数初始化网络模型、优化器以及训练过程中所需的其他对象。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_forward_learn</span></code> 函数则负责实现网络的更新。通常， <code class="docutils literal notranslate"><span class="pre">_forward_learn</span></code> 函数会接收 Collector 所收集的数据，根据这些数据计算损失函数并进行梯度更新。函数会返回更新过程中的各项损失以及更新所采用的相关参数，以便进行实验记录。在训练期间，该函数会通过由 Entry 文件创建的 Learner 对象的 <code class="docutils literal notranslate"><span class="pre">learner.train</span></code> 方法进行调用。</p></li>
+</ul>
+</section>
+</section>
+<section id="id7">
+<h3>4. 注册你的策略<a class="headerlink" href="#id7" title="Permalink to this heading"></a></h3>
+<p>为了让 LightZero 能够识别你的策略，你需要在你的策略类上方使用 <code class="docutils literal notranslate"><span class="pre">&#64;POLICY_REGISTRY.register('my_algorithm')</span></code> 这个装饰器来注册你的策略。这样， LightZero 就可以通过 <code class="docutils literal notranslate"><span class="pre">'my_algorithm'</span></code> 这个名字来引用你的策略了。
+具体而言，在实验的配置文件中，通过 <code class="docutils literal notranslate"><span class="pre">create_config</span></code> 部分来指定相应的算法：</p>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="n">create_config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+    <span class="o">...</span>
+    <span class="n">policy</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+        <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;my_algorithm&#39;</span><span class="p">,</span>
+        <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;lzero.policy.my_algorithm&#39;</span><span class="p">],</span>
+    <span class="p">),</span>
+    <span class="o">...</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>其中 <code class="docutils literal notranslate"><span class="pre">type</span></code> 要设定为所注册的策略名， <code class="docutils literal notranslate"><span class="pre">import_names</span></code> 则设置为策略包的位置。</p>
+</section>
+<section id="id8">
+<h3>5. <strong>可能的其他更改</strong><a class="headerlink" href="#id8" title="Permalink to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>模型（model）</strong>：在 LightZero 的 <code class="docutils literal notranslate"><span class="pre">model.common</span></code> 包中提供了一些通用的网络结构，例如将2D图像映射到隐空间中的表征网络 <code class="docutils literal notranslate"><span class="pre">RepresentationNetwork</span></code> ，在MCTS中用于预测概率和节点价值的预测网络 <code class="docutils literal notranslate"><span class="pre">PredictionNetwork</span></code> 等。如果自定义的策略需要专门的网络模型，则需要自行在 <code class="docutils literal notranslate"><span class="pre">model</span></code> 文件夹下实现相应的模型。例如 Muzero 算法的模型保存在 <code class="docutils literal notranslate"><span class="pre">muzero_model.py</span></code> 文件中，该文件实现了 Muzero 算法所需要的 <code class="docutils literal notranslate"><span class="pre">DynamicsNetwork</span></code> ，并通过调用 <code class="docutils literal notranslate"><span class="pre">model.common</span></code> 包中现成的网络结构最终实现了 <code class="docutils literal notranslate"><span class="pre">MuZeroModel</span></code> 。</p></li>
+<li><p><strong>工作件（worker）</strong>：在 LightZero 中实现了 AlphaZero 和 MuZero 的相应 <code class="docutils literal notranslate"><span class="pre">worker</span></code> 。后续的 EfficientZero 和 GumbelMuzero 等算法沿用了 MuZero 的 <code class="docutils literal notranslate"><span class="pre">worker</span></code> 。如果你的算法在数据采集的逻辑上有所不同，则需要自行实现相应的 <code class="docutils literal notranslate"><span class="pre">worker</span></code> 。例如，如果你的算法需要对采集到的<code class="docutils literal notranslate"><span class="pre">transitions</span></code> 进行预处理，可以在 collector 文件中的 <code class="docutils literal notranslate"><span class="pre">collect</span></code> 函数下加入下面这一片段。其中 <code class="docutils literal notranslate"><span class="pre">get_train_sample</span></code> 函数实现了具体的数据处理过程。</p></li>
+</ul>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">if</span> <span class="n">timestep</span><span class="o">.</span><span class="n">done</span><span class="p">:</span>
+    <span class="c1"># Prepare trajectory data.</span>
+    <span class="n">transitions</span> <span class="o">=</span> <span class="n">to_tensor_transitions</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_traj_buffer</span><span class="p">[</span><span class="n">env_id</span><span class="p">])</span>
+    <span class="c1"># Use ``get_train_sample`` to process the data.</span>
+    <span class="n">train_sample</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_policy</span><span class="o">.</span><span class="n">get_train_sample</span><span class="p">(</span><span class="n">transitions</span><span class="p">)</span>
+    <span class="n">return_data</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">train_sample</span><span class="p">)</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_traj_buffer</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+</pre></div>
+</div>
+</section>
+<section id="id9">
+<h3>6. <strong>测试你的策略</strong><a class="headerlink" href="#id9" title="Permalink to this heading"></a></h3>
+<p>在你实现你的策略之后，确保策略的正确性和有效性是非常重要的。为此，你应该编写一些单元测试来验证你的策略是否正常工作。比如，你可以测试策略是否能在特定的环境中执行，策略的输出是否符合预期等。单元测试的编写及意义可以参考 DI-engine 中的<a class="reference external" href="https://di-engine-docs.readthedocs.io/zh_CN/latest/22_test/index_zh.html">单元测试指南</a> ,你可以在 <code class="docutils literal notranslate"><span class="pre">lzero/policy/tests</span></code> 目录下添加你的测试。在编写测试时，尽可能考虑到所有可能的场景和边界条件，确保你的策略在各种情况下都能正常运行。
+下面是一个 LightZero 中单元测试的例子。在这个例子中，所测试的对象是 <code class="docutils literal notranslate"><span class="pre">inverse_scalar_transform</span></code> 和 <code class="docutils literal notranslate"><span class="pre">InverseScalarTransform</span></code> 方法。这两个方法都将经过变换的 value 逆变换为原本的值，但是采取了不同的实现。单元测试时，用这两个方法对同一组数据进行处理，并比较输出的结果是否相同。如果相同，则会通过测试。</p>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">pytest</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">from</span> <span class="nn">lzero.policy.scaling_transform</span> <span class="kn">import</span> <span class="n">inverse_scalar_transform</span><span class="p">,</span> <span class="n">InverseScalarTransform</span>
+
+<span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">unittest</span>
+<span class="k">def</span> <span class="nf">test_scaling_transform</span><span class="p">():</span>
+    <span class="kn">import</span> <span class="nn">time</span>
+    <span class="n">logit</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">601</span><span class="p">)</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">output_1</span> <span class="o">=</span> <span class="n">inverse_scalar_transform</span><span class="p">(</span><span class="n">logit</span><span class="p">,</span> <span class="mi">300</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;t1&#39;</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
+    <span class="n">handle</span> <span class="o">=</span> <span class="n">InverseScalarTransform</span><span class="p">(</span><span class="mi">300</span><span class="p">)</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">output_2</span> <span class="o">=</span> <span class="n">handle</span><span class="p">(</span><span class="n">logit</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;t2&#39;</span><span class="p">,</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">output_1</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="n">output_2</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="p">(</span><span class="n">output_1</span> <span class="o">==</span> <span class="n">output_2</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>在单元测试文件中，要将测试通过 <code class="docutils literal notranslate"><span class="pre">&#64;pytest.mark.unittest</span></code> 标记到python的测试框架中，这样就可以通过在命令行输入 <code class="docutils literal notranslate"><span class="pre">pytest</span> <span class="pre">-sv</span> <span class="pre">xxx.py</span></code> 直接运行单元测试文件。其中 <code class="docutils literal notranslate"><span class="pre">-sv</span></code> 是一个命令选项，表示在测试运行过程中将详细的信息打印到终端以便查看。</p>
+</section>
+<section id="id10">
+<h3>7. <strong>完整测试与运行</strong><a class="headerlink" href="#id10" title="Permalink to this heading"></a></h3>
+<p>在确保策略的基本功能正常之后，你需要利用如 cartpole 等经典环境，对你的策略进行完整的正确性和收敛性测试。这是为了验证你的策略不仅能在单元测试中工作，而且能在实际游戏环境中有效工作。</p>
+<p>你可以仿照  <a class="reference external" href="https://github.com/opendilab/LightZero/blob/main/zoo/classic_control/cartpole/config/cartpole_muzero_config.py">cartpole_muzero_config.py</a>  编写相关的配置文件和入口程序。在测试过程中，注意记录策略的性能数据，如每轮的得分、策略的收敛速度等，以便于分析和改进。</p>
+</section>
+<section id="id11">
+<h3>8. <strong>贡献</strong><a class="headerlink" href="#id11" title="Permalink to this heading"></a></h3>
+<p>在你完成了所有以上步骤后，如果你希望把你的策略贡献到 LightZero 仓库中，你可以在官方仓库上提交 Pull Request 。在提交之前，请确保你的代码符合仓库的编码规范，所有测试都已通过，并且已经有足够的文档和注释来解释你的代码和策略。</p>
+<p>在 PR 的描述中，详细说明你的策略，包括它的工作原理，你的实现方法，以及在测试中的表现。这会帮助其他人理解你的贡献，并加速 PR 的审查过程。</p>
+</section>
+<section id="id12">
+<h3>9. <strong>分享讨论，反馈改进</strong><a class="headerlink" href="#id12" title="Permalink to this heading"></a></h3>
+<p>完成策略实现和测试后，考虑将你的结果和经验分享给社区。你可以在论坛、博客或者社交媒体上发布你的策略和测试结果，邀请其他人对你的工作进行评价和讨论。这不仅可以得到其他人的反馈，还能帮助你建立专业网络，并可能引发新的想法和合作。</p>
+<p>基于你的测试结果和社区的反馈，不断改进和优化你的策略。这可能涉及到调整策略的参数，改进代码的性能，或者解决出现的问题和 bug 。记住，策略的开发是一个迭代的过程，永远有提升的空间。</p>
+</section>
+</section>
+<section id="id13">
+<h2>注意事项<a class="headerlink" href="#id13" title="Permalink to this heading"></a></h2>
+<ul class="simple">
+<li><p>请确保你的代码符合 python PEP8 编码规范。</p></li>
+<li><p>当你在实现 <code class="docutils literal notranslate"><span class="pre">_forward_learn</span></code> 、 <code class="docutils literal notranslate"><span class="pre">_forward_collect</span></code> 和 <code class="docutils literal notranslate"><span class="pre">_forward_eval</span></code> 等方法时，请确保正确处理输入和返回的数据。</p></li>
+<li><p>在编写策略时，请确保考虑到不同的环境类型。你的策略应该能够处理不同的环境。</p></li>
+<li><p>在实现你的策略时，请尽可能使你的代码模块化，以便于其他人理解和重用你的代码。</p></li>
+<li><p>请编写清晰的文档和注释，描述你的策略如何工作，以及你的代码是如何实现这个策略的。</p></li>
+</ul>
+</section>
+</section>
+
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

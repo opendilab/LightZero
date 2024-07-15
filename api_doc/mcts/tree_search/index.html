@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tree Search &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/sphinx_highlight.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <link rel="next" title="Model" href="../../model/index.html" />
+    <link rel="prev" title="EfficientZeroBuffer" href="../buffer/efficientzero_buffer.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/installation/index.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../envs/index.html">Envs</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">MCTS</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../buffer/index.html">Buffer</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Tree Search</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree"><code class="docutils literal notranslate"><span class="pre">MuZeroMCTSCtree</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.__init__"><code class="docutils literal notranslate"><span class="pre">MuZeroMCTSCtree.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.config"><code class="docutils literal notranslate"><span class="pre">MuZeroMCTSCtree.config</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.default_config"><code class="docutils literal notranslate"><span class="pre">MuZeroMCTSCtree.default_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.roots"><code class="docutils literal notranslate"><span class="pre">MuZeroMCTSCtree.roots()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.search"><code class="docutils literal notranslate"><span class="pre">MuZeroMCTSCtree.search()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree"><code class="docutils literal notranslate"><span class="pre">EfficientZeroMCTSCtree</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.__init__"><code class="docutils literal notranslate"><span class="pre">EfficientZeroMCTSCtree.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.config"><code class="docutils literal notranslate"><span class="pre">EfficientZeroMCTSCtree.config</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.default_config"><code class="docutils literal notranslate"><span class="pre">EfficientZeroMCTSCtree.default_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.roots"><code class="docutils literal notranslate"><span class="pre">EfficientZeroMCTSCtree.roots()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.search"><code class="docutils literal notranslate"><span class="pre">EfficientZeroMCTSCtree.search()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroMCTSCtree</span></code></a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.__init__"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroMCTSCtree.__init__()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.config"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroMCTSCtree.config</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.default_config"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroMCTSCtree.default_config()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.roots"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroMCTSCtree.roots()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.search"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroMCTSCtree.search()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="../index.html">MCTS</a></li>
+      <li class="breadcrumb-item active">Tree Search</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/api_doc/mcts/tree_search/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <section id="tree-search">
+<h1>Tree Search<a class="headerlink" href="#tree-search" title="Permalink to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lzero.mcts.tree_search.mcts_ctree.</span></span><span class="sig-name descname"><span class="pre">MuZeroMCTSCtree</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#MuZeroMCTSCtree"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="simple">
+<dt>Overview:</dt><dd><p>The C++ implementation of MCTS (batch format) for MuZero.          It completes the <code class="docutils literal notranslate"><span class="pre">roots``and</span> <span class="pre">``search</span></code> methods by calling functions in module <code class="docutils literal notranslate"><span class="pre">ctree_muzero</span></code>,         which are implemented in C++.</p>
+</dd>
+<dt>Interfaces:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">__init__</span></code>, <code class="docutils literal notranslate"><span class="pre">roots</span></code>, <code class="docutils literal notranslate"><span class="pre">search</span></code></p>
+</dd>
+<dt>..note::</dt><dd><p>The benefit of searching for a batch of nodes at the same time is that         it can be parallelized during model inference, thus saving time.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#MuZeroMCTSCtree.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key             in the default configuration, the user-provided value will override the default configuration. Otherwise,             the default configuration will be used.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>cfg</strong> (<em>-</em>) – The configuration passed in by the user.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.config">
+<span class="sig-name descname"><span class="pre">config</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'pb_c_base':</span> <span class="pre">19652,</span> <span class="pre">'pb_c_init':</span> <span class="pre">1.25,</span> <span class="pre">'root_dirichlet_alpha':</span> <span class="pre">0.3,</span> <span class="pre">'root_noise_weight':</span> <span class="pre">0.25,</span> <span class="pre">'value_delta_max':</span> <span class="pre">0.01}</span></em><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.config" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.default_config">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">default_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EasyDict</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#MuZeroMCTSCtree.default_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.default_config" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>A class method that returns a default configuration in the form of an EasyDict object.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The dict of the default configuration.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>cfg (<code class="xref py py-obj docutils literal notranslate"><span class="pre">EasyDict</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.roots">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">roots</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">active_collect_env_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">legal_actions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">mz_ctree</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#MuZeroMCTSCtree.roots"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.roots" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Initializes a batch of roots to search parallelly later.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>root_num</strong> (<em>-</em>) – the number of the roots in a batch.</p></li>
+<li><p><strong>legal_action_list</strong> (<em>-</em>) – the vector of the legal actions for the roots.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>..note::</dt><dd><p>The initialization is achieved by the <code class="docutils literal notranslate"><span class="pre">Roots</span></code> class from the <code class="docutils literal notranslate"><span class="pre">ctree_muzero</span></code> module.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.search">
+<span class="sig-name descname"><span class="pre">search</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">roots</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">latent_state_roots</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_play_batch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#MuZeroMCTSCtree.search"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.search" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Do MCTS for a batch of roots. Parallel in model inference.             Use C++ to implement the tree search.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>roots</strong> (<em>-</em>) – a batch of expanded root nodes.</p></li>
+<li><p><strong>latent_state_roots</strong> (<em>-</em>) – the hidden states of the roots.</p></li>
+<li><p><strong>model</strong> (<em>-</em>) – The model used for inference.</p></li>
+<li><p><strong>to_play</strong> (<em>-</em>) – the to_play list used in in self-play-mode board games.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The core functions <code class="docutils literal notranslate"><span class="pre">batch_traverse</span></code> and <code class="docutils literal notranslate"><span class="pre">batch_backpropagate</span></code> are implemented in C++.</p>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lzero.mcts.tree_search.mcts_ctree.</span></span><span class="sig-name descname"><span class="pre">EfficientZeroMCTSCtree</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#EfficientZeroMCTSCtree"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="simple">
+<dt>Overview:</dt><dd><p>The C++ implementation of MCTS (batch format) for EfficientZero.          It completes the <code class="docutils literal notranslate"><span class="pre">roots``and</span> <span class="pre">``search</span></code> methods by calling functions in module <code class="docutils literal notranslate"><span class="pre">ctree_efficientzero</span></code>,         which are implemented in C++.</p>
+</dd>
+<dt>Interfaces:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">__init__</span></code>, <code class="docutils literal notranslate"><span class="pre">roots</span></code>, <code class="docutils literal notranslate"><span class="pre">search</span></code></p>
+</dd>
+<dt>..note::</dt><dd><p>The benefit of searching for a batch of nodes at the same time is that         it can be parallelized during model inference, thus saving time.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#EfficientZeroMCTSCtree.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key
+in the default configuration, the user-provided value will override the default configuration. Otherwise,
+the default configuration will be used.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>cfg</strong> (<em>-</em>) – The configuration passed in by the user.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.config">
+<span class="sig-name descname"><span class="pre">config</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'pb_c_base':</span> <span class="pre">19652,</span> <span class="pre">'pb_c_init':</span> <span class="pre">1.25,</span> <span class="pre">'root_dirichlet_alpha':</span> <span class="pre">0.3,</span> <span class="pre">'root_noise_weight':</span> <span class="pre">0.25,</span> <span class="pre">'value_delta_max':</span> <span class="pre">0.01}</span></em><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.config" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.default_config">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">default_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EasyDict</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#EfficientZeroMCTSCtree.default_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.default_config" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>A class method that returns a default configuration in the form of an EasyDict object.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The dict of the default configuration.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>cfg (<code class="xref py py-obj docutils literal notranslate"><span class="pre">EasyDict</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.roots">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">roots</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">active_collect_env_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">legal_actions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ez_ctree.Roots</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#EfficientZeroMCTSCtree.roots"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.roots" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Initializes a batch of roots to search parallelly later.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>root_num</strong> (<em>-</em>) – the number of the roots in a batch.</p></li>
+<li><p><strong>legal_action_list</strong> (<em>-</em>) – the vector of the legal actions for the roots.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>..note::</dt><dd><p>The initialization is achieved by the <code class="docutils literal notranslate"><span class="pre">Roots</span></code> class from the <code class="docutils literal notranslate"><span class="pre">ctree_efficientzero</span></code> module.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.search">
+<span class="sig-name descname"><span class="pre">search</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">roots</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">latent_state_roots</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reward_hidden_state_roots</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_play_batch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#EfficientZeroMCTSCtree.search"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.search" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Do MCTS for a batch of roots. Parallel in model inference.             Use C++ to implement the tree search.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>roots</strong> (<em>-</em>) – a batch of expanded root nodes.</p></li>
+<li><p><strong>latent_state_roots</strong> (<em>-</em>) – the hidden states of the roots.</p></li>
+<li><p><strong>reward_hidden_state_roots</strong> (<em>-</em>) – the value prefix hidden states in LSTM of the roots.</p></li>
+<li><p><strong>model</strong> (<em>-</em>) – The model used for inference.</p></li>
+<li><p><strong>to_play</strong> (<em>-</em>) – the to_play list used in in self-play-mode board games.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The core functions <code class="docutils literal notranslate"><span class="pre">batch_traverse</span></code> and <code class="docutils literal notranslate"><span class="pre">batch_backpropagate</span></code> are implemented in C++.</p>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lzero.mcts.tree_search.mcts_ctree.</span></span><span class="sig-name descname"><span class="pre">GumbelMuZeroMCTSCtree</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#GumbelMuZeroMCTSCtree"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="simple">
+<dt>Overview:</dt><dd><p>The C++ implementation of MCTS (batch format) for  Gumbel MuZero.          It completes the <code class="docutils literal notranslate"><span class="pre">roots``and</span> <span class="pre">``search</span></code> methods by calling functions in module <code class="docutils literal notranslate"><span class="pre">ctree_gumbel_muzero</span></code>,         which are implemented in C++.</p>
+</dd>
+<dt>Interfaces:</dt><dd><p><code class="docutils literal notranslate"><span class="pre">__init__</span></code>, <code class="docutils literal notranslate"><span class="pre">roots</span></code>, <code class="docutils literal notranslate"><span class="pre">search</span></code></p>
+</dd>
+<dt>..note::</dt><dd><p>The benefit of searching for a batch of nodes at the same time is that         it can be parallelized during model inference, thus saving time.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">EasyDict</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#GumbelMuZeroMCTSCtree.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.__init__" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key             in the default configuration, the user-provided value will override the default configuration. Otherwise,             the default configuration will be used.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>cfg</strong> (<em>-</em>) – The configuration passed in by the user.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.config">
+<span class="sig-name descname"><span class="pre">config</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'num_simulations':</span> <span class="pre">50,</span> <span class="pre">'root_dirichlet_alpha':</span> <span class="pre">0.3,</span> <span class="pre">'root_noise_weight':</span> <span class="pre">0.25,</span> <span class="pre">'value_delta_max':</span> <span class="pre">0.01}</span></em><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.config" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.default_config">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">default_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EasyDict</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#GumbelMuZeroMCTSCtree.default_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.default_config" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>A class method that returns a default configuration in the form of an EasyDict object.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p>The dict of the default configuration.</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>cfg (<code class="xref py py-obj docutils literal notranslate"><span class="pre">EasyDict</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.roots">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">roots</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">active_collect_env_num</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">legal_actions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">gmz_ctree</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#GumbelMuZeroMCTSCtree.roots"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.roots" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Initializes a batch of roots to search parallelly later.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>root_num</strong> (<em>-</em>) – the number of the roots in a batch.</p></li>
+<li><p><strong>legal_action_list</strong> (<em>-</em>) – the vector of the legal actions for the roots.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="simple">
+<dt>..note::</dt><dd><p>The initialization is achieved by the <code class="docutils literal notranslate"><span class="pre">Roots</span></code> class from the <code class="docutils literal notranslate"><span class="pre">ctree_gumbel_muzero</span></code> module.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.search">
+<span class="sig-name descname"><span class="pre">search</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">roots</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">latent_state_roots</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_play_batch</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/tree_search/mcts_ctree.html#GumbelMuZeroMCTSCtree.search"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.search" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Do MCTS for a batch of roots. Parallel in model inference.             Use C++ to implement the tree search.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>roots</strong> (<em>-</em>) – a batch of expanded root nodes.</p></li>
+<li><p><strong>latent_state_roots</strong> (<em>-</em>) – the hidden states of the roots.</p></li>
+<li><p><strong>model</strong> (<em>-</em>) – The model used for inference.</p></li>
+<li><p><strong>to_play</strong> (<em>-</em>) – the to_play list used in in self-play-mode board games.</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The core functions <code class="docutils literal notranslate"><span class="pre">batch_traverse</span></code> and <code class="docutils literal notranslate"><span class="pre">batch_backpropagate</span></code> are implemented in C++.</p>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../buffer/efficientzero_buffer.html" class="btn btn-neutral float-left" title="EfficientZeroBuffer" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../../model/index.html" class="btn btn-neutral float-right" title="Model" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

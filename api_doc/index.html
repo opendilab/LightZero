@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>&lt;no title&gt; &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script src="../_static/sphinx_highlight.js"></script>
+    <script src="../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Agent" href="agent/index.html" />
+    <link rel="prev" title="How to Set Configuration Files in LightZero" href="../tutorials/config/config.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/installation/index.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">&lt;no title&gt;</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../_sources/api_doc/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="agent/index.html">Agent</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="agent/index.html#lzero.agent.alphazero.AlphaZeroAgent"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.alphazero.AlphaZeroAgent.__init__"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.alphazero.AlphaZeroAgent.batch_evaluate"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent.batch_evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.alphazero.AlphaZeroAgent.best"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent.best</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.alphazero.AlphaZeroAgent.deploy"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent.deploy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.alphazero.AlphaZeroAgent.supported_env_list"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent.supported_env_list</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.alphazero.AlphaZeroAgent.train"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent.train()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="agent/index.html#lzero.agent.muzero.MuZeroAgent"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.muzero.MuZeroAgent.__init__"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.muzero.MuZeroAgent.batch_evaluate"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent.batch_evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.muzero.MuZeroAgent.best"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent.best</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.muzero.MuZeroAgent.deploy"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent.deploy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.muzero.MuZeroAgent.supported_env_list"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent.supported_env_list</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.muzero.MuZeroAgent.train"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent.train()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="agent/index.html#lzero.agent.efficientzero.EfficientZeroAgent"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.efficientzero.EfficientZeroAgent.__init__"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.efficientzero.EfficientZeroAgent.batch_evaluate"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent.batch_evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.efficientzero.EfficientZeroAgent.best"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent.best</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.efficientzero.EfficientZeroAgent.deploy"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent.deploy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.efficientzero.EfficientZeroAgent.supported_env_list"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent.supported_env_list</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.efficientzero.EfficientZeroAgent.train"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent.train()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="agent/index.html#lzero.agent.gumbel_muzero.GumbelMuZeroAgent"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.__init__"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.batch_evaluate"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent.batch_evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.best"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent.best</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.deploy"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent.deploy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.supported_env_list"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent.supported_env_list</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.gumbel_muzero.GumbelMuZeroAgent.train"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent.train()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="agent/index.html#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.__init__"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.batch_evaluate"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent.batch_evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.best"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent.best</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.deploy"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent.deploy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.supported_env_list"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent.supported_env_list</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent.train"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent.train()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="agent/index.html#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.__init__"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.batch_evaluate"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent.batch_evaluate()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.best"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent.best</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.deploy"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent.deploy()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.supported_env_list"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent.supported_env_list</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="agent/index.html#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent.train"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent.train()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="config/index.html">Config</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="config/meta.html">lzero.config.meta</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="config/meta.html#title">__TITLE__</a></li>
+<li class="toctree-l3"><a class="reference internal" href="config/meta.html#version">__VERSION__</a></li>
+<li class="toctree-l3"><a class="reference internal" href="config/meta.html#description">__DESCRIPTION__</a></li>
+<li class="toctree-l3"><a class="reference internal" href="config/meta.html#author">__AUTHOR__</a></li>
+<li class="toctree-l3"><a class="reference internal" href="config/meta.html#author-email">__AUTHOR_EMAIL__</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="entry/index.html">Entry</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="entry/index.html#lzero.entry.train_alphazero.train_alphazero"><code class="docutils literal notranslate"><span class="pre">train_alphazero</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="entry/index.html#lzero.entry.train_alphazero.train_alphazero.__init__"><code class="docutils literal notranslate"><span class="pre">train_alphazero.__init__()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="entry/index.html#lzero.entry.eval_alphazero.eval_alphazero"><code class="docutils literal notranslate"><span class="pre">eval_alphazero</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="entry/index.html#lzero.entry.eval_alphazero.eval_alphazero.__init__"><code class="docutils literal notranslate"><span class="pre">eval_alphazero.__init__()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="entry/index.html#lzero.entry.train_muzero.train_muzero"><code class="docutils literal notranslate"><span class="pre">train_muzero</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="entry/index.html#lzero.entry.train_muzero.train_muzero.__init__"><code class="docutils literal notranslate"><span class="pre">train_muzero.__init__()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="entry/index.html#lzero.entry.eval_muzero.eval_muzero"><code class="docutils literal notranslate"><span class="pre">eval_muzero</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="entry/index.html#lzero.entry.eval_muzero.eval_muzero.__init__"><code class="docutils literal notranslate"><span class="pre">eval_muzero.__init__()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="entry/index.html#lzero.entry.train_muzero_with_gym_env.train_muzero_with_gym_env"><code class="docutils literal notranslate"><span class="pre">train_muzero_with_gym_env</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="entry/index.html#lzero.entry.train_muzero_with_gym_env.train_muzero_with_gym_env.__init__"><code class="docutils literal notranslate"><span class="pre">train_muzero_with_gym_env.__init__()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="entry/index.html#lzero.entry.eval_muzero_with_gym_env.eval_muzero_with_gym_env"><code class="docutils literal notranslate"><span class="pre">eval_muzero_with_gym_env</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="entry/index.html#lzero.entry.eval_muzero_with_gym_env.eval_muzero_with_gym_env.__init__"><code class="docutils literal notranslate"><span class="pre">eval_muzero_with_gym_env.__init__()</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="entry/index.html#lzero.entry.train_muzero_with_reward_model.train_muzero_with_reward_model"><code class="docutils literal notranslate"><span class="pre">train_muzero_with_reward_model</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="entry/index.html#lzero.entry.train_muzero_with_reward_model.train_muzero_with_reward_model.__init__"><code class="docutils literal notranslate"><span class="pre">train_muzero_with_reward_model.__init__()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="envs/index.html">Envs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.__init__"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper._is_protocol"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper._is_protocol</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper._np_random"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper._np_random</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.action_space"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.action_space</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.class_name"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.class_name()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.close"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.close()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.metadata"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.metadata</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.np_random"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.np_random</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.observation_space"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.observation_space</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.render"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.render()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.render_mode"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.render_mode</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.reset"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.reset()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.reward_range"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.reward_range</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.seed"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.seed()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.spec"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.spec</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.step"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.step()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper.unwrapped"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper.unwrapped</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper</span></code></a><ul>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.__init__"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.__init__()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper._is_protocol"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper._is_protocol</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper._np_random"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper._np_random</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.action_space"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.action_space</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.class_name"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.class_name()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.close"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.close()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.metadata"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.metadata</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.np_random"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.np_random</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.observation_space"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.observation_space</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.render"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.render()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.render_mode"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.render_mode</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.reset"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.reset()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.reward_range"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.reward_range</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.seed"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.seed()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.spec"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.spec</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.step"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.step()</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.unwrapped"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper.unwrapped</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="mcts/index.html">MCTS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="mcts/buffer/index.html">Buffer</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="mcts/buffer/game_buffer.html">GameBuffer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="mcts/buffer/muzero_buffer.html">MuZeroBuffer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="mcts/buffer/efficientzero_buffer.html">EfficientZeroBuffer</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="mcts/tree_search/index.html">Tree Search</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree"><code class="docutils literal notranslate"><span class="pre">MuZeroMCTSCtree</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree"><code class="docutils literal notranslate"><span class="pre">EfficientZeroMCTSCtree</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroMCTSCtree</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="model/index.html">Model</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="model/common.html">Common</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model/common.html#lzero.model.common.DownSample"><code class="docutils literal notranslate"><span class="pre">DownSample</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model/common.html#lzero.model.common.RepresentationNetwork"><code class="docutils literal notranslate"><span class="pre">RepresentationNetwork</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model/common.html#lzero.model.common.RepresentationNetworkMLP"><code class="docutils literal notranslate"><span class="pre">RepresentationNetworkMLP</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model/common.html#lzero.model.common.PredictionNetwork"><code class="docutils literal notranslate"><span class="pre">PredictionNetwork</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model/common.html#lzero.model.common.PredictionNetworkMLP"><code class="docutils literal notranslate"><span class="pre">PredictionNetworkMLP</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model/muzero_model.html">MuZeroModel</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model/muzero_model.html#lzero.model.muzero_model.MuZeroModel"><code class="docutils literal notranslate"><span class="pre">MuZeroModel</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model/muzero_model.html#lzero.model.muzero_model.DynamicsNetwork"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model/muzero_model_mlp.html">MuZeroModelMLP</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model/muzero_model_mlp.html#lzero.model.muzero_model_mlp.MuZeroModelMLP"><code class="docutils literal notranslate"><span class="pre">MuZeroModelMLP</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model/muzero_model_mlp.html#lzero.model.muzero_model_mlp.DynamicsNetwork"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model/efficientzero_model.html">EfficientZeroModel</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model/efficientzero_model.html#lzero.model.efficientzero_model.DynamicsNetwork"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model/efficientzero_model_mlp.html">EfficientZeroModelMLP</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model/efficientzero_model_mlp.html#lzero.model.efficientzero_model_mlp.DynamicsNetworkMLP"><code class="docutils literal notranslate"><span class="pre">DynamicsNetworkMLP</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model/alphazero_model.html">AlphaZeroModel</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model/alphazero_model.html#lzero.model.alphazero_model.AlphaZeroModel"><code class="docutils literal notranslate"><span class="pre">AlphaZeroModel</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model/alphazero_model.html#lzero.model.alphazero_model.PredictionNetwork"><code class="docutils literal notranslate"><span class="pre">PredictionNetwork</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model/sampled_efficientzero_model.html">SampledEfficientZeroModel</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model/sampled_efficientzero_model.html#lzero.model.sampled_efficientzero_model.PredictionNetwork"><code class="docutils literal notranslate"><span class="pre">PredictionNetwork</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model/sampled_efficientzero_model_mlp.html">SampledEfficientZeroModelMLP</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model/sampled_efficientzero_model_mlp.html#lzero.model.sampled_efficientzero_model_mlp.PredictionNetworkMLP"><code class="docutils literal notranslate"><span class="pre">PredictionNetworkMLP</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model/stochastic_muzero_model.html">StochasticMuZeroModel</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.StochasticMuZeroModel"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.DynamicsNetwork"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.ChanceEncoder"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.StraightThroughEstimator"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="model/stochastic_muzero_model.html#lzero.model.stochastic_muzero_model.OnehotArgmax"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="model/stochastic_muzero_model_mlp.html">StochasticMuZeroModelMLP</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="model/stochastic_muzero_model_mlp.html#lzero.model.stochastic_muzero_model_mlp.StochasticMuZeroModelMLP"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModelMLP</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="policy/index.html">Policy</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="policy/index.html#alphazeropolicy">AlphaZeroPolicy</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="policy/index.html#lzero.policy.alphazero.AlphaZeroPolicy"><code class="docutils literal notranslate"><span class="pre">AlphaZeroPolicy</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="policy/index.html#muzeropolicy">MuZeroPolicy</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="policy/index.html#lzero.policy.muzero.MuZeroPolicy"><code class="docutils literal notranslate"><span class="pre">MuZeroPolicy</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="policy/index.html#efficientzeropolicy">EfficientZeroPolicy</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="policy/index.html#lzero.policy.efficientzero.EfficientZeroPolicy"><code class="docutils literal notranslate"><span class="pre">EfficientZeroPolicy</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="policy/index.html#gumbel-alphazeropolicy">Gumbel AlphaZeroPolicy</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="policy/index.html#lzero.policy.gumbel_alphazero.GumbelAlphaZeroPolicy"><code class="docutils literal notranslate"><span class="pre">GumbelAlphaZeroPolicy</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="policy/index.html#gumbel-muzeropolicy">Gumbel MuZeroPolicy</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="policy/index.html#lzero.policy.gumbel_muzero.GumbelMuZeroPolicy"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroPolicy</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="policy/index.html#sampled-alphazeropolicy">Sampled AlphaZeroPolicy</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="policy/index.html#lzero.policy.sampled_alphazero.SampledAlphaZeroPolicy"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroPolicy</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="policy/index.html#sampled-muzeropolicy">Sampled MuZeroPolicy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="policy/index.html#sampled-efficientzeropolicy">Sampled EfficientZeroPolicy</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="policy/index.html#lzero.policy.sampled_efficientzero.SampledEfficientZeroPolicy"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroPolicy</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="policy/index.html#stochastic-muzeropolicy">Stochastic MuZeroPolicy</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="policy/index.html#lzero.policy.stochastic_muzero.StochasticMuZeroPolicy"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroPolicy</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="policy/index.html#unizeropolicy">UniZeroPolicy</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="worker/index.html">Worker</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="worker/index.html#muzerocollector">MuZeroCollector</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="worker/index.html#lzero.worker.muzero_collector.MuZeroCollector"><code class="docutils literal notranslate"><span class="pre">MuZeroCollector</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="worker/index.html#muzeroevaluator">MuZeroEvaluator</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator"><code class="docutils literal notranslate"><span class="pre">MuZeroEvaluator</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../tutorials/config/config.html" class="btn btn-neutral float-left" title="How to Set Configuration Files in LightZero" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="agent/index.html" class="btn btn-neutral float-right" title="Agent" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

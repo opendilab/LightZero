@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GameBuffer &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/sphinx_highlight.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <link rel="next" title="MuZeroBuffer" href="muzero_buffer.html" />
+    <link rel="prev" title="Buffer" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/installation/index.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../../agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../envs/index.html">Envs</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">MCTS</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="index.html">Buffer</a><ul class="current">
+<li class="toctree-l3 current"><a class="current reference internal" href="#">GameBuffer</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.mcts.buffer.game_buffer.GameBuffer"><code class="docutils literal notranslate"><span class="pre">GameBuffer</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="muzero_buffer.html">MuZeroBuffer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="efficientzero_buffer.html">EfficientZeroBuffer</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../tree_search/index.html">Tree Search</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">&lt;no title&gt;</a></li>
+          <li class="breadcrumb-item"><a href="../index.html">MCTS</a></li>
+          <li class="breadcrumb-item"><a href="index.html">Buffer</a></li>
+      <li class="breadcrumb-item active">GameBuffer</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../../_sources/api_doc/mcts/buffer/game_buffer.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <section id="gamebuffer">
+<h1>GameBuffer<a class="headerlink" href="#gamebuffer" title="Permalink to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">lzero.mcts.buffer.game_buffer.</span></span><span class="sig-name descname"><span class="pre">GameBuffer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer" title="Permalink to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">ABC</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<dl class="simple">
+<dt>Overview:</dt><dd><p>The base game buffer class for MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy, GumbelMuZeroPolicy.</p>
+</dd>
+</dl>
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">cfg</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer.__init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer.__init__" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._abc_impl">
+<span class="sig-name descname"><span class="pre">_abc_impl</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">&lt;_abc._abc_data</span> <span class="pre">object&gt;</span></em><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._abc_impl" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._compute_target_policy_non_reanalyzed">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_compute_target_policy_non_reanalyzed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">policy_non_re_context</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy_shape</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._compute_target_policy_non_reanalyzed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._compute_target_policy_non_reanalyzed" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>prepare policy targets from the non-reanalyzed context of policies</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>policy_non_re_context</strong> (<em>-</em>) – List containing:
+- pos_in_game_segment_list
+- child_visits
+- game_segment_lens
+- action_mask_segment
+- to_play_segment</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>batch_target_policies_non_re</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._compute_target_policy_reanalyzed">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_compute_target_policy_reanalyzed</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">policy_re_context</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">ndarray</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._compute_target_policy_reanalyzed"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._compute_target_policy_reanalyzed" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>prepare policy targets from the reanalyzed context of policies</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>policy_re_context</strong> (<em>-</em>) – List of policy context to reanalyzed</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p>batch_target_policies_re</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._compute_target_reward_value">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_compute_target_reward_value</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">reward_value_context</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._compute_target_reward_value"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._compute_target_reward_value" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>prepare reward and value targets from the context of rewards and values.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>(</strong> (<em>- model</em>) – obj:’list’): the reward value context</p></li>
+<li><p><strong>(</strong> – obj:’torch.tensor’):model of the target model</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>obj:’np.ndarray): batch of value prefix
+- batch_target_values (:obj:’np.ndarray): batch of value estimation</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>batch_value_prefixs (</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._make_batch">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_make_batch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">orig_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reanalyze_ratio</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._make_batch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._make_batch" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>prepare the context of a batch
+reward_value_context:        the context of reanalyzed value targets
+policy_re_context:           the context of reanalyzed policy targets
+policy_non_re_context:       the context of non-reanalyzed policy targets
+current_batch:                the inputs of batch</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>orig_data</strong> – Any batch context from replay buffer</p></li>
+<li><p><strong>reanalyze_ratio</strong> – float ratio of reanalyzed policy (value is 100% reanalyzed)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>reward_value_context, policy_re_context, policy_non_re_context, current_batch</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>context (<code class="xref py py-obj docutils literal notranslate"><span class="pre">Tuple</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._prepare_policy_non_reanalyzed_context">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_prepare_policy_non_reanalyzed_context</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_index_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">game_segment_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos_in_game_segment_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._prepare_policy_non_reanalyzed_context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._prepare_policy_non_reanalyzed_context" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>prepare the context of policies for calculating policy target in non-reanalyzing part, just return the policy in self-play</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>batch_index_list</strong> (<em>-</em>) – the index of start transition of sampled minibatch in replay buffer</p></li>
+<li><p><strong>game_segment_list</strong> (<em>-</em>) – list of game segments</p></li>
+<li><p><strong>pos_in_game_segment_list</strong> (<em>-</em>) – list transition index in game</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>state_index_lst, child_visits, game_segment_lens, action_mask_segment, to_play_segment</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>policy_non_re_context (<code class="xref py py-obj docutils literal notranslate"><span class="pre">list</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._prepare_policy_reanalyzed_context">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_prepare_policy_reanalyzed_context</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_index_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">game_segment_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos_in_game_segment_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._prepare_policy_reanalyzed_context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._prepare_policy_reanalyzed_context" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>prepare the context of policies for calculating policy target in reanalyzing part.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>(</strong> (<em>- pos_in_game_segment_list</em>) – obj:’list’): start transition index in the replay buffer</p></li>
+<li><p><strong>(</strong> – obj:’list’): list of game segments</p></li>
+<li><p><strong>(</strong> – obj:’list’): position of transition index in one game history</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>policy_obs_lst, policy_mask, state_index_lst, indices,</dt><dd><p>child_visits, game_segment_lens, action_mask_segment, to_play_segment</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>policy_re_context (<code class="xref py py-obj docutils literal notranslate"><span class="pre">list</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._prepare_reward_value_context">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">_prepare_reward_value_context</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_index_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">game_segment_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos_in_game_segment_list</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">total_transitions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._prepare_reward_value_context"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._prepare_reward_value_context" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>prepare the context of rewards and values for calculating TD value target in reanalyzing part.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>batch_index_list</strong> (<em>-</em>) – the index of start transition of sampled minibatch in replay buffer</p></li>
+<li><p><strong>game_segment_list</strong> (<em>-</em>) – list of game segments</p></li>
+<li><p><strong>pos_in_game_segment_list</strong> (<em>-</em>) – list of transition index in game_segment</p></li>
+<li><p><strong>total_transitions</strong> (<em>-</em>) – number of collected transitions</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><dl class="simple">
+<dt>value_obs_lst, value_mask, state_index_lst, rewards_lst, game_segment_lens,</dt><dd><p>td_steps_lst, action_mask_segment, to_play_segment</p>
+</dd>
+</dl>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>reward_value_context (<code class="xref py py-obj docutils literal notranslate"><span class="pre">list</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._preprocess_to_play_and_action_mask">
+<span class="sig-name descname"><span class="pre">_preprocess_to_play_and_action_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">game_segment_batch_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_play_segment</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">action_mask_segment</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos_in_game_segment_list</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._preprocess_to_play_and_action_mask"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._preprocess_to_play_and_action_mask" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><dl class="simple">
+<dt>prepare the to_play and action_mask for the target obs in <code class="docutils literal notranslate"><span class="pre">value_obs_list</span></code></dt><dd><ul class="simple">
+<li><p>to_play: {list: game_segment_batch_size * (num_unroll_steps+1)}</p></li>
+<li><p>action_mask: {list: game_segment_batch_size * (num_unroll_steps+1)}</p></li>
+</ul>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._push_game_segment">
+<span class="sig-name descname"><span class="pre">_push_game_segment</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">meta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._push_game_segment"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._push_game_segment" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Push data and it’s meta information in buffer.
+Save a game segment.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>data</strong> (<em>-</em>) – The data (a game segment) which will be pushed into buffer.</p></li>
+<li><p><strong>meta</strong> (<em>-</em>) – Meta information, e.g. priority, count, staleness.
+- done (<code class="xref py py-obj docutils literal notranslate"><span class="pre">bool</span></code>): whether the game is finished.
+- unroll_plus_td_steps (<code class="xref py py-obj docutils literal notranslate"><span class="pre">int</span></code>): if the game is not finished, we only save the transitions that can be computed
+- priorities (<code class="xref py py-obj docutils literal notranslate"><span class="pre">list</span></code>): the priorities corresponding to the transitions in the game history</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The pushed data.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>buffered_data (<code class="xref py py-obj docutils literal notranslate"><span class="pre">BufferedData</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._remove">
+<span class="sig-name descname"><span class="pre">_remove</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">excess_game_segment_index</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._remove"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._remove" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>delete game segments in index [0: excess_game_segment_index]</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>excess_game_segment_index</strong> (<em>-</em>) – Index of data.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_data">
+<span class="sig-name descname"><span class="pre">_sample_orig_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._sample_orig_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_data" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><dl class="simple">
+<dt>sample orig_data that contains:</dt><dd><p>game_segment_list: a list of game segments
+pos_in_game_segment_list: transition index in game (relative index)
+batch_index_list: the index of start transition of sampled minibatch in replay buffer
+weights_list: the weight concerning the priority
+make_time: the time the batch is made (for correctly updating replay buffer when data is deleted)</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>batch_size</strong> (<em>-</em>) – batch size</p></li>
+<li><p><strong>beta</strong> (<em>-</em>) – float the parameter in PER for calculating the priority</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer.config">
+<span class="sig-name descname"><span class="pre">config</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'mini_infer_size':</span> <span class="pre">10240,</span> <span class="pre">'reanalyze_outdated':</span> <span class="pre">True,</span> <span class="pre">'reanalyze_ratio':</span> <span class="pre">0.3,</span> <span class="pre">'replay_buffer_size':</span> <span class="pre">1000000,</span> <span class="pre">'use_root_value':</span> <span class="pre">False}</span></em><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer.config" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer.default_config">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">default_config</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">EasyDict</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer.default_config"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer.default_config" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer.get_num_of_episodes">
+<span class="sig-name descname"><span class="pre">get_num_of_episodes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer.get_num_of_episodes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer.get_num_of_episodes" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer.get_num_of_game_segments">
+<span class="sig-name descname"><span class="pre">get_num_of_game_segments</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer.get_num_of_game_segments"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer.get_num_of_game_segments" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer.get_num_of_transitions">
+<span class="sig-name descname"><span class="pre">get_num_of_transitions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer.get_num_of_transitions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer.get_num_of_transitions" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer.push_game_segments">
+<span class="sig-name descname"><span class="pre">push_game_segments</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data_and_meta</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer.push_game_segments"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer.push_game_segments" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Push game_segments data and it’s meta information into buffer.
+Save a game segment</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data_and_meta</strong> (<em>-</em>) – <ul class="simple">
+<li><p>data (<code class="xref py py-obj docutils literal notranslate"><span class="pre">Any</span></code>): The data (game segments) which will be pushed into buffer.</p></li>
+<li><p>meta (<code class="xref py py-obj docutils literal notranslate"><span class="pre">dict</span></code>): Meta information, e.g. priority, count, staleness.</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer.remove_oldest_data_to_fit">
+<span class="sig-name descname"><span class="pre">remove_oldest_data_to_fit</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer.remove_oldest_data_to_fit"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer.remove_oldest_data_to_fit" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>remove some oldest data if the replay buffer is full.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer.sample">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">sample</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">policy</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../policy/index.html#lzero.policy.muzero.MuZeroPolicy" title="lzero.policy.muzero.MuZeroPolicy"><span class="pre">MuZeroPolicy</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="../../policy/index.html#lzero.policy.efficientzero.EfficientZeroPolicy" title="lzero.policy.efficientzero.EfficientZeroPolicy"><span class="pre">EfficientZeroPolicy</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="../../policy/index.html#lzero.policy.sampled_efficientzero.SampledEfficientZeroPolicy" title="lzero.policy.sampled_efficientzero.SampledEfficientZeroPolicy"><span class="pre">SampledEfficientZeroPolicy</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="../../policy/index.html#lzero.policy.gumbel_muzero.GumbelMuZeroPolicy" title="lzero.policy.gumbel_muzero.GumbelMuZeroPolicy"><span class="pre">GumbelMuZeroPolicy</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer.sample"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer.sample" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>sample data from <code class="docutils literal notranslate"><span class="pre">GameBuffer</span></code> and prepare the current and target batch for training.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>batch_size</strong> (<em>-</em>) – batch size.</p></li>
+<li><p><strong>policy</strong> (<em>-</em>) – policy.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of train data, including current_batch and target_batch.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>train_data (<code class="xref py py-obj docutils literal notranslate"><span class="pre">List</span></code>)</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer.update_priority">
+<em class="property"><span class="pre">abstract</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">update_priority</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">train_data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">ndarray</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_priorities</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer.update_priority"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer.update_priority" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Update the priority of training data.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>train_data</strong> (<em>-</em>) – training data to be updated priority.</p></li>
+<li><p><strong>batch_priorities</strong> (<em>-</em>) – priorities to update to.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="Buffer" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="muzero_buffer.html" class="btn btn-neutral float-right" title="MuZeroBuffer" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

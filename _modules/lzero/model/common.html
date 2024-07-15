@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lzero.model.common &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/sphinx_highlight.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/installation/index.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lzero.model.common</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <h1>Source code for lzero.model.common</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Overview:</span>
+<span class="sd">    In this Python file, we provide a collection of reusable model templates designed to streamline the development</span>
+<span class="sd">    process for various custom algorithms. By utilizing these pre-built model templates, users can quickly adapt and</span>
+<span class="sd">    customize their custom algorithms, ensuring efficient and effective development.</span>
+<span class="sd">    BTW, users can refer to the unittest of these model templates to learn how to use them.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+<span class="kn">from</span> <span class="nn">ding.torch_utils</span> <span class="kn">import</span> <span class="n">MLP</span><span class="p">,</span> <span class="n">ResBlock</span>
+<span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">SequenceType</span>
+
+
+<span class="c1"># use dataclass to make the output of network more convenient to use</span>
+<span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">EZNetworkOutput</span><span class="p">:</span>
+    <span class="c1"># output format of the EfficientZero model</span>
+    <span class="n">value</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="n">value_prefix</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="n">policy_logits</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="n">reward_hidden_state</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]</span>
+
+
+<span class="nd">@dataclass</span>
+<span class="k">class</span> <span class="nc">MZNetworkOutput</span><span class="p">:</span>
+    <span class="c1"># output format of the MuZero model</span>
+    <span class="n">value</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="n">reward</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="n">policy_logits</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+    <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
+
+
+<div class="viewcode-block" id="DownSample"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.DownSample">[docs]</a><span class="k">class</span> <span class="nc">DownSample</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+            
+<div class="viewcode-block" id="DownSample.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.DownSample.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_shape</span><span class="p">:</span> <span class="n">SequenceType</span><span class="p">,</span> <span class="n">out_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">activation</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+                 <span class="n">norm_type</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;BN&#39;</span><span class="p">,</span>
+                 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Define downSample convolution network. Encode the observation into hidden state.</span>
+<span class="sd">            This network is often used in video games like Atari. In board games like go and chess,</span>
+<span class="sd">            we don&#39;t need this module.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[12, 96, 96]</span>
+<span class="sd">                for video games like atari, RGB 3 channel times stack 4 frames.</span>
+<span class="sd">            - out_channels (:obj:`int`): The output channels of output hidden state.</span>
+<span class="sd">            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \</span>
+<span class="sd">                Use the inplace operation to speed up.</span>
+<span class="sd">            - norm_type (:obj:`Optional[str]`): The normalization type used in network, defaults to &#39;BN&#39;. </span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="n">norm_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span> <span class="s1">&#39;LN&#39;</span><span class="p">],</span> <span class="s2">&quot;norm_type must in [&#39;BN&#39;, &#39;LN&#39;]&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">conv1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span>
+            <span class="n">observation_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+            <span class="n">out_channels</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span>
+            <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+            <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+            <span class="n">bias</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>  <span class="c1"># disable bias for better convergence</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">norm_type</span> <span class="o">==</span> <span class="s1">&#39;BN&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">norm1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm2d</span><span class="p">(</span><span class="n">out_channels</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">norm_type</span> <span class="o">==</span> <span class="s1">&#39;LN&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">norm1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">([</span><span class="n">out_channels</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">//</span> <span class="mi">2</span><span class="p">])</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">resblocks1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ModuleList</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="n">ResBlock</span><span class="p">(</span>
+                    <span class="n">in_channels</span><span class="o">=</span><span class="n">out_channels</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span>
+                    <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span>
+                    <span class="n">norm_type</span><span class="o">=</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span>
+                    <span class="n">res_type</span><span class="o">=</span><span class="s1">&#39;basic&#39;</span><span class="p">,</span>
+                    <span class="n">bias</span><span class="o">=</span><span class="kc">False</span>
+                <span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">downsample_block</span> <span class="o">=</span> <span class="n">ResBlock</span><span class="p">(</span>
+            <span class="n">in_channels</span><span class="o">=</span><span class="n">out_channels</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span>
+            <span class="n">out_channels</span><span class="o">=</span><span class="n">out_channels</span><span class="p">,</span>
+            <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span>
+            <span class="n">norm_type</span><span class="o">=</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span>
+            <span class="n">res_type</span><span class="o">=</span><span class="s1">&#39;downsample&#39;</span><span class="p">,</span>
+            <span class="n">bias</span><span class="o">=</span><span class="kc">False</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resblocks2</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ModuleList</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="n">ResBlock</span><span class="p">(</span>
+                    <span class="n">in_channels</span><span class="o">=</span><span class="n">out_channels</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span> <span class="n">norm_type</span><span class="o">=</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span> <span class="n">res_type</span><span class="o">=</span><span class="s1">&#39;basic&#39;</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span>
+                <span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pooling1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">AvgPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">resblocks3</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ModuleList</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="n">ResBlock</span><span class="p">(</span>
+                    <span class="n">in_channels</span><span class="o">=</span><span class="n">out_channels</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span> <span class="n">norm_type</span><span class="o">=</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span> <span class="n">res_type</span><span class="o">=</span><span class="s1">&#39;basic&#39;</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span>
+                <span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pooling2</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">AvgPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">activation</span> <span class="o">=</span> <span class="n">activation</span></div>
+
+<div class="viewcode-block" id="DownSample.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.DownSample.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Shapes:</span>
+<span class="sd">            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \</span>
+<span class="sd">                H is height.</span>
+<span class="sd">            - output (:obj:`torch.Tensor`): :math:`(B, C_out, W_, H_)`, where B is batch size, C_out is channel, W_ is \</span>
+<span class="sd">                output width, H_ is output height.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resblocks1</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">block</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">downsample_block</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resblocks2</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">block</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pooling1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resblocks3</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">block</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pooling2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">output</span></div></div>
+
+
+<div class="viewcode-block" id="RepresentationNetwork"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetwork">[docs]</a><span class="k">class</span> <span class="nc">RepresentationNetwork</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+
+<div class="viewcode-block" id="RepresentationNetwork.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetwork.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">observation_shape</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">),</span>
+            <span class="n">num_res_blocks</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="n">num_channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span><span class="p">,</span>
+            <span class="n">downsample</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="n">activation</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+            <span class="n">norm_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;BN&#39;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Representation network used in MuZero and derived algorithms. Encode the 2D image obs into hidden state.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[12, 96, 96]</span>
+<span class="sd">                for video games like atari, RGB 3 channel times stack 4 frames.</span>
+<span class="sd">            - num_res_blocks (:obj:`int`): The number of residual blocks.</span>
+<span class="sd">            - num_channels (:obj:`int`): The channel of output hidden state.</span>
+<span class="sd">            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \</span>
+<span class="sd">                defaults to True. This option is often used in video games like Atari. In board games like go, \</span>
+<span class="sd">                we don&#39;t need this module.</span>
+<span class="sd">            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \</span>
+<span class="sd">                Use the inplace operation to speed up.</span>
+<span class="sd">            - norm_type (:obj:`str`): The type of normalization in networks. defaults to &#39;BN&#39;.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="n">norm_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span> <span class="s1">&#39;LN&#39;</span><span class="p">],</span> <span class="s2">&quot;norm_type must in [&#39;BN&#39;, &#39;LN&#39;]&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">downsample</span> <span class="o">=</span> <span class="n">downsample</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">downsample</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">downsample_net</span> <span class="o">=</span> <span class="n">DownSample</span><span class="p">(</span>
+                <span class="n">observation_shape</span><span class="p">,</span>
+                <span class="n">num_channels</span><span class="p">,</span>
+                <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span>
+                <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">conv</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">num_channels</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">norm_type</span> <span class="o">==</span> <span class="s1">&#39;BN&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">norm</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm2d</span><span class="p">(</span><span class="n">num_channels</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="n">norm_type</span> <span class="o">==</span> <span class="s1">&#39;LN&#39;</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">downsample</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">norm</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">([</span><span class="n">num_channels</span><span class="p">,</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">),</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">norm</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">([</span><span class="n">num_channels</span><span class="p">,</span> <span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]])</span>
+            
+        <span class="bp">self</span><span class="o">.</span><span class="n">resblocks</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ModuleList</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="n">ResBlock</span><span class="p">(</span>
+                    <span class="n">in_channels</span><span class="o">=</span><span class="n">num_channels</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span> <span class="n">norm_type</span><span class="o">=</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span> <span class="n">res_type</span><span class="o">=</span><span class="s1">&#39;basic&#39;</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span>
+                <span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_res_blocks</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">activation</span> <span class="o">=</span> <span class="n">activation</span></div>
+
+<div class="viewcode-block" id="RepresentationNetwork.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetwork.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Shapes:</span>
+<span class="sd">            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \</span>
+<span class="sd">                H is height.</span>
+<span class="sd">            - output (:obj:`torch.Tensor`): :math:`(B, C_out, W_, H_)`, where B is batch size, C_out is channel, W_ is \</span>
+<span class="sd">                output width, H_ is output height.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">downsample</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">downsample_net</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resblocks</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">block</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">x</span></div>
+
+<div class="viewcode-block" id="RepresentationNetwork.get_param_mean"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetwork.get_param_mean">[docs]</a>    <span class="k">def</span> <span class="nf">get_param_mean</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">float</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Get the mean of parameters in the network for debug and visualization.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - mean (:obj:`float`): The mean of parameters in the network.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">mean</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">param</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">named_parameters</span><span class="p">():</span>
+            <span class="n">mean</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">param</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="n">mean</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">mean</span><span class="p">)</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">mean</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">mean</span></div></div>
+
+
+<div class="viewcode-block" id="RepresentationNetworkMLP"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkMLP">[docs]</a><span class="k">class</span> <span class="nc">RepresentationNetworkMLP</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+
+<div class="viewcode-block" id="RepresentationNetworkMLP.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkMLP.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">observation_shape</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+            <span class="n">hidden_channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span><span class="p">,</span>
+            <span class="n">layer_num</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+            <span class="n">activation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+            <span class="n">last_linear_layer_init_zero</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="n">norm_type</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;BN&#39;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Representation network used in MuZero and derived algorithms. Encode the vector obs into latent state \</span>
+<span class="sd">                with Multi-Layer Perceptron (MLP).</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - observation_shape (:obj:`int`): The shape of vector observation space, e.g. N = 10.</span>
+<span class="sd">            - num_res_blocks (:obj:`int`): The number of residual blocks.</span>
+<span class="sd">            - hidden_channels (:obj:`int`): The channel of output hidden state.</span>
+<span class="sd">            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \</span>
+<span class="sd">                defaults to True. This option is often used in video games like Atari. In board games like go, \</span>
+<span class="sd">                we don&#39;t need this module.</span>
+<span class="sd">            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(). \</span>
+<span class="sd">                Use the inplace operation to speed up.</span>
+<span class="sd">            - last_linear_layer_init_zero (:obj:`bool`): Whether to initialize the last linear layer with zeros, \</span>
+<span class="sd">                which can provide stable zero outputs in the beginning, defaults to True.</span>
+<span class="sd">            - norm_type (:obj:`str`): The type of normalization in networks. defaults to &#39;BN&#39;.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fc_representation</span> <span class="o">=</span> <span class="n">MLP</span><span class="p">(</span>
+            <span class="n">in_channels</span><span class="o">=</span><span class="n">observation_shape</span><span class="p">,</span>
+            <span class="n">hidden_channels</span><span class="o">=</span><span class="n">hidden_channels</span><span class="p">,</span>
+            <span class="n">out_channels</span><span class="o">=</span><span class="n">hidden_channels</span><span class="p">,</span>
+            <span class="n">layer_num</span><span class="o">=</span><span class="n">layer_num</span><span class="p">,</span>
+            <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span>
+            <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span><span class="p">,</span>
+            <span class="c1"># don&#39;t use activation and norm in the last layer of representation network is important for convergence.</span>
+            <span class="n">output_activation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">output_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="c1"># last_linear_layer_init_zero=True is beneficial for convergence speed.</span>
+            <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="RepresentationNetworkMLP.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkMLP.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Shapes:</span>
+<span class="sd">            - x (:obj:`torch.Tensor`): :math:`(B, N)`, where B is batch size, N is the length of vector observation.</span>
+<span class="sd">            - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc_representation</span><span class="p">(</span><span class="n">x</span><span class="p">)</span></div></div>
+
+
+<div class="viewcode-block" id="PredictionNetwork"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetwork">[docs]</a><span class="k">class</span> <span class="nc">PredictionNetwork</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+
+<div class="viewcode-block" id="PredictionNetwork.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetwork.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">observation_shape</span><span class="p">:</span> <span class="n">SequenceType</span><span class="p">,</span>
+            <span class="n">action_space_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+            <span class="n">num_res_blocks</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+            <span class="n">num_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+            <span class="n">value_head_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+            <span class="n">policy_head_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+            <span class="n">fc_value_layers</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+            <span class="n">fc_policy_layers</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+            <span class="n">output_support_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+            <span class="n">flatten_output_size_for_value_head</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+            <span class="n">flatten_output_size_for_policy_head</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+            <span class="n">downsample</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+            <span class="n">last_linear_layer_init_zero</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="n">activation</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+            <span class="n">norm_type</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;BN&#39;</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            The definition of policy and value prediction network, which is used to predict value and policy by the</span>
+<span class="sd">            given latent state.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. (C, H, W) for image.</span>
+<span class="sd">            - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.</span>
+<span class="sd">            - num_res_blocks (:obj:`int`): The number of res blocks in AlphaZero model.</span>
+<span class="sd">            - num_channels (:obj:`int`): The channels of hidden states.</span>
+<span class="sd">            - value_head_channels (:obj:`int`): The channels of value head.</span>
+<span class="sd">            - policy_head_channels (:obj:`int`): The channels of policy head.</span>
+<span class="sd">            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).</span>
+<span class="sd">            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).</span>
+<span class="sd">            - output_support_size (:obj:`int`): The size of categorical value output.</span>
+<span class="sd">            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \</span>
+<span class="sd">            - flatten_output_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \</span>
+<span class="sd">                of the value head.</span>
+<span class="sd">            - flatten_output_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \</span>
+<span class="sd">                of the policy head.</span>
+<span class="sd">            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.</span>
+<span class="sd">            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \</span>
+<span class="sd">                dynamics/prediction mlp, default sets it to True.</span>
+<span class="sd">            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \</span>
+<span class="sd">                operation to speedup, e.g. ReLU(inplace=True).</span>
+<span class="sd">            - norm_type (:obj:`str`): The type of normalization in networks. defaults to &#39;BN&#39;.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">PredictionNetwork</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="n">norm_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span> <span class="s1">&#39;LN&#39;</span><span class="p">],</span> <span class="s2">&quot;norm_type must in [&#39;BN&#39;, &#39;LN&#39;]&quot;</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">resblocks</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ModuleList</span><span class="p">(</span>
+            <span class="p">[</span>
+                <span class="n">ResBlock</span><span class="p">(</span>
+                    <span class="n">in_channels</span><span class="o">=</span><span class="n">num_channels</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span> <span class="n">norm_type</span><span class="o">=</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span> <span class="n">res_type</span><span class="o">=</span><span class="s1">&#39;basic&#39;</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span>
+                <span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_res_blocks</span><span class="p">)</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">conv1x1_value</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">num_channels</span><span class="p">,</span> <span class="n">value_head_channels</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">conv1x1_policy</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">num_channels</span><span class="p">,</span> <span class="n">policy_head_channels</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        
+        <span class="k">if</span> <span class="n">norm_type</span> <span class="o">==</span> <span class="s1">&#39;BN&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">norm_value</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm2d</span><span class="p">(</span><span class="n">value_head_channels</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">norm_policy</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm2d</span><span class="p">(</span><span class="n">policy_head_channels</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">norm_type</span> <span class="o">==</span> <span class="s1">&#39;LN&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">downsample</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">norm_value</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">([</span><span class="n">value_head_channels</span><span class="p">,</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">),</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)])</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">norm_policy</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">([</span><span class="n">policy_head_channels</span><span class="p">,</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">),</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">norm_value</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">([</span><span class="n">value_head_channels</span><span class="p">,</span> <span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]])</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">norm_policy</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">([</span><span class="n">policy_head_channels</span><span class="p">,</span> <span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]])</span>
+        
+        <span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_value_head</span> <span class="o">=</span> <span class="n">flatten_output_size_for_value_head</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_policy_head</span> <span class="o">=</span> <span class="n">flatten_output_size_for_policy_head</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">activation</span> <span class="o">=</span> <span class="n">activation</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">fc_value</span> <span class="o">=</span> <span class="n">MLP</span><span class="p">(</span>
+            <span class="n">in_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_value_head</span><span class="p">,</span>
+            <span class="n">hidden_channels</span><span class="o">=</span><span class="n">fc_value_layers</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+            <span class="n">out_channels</span><span class="o">=</span><span class="n">output_support_size</span><span class="p">,</span>
+            <span class="n">layer_num</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">fc_value_layers</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="n">activation</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span>
+            <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span><span class="p">,</span>
+            <span class="n">output_activation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">output_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="c1"># last_linear_layer_init_zero=True is beneficial for convergence speed.</span>
+            <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="n">last_linear_layer_init_zero</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fc_policy</span> <span class="o">=</span> <span class="n">MLP</span><span class="p">(</span>
+            <span class="n">in_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_policy_head</span><span class="p">,</span>
+            <span class="n">hidden_channels</span><span class="o">=</span><span class="n">fc_policy_layers</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+            <span class="n">out_channels</span><span class="o">=</span><span class="n">action_space_size</span><span class="p">,</span>
+            <span class="n">layer_num</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">fc_policy_layers</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="n">activation</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span>
+            <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span><span class="p">,</span>
+            <span class="n">output_activation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">output_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="c1"># last_linear_layer_init_zero=True is beneficial for convergence speed.</span>
+            <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="n">last_linear_layer_init_zero</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="PredictionNetwork.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetwork.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Forward computation of the prediction network.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, latent_state_dim).</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - policy (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).</span>
+<span class="sd">            - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">res_block</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resblocks</span><span class="p">:</span>
+            <span class="n">latent_state</span> <span class="o">=</span> <span class="n">res_block</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span>
+
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv1x1_value</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm_value</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+
+        <span class="n">policy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv1x1_policy</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span>
+        <span class="n">policy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm_policy</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+        <span class="n">policy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+
+        <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_value_head</span><span class="p">)</span>
+        <span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_policy_head</span><span class="p">)</span>
+
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc_value</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
+        <span class="n">policy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc_policy</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">policy</span><span class="p">,</span> <span class="n">value</span></div></div>
+
+
+<div class="viewcode-block" id="PredictionNetworkMLP"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetworkMLP">[docs]</a><span class="k">class</span> <span class="nc">PredictionNetworkMLP</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+
+<div class="viewcode-block" id="PredictionNetworkMLP.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetworkMLP.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">action_space_size</span><span class="p">,</span>
+            <span class="n">num_channels</span><span class="p">,</span>
+            <span class="n">common_layer_num</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
+            <span class="n">fc_value_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
+            <span class="n">fc_policy_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
+            <span class="n">output_support_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">601</span><span class="p">,</span>
+            <span class="n">last_linear_layer_init_zero</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+            <span class="n">activation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+            <span class="n">norm_type</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;BN&#39;</span><span class="p">,</span>
+    <span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            The definition of policy and value prediction network with Multi-Layer Perceptron (MLP),</span>
+<span class="sd">            which is used to predict value and policy by the given latent state.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - action_space_size: (:obj:`int`): Action space size, usually an integer number. For discrete action \</span>
+<span class="sd">                space, it is the number of discrete actions.</span>
+<span class="sd">            - num_channels (:obj:`int`): The channels of latent states.</span>
+<span class="sd">            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).</span>
+<span class="sd">            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).</span>
+<span class="sd">            - output_support_size (:obj:`int`): The size of categorical value output.</span>
+<span class="sd">            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \</span>
+<span class="sd">                dynamics/prediction mlp, default sets it to True.</span>
+<span class="sd">            - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \</span>
+<span class="sd">                operation to speedup, e.g. ReLU(inplace=True).</span>
+<span class="sd">            - norm_type (:obj:`str`): The type of normalization in networks. defaults to &#39;BN&#39;.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">num_channels</span> <span class="o">=</span> <span class="n">num_channels</span>
+
+        <span class="c1"># ******* common backbone ******</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fc_prediction_common</span> <span class="o">=</span> <span class="n">MLP</span><span class="p">(</span>
+            <span class="n">in_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_channels</span><span class="p">,</span>
+            <span class="n">hidden_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_channels</span><span class="p">,</span>
+            <span class="n">out_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_channels</span><span class="p">,</span>
+            <span class="n">layer_num</span><span class="o">=</span><span class="n">common_layer_num</span><span class="p">,</span>
+            <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span>
+            <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span><span class="p">,</span>
+            <span class="n">output_activation</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="n">output_norm</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="c1"># last_linear_layer_init_zero=False is important for convergence</span>
+            <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="c1"># ******* value and policy head ******</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fc_value_head</span> <span class="o">=</span> <span class="n">MLP</span><span class="p">(</span>
+            <span class="n">in_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_channels</span><span class="p">,</span>
+            <span class="n">hidden_channels</span><span class="o">=</span><span class="n">fc_value_layers</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+            <span class="n">out_channels</span><span class="o">=</span><span class="n">output_support_size</span><span class="p">,</span>
+            <span class="n">layer_num</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">fc_value_layers</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span>
+            <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span><span class="p">,</span>
+            <span class="n">output_activation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">output_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="c1"># last_linear_layer_init_zero=True is beneficial for convergence speed.</span>
+            <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="n">last_linear_layer_init_zero</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fc_policy_head</span> <span class="o">=</span> <span class="n">MLP</span><span class="p">(</span>
+            <span class="n">in_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">num_channels</span><span class="p">,</span>
+            <span class="n">hidden_channels</span><span class="o">=</span><span class="n">fc_policy_layers</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+            <span class="n">out_channels</span><span class="o">=</span><span class="n">action_space_size</span><span class="p">,</span>
+            <span class="n">layer_num</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">fc_policy_layers</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span>
+            <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span><span class="p">,</span>
+            <span class="n">output_activation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">output_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="c1"># last_linear_layer_init_zero=True is beneficial for convergence speed.</span>
+            <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="n">last_linear_layer_init_zero</span>
+        <span class="p">)</span></div>
+
+<div class="viewcode-block" id="PredictionNetworkMLP.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetworkMLP.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Forward computation of the prediction network.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - latent_state (:obj:`torch.Tensor`): input tensor with shape (B, latent_state_dim).</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - policy (:obj:`torch.Tensor`): policy tensor with shape (B, action_space_size).</span>
+<span class="sd">            - value (:obj:`torch.Tensor`): value tensor with shape (B, output_support_size).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">x_prediction_common</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc_prediction_common</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span>
+
+        <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc_value_head</span><span class="p">(</span><span class="n">x_prediction_common</span><span class="p">)</span>
+        <span class="n">policy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc_policy_head</span><span class="p">(</span><span class="n">x_prediction_common</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">policy</span><span class="p">,</span> <span class="n">value</span></div></div>
+</pre></div>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
