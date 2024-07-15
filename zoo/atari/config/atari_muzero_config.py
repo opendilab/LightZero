@@ -59,8 +59,7 @@ atari_muzero_config = dict(
             norm_type='BN',
             use_sim_norm=True,
             use_sim_norm_kl_loss=False,
-            model_type='conv',
-            harmony_balance=False # Referred as https://github.com/thuml/HarmonyDream.
+            model_type='conv'
         ),
         cuda=True,
         env_type='not_board_games',

@@ -71,6 +71,7 @@ class MuZeroPolicy(Policy):
             # (bool) Whether to analyze dormant ratio.
             analysis_dormant_ratio=False,
             # (bool) Whether to use HarmonyDream to balance weights between different losses. Default to False.
+            # More details can be found in https://arxiv.org/abs/2310.00344
             harmony_balance=False
         ),
         # ****** common ******
@@ -538,7 +539,7 @@ class MuZeroPolicy(Policy):
         # weighted loss with masks (some invalid states which are out of trajectory.)
         # Nan appear when consistency loss or policy entropy loss uses harmony parameter as coefficient.
         
-        # Referred as https://github.com/thuml/HarmonyDream/blob/main/wmlib-torch/wmlib/agents/dreamerv2.py#L161
+        # Please refer to https://github.com/thuml/HarmonyDream/blob/main/wmlib-torch/wmlib/agents/dreamerv2.py#L161
         # ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
         if self._cfg.model.harmony_balance:
             loss = (
@@ -546,15 +547,12 @@ class MuZeroPolicy(Policy):
                 + (policy_loss.mean() / torch.exp(self.harmony_policy))
                 + (value_loss.mean() / torch.exp(self.harmony_value)) 
                 + (reward_loss.mean() / torch.exp(self.harmony_reward))
-                # + (policy_entropy_loss.mean() / torch.exp(self.harmony_entropy))
             ) 
             weighted_total_loss = loss.mean()
             weighted_total_loss += (
-                # torch.log(torch.exp(self.harmony_dynamics) + 1) +
                 torch.log(torch.exp(self.harmony_policy) + 1) +
                 torch.log(torch.exp(self.harmony_value) + 1) + 
                 torch.log(torch.exp(self.harmony_reward) + 1) 
-                # torch.log(torch.exp(self.harmony_entropy) + 1)
             )
         else:  
             loss = (
