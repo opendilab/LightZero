@@ -199,12 +199,14 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 ```
 ## 📚 文档
 
+LightZero的文档可以在[这里](https://opendilab.github.io/LightZero/)找到。文档中包含教程和API参考。
+
 为希望定制环境和算法的用户，我们提供了相应的指南：
 
-- [如何自定义环境?](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/envs/customize_envs_zh.md)
-- [如何自定义算法?](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/algos/customize_algos_zh.md)
-- [如何设置配置文件？](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/config/config_zh.md)
-- [日志系统](https://github.com/opendilab/LightZero/blob/main/docs/source/tutorials/logs/logs_zh.md)
+- [如何自定义环境?](https://github.com/opendilab/LightZero/blob/main/docs/en/source/tutorials/envs/customize_envs_zh.md)
+- [如何自定义算法?](https://github.com/opendilab/LightZero/blob/main/docs/en/source/tutorials/algos/customize_algos_zh.md)
+- [如何设置配置文件？](https://github.com/opendilab/LightZero/blob/main/docs/en/source/tutorials/config/config_zh.md)
+- [日志系统](https://github.com/opendilab/LightZero/blob/main/docs/en/source/tutorials/logs/logs_zh.md)
 
 如有任何疑问，欢迎随时联系我们。
 
