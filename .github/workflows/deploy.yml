@@ -11,10 +11,10 @@ jobs:
 
     steps:
     - name: Checkout the repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v2
 
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v2
       with:
         python-version: '3.11'
 
@@ -31,13 +31,8 @@ jobs:
         make html
         cp ../../.nojekyll ./build/html/.nojekyll
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: github-pages
-        path: docs/en/build/html
-
     - name: Deploy to GitHub Pages
-      uses: actions/deploy-pages@v1
+      uses: peaceiris/actions-gh-pages@v3
       with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs/en/build/html
