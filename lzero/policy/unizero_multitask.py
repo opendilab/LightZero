@@ -219,6 +219,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 gamma=1,
                 # (float) The threshold for a dormant neuron.
                 dormant_threshold=0.025,
+                num_fc_gating_layers=2,
+                
+                base_layers_num = 5
             ),
         ),
         # ****** common ******

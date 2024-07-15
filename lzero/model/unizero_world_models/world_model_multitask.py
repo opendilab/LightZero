@@ -45,7 +45,8 @@ class WorldModelMT(nn.Module):
         self.config = config
         self.transformer = Transformer(self.config)
 
-        # TODO: multitask
+        # TODO: multitasks
+        self.embed_dim = config.embed_dim
         self.task_num = config.task_num
         self.task_emb = nn.Embedding(self.task_num, config.embed_dim, max_norm=1)  # TODO
         self.head_policy_multi_task = nn.ModuleList()
@@ -54,7 +55,28 @@ class WorldModelMT(nn.Module):
         self.head_observations_multi_task = nn.ModuleList()
 
         self.num_experts_in_softmoe = config.num_experts_in_softmoe
-
+        
+        ################################################################
+        # Soft Modulization 
+        # referred as https://github.com/RchalYang/Soft-Module/blob/main/torchrl/networks/nets.py#L60
+        
+        self.num_fc_gating_layers = config.num_fc_gating_layers
+        self.base_layers_num = config.base_layers_num
+        self.task_embed_layer = nn.Linear(self.task_num, self.embed_dim)
+        gating_fc_layer_module = [nn.ReLU(), nn.Linear(self.embed_dim, self.embed_dim)] \
+                            * self.num_fc_gating_layers
+        self.gating_fcs = nn.Sequential(*gating_fc_layer_module)
+        self.gating_weight_fc_0 = nn.Linear(self.embed_dim, self.task_num * self.task_num)
+        self.gating_weight_fcs = nn.ModuleList()
+        self.gating_weight_cond_fcs = nn.ModuleList()
+        for k in range(self.base_layers_num - 2):
+            self.gating_weight_cond_fcs.append(nn.Linear((k+1) * self.task_num * self.task_num, self.embed_dim))
+            self.gating_weight_fcs.append(nn.Linear(self.embed_dim, self.task_num * self.task_num))
+        # self.gating_weight_cond_fc = nn.Linear(self.task_num * self.task_num, self.embed_dim)
+        self.gating_weight_last_fc = nn.Linear(self.embed_dim, self.task_num)
+        self.gating_weight_cond_last = nn.Linear((self.base_layers_num - 1) * self.task_num * self.task_num, self.embed_dim)
+        ################################################################
+        
         # Move all modules to the specified device
         print(f"self.config.device: {self.config.device}")
         self.to(self.config.device)
@@ -73,25 +95,26 @@ class WorldModelMT(nn.Module):
         # Initialize action embedding table
         self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
         print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
-
+        
+        
         if self.num_experts_in_softmoe == -1:
             print('We use normal head')
             # TODO: Normal Head
             for task_id in range(self.task_num):  # TODO
                 action_space_size = self.action_space_size # TODO:======================
                 # action_space_size=18  # TODO:======================
-                self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
+                self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size, num_layer=self.base_layers_num)
                 self.head_policy_multi_task.append(self.head_policy)
-
-                self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
+                
+                self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size, num_layer=self.base_layers_num)
                 self.head_value_multi_task.append(self.head_value)
 
-                self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
+                self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size, num_layer=self.base_layers_num)
                 self.head_rewards_multi_task.append(self.head_rewards)
 
                 self.head_observations = self._create_head(self.all_but_last_latent_state_pattern,
                                                         self.obs_per_embdding_dim,
-                                                        self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
+                                                        self.sim_norm, num_layer=self.base_layers_num)  # NOTE: we add a sim_norm to the head for observations
                 self.head_observations_multi_task.append(self.head_observations)
         else:
             print(f'We use softmoe head, self.num_experts_in_softmoe is {self.num_experts_in_softmoe}')
@@ -105,7 +128,8 @@ class WorldModelMT(nn.Module):
             self.head_value_multi_task.append(self.head_value)
             self.head_rewards_multi_task.append(self.head_rewards)
             self.head_observations_multi_task.append(self.head_observations)
-
+            
+    
 
         # Apply weight initialization, the order is important
         self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
@@ -157,20 +181,21 @@ class WorldModelMT(nn.Module):
         self.value_policy_tokens_pattern = torch.zeros(self.config.tokens_per_block)
         self.value_policy_tokens_pattern[-2] = 1
 
-    def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
+    def _create_head(self, block_mask: torch.Tensor, output_dim: int, 
+                     norm_layer: Optional[nn.Module] = None, num_layer: int = 5) -> Head:
         """Create head modules for the transformer."""
         modules = [
             nn.Linear(self.config.embed_dim, self.config.embed_dim),
             nn.GELU(approximate='tanh'),
-            nn.Linear(self.config.embed_dim, output_dim)
-        ]
-        if norm_layer:
-            modules.append(norm_layer)
+        ] * (num_layer - 1) + [nn.Linear(self.config.embed_dim, output_dim)]
+        # if norm_layer:
+        modules.append(norm_layer) if norm_layer else modules.append(nn.Identity())
         return Head(
             max_blocks=self.config.max_blocks,
             block_mask=block_mask,
             head_module=nn.Sequential(*modules)
         )
+        
 
     def _create_head_softmoe(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, soft_moe=None) -> Head:
         """Create softmoe head modules for the transformer."""
@@ -338,7 +363,94 @@ class WorldModelMT(nn.Module):
             return attn_func(self.pos_emb.weight).view(
                 1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
             ).transpose(1, 2).detach()
+            
+    def _compute_soft_modulization(
+            self,
+            x: torch.Tensor, 
+            task_num: int,
+            task_id: int,
+            task_embed_layer: nn.Module,
+            gating_fcs: nn.Module,
+            gating_weight_fc_0: nn.Module, 
+            gating_weight_fcs: nn.ModuleList,
+            gating_weight_cond_fcs: nn.ModuleList,
+            gating_weight_cond_last: nn.Module,
+            gating_weight_last_fc: nn.Module,
+            base_model: nn.Module,
+            base_layers_num: int,
+            device: torch.device
+        ) -> torch.Tensor:
+        """
+        Overview: Soft Modulization for computing 
+        """
+        # Encode task into one_hot vector 
+        # https://arxiv.org/abs/2003.13661 mentioned in section 4.1
+        task_id_vector = torch.zeros(task_num).to(device)
+        task_id_vector[task_id] = 1
+        
+        ###################### Preprocess task embedding ########################
+        task_embedding = task_embed_layer(task_id_vector).to(device)
+        task_embedding = F.relu(task_embedding * x)
+        # f(s)·h(T) as mentioned in paper
+        task_embedding = gating_fcs(task_embedding)
+        #########################################################################
+        
+          
+        weights = []
+        flatten_weights = []
+        base_shape = task_embedding.shape[:-1]
+        weight_shape = base_shape + torch.Size([task_num, task_num])
+        flatten_shape = base_shape + torch.Size([task_num * task_num])
+        
+        ################## Calculate all weights between layers #################
+        raw_weight = gating_weight_fc_0(F.relu(task_embedding))
+        raw_weight = raw_weight.view(weight_shape)
+        softmax_weight = F.softmax(raw_weight, dim=-1)
+        flatten_weight = softmax_weight.view(flatten_shape)
+        weights.append(softmax_weight)
+        flatten_weights.append(flatten_weight)
+        for i, (gating_weight_fc, gating_weight_cond_fc) in enumerate(zip(gating_weight_fcs, gating_weight_cond_fcs)):
+            
+            cond = F.relu(torch.cat(flatten_weights, dim = -1))
+            cond = gating_weight_cond_fc(cond)
+            cond = F.relu(cond * task_embedding)
+            raw_weight = gating_weight_fc(cond)
+            raw_weight = raw_weight.view(weight_shape)
+            softmax_weight = F.softmax(raw_weight, dim=-1)
+            weights.append(softmax_weight)
+            flatten_weights.append(raw_weight.view(flatten_shape))
+            
+            
+        cond = F.relu(torch.cat(flatten_weights, dim=-1))
+        cond = gating_weight_cond_last(cond)
+        cond = F.relu(cond * task_embedding)
+        raw_last_weight = gating_weight_last_fc(cond)
+        last_weight = F.softmax(raw_last_weight, dim = -1)
+        #########################################################################
+        
+        #################### Now for forward calculation ########################
+        #! We suppose each model follows:
+        #! Linear -> Activation -> Linear -> Activation ..
+        obs_mid_layers = [base_model[i].head_module[:2] for i in range(task_num)]
+        obs_mid_outputs = [obs_mid_layer(x).unsqueeze(-2) for obs_mid_layer in obs_mid_layers]
+        obs_mid_outputs = torch.cat(obs_mid_outputs, dim=-2)
+        for i in range(base_layers_num - 1):
+            new_module_outputs = []
+            obs_next_mid_layers = [base_model[j].head_module[2*i+2:2*i+4] for j in range(task_num)]
+            # print(f"obs_next_mid_layers: \n{obs_next_mid_layers}")
+            # time.sleep(5)
+            for j, next_layer_module in enumerate(obs_next_mid_layers):
+                
+                next_module_input = F.relu((obs_mid_outputs * weights[i][..., j, :].unsqueeze(-1)).sum(dim=-2))
+                new_module_outputs.append((next_layer_module(next_module_input)).unsqueeze(-2))
 
+            obs_mid_outputs = torch.cat(new_module_outputs, dim=-2)
+            
+        obs_module_output = obs_mid_outputs
+
+        obs_output = (obs_module_output * last_weight.unsqueeze(-1)).sum(-2)
+        #########################################################################
+        return obs_output
     def forward(self, obs_embeddings_or_act_tokens: Dict[str, Union[torch.Tensor, tuple]],
                 past_keys_values: Optional[torch.Tensor] = None,
                 kvcache_independent: bool = False, is_init_infer: bool = True,
@@ -398,25 +510,66 @@ class WorldModelMT(nn.Module):
         # Process combined observation embeddings and action tokens
         else:
             sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
-
+            
         # Pass sequences through transformer
+        
+        ########################################################################
+        #####               Soft Modulation weight computing               #####
+        ########################################################################
+        # TODO: Implement only 2 Linear layers for each task module firstly
+        #! K in [embed_dim(obs), support_dim(value, reward), action_dim(policy)]
+        #   
+        #      Linear(768, K)          Linear(768, K)        Linear(768, K)
+        #             ↑                      ↑                     ↑
+        #           GeLU                   GeLU                  GeLU
+        #             ↑                      ↑                     ↑
+        #     Linear(768, 768)        Linear(768, 768)      Linear(768, 768)
+        #             ↑                      ↑                     ↑
+        #           GeLU                   GeLU                  GeLU
+        #             ↑                      ↑                     ↑
+        #     Linear(768, 768)        Linear(768, 768)      Linear(768, 768)
+        #             ↑                      ↑                     ↑
+        #           GeLU                   GeLU                  GeLU
+        #             ↑                      ↑                     ↑
+        #     Linear(768, 768)        Linear(768, 768)      Linear(768, 768)
+        #  ----------------------------------------------------------------------
+        #             ↑                      ↑                     ↑
+        #       x:(3, 1, 768)          x:(3, 1, 768)         x:(3, 1, 768)
+        #
+        #          Task 1                  Task 2               Task 3
+        #########################################################################
+        
         x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths)
-
-        # Generate logits
-
+        
+        output = self._compute_soft_modulization(
+            x=x, 
+            task_num=self.task_num, 
+            task_id=task_id,
+            task_embed_layer=self.task_embed_layer, 
+            gating_fcs=self.gating_fcs,
+            gating_weight_fc_0=self.gating_weight_fc_0,
+            gating_weight_fcs=self.gating_weight_fcs,
+            gating_weight_cond_fcs=self.gating_weight_cond_fcs,
+            gating_weight_cond_last=self.gating_weight_cond_last,
+            gating_weight_last_fc=self.gating_weight_last_fc,
+            base_model=self.head_rewards_multi_task,  # TODO: observaion, rewards, policy, value 
+            base_layers_num=self.base_layers_num,
+            device=self.device
+        )
+        print(f"output has shape {output.shape}")
+        # [3, 1, 768] for obs, [3, 1, 18] for policy and [3, 1, 101] for rew, val
+        
+        # # Generate logits
+        # print("=========================")
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
         # one head or soft_moe
+        
+        # TODO Not certain for what should be passed into the network
         logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
-
-        # N head
-        # logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-
+        
         # logits_ends is None
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)
 

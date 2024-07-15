@@ -52,8 +52,10 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # collector_env_num=collector_env_num,
                     # evaluator_env_num=evaluator_env_num,
                     task_num=len(env_id_list),
-                    num_experts_in_softmoe=4,  # NOTE
+                    num_experts_in_softmoe=-1,  # NOTE
                     # num_experts_in_softmoe=-1,  # NOTE
+                    num_fc_gating_layers=2,
+                    base_layers_num=5
                 ),
             ),
             cuda=True,
