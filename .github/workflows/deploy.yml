@@ -29,10 +29,10 @@ jobs:
       run: |
         cd docs/en
         make html
-#        cp ../../.nojekyll ./_build/html/.nojekyll
+        cp ../../.nojekyll ./build/html/.nojekyll
 
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./docs/en/_build/html
+        publish_dir: ./docs/en/build/html
