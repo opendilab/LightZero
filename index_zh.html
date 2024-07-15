@@ -4,7 +4,7 @@
   <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Welcome to LightZero’s Documentation &mdash; LightZero 0.1.0 documentation</title>
+  <title>LightZero文档 &mdash; LightZero 0.1.0 documentation</title>
       <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/theme.css" />
       <link rel="stylesheet" type="text/css" href="_static/css/style.css" />
@@ -44,15 +44,22 @@
   </form>
 </div>
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+              <p class="caption" role="heading"><span class="caption-text">教程</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/algos/customize_algos_zh.html">LightZero 中如何自定义算法?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/envs/customize_envs_zh.html">LightZero 中如何自定义环境?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/config/config_zh.html">LightZero 中如何设置配置文件？</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<p class="caption" role="heading"><span class="caption-text">API 文档</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="api_doc/index_zh.html">API Doc</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/worker/index.html">Worker</a></li>
 </ul>
 
         </div>
@@ -69,7 +76,7 @@
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
       <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
-      <li class="breadcrumb-item active">Welcome to LightZero’s Documentation</li>
+      <li class="breadcrumb-item active">LightZero文档</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/index_zh.rst.txt" rel="nofollow"> View page source</a>
       </li>
@@ -81,13 +88,21 @@
              
     
     
-  <section id="welcome-to-lightzero-s-documentation">
-<h1>Welcome to LightZero’s Documentation<a class="headerlink" href="#welcome-to-lightzero-s-documentation" title="Permalink to this heading"></a></h1>
-<section id="overview">
-<h2>Overview<a class="headerlink" href="#overview" title="Permalink to this heading"></a></h2>
-<p>[LightZero](<a class="reference external" href="https://arxiv.org/pdf/2310.08348.pdf">https://arxiv.org/pdf/2310.08348.pdf</a>) is a lightweight, efficient, and easy-to-understand open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL).</p>
+  <section id="lightzero">
+<h1>LightZero文档<a class="headerlink" href="#lightzero" title="Permalink to this heading"></a></h1>
+<section id="id1">
+<h2>概述<a class="headerlink" href="#id1" title="Permalink to this heading"></a></h2>
+<p><a class="reference external" href="../index.html">English Documentation</a></p>
+<p><a class="reference external" href="https://arxiv.org/pdf/2310.08348.pdf">LightZero</a> 是一个轻量、高效且易于理解的开源算法工具包，结合了蒙特卡洛树搜索（MCTS）和深度强化学习（RL）。
+你可以在 <a class="reference external" href="https://github.com/opendilab/LightZero">GitHub</a> 上找到源代码。</p>
+<p>相关研究论文包括：</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://arxiv.org/pdf/2310.08348.pdf">LightZero</a></p></li>
+<li><p><a class="reference external" href="https://arxiv.org/abs/2406.10667">UniZero</a></p></li>
+<li><p><a class="reference external" href="https://arxiv.org/abs/2404.16364">ReZero</a></p></li>
+</ul>
 <div class="toctree-wrapper compound">
-<p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<p class="caption" role="heading"><span class="caption-text">教程</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/algos/customize_algos_zh.html">LightZero 中如何自定义算法?</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="tutorials/algos/customize_algos_zh.html#id1">基本步骤</a></li>
@@ -112,17 +127,70 @@
 </ul>
 </div>
 <div class="toctree-wrapper compound">
-<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<p class="caption" role="heading"><span class="caption-text">API 文档</span></p>
 <ul>
-<li class="toctree-l1"><a class="reference internal" href="api_doc/index_zh.html">API Doc</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="api_doc/config/index.html">Config</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api_doc/agent/index.html">Agent</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api_doc/entry/index.html">Entry</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api_doc/envs/index.html">Envs</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api_doc/mcts/index.html">MCTS</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api_doc/model/index.html">Model</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api_doc/policy/index.html">Policy</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api_doc/worker/index.html">Worker</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/agent/index.html">Agent</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/agent/index.html#lzero.agent.alphazero.AlphaZeroAgent"><code class="docutils literal notranslate"><span class="pre">AlphaZeroAgent</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/agent/index.html#lzero.agent.muzero.MuZeroAgent"><code class="docutils literal notranslate"><span class="pre">MuZeroAgent</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/agent/index.html#lzero.agent.efficientzero.EfficientZeroAgent"><code class="docutils literal notranslate"><span class="pre">EfficientZeroAgent</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/agent/index.html#lzero.agent.gumbel_muzero.GumbelMuZeroAgent"><code class="docutils literal notranslate"><span class="pre">GumbelMuZeroAgent</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/agent/index.html#lzero.agent.sampled_efficientzero.SampledEfficientZeroAgent"><code class="docutils literal notranslate"><span class="pre">SampledEfficientZeroAgent</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/agent/index.html#lzero.agent.sampled_alphazero.SampledAlphaZeroAgent"><code class="docutils literal notranslate"><span class="pre">SampledAlphaZeroAgent</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/config/index.html">Config</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/config/meta.html">lzero.config.meta</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/entry/index.html">Entry</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/entry/index.html#lzero.entry.train_alphazero.train_alphazero"><code class="docutils literal notranslate"><span class="pre">train_alphazero</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/entry/index.html#lzero.entry.eval_alphazero.eval_alphazero"><code class="docutils literal notranslate"><span class="pre">eval_alphazero</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/entry/index.html#lzero.entry.train_muzero.train_muzero"><code class="docutils literal notranslate"><span class="pre">train_muzero</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/entry/index.html#lzero.entry.eval_muzero.eval_muzero"><code class="docutils literal notranslate"><span class="pre">eval_muzero</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/entry/index.html#lzero.entry.train_muzero_with_gym_env.train_muzero_with_gym_env"><code class="docutils literal notranslate"><span class="pre">train_muzero_with_gym_env</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/entry/index.html#lzero.entry.eval_muzero_with_gym_env.eval_muzero_with_gym_env"><code class="docutils literal notranslate"><span class="pre">eval_muzero_with_gym_env</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/entry/index.html#lzero.entry.train_muzero_with_reward_model.train_muzero_with_reward_model"><code class="docutils literal notranslate"><span class="pre">train_muzero_with_reward_model</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/envs/index.html">Envs</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/envs/index.html#lzero.envs.wrappers.lightzero_env_wrapper.LightZeroEnvWrapper"><code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper"><code class="docutils literal notranslate"><span class="pre">ActionDiscretizationEnvWrapper</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/mcts/index.html">MCTS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/mcts/buffer/index.html">Buffer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/mcts/tree_search/index.html">Tree Search</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/model/index.html">Model</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/model/common.html">Common</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/model/muzero_model.html">MuZeroModel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/model/muzero_model_mlp.html">MuZeroModelMLP</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/model/efficientzero_model.html">EfficientZeroModel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/model/efficientzero_model_mlp.html">EfficientZeroModelMLP</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/model/alphazero_model.html">AlphaZeroModel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/model/sampled_efficientzero_model.html">SampledEfficientZeroModel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/model/sampled_efficientzero_model_mlp.html">SampledEfficientZeroModelMLP</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/model/stochastic_muzero_model.html">StochasticMuZeroModel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/model/stochastic_muzero_model_mlp.html">StochasticMuZeroModelMLP</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/policy/index.html">Policy</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/policy/index.html#alphazeropolicy">AlphaZeroPolicy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/policy/index.html#muzeropolicy">MuZeroPolicy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/policy/index.html#efficientzeropolicy">EfficientZeroPolicy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/policy/index.html#gumbel-alphazeropolicy">Gumbel AlphaZeroPolicy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/policy/index.html#gumbel-muzeropolicy">Gumbel MuZeroPolicy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/policy/index.html#sampled-alphazeropolicy">Sampled AlphaZeroPolicy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/policy/index.html#sampled-muzeropolicy">Sampled MuZeroPolicy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/policy/index.html#sampled-efficientzeropolicy">Sampled EfficientZeroPolicy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/policy/index.html#stochastic-muzeropolicy">Stochastic MuZeroPolicy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/policy/index.html#unizeropolicy">UniZeroPolicy</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="api_doc/worker/index.html">Worker</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/worker/index.html#muzerocollector">MuZeroCollector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api_doc/worker/index.html#muzeroevaluator">MuZeroEvaluator</a></li>
 </ul>
 </li>
 </ul>

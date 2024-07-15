@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>安装和快速入门指南 &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../config/config.html">How to Set Configuration Files in LightZero</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../api_doc/worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">安装和快速入门指南</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/tutorials/installation/installation_and_quickstart_zh.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <section id="id1">
+<h1>安装和快速入门指南<a class="headerlink" href="#id1" title="Permalink to this heading"></a></h1>
+<section id="id2">
+<h2>安装<a class="headerlink" href="#id2" title="Permalink to this heading"></a></h2>
+<p>LightZero 目前可通过 PyPI 获取，并需要 Python 3.7 或更高版本。</p>
+<p>要从 PyPI 安装 LightZero，请使用以下命令：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>LightZero
+</pre></div>
+</div>
+<p>或者，您可以通过以下命令直接从 GitHub 仓库安装最新的开发版本：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/opendilab/LightZero.git
+<span class="nb">cd</span><span class="w"> </span>LightZero
+pip3<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+</pre></div>
+</div>
+<p>请注意，LightZero 目前仅支持在 <code class="docutils literal notranslate"><span class="pre">Linux</span></code> 和 <code class="docutils literal notranslate"><span class="pre">macOS</span></code> 平台上安装。我们正在积极工作以扩展对 <code class="docutils literal notranslate"><span class="pre">Windows</span></code> 平台的支持，感谢您在此过渡期间的耐心等待。</p>
+</section>
+<section id="docker">
+<h2>使用 Docker 安装<a class="headerlink" href="#docker" title="Permalink to this heading"></a></h2>
+<p>我们还提供了一个 Dockerfile，用于设置一个包含运行 LightZero 库所需的所有依赖项的环境。此 Docker 镜像基于 Ubuntu 20.04，并安装了 Python 3.8 以及其他必要的工具和库。</p>
+<p>以下是使用 Dockerfile 构建 Docker 镜像、从此镜像运行容器并在容器内执行 LightZero 代码的方法：</p>
+<ol>
+<li><p><strong>下载 Dockerfile</strong>：Dockerfile 位于 LightZero 仓库的根目录。将此 <a class="reference external" href="https://github.com/opendilab/LightZero/blob/main/Dockerfile">文件</a> 下载到您的本地机器。</p></li>
+<li><p><strong>准备构建上下文</strong>：在本地机器上创建一个新目录，将 Dockerfile 移动到此目录，并导航到该目录。此步骤有助于在构建过程中避免将不必要的文件发送到 Docker 守护程序。</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mkdir<span class="w"> </span>lightzero-docker
+mv<span class="w"> </span>Dockerfile<span class="w"> </span>lightzero-docker/
+<span class="nb">cd</span><span class="w"> </span>lightzero-docker/
+</pre></div>
+</div>
+</li>
+<li><p><strong>构建 Docker 镜像</strong>：在包含 Dockerfile 的目录中使用以下命令构建 Docker 镜像。</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>ubuntu-py38-lz:latest<span class="w"> </span>-f<span class="w"> </span>./Dockerfile<span class="w"> </span>.
+</pre></div>
+</div>
+</li>
+<li><p><strong>从镜像运行容器</strong>：使用以下命令以交互模式启动一个从镜像生成的容器，并带有 Bash shell。</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>run<span class="w"> </span>-dit<span class="w"> </span>--rm<span class="w"> </span>ubuntu-py38-lz:latest<span class="w"> </span>/bin/bash
+</pre></div>
+</div>
+</li>
+<li><p><strong>在容器内执行 LightZero 代码</strong>：进入容器后，您可以使用以下命令运行示例 Python 脚本：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>./LightZero/zoo/classic_control/cartpole/config/cartpole_muzero_config.py
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+<section id="id3">
+<h2>快速入门<a class="headerlink" href="#id3" title="Permalink to this heading"></a></h2>
+<section id="muzero-agent-cartpole">
+<h3>训练 MuZero Agent 玩 CartPole<a class="headerlink" href="#muzero-agent-cartpole" title="Permalink to this heading"></a></h3>
+<p>要训练一个 MuZero agent 来玩 <a class="reference external" href="https://gymnasium.farama.org/environments/classic_control/cart_pole/">CartPole</a>，请使用以下命令：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>LightZero
+python3<span class="w"> </span>-u<span class="w"> </span>zoo/classic_control/cartpole/config/cartpole_muzero_config.py
+</pre></div>
+</div>
+</section>
+<section id="muzero-agent-pong">
+<h3>训练 MuZero Agent 玩 Pong<a class="headerlink" href="#muzero-agent-pong" title="Permalink to this heading"></a></h3>
+<p>要训练一个 MuZero agent 来玩 <a class="reference external" href="https://gymnasium.farama.org/environments/atari/pong/">Pong</a>，请使用以下命令：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>LightZero
+python3<span class="w"> </span>-u<span class="w"> </span>zoo/atari/config/atari_muzero_config.py
+</pre></div>
+</div>
+</section>
+<section id="muzero-agent-tictactoe">
+<h3>训练 MuZero Agent 玩 TicTacToe<a class="headerlink" href="#muzero-agent-tictactoe" title="Permalink to this heading"></a></h3>
+<p>要训练一个 MuZero agent 来玩 <a class="reference external" href="https://en.wikipedia.org/wiki/Tic-tac-toe">TicTacToe</a>，请使用以下命令：</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>LightZero
+python3<span class="w"> </span>-u<span class="w"> </span>zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
+</pre></div>
+</div>
+<p>在探索 LightZero 的过程中，如有任何问题或疑问，请随时联系我们！</p>
+</section>
+</section>
+</section>
+
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
