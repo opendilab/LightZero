@@ -28,6 +28,7 @@ jobs:
       run: |
         cd docs/en
         make html
+        cp .nojekyll ./docs/en/_build/html/.nojekyll
 
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
