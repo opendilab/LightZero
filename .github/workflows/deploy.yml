@@ -16,12 +16,12 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: '3.x'
+        python-version: '3.11'
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r requirements-doc.txt
+        pip install --upgrade -r requirements-doc.txt
         pip install -e .
         pip install sphinx sphinx-rtd-theme recommonmark
 
