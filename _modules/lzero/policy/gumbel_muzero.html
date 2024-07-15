@@ -200,10 +200,10 @@
         <span class="c1"># Bigger &quot;update_per_collect&quot; means bigger off-policy.</span>
         <span class="c1"># collect data -&gt; update policy-&gt; collect data -&gt; ...</span>
         <span class="c1"># For different env, we have different episode_length,</span>
-        <span class="c1"># If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.</span>
+        <span class="c1"># If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.replay_ratio automatically.</span>
         <span class="n">update_per_collect</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
         <span class="c1"># (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.</span>
-        <span class="n">model_update_ratio</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+        <span class="n">replay_ratio</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
         <span class="c1"># (int) Minibatch size for one gradient descent.</span>
         <span class="n">batch_size</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
         <span class="c1"># (str) Optimizer for training policy network. [&#39;SGD&#39; or &#39;Adam&#39;]</span>
@@ -251,7 +251,7 @@
         <span class="c1"># The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.</span>
         <span class="n">fixed_temperature_value</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
         <span class="c1"># (bool) Whether to add noise to roots during reanalyze process.</span>
-        <span class="n">reanalyze_noise</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">reanalyze_noise</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
 
         <span class="c1"># ****** Priority ******</span>
         <span class="c1"># (bool) Whether to use priority when sampling training data from the buffer.</span>
@@ -618,6 +618,10 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span> <span class="o">=</span> <span class="n">temperature</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">collect_epsilon</span> <span class="o">=</span> <span class="n">epsilon</span>
         <span class="n">active_collect_env_num</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">ready_env_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
+
         <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
             <span class="c1"># data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}</span>
             <span class="n">network_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="o">.</span><span class="n">initial_inference</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
@@ -656,12 +660,6 @@
             <span class="n">roots_improved_policy_probs</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_policies</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">discount_factor</span><span class="p">,</span>
                                                              <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">)</span>  <span class="c1"># new policy constructed with completed Q in gumbel muzero</span>
             <span class="n">roots_improved_policy_probs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">roots_improved_policy_probs</span><span class="p">)</span>
-
-            <span class="n">data_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">)]</span>
-            <span class="n">output</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">data_id</span><span class="p">}</span>
-
-            <span class="k">if</span> <span class="n">ready_env_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">)</span>
 
             <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">):</span>
                 <span class="n">distributions</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">improved_policy_probs</span> <span class="o">=</span> <span class="n">roots_visit_count_distributions</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">roots_values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> \
@@ -728,6 +726,9 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
         <span class="n">active_eval_env_num</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">ready_env_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">active_eval_env_num</span><span class="p">)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
         <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
             <span class="c1"># data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}</span>
             <span class="n">network_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="o">.</span><span class="n">initial_inference</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
@@ -760,12 +761,6 @@
             <span class="n">roots_improved_policy_probs</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_policies</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">discount_factor</span><span class="p">,</span>
                                                              <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">)</span>  <span class="c1"># new policy constructed with completed Q in gumbel muzero</span>
             <span class="n">roots_improved_policy_probs</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">roots_improved_policy_probs</span><span class="p">)</span>
-
-            <span class="n">data_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">active_eval_env_num</span><span class="p">)]</span>
-            <span class="n">output</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">data_id</span><span class="p">}</span>
-
-            <span class="k">if</span> <span class="n">ready_env_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">active_eval_env_num</span><span class="p">)</span>
 
             <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">):</span>
                 <span class="n">distributions</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">improved_policy_probs</span> <span class="o">=</span> <span class="n">roots_visit_count_distributions</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">roots_values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> \

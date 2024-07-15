@@ -91,16 +91,16 @@
 <span class="sd">Overview:</span>
 <span class="sd">    BTW, users can refer to the unittest of these model templates to learn how to use them.</span>
 <span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">math</span>
 <span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
 
-<span class="kn">import</span> <span class="nn">math</span>
 <span class="kn">import</span> <span class="nn">torch</span>
 <span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
 <span class="kn">from</span> <span class="nn">ding.torch_utils</span> <span class="kn">import</span> <span class="n">MLP</span><span class="p">,</span> <span class="n">ResBlock</span>
 <span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">MODEL_REGISTRY</span><span class="p">,</span> <span class="n">SequenceType</span>
 <span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">ndarray</span>
 
-<span class="kn">from</span> <span class="nn">.common</span> <span class="kn">import</span> <span class="n">EZNetworkOutput</span><span class="p">,</span> <span class="n">RepresentationNetwork</span><span class="p">,</span> <span class="n">PredictionNetwork</span>
+<span class="kn">from</span> <span class="nn">.common</span> <span class="kn">import</span> <span class="n">RepresentationNetwork</span><span class="p">,</span> <span class="n">PredictionNetwork</span><span class="p">,</span> <span class="n">EZNetworkOutput</span>
 <span class="kn">from</span> <span class="nn">.utils</span> <span class="kn">import</span> <span class="n">renormalize</span><span class="p">,</span> <span class="n">get_params_mean</span><span class="p">,</span> <span class="n">get_dynamic_mean</span><span class="p">,</span> <span class="n">get_reward_mean</span>
 
 
@@ -206,21 +206,21 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">norm_type</span> <span class="o">=</span> <span class="n">norm_type</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">activation</span> <span class="o">=</span> <span class="n">activation</span>
 
+        <span class="k">if</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">96</span><span class="p">:</span>
+            <span class="n">latent_size</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">64</span><span class="p">:</span>
+            <span class="n">latent_size</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">8</span><span class="p">)</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">8</span><span class="p">)</span>
+
         <span class="n">flatten_output_size_for_reward_head</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="p">(</span><span class="n">reward_head_channels</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)</span> <span class="o">*</span>
-             <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">))</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
+            <span class="p">(</span><span class="n">reward_head_channels</span> <span class="o">*</span> <span class="n">latent_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
             <span class="p">(</span><span class="n">reward_head_channels</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
         <span class="p">)</span>
-
         <span class="n">flatten_output_size_for_value_head</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="p">(</span><span class="n">value_head_channels</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)</span> <span class="o">*</span>
-             <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">))</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
+            <span class="p">(</span><span class="n">value_head_channels</span> <span class="o">*</span> <span class="n">latent_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
             <span class="p">(</span><span class="n">value_head_channels</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
         <span class="p">)</span>
-
         <span class="n">flatten_output_size_for_policy_head</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="p">(</span><span class="n">policy_head_channels</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)</span> <span class="o">*</span>
-             <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">))</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
+            <span class="p">(</span><span class="n">policy_head_channels</span> <span class="o">*</span> <span class="n">latent_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
             <span class="p">(</span><span class="n">policy_head_channels</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
         <span class="p">)</span>
 
@@ -271,8 +271,7 @@
             <span class="c1"># (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is</span>
             <span class="c1"># (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,</span>
             <span class="c1"># self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304</span>
-            <span class="n">ceil_size</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">projection_input_dim</span> <span class="o">=</span> <span class="n">num_channels</span> <span class="o">*</span> <span class="n">ceil_size</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">projection_input_dim</span> <span class="o">=</span> <span class="n">num_channels</span> <span class="o">*</span> <span class="n">latent_size</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">projection_input_dim</span> <span class="o">=</span> <span class="n">num_channels</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
 
@@ -319,7 +318,6 @@
         <span class="n">latent_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_representation</span><span class="p">(</span><span class="n">obs</span><span class="p">)</span>
         <span class="n">policy_logits</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prediction</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span>
         <span class="c1"># zero initialization for reward hidden states</span>
-        <span class="c1"># (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)</span>
         <span class="n">reward_hidden_state</span> <span class="o">=</span> <span class="p">(</span>
             <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">lstm_hidden_size</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">obs</span><span class="o">.</span><span class="n">device</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span>

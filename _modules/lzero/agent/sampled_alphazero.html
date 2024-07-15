@@ -287,9 +287,9 @@
             <span class="n">new_data</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">new_data</span><span class="p">,</span> <span class="p">[])</span>
 
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">update_per_collect</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="c1"># update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.</span>
+                <span class="c1"># update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.</span>
                 <span class="n">collected_transitions_num</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">new_data</span><span class="p">)</span>
-                <span class="n">update_per_collect</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">collected_transitions_num</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">model_update_ratio</span><span class="p">)</span>
+                <span class="n">update_per_collect</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">collected_transitions_num</span> <span class="o">*</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">replay_ratio</span><span class="p">)</span>
             <span class="n">replay_buffer</span><span class="o">.</span><span class="n">push</span><span class="p">(</span><span class="n">new_data</span><span class="p">,</span> <span class="n">cur_collector_envstep</span><span class="o">=</span><span class="n">collector</span><span class="o">.</span><span class="n">envstep</span><span class="p">)</span>
 
             <span class="c1"># Learn policy from collected data</span>

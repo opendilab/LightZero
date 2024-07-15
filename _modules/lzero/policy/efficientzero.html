@@ -200,10 +200,10 @@
         <span class="c1"># collect data -&gt; update policy-&gt; collect data -&gt; ...</span>
         <span class="c1"># For different env, we have different episode_length,</span>
         <span class="c1"># we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor</span>
-        <span class="c1"># if we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.</span>
+        <span class="c1"># if we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.replay_ratio automatically.</span>
         <span class="n">update_per_collect</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
         <span class="c1"># (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.</span>
-        <span class="n">model_update_ratio</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+        <span class="n">replay_ratio</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
         <span class="c1"># (int) Minibatch size for one gradient descent.</span>
         <span class="n">batch_size</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
         <span class="c1"># (str) Optimizer for training policy network. [&#39;SGD&#39;, &#39;Adam&#39;, &#39;AdamW&#39;]</span>
@@ -254,11 +254,15 @@
         <span class="c1"># (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.</span>
         <span class="n">use_ture_chance_label_in_chance_encoder</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="c1"># (bool) Whether to add noise to roots during reanalyze process.</span>
-        <span class="n">reanalyze_noise</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">reanalyze_noise</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to reuse the root value between batch searches.</span>
+        <span class="n">reuse_search</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (bool) whether to use the pure policy to collect data. If False, use the MCTS guided with policy.</span>
+        <span class="n">collect_with_pure_policy</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
 
         <span class="c1"># ****** Priority ******</span>
         <span class="c1"># (bool) Whether to use priority when sampling training data from the buffer.</span>
-        <span class="n">use_priority</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">use_priority</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="c1"># (float) The degree of prioritization to use. A value of 0 means no prioritization,</span>
         <span class="c1"># while a value of 1 means full prioritization.</span>
         <span class="n">priority_prob_alpha</span><span class="o">=</span><span class="mf">0.6</span><span class="p">,</span>
@@ -497,6 +501,7 @@
                 <span class="n">representation_state</span> <span class="o">=</span> <span class="n">to_tensor</span><span class="p">(</span><span class="n">network_output</span><span class="o">.</span><span class="n">latent_state</span><span class="p">)</span>
 
                 <span class="c1"># NOTE: no grad for the representation_state branch.</span>
+                <span class="c1"># import pdb; pdb.set_trace()</span>
                 <span class="n">dynamic_proj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">project</span><span class="p">(</span><span class="n">latent_state</span><span class="p">,</span> <span class="n">with_grad</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
                 <span class="n">observation_proj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">project</span><span class="p">(</span><span class="n">representation_state</span><span class="p">,</span> <span class="n">with_grad</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
                 <span class="n">temp_loss</span> <span class="o">=</span> <span class="n">negative_cosine_similarity</span><span class="p">(</span><span class="n">dynamic_proj</span><span class="p">,</span> <span class="n">observation_proj</span><span class="p">)</span> <span class="o">*</span> <span class="n">mask_batch</span><span class="p">[:,</span> <span class="n">step_k</span><span class="p">]</span>
@@ -655,6 +660,10 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span> <span class="o">=</span> <span class="n">temperature</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">collect_epsilon</span> <span class="o">=</span> <span class="n">epsilon</span>
         <span class="n">active_collect_env_num</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">ready_env_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
+
         <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
             <span class="c1"># data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}</span>
             <span class="n">network_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="o">.</span><span class="n">initial_inference</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
@@ -671,58 +680,67 @@
             <span class="n">policy_logits</span> <span class="o">=</span> <span class="n">policy_logits</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
 
             <span class="n">legal_actions</span> <span class="o">=</span> <span class="p">[[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">j</span><span class="p">])</span> <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">)]</span>
-            <span class="c1"># the only difference between collect and eval is the dirichlet noise.</span>
-            <span class="n">noises</span> <span class="o">=</span> <span class="p">[</span>
-                <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">dirichlet</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">root_dirichlet_alpha</span><span class="p">]</span> <span class="o">*</span> <span class="nb">int</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">j</span><span class="p">]))</span>
-                                    <span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">)</span>
-            <span class="p">]</span>
-            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts_ctree</span><span class="p">:</span>
-                <span class="c1"># cpp mcts_tree</span>
-                <span class="n">roots</span> <span class="o">=</span> <span class="n">MCTSCtree</span><span class="o">.</span><span class="n">roots</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
-            <span class="k">else</span><span class="p">:</span>
-                <span class="c1"># python mcts_tree</span>
-                <span class="n">roots</span> <span class="o">=</span> <span class="n">MCTSPtree</span><span class="o">.</span><span class="n">roots</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
-            <span class="n">roots</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">root_noise_weight</span><span class="p">,</span> <span class="n">noises</span><span class="p">,</span> <span class="n">value_prefix_roots</span><span class="p">,</span> <span class="n">policy_logits</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_collect</span><span class="o">.</span><span class="n">search</span><span class="p">(</span>
-                <span class="n">roots</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">reward_hidden_state_roots</span><span class="p">,</span> <span class="n">to_play</span>
-            <span class="p">)</span>
 
-            <span class="n">roots_visit_count_distributions</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_distributions</span><span class="p">()</span>
-            <span class="n">roots_values</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_values</span><span class="p">()</span>  <span class="c1"># shape: {list: batch_size}</span>
-
-            <span class="n">data_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">)]</span>
-            <span class="n">output</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">data_id</span><span class="p">}</span>
-            <span class="k">if</span> <span class="n">ready_env_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">)</span>
-
-            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">):</span>
-                <span class="n">distributions</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">roots_visit_count_distributions</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">roots_values</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
-                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">eps</span><span class="o">.</span><span class="n">eps_greedy_exploration_in_collect</span><span class="p">:</span>
-                    <span class="c1"># eps-greedy collect</span>
-                    <span class="n">action_index_in_legal_action_set</span><span class="p">,</span> <span class="n">visit_count_distribution_entropy</span> <span class="o">=</span> <span class="n">select_action</span><span class="p">(</span>
-                        <span class="n">distributions</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span><span class="p">,</span> <span class="n">deterministic</span><span class="o">=</span><span class="kc">True</span>
-                    <span class="p">)</span>
-                    <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.0</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="n">action_index_in_legal_action_set</span><span class="p">]</span>
-                    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">()</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">collect_epsilon</span><span class="p">:</span>
-                        <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">legal_actions</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">collect_with_pure_policy</span><span class="p">:</span>
+                <span class="c1"># collect with MCTS guided with policy.</span>
+                <span class="n">noises</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">dirichlet</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">root_dirichlet_alpha</span><span class="p">]</span> <span class="o">*</span> <span class="nb">int</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">j</span><span class="p">]))</span>
+                                        <span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">)</span>
+                <span class="p">]</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts_ctree</span><span class="p">:</span>
+                    <span class="c1"># cpp mcts_tree</span>
+                    <span class="n">roots</span> <span class="o">=</span> <span class="n">MCTSCtree</span><span class="o">.</span><span class="n">roots</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
                 <span class="k">else</span><span class="p">:</span>
-                    <span class="c1"># normal collect</span>
-                    <span class="c1"># NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents</span>
-                    <span class="c1"># the index within the legal action set, rather than the index in the entire action set.</span>
-                    <span class="n">action_index_in_legal_action_set</span><span class="p">,</span> <span class="n">visit_count_distribution_entropy</span> <span class="o">=</span> <span class="n">select_action</span><span class="p">(</span>
-                        <span class="n">distributions</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span><span class="p">,</span> <span class="n">deterministic</span><span class="o">=</span><span class="kc">False</span>
-                    <span class="p">)</span>
-                    <span class="c1"># NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.</span>
-                    <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.0</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="n">action_index_in_legal_action_set</span><span class="p">]</span>
-                <span class="n">output</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
-                    <span class="s1">&#39;action&#39;</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>
-                    <span class="s1">&#39;visit_count_distributions&#39;</span><span class="p">:</span> <span class="n">distributions</span><span class="p">,</span>
-                    <span class="s1">&#39;visit_count_distribution_entropy&#39;</span><span class="p">:</span> <span class="n">visit_count_distribution_entropy</span><span class="p">,</span>
-                    <span class="s1">&#39;searched_value&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">,</span>
-                    <span class="s1">&#39;predicted_value&#39;</span><span class="p">:</span> <span class="n">pred_values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
-                    <span class="s1">&#39;predicted_policy_logits&#39;</span><span class="p">:</span> <span class="n">policy_logits</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
-                <span class="p">}</span>
+                    <span class="c1"># python mcts_tree</span>
+                    <span class="n">roots</span> <span class="o">=</span> <span class="n">MCTSPtree</span><span class="o">.</span><span class="n">roots</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
+                <span class="n">roots</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">root_noise_weight</span><span class="p">,</span> <span class="n">noises</span><span class="p">,</span> <span class="n">value_prefix_roots</span><span class="p">,</span> <span class="n">policy_logits</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_collect</span><span class="o">.</span><span class="n">search</span><span class="p">(</span>
+                    <span class="n">roots</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">reward_hidden_state_roots</span><span class="p">,</span> <span class="n">to_play</span>
+                <span class="p">)</span>
 
+                <span class="n">roots_visit_count_distributions</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_distributions</span><span class="p">()</span>
+                <span class="n">roots_values</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_values</span><span class="p">()</span>  <span class="c1"># shape: {list: batch_size}</span>
+
+                <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">):</span>
+                    <span class="n">distributions</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">roots_visit_count_distributions</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">roots_values</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">eps</span><span class="o">.</span><span class="n">eps_greedy_exploration_in_collect</span><span class="p">:</span>
+                        <span class="c1"># eps-greedy collect</span>
+                        <span class="n">action_index_in_legal_action_set</span><span class="p">,</span> <span class="n">visit_count_distribution_entropy</span> <span class="o">=</span> <span class="n">select_action</span><span class="p">(</span>
+                            <span class="n">distributions</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span><span class="p">,</span> <span class="n">deterministic</span><span class="o">=</span><span class="kc">True</span>
+                        <span class="p">)</span>
+                        <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.0</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="n">action_index_in_legal_action_set</span><span class="p">]</span>
+                        <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">()</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">collect_epsilon</span><span class="p">:</span>
+                            <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">legal_actions</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="c1"># normal collect</span>
+                        <span class="c1"># NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents</span>
+                        <span class="c1"># the index within the legal action set, rather than the index in the entire action set.</span>
+                        <span class="n">action_index_in_legal_action_set</span><span class="p">,</span> <span class="n">visit_count_distribution_entropy</span> <span class="o">=</span> <span class="n">select_action</span><span class="p">(</span>
+                            <span class="n">distributions</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span><span class="p">,</span> <span class="n">deterministic</span><span class="o">=</span><span class="kc">False</span>
+                        <span class="p">)</span>
+                        <span class="c1"># NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.</span>
+                        <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.0</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="n">action_index_in_legal_action_set</span><span class="p">]</span>
+                    <span class="n">output</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                        <span class="s1">&#39;action&#39;</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>
+                        <span class="s1">&#39;visit_count_distributions&#39;</span><span class="p">:</span> <span class="n">distributions</span><span class="p">,</span>
+                        <span class="s1">&#39;visit_count_distribution_entropy&#39;</span><span class="p">:</span> <span class="n">visit_count_distribution_entropy</span><span class="p">,</span>
+                        <span class="s1">&#39;searched_value&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">,</span>
+                        <span class="s1">&#39;predicted_value&#39;</span><span class="p">:</span> <span class="n">pred_values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                        <span class="s1">&#39;predicted_policy_logits&#39;</span><span class="p">:</span> <span class="n">policy_logits</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                    <span class="p">}</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># collect with pure policy.</span>
+                <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">):</span>
+                    <span class="n">policy_values</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="n">policy_logits</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">a</span><span class="p">]</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">legal_actions</span><span class="p">[</span><span class="n">i</span><span class="p">]]),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+                    <span class="n">policy_values</span> <span class="o">=</span> <span class="n">policy_values</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">policy_values</span><span class="p">)</span>
+                    <span class="n">action_index_in_legal_action_set</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">legal_actions</span><span class="p">[</span><span class="n">i</span><span class="p">]),</span> <span class="n">p</span><span class="o">=</span><span class="n">policy_values</span><span class="p">)</span>
+                    <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.0</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="n">action_index_in_legal_action_set</span><span class="p">]</span>
+                    <span class="n">output</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                        <span class="s1">&#39;action&#39;</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>
+                        <span class="s1">&#39;searched_value&#39;</span><span class="p">:</span> <span class="n">pred_values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                        <span class="s1">&#39;predicted_value&#39;</span><span class="p">:</span> <span class="n">pred_values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                        <span class="s1">&#39;predicted_policy_logits&#39;</span><span class="p">:</span> <span class="n">policy_logits</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                    <span class="p">}</span>
         <span class="k">return</span> <span class="n">output</span></div>
 
 <div class="viewcode-block" id="EfficientZeroPolicy._init_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.efficientzero.EfficientZeroPolicy._init_eval">[docs]</a>    <span class="k">def</span> <span class="nf">_init_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -760,6 +778,9 @@
 <span class="sd">         &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
         <span class="n">active_eval_env_num</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">ready_env_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">active_eval_env_num</span><span class="p">)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
         <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
             <span class="c1"># data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}</span>
             <span class="n">network_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="o">.</span><span class="n">initial_inference</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
@@ -790,11 +811,6 @@
             <span class="c1"># list of list, shape: ``{list: batch_size} -&gt; {list: action_space_size}``</span>
             <span class="n">roots_visit_count_distributions</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_distributions</span><span class="p">()</span>
             <span class="n">roots_values</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_values</span><span class="p">()</span>  <span class="c1"># shape: {list: batch_size}</span>
-            <span class="n">data_id</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">active_eval_env_num</span><span class="p">)]</span>
-            <span class="n">output</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">data_id</span><span class="p">}</span>
-
-            <span class="k">if</span> <span class="n">ready_env_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">active_eval_env_num</span><span class="p">)</span>
 
             <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">):</span>
                 <span class="n">distributions</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">roots_visit_count_distributions</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">roots_values</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>

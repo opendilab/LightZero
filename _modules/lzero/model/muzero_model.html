@@ -100,7 +100,7 @@
 <span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">MODEL_REGISTRY</span><span class="p">,</span> <span class="n">SequenceType</span>
 <span class="kn">from</span> <span class="nn">numpy</span> <span class="kn">import</span> <span class="n">ndarray</span>
 
-<span class="kn">from</span> <span class="nn">.common</span> <span class="kn">import</span> <span class="n">MZNetworkOutput</span><span class="p">,</span> <span class="n">RepresentationNetwork</span><span class="p">,</span> <span class="n">PredictionNetwork</span>
+<span class="kn">from</span> <span class="nn">.common</span> <span class="kn">import</span> <span class="n">MZNetworkOutput</span><span class="p">,</span> <span class="n">RepresentationNetwork</span><span class="p">,</span> <span class="n">PredictionNetwork</span><span class="p">,</span> <span class="n">FeatureAndGradientHook</span>
 <span class="kn">from</span> <span class="nn">.utils</span> <span class="kn">import</span> <span class="n">renormalize</span><span class="p">,</span> <span class="n">get_params_mean</span><span class="p">,</span> <span class="n">get_dynamic_mean</span><span class="p">,</span> <span class="n">get_reward_mean</span>
 
 
@@ -134,6 +134,7 @@
         <span class="n">downsample</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">norm_type</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;BN&#39;</span><span class="p">,</span>
         <span class="n">discrete_action_encoding_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;one_hot&#39;</span><span class="p">,</span>
+        <span class="n">analysis_sim_norm</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="o">*</span><span class="n">args</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span>
     <span class="p">):</span>
@@ -173,8 +174,11 @@
 <span class="sd">                we don&#39;t need this module.</span>
 <span class="sd">            - norm_type (:obj:`str`): The type of normalization in networks. defaults to &#39;BN&#39;.</span>
 <span class="sd">            - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to &#39;one_hot&#39;. options = {&#39;one_hot&#39;, &#39;not_one_hot&#39;}</span>
+<span class="sd">            - analysis_sim_norm (:obj:`bool`): Whether to enable analysis within the sim_norm of hidden states in the model, the default setting is False.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="nb">super</span><span class="p">(</span><span class="n">MuZeroModel</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="n">discrete_action_encoding_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;one_hot&#39;</span><span class="p">,</span> <span class="s1">&#39;not_one_hot&#39;</span><span class="p">],</span> <span class="n">discrete_action_encoding_type</span>
+
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
             <span class="c1"># for vector obs input, e.g. classical control and box2d environments</span>
             <span class="c1"># to be compatible with LightZero model/policy, transform to shape: [C, W, H]</span>
@@ -189,8 +193,6 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">value_support_size</span> <span class="o">=</span> <span class="mi">1</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">action_space_size</span> <span class="o">=</span> <span class="n">action_space_size</span>
-
-        <span class="k">assert</span> <span class="n">discrete_action_encoding_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;one_hot&#39;</span><span class="p">,</span> <span class="s1">&#39;not_one_hot&#39;</span><span class="p">],</span> <span class="n">discrete_action_encoding_type</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">discrete_action_encoding_type</span> <span class="o">=</span> <span class="n">discrete_action_encoding_type</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">discrete_action_encoding_type</span> <span class="o">==</span> <span class="s1">&#39;one_hot&#39;</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">action_encoding_dim</span> <span class="o">=</span> <span class="n">action_space_size</span>
@@ -204,20 +206,23 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">last_linear_layer_init_zero</span> <span class="o">=</span> <span class="n">last_linear_layer_init_zero</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">state_norm</span> <span class="o">=</span> <span class="n">state_norm</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">downsample</span> <span class="o">=</span> <span class="n">downsample</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">analysis_sim_norm</span> <span class="o">=</span> <span class="n">analysis_sim_norm</span>
+
+        <span class="k">if</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">96</span><span class="p">:</span>
+            <span class="n">latent_size</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">64</span><span class="p">:</span>
+            <span class="n">latent_size</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">8</span><span class="p">)</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">8</span><span class="p">)</span>
 
         <span class="n">flatten_output_size_for_reward_head</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="p">(</span><span class="n">reward_head_channels</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)</span> <span class="o">*</span>
-             <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">))</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
+            <span class="p">(</span><span class="n">reward_head_channels</span> <span class="o">*</span> <span class="n">latent_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
             <span class="p">(</span><span class="n">reward_head_channels</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
         <span class="p">)</span>
         <span class="n">flatten_output_size_for_value_head</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="p">(</span><span class="n">value_head_channels</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)</span> <span class="o">*</span>
-             <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">))</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
+            <span class="p">(</span><span class="n">value_head_channels</span> <span class="o">*</span> <span class="n">latent_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
             <span class="p">(</span><span class="n">value_head_channels</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
         <span class="p">)</span>
         <span class="n">flatten_output_size_for_policy_head</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="p">(</span><span class="n">policy_head_channels</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)</span> <span class="o">*</span>
-             <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">))</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
+            <span class="p">(</span><span class="n">policy_head_channels</span> <span class="o">*</span> <span class="n">latent_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
             <span class="p">(</span><span class="n">policy_head_channels</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
         <span class="p">)</span>
 
@@ -229,6 +234,12 @@
             <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span>
             <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span>
         <span class="p">)</span>
+        
+        <span class="c1"># ====== for analysis ======</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">analysis_sim_norm</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">encoder_hook</span> <span class="o">=</span> <span class="n">FeatureAndGradientHook</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">encoder_hook</span><span class="o">.</span><span class="n">setup_hooks</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">representation_network</span><span class="p">)</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">dynamics_network</span> <span class="o">=</span> <span class="n">DynamicsNetwork</span><span class="p">(</span>
             <span class="n">observation_shape</span><span class="p">,</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">action_encoding_dim</span><span class="p">,</span>
@@ -268,8 +279,7 @@
                 <span class="c1"># (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is</span>
                 <span class="c1"># (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,</span>
                 <span class="c1"># self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304</span>
-                <span class="n">ceil_size</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)</span> <span class="o">*</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">/</span> <span class="mi">16</span><span class="p">)</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">projection_input_dim</span> <span class="o">=</span> <span class="n">num_channels</span> <span class="o">*</span> <span class="n">ceil_size</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">projection_input_dim</span> <span class="o">=</span> <span class="n">num_channels</span> <span class="o">*</span> <span class="n">latent_size</span>
             <span class="k">else</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">projection_input_dim</span> <span class="o">=</span> <span class="n">num_channels</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
 
@@ -538,8 +548,8 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">num_channels</span> <span class="o">=</span> <span class="n">num_channels</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_reward_head</span> <span class="o">=</span> <span class="n">flatten_output_size_for_reward_head</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">action_encoding_dim</span> <span class="o">=</span> <span class="n">action_encoding_dim</span>
 
+        <span class="bp">self</span><span class="o">.</span><span class="n">action_encoding_dim</span> <span class="o">=</span> <span class="n">action_encoding_dim</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">conv</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">num_channels</span><span class="p">,</span> <span class="n">num_channels</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_encoding_dim</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
         
         <span class="k">if</span> <span class="n">norm_type</span> <span class="o">==</span> <span class="s1">&#39;BN&#39;</span><span class="p">:</span>
@@ -609,7 +619,7 @@
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">conv1x1_reward</span><span class="p">(</span><span class="n">next_latent_state</span><span class="p">)</span>
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm_reward</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
-        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_reward_head</span><span class="p">)</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 
         <span class="c1"># use the fully connected layer to predict reward</span>
         <span class="n">reward</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc_reward_head</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>

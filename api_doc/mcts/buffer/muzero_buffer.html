@@ -324,7 +324,7 @@ current_batch:                the inputs of batch</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._preprocess_to_play_and_action_mask">
-<span class="sig-name descname"><span class="pre">_preprocess_to_play_and_action_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">game_segment_batch_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_play_segment</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">action_mask_segment</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos_in_game_segment_list</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._preprocess_to_play_and_action_mask" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">_preprocess_to_play_and_action_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">game_segment_batch_size</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">to_play_segment</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">action_mask_segment</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos_in_game_segment_list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">unroll_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._preprocess_to_play_and_action_mask" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">
 <dt>Overview:</dt><dd><dl class="simple">
 <dt>prepare the to_play and action_mask for the target obs in <code class="docutils literal notranslate"><span class="pre">value_obs_list</span></code></dt><dd><ul class="simple">
@@ -405,9 +405,59 @@ make_time: the time the batch is made (for correctly updating replay buffer when
 </dl>
 </dd></dl>
 
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._sample_orig_data_episode">
+<span class="sig-name descname"><span class="pre">_sample_orig_data_episode</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span></span></span><a class="headerlink" href="#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._sample_orig_data_episode" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><dl class="simple">
+<dt>Sample original data for a training batch, which includes:</dt><dd><ul class="simple">
+<li><p>game_segment_list: A list of game segments.</p></li>
+<li><p>pos_in_game_segment_list: Indices of transitions within the game segments.</p></li>
+<li><p>batch_index_list: Indices of the start transitions of the sampled mini-batch in the replay buffer.</p></li>
+<li><p>weights_list: Weights for each sampled transition, used for prioritization.</p></li>
+<li><p>make_time: Timestamps indicating when the batch was created (useful for managing replay buffer updates).</p></li>
+</ul>
+</dd>
+</dl>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>batch_size</strong> (<em>-</em>) – The number of samples to draw for the batch.</p></li>
+<li><p><strong>beta</strong> (<em>-</em>) – Parameter for Prioritized Experience Replay (PER) that adjusts the importance of samples.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._sample_orig_reanalyze_data">
+<span class="sig-name descname"><span class="pre">_sample_orig_reanalyze_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span></span></span><a class="headerlink" href="#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._sample_orig_reanalyze_data" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><dl class="simple">
+<dt>sample orig_data that contains:</dt><dd><p>game_segment_list: a list of game segments
+pos_in_game_segment_list: transition index in game (relative index)
+batch_index_list: the index of start transition of sampled minibatch in replay buffer
+weights_list: the weight concerning the priority
+make_time: the time the batch is made (for correctly updating replay buffer when data is deleted)</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>batch_size</strong> (<em>-</em>) – batch size</p></li>
+<li><p><strong>beta</strong> (<em>-</em>) – float the parameter in PER for calculating the priority</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
 <dl class="py attribute">
 <dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.config">
-<span class="sig-name descname"><span class="pre">config</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'mini_infer_size':</span> <span class="pre">10240,</span> <span class="pre">'reanalyze_outdated':</span> <span class="pre">True,</span> <span class="pre">'reanalyze_ratio':</span> <span class="pre">0.3,</span> <span class="pre">'replay_buffer_size':</span> <span class="pre">1000000,</span> <span class="pre">'use_root_value':</span> <span class="pre">False}</span></em><a class="headerlink" href="#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.config" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">config</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'mini_infer_size':</span> <span class="pre">10240,</span> <span class="pre">'reanalyze_outdated':</span> <span class="pre">True,</span> <span class="pre">'reanalyze_ratio':</span> <span class="pre">0,</span> <span class="pre">'replay_buffer_size':</span> <span class="pre">1000000,</span> <span class="pre">'sample_type':</span> <span class="pre">'transition',</span> <span class="pre">'use_root_value':</span> <span class="pre">False}</span></em><a class="headerlink" href="#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.config" title="Permalink to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
@@ -454,6 +504,15 @@ Save a game segment</p>
 <span class="sig-name descname"><span class="pre">remove_oldest_data_to_fit</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.remove_oldest_data_to_fit" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">
 <dt>Overview:</dt><dd><p>remove some oldest data if the replay buffer is full.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.reset_runtime_metrics">
+<span class="sig-name descname"><span class="pre">reset_runtime_metrics</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer_muzero.html#MuZeroGameBuffer.reset_runtime_metrics"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.reset_runtime_metrics" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Overview:</dt><dd><p>Reset the runtime metrics of the buffer.</p>
 </dd>
 </dl>
 </dd></dl>
