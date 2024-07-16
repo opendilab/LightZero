@@ -70,6 +70,9 @@ class MuZeroPolicy(Policy):
             analysis_sim_norm=False,
             # (bool) Whether to analyze dormant ratio.
             analysis_dormant_ratio=False,
+            # (bool) Whether to use HarmonyDream to balance weights between different losses. Default to False.
+            # More details can be found in https://arxiv.org/abs/2310.00344
+            harmony_balance=False
         ),
         # ****** common ******
         # (bool) whether to use rnd model.
@@ -297,7 +300,18 @@ class MuZeroPolicy(Policy):
         self.inverse_scalar_transform_handle = InverseScalarTransform(
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
-
+        
+        # ==============================================================
+        # harmonydream (learnable weights for different losses)
+        # ==============================================================
+        if self._cfg.model.harmony_balance:
+            # List of parameter names
+            harmony_names = ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
+            # Initialize and name each parameter
+            for name in harmony_names:
+                param = torch.nn.Parameter(-torch.log(torch.tensor(1.0)))
+                setattr(self, name, param)
+            
         if self._cfg.use_rnd_model:
             if self._cfg.target_model_for_intrinsic_reward_update_type == 'assign':
                 self._target_model_for_intrinsic_reward = model_wrap(
@@ -523,12 +537,30 @@ class MuZeroPolicy(Policy):
         # the core learn model update step.
         # ==============================================================
         # weighted loss with masks (some invalid states which are out of trajectory.)
-        loss = (
-                self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss +
-                self._cfg.policy_entropy_loss_weight * policy_entropy_loss
-        )
-        weighted_total_loss = (weights * loss).mean()
+        # Nan appear when consistency loss or policy entropy loss uses harmony parameter as coefficient.
+        
+        # Please refer to https://github.com/thuml/HarmonyDream/blob/main/wmlib-torch/wmlib/agents/dreamerv2.py#L161
+        # ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
+        if self._cfg.model.harmony_balance:
+            loss = (
+                  (consistency_loss.mean() * self._cfg.ssl_loss_weight)
+                + (policy_loss.mean() / torch.exp(self.harmony_policy))
+                + (value_loss.mean() / torch.exp(self.harmony_value)) 
+                + (reward_loss.mean() / torch.exp(self.harmony_reward))
+            ) 
+            weighted_total_loss = loss.mean()
+            weighted_total_loss += (
+                torch.log(torch.exp(self.harmony_policy) + 1) +
+                torch.log(torch.exp(self.harmony_value) + 1) + 
+                torch.log(torch.exp(self.harmony_reward) + 1) 
+            )
+        else:  
+            loss = (
+                    self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+                    self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss +
+                    self._cfg.policy_entropy_loss_weight * policy_entropy_loss
+            )
+            weighted_total_loss = (weights * loss).mean()
 
         gradient_scale = 1 / self._cfg.num_unroll_steps
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
@@ -564,7 +596,7 @@ class MuZeroPolicy(Policy):
             predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
             predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
 
-        return {
+        return_dict = {
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
@@ -597,7 +629,24 @@ class MuZeroPolicy(Policy):
             'analysis/grad_norm_before': self.grad_norm_before,
             'analysis/grad_norm_after': self.grad_norm_after,
         }
-
+        
+        # ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
+        if self._cfg.model.harmony_balance:
+            harmony_dict = {
+                "harmony_dynamics": self.harmony_dynamics.item(), 
+                "harmony_dynamics_exp_recip": (1 / torch.exp(self.harmony_dynamics)).item(),
+                "harmony_policy": self.harmony_policy.item(),
+                "harmony_policy_exp_recip": (1 / torch.exp(self.harmony_policy)).item(),
+                "harmony_value": self.harmony_value.item(),
+                "harmony_value_exp_recip": (1 / torch.exp(self.harmony_value)).item(),
+                "harmony_reward": self.harmony_reward.item(),
+                "harmony_reward_exp_recip": (1 / torch.exp(self.harmony_reward)).item(),
+                "harmony_entropy": self.harmony_entropy.item(),
+                "harmony_entropy_exp_recip": (1 / torch.exp(self.harmony_entropy)).item(),
+            }
+            return_dict.update(harmony_dict)
+        return return_dict
+    
     def _init_collect(self) -> None:
         """
         Overview:
@@ -901,7 +950,7 @@ class MuZeroPolicy(Policy):
             Register the variables to be monitored in learn mode. The registered variables will be logged in
             tensorboard according to the return value ``_forward_learn``.
         """
-        return [
+        return_list = [
             'analysis/dormant_ratio_encoder',
             'analysis/dormant_ratio_dynamics',
             'analysis/latent_state_l2_norms',
@@ -929,6 +978,17 @@ class MuZeroPolicy(Policy):
             'transformed_target_value',
             'total_grad_norm_before_clip',
         ]
+        # ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
+        if self._cfg.model.harmony_balance:
+            harmony_list = [
+                'harmony_dynamics', 'harmony_dynamics_exp_recip',
+                'harmony_policy', 'harmony_policy_exp_recip',
+                'harmony_value', 'harmony_value_exp_recip',
+                'harmony_reward', 'harmony_reward_exp_recip',
+                'harmony_entropy', 'harmony_entropy_exp_recip',
+            ]
+            return_list.extend(harmony_list)
+        return return_list
 
     def _state_dict_learn(self) -> Dict[str, Any]:
         """

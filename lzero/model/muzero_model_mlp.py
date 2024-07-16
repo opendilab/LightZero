@@ -125,7 +125,9 @@ class MuZeroModelMLP(nn.Module):
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             norm_type=norm_type
         )
-
+        
+            
+            
         if self.self_supervised_learning_loss:
             # self_supervised_learning_loss related network proposed in EfficientZero
             self.projection_input_dim = latent_state_dim
