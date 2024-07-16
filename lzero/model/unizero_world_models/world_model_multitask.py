@@ -53,7 +53,7 @@ class WorldModelMT(nn.Module):
         self.head_rewards_multi_task = nn.ModuleList()
         self.head_observations_multi_task = nn.ModuleList()
 
-        self.num_experts_in_softmoe = config.num_experts_in_softmoe
+        self.num_experts_in_softmoe_head = config.num_experts_in_softmoe_head
 
         # Move all modules to the specified device
         print(f"self.config.device: {self.config.device}")
@@ -74,7 +74,7 @@ class WorldModelMT(nn.Module):
         self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
         print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
-        if self.num_experts_in_softmoe == -1:
+        if self.num_experts_in_softmoe_head == -1:
             print('We use normal head')
             # TODO: Normal Head
             for task_id in range(self.task_num):  # TODO
@@ -94,7 +94,7 @@ class WorldModelMT(nn.Module):
                                                         self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
                 self.head_observations_multi_task.append(self.head_observations)
         else:
-            print(f'We use softmoe head, self.num_experts_in_softmoe is {self.num_experts_in_softmoe}')
+            print(f'We use softmoe head, self.num_experts_in_softmoe_head is {self.num_experts_in_softmoe_head}')
             # Dictionary to store SoftMoE instances
             self.soft_moe_instances = {}
 
@@ -193,13 +193,13 @@ class WorldModelMT(nn.Module):
         #     self.soft_moe_instances[name] = SoftMoE(
         #         dim=self.embed_dim,
         #         seq_len=20,  # TODO
-        #         num_experts=self.num_experts_in_softmoe,
+        #         num_experts=self.num_experts_in_softmoe_head,
         #     )
         from soft_moe_pytorch import DynamicSlotsSoftMoE as SoftMoE
         if name not in self.soft_moe_instances:
             self.soft_moe_instances[name] = SoftMoE(
                 dim=self.embed_dim,
-                num_experts=self.num_experts_in_softmoe,
+                num_experts=self.num_experts_in_softmoe_head,
                 geglu = True
             )
         return self.soft_moe_instances[name]
@@ -412,7 +412,7 @@ class WorldModelMT(nn.Module):
         # Generate logits
 
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
-        # one head or soft_moe
+        # TODO: one head or soft_moe
         # logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
         # logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
         # logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)

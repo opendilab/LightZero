@@ -54,8 +54,11 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # collector_env_num=collector_env_num,
                     # evaluator_env_num=evaluator_env_num,
                     task_num=len(env_id_list),
-                    # num_experts_in_softmoe=4,  # NOTE
-                    num_experts_in_softmoe=-1,  # NOTE
+                    # num_experts_in_softmoe_head=4,  # NOTE
+                    num_experts_in_softmoe_head=-1,  # NOTE
+                    # moe_in_transformer=True,
+                    moe_in_transformer=False,
+                    num_experts_of_moe_in_transformer=4,
                 ),
             ),
             cuda=True,
@@ -78,10 +81,13 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     configs = []
     # exp_name_prefix = f'data_unizero_mt_0711/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head-softmoe4_1-encoder-{norm_type}_lsd768-nlayer4-nh8_seed{seed}/'
     
-    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_1-head-softmoe4-dynamics_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716_debug/{len(env_id_list)}games_1-head-softmoe4-dynamics_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_8-head_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_MOCO_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_CAGrad_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_MoCo_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    
+    exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_1-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -127,7 +133,7 @@ if __name__ == "__main__":
         'PongNoFrameskip-v4',
         'MsPacmanNoFrameskip-v4',
         'SeaquestNoFrameskip-v4',
-        'BoxingNoFrameskip-v4',
+        'BoxingNoFrameskip-v4'
     ]
 
     # env_id_list = [
@@ -158,7 +164,7 @@ if __name__ == "__main__":
     # norm_type = 'BN'
 
 
-    # ======== only for debug ========
+    # ======== TODO: only for debug ========
     # collector_env_num = 3
     # n_episode = 3
     # evaluator_env_num = 2

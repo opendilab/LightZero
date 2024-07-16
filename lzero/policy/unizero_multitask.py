@@ -628,9 +628,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # self.grad_correct.update(curr_loss.detach())
         # self.grad_correct.prev_loss = curr_loss.detach()
 
-        #  ============= 不使用梯度矫正的情况  =============
+        #  ============= TODO: 不使用梯度矫正的情况  =============
         lambd = torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)
-
         weighted_total_loss.backward()
 
         #  ========== for debugging ==========
@@ -1097,7 +1096,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'latent_state_l2_norms',
             'lambd',
         ]
-
+        num_tasks = self.task_num
         # If the number of tasks is provided, extend the monitored variables list with task-specific variables
         if num_tasks is not None:
             for var in task_specific_vars:

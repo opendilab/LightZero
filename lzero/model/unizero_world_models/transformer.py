@@ -13,7 +13,7 @@ from einops import rearrange
 from torch.nn import functional as F
 
 from .kv_caching import KeysValues
-
+from .moe import MoeLayer
 
 @dataclass
 class TransformerConfig:
@@ -121,12 +121,28 @@ class Block(nn.Module):
         self.ln1 = nn.LayerNorm(config.embed_dim)
         self.ln2 = nn.LayerNorm(config.embed_dim)
         self.attn = SelfAttention(config)
-        self.mlp = nn.Sequential(
-            nn.Linear(config.embed_dim, 4 * config.embed_dim),
-            nn.GELU(approximate='tanh'),
-            nn.Linear(4 * config.embed_dim, config.embed_dim),
-            nn.Dropout(config.resid_pdrop),
-        )
+        if config.moe_in_transformer:
+            self.mlp = nn.Sequential(
+                nn.Linear(config.embed_dim, 4 * config.embed_dim),
+                nn.GELU(approximate='tanh'),
+                nn.Linear(4 * config.embed_dim, config.embed_dim),
+                nn.Dropout(config.resid_pdrop),
+            )
+            self.feed_forward = MoeLayer(
+                experts=[self.mlp for _ in range(config.num_experts_of_moe_in_transformer)],
+                gate=nn.Linear(config.embed_dim, config.num_experts_of_moe_in_transformer, bias=False),
+                num_experts_per_tok=1,
+            )
+            print("="*20)
+            print('use moe in feed_forward of transformer')
+            print("="*20)
+        else:
+            self.feed_forward = nn.Sequential(
+                nn.Linear(config.embed_dim, 4 * config.embed_dim),
+                nn.GELU(approximate='tanh'),
+                nn.Linear(4 * config.embed_dim, config.embed_dim),
+                nn.Dropout(config.resid_pdrop),
+            )
 
     def forward(self, x: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
                 valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
@@ -144,10 +160,10 @@ class Block(nn.Module):
         x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths)
         if self.gru_gating:
             x = self.gate1(x, x_attn)
-            x = self.gate2(x, self.mlp(self.ln2(x)))
+            x = self.gate2(x, self.feed_forward(self.ln2(x)))
         else:
             x = x + x_attn
-            x = x + self.mlp(self.ln2(x))
+            x = x + self.feed_forward(self.ln2(x))
 
         return x
 
