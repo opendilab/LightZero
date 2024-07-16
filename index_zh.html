@@ -22,7 +22,7 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="LightZero 中如何自定义算法?" href="tutorials/algos/customize_algos_zh.html" /> 
+    <link rel="next" title="安装和快速入门指南" href="tutorials/installation/installation_and_quickstart_zh.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -46,9 +46,11 @@
         </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
               <p class="caption" role="heading"><span class="caption-text">教程</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/installation/installation_and_quickstart_zh.html">安装和快速入门指南</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/algos/customize_algos_zh.html">LightZero 中如何自定义算法?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/envs/customize_envs_zh.html">LightZero 中如何自定义环境?</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/config/config_zh.html">LightZero 中如何设置配置文件？</a></li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/logs/logs_zh.html">LightZero的日志监控体系</a></li>
 </ul>
 <p class="caption" role="heading"><span class="caption-text">API 文档</span></p>
 <ul>
@@ -92,7 +94,7 @@
 <h1>LightZero文档<a class="headerlink" href="#lightzero" title="Permalink to this heading"></a></h1>
 <section id="id1">
 <h2>概述<a class="headerlink" href="#id1" title="Permalink to this heading"></a></h2>
-<p><a class="reference external" href="../index.html">English Documentation</a></p>
+<p><a class="reference external" href="./index.html">English Documentation</a></p>
 <p><a class="reference external" href="https://arxiv.org/pdf/2310.08348.pdf">LightZero</a> 是一个轻量、高效且易于理解的开源算法工具包，结合了蒙特卡洛树搜索（MCTS）和深度强化学习（RL）。
 你可以在 <a class="reference external" href="https://github.com/opendilab/LightZero">GitHub</a> 上找到源代码。</p>
 <p>相关研究论文包括：</p>
@@ -104,6 +106,12 @@
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">教程</span></p>
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/installation/installation_and_quickstart_zh.html">安装和快速入门指南</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/installation/installation_and_quickstart_zh.html#id2">安装</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/installation/installation_and_quickstart_zh.html#docker">使用 Docker 安装</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/installation/installation_and_quickstart_zh.html#id3">快速入门</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="tutorials/algos/customize_algos_zh.html">LightZero 中如何自定义算法?</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="tutorials/algos/customize_algos_zh.html#id1">基本步骤</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tutorials/algos/customize_algos_zh.html#id13">注意事项</a></li>
@@ -122,6 +130,13 @@
 <li class="toctree-l2"><a class="reference internal" href="tutorials/config/config_zh.html#create-config">2. <code class="docutils literal notranslate"><span class="pre">create_config</span></code></a></li>
 <li class="toctree-l2"><a class="reference internal" href="tutorials/config/config_zh.html#id3">3. 运行算法</a></li>
 <li class="toctree-l2"><a class="reference internal" href="tutorials/config/config_zh.html#id4">4. 注意事项</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="tutorials/logs/logs_zh.html">LightZero的日志监控体系</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/logs/logs_zh.html#id1">1. 文件目录结构</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/logs/logs_zh.html#id2">2. 日志文件解析</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/logs/logs_zh.html#id6">3. 检查点文件</a></li>
+<li class="toctree-l2"><a class="reference internal" href="tutorials/logs/logs_zh.html#id7">4. 总结</a></li>
 </ul>
 </li>
 </ul>
@@ -203,7 +218,7 @@
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="tutorials/algos/customize_algos_zh.html" class="btn btn-neutral float-right" title="LightZero 中如何自定义算法?" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="tutorials/installation/installation_and_quickstart_zh.html" class="btn btn-neutral float-right" title="安装和快速入门指南" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>
