@@ -4,7 +4,7 @@ LightZero文档
 概述
 ----
 
-`English Documentation <../index.html>`_
+`English Documentation <./index.html>`_
 
 `LightZero <https://arxiv.org/pdf/2310.08348.pdf>`_ 是一个轻量、高效且易于理解的开源算法工具包，结合了蒙特卡洛树搜索（MCTS）和深度强化学习（RL）。
 你可以在 `GitHub <https://github.com/opendilab/LightZero>`_ 上找到源代码。
@@ -20,7 +20,7 @@ LightZero文档
     :maxdepth: 2
     :caption: 教程
 
-    tutorials/installation/installation_and_quick_start_zh
+    tutorials/installation/installation_and_quickstart_zh
     tutorials/algos/customize_algos_zh
     tutorials/envs/customize_envs_zh
     tutorials/config/config_zh
