@@ -214,7 +214,9 @@
             <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">last_linear_layer_init_zero</span><span class="p">,</span>
             <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span>
         <span class="p">)</span>
-
+        
+            
+            
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">self_supervised_learning_loss</span><span class="p">:</span>
             <span class="c1"># self_supervised_learning_loss related network proposed in EfficientZero</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">projection_input_dim</span> <span class="o">=</span> <span class="n">latent_state_dim</span>
