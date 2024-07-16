@@ -21,6 +21,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             # eval_max_episode_steps=int(500),
         ),
         policy=dict(
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000,),),),  # default is 10000
             grad_correct_params=dict(
                 # for MoCo
                 MoCo_beta=0.5,
@@ -76,6 +77,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed):
     configs = []
     # exp_name_prefix = f'data_unizero_mt_0711/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head-softmoe4_1-encoder-{norm_type}_lsd768-nlayer4-nh8_seed{seed}/'
+    
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_1-head-softmoe4-dynamics_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_8-head_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_MOCO_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
@@ -149,7 +151,7 @@ if __name__ == "__main__":
     reanalyze_ratio = 0.
     # batch_size = [32, 32, 32, 32]
     max_batch_size = 1500
-    batch_size = [1500/len(env_id_list) for i in range(len(env_id_list))]
+    batch_size = [int(1500/len(env_id_list)) for i in range(len(env_id_list))]
     num_unroll_steps = 10
     infer_context_length = 4
     norm_type = 'LN'
