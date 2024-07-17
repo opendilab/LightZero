@@ -4,6 +4,7 @@ from functools import partial
 from typing import Tuple, Optional, List
 
 import torch
+import numpy as np
 from ding.config import compile_config
 from ding.envs import create_env_manager, get_vec_env_setting
 from ding.policy import create_policy
@@ -126,6 +127,7 @@ def train_unizero_multitask(
         evaluators.append(evaluator)
 
     learner.call_hook('before_run')
+    value_priority_tasks = {}
 
     while True:
         # Precompute positional embedding matrices for collect/eval (not training)
@@ -207,6 +209,43 @@ def train_unizero_multitask(
 
                 if train_data_multi_task:
                     log_vars = learner.train(train_data_multi_task, envstep_multi_task)
+                
+                if cfg.policy.use_priority:
+                    for task_id, replay_buffer in enumerate(game_buffers):
+                        #  Update the priority for the task-specific replay buffer.
+                        replay_buffer.update_priority(train_data_multi_task[task_id], log_vars[0][f'value_priority_task{task_id}'])
+                        
+                        # Retrieve the updated priorities for the current task.
+                        current_priorities = log_vars[0][f'value_priority_task{task_id}']
+                        
+                        # Calculate statistics: mean, running mean, standard deviation for the priorities.
+                        mean_priority = np.mean(current_priorities)
+                        std_priority = np.std(current_priorities)
+                        
+                        # Using exponential moving average for running mean (alpha is the smoothing factor).
+                        alpha = 0.1  # You can adjust this smoothing factor as needed.
+                        if f'running_mean_priority_task{task_id}' not in value_priority_tasks:
+                            # Initialize running mean if it does not exist.
+                            value_priority_tasks[f'running_mean_priority_task{task_id}'] = mean_priority
+                        else:
+                            # Update running mean.
+                            value_priority_tasks[f'running_mean_priority_task{task_id}'] = (
+                                alpha * mean_priority + (1 - alpha) * value_priority_tasks[f'running_mean_priority_task{task_id}']
+                            )
+                        
+                        # Calculate the normalized priority using the running mean.
+                        running_mean_priority = value_priority_tasks[f'running_mean_priority_task{task_id}']
+                        normalized_priorities = (current_priorities - running_mean_priority) / (std_priority + 1e-6)
+                        
+                        # Store the normalized priorities back to the replay buffer (if needed).
+                        # replay_buffer.update_priority(train_data_multi_task[task_id], normalized_priorities)
+                        
+                        # Log the statistics if the print_task_priority_logs flag is set.
+                        if cfg.policy.print_task_priority_logs:
+                            print(f"Task {task_id} - Mean Priority: {mean_priority:.8f}, "
+                                f"Running Mean Priority: {running_mean_priority:.8f}, "
+                                f"Standard Deviation: {std_priority:.8f}")
+
 
         if all(collector.envstep >= max_env_step for collector in collectors) or learner.train_iter >= max_train_iter:
             break

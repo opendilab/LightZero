@@ -35,7 +35,10 @@ def generate_task_loss_dict(multi_task_losses, task_name_template):
     task_loss_dict = {}
     for task_idx, task_loss in enumerate(multi_task_losses):
         task_name = task_name_template.format(task_idx)
-        task_loss_dict[task_name] = task_loss.item() if hasattr(task_loss, 'item') else task_loss
+        try:
+            task_loss_dict[task_name] = task_loss.item() if hasattr(task_loss, 'item') else task_loss
+        except Exception as e:
+            task_loss_dict[task_name] = task_loss
     return task_loss_dict
 
 
@@ -505,6 +508,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
 
         average_target_policy_entropy_multi_task = []
+        value_priority_multi_task = []
+        value_priority_mean_multi_task = []
+
 
         losses_list = []  # 用于存储每个任务的损失
         for task_id, data_one_task in enumerate(data):
@@ -597,7 +603,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             latent_recon_loss = intermediate_losses['latent_recon_loss']
             perceptual_loss = intermediate_losses['perceptual_loss']
             latent_state_l2_norms = intermediate_losses['latent_state_l2_norms']
-
+            value_priority = intermediate_losses['value_priority']
 
             obs_loss_multi_task.append(obs_loss)
             reward_loss_multi_task.append(reward_loss)
@@ -609,12 +615,14 @@ class UniZeroMTPolicy(UniZeroPolicy):
             latent_recon_loss_multi_task.append(latent_recon_loss)
             perceptual_loss_multi_task.append(perceptual_loss)
             latent_state_l2_norms_multi_task.append(latent_state_l2_norms)
+            value_priority_multi_task.append(value_priority)
+            value_priority_mean_multi_task.append(value_priority.mean().item())
+
 
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
 
-        # TODO MoCo
-        # 使用 MoCo 和 CAGrad 来计算梯度和权重
+        # TODO 使用 MoCo 和 CAGrad 来计算梯度和权重
         #  ============= for CAGrad and MoCo =============
         # lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
 
@@ -691,7 +699,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
             **generate_task_loss_dict(reward_loss_multi_task, 'reward_loss_task{}'),
             **generate_task_loss_dict(value_loss_multi_task, 'value_loss_task{}'),
             **generate_task_loss_dict(average_target_policy_entropy_multi_task, 'target_policy_entropy_task{}'),
-            **generate_task_loss_dict(lambd, 'lambd_task{}'),
+            **generate_task_loss_dict(lambd, 'lambd_task{}'), 
+            # ==============================================================
+            # priority related
+            # ==============================================================
+            **generate_task_loss_dict(value_priority_multi_task, 'value_priority_task{}'),
+            **generate_task_loss_dict(value_priority_mean_multi_task, 'value_priority_mean_task{}'),
         }
 
         # 合并两个字典
@@ -1095,6 +1108,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'perceptual_loss',
             'latent_state_l2_norms',
             'lambd',
+            'value_priority_mean',
         ]
         num_tasks = self.task_num
         # If the number of tasks is provided, extend the monitored variables list with task-specific variables

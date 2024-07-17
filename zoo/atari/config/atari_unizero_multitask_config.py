@@ -15,6 +15,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             manager=dict(shared_memory=False, ),
             full_action_space=True,
             # ===== only for debug =====
+            # collect_max_episode_steps=int(30),
+            # eval_max_episode_steps=int(30),
             # collect_max_episode_steps=int(50),
             # eval_max_episode_steps=int(50),
             # collect_max_episode_steps=int(500),
@@ -57,14 +59,20 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # num_experts_in_softmoe_head=4,  # NOTE
                     num_experts_in_softmoe_head=-1,  # NOTE
                     # moe_in_transformer=True,
-                    moe_in_transformer=False,
-                    num_experts_of_moe_in_transformer=4,
+                    moe_in_transformer=False,  # NOTE
+                    # num_experts_of_moe_in_transformer=4,
+                    num_experts_of_moe_in_transformer=1,
                 ),
             ),
+            use_priority=False,
+            print_task_priority_logs=False,
+            # use_priority=True,
+            # print_task_priority_logs=True,
             cuda=True,
             model_path=None,
             num_unroll_steps=num_unroll_steps,
-            update_per_collect=None,
+            # update_per_collect=None,
+            update_per_collect=1000,
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -82,11 +90,11 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # exp_name_prefix = f'data_unizero_mt_0711/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head-softmoe4_1-encoder-{norm_type}_lsd768-nlayer4-nh8_seed{seed}/'
     
     # exp_name_prefix = f'data_unizero_mt_0716_debug/{len(env_id_list)}games_1-head-softmoe4-dynamics_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_8-head_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_upc1000_value-priority_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_upc1000_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_CAGrad_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_MoCo_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
-    
-    exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_trans-ffw-moe1_lsd768-nlayer4-nh8_max-bs1500_upc1000_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_1-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
@@ -161,14 +169,14 @@ if __name__ == "__main__":
     num_unroll_steps = 10
     infer_context_length = 4
     norm_type = 'LN'
-    # norm_type = 'BN'
+    # norm_type = 'BN'  # bad performance now
 
 
     # ======== TODO: only for debug ========
     # collector_env_num = 3
     # n_episode = 3
     # evaluator_env_num = 2
-    # num_simulations = 5
+    # num_simulations = 2
     # batch_size = [4, 4, 4, 4]
 
     configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed)
