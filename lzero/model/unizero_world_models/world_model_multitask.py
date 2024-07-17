@@ -1016,8 +1016,8 @@ class WorldModelMT(nn.Module):
             # original_images, reconstructed_images = batch['observations'], reconstructed_images
             # target_policy = batch['target_policy']
             # ==== for value priority ====
-            target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1, 101)).reshape(
-                batch['observations'].shape[0], batch['observations'].shape[1], 1)
+            # target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1, 101)).reshape(
+            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
             # true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1, 101)).reshape(
             #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
             #  ========== for visualization ==========
@@ -1143,17 +1143,6 @@ class WorldModelMT(nn.Module):
         loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy, batch,
                                                                                         element='policy')
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
-        
-        # ============ for value priority  ============ 
-        # transform the scaled value or its categorical representation to its original value,
-        # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
-        original_value = inverse_scalar_transform_handle(outputs.logits_value.reshape(-1, 101)).reshape(
-                batch['observations'].shape[0], batch['observations'].shape[1], 1)
-        # calculate the new priorities for each transition.
-        from torch.nn import L1Loss
-        value_priority = L1Loss(reduction='none')(original_value[:,0], target_predict_value[:, 0])   # TODO: mix of mean and sum
-        value_priority = value_priority.data.cpu().numpy() + 1e-6
-        # ============ for value priority  ============ 
 
         # Compute timesteps
         timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
@@ -1224,7 +1213,7 @@ class WorldModelMT(nn.Module):
             dormant_ratio_encoder=dormant_ratio_encoder,
             dormant_ratio_world_model=dormant_ratio_world_model,
             latent_state_l2_norms=latent_state_l2_norms,
-            value_priority=value_priority,
+            logits_value=outputs.logits_value,
         )
 
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):

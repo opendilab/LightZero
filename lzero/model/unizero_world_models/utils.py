@@ -185,7 +185,7 @@ class LossWithIntermediateLosses:
                 self.loss_total += self.perceptual_loss_weight * v
 
         self.intermediate_losses = {
-            k: v if isinstance(v, dict) or isinstance(v, np.ndarray) else (v if isinstance(v, float) else v.item())
+            k: v if isinstance(v, dict) or isinstance(v, np.ndarray) or isinstance(v, torch.Tensor) else (v if isinstance(v, float) else v.item())
             for k, v in kwargs.items()
         }
 
