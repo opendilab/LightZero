@@ -118,7 +118,7 @@ class DMC2GymEnv(BaseEnv):
         scale=False,
         clip_rewards=False,
         action_repeat=1,
-        frame_stack=3,
+        frame_stack=1,
         from_pixels=True,
         visualize_reward=False,
         height=84,
@@ -205,7 +205,7 @@ class DMC2GymEnv(BaseEnv):
             self._env.seed(self._seed)
 
         self._eval_episode_return = 0
-        obs = self._env.reset()
+        obs = self._env.reset()  # This line will cause errors when subprocess_env_manager is used
 
         obs = to_ndarray(obs).astype(np.float32)
         action_mask = None

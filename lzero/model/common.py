@@ -258,9 +258,14 @@ class DownSample(nn.Module):
 
         if self.observation_shape[1] == 64:
             output = x
+        elif self.observation_shape[1] == 84:
+            x = self.pooling2(x)
+            output = x
         elif self.observation_shape[1] == 96:
             x = self.pooling2(x)
             output = x
+        else:
+            raise ValueError(f"Unsupported observation shape: {self.observation_shape}")
 
         return output
 
@@ -336,7 +341,6 @@ class RepresentationNetworkUniZero(nn.Module):
         self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
 
         self.sim_norm = SimNorm(simnorm_dim=group_size)
-
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

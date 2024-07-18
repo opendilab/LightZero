@@ -54,6 +54,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             # (int) The scale of supports used in categorical distribution.
             # This variable is only effective when ``categorical_distribution=True``.
             support_scale=300,
+            # (int) The number of res blocks in Sampled EfficientZero model.
+            num_res_blocks=1,
             # (int) The hidden size in LSTM.
             lstm_hidden_size=512,
             # (str) The type of sigma. options={'conditioned', 'fixed'}

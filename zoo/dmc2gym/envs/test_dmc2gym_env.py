@@ -14,13 +14,14 @@ class TestDMC2GymEnv:
             "task_name": "balance",
             "frame_skip": 2,
             "from_pixels": True,
-            "from_stack": 3,
-
+            "from_stack": 1,
+            # "from_stack": 3,
         }))
         env.seed(314, dynamic_seed=False)
         assert env._seed == 314
         obs = env.reset()
-        assert obs['observation'].shape == (3, 3, 84, 84)
+        # assert obs['observation'].shape == (3, 3, 84, 84)
+        assert obs['observation'].shape == (3, 84, 84)
 
         for _ in range(5):
             env.reset()
@@ -37,7 +38,8 @@ class TestDMC2GymEnv:
                 print(timestep)
                 assert isinstance(timestep.obs['observation'], np.ndarray)
                 assert isinstance(timestep.done, bool)
-                assert timestep.obs['observation'].shape == (3, 3, 84, 84)
+                # assert timestep.obs['observation'].shape == (3, 3, 84, 84)
+                assert timestep.obs['observation'].shape == (3, 84, 84)
 
                 assert timestep.reward.shape == (1, )
                 assert timestep.reward >= env.reward_space.low

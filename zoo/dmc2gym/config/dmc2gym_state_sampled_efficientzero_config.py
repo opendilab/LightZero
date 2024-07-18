@@ -26,7 +26,6 @@ dmc2gym_state_sampled_efficientzero_config = dict(
         task_name="swingup",
         from_pixels=False,  # vector/state obs
         frame_skip=8,
-        frame_stack=1,
         continuous=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -41,11 +40,12 @@ dmc2gym_state_sampled_efficientzero_config = dict(
             num_of_sampled_actions=K,
             sigma_type='conditioned',
             model_type='mlp', 
-            lstm_hidden_size=256,
+            lstm_hidden_size=512,
             latent_state_dim=256,
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
-            norm_type='BN', 
+            norm_type='BN',
+            use_sim_norm=False,
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
@@ -77,8 +77,7 @@ dmc2gym_state_sampled_efficientzero_create_config = dict(
         type='dmc2gym_lightzero',
         import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
     ),
-    # env_manager=dict(type='subprocess'),
-    env_manager=dict(type='base'),
+    env_manager=dict(type='subprocess'),
     policy=dict(
         type='sampled_efficientzero',
         import_names=['lzero.policy.sampled_efficientzero'],

@@ -28,9 +28,6 @@ dmc2gym_pixels_sampled_efficientzero_config = dict(
         frame_skip=4,
         warp_frame=True,
         scale=True,
-        clip_rewards=False,
-        frame_stack=3,
-        observation_shape=(9, 84, 84),
         frame_stack_num=3,
         channels_first=True,
         stop_value=1e6,
@@ -42,7 +39,7 @@ dmc2gym_pixels_sampled_efficientzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            # observation_shape=(3, 84, 84),
+            # observation_shape=(3, 84, 84),  # for frame_stack_num=1
             observation_shape=(9, 84, 84),
             action_space_size=1,
             image_channel=3,
@@ -51,11 +48,13 @@ dmc2gym_pixels_sampled_efficientzero_config = dict(
             num_of_sampled_actions=K,
             sigma_type='conditioned',
             model_type='conv',
-            lstm_hidden_size=256,
+            lstm_hidden_size=512,
             latent_state_dim=256,
+            downsample=True,
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
-            norm_type='BN', 
+            norm_type='BN',
+            use_sim_norm=False,
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
@@ -86,7 +85,9 @@ dmc2gym_pixels_sampled_efficientzero_create_config = dict(
         type='dmc2gym_lightzero',
         import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
     ),
-    env_manager=dict(type='subprocess'),
+    # When using subprocess_env_manager, it may lead to errors during the call to obs = self._env.reset().
+    # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
     policy=dict(
         type='sampled_efficientzero',
         import_names=['lzero.policy.sampled_efficientzero'],
