@@ -1,9 +1,11 @@
 import hashlib
 from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from .kv_caching import KeysValues
 
@@ -109,8 +111,14 @@ def init_weights(module, norm_type='BN'):
             module.bias.data.zero_()
     elif isinstance(module, (nn.LayerNorm, nn.GroupNorm)):
         print(f"Init {module} using zero bias, 1 weight")
-        module.bias.data.zero_()
-        module.weight.data.fill_(1.0)
+        try:
+            module.bias.data.zero_()
+        except Exception as e:
+            print(e)
+        try:
+             module.weight.data.fill_(1.0)
+        except Exception as e:
+            print(e)
     elif isinstance(module, nn.BatchNorm2d):
         print(f"Init nn.BatchNorm2d using zero bias, 1 weight")
         module.weight.data.fill_(1.0)
@@ -188,3 +196,146 @@ class LossWithIntermediateLosses:
             self.intermediate_losses[k] = v / value
         self.loss_total = self.loss_total / value
         return self
+
+
+class SoftModulizationHead(nn.Module):
+    """
+    Overview:
+        SoftModulizationHead is an nn.Module class that implements soft modulization for multi-task reinforcement learning.
+    Arguments:
+        - task_num (:obj:`int`): The number of tasks.
+        - embed_dim (:obj:`int`): The embedding dimension.
+        - base_layers_num (:obj:`int`): The number of base layers in the model.
+        - device (:obj:`torch.device`): The device to run computations on.
+    """
+
+    def __init__(self, 
+                 task_num: int, 
+                 embed_dim: int, 
+                 gating_embed_mlp_num: int,
+                 base_model, 
+                 base_layers_num: int,
+                 base_modules_num: int, 
+                 device: torch.device
+        ) -> None:
+        super(SoftModulizationHead, self).__init__()
+        self.task_num = task_num
+        self.embed_dim = embed_dim
+        self.gating_embed_mlp_num = gating_embed_mlp_num
+        self.base_layers_num = base_layers_num
+        self.base_modules_num = base_modules_num
+        self.base_model = base_model
+        self.device = device
+
+        # Task embedding layer
+        self.task_embed_layer = nn.Linear(task_num, embed_dim)
+        # Ex. (.., task_num) -> (.., 768)
+        
+        # Gating fully connected layers
+        gating_fc_layer_module = [nn.ReLU(), nn.Linear(embed_dim, embed_dim)] * (self.gating_embed_mlp_num - 1)
+        self.gating_fcs = nn.Sequential(*gating_fc_layer_module)
+
+        # Initial gating weight layer
+        self.gating_weight_fc_0 = nn.Linear(embed_dim, task_num * task_num)
+        # (.., 768) -> (.., 16)
+        
+        # Conditional gating weight layers
+        self.gating_weight_fcs = nn.ModuleList()
+        self.gating_weight_cond_fcs = nn.ModuleList()
+        for k in range(self.base_layers_num - 2):
+            self.gating_weight_cond_fcs.append(nn.Linear((k + 1) * task_num * task_num, embed_dim))
+            self.gating_weight_fcs.append(nn.Linear(embed_dim, task_num * task_num))
+        
+        # Cond_weight_fcs [Linear(16, 768), Linear(32, 768), Linear(48, 768)]
+        # weight_fcs: [Linear]
+        
+        # Final gating weight layers
+        self.gating_weight_cond_last = nn.Linear((self.base_layers_num - 1) * task_num * task_num, embed_dim)
+        self.gating_weight_last_fc = nn.Linear(embed_dim, task_num)
+
+    def forward(self, x: torch.Tensor, task_id: int, num_steps, prev_steps) -> torch.Tensor:
+        """
+        Overview:
+            Forward pass for soft modulization.
+        Arguments:
+            - x (:obj:`torch.Tensor`): Input tensor.
+            - task_id (:obj:`int`): ID of the task.
+            - base_model (:obj:`nn.Module`): Base model containing the layers to be modularized.
+        Returns:
+            - torch.Tensor: Output tensor after soft modulization.
+        """
+        print(f"x.shape:  {x.shape}")
+        task_id_vector = torch.zeros(self.task_num).to(self.device)
+        task_id_vector[task_id] = 1
+
+        # Process task embedding
+        task_embedding = self.task_embed_layer(task_id_vector).to(self.device)
+        print(f"task_embedding.shape before * x :  {task_embedding.shape}")
+        task_embedding = F.relu(task_embedding * x)
+        task_embedding = self.gating_fcs(task_embedding)
+        print(f"task_embedding.shape after * x:  {task_embedding.shape}")
+        
+        weights = []
+        flatten_weights = []
+        base_shape = task_embedding.shape[:-1]
+        weight_shape = base_shape + torch.Size([self.task_num, self.task_num])
+        flatten_shape = base_shape + torch.Size([self.task_num * self.task_num])
+
+        # Calculate weights between layers
+        raw_weight = self.gating_weight_fc_0(F.relu(task_embedding))
+        raw_weight = raw_weight.view(weight_shape)
+        
+        
+        softmax_weight = F.softmax(raw_weight, dim=-1)
+        print(f"softmax_weight:  {softmax_weight.shape}")
+        flatten_weight = softmax_weight.view(flatten_shape)
+        print(f"flatten_weight:  {flatten_weight.shape}")
+        weights.append(softmax_weight)
+        flatten_weights.append(flatten_weight)
+
+        for i, (gating_weight_fc, gating_weight_cond_fc) in enumerate(zip(self.gating_weight_fcs, self.gating_weight_cond_fcs)):
+            cond = F.relu(torch.cat(flatten_weights, dim=-1))
+            print(f"cond_weight:  {cond.shape}")
+            cond = gating_weight_cond_fc(cond)
+            print(f"cond_weight:  {cond.shape}")
+            cond = F.relu(cond * task_embedding)
+            print(f"cond_weight:  {cond.shape}")
+            
+            raw_weight = gating_weight_fc(cond)
+            raw_weight = raw_weight.view(weight_shape)
+            softmax_weight = F.softmax(raw_weight, dim=-1)
+            print(f"softmax_weight:  {softmax_weight.shape}")
+            weights.append(softmax_weight)
+            flatten_weights.append(raw_weight.view(flatten_shape))
+
+        cond = F.relu(torch.cat(flatten_weights, dim=-1))
+        print(f"cond_weight:  {cond.shape}")
+        cond = self.gating_weight_cond_last(cond)
+        cond = F.relu(cond * task_embedding)
+        print(f"cond_weight:  {cond.shape}")
+        raw_last_weight = self.gating_weight_last_fc(cond)
+        print(f"cond_weight:  {cond.shape}")
+        last_weight = F.softmax(raw_last_weight, dim=-1)
+
+        # Forward calculation
+        obs_mid_layers = [self.base_model[i][0] for i in range(self.base_modules_num)]
+        obs_mid_outputs = [obs_mid_layer(x, num_steps=num_steps, prev_steps=prev_steps).unsqueeze(-2) for obs_mid_layer in obs_mid_layers]
+        obs_mid_outputs = torch.cat(obs_mid_outputs, dim=-2)
+
+        for i in range(self.base_layers_num - 1):
+            new_module_outputs = []
+            obs_next_mid_layers = [self.base_model[j][i+1] for j in range(self.base_modules_num)]
+
+            for j, next_layer_module in enumerate(obs_next_mid_layers):
+                
+                print(f"obs_mid_outputs.shape: {obs_mid_outputs.shape}")
+                print(f"weights[{i}][..., {j}, :].unsqueeze(-1).shape: {weights[i][..., j, :].unsqueeze(-1).shape}")
+                next_module_input = F.relu((obs_mid_outputs * weights[i][..., j, :].unsqueeze(-1)).sum(dim=-2))
+                new_module_outputs.append((next_layer_module(next_module_input, num_steps=num_steps, prev_steps=prev_steps)).unsqueeze(-2))
+
+            obs_mid_outputs = torch.cat(new_module_outputs, dim=-2)
+
+        obs_module_output = obs_mid_outputs
+        obs_output = (obs_module_output * last_weight.unsqueeze(-1)).sum(-2)
+
+        return obs_output

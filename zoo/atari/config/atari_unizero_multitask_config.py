@@ -2,7 +2,7 @@ from easydict import EasyDict
 from copy import deepcopy
 # from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
-def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length):
+def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type):
     return EasyDict(dict(
         env=dict(
             stop_value=int(1e6),
@@ -21,6 +21,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             # eval_max_episode_steps=int(500),
         ),
         policy=dict(
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000,),),),  # default is 10000
             grad_correct_params=dict(
                 # for MoCo
                 MoCo_beta=0.5,
@@ -37,6 +38,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             model=dict(
                 observation_shape=(3, 64, 64),
                 action_space_size=action_space_size,
+                norm_type=norm_type,
                 world_model_cfg=dict(
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,
@@ -52,16 +54,21 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # collector_env_num=collector_env_num,
                     # evaluator_env_num=evaluator_env_num,
                     task_num=len(env_id_list),
-                    num_experts_in_softmoe=-1,  # NOTE
-                    # num_experts_in_softmoe=-1,  # NOTE
-                    num_fc_gating_layers=2,
-                    base_layers_num=5
+                    # num_experts_in_softmoe_head=4,  # NOTE
+                    num_experts_in_softmoe_head=-1,  # NOTE
+                    # moe_in_transformer=True,
+                    moe_in_transformer=False,
+                    num_experts_of_moe_in_transformer=4,
+                    
+                    head_soft_modulization=True, # NOTE: soft modulization
+                    soft_modulization_modules=4,
+                    soft_modulization_layers=3
                 ),
             ),
             cuda=True,
             model_path=None,
             num_unroll_steps=num_unroll_steps,
-            update_per_collect=None,
+            update_per_collect=1000,
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -74,10 +81,17 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
         ),
     ))
 
-def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, seed):
+def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed):
     configs = []
-    # exp_name_prefix = f'data_unizero_mt_0711/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head-softmoe4_1-encoder-LN_lsd768-nlayer4-nh8_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_0711_debug/{len(env_id_list)}games_1-head-softmoe4_1-encoder-LN_lsd768-nlayer4-nh8_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0711/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head-softmoe4_1-encoder-{norm_type}_lsd768-nlayer4-nh8_seed{seed}/'
+    
+    # exp_name_prefix = f'data_unizero_mt_0716_debug/{len(env_id_list)}games_1-head-softmoe4-dynamics_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_8-head_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_CAGrad_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_MoCo_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    
+    exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_1-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -93,7 +107,8 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
             reanalyze_ratio,
             batch_size,
             num_unroll_steps,
-            infer_context_length
+            infer_context_length,
+            norm_type
         )
         config.policy.task_id = task_id
         config.exp_name = exp_name_prefix + f"{env_id.split('NoFrameskip')[0]}_unizero-mt_seed{seed}"
@@ -117,13 +132,24 @@ def create_env_manager():
 
 if __name__ == "__main__":
     from lzero.entry import train_unizero_multitask
-
+    # TODO
     env_id_list = [
         'PongNoFrameskip-v4',
         'MsPacmanNoFrameskip-v4',
         'SeaquestNoFrameskip-v4',
         'BoxingNoFrameskip-v4'
     ]
+
+    # env_id_list = [
+    #     'PongNoFrameskip-v4',
+    #     'MsPacmanNoFrameskip-v4',
+    #     'SeaquestNoFrameskip-v4',
+    #     'BoxingNoFrameskip-v4',
+    #     'AlienNoFrameskip-v4',
+    #     'CrazyClimberNoFrameskip-v4',
+    #     'BreakoutNoFrameskip-v4',
+    #     'QbertNoFrameskip-v4',
+    # ]
 
     action_space_size = 18  # Full action space
     seed = 0
@@ -133,18 +159,23 @@ if __name__ == "__main__":
     num_simulations = 50
     max_env_step = int(1e6)
     reanalyze_ratio = 0.
-    batch_size = [32, 32, 32, 32]
+    # batch_size = [32, 32, 32, 32]
+    max_batch_size = 128
+    batch_size = [int(1500/len(env_id_list)) for i in range(len(env_id_list))]
     num_unroll_steps = 10
     infer_context_length = 4
+    norm_type = 'LN'
+    # norm_type = 'BN'
 
-    # ======== only for debug ========
-    collector_env_num = 3
-    n_episode = 3
-    evaluator_env_num = 2
-    num_simulations = 5
-    batch_size = [4, 4, 4, 4]
 
-    configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, seed)
+    # ======== TODO: only for debug ========
+    # collector_env_num = 3
+    # n_episode = 3
+    # evaluator_env_num = 2
+    # num_simulations = 5
+    # batch_size = [4, 4, 4, 4]
+
+    configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed)
 
     # Uncomment the desired training run
     # train_unizero_multitask(configs[:1], seed=seed, max_env_step=max_env_step)  # Pong
