@@ -19,6 +19,8 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
     prepare_obs, \
     configure_optimizers
 from lzero.policy.muzero import MuZeroPolicy
+from .utils import configure_optimizers_nanogpt
+
 
 
 @POLICY_REGISTRY.register('sampled_efficientzero')
@@ -125,8 +127,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
-        optim_type='SGD',
-        learning_rate=0.2,  # init lr for manually decay schedule
+        optim_type='AdamW',
+        learning_rate=1e-4,  # init lr for manually decay schedule
         # optim_type='Adam',
         # lr_piecewise_constant_decay=False,
         # learning_rate=0.003,  # lr for Adam optimizer
@@ -166,7 +168,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         cos_lr_scheduler=False,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=True,
+        lr_piecewise_constant_decay=False,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e4),
         # (int) The number of final training iterations to control temperature, which is only used for manually decay.
@@ -267,11 +269,13 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
         elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = configure_optimizers(
+            # NOTE: nanoGPT optimizer
+            self._optimizer = configure_optimizers_nanogpt(
                 model=self._model,
-                weight_decay=self._cfg.weight_decay,
                 learning_rate=self._cfg.learning_rate,
-                device_type=self._cfg.device
+                weight_decay=self._cfg.weight_decay,
+                device_type=self._cfg.device,
+                betas=(0.9, 0.95),
             )
 
         if self._cfg.cos_lr_scheduler is True:
@@ -308,17 +312,17 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
     def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
         """
-         Overview:
-             The forward function for learning policy in learn mode, which is the core of the learning process.
-             The data is sampled from replay buffer.
-             The loss is calculated by the loss function and the loss is backpropagated to update the model.
-         Arguments:
-             - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
-                 The first tensor is the current_batch, the second tensor is the target_batch.
-         Returns:
-             - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
-                 current learning loss and learning statistics.
-         """
+        Overview:
+            The forward function for learning policy in learn mode, which is the core of the learning process.
+            The data is sampled from replay buffer.
+            The loss is calculated by the loss function and the loss is backpropagated to update the model.
+        Arguments:
+            - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
+                The first tensor is the current_batch, the second tensor is the target_batch.
+        Returns:
+            - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
+                current learning loss and learning statistics.
+        """
         self._learn_model.train()
         self._target_model.train()
 
