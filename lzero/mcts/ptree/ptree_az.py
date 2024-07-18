@@ -301,7 +301,7 @@ class MCTS(object):
             # game state from the perspective of player 1.
             leaf_value = self._expand_leaf_node(node, simulate_env, policy_forward_fn)
         else:
-            if simulate_env.non_zero_sum:
+            if hasattr(simulate_env, 'non_zero_sum') and simulate_env.non_zero_sum:
                 # NOTE: for single-player game and non_zero_sum two-player game
                 leaf_value = eval_return_current_player
             else:
