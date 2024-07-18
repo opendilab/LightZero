@@ -134,7 +134,7 @@ class Block(nn.Module):
                 num_experts_per_tok=1,
             )
             print("="*20)
-            print('use moe in feed_forward of transformer')
+            print(f'use moe in feed_forward of transformer, num of expert: {config.num_experts_of_moe_in_transformer}')
             print("="*20)
         else:
             self.feed_forward = nn.Sequential(

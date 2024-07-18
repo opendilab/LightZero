@@ -22,6 +22,10 @@ class MoeLayer(nn.Module):
         self.num_experts_per_tok = num_experts_per_tok
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        # if len(self.experts) == 1:
+        #     # 只有一个专家时，直接使用该专家
+        #     return self.experts[0](inputs)
+
         gate_logits = self.gate(inputs)
         weights, selected_experts = torch.topk(gate_logits, self.num_experts_per_tok)
         weights = F.softmax(weights, dim=1, dtype=torch.float).to(inputs.dtype)

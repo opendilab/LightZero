@@ -15,8 +15,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             manager=dict(shared_memory=False, ),
             full_action_space=True,
             # ===== only for debug =====
-            collect_max_episode_steps=int(30),
-            eval_max_episode_steps=int(30),
+            # collect_max_episode_steps=int(30),
+            # eval_max_episode_steps=int(30),
             # collect_max_episode_steps=int(50),
             # eval_max_episode_steps=int(50),
             # collect_max_episode_steps=int(500),
@@ -52,22 +52,23 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     num_heads=8,
                     embed_dim=768,
                     obs_type='image',
-                    env_num=max(collector_env_num, evaluator_env_num),
+                    # env_num=max(collector_env_num, evaluator_env_num),
+                    env_num=8,  # TODO: the max of all tasks
                     # collector_env_num=collector_env_num,
                     # evaluator_env_num=evaluator_env_num,
                     task_num=len(env_id_list),
                     # num_experts_in_softmoe_head=4,  # NOTE
                     num_experts_in_softmoe_head=-1,  # NOTE
-                    # moe_in_transformer=True,
-                    moe_in_transformer=False,  # NOTE
+                    moe_in_transformer=True,
+                    # moe_in_transformer=False,  # NOTE
                     # num_experts_of_moe_in_transformer=4,
-                    num_experts_of_moe_in_transformer=1,
+                    num_experts_of_moe_in_transformer=2,
                 ),
             ),
-            # use_priority=False,
-            # print_task_priority_logs=False,
-            use_priority=True,
-            print_task_priority_logs=True,
+            use_priority=False,
+            print_task_priority_logs=False,
+            # use_priority=True,  # TODO
+            # print_task_priority_logs=True,
             cuda=True,
             model_path=None,
             num_unroll_steps=num_unroll_steps,
@@ -92,22 +93,24 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     
     # exp_name_prefix = f'data_unizero_mt_0716_debug/{len(env_id_list)}games_1-head-softmoe4-dynamics_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_upc1000_value-priority_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_0716_debug/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_upc1000_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716_debug/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_upc1000_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_CAGrad_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_MoCo_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_trans-ffw-moe1_lsd768-nlayer4-nh8_max-bs1500_upc1000_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_pong-boxing-envnum2_4-head_1-encoder-{norm_type}_trans-ffw-moe1-same_lsd768-nlayer4-nh8_max-bs1500_upc1000_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_pong-boxing-envnum2_4-head_1-encoder-{norm_type}_trans-ffw-moe2_lsd768-nlayer4-nh8_max-bs1500_upc1000_seed{seed}/'
+
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_1-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
             env_id,
             action_space_size,
-            # collector_env_num if env_id not in ['PongNoFrameskip-v4', 'BoxingNoFrameskip-v4'] else 2,  # TODO: different collector_env_num for Pong and Boxing
-            # evaluator_env_num if env_id not in ['PongNoFrameskip-v4', 'BoxingNoFrameskip-v4'] else 2,
-            # n_episode if env_id not in ['PongNoFrameskip-v4', 'BoxingNoFrameskip-v4'] else 2,
-            collector_env_num,
-            evaluator_env_num,
-            n_episode,
+            collector_env_num if env_id not in ['PongNoFrameskip-v4', 'BoxingNoFrameskip-v4'] else 2,  # TODO: different collector_env_num for Pong and Boxing
+            evaluator_env_num if env_id not in ['PongNoFrameskip-v4', 'BoxingNoFrameskip-v4'] else 2,
+            n_episode if env_id not in ['PongNoFrameskip-v4', 'BoxingNoFrameskip-v4'] else 2,
+            # collector_env_num,
+            # evaluator_env_num,
+            # n_episode,
             num_simulations,
             reanalyze_ratio,
             batch_size,
@@ -174,11 +177,11 @@ if __name__ == "__main__":
 
 
     # ======== TODO: only for debug ========
-    collector_env_num = 3
-    n_episode = 3
-    evaluator_env_num = 2
-    num_simulations = 2
-    batch_size = [4, 4, 4, 4]
+    # collector_env_num = 3
+    # n_episode = 3
+    # evaluator_env_num = 2
+    # num_simulations = 2
+    # batch_size = [4, 4, 4, 4]
 
     configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed)
 
