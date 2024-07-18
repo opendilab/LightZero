@@ -17,8 +17,8 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 
-sys.path.append('/Users/puyuan/code/LibMTL/')
-from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+# sys.path.append('/Users/puyuan/code/LibMTL/')
+# from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 # from LibMTL.weighting.FAMO_unizero import FAMO as GradCorrect  # NOTE: FAMO have bugs now
 
@@ -35,10 +35,7 @@ def generate_task_loss_dict(multi_task_losses, task_name_template):
     task_loss_dict = {}
     for task_idx, task_loss in enumerate(multi_task_losses):
         task_name = task_name_template.format(task_idx)
-        try:
-            task_loss_dict[task_name] = task_loss.item() if hasattr(task_loss, 'item') else task_loss
-        except Exception as e:
-            task_loss_dict[task_name] = task_loss
+        task_loss_dict[task_name] = task_loss.item() if hasattr(task_loss, 'item') else task_loss
     return task_loss_dict
 
 
@@ -222,6 +219,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 gamma=1,
                 # (float) The threshold for a dormant neuron.
                 dormant_threshold=0.025,
+                
+                head_soft_modulization=True,
+                soft_modulization_modules=4,
+                soft_modulization_layers=3
             ),
         ),
         # ****** common ******
@@ -282,7 +283,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor.
         # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.replay_ratio automatically.
-        update_per_collect=None,
+        update_per_collect=1000,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
         replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
@@ -337,7 +338,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
         fixed_temperature_value=0.25,
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
-
+        
+        # ****** Harmony Dream for balancing ******
+        # (bool) Whether to use harmony dream to balance different weights between different tasks.
+        harmony_balance_tasks=False,
+        
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
         use_priority=False,
@@ -396,14 +401,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
-        # NOTE: nanoGPT optimizer
-        self._optimizer_world_model = configure_optimizers_nanogpt(
-            model=self._model.world_model,
-            learning_rate=self._cfg.learning_rate,
-            weight_decay=self._cfg.weight_decay,
-            device_type=self._cfg.device,
-            betas=(0.9, 0.95),
-        )
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
@@ -435,7 +432,29 @@ class UniZeroMTPolicy(UniZeroPolicy):
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
-
+        
+        self.task_num = self._cfg.task_num
+        self.harmony_balance_tasks = self._cfg.harmony_balance_tasks
+        print(f"Use harmony? {self.harmony_balance_tasks}")
+        if self.harmony_balance_tasks:
+            
+            harmony_task_names = [f"task_{task_id}_harmony_s" for task_id in range(self.task_num)]
+            for name in harmony_task_names:
+                param = torch.nn.Parameter(-torch.log(torch.tensor(1.0)))
+                setattr(self, name, param)
+                
+        harmony_task_s_dict = {name: getattr(self, name) for name in harmony_task_names} if self.harmony_balance_tasks else None
+            
+        # NOTE: nanoGPT optimizer
+        self._optimizer_world_model = configure_optimizers_nanogpt(
+            model=self._model.world_model,
+            learning_rate=self._cfg.learning_rate,
+            weight_decay=self._cfg.weight_decay,
+            device_type=self._cfg.device,
+            betas=(0.9, 0.95),
+            additional_params=harmony_task_s_dict
+        )
+        
         # 创建 WrappedModel 实例
         # head和nn.Embedding 没有矫正梯度
         # wrapped_model = WrappedModel(
@@ -466,9 +485,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # 将 wrapped_model 作为 share_model 传递给 GradCorrect
         # ========= 初始化 MoCo CAGrad 参数 =========
         self.task_num = self._cfg.task_num
-        self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
-        self.grad_correct.init_param()  
-        self.grad_correct.rep_grad = False
+        
+        # 这三行是梯度纠正部分
+        # self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
+        # self.grad_correct.init_param()  
+        # self.grad_correct.rep_grad = False
 
         #  =========only for FAMO =========
         # self.grad_correct.set_min_losses(torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)) 
@@ -508,9 +529,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
 
         average_target_policy_entropy_multi_task = []
-        value_priority_multi_task = []
-        value_priority_mean_multi_task = []
-
 
         losses_list = []  # 用于存储每个任务的损失
         for task_id, data_one_task in enumerate(data):
@@ -582,7 +600,15 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle, task_id=task_id
             )
 
-            weighted_total_loss += losses.loss_total  # TODO
+            if self.harmony_balance_tasks:
+                harmony_val_s = getattr(self, f'task_{task_id}_harmony_s')
+                # print(harmony_val_s)
+                weighted_total_loss += losses.loss_total / torch.exp(harmony_val_s)
+                weighted_total_loss += torch.log(torch.exp(harmony_val_s) + 1)         
+                print(f"task_{task_id}_harmony_s：{harmony_val_s.item()}")
+            else:
+                weighted_total_loss += losses.loss_total  # TODO
+                
             # weighted_total_loss = torch.tensor(0., device=self._cfg.device)
 
             # assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
@@ -603,17 +629,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             latent_recon_loss = intermediate_losses['latent_recon_loss']
             perceptual_loss = intermediate_losses['perceptual_loss']
             latent_state_l2_norms = intermediate_losses['latent_state_l2_norms']
-            # value_priority = intermediate_losses['value_priority']
-            logits_value = intermediate_losses['logits_value']
 
-            # ============ for value priority  ============ 
-            # transform the categorical representation of the scaled value to its original value
-            original_value = self.inverse_scalar_transform_handle(logits_value.reshape(-1, 101)).reshape(
-                    batch_for_gpt['observations'].shape[0], batch_for_gpt['observations'].shape[1], 1)
-            # calculate the new priorities for each transition.
-            value_priority = torch.nn.L1Loss(reduction='none')(original_value.squeeze(-1)[:,0], target_value[:, 0])   # TODO: mix of mean and sum
-            value_priority = value_priority.data.cpu().numpy() + 1e-6
-            # ============ for value priority  ============ 
 
             obs_loss_multi_task.append(obs_loss)
             reward_loss_multi_task.append(reward_loss)
@@ -625,14 +641,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
             latent_recon_loss_multi_task.append(latent_recon_loss)
             perceptual_loss_multi_task.append(perceptual_loss)
             latent_state_l2_norms_multi_task.append(latent_state_l2_norms)
-            value_priority_multi_task.append(value_priority)
-            value_priority_mean_multi_task.append(value_priority.mean().item())
-
 
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
 
-        # TODO 使用 MoCo 和 CAGrad 来计算梯度和权重
+        # TODO MoCo
+        # 使用 MoCo 和 CAGrad 来计算梯度和权重
         #  ============= for CAGrad and MoCo =============
         # lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
 
@@ -709,17 +723,21 @@ class UniZeroMTPolicy(UniZeroPolicy):
             **generate_task_loss_dict(reward_loss_multi_task, 'reward_loss_task{}'),
             **generate_task_loss_dict(value_loss_multi_task, 'value_loss_task{}'),
             **generate_task_loss_dict(average_target_policy_entropy_multi_task, 'target_policy_entropy_task{}'),
-            **generate_task_loss_dict(lambd, 'lambd_task{}'), 
-            # ==============================================================
-            # priority related
-            # ==============================================================
-            **generate_task_loss_dict(value_priority_multi_task, 'value_priority_task{}'),
-            **generate_task_loss_dict(value_priority_mean_multi_task, 'value_priority_mean_task{}'),
+            **generate_task_loss_dict(lambd, 'lambd_task{}'),
         }
 
         # 合并两个字典
         return_loss_dict.update(multi_task_loss_dicts)
 
+        if self.harmony_balance_tasks:
+            harmony_task_dict = {}
+            for task_id in range(self.task_num):
+                harmony_s_val = getattr(self, f'task_{task_id}_harmony_s')
+                harmony_task_dict[f'task_{task_id}_harmony_s'] = harmony_s_val.item()
+                harmony_task_dict[f'task_{task_id}_harmony_s_exp_recip'] = (1 / torch.exp(harmony_s_val)).item()
+        
+            return_loss_dict.update(harmony_task_dict)
+            
         # 返回最终的损失字典
         return return_loss_dict
 
@@ -1118,8 +1136,19 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'perceptual_loss',
             'latent_state_l2_norms',
             'lambd',
-            'value_priority_mean',
         ]
+        
+        if self.harmony_balance_tasks:
+            harmony_task_balance_s_list = [
+                f'task_{task_id}_harmony_s' for task_id in range(self.task_num)
+            ]
+            harmony_task_balance_s_exprecip_list = [
+                f'task_{task_id}_harmony_s_exp_recip' for task_id in range(self.task_num)
+            ]
+            monitored_vars.extend(harmony_task_balance_s_list)
+            monitored_vars.extend(harmony_task_balance_s_exprecip_list)
+            
+            
         num_tasks = self.task_num
         # If the number of tasks is provided, extend the monitored variables list with task-specific variables
         if num_tasks is not None:

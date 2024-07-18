@@ -16,7 +16,7 @@ from lzero.model.utils import cal_dormant_ratio
 from .slicer import Head
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
-from .utils import LossWithIntermediateLosses, init_weights, to_device_for_kvcache
+from .utils import LossWithIntermediateLosses, init_weights, to_device_for_kvcache, SoftModulizationHead
 from .utils import WorldModelOutput, quantize_state
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -47,6 +47,7 @@ class WorldModelMT(nn.Module):
 
         # TODO: multitask
         self.task_num = config.task_num
+        self.embed_dim = self.config.embed_dim
         self.task_emb = nn.Embedding(self.task_num, config.embed_dim, max_norm=1)  # TODO
         self.head_policy_multi_task = nn.ModuleList()
         self.head_value_multi_task = nn.ModuleList()
@@ -54,6 +55,8 @@ class WorldModelMT(nn.Module):
         self.head_observations_multi_task = nn.ModuleList()
 
         self.num_experts_in_softmoe_head = config.num_experts_in_softmoe_head
+        self.head_soft_modulization = config.head_soft_modulization
+        print(f"self.head_soft_modulization: {self.head_soft_modulization}")
 
         # Move all modules to the specified device
         print(f"self.config.device: {self.config.device}")
@@ -74,7 +77,7 @@ class WorldModelMT(nn.Module):
         self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
         print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
-        if self.num_experts_in_softmoe_head == -1:
+        if self.num_experts_in_softmoe_head == -1 and not self.head_soft_modulization:
             print('We use normal head')
             # TODO: Normal Head
             for task_id in range(self.task_num):  # TODO
@@ -93,6 +96,69 @@ class WorldModelMT(nn.Module):
                                                         self.obs_per_embdding_dim,
                                                         self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
                 self.head_observations_multi_task.append(self.head_observations)
+       
+        elif self.num_experts_in_softmoe_head == -1 and self.head_soft_modulization:
+            
+            print(f"Soft Modulization Here! ")
+            
+            self.num_sm_modules = config.soft_modulization_modules
+            self.num_sm_layers = config.soft_modulization_layers
+            
+            self.head_policy_multi_task = self._create_head_soft_modulization(
+                                                block_mask=self.value_policy_tokens_pattern, 
+                                                output_dim=self.action_space_size,
+                                                num_layers=self.num_sm_layers, 
+                                                num_modules=self.num_sm_modules)
+            
+            self.head_value_multi_task = self._create_head_soft_modulization(
+                                                block_mask=self.value_policy_tokens_pattern, 
+                                                output_dim=self.support_size,
+                                                num_layers=self.num_sm_layers, 
+                                                num_modules=self.num_sm_modules)
+            
+            self.head_rewards_multi_task = self._create_head_soft_modulization(
+                                                block_mask=self.act_tokens_pattern, 
+                                                output_dim=self.support_size,
+                                                num_layers=self.num_sm_layers, 
+                                                num_modules=self.num_sm_modules)
+            
+            self.head_observations_multi_task = self._create_head_soft_modulization(
+                                                block_mask=self.all_but_last_latent_state_pattern, 
+                                                output_dim=self.obs_per_embdding_dim,
+                                                norm_layer=self.sim_norm,
+                                                num_layers=self.num_sm_layers, 
+                                                num_modules=self.num_sm_modules)
+            
+            print(f"head_policy_multi_task 有 {len(self.head_policy_multi_task)} 个，每个里面是 {len(self.head_policy_multi_task[0])}")
+            self.head_policy_sm = SoftModulizationHead(task_num=self.task_num,
+                                                       embed_dim=self.embed_dim,
+                                                       gating_embed_mlp_num=3,
+                                                       base_model=self.head_policy_multi_task,
+                                                       base_layers_num=self.num_sm_layers,
+                                                       base_modules_num=self.num_sm_modules,
+                                                       device=self.config.device)
+            
+            self.head_value_sm = SoftModulizationHead(task_num=self.task_num,
+                                                       embed_dim=self.embed_dim,
+                                                       gating_embed_mlp_num=3,
+                                                       base_model=self.head_value_multi_task,
+                                                       base_layers_num=self.num_sm_layers,
+                                                       base_modules_num=self.num_sm_modules,
+                                                       device=self.config.device)
+            self.head_rewards_sm = SoftModulizationHead(task_num=self.task_num,
+                                                       embed_dim=self.embed_dim,
+                                                       gating_embed_mlp_num=3,
+                                                       base_model=self.head_rewards_multi_task,
+                                                       base_layers_num=self.num_sm_layers,
+                                                       base_modules_num=self.num_sm_modules,
+                                                       device=self.config.device)
+            self.head_observations_sm = SoftModulizationHead(task_num=self.task_num,
+                                                       embed_dim=self.embed_dim,
+                                                       gating_embed_mlp_num=3,
+                                                       base_model=self.head_observations_multi_task,
+                                                       base_layers_num=self.num_sm_layers,
+                                                       base_modules_num=self.num_sm_modules,
+                                                       device=self.config.device)
         else:
             print(f'We use softmoe head, self.num_experts_in_softmoe_head is {self.num_experts_in_softmoe_head}')
             # Dictionary to store SoftMoE instances
@@ -157,7 +223,7 @@ class WorldModelMT(nn.Module):
         self.value_policy_tokens_pattern = torch.zeros(self.config.tokens_per_block)
         self.value_policy_tokens_pattern[-2] = 1
 
-    def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
+    def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer: Optional[nn.Module]=None) -> Head:
         """Create head modules for the transformer."""
         modules = [
             nn.Linear(self.config.embed_dim, self.config.embed_dim),
@@ -171,7 +237,40 @@ class WorldModelMT(nn.Module):
             block_mask=block_mask,
             head_module=nn.Sequential(*modules)
         )
-
+        
+    def _create_head_soft_modulization(self, block_mask: torch.Tensor, 
+                                       output_dim: int, norm_layer: Optional[nn.Module]=None,
+                                       num_layers: int = 2, num_modules: int = 4) -> nn.ModuleList:
+        
+        all_modules = nn.ModuleList()
+        for i in range(num_modules):
+            layer_modules = nn.ModuleList()
+            for j in range(num_layers - 1):
+                module_list = [
+                    nn.Linear(self.config.embed_dim, self.config.embed_dim),
+                    nn.GELU(approximate='tanh'),
+                ]
+                head = Head(
+                    max_blocks=self.config.max_blocks,
+                    block_mask=block_mask,
+                    head_module=nn.Sequential(*module_list)
+                )
+                layer_modules.append(head)
+            last_module_list = [
+                nn.Linear(self.config.embed_dim, output_dim),
+            ]
+            if norm_layer:
+                last_module_list.append(norm_layer)
+            last_head = Head(
+                max_blocks=self.config.max_blocks,
+                block_mask=block_mask,
+                head_module=nn.Sequential(*last_module_list)
+            )
+            layer_modules.append(last_head)
+            all_modules.append(layer_modules)
+        return all_modules
+        
+        
     def _create_head_softmoe(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, soft_moe=None) -> Head:
         """Create softmoe head modules for the transformer."""
         modules = [
@@ -250,7 +349,8 @@ class WorldModelMT(nn.Module):
                             break
             elif self.task_num > 1:
                 for head in self.head_policy_multi_task + self.head_value_multi_task + self.head_rewards_multi_task + self.head_observations_multi_task:
-                    for layer in reversed(head.head_module):
+                    loop = reversed(head[-1].head_module) if self.head_soft_modulization else reversed(head.head_module)
+                    for layer in loop:
                         if isinstance(layer, nn.Linear):
                             nn.init.zeros_(layer.weight)
                             if layer.bias is not None:
@@ -419,10 +519,16 @@ class WorldModelMT(nn.Module):
         # logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
 
         # TODO: N head
-        logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        if self.head_soft_modulization:
+            logits_observations = self.head_observations_sm(x, task_id=task_id, num_steps=num_steps, prev_steps=prev_steps)
+            logits_rewards = self.head_rewards_sm(x, task_id=task_id, num_steps=num_steps, prev_steps=prev_steps)
+            logits_policy = self.head_policy_sm(x, task_id=task_id, num_steps=num_steps, prev_steps=prev_steps)
+            logits_value = self.head_value_sm(x, task_id=task_id, num_steps=num_steps, prev_steps=prev_steps)
+        else:
+            logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
 
         # logits_ends is None
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)
@@ -1015,7 +1121,6 @@ class WorldModelMT(nn.Module):
             # Uncomment the lines below for visual analysis
             # original_images, reconstructed_images = batch['observations'], reconstructed_images
             # target_policy = batch['target_policy']
-            # ==== for value priority ====
             # target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1, 101)).reshape(
             #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
             # true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1, 101)).reshape(
@@ -1213,7 +1318,6 @@ class WorldModelMT(nn.Module):
             dormant_ratio_encoder=dormant_ratio_encoder,
             dormant_ratio_world_model=dormant_ratio_world_model,
             latent_state_l2_norms=latent_state_l2_norms,
-            logits_value=outputs.logits_value,
         )
 
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
