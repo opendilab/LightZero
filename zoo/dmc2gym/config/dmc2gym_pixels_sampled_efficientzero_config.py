@@ -1,3 +1,7 @@
+import os
+# os.environ['MUJOCO_GL']="osmesa"
+os.environ['MUJOCO_GL']="glfw" 
+os.environ['DISABLE_MUJOCO_RENDERING'] = '1'
 from easydict import EasyDict
 
 # ==============================================================
@@ -19,7 +23,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 dmc2gym_pixels_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez/dmc2gym_pixels_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_seed0',
+    exp_name=f'data_dmc2gym_sez/dmc2gym_pixels_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id='dmc2gym-v0',
         domain_name="cartpole",
