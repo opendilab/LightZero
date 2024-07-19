@@ -122,17 +122,22 @@ class Block(nn.Module):
         self.ln2 = nn.LayerNorm(config.embed_dim)
         self.attn = SelfAttention(config)
         if config.moe_in_transformer:
-            self.mlp = nn.Sequential(
-                nn.Linear(config.embed_dim, 4 * config.embed_dim),
-                nn.GELU(approximate='tanh'),
-                nn.Linear(4 * config.embed_dim, config.embed_dim),
-                nn.Dropout(config.resid_pdrop),
-            )
+            # 创建多个独立的 MLP 实例
+            self.experts = nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(config.embed_dim, 4 * config.embed_dim),
+                    nn.GELU(approximate='tanh'),
+                    nn.Linear(4 * config.embed_dim, config.embed_dim),
+                    nn.Dropout(config.resid_pdrop),
+                ) for _ in range(config.num_experts_of_moe_in_transformer)
+            ])
+            
             self.feed_forward = MoeLayer(
-                experts=[self.mlp for _ in range(config.num_experts_of_moe_in_transformer)],
+                experts=self.experts,
                 gate=nn.Linear(config.embed_dim, config.num_experts_of_moe_in_transformer, bias=False),
                 num_experts_per_tok=1,
             )
+            
             print("="*20)
             print(f'use moe in feed_forward of transformer, num of expert: {config.num_experts_of_moe_in_transformer}')
             print("="*20)
