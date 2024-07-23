@@ -18,7 +18,9 @@ from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroCollector as Collector, MuZeroEvaluator as Evaluator
 from lzero.mcts import UniZeroGameBuffer as GameBuffer
 
+from line_profiler import line_profiler
 
+#@profile
 def train_unizero_multitask(
         input_cfg_list: List[Tuple[int, Tuple[dict, dict]]],
         seed: int = 0,

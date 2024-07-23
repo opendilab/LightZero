@@ -6,6 +6,17 @@ import torch.nn.functional as F
 from simple_parsing.helpers import Serializable
 from torch import nn
 
+# Modified from https://github.com/mistralai/mistral-inference/blob/main/src/mistral_inference/transformer.py#L108
+class MultiplicationFeedForward(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+
+        self.w1 = nn.Linear(config.embed_dim, 4 * config.embed_dim, bias=False)
+        self.w2 = nn.Linear(4 * config.embed_dim, config.embed_dim, bias=False)
+        self.w3 = nn.Linear(config.embed_dim, 4 * config.embed_dim, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.w2(nn.functional.silu(self.w1(x)) * self.w3(x))  # type: ignore
 
 @dataclasses.dataclass
 class MoeArgs(Serializable):

@@ -13,7 +13,9 @@ from einops import rearrange
 from torch.nn import functional as F
 
 from .kv_caching import KeysValues
-from .moe import MoeLayer
+from .moe import MoeLayer, MultiplicationFeedForward
+from line_profiler import line_profiler
+
 
 @dataclass
 class TransformerConfig:
@@ -69,6 +71,7 @@ class Transformer(nn.Module):
         device = self.ln_f.weight.device  # Assumption: All submodules are on the same device
         return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
 
+    #@profile
     def forward(self, sequences: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
                 valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
@@ -89,6 +92,8 @@ class Transformer(nn.Module):
 
         x = self.ln_f(x)
         return x
+
+
 
 
 class Block(nn.Module):
@@ -122,7 +127,7 @@ class Block(nn.Module):
         self.ln2 = nn.LayerNorm(config.embed_dim)
         self.attn = SelfAttention(config)
         if config.moe_in_transformer:
-            # 创建多个独立的 MLP 实例
+            # 创Create multiple independent MLP instances
             self.experts = nn.ModuleList([
                 nn.Sequential(
                     nn.Linear(config.embed_dim, 4 * config.embed_dim),
@@ -140,6 +145,21 @@ class Block(nn.Module):
             
             print("="*20)
             print(f'use moe in feed_forward of transformer, num of expert: {config.num_experts_of_moe_in_transformer}')
+            print("="*20)
+        elif config.multiplication_moe_in_transformer:
+            # Create multiple FeedForward instances for multiplication-based MoE
+            self.experts = nn.ModuleList([
+                MultiplicationFeedForward(config) for _ in range(config.num_experts_of_moe_in_transformer)
+            ])
+
+            self.feed_forward = MoeLayer(
+                experts=self.experts,
+                gate=nn.Linear(config.embed_dim, config.num_experts_of_moe_in_transformer, bias=False),
+                num_experts_per_tok=1,
+            )
+
+            print("="*20)
+            print(f'use multiplication moe in feed_forward of transformer, num of expert: {config.num_experts_of_moe_in_transformer}')
             print("="*20)
         else:
             self.feed_forward = nn.Sequential(
@@ -209,6 +229,7 @@ class SelfAttention(nn.Module):
         causal_mask = torch.tril(torch.ones(config.max_tokens, config.max_tokens))
         self.register_buffer('mask', causal_mask)
 
+    #@profile
     def forward(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None,
                 valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
         """

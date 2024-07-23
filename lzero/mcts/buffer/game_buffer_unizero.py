@@ -12,6 +12,7 @@ from .game_buffer_muzero import MuZeroGameBuffer
 
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
+from line_profiler import line_profiler
 
 
 @BUFFER_REGISTRY.register('game_buffer_unizero')
@@ -56,6 +57,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             self.task_id = None
             print("No task_id found in configuration. Task ID is set to None.")
 
+    #@profile
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
     ) -> List[Any]:
@@ -103,6 +105,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         train_data = [current_batch, target_batch]
         return train_data
 
+    #@profile
     def _make_batch(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
         """
         Overview:
@@ -198,6 +201,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         context = reward_value_context, policy_re_context, policy_non_re_context, current_batch
         return context
 
+    #@profile
     def _prepare_policy_reanalyzed_context(
             self, batch_index_list: List[str], game_segment_list: List[Any], pos_in_game_segment_list: List[str]
     ) -> List[Any]:
@@ -251,6 +255,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         ]
         return policy_re_context
 
+    #@profile
     def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any, action_batch) -> np.ndarray:
         """
         Overview:
@@ -374,6 +379,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         return batch_target_policies_re
 
+    #@profile
     def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, action_batch) -> Tuple[
         Any, Any]:
         """

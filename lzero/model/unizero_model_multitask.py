@@ -10,11 +10,13 @@ from .common import MZNetworkOutput, RepresentationNetworkUniZero, Representatio
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model_multitask import WorldModelMT
 
+from line_profiler import line_profiler
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
 @MODEL_REGISTRY.register('UniZeroMTModel')
 class UniZeroMTModel(nn.Module):
 
+    #@profile
     def __init__(
             self,
             observation_shape: SequenceType = (4, 64, 64),
@@ -162,6 +164,7 @@ class UniZeroMTModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
             print('==' * 20)
 
+    #@profile
     def initial_inference(self, obs_batch: torch.Tensor, action_batch=None, current_obs_batch=None, task_id=None) -> MZNetworkOutput:
         """
         Overview:
@@ -198,6 +201,7 @@ class UniZeroMTModel(nn.Module):
             latent_state,
         )
 
+    #@profile
     def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index=0,
                             latent_state_index_in_search_path=[], task_id=None) -> MZNetworkOutput:
         """

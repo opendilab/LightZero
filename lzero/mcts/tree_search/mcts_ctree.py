@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from lzero.mcts.ctree.ctree_muzero import mz_tree as mz_ctree
     from lzero.mcts.ctree.ctree_gumbel_muzero import gmz_tree as gmz_ctree
 
+from line_profiler import line_profiler
 
 class UniZeroMCTSCtree(object):
     """
@@ -71,7 +72,7 @@ class UniZeroMCTSCtree(object):
         from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
         return ctree.Roots(active_collect_env_num, legal_actions)
 
-    # @profile
+    #@profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
             List[Any]], task_id=None
@@ -225,7 +226,7 @@ class MuZeroMCTSCtree(object):
         from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
         return ctree.Roots(active_collect_env_num, legal_actions)
 
-    # @profile
+    # #@profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
             List[Any]]
@@ -494,7 +495,7 @@ class MuZeroRNNFullObsMCTSCtree(object):
         """
         return tree_muzero.Roots(active_collect_env_num, legal_actions)
 
-    # @profile
+    # #@profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any],
             world_model_latent_history_roots: List[Any], to_play_batch: Union[int, List[Any]], ready_env_id=None,

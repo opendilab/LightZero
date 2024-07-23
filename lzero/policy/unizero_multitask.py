@@ -16,6 +16,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
+from line_profiler import line_profiler
 
 sys.path.append('/Users/puyuan/code/LibMTL/')
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
@@ -475,7 +476,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # self.curr_min_loss = torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)
         # self.grad_correct.prev_loss = self.curr_min_loss
 
-    # @profile
+    #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         Overview:
@@ -753,7 +754,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
 
-    # @profile
+    #@profile
     def _forward_collect(
             self,
             data: torch.Tensor,
@@ -887,6 +888,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
+    #@profile
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
                       ready_env_id: np.array = None, task_id=None) -> Dict:
         """
@@ -971,6 +973,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
         return output
 
+    #@profile
     def _reset_collect(self, env_id: int = None, current_steps: int = 0, reset_init_data: bool = True) -> None:
         """
         Overview:
@@ -1020,6 +1023,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # TODO: check its correctness
             self._reset_target_model()
 
+    #@profile
     def _reset_target_model(self) -> None:
         """
         Overview:
@@ -1040,6 +1044,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         torch.cuda.empty_cache()
         print('collector: target_model past_kv_cache.clear()')
 
+    #@profile
     def _reset_eval(self, env_id: int = None, current_steps: int = 0, reset_init_data: bool = True) -> None:
         """
         Overview:

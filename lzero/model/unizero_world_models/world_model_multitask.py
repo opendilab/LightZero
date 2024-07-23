@@ -18,9 +18,12 @@ from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights, to_device_for_kvcache
 from .utils import WorldModelOutput, quantize_state
+from .moe import MoeLayer, MultiplicationFeedForward
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+
+from line_profiler import line_profiler
 
 class WorldModelMT(nn.Module):
     """
@@ -32,6 +35,8 @@ class WorldModelMT(nn.Module):
             - a transformer, which processes the input sequences,
             - and heads, which generate the logits for observations, rewards, policy, and value.
     """
+
+    #@profile
     def __init__(self, config: TransformerConfig, tokenizer) -> None:
         """
         Overview:
@@ -53,7 +58,10 @@ class WorldModelMT(nn.Module):
         self.head_rewards_multi_task = nn.ModuleList()
         self.head_observations_multi_task = nn.ModuleList()
 
-        self.num_experts_in_softmoe_head = config.num_experts_in_softmoe_head
+        self.num_experts_in_moe_head = config.num_experts_in_moe_head
+        self.use_normal_head = config.use_normal_head
+        self.use_moe_head = config.use_moe_head
+        self.use_softmoe_head = config.use_softmoe_head
 
         # Move all modules to the specified device
         print(f"self.config.device: {self.config.device}")
@@ -74,7 +82,9 @@ class WorldModelMT(nn.Module):
         self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
         print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
-        if self.num_experts_in_softmoe_head == -1:
+        # if self.num_experts_in_moe_head == -1:
+        assert self.num_experts_in_moe_head > 0
+        if self.use_normal_head:
             print('We use normal head')
             # TODO: Normal Head
             for task_id in range(self.task_num):  # TODO
@@ -93,13 +103,25 @@ class WorldModelMT(nn.Module):
                                                         self.obs_per_embdding_dim,
                                                         self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
                 self.head_observations_multi_task.append(self.head_observations)
-        else:
-            print(f'We use softmoe head, self.num_experts_in_softmoe_head is {self.num_experts_in_softmoe_head}')
+        elif self.use_softmoe_head:
+            print(f'We use softmoe head, self.num_experts_in_moe_head is {self.num_experts_in_moe_head}')
             # Dictionary to store SoftMoE instances
             self.soft_moe_instances = {}
 
             # Create softmoe head modules
             self.create_head_modules_softmoe()
+
+            self.head_policy_multi_task.append(self.head_policy)
+            self.head_value_multi_task.append(self.head_value)
+            self.head_rewards_multi_task.append(self.head_rewards)
+            self.head_observations_multi_task.append(self.head_observations)
+        elif self.use_moe_head:
+            print(f'We use moe head, self.num_experts_in_moe_head is {self.num_experts_in_moe_head}')
+            # Dictionary to store moe instances
+            self.moe_instances = {}
+
+            # Create moe head modules
+            self.create_head_modules_moe()
 
             self.head_policy_multi_task.append(self.head_policy)
             self.head_value_multi_task.append(self.head_value)
@@ -172,6 +194,66 @@ class WorldModelMT(nn.Module):
             head_module=nn.Sequential(*modules)
         )
 
+    def _create_head_moe(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, moe=None) -> Head:
+        """Create moe head modules for the transformer."""
+        modules = [
+            moe,
+            nn.Linear(self.config.embed_dim, output_dim)
+        ]
+        if norm_layer:
+            modules.append(norm_layer)
+        return Head(
+            max_blocks=self.config.max_blocks,
+            block_mask=block_mask,
+            head_module=nn.Sequential(*modules)
+        )
+    def get_moe(self, name):
+        """Get or create a MoE instance"""
+        if name not in self.moe_instances:
+            # Create multiple FeedForward instances for multiplication-based MoE
+            self.experts = nn.ModuleList([
+                MultiplicationFeedForward(self.config) for _ in range(self.config.num_experts_of_moe_in_transformer)
+            ])
+
+            self.moe_instances[name] = MoeLayer(
+                experts=self.experts,
+                gate=nn.Linear(self.config.embed_dim, self.config.num_experts_of_moe_in_transformer, bias=False),
+                num_experts_per_tok=1,
+            )
+
+        return self.moe_instances[name]
+
+    def create_head_modules_moe(self):
+        """Create all softmoe head modules"""
+        # Rewards head
+        self.head_rewards = self._create_head_moe(
+            self.act_tokens_pattern,
+            self.support_size,
+            moe=self.get_moe("rewards_moe")
+        )
+
+        # Observations head
+        self.head_observations = self._create_head_moe(
+            self.all_but_last_latent_state_pattern,
+            self.obs_per_embdding_dim,
+            norm_layer=self.sim_norm,  # NOTE
+            moe=self.get_moe("observations_moe")
+        )
+
+        # Policy head
+        self.head_policy = self._create_head_moe(
+            self.value_policy_tokens_pattern,
+            self.action_space_size,
+            moe=self.get_moe("policy_moe")
+        )
+
+        # Value head
+        self.head_value = self._create_head_moe(
+            self.value_policy_tokens_pattern,
+            self.support_size,
+            moe=self.get_moe("value_moe")
+        )
+
     def _create_head_softmoe(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, soft_moe=None) -> Head:
         """Create softmoe head modules for the transformer."""
         modules = [
@@ -193,13 +275,13 @@ class WorldModelMT(nn.Module):
         #     self.soft_moe_instances[name] = SoftMoE(
         #         dim=self.embed_dim,
         #         seq_len=20,  # TODO
-        #         num_experts=self.num_experts_in_softmoe_head,
+        #         num_experts=self.num_experts_in_moe_head,
         #     )
         from soft_moe_pytorch import DynamicSlotsSoftMoE as SoftMoE
         if name not in self.soft_moe_instances:
             self.soft_moe_instances[name] = SoftMoE(
                 dim=self.embed_dim,
-                num_experts=self.num_experts_in_softmoe_head,
+                num_experts=self.num_experts_in_moe_head,
                 geglu = True
             )
         return self.soft_moe_instances[name]
@@ -281,6 +363,7 @@ class WorldModelMT(nn.Module):
         self.root_hit_cnt = 0
         self.root_total_query_cnt = 0
 
+    #@profile
     def _initialize_transformer_keys_values(self) -> None:
         """Initialize keys and values for the transformer."""
         self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1,
@@ -288,6 +371,7 @@ class WorldModelMT(nn.Module):
         self.keys_values_wm = self.transformer.generate_empty_keys_values(n=self.env_num,
                                                                           max_tokens=self.context_length)
 
+    #@profile
     def precompute_pos_emb_diff_kv(self):
         """ Precompute positional embedding differences for key and value. """
         if self.context_length <= 2:
@@ -325,6 +409,7 @@ class WorldModelMT(nn.Module):
             self.pos_emb_diff_k.append(layer_pos_emb_diff_k)
             self.pos_emb_diff_v.append(layer_pos_emb_diff_v)
 
+    #@profile
     def _get_positional_embedding(self, layer, attn_type) -> torch.Tensor:
         """
          Helper function to get positional embedding for a given layer and attention type.
@@ -346,6 +431,7 @@ class WorldModelMT(nn.Module):
                 1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
             ).transpose(1, 2).detach()
 
+    #@profile
     def forward(self, obs_embeddings_or_act_tokens: Dict[str, Union[torch.Tensor, tuple]],
                 past_keys_values: Optional[torch.Tensor] = None,
                 kvcache_independent: bool = False, is_init_infer: bool = True,
@@ -412,21 +498,24 @@ class WorldModelMT(nn.Module):
         # Generate logits
 
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
-        # TODO: one head or soft_moe
-        # logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
-        # logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
-
-        # TODO: N head
-        logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-        logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+        # TODO: one head or moe head
+        if self.use_moe_head:
+            logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
+        else:
+            # TODO: N head
+            logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
 
         # logits_ends is None
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)
 
+
+    #@profile
     def _add_position_embeddings(self, embeddings, prev_steps, num_steps, kvcache_independent, is_init_infer,
                                  valid_context_lengths):
         """
@@ -455,6 +544,7 @@ class WorldModelMT(nn.Module):
                     valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
                 return embeddings + position_embeddings
 
+    #@profile
     def _process_obs_act_combined(self, obs_embeddings_or_act_tokens, prev_steps):
         """
         Process combined observation embeddings and action tokens.
@@ -485,6 +575,7 @@ class WorldModelMT(nn.Module):
 
         return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
 
+    #@profile
     def _transformer_pass(self, sequences, past_keys_values, kvcache_independent, valid_context_lengths):
         """
         Pass sequences through the transformer.
@@ -505,6 +596,7 @@ class WorldModelMT(nn.Module):
         else:
             return self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths)
 
+    #@profile
     @torch.no_grad()
     def reset_from_initial_observations(self, obs_act_dict: torch.FloatTensor, task_id=0) -> torch.FloatTensor:
         """
@@ -538,6 +630,8 @@ class WorldModelMT(nn.Module):
 
         return outputs_wm, self.latent_state
 
+
+    #@profile
     @torch.no_grad()
     def refresh_kvs_with_initial_latent_state_for_init_infer(self, latent_state: torch.LongTensor,
                                                              buffer_action=None,
@@ -644,6 +738,8 @@ class WorldModelMT(nn.Module):
 
         return outputs_wm
 
+
+    #@profile
     @torch.no_grad()
     def forward_initial_inference(self, obs_act_dict, task_id=0):
         """
@@ -661,6 +757,7 @@ class WorldModelMT(nn.Module):
         return (outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards,
                 outputs_wm.logits_policy, outputs_wm.logits_value)
 
+    #@profile
     @torch.no_grad()
     def forward_recurrent_inference(self, state_action_history, simulation_index=0,
                                     latent_state_index_in_search_path=[], task_id=0):
@@ -795,6 +892,7 @@ class WorldModelMT(nn.Module):
 
         return self.keys_values_wm_size_list
 
+    #@profile
     def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0,
                              latent_state_index_in_search_path=[], valid_context_lengths=None):
         """
@@ -930,6 +1028,7 @@ class WorldModelMT(nn.Module):
                 # Store the latest key-value cache for recurrent inference
                 self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
 
+    #@profile
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
                                      simulation_index: int = 0, task_id=0) -> list:
         """
@@ -978,6 +1077,7 @@ class WorldModelMT(nn.Module):
 
         return self.keys_values_wm_size_list
 
+    #@profile
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None, task_id=0, **kwargs: Any) -> LossWithIntermediateLosses:
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], task_id=task_id)
@@ -1216,6 +1316,7 @@ class WorldModelMT(nn.Module):
             logits_value=outputs.logits_value,
         )
 
+    #@profile
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
         # Assume outputs is an object with logits attributes like 'rewards', 'policy', and 'value'.
         # labels is a target tensor for comparison. batch is a dictionary with a mask indicating valid timesteps.
@@ -1242,6 +1343,7 @@ class WorldModelMT(nn.Module):
 
         return loss
 
+    #@profile
     def compute_policy_entropy_loss(self, logits, mask):
         # Compute entropy of the policy
         probs = torch.softmax(logits, dim=1)
@@ -1251,6 +1353,7 @@ class WorldModelMT(nn.Module):
         entropy_loss = (entropy * mask)
         return entropy_loss
 
+    #@profile
     def compute_labels_world_model(self, obs_embeddings: torch.Tensor, rewards: torch.Tensor, ends: torch.Tensor,
                                    mask_padding: torch.BoolTensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         assert torch.all(ends.sum(dim=1) <= 1)  # Each sequence sample should have at most one 'done' flag
@@ -1268,6 +1371,7 @@ class WorldModelMT(nn.Module):
 
         return labels_observations, labels_rewards.reshape(-1, self.support_size), labels_ends.reshape(-1)
 
+    #@profile
     def compute_labels_world_model_value_policy(self, target_value: torch.Tensor, target_policy: torch.Tensor,
                                                 mask_padding: torch.BoolTensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """ Compute labels for value and policy predictions. """
@@ -1283,6 +1387,7 @@ class WorldModelMT(nn.Module):
 
         return labels_policy.reshape(-1, self.action_space_size), labels_value.reshape(-1, self.support_size)
 
+    #@profile
     def clear_caches(self):
         """
         Clears the caches of the world model.

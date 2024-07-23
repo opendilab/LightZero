@@ -98,12 +98,18 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     configs = []
     # TODO
     # exp_name_prefix = f'data_unizero_mt_0711/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head-softmoe4_1-encoder-{norm_type}_lsd768-nlayer4-nh8_seed{seed}/'
+    
+    # exp_name_prefix = f'data_unizero_mt_0716_debug/{len(env_id_list)}games_1-head-softmoe4-dynamics_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_upc1000_value-priority_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716_debug/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_upc1000_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_CAGrad_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_MoCo_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_pong-boxing-envnum2_4-head_1-encoder-{norm_type}_trans-ffw-moe1-same_lsd768-nlayer4-nh8_max-bs1500_upc1000_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0719/{len(env_id_list)}games_pong-boxing-envnum2_4-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer2-nh8_max-bs1500_upc1000_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_1-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0722_debug/{len(env_id_list)}games_1-encoder-{norm_type}_trans-ffw-moeV2-expert4_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0722_profile/lineprofile_{len(env_id_list)}games_1-encoder-{norm_type}_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_0722/{len(env_id_list)}games_1-encoder-{norm_type}_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0722/{len(env_id_list)}games_1-encoder-{norm_type}_trans-ffw-moeV2-expert4_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0722/{len(env_id_list)}games_1-encoder-{norm_type}_1-head-moeV2-expert4_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_0722/{len(env_id_list)}games_1-encoder-{norm_type}_26-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -149,7 +155,29 @@ if __name__ == "__main__":
         'PongNoFrameskip-v4',
         'MsPacmanNoFrameskip-v4',
         'SeaquestNoFrameskip-v4',
-        'BoxingNoFrameskip-v4'
+        'BoxingNoFrameskip-v4', #
+        'AlienNoFrameskip-v4',
+        'AmidarNoFrameskip-v4',
+        'AssaultNoFrameskip-v4',
+        'AsterixNoFrameskip-v4',
+        'BankHeistNoFrameskip-v4',
+        'BattleZoneNoFrameskip-v4',
+        'ChopperCommandNoFrameskip-v4',
+        'CrazyClimberNoFrameskip-v4',
+        'DemonAttackNoFrameskip-v4',
+        'FreewayNoFrameskip-v4',
+        'FrostbiteNoFrameskip-v4',
+        'GopherNoFrameskip-v4',
+        'HeroNoFrameskip-v4',
+        'JamesbondNoFrameskip-v4',
+        'KangarooNoFrameskip-v4',
+        'KrullNoFrameskip-v4',
+        'KungFuMasterNoFrameskip-v4',
+        'PrivateEyeNoFrameskip-v4',
+        'RoadRunnerNoFrameskip-v4',
+        'UpNDownNoFrameskip-v4',
+        'QbertNoFrameskip-v4',
+        'BreakoutNoFrameskip-v4',
     ]
 
     # env_id_list = [
@@ -172,7 +200,8 @@ if __name__ == "__main__":
     max_env_step = int(1e6)
     reanalyze_ratio = 0.
     # batch_size = [32, 32, 32, 32]
-    max_batch_size = 2000
+    # max_batch_size = 2000
+    max_batch_size = 1000
     batch_size = [int(max_batch_size/len(env_id_list)) for i in range(len(env_id_list))]
     num_unroll_steps = 10
     infer_context_length = 4
@@ -193,9 +222,3 @@ if __name__ == "__main__":
     # train_unizero_multitask(configs[:1], seed=seed, max_env_step=max_env_step)  # Pong
     # train_unizero_multitask(configs[:2], seed=seed, max_env_step=max_env_step)  # Pong, MsPacman
     train_unizero_multitask(configs, seed=seed, max_env_step=max_env_step)      # Pong, MsPacman, Seaquest, Boxing
-
-    # only for cprofile
-    # def run(max_env_step: int):
-    #     train_unizero_multitask(configs, seed=seed, max_env_step=max_env_step)      # Pong, MsPacman, Seaquest, Boxing
-    # import cProfile
-    # cProfile.run(f"run({20000})", filename="unizero_mt_4games_cprofile_20k_envstep", sort="cumulative")
