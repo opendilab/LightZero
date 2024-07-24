@@ -703,7 +703,6 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.dirty_tensors"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax.dirty_tensors</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.forward"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax.forward()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.generate_vmap_rule"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax.generate_vmap_rule</span></code></a></li>
-<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.is_traceable"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax.is_traceable</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.jvp"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax.jvp()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.mark_dirty"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax.mark_dirty()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.mark_non_differentiable"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax.mark_non_differentiable()</span></code></a></li>
@@ -1730,8 +1729,16 @@ exception is the <code class="docutils literal notranslate"><span class="pre">re
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><ul class="simple">
-<li><p><strong>missing_keys</strong> is a list of str containing the missing keys</p></li>
-<li><p><strong>unexpected_keys</strong> is a list of str containing the unexpected keys</p></li>
+<li><dl class="simple">
+<dt><strong>missing_keys</strong> is a list of str containing any keys that are expected</dt><dd><p>by this module but missing from the provided <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>unexpected_keys</strong> is a list of str containing the keys that are not</dt><dd><p>expected by this module but present in the provided <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </p>
 </dd>
@@ -3379,8 +3386,16 @@ exception is the <code class="docutils literal notranslate"><span class="pre">re
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><ul class="simple">
-<li><p><strong>missing_keys</strong> is a list of str containing the missing keys</p></li>
-<li><p><strong>unexpected_keys</strong> is a list of str containing the unexpected keys</p></li>
+<li><dl class="simple">
+<dt><strong>missing_keys</strong> is a list of str containing any keys that are expected</dt><dd><p>by this module but missing from the provided <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>unexpected_keys</strong> is a list of str containing the keys that are not</dt><dd><p>expected by this module but present in the provided <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </p>
 </dd>
@@ -4929,8 +4944,16 @@ exception is the <code class="docutils literal notranslate"><span class="pre">re
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><ul class="simple">
-<li><p><strong>missing_keys</strong> is a list of str containing the missing keys</p></li>
-<li><p><strong>unexpected_keys</strong> is a list of str containing the unexpected keys</p></li>
+<li><dl class="simple">
+<dt><strong>missing_keys</strong> is a list of str containing any keys that are expected</dt><dd><p>by this module but missing from the provided <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>unexpected_keys</strong> is a list of str containing the keys that are not</dt><dd><p>expected by this module but present in the provided <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </p>
 </dd>
@@ -6459,8 +6482,16 @@ exception is the <code class="docutils literal notranslate"><span class="pre">re
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><ul class="simple">
-<li><p><strong>missing_keys</strong> is a list of str containing the missing keys</p></li>
-<li><p><strong>unexpected_keys</strong> is a list of str containing the unexpected keys</p></li>
+<li><dl class="simple">
+<dt><strong>missing_keys</strong> is a list of str containing any keys that are expected</dt><dd><p>by this module but missing from the provided <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>unexpected_keys</strong> is a list of str containing the keys that are not</dt><dd><p>expected by this module but present in the provided <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </p>
 </dd>
@@ -7989,8 +8020,16 @@ exception is the <code class="docutils literal notranslate"><span class="pre">re
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><ul class="simple">
-<li><p><strong>missing_keys</strong> is a list of str containing the missing keys</p></li>
-<li><p><strong>unexpected_keys</strong> is a list of str containing the unexpected keys</p></li>
+<li><dl class="simple">
+<dt><strong>missing_keys</strong> is a list of str containing any keys that are expected</dt><dd><p>by this module but missing from the provided <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>unexpected_keys</strong> is a list of str containing the keys that are not</dt><dd><p>expected by this module but present in the provided <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </p>
 </dd>
@@ -9519,8 +9558,16 @@ exception is the <code class="docutils literal notranslate"><span class="pre">re
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><ul class="simple">
-<li><p><strong>missing_keys</strong> is a list of str containing the missing keys</p></li>
-<li><p><strong>unexpected_keys</strong> is a list of str containing the unexpected keys</p></li>
+<li><dl class="simple">
+<dt><strong>missing_keys</strong> is a list of str containing any keys that are expected</dt><dd><p>by this module but missing from the provided <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>unexpected_keys</strong> is a list of str containing the keys that are not</dt><dd><p>expected by this module but present in the provided <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </p>
 </dd>
@@ -11046,8 +11093,16 @@ exception is the <code class="docutils literal notranslate"><span class="pre">re
 </dd>
 <dt class="field-even">Returns<span class="colon">:</span></dt>
 <dd class="field-even"><p><ul class="simple">
-<li><p><strong>missing_keys</strong> is a list of str containing the missing keys</p></li>
-<li><p><strong>unexpected_keys</strong> is a list of str containing the unexpected keys</p></li>
+<li><dl class="simple">
+<dt><strong>missing_keys</strong> is a list of str containing any keys that are expected</dt><dd><p>by this module but missing from the provided <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>.</p>
+</dd>
+</dl>
+</li>
+<li><dl class="simple">
+<dt><strong>unexpected_keys</strong> is a list of str containing the keys that are not</dt><dd><p>expected by this module but present in the provided <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>.</p>
+</dd>
+</dl>
+</li>
 </ul>
 </p>
 </dd>
@@ -11988,17 +12043,6 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <span class="sig-name descname"><span class="pre">generate_vmap_rule</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.generate_vmap_rule" title="Permalink to this definition"></a></dt>
 <dd></dd></dl>
 
-<dl class="py attribute">
-<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.OnehotArgmax.is_traceable">
-<span class="sig-name descname"><span class="pre">is_traceable</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.is_traceable" title="Permalink to this definition"></a></dt>
-<dd><p>Bool that specifies if PyTorch should attempt to autogenerate
-<code class="xref py py-func docutils literal notranslate"><span class="pre">torch.vmap()</span></code> support for this autograd.Function. You may set this to
-True only if this autograd.Function’s forward, backward, and jvp (if they
-exist) are written using PyTorch operations; otherwise, please override
-<code class="xref py py-meth docutils literal notranslate"><span class="pre">torch.autograd.Function.vmap()</span></code> to add support for <code class="xref py py-func docutils literal notranslate"><span class="pre">torch.vmap()</span></code>.</p>
-<p>Please see <span class="xref std std-ref">func-autograd-function</span> for more details.</p>
-</dd></dl>
-
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.OnehotArgmax.jvp">
 <em class="property"><span class="pre">static</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">jvp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ctx</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">grad_inputs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.jvp" title="Permalink to this definition"></a></dt>
@@ -12021,8 +12065,8 @@ functions.</p>
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.OnehotArgmax.mark_dirty">
 <span class="sig-name descname"><span class="pre">mark_dirty</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.mark_dirty" title="Permalink to this definition"></a></dt>
 <dd><p>Mark given tensors as modified in an in-place operation.</p>
-<p><strong>This should be called at most once, only from inside the</strong>
-<a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.forward" title="lzero.model.stochastic_muzero_model.OnehotArgmax.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> <strong>method, and all arguments should be inputs.</strong></p>
+<p>This should be called at most once, in either the <a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.setup_context" title="lzero.model.stochastic_muzero_model.OnehotArgmax.setup_context"><code class="xref py py-func docutils literal notranslate"><span class="pre">setup_context()</span></code></a>
+or <a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.forward" title="lzero.model.stochastic_muzero_model.OnehotArgmax.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> methods, and all arguments should be inputs.</p>
 <p>Every tensor that’s been modified in-place in a call to <a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.forward" title="lzero.model.stochastic_muzero_model.OnehotArgmax.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a>
 should be given to this function, to ensure correctness of our checks.
 It doesn’t matter whether the function is called before or after
@@ -12059,8 +12103,8 @@ modification.</p>
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.OnehotArgmax.mark_non_differentiable">
 <span class="sig-name descname"><span class="pre">mark_non_differentiable</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.mark_non_differentiable" title="Permalink to this definition"></a></dt>
 <dd><p>Mark outputs as non-differentiable.</p>
-<p><strong>This should be called at most once, only from inside the</strong>
-<a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.forward" title="lzero.model.stochastic_muzero_model.OnehotArgmax.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> <strong>method, and all arguments should be tensor outputs.</strong></p>
+<p>This should be called at most once, in either the <a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.setup_context" title="lzero.model.stochastic_muzero_model.OnehotArgmax.setup_context"><code class="xref py py-func docutils literal notranslate"><span class="pre">setup_context()</span></code></a>
+or <a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.forward" title="lzero.model.stochastic_muzero_model.OnehotArgmax.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> methods, and all arguments should be tensor outputs.</p>
 <p>This will mark outputs as not requiring gradients, increasing the
 efficiency of backward computation. You still need to accept a gradient
 for each output in <code class="xref py py-meth docutils literal notranslate"><span class="pre">backward()</span></code>, but it’s always going to
@@ -12147,8 +12191,8 @@ output.</p>
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.OnehotArgmax.save_for_backward">
 <span class="sig-name descname"><span class="pre">save_for_backward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">tensors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.save_for_backward" title="Permalink to this definition"></a></dt>
 <dd><p>Save given tensors for a future call to <code class="xref py py-func docutils literal notranslate"><span class="pre">backward()</span></code>.</p>
-<p><code class="docutils literal notranslate"><span class="pre">save_for_backward</span></code> should be called at most once, only from inside the
-<a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.forward" title="lzero.model.stochastic_muzero_model.OnehotArgmax.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> method, and only with tensors.</p>
+<p><code class="docutils literal notranslate"><span class="pre">save_for_backward</span></code> should be called at most once, in either the
+<a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.setup_context" title="lzero.model.stochastic_muzero_model.OnehotArgmax.setup_context"><code class="xref py py-func docutils literal notranslate"><span class="pre">setup_context()</span></code></a> or <a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.forward" title="lzero.model.stochastic_muzero_model.OnehotArgmax.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> methods, and only with tensors.</p>
 <p>All tensors intended to be used in the backward pass should be saved
 with <code class="docutils literal notranslate"><span class="pre">save_for_backward</span></code> (as opposed to directly on <code class="docutils literal notranslate"><span class="pre">ctx</span></code>) to prevent
 incorrect gradients and memory leaks, and enable the application of saved
@@ -12203,8 +12247,9 @@ they weren’t used in any in-place operation that modified their content.</p>
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.OnehotArgmax.save_for_forward">
 <span class="sig-name descname"><span class="pre">save_for_forward</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">tensors</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Tensor</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.save_for_forward" title="Permalink to this definition"></a></dt>
 <dd><p>Save given tensors for a future call to <code class="xref py py-func docutils literal notranslate"><span class="pre">jvp()</span></code>.</p>
-<p><code class="docutils literal notranslate"><span class="pre">save_for_forward</span></code> should be only called once, from inside the <a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.forward" title="lzero.model.stochastic_muzero_model.OnehotArgmax.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a>
-method, and only be called with tensors.</p>
+<p><code class="docutils literal notranslate"><span class="pre">save_for_forward</span></code> should be called at most once, in either the
+<a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.setup_context" title="lzero.model.stochastic_muzero_model.OnehotArgmax.setup_context"><code class="xref py py-func docutils literal notranslate"><span class="pre">setup_context()</span></code></a> or <a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.forward" title="lzero.model.stochastic_muzero_model.OnehotArgmax.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> methods, and all arguments
+should be tensors.</p>
 <p>In <a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.jvp" title="lzero.model.stochastic_muzero_model.OnehotArgmax.jvp"><code class="xref py py-func docutils literal notranslate"><span class="pre">jvp()</span></code></a>, saved objects can be accessed through the <a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.saved_tensors" title="lzero.model.stochastic_muzero_model.OnehotArgmax.saved_tensors"><code class="xref py py-attr docutils literal notranslate"><span class="pre">saved_tensors</span></code></a>
 attribute.</p>
 <p>Arguments can also be <code class="docutils literal notranslate"><span class="pre">None</span></code>. This is a no-op.</p>
@@ -12264,7 +12309,8 @@ attribute.</p>
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.OnehotArgmax.set_materialize_grads">
 <span class="sig-name descname"><span class="pre">set_materialize_grads</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.set_materialize_grads" title="Permalink to this definition"></a></dt>
 <dd><p>Set whether to materialize grad tensors. Default is <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
-<p><strong>This should be called only from inside the</strong> <a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.forward" title="lzero.model.stochastic_muzero_model.OnehotArgmax.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> <strong>method</strong></p>
+<p>This should be called only from either the <a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.setup_context" title="lzero.model.stochastic_muzero_model.OnehotArgmax.setup_context"><code class="xref py py-func docutils literal notranslate"><span class="pre">setup_context()</span></code></a> or
+<a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.forward" title="lzero.model.stochastic_muzero_model.OnehotArgmax.forward"><code class="xref py py-func docutils literal notranslate"><span class="pre">forward()</span></code></a> methods.</p>
 <p>If <code class="docutils literal notranslate"><span class="pre">True</span></code>, undefined grad tensors will be expanded to tensors full of zeros
 prior to calling the <a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.backward" title="lzero.model.stochastic_muzero_model.OnehotArgmax.backward"><code class="xref py py-func docutils literal notranslate"><span class="pre">backward()</span></code></a> and <a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax.jvp" title="lzero.model.stochastic_muzero_model.OnehotArgmax.jvp"><code class="xref py py-func docutils literal notranslate"><span class="pre">jvp()</span></code></a> methods.</p>
 <dl>
