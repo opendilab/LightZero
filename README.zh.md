@@ -107,7 +107,8 @@ LightZero 是基于 [PyTorch](https://pytorch.org/) 实现的 MCTS 算法库，�
 - [Stochastic MuZero](https://openreview.net/pdf?id=X6D9bAHhBQ1)
 - [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Gumbel MuZero](https://openreview.net/pdf?id=bERaNdoegnO&)
-
+- [ReZero](https://arxiv.org/abs/2404.16364)
+- [UniZero](https://arxiv.org/abs/2406.10667)
 
 LightZero 目前支持的环境及算法如下表所示：
 
@@ -196,6 +197,14 @@ python3 -u zoo/atari/config/atari_muzero_config.py
 cd LightZero
 python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 ```
+
+使用如下代码在 [Pong](https://gymnasium.farama.org/environments/atari/pong/) 环境上快速训练一个 UniZero 智能体：
+
+```bash
+cd LightZero
+python3 -u zoo/atari/config/atari_unizero_config.py
+```
+
 ## 📚 文档
 
 LightZero的文档可以在[这里](https://opendilab.github.io/LightZero/)找到。文档中包含教程和API参考。

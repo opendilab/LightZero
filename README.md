@@ -121,6 +121,8 @@ LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of 
 - [Stochastic MuZero](https://openreview.net/pdf?id=X6D9bAHhBQ1)
 - [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Gumbel MuZero](https://openreview.net/pdf?id=bERaNdoegnO&)
+- [ReZero](https://arxiv.org/abs/2404.16364)
+- [UniZero](https://arxiv.org/abs/2406.10667)
 
 The environments and algorithms currently supported by LightZero are shown in the table below:
 
@@ -213,6 +215,13 @@ Train a MuZero agent to play [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-t
 ```bash
 cd LightZero
 python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
+```
+
+Train a UniZero agent to play [Pong](https://gymnasium.farama.org/environments/atari/pong/):
+
+```bash
+cd LightZero
+python3 -u zoo/atari/config/atari_unizero_config.py
 ```
 
 ## 📚 Documentation
