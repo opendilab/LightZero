@@ -1,7 +1,6 @@
 from easydict import EasyDict
 from copy import deepcopy
 # from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
-
 def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type):
     return EasyDict(dict(
         env=dict(
@@ -58,6 +57,11 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # collector_env_num=collector_env_num,
                     # evaluator_env_num=evaluator_env_num,
                     task_num=len(env_id_list),
+                    use_soft_modulization_head=False,
+                    num_modules_per_layer=4,
+                    num_layers_for_sm=3,
+                    gating_embed_mlp_num=2,
+                    
                     use_normal_head=True,
                     # use_normal_head=False,
                     use_softmoe_head=False,
