@@ -1,5 +1,5 @@
 import hashlib
-from typing import Optional
+from typing import Optional, List, Tuple, Union
 from dataclasses import dataclass
 
 import numpy as np
@@ -97,6 +97,20 @@ class WorldModelOutput:
     logits_value: torch.FloatTensor
 
 
+@dataclass
+class WorldModelOutputSoftModulization:
+    output_sequence: torch.FloatTensor
+    logits_observations: torch.FloatTensor
+    logits_rewards: torch.FloatTensor
+    logits_ends: torch.FloatTensor
+    logits_policy: torch.FloatTensor
+    logits_value: torch.FloatTensor
+    task_id: int
+    observation_weights_list: List[torch.FloatTensor] = None
+    reward_weights_list: List[torch.FloatTensor] = None
+    policy_weights_list: List[torch.FloatTensor] = None
+    value_weights_list: List[torch.FloatTensor] = None
+
 def init_weights(module, norm_type='BN'):
     """
     Initialize the weights of the module based on the specified normalization type.
@@ -164,7 +178,11 @@ class LossWithIntermediateLosses:
         self.value_loss_weight = 0.25
         self.policy_loss_weight = 1.
         self.ends_loss_weight = 0.
-
+        
+        # updated from soft modulization 
+        self.task_id = kwargs.get("task_id", None)
+        self.obs_soft_module_route_weights = kwargs.get("observation_weights_list", None)
+        
         self.latent_recon_loss_weight = latent_recon_loss_weight
         self.perceptual_loss_weight = perceptual_loss_weight
 
@@ -188,7 +206,7 @@ class LossWithIntermediateLosses:
 
         self.intermediate_losses = {
             k: v if isinstance(v, dict) or isinstance(v, np.ndarray) or isinstance(v, torch.Tensor) else (v if isinstance(v, float) else v.item())
-            for k, v in kwargs.items()
+            for k, v in kwargs.items() if k not in ["task_id", "observation_weights_list"]
         }
 
     def __truediv__(self, value):
@@ -253,7 +271,9 @@ class SoftModulizationHead(nn.Module):
         self.gating_weight_cond_last = nn.Linear((self.base_layers_num - 1) * task_num * task_num, embed_dim)
         self.gating_weight_last_fc = nn.Linear(embed_dim, task_num)
 
-    def forward(self, x: torch.Tensor, task_id: int, final_norm: Optional[nn.Module]=None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, task_id: int, 
+                final_norm: Optional[nn.Module]=None, return_weight: bool=False
+                ) -> Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]:
         """
         Overview:
             Forward pass for soft modulization.
@@ -343,4 +363,7 @@ class SoftModulizationHead(nn.Module):
         
         if final_norm is not None:
             obs_output = final_norm(obs_output)
+            
+        if return_weight:
+            return obs_output, flatten_weights
         return obs_output

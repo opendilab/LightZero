@@ -17,7 +17,7 @@ from .slicer import Head
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights, to_device_for_kvcache
-from .utils import WorldModelOutput, quantize_state, SoftModulizationHead
+from .utils import WorldModelOutput, WorldModelOutputSoftModulization, quantize_state, SoftModulizationHead
 from .moe import MoeLayer, MultiplicationFeedForward
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -134,6 +134,16 @@ class WorldModelMT(nn.Module):
             
         elif self.use_soft_modulization_head:
             print('We use soft_modulization head')
+            for _ in range(self.task_num):
+                self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
+                self.head_policy_multi_task.append(self.head_policy)
+
+                self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
+                self.head_value_multi_task.append(self.head_value)
+
+                self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
+                self.head_rewards_multi_task.append(self.head_rewards)
+                
             self.policy_first_head = Head(max_blocks=self.config.max_blocks, block_mask=self.value_policy_tokens_pattern,
                                           head_module=nn.Sequential(
                                               nn.Linear(self.embed_dim, self.embed_dim),
@@ -580,12 +590,18 @@ class WorldModelMT(nn.Module):
             tmp_reward = self.rewards_first_head(x, num_steps=num_steps, prev_steps=prev_steps)
             tmp_policy = self.policy_first_head(x, num_steps=num_steps, prev_steps=prev_steps)
             tmp_value = self.value_first_head(x, num_steps=num_steps, prev_steps=prev_steps)
-            print(f"四者的shape: {tmp_obs.shape}, {tmp_reward.shape}, {tmp_policy.shape}, {tmp_value.shape}")
-            logits_observations = self.observations_soft_module_router(tmp_obs, task_id=task_id)
-            logits_rewards = self.rewards_soft_module_router(tmp_reward, task_id=task_id)
-            logits_policy = self.policy_soft_module_router(tmp_policy, task_id=task_id)
-            logits_value = self.value_soft_module_router(tmp_value, task_id=task_id)
-            print(f"四者的shape: {logits_observations.shape}, {logits_rewards.shape}, {logits_policy.shape}, {logits_value.shape}")
+
+            logits_observations, observation_weights_list = self.observations_soft_module_router(tmp_obs, task_id=task_id, return_weight=True)
+            
+            # logits_rewards = self.rewards_soft_module_router(tmp_reward, task_id=task_id)
+            # logits_policy = self.policy_soft_module_router(tmp_policy, task_id=task_id)
+            # logits_value = self.value_soft_module_router(tmp_value, task_id=task_id)
+            logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+            # print(f"四者的shape: {logits_observations.shape}, {logits_rewards.shape}, {logits_policy.shape}, {logits_value.shape}")
+            return WorldModelOutputSoftModulization(x, logits_observations, logits_rewards, None, logits_policy, logits_value, 
+                                                    task_id, observation_weights_list, None, None, None)
         # TODO: one head or moe head
         elif self.use_moe_head and not self.use_soft_modulization_head:
             logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
@@ -1383,26 +1399,49 @@ class WorldModelMT(nn.Module):
         discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * discounts).mean()
         discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).mean()
         discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).mean()
-
-        return LossWithIntermediateLosses(
-            latent_recon_loss_weight=self.latent_recon_loss_weight,
-            perceptual_loss_weight=self.perceptual_loss_weight,
-            loss_obs=discounted_loss_obs,
-            loss_rewards=discounted_loss_rewards,
-            loss_value=discounted_loss_value,
-            loss_policy=discounted_loss_policy,
-            latent_recon_loss=discounted_latent_recon_loss,
-            perceptual_loss=discounted_perceptual_loss,
-            orig_policy_loss=discounted_orig_policy_loss,
-            policy_entropy=discounted_policy_entropy,
-            first_step_losses=first_step_losses,
-            middle_step_losses=middle_step_losses,
-            last_step_losses=last_step_losses,
-            dormant_ratio_encoder=dormant_ratio_encoder,
-            dormant_ratio_world_model=dormant_ratio_world_model,
-            latent_state_l2_norms=latent_state_l2_norms,
-            logits_value=outputs.logits_value,
-        )
+        
+        if self.use_soft_modulization_head:
+            return LossWithIntermediateLosses(
+                    latent_recon_loss_weight=self.latent_recon_loss_weight,
+                    perceptual_loss_weight=self.perceptual_loss_weight,
+                    loss_obs=discounted_loss_obs,
+                    loss_rewards=discounted_loss_rewards,
+                    loss_value=discounted_loss_value,
+                    loss_policy=discounted_loss_policy,
+                    latent_recon_loss=discounted_latent_recon_loss,
+                    perceptual_loss=discounted_perceptual_loss,
+                    orig_policy_loss=discounted_orig_policy_loss,
+                    policy_entropy=discounted_policy_entropy,
+                    first_step_losses=first_step_losses,
+                    middle_step_losses=middle_step_losses,
+                    last_step_losses=last_step_losses,
+                    dormant_ratio_encoder=dormant_ratio_encoder,
+                    dormant_ratio_world_model=dormant_ratio_world_model,
+                    latent_state_l2_norms=latent_state_l2_norms,
+                    logits_value=outputs.logits_value,
+                    task_id=outputs.task_id,
+                    observation_weights_list=outputs.observation_weights_list
+            )
+        else:
+            return LossWithIntermediateLosses(
+                    latent_recon_loss_weight=self.latent_recon_loss_weight,
+                    perceptual_loss_weight=self.perceptual_loss_weight,
+                    loss_obs=discounted_loss_obs,
+                    loss_rewards=discounted_loss_rewards,
+                    loss_value=discounted_loss_value,
+                    loss_policy=discounted_loss_policy,
+                    latent_recon_loss=discounted_latent_recon_loss,
+                    perceptual_loss=discounted_perceptual_loss,
+                    orig_policy_loss=discounted_orig_policy_loss,
+                    policy_entropy=discounted_policy_entropy,
+                    first_step_losses=first_step_losses,
+                    middle_step_losses=middle_step_losses,
+                    last_step_losses=last_step_losses,
+                    dormant_ratio_encoder=dormant_ratio_encoder,
+                    dormant_ratio_world_model=dormant_ratio_world_model,
+                    latent_state_l2_norms=latent_state_l2_norms,
+                    logits_value=outputs.logits_value,
+            )
 
     #@profile
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):

@@ -18,8 +18,8 @@ from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 from line_profiler import line_profiler
 
-sys.path.append('/Users/puyuan/code/LibMTL/')
-from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+# sys.path.append('/Users/puyuan/code/LibMTL/')
+# from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 # from LibMTL.weighting.FAMO_unizero import FAMO as GradCorrect  # NOTE: FAMO have bugs now
 
@@ -223,6 +223,16 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 gamma=1,
                 # (float) The threshold for a dormant neuron.
                 dormant_threshold=0.025,
+                
+                # ******** for soft modulization 
+                # (float) If soft modulization is used
+                use_soft_modulization_head=False,
+                # (int) The number of modules per layer in base policy network when soft modulization is used
+                num_modules_per_layer=4,
+                # (int) The num of layers of the base policy network when soft modulization is used
+                num_layers_for_sm=3,
+                # (int) The embedding MLP numbers before the routing weight is calculated when embedding.
+                gating_embed_mlp_num=2,
             ),
         ),
         # ****** common ******
@@ -467,15 +477,18 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # 将 wrapped_model 作为 share_model 传递给 GradCorrect
         # ========= 初始化 MoCo CAGrad 参数 =========
         self.task_num = self._cfg.task_num
-        self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
-        self.grad_correct.init_param()  
-        self.grad_correct.rep_grad = False
+        # self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
+        # self.grad_correct.init_param()  
+        # self.grad_correct.rep_grad = False
 
         #  =========only for FAMO =========
         # self.grad_correct.set_min_losses(torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)) 
         # self.curr_min_loss = torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)
         # self.grad_correct.prev_loss = self.curr_min_loss
-
+        
+        
+        # ========== for soft modulization ==========
+        self.use_soft_modulization_head = self._cfg.model.world_model_cfg.use_soft_modulization_head
     #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -501,6 +514,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
         perceptual_loss_multi_task = []
         orig_policy_loss_multi_task = []
         policy_entropy_multi_task = []
+        
+        if self.use_soft_modulization_head:
+            obs_softmodule_route_weight0_multi_task = []
+            obs_softmodule_route_weight1_multi_task = []
+        
         # weighted_total_loss = torch.tensor(0., device=self._cfg.device)
         # weighted_total_loss.requires_grad = True
         weighted_total_loss = 0.0  # 初始化为0,避免使用in-place操作
@@ -582,7 +600,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
             losses = self._learn_model.world_model.compute_loss(
                 batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle, task_id=task_id
             )
-
+            
+                
+            if self.use_soft_modulization_head:
+                obs_softmodule_route_weight0 = losses.obs_soft_module_route_weights[0]
+                obs_softmodule_route_weight1 = losses.obs_soft_module_route_weights[1]
+            
             weighted_total_loss += losses.loss_total  # TODO
             # weighted_total_loss = torch.tensor(0., device=self._cfg.device)
 
@@ -628,7 +651,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
             latent_state_l2_norms_multi_task.append(latent_state_l2_norms)
             value_priority_multi_task.append(value_priority)
             value_priority_mean_multi_task.append(value_priority.mean().item())
-
+            if self.use_soft_modulization_head:
+                obs_softmodule_route_weight0_multi_task.append(obs_softmodule_route_weight0)
+                obs_softmodule_route_weight1_multi_task.append(obs_softmodule_route_weight1)
+            
 
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
@@ -696,7 +722,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # 'target_policy_entropy': average_target_policy_entropy,
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
         }
-
+        
         # 用于存储多任务损失的字典
         multi_task_loss_dicts = {
             **generate_task_loss_dict(obs_loss_multi_task, 'obs_loss_task{}'),
@@ -716,11 +742,17 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # ==============================================================
             **generate_task_loss_dict(value_priority_multi_task, 'value_priority_task{}'),
             **generate_task_loss_dict(value_priority_mean_multi_task, 'value_priority_mean_task{}'),
+            
         }
 
         # 合并两个字典
         return_loss_dict.update(multi_task_loss_dicts)
-
+        if self.use_soft_modulization_head:
+            soft_modulization_weight_dict = {
+                **generate_task_loss_dict(obs_softmodule_route_weight0_multi_task, '[histogram]obs_softmodule_route_weight0_task{}'),
+                **generate_task_loss_dict(obs_softmodule_route_weight1_multi_task, '[histogram]obs_softmodule_route_weight1_task{}')
+            }
+            return_loss_dict.update(soft_modulization_weight_dict)
         # 返回最终的损失字典
         return return_loss_dict
 
@@ -1125,6 +1157,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'lambd',
             'value_priority_mean',
         ]
+        if self.use_soft_modulization_head:
+            soft_module_historgams = [
+                '[histogram]obs_softmodule_route_weight0',
+                '[histogram]obs_softmodule_route_weight1'
+            ]
+            task_specific_vars.extend(soft_module_historgams)
         num_tasks = self.task_num
         # If the number of tasks is provided, extend the monitored variables list with task-specific variables
         if num_tasks is not None:
