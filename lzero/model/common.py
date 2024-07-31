@@ -517,6 +517,7 @@ class RepresentationNetworkMLP(nn.Module):
             - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
         """
         x = self.fc_representation(x)
+        # TODO
         x = self.sim_norm(x)
         return x
 
