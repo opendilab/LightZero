@@ -850,7 +850,8 @@ class WorldModel(nn.Module):
         return self.keys_values_wm_size_list
 
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None, **kwargs: Any) -> LossWithIntermediateLosses:
-        # Encode observations into latent state representations
+        
+        harmony_s_dict = kwargs.get("harmony_s_dict", None)
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
         # ========= for visual analysis =========
@@ -1053,7 +1054,17 @@ class WorldModel(nn.Module):
             # Last step loss
             last_step_mask = mask_padding[:, -1]
             last_step_losses[loss_name] = loss_tmp[:, -1][last_step_mask].mean()
-
+        # if harmony_s_dict is not None:
+        #     print(harmony_s_dict.keys())
+        #     for loss_name, loss_tmp in zip(
+        #             ['loss_obs', 'loss_rewards', 'loss_value', 'loss_policy', 'orig_policy_loss', 'policy_entropy'],
+        #             [loss_obs, loss_rewards, loss_value, loss_policy, orig_policy_loss, policy_entropy]
+        #     ):
+        #         if f"{loss_name}_s" in harmony_s_dict:
+        #             harmony_tmp_val = harmony_s_dict.get(f"{loss_name}_s")
+        #             loss_tmp = loss_tmp / torch.exp(harmony_tmp_val)
+        #             loss_tmp = loss_tmp + torch.log(torch.exp(harmony_tmp_val) + 1) 
+        #             print(f"{loss_name}_s in dict: {f'{loss_name}_s' in harmony_s_dict}, harmony_s: {harmony_tmp_val}")
         # Discount reconstruction loss and perceptual loss
         discounted_latent_recon_loss = latent_recon_loss
         discounted_perceptual_loss = perceptual_loss
@@ -1069,6 +1080,7 @@ class WorldModel(nn.Module):
         return LossWithIntermediateLosses(
             latent_recon_loss_weight=self.latent_recon_loss_weight,
             perceptual_loss_weight=self.perceptual_loss_weight,
+            harmony_s_dict=harmony_s_dict,
             loss_obs=discounted_loss_obs,
             loss_rewards=discounted_loss_rewards,
             loss_value=discounted_loss_value,

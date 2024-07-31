@@ -1,13 +1,13 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
-
-env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
+env_id = 'QbertNoFrameskip-v4'  # You can specify any Atari game here
+# 'QbertNoFrameskip-v4'
 action_space_size = atari_env_action_space_map[env_id]
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-update_per_collect = None
+update_per_collect = 1000
 replay_ratio = 0.25
 collector_env_num = 8
 n_episode = 8

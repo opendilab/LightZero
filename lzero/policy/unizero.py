@@ -268,6 +268,11 @@ class UniZeroPolicy(MuZeroPolicy):
             # (int) The decay steps from start to end eps.
             decay=int(1e5),
         ),
+        # ****** Harmony Dream for balancing ******
+        harmony_balance=False,
+        harmony_loss_names=['loss_obs', 'loss_rewards', 'loss_value', 'loss_policy']
+        
+        #^ ['loss_obs', 'loss_rewards', 'loss_value', 'loss_policy', 'orig_policy_loss', 'policy_entropy']
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
@@ -290,12 +295,25 @@ class UniZeroPolicy(MuZeroPolicy):
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
         # NOTE: nanoGPT optimizer
+        self.harmony_balance = self._cfg.harmony_balance
+        if self.harmony_balance:
+            self.harmony_loss_names = self._cfg.harmony_loss_names
+            assert self.harmony_loss_names != None
+            harmony_s_names = [f"{name}_s" for name in self.harmony_loss_names]
+            for name in harmony_s_names:
+                param = torch.nn.Parameter(-torch.log(torch.tensor(1.0)))
+                setattr(self, name, param)
+             
+        self.harmony_s_dict = {name: getattr(self, name) for name in harmony_s_names} if self.harmony_balance else None
+            
+        print(self.harmony_s_dict)  
         self._optimizer_world_model = configure_optimizers_nanogpt(
             model=self._model.world_model,
             learning_rate=self._cfg.learning_rate,
             weight_decay=self._cfg.weight_decay,
             device_type=self._cfg.device,
             betas=(0.9, 0.95),
+            additional_params=self.harmony_s_dict
         )
 
         # use model_wrapper for specialized demands of different modes
@@ -409,10 +427,26 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
-            batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle
+            batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle, harmony_s_dict=self.harmony_s_dict
         )
-
+        # if self.harmony_balance:
+        #     weighted_total_loss = torch.tensor(0., device=self._cfg.device)
+        #     print(f"harmony_loss_names is {self.harmony_loss_names}")
+        #     for loss_name in self.harmony_loss_names:
+        #         if f"{loss_name}_s" in self.harmony_s_dict:
+        #             harmony_s = self.harmony_s_dict.get(f"{loss_name}_s")
+        #             loss_tmp = losses.intermediate_losses.get(loss_name)
+        #             loss_tmp = loss_tmp / torch.exp(harmony_s)
+        #             loss_tmp = loss_tmp + torch.log(torch.exp(harmony_s) + 1)
+        #             print(f"{f'{loss_name}_s' in self.harmony_s_dict}", end=", ")
+        #             print(f"{loss_name}_s is {harmony_s}")
+        #         weighted_total_loss += loss_tmp
+                
+            # weighted_total_loss += self.intermediate_losses['first_step_losses']
+            
+        # else:
         weighted_total_loss = losses.loss_total
+            
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
 
@@ -430,7 +464,8 @@ class UniZeroPolicy(MuZeroPolicy):
         dormant_ratio_encoder = self.intermediate_losses['dormant_ratio_encoder']
         dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
-
+        
+                    
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
@@ -516,9 +551,13 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/grad_norm_before': self.grad_norm_before,
             'analysis/grad_norm_after': self.grad_norm_after,
         }
-
+        if self.harmony_balance:
+            harmony_s_dict_monitor = {k: v.item() for k, v in self.harmony_s_dict.items()}
+            harmony_s_exp_recip_dict_monitor = {f"{k}_exp_recip": (torch.reciprocal(torch.exp(v))).item() for k, v in self.harmony_s_dict.items()}
+            return_loss_dict.update(harmony_s_dict_monitor)
+            return_loss_dict.update(harmony_s_exp_recip_dict_monitor)
         return return_loss_dict
-
+    
     def monitor_weights_and_grads(self, model):
         for name, param in model.named_parameters():
             if param.requires_grad:
@@ -862,7 +901,7 @@ class UniZeroPolicy(MuZeroPolicy):
             Register the variables to be monitored in learn mode. The registered variables will be logged in
             tensorboard according to the return value ``_forward_learn``.
         """
-        return [
+        return_list = [
             'analysis/dormant_ratio_encoder',
             'analysis/dormant_ratio_world_model',
             'analysis/latent_state_l2_norms',
@@ -912,6 +951,12 @@ class UniZeroPolicy(MuZeroPolicy):
             'reconstruction_loss',
             'perceptual_loss',
         ]
+        if self.harmony_balance:
+            harmony_s_monitor_list = self.harmony_s_dict.keys()
+            harmony_s_exp_recip_monitor_list = [f"{k}_exp_recip" for k in self.harmony_s_dict.keys()]
+            return_list.extend(harmony_s_monitor_list)
+            return_list.extend(harmony_s_exp_recip_monitor_list)
+        return return_list
 
     def _state_dict_learn(self) -> Dict[str, Any]:
         """
