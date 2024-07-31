@@ -40,29 +40,31 @@ def _get_done_winner_func_lru(board_tuple):
 class TicTacToeEnv(BaseEnv):
 
     config = dict(
-        # env_id (str): The name of the environment.
+        # (str): The name of the environment.
         env_id="TicTacToe",
-        # battle_mode (str): The mode of the battle. Choices are 'self_play_mode' or 'alpha_beta_pruning'.
+        # (bool) If True, means that the game is not a zero-sum game.
+        non_zero_sum=False,
+        # (str): The mode of the battle. Choices are 'self_play_mode' or 'alpha_beta_pruning'.
         battle_mode='self_play_mode',
-        # battle_mode_in_simulation_env (str): The mode of Monte Carlo Tree Search. This is only used in AlphaZero.
+        # (str): The mode of Monte Carlo Tree Search. This is only used in AlphaZero.
         battle_mode_in_simulation_env='self_play_mode',
-        # bot_action_type (str): The type of action the bot should take. Choices are 'v0' or 'alpha_beta_pruning'.
+        # (str): The type of action the bot should take. Choices are 'v0' or 'alpha_beta_pruning'.
         bot_action_type='v0',
-        # replay_path (str): The folder path where replay video saved, if None, will not save replay video.
+        # (str): The folder path where replay video saved, if None, will not save replay video.
         replay_path=None,
-        # agent_vs_human (bool): If True, the agent will play against a human.
+        # (bool): If True, the agent will play against a human.
         agent_vs_human=False,
-        # prob_random_agent (int): The probability of the random agent.
+        # (int): The probability of the random agent.
         prob_random_agent=0,
-        # prob_expert_agent (int): The probability of the expert agent.
+        # (int): The probability of the expert agent.
         prob_expert_agent=0,
-        # channel_last (bool): If True, the channel will be the last dimension.
+        # (bool): If True, the channel will be the last dimension.
         channel_last=False,
-        # scale (bool): If True, the pixel values will be scaled.
+        # (bool): If True, the pixel values will be scaled.
         scale=True,
-        # stop_value (int): The value to stop the game.
+        # (int): The value to stop the game.
         stop_value=1,
-        # alphazero_mcts_ctree (bool): If True, the Monte Carlo Tree Search from AlphaZero is used.
+        # (bool): If True, the Monte Carlo Tree Search from AlphaZero is used.
         alphazero_mcts_ctree=False,
     )
 
@@ -73,10 +75,12 @@ class TicTacToeEnv(BaseEnv):
         return cfg
 
     def __init__(self, cfg=None):
-        self.cfg = cfg
-        self.channel_last = cfg.channel_last
-        self.scale = cfg.scale
-        self.battle_mode = cfg.battle_mode
+        default_config = self.default_config()
+        default_config.update(cfg)
+        self._cfg = default_config
+        self.channel_last = self._cfg.channel_last
+        self.scale = self._cfg.scale
+        self.battle_mode = self._cfg.battle_mode
         # The mode of interaction between the agent and the environment.
         assert self.battle_mode in ['self_play_mode', 'play_with_bot_mode', 'eval_mode']
         # The mode of MCTS is only used in AlphaZero.
@@ -84,18 +88,18 @@ class TicTacToeEnv(BaseEnv):
         self.board_size = 3
         self.players = [1, 2]
         self.total_num_actions = 9
-        self.prob_random_agent = cfg.prob_random_agent
-        self.prob_expert_agent = cfg.prob_expert_agent
+        self.prob_random_agent = self._cfg.prob_random_agent
+        self.prob_expert_agent = self._cfg.prob_expert_agent
         assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (
                 self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
             f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
         self._env = self
-        self.agent_vs_human = cfg.agent_vs_human
-        self.bot_action_type = cfg.bot_action_type
+        self.agent_vs_human = self._cfg.agent_vs_human
+        self.bot_action_type = self._cfg.bot_action_type
         if 'alpha_beta_pruning' in self.bot_action_type:
-            self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
-        self.alphazero_mcts_ctree = cfg.alphazero_mcts_ctree
-        self._replay_path = cfg.replay_path if hasattr(cfg, "replay_path") and cfg.replay_path is not None else None
+            self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, self._cfg, 'alpha_beta_pruning_player')
+        self.alphazero_mcts_ctree = self._cfg.alphazero_mcts_ctree
+        self._replay_path = self._cfg.replay_path if hasattr(self._cfg, "replay_path") and self._cfg.replay_path is not None else None
         self._save_replay_count = 0
 
     @property
