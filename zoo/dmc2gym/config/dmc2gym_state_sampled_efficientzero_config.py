@@ -11,15 +11,17 @@ K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
-batch_size = 256
+# batch_size = 256
+batch_size = 1024
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
+norm_type = 'BN'
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 dmc2gym_state_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez/dmc2gym_state_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez/dmc2gym_state_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
     env=dict(
         env_id='dmc2gym-v0',
         domain_name="cartpole",
@@ -44,7 +46,8 @@ dmc2gym_state_sampled_efficientzero_config = dict(
             latent_state_dim=256,
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
-            norm_type='BN',
+            norm_type=norm_type,
+            # norm_type='LN',  # TODO
             use_sim_norm=False,
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
@@ -54,10 +57,14 @@ dmc2gym_state_sampled_efficientzero_config = dict(
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
-        lr_piecewise_constant_decay=False,
+        cos_lr_scheduler=True,  # TODO
         learning_rate=0.0001,
-        grad_clip_value=5,
+        optim_type='Adam',
+        grad_clip_value=0.5,
+        # optim_type='AdamW',
+        lr_piecewise_constant_decay=False,
+        # learning_rate=0.0001,
+        # grad_clip_value=5,
         policy_entropy_loss_weight=5e-3,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

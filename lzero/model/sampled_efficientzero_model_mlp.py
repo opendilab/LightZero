@@ -208,7 +208,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
         batch_size = obs.size(0)
         latent_state = self._representation(obs)
         policy_logits, value = self._prediction(latent_state)
-        # zero initialization for reward hidden states
+        # zero initializations for reward hidden states
         # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
         reward_hidden_state = (
             torch.zeros(1, batch_size,
