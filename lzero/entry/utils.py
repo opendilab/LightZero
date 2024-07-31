@@ -7,6 +7,13 @@ from tensorboardX import SummaryWriter
 from typing import Optional, Callable
 import torch
 
+def clamp(x, min=None, max=None):
+    if min is not None and x < min:
+        return min
+    elif max is not None and x > max:
+        return max
+    else:
+        return x
 
 def initialize_zeros_batch(observation_shape, batch_size, device):
     """

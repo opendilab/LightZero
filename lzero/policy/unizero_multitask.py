@@ -339,6 +339,17 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
 
+        # ****** Adaptive for transition length ******
+        # (bool) Whether to adapt batch size according to the transition lengths of different tasks.
+        adaptive_batch_size_for_transition=False,
+        # (int) The total batch size for all tasks
+        adaptive_total_batch_size=1500,
+        # (Optional[float]) The minimum ratio of the max batch size when adaptive batch size is used
+        min_clamp_ratio_for_adaptive_bs=None,
+        # (Optional[float]) The maximum ratio of the max batch size when adaptive batch size is used
+        max_clamp_ratio_for_adaptive_bs=None,
+        
+
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
         use_priority=False,
@@ -477,7 +488,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # self.grad_correct.prev_loss = self.curr_min_loss
 
     #@profile
-    def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
+    def _forward_learn(self, data: Tuple[torch.Tensor], **kwargs) -> Dict[str, Union[float, int]]:
         """
         Overview:
             The forward function for learning policy in learn mode, which is the core of the learning process.
@@ -490,6 +501,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
                 current learning loss and learning statistics.
         """
+        batch_size_list = kwargs.get("batch_size_list", self._cfg.batch_size)
+        # print(f"batch size list is {batch_size_list}")
         self._learn_model.train()
         self._target_model.train()
 
@@ -540,10 +553,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
             mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
                                                                                                     self._cfg.device)
 
-            target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
-            target_value = target_value.view(self._cfg.batch_size[task_id], -1)
+            target_reward = target_reward.view(batch_size_list[task_id], -1)
+            target_value = target_value.view(batch_size_list[task_id], -1)
 
-            # assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
+            # assert obs_batch.size(0) == batch_size_list == target_reward.size(0)
 
             # Transform rewards and values to their scaled forms
             transformed_target_reward = scalar_transform(target_reward)
@@ -557,10 +570,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
             batch_for_gpt = {}
             if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
                 batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                    self._cfg.batch_size[task_id], -1, self._cfg.model.observation_shape)
+                    batch_size_list[task_id], -1, self._cfg.model.observation_shape)
             elif len(self._cfg.model.observation_shape) == 3:
                 batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                    self._cfg.batch_size[task_id], -1, *self._cfg.model.observation_shape)
+                    batch_size_list[task_id], -1, *self._cfg.model.observation_shape)
 
             batch_for_gpt['actions'] = action_batch.squeeze(-1)
             batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
