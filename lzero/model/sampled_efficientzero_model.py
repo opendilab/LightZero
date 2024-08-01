@@ -37,7 +37,7 @@ class SampledEfficientZeroModel(nn.Module):
             pred_out: int = 1024,
             self_supervised_learning_loss: bool = True,
             categorical_distribution: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            activation: Optional[nn.Module] = nn.GELU(approximate='tanh'),
             last_linear_layer_init_zero: bool = True,
             state_norm: bool = False,
             downsample: bool = False,
@@ -51,6 +51,7 @@ class SampledEfficientZeroModel(nn.Module):
             bound_type: str = None,
             norm_type: str = 'BN',
             discrete_action_encoding_type: str = 'one_hot',
+            use_sim_norm: bool = False,
             *args,
             **kwargs,
     ):
@@ -150,8 +151,12 @@ class SampledEfficientZeroModel(nn.Module):
 
         if observation_shape[1] == 96:
             latent_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
+        elif observation_shape[1] == 84:
+            latent_size = math.ceil(observation_shape[1] / 14) * math.ceil(observation_shape[2] / 14)
         elif observation_shape[1] == 64:
             latent_size = math.ceil(observation_shape[1] / 8) * math.ceil(observation_shape[2] / 8)
+        else:
+            raise ValueError("Invalid observation shape, only support 64, 84, 96 for now.")
 
         flatten_output_size_for_reward_head = (
             (reward_head_channels * latent_size) if downsample else
@@ -172,6 +177,7 @@ class SampledEfficientZeroModel(nn.Module):
             num_channels,
             downsample,
             norm_type=self.norm_type,
+            use_sim_norm=use_sim_norm,
         )
 
         self.dynamics_network = DynamicsNetwork(
@@ -499,7 +505,7 @@ class PredictionNetwork(nn.Module):
             flatten_output_size_for_policy_head,
             downsample: bool = False,
             last_linear_layer_init_zero: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            activation: Optional[nn.Module] = nn.GELU(approximate='tanh'),
             # ==============================================================
             # specific sampled related config
             # ==============================================================
@@ -554,7 +560,7 @@ class PredictionNetwork(nn.Module):
                 ResBlock(
                     in_channels=num_channels,
                     activation=activation,
-                    norm_type='BN',
+                    norm_type=self.norm_type,
                     res_type='basic',
                     bias=False
                 ) for _ in range(num_res_blocks)
@@ -598,7 +604,7 @@ class PredictionNetwork(nn.Module):
                 layer_num=len(fc_policy_layers) + 1,
                 sigma_type=self.sigma_type,
                 fixed_sigma_value=self.fixed_sigma_value,
-                activation=nn.ReLU(),
+                activation=activation,
                 norm_type=None,
                 bound_type=self.bound_type
             )
