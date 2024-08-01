@@ -317,14 +317,19 @@ class WorldModel(nn.Module):
         # Process action tokens
         elif 'act_tokens' in obs_embeddings_or_act_tokens:
             act_tokens = obs_embeddings_or_act_tokens['act_tokens']
-            if len(act_tokens.shape) == 3:
-                act_tokens = act_tokens.squeeze(1)
-            num_steps = act_tokens.size(1)
             if self.continuous_action_space:
+                num_steps = 1
                 act_tokens = act_tokens.float()
-                if len(act_tokens.shape) == 2:  # TODO
-                    act_tokens = act_tokens.unsqueeze(-1)
-            act_embeddings = self.act_embedding_table(act_tokens)
+                if len(act_tokens.shape) == 2:
+                    act_tokens = act_tokens.unsqueeze(1)
+            else:
+                if len(act_tokens.shape) == 3:
+                    act_tokens = act_tokens.squeeze(1)
+                num_steps = act_tokens.size(1)
+            try:
+                act_embeddings = self.act_embedding_table(act_tokens)
+            except Exception as e:
+                print(e)
             sequences = self._add_position_embeddings(act_embeddings, prev_steps, num_steps, kvcache_independent,
                                                       is_init_infer, valid_context_lengths)
 
@@ -396,6 +401,7 @@ class WorldModel(nn.Module):
             act_tokens = act_tokens.float()
             if len(act_tokens.shape) == 2:  # TODO
                 act_tokens = act_tokens.unsqueeze(-1)
+
         # B, L, E
         act_embeddings = self.act_embedding_table(act_tokens)
 
@@ -512,7 +518,11 @@ class WorldModel(nn.Module):
         if n <= self.env_num:
             # ================ Collect and Evaluation Phase ================
             if current_obs_embeddings is not None:
-                if max(buffer_action) == -1:
+                if self.continuous_action_space:
+                    first_step_flag = not isinstance(buffer_action[0], np.ndarray)
+                else:
+                    first_step_flag = max(buffer_action) == -1
+                if first_step_flag:
                     # First step in an episode
                     self.keys_values_wm = self.transformer.generate_empty_keys_values(n=current_obs_embeddings.shape[0],
                                                                                       max_tokens=self.context_length)
@@ -558,7 +568,10 @@ class WorldModel(nn.Module):
                     buffer_action = buffer_action[:ready_env_num]
                     # if ready_env_num < self.env_num:
                     #     print(f'init inference ready_env_num: {ready_env_num} < env_num: {self.env_num}')
-                    act_tokens = torch.from_numpy(np.array(buffer_action)).to(latent_state.device).unsqueeze(-1)
+                    if self.continuous_action_space:
+                        act_tokens = torch.from_numpy(np.array(buffer_action)).to(latent_state.device).unsqueeze(1)
+                    else:
+                        act_tokens = torch.from_numpy(np.array(buffer_action)).to(latent_state.device).unsqueeze(-1)
                     outputs_wm = self.forward({'act_tokens': act_tokens}, past_keys_values=self.keys_values_wm,
                                               is_init_infer=True)
 

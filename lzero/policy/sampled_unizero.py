@@ -215,7 +215,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         # (float) The weight of policy loss.
         policy_loss_weight=1,
         # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=0,
+        policy_entropy_loss_weight=1e-4,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.

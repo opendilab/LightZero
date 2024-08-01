@@ -7,10 +7,10 @@ K = 20  # num_of_sampled_actions
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-num_simulations = 25
+num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
-max_env_step = int(5e5)
+max_env_step = int(2e6)
 reanalyze_ratio = 0
 batch_size = 64
 num_unroll_steps = 10
@@ -26,13 +26,12 @@ infer_context_length = 4
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-pendulum_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero/pendulum_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
+lunarlander_cont_sampled_unizero_config = dict(
+    exp_name=f'data_sampled_unizero/lunarlander_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
     env=dict(
-        env_id='Pendulum-v1',
+        env_id='LunarLanderContinuous-v2',
         continuous=True,
         manually_discretization=False,
-        each_dim_disc_size=1,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -40,11 +39,13 @@ pendulum_cont_sampled_unizero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=3,
-            action_space_size=1,
+            observation_shape=8,
+            action_space_size=2,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
+            sigma_type='conditioned',
             norm_type='BN',
+            # norm_type=norm_type,
             model_type='mlp',
             world_model_cfg=dict(
                 num_unroll_steps=num_unroll_steps,
@@ -58,10 +59,10 @@ pendulum_cont_sampled_unizero_config = dict(
                 context_length=2 * infer_context_length,
                 device='cpu',
                 # device='cuda',
-                action_space_size=1,
+                action_space_size=2,
                 num_layers=2,
                 num_heads=8,
-                embed_dim=256,
+                embed_dim=768,
                 env_num=collector_env_num,
                 collector_env_num=collector_env_num,
                 evaluator_env_num=evaluator_env_num,
@@ -74,7 +75,7 @@ pendulum_cont_sampled_unizero_config = dict(
         cuda=True,
         use_augmentation=False,
         env_type='not_board_games',
-        game_segment_length=50,
+        game_segment_length=200,
         replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type='AdamW',
@@ -85,20 +86,20 @@ pendulum_cont_sampled_unizero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(1e3),
+        eval_freq=int(2e3),
         replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
 )
 
-pendulum_cont_sampled_unizero_config = EasyDict(pendulum_cont_sampled_unizero_config)
-main_config = pendulum_cont_sampled_unizero_config
+lunarlander_cont_sampled_unizero_config = EasyDict(lunarlander_cont_sampled_unizero_config)
+main_config = lunarlander_cont_sampled_unizero_config
 
-pendulum_cont_sampled_unizero_create_config = dict(
+lunarlander_cont_sampled_unizero_create_config = dict(
     env=dict(
-        type='pendulum_lightzero',
-        import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
+        type='lunarlander',
+        import_names=['zoo.box2d.lunarlander.envs.lunarlander_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
@@ -106,8 +107,8 @@ pendulum_cont_sampled_unizero_create_config = dict(
         import_names=['lzero.policy.sampled_unizero'],
     ),
 )
-pendulum_cont_sampled_unizero_create_config = EasyDict(pendulum_cont_sampled_unizero_create_config)
-create_config = pendulum_cont_sampled_unizero_create_config
+lunarlander_cont_sampled_unizero_create_config = EasyDict(lunarlander_cont_sampled_unizero_create_config)
+create_config = lunarlander_cont_sampled_unizero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_unizero
