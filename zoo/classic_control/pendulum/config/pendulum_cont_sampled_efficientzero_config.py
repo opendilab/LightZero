@@ -9,16 +9,20 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-update_per_collect = 200
+update_per_collect = None
+replay_ratio = 0.25
+# update_per_collect = 200
 batch_size = 256
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
+# norm_type='BN'
+norm_type = 'LN'
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 pendulum_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez/pendulum_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez/pendulum_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
     env=dict(
         env_id='Pendulum-v1',
         continuous=True,
@@ -31,13 +35,15 @@ pendulum_sampled_efficientzero_config = dict(
     policy=dict(
         model=dict(
             observation_shape=3,
-            action_space_size=11,
+            action_space_size=1,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             sigma_type='conditioned',
             model_type='mlp', 
             lstm_hidden_size=128,
             latent_state_dim=128,
+            norm_type=norm_type,
+            # norm_type='LN',  # TODO
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
@@ -46,9 +52,11 @@ pendulum_sampled_efficientzero_config = dict(
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
+        cos_lr_scheduler=True,  # TODO
+        learning_rate=0.0001,
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
-        learning_rate=0.003,
+        # learning_rate=0.003,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
         num_simulations=num_simulations,
