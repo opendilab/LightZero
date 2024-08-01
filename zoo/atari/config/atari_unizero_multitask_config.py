@@ -186,7 +186,7 @@ if __name__ == "__main__":
     max_env_step = int(1e6)
     reanalyze_ratio = 0.
     # batch_size = [32, 32, 32, 32]
-    max_batch_size = 2000
+    max_batch_size = 512
     batch_size = [int(max_batch_size/len(env_id_list)) for i in range(len(env_id_list))]
     num_unroll_steps = 10
     infer_context_length = 4
@@ -195,11 +195,11 @@ if __name__ == "__main__":
 
 
     # ======== TODO: only for debug ========
-    collector_env_num = 3
-    n_episode = 3
-    evaluator_env_num = 2
-    num_simulations = 2
-    batch_size = [4, 4, 4, 4]
+    # collector_env_num = 3
+    # n_episode = 3
+    # evaluator_env_num = 2
+    # num_simulations = 2
+    # batch_size = [4, 4, 4, 4]
 
     configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed)
 
