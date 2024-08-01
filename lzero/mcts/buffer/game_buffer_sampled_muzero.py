@@ -4,18 +4,18 @@ import numpy as np
 import torch
 from ding.utils import BUFFER_REGISTRY
 
-from lzero.mcts.tree_search.mcts_ctree_sampled import SampledEfficientZeroMCTSCtree as MCTSCtree
-from lzero.mcts.tree_search.mcts_ptree_sampled import SampledEfficientZeroMCTSPtree as MCTSPtree
+from lzero.mcts.tree_search.mcts_ctree_sampled import SampledMuZeroMCTSCtree as MCTSCtree
+# from lzero.mcts.tree_search.mcts_ptree_sampled import SampledMuZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation, generate_random_actions_discrete
 from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
-from .game_buffer_efficientzero import EfficientZeroGameBuffer
+from .game_buffer_muzero import MuZeroGameBuffer
 
 
-@BUFFER_REGISTRY.register('game_buffer_sampled_efficientzero')
-class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
+@BUFFER_REGISTRY.register('game_buffer_sampled_muzero')
+class SampledMuZeroGameBuffer(MuZeroGameBuffer):
     """
     Overview:
-        The specific game buffer for Sampled EfficientZero policy.
+        The specific game buffer for Sampled MuZero policy.
     """
 
     def __init__(self, cfg: dict):
@@ -64,7 +64,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
         )
 
         # target reward, target value
-        batch_value_prefixs, batch_target_values = self._compute_target_reward_value(
+        batch_rewards, batch_target_values = self._compute_target_reward_value(
             reward_value_context, policy._target_model
         )
 
@@ -107,7 +107,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
         elif self._cfg.reanalyze_ratio == 0:
             batch_target_policies = batch_target_policies_non_re
 
-        target_batch = [batch_value_prefixs, batch_target_values, batch_target_policies]
+        target_batch = [batch_rewards, batch_target_values, batch_target_policies]
         # a batch contains the current_batch and the target_batch
         train_data = [current_batch, target_batch]
         return train_data
@@ -246,7 +246,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
             - reward_value_context (:obj:'list'): the reward value context
             - model (:obj:'torch.tensor'):model of the target model
         Returns:
-            - batch_value_prefixs (:obj:'np.ndarray): batch of value prefix
+            - batch_rewards (:obj:'np.ndarray): batch of value prefix
             - batch_target_values (:obj:'np.ndarray): batch of value estimation
         """
         value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
@@ -271,7 +271,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
         else:
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
 
-        batch_target_values, batch_value_prefixs = [], []
+        batch_target_values, batch_rewards = [], []
         with torch.no_grad():
             value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
@@ -295,10 +295,10 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                             m_output.policy_logits
                         ]
                     )
-                    m_output.reward_hidden_state = (
-                        m_output.reward_hidden_state[0].detach().cpu().numpy(),
-                        m_output.reward_hidden_state[1].detach().cpu().numpy()
-                    )
+                    # m_output.reward_hidden_state = (
+                    #     m_output.reward_hidden_state[0].detach().cpu().numpy(),
+                    #     m_output.reward_hidden_state[1].detach().cpu().numpy()
+                    # )
 
                 network_output.append(m_output)
 
@@ -306,10 +306,13 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
             if self._cfg.use_root_value:
                 # use the root values from MCTS
                 # the root values have limited improvement but require much more GPU actors;
-                _, value_prefix_pool, policy_logits_pool, latent_state_roots, reward_hidden_state_roots = concat_output(
-                    network_output, data_type='efficientzero'
+                # _, reward_pool, policy_logits_pool, latent_state_roots, reward_hidden_state_roots = concat_output(
+                #     network_output, data_type='muzero'
+                # )
+                _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
+                    network_output, data_type='muzero'
                 )
-                value_prefix_pool = value_prefix_pool.squeeze().tolist()
+                reward_pool = reward_pool.squeeze().tolist()
                 policy_logits_pool = policy_logits_pool.tolist()
                 # generate the noises for the root nodes
                 noises = [
@@ -325,11 +328,11 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                         self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                     )
                     if self._cfg.reanalyze_noise:
-                        roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                        roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                     else:
-                        roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+                        roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
-                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
+                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
                 else:
                     # python mcts_tree
                     roots = MCTSPtree.roots(
@@ -337,12 +340,12 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                         self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                     )
                     if self._cfg.reanalyze_noise:
-                        roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                        roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                     else:
-                        roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+                        roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
                     MCTSPtree.roots(self._cfg
-                                    ).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
+                                    ).search(roots, model, latent_state_roots, to_play)
 
                 roots_values = roots.get_values()
                 value_list = np.array(roots_values)
@@ -373,9 +376,9 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                                                                                        pos_in_game_segment_list,
                                                                                        to_play_segment):
                 target_values = []
-                target_value_prefixs = []
+                target_rewards = []
 
-                value_prefix = np.array([0.])
+                reward = np.array([0.])
                 base_index = state_index
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
@@ -391,34 +394,38 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                             value_list[value_index] += reward * self._cfg.discount_factor ** i
                             # TODO(pu): why value don't use discount_factor factor
 
-                    # reset every lstm_horizon_len
-                    if horizon_id % self._cfg.lstm_horizon_len == 0:
-                        value_prefix = np.array([0.])
-                        base_index = current_index
+                    # # reset every lstm_horizon_len
+                    # if horizon_id % self._cfg.lstm_horizon_len == 0:
+                    #     reward = np.array([0.])
+                    #     base_index = current_index
                     horizon_id += 1
 
                     if current_index < game_segment_len_non_re:
                         target_values.append(value_list[value_index])
-                        # Since the horizon is small and the discount_factor is close to 1.
-                        # Compute the reward sum to approximate the value prefix for simplification
-                        value_prefix += reward_list[current_index
-                                                    ]  # * config.discount_factor ** (current_index - base_index)
-                        target_value_prefixs.append(value_prefix)
+                        # # Since the horizon is small and the discount_factor is close to 1.
+                        # # Compute the reward sum to approximate the value prefix for simplification
+                        # reward += reward_list[current_index]  # * config.discount_factor ** (current_index - base_index)
+                        # target_rewards.append(reward)
+                        target_rewards.append(reward_list[current_index])
                     else:
                         target_values.append(np.array([0.]))
-                        target_value_prefixs.append(value_prefix)
+                        target_rewards.append(np.array([0.]))
 
                     value_index += 1
 
-                batch_value_prefixs.append(target_value_prefixs)
+                batch_rewards.append(target_rewards)
                 batch_target_values.append(target_values)
 
-        batch_value_prefixs = np.asarray(batch_value_prefixs)
-        batch_target_values = np.asarray(batch_target_values)
-        batch_value_prefixs = np.squeeze(batch_value_prefixs, axis=-1)
-        batch_target_values = np.squeeze(batch_target_values, axis=-1)
+        # batch_rewards = np.asarray(batch_rewards)
+        # batch_target_values = np.asarray(batch_target_values)
+        # batch_rewards = np.squeeze(batch_rewards, axis=-1)
+        # batch_target_values = np.squeeze(batch_target_values, axis=-1)
+        #
+        # return batch_rewards, batch_target_values
 
-        return batch_value_prefixs, batch_target_values
+        batch_rewards = np.asarray(batch_rewards, dtype=object)
+        batch_target_values = np.asarray(batch_target_values, dtype=object)
+        return batch_rewards, batch_target_values
 
     def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any) -> np.ndarray:
         """
@@ -476,18 +483,18 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                             m_output.policy_logits
                         ]
                     )
-                    m_output.reward_hidden_state = (
-                        m_output.reward_hidden_state[0].detach().cpu().numpy(),
-                        m_output.reward_hidden_state[1].detach().cpu().numpy()
-                    )
+                    # m_output.reward_hidden_state = (
+                    #     m_output.reward_hidden_state[0].detach().cpu().numpy(),
+                    #     m_output.reward_hidden_state[1].detach().cpu().numpy()
+                    # )
 
                 network_output.append(m_output)
 
-            _, value_prefix_pool, policy_logits_pool, latent_state_roots, reward_hidden_state_roots = concat_output(
-                network_output, data_type='efficientzero'
+            _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
+                network_output, data_type='muzero'
             )
 
-            value_prefix_pool = value_prefix_pool.squeeze().tolist()
+            reward_pool = reward_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
             # noises are not necessary for reanalyze
             noises = [
@@ -504,11 +511,11 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
                 if self._cfg.reanalyze_noise:
-                    roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                 else:
-                    roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+                    roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSCtree(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
+                MCTSCtree(self._cfg).search(roots, model, latent_state_roots,  to_play)
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(
@@ -516,11 +523,11 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                     self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
                 if self._cfg.reanalyze_noise:
-                    roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_pool, policy_logits_pool, to_play)
+                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                 else:
-                    roots.prepare_no_noise(value_prefix_pool, policy_logits_pool, to_play)
+                    roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSPtree.roots(self._cfg).search(roots, model, latent_state_roots, reward_hidden_state_roots, to_play)
+                MCTSPtree.roots(self._cfg).search(roots, model, latent_state_roots, to_play)
 
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()

@@ -6,20 +6,19 @@ from ding.model.common import ReparameterizationHead
 from ding.torch_utils import MLP
 from ding.utils import MODEL_REGISTRY, SequenceType
 
-from .common import EZNetworkOutput, RepresentationNetworkMLP
-from .efficientzero_model_mlp import DynamicsNetworkMLP
+from .common import MZNetworkOutput, RepresentationNetworkMLP
+from .muzero_model_mlp import DynamicsNetwork
 from .utils import renormalize, get_params_mean
 
 
-@MODEL_REGISTRY.register('SampledEfficientZeroModelMLP')
-class SampledEfficientZeroModelMLP(nn.Module):
+@MODEL_REGISTRY.register('SampledMuZeroModelMLP')
+class SampledMuZeroModelMLP(nn.Module):
 
     def __init__(
         self,
         observation_shape: int = 2,
         action_space_size: int = 6,
         latent_state_dim: int = 256,
-        lstm_hidden_size: int = 512,
         fc_reward_layers: SequenceType = [32],
         fc_value_layers: SequenceType = [32],
         fc_policy_layers: SequenceType = [32],
@@ -50,9 +49,9 @@ class SampledEfficientZeroModelMLP(nn.Module):
     ):
         """
         Overview:
-            The definition of the network model of Sampled EfficientZero, which is a generalization version for 1D vector obs.
+            The definition of the network model of Sampled MuZero, which is a generalization version for 1D vector obs.
             The networks are mainly built on fully connected layers.
-            Sampled EfficientZero model consists of a representation network, a dynamics network and a prediction network.
+            Sampled MuZero model consists of a representation network, a dynamics network and a prediction network.
             The representation network is an MLP network which maps the raw observation to a latent state.
             The dynamics network is an MLP+LSTM network which predicts the next latent state, reward_hidden_state and value_prefix given the current latent state and action.
             The prediction network is an MLP network which predicts the value and policy given the current latent state.
@@ -61,7 +60,6 @@ class SampledEfficientZeroModelMLP(nn.Module):
             - action_space_size: (:obj:`int`): Action space size, which is an integer number. For discrete action space, it is the num of discrete actions, \
                 e.g. 4 for Lunarlander. For continuous action space, it is the dimension of the continuous action, e.g. 4 for bipedalwalker.
             - latent_state_dim (:obj:`int`): The dimension of latent state, such as 256.
-            - lstm_hidden_size (:obj:`int`): The hidden size of LSTM in dynamics network to predict value_prefix.
             - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
             - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
             - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
@@ -71,7 +69,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
             - proj_out (:obj:`int`): The size of projection output layer.
             - pred_hid (:obj:`int`): The size of prediction hidden layer.
             - pred_out (:obj:`int`): The size of prediction output layer.
-            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks in Sampled EfficientZero model, default set it to False.
+            - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks in Sampled MuZero model, default set it to False.
             - categorical_distribution (:obj:`bool`): Whether to use discrete support to represent categorical distribution for value, reward/value_prefix.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
                 operation to speedup, e.g. ReLU(inplace=True).
@@ -90,7 +88,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
             - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection for dynamics network, default set it to False.
         """
-        super(SampledEfficientZeroModelMLP, self).__init__()
+        super(SampledMuZeroModelMLP, self).__init__()
         if not categorical_distribution:
             self.reward_support_size = 1
             self.value_support_size = 1
@@ -114,7 +112,6 @@ class SampledEfficientZeroModelMLP(nn.Module):
             elif self.discrete_action_encoding_type == 'not_one_hot':
                 self.action_encoding_dim = 1
 
-        self.lstm_hidden_size = lstm_hidden_size
         self.latent_state_dim = latent_state_dim
         self.fc_reward_layers = fc_reward_layers
         self.fc_value_layers = fc_value_layers
@@ -139,11 +136,10 @@ class SampledEfficientZeroModelMLP(nn.Module):
             observation_shape=self.observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
         )
 
-        self.dynamics_network = DynamicsNetworkMLP(
+        self.dynamics_network = DynamicsNetwork(
             action_encoding_dim=self.action_encoding_dim,
             num_channels=self.latent_state_dim + self.action_encoding_dim,
             common_layer_num=2,
-            lstm_hidden_size=self.lstm_hidden_size,
             fc_reward_layers=self.fc_reward_layers,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
@@ -166,7 +162,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
         )
 
         if self.self_supervised_learning_loss:
-            # self_supervised_learning_loss related network proposed in EfficientZero
+            # self_supervised_learning_loss related network proposed in MuZero
             self.projection_input_dim = latent_state_dim
             self.projection = nn.Sequential(
                 nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
@@ -180,16 +176,16 @@ class SampledEfficientZeroModelMLP(nn.Module):
                 nn.Linear(self.pred_hid, self.pred_out),
             )
 
-    def initial_inference(self, obs: torch.Tensor) -> EZNetworkOutput:
+    def initial_inference(self, obs: torch.Tensor) -> MZNetworkOutput:
         """
          Overview:
-            Initial inference of SampledEfficientZero model, which is the first step of the SampledEfficientZero model.
+            Initial inference of SampledMuZero model, which is the first step of the SampledMuZero model.
             To perform the initial inference, we first use the representation network to obtain the "latent_state" of the observation.
             Then we use the prediction network to predict the "value" and "policy_logits" of the "latent_state", and
-            also prepare the zeros-like ``reward_hidden_state`` for the next step of the Sampled EfficientZero model.
+            also prepare the zeros-like ``reward_hidden_state`` for the next step of the Sampled MuZero model.
         Arguments:
             - obs (:obj:`torch.Tensor`): The 1D vector observation data.
-        Returns (EZNetworkOutput):
+        Returns (MZNetworkOutput):
             - value (:obj:`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
             - value_prefix (:obj:`torch.Tensor`): The predicted prefix sum of value for input state. \
                 In initial inference, we set it to zero vector.
@@ -208,46 +204,48 @@ class SampledEfficientZeroModelMLP(nn.Module):
         batch_size = obs.size(0)
         latent_state = self._representation(obs)
         policy_logits, value = self._prediction(latent_state)
-        # zero initializations for reward hidden states
-        # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
-        reward_hidden_state = (
-            torch.zeros(1, batch_size,
-                        self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
-                                                                           self.lstm_hidden_size).to(obs.device)
+        return MZNetworkOutput(
+            value,
+            [0. for _ in range(batch_size)],
+            policy_logits,
+            latent_state,
         )
-        return EZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, latent_state, reward_hidden_state)
 
-    def recurrent_inference(
-            self, latent_state: torch.Tensor, reward_hidden_state: torch.Tensor, action: torch.Tensor
-    ) -> EZNetworkOutput:
+        # # zero initializations for reward hidden states
+        # # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
+        # reward_hidden_state = (
+        #     torch.zeros(1, batch_size,
+        #                 self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
+        #                                                                    self.lstm_hidden_size).to(obs.device)
+        # )
+        # return MZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, latent_state, reward_hidden_state)
+
+    def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
         """
         Overview:
-            Recurrent inference of Sampled EfficientZero model, which is the rollout step of the Sampled EfficientZero model.
+            Recurrent inference of MuZero model, which is the rollout step of the MuZero model.
             To perform the recurrent inference, we first use the dynamics network to predict ``next_latent_state``,
-            ``reward_hidden_state``, ``value_prefix`` by the given current ``latent_state`` and ``action``.
+            ``reward`` by the given current ``latent_state`` and ``action``.
              We then use the prediction network to predict the ``value`` and ``policy_logits``.
         Arguments:
-            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The input hidden state of LSTM about reward.
+            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input obs.
             - action (:obj:`torch.Tensor`): The predicted action to rollout.
-        Returns (EZNetworkOutput):
+        Returns (MZNetworkOutput):
             - value (:obj:`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
-            - value_prefix (:obj:`torch.Tensor`): The predicted prefix sum of value for input state.
+            - reward (:obj:`torch.Tensor`): The predicted reward for input state.
             - policy_logits (:obj:`torch.Tensor`): The output logit to select discrete action.
             - next_latent_state (:obj:`torch.Tensor`): The predicted next latent state.
-            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The output hidden state of LSTM about reward.
         Shapes:
             - action (:obj:`torch.Tensor`): :math:`(B, )`, where B is batch_size.
             - value (:obj:`torch.Tensor`): :math:`(B, value_support_size)`, where B is batch_size.
-            - value_prefix (:obj:`torch.Tensor`): :math:`(B, reward_support_size)`, where B is batch_size.
+            - reward (:obj:`torch.Tensor`): :math:`(B, reward_support_size)`, where B is batch_size.
             - policy_logits (:obj:`torch.Tensor`): :math:`(B, action_dim)`, where B is batch_size.
             - latent_state (:obj:`torch.Tensor`): :math:`(B, H)`, where B is batch_size, H is the dimension of latent state.
             - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H)`, where B is batch_size, H is the dimension of latent state.
-            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The shape of each element is :math:`(1, B, lstm_hidden_size)`, where B is batch_size.
-         """
-        next_latent_state, reward_hidden_state, value_prefix = self._dynamics(latent_state, reward_hidden_state, action)
+        """
+        next_latent_state, reward = self._dynamics(latent_state, action)
         policy_logits, value = self._prediction(next_latent_state)
-        return EZNetworkOutput(value, value_prefix, policy_logits, next_latent_state, reward_hidden_state)
+        return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
 
     def _representation(self, observation: torch.Tensor) -> Tuple[torch.Tensor]:
         """
@@ -283,8 +281,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
         policy, value = self.prediction_network(latent_state)
         return policy, value
 
-    def _dynamics(self, latent_state: torch.Tensor, reward_hidden_state: Tuple,
-                  action: torch.Tensor) -> Tuple[torch.Tensor, Tuple[torch.Tensor], torch.Tensor]:
+    def _dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor, Tuple[torch.Tensor], torch.Tensor]:
         """
         Overview:
             Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state``
@@ -345,20 +342,18 @@ class SampledEfficientZeroModelMLP(nn.Module):
         # (batch_size, latent_state[1] + action_space_size]) depending on the discrete_action_encoding_type.
         state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
 
-        next_latent_state, next_reward_hidden_state, value_prefix = self.dynamics_network(
-            state_action_encoding, reward_hidden_state
-        )
+        next_latent_state, reward = self.dynamics_network(state_action_encoding)
+
 
         if not self.state_norm:
-            return next_latent_state, next_reward_hidden_state, value_prefix
+            return next_latent_state, reward
         else:
             next_latent_state_normalized = renormalize(next_latent_state)
-            return next_latent_state_normalized, next_reward_hidden_state, value_prefix
-
+            return next_latent_state_normalized, reward
     def project(self, latent_state: torch.Tensor, with_grad=True) -> torch.Tensor:
         """
         Overview:
-            Project the latent state to a lower dimension to calculate the self-supervised loss, which is proposed in EfficientZero.
+            Project the latent state to a lower dimension to calculate the self-supervised loss, which is proposed in MuZero.
             For more details, please refer to the paper ``Exploring Simple Siamese Representation Learning``.
         Arguments:
             - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
@@ -382,8 +377,6 @@ class SampledEfficientZeroModelMLP(nn.Module):
         else:
             return proj.detach()
 
-    def get_params_mean(self):
-        return get_params_mean(self)
 
 
 class PredictionNetworkMLP(nn.Module):
