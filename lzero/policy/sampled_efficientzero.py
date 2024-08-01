@@ -22,7 +22,6 @@ from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
 
 
-
 @POLICY_REGISTRY.register('sampled_efficientzero')
 class SampledEfficientZeroPolicy(MuZeroPolicy):
     """

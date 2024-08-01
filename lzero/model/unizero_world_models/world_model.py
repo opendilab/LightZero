@@ -1126,7 +1126,7 @@ class WorldModel(nn.Module):
             #                                                                             element='policy')
             """NOTE: continuous action space"""
             orig_policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont_v2(outputs,  batch['target_policy'], batch)
-            loss_policy = self.config.policy_loss_weight * orig_policy_loss + self.config.policy_entropy_weight * policy_entropy_loss
+            loss_policy = orig_policy_loss + self.config.policy_entropy_weight * policy_entropy_loss
             policy_entropy = - policy_entropy_loss
 
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')

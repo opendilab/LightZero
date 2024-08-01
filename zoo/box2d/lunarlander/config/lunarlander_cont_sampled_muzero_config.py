@@ -17,7 +17,8 @@ reanalyze_ratio = 0.
 # norm_type='BN'
 norm_type = 'LN'
 
-
+# debug
+# num_simulations = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -53,6 +54,7 @@ lunarlander_cont_sampled_muzero_config = dict(
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
+        use_priority=False,
         cos_lr_scheduler=True,  # TODO
         learning_rate=0.0001,
         optim_type='Adam',
