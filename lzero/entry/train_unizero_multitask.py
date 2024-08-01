@@ -13,7 +13,7 @@ from ding.utils import set_pkg_seed, get_rank
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
-from lzero.entry.utils import log_buffer_memory_usage, clamp
+from lzero.entry.utils import log_buffer_memory_usage, clamp, softmax_with_temperature
 from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroCollector as Collector, MuZeroEvaluator as Evaluator
 from lzero.mcts import UniZeroGameBuffer as GameBuffer
@@ -194,11 +194,9 @@ def train_unizero_multitask(
                 envstep_multi_task = 0
                 if cfg.policy.adaptive_batch_size_for_transition:
                     buffer_num_of_transitions_list = [buffer.get_num_of_transitions() for buffer in game_buffers]
-                    buffer_ratio_list = [clamp
-                        (x / sum(buffer_num_of_transitions_list), \
-                            min=cfg.policy.min_clamp_ratio_for_adaptive_bs, \
-                            max=cfg.policy.max_clamp_ratio_for_adaptive_bs) for x in buffer_num_of_transitions_list]
-                    adaptive_batch_size_list = [int(x * cfg.policy.adaptive_total_batch_size) for x in buffer_ratio_list]
+                    buffer_ratio_list = [x / sum(buffer_num_of_transitions_list) for x in buffer_num_of_transitions_list]
+                    softmax_buffer_ratio_list = softmax_with_temperature(buffer_ratio_list, temperature=cfg.policy.temperature_for_softmax_list)
+                    adaptive_batch_size_list = [int(x * cfg.policy.adaptive_total_batch_size) for x in softmax_buffer_ratio_list]
                 for task_id, (cfg, collector, replay_buffer) in enumerate(zip(cfgs, collectors, game_buffers)):
                     envstep_multi_task += collector.envstep
                     if replay_buffer.get_num_of_transitions() > batch_size:
