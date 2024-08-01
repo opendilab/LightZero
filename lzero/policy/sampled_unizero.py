@@ -8,17 +8,17 @@ from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
 
 from lzero.entry.utils import initialize_zeros_batch
-from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
+from lzero.mcts import SampledUniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
     prepare_obs_stack4_for_unizero
-from lzero.policy.muzero import MuZeroPolicy
+from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 
 
-@POLICY_REGISTRY.register('unizero')
-class UniZeroPolicy(MuZeroPolicy):
+@POLICY_REGISTRY.register('sampled_unizero')
+class SampledUniZeroPolicy(UniZeroPolicy):
     """
     Overview:
         The policy class for UniZero, official implementation for paper UniZero: Generalized and Efficient Planning
@@ -126,7 +126,7 @@ class UniZeroPolicy(MuZeroPolicy):
         multi_gpu=False,
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
         # this variable is used in ``collector``.
-        sampled_algo=False,
+        sampled_algo=True,
         # (bool) Whether to enable the gumbel-based algorithm (e.g. Gumbel Muzero)
         gumbel_algo=False,
         # (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.
@@ -282,7 +282,7 @@ class UniZeroPolicy(MuZeroPolicy):
             The user can define and use customized network model but must obey the same interface definition indicated \
             by import_names path. For MuZero, ``lzero.model.unizero_model.MuZeroModel``
         """
-        return 'UniZeroModel', ['lzero.model.unizero_model']
+        return 'SampledUniZeroModel', ['lzero.model.sampled_unizero_model']
 
     def _init_learn(self) -> None:
         """
@@ -347,7 +347,11 @@ class UniZeroPolicy(MuZeroPolicy):
         self._target_model.train()
 
         current_batch, target_batch, _ = data
-        obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
+        # ==============================================================
+        # sampled related core code
+        # ==============================================================
+        # obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
+        obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number
@@ -365,9 +369,17 @@ class UniZeroPolicy(MuZeroPolicy):
         # Prepare action batch and convert to torch tensor
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
             -1).long()  # For discrete action space
-        data_list = [mask_batch, target_reward, target_value, target_policy, weights]
-        mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
-                                                                                                self._cfg.device)
+        data_list = [mask_batch, target_reward.astype('float32'), target_value.astype('float32'), target_policy,
+                     weights]
+        [mask_batch, target_reward, target_value, target_policy,
+         weights] = to_torch_float_tensor(data_list, self._cfg.device)
+
+        # ==============================================================
+        # sampled related core code
+        # ==============================================================
+        # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim), e.g. (4, 6, 5, 1)
+        child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device)
+
 
         target_reward = target_reward.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
@@ -400,6 +412,9 @@ class UniZeroPolicy(MuZeroPolicy):
                                             device=self._cfg.device)
         batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
         batch_for_gpt['target_policy'] = target_policy[:, :-1]
+
+        #
+        batch_for_gpt['child_sampled_actions'] = child_sampled_actions_batch[:, :-1]
 
         # Extract valid target policy data and compute entropy
         valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
@@ -598,15 +613,31 @@ class UniZeroPolicy(MuZeroPolicy):
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
+            # legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
+
+            if self._cfg.model.continuous_action_space is True:
+                # when the action space of the environment is continuous, action_mask[:] is None.
+                # NOTE: in continuous action space env: we set all legal_actions as -1
+                legal_actions = [
+                    [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_collect_env_num)
+                ]
+            else:
+                legal_actions = [
+                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
+                ]
+
             # the only difference between collect and eval is the dirichlet noise
             noises = [
-                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(self._cfg.model.num_of_sampled_actions)
                                     ).astype(np.float32).tolist() for j in range(active_collect_env_num)
             ]
+
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
-                roots = MCTSCtree.roots(active_collect_env_num, legal_actions)
+                roots = MCTSCtree.roots(
+                    active_collect_env_num, legal_actions, self._cfg.model.action_space_size,
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
+                )
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
@@ -618,27 +649,40 @@ class UniZeroPolicy(MuZeroPolicy):
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
+            # ==============================================================
+            # sampled related core code
+            # ==============================================================
+            roots_sampled_actions = roots.get_sampled_actions(
+            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                
-                if self._cfg.eps.eps_greedy_exploration_in_collect:
-                    # eps greedy collect
-                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self._collect_mcts_temperature, deterministic=True
-                    )
-                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                    if np.random.rand() < self._collect_epsilon:
-                        action = np.random.choice(legal_actions[i])
+                if self._cfg.mcts_ctree:
+                    # In ctree, the method roots.get_sampled_actions() returns a list object.
+                    root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
                 else:
-                    # normal collect
-                    # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
-                    # the index within the legal action set, rather than the index in the entire action set.
-                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self._collect_mcts_temperature, deterministic=False
-                    )
-                    # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
-                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                    # In ptree, the same method roots.get_sampled_actions() returns an Action object.
+                    root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
+
+                # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                # the index within the legal action set, rather than the index in the entire action set.
+                action, visit_count_distribution_entropy = select_action(
+                    distributions, temperature=self._collect_mcts_temperature, deterministic=False
+                )
+
+                if self._cfg.mcts_ctree:
+                    # In ctree, the method roots.get_sampled_actions() returns a list object.
+                    action = np.array(roots_sampled_actions[i][action])
+                else:
+                    # In ptree, the same method roots.get_sampled_actions() returns an Action object.
+                    action = roots_sampled_actions[i][action].value
+
+                if not self._cfg.model.continuous_action_space:
+                    if len(action.shape) == 0:
+                        action = int(action)
+                    elif len(action.shape) == 1:
+                        action = int(action[0])
 
                 # ============== TODO: only for visualize ==============
                 # action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
@@ -650,6 +694,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 output[env_id] = {
                     'action': action,
                     'visit_count_distributions': distributions,
+                    'root_sampled_actions': root_sampled_actions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
                     'searched_value': value,
                     'predicted_value': pred_values[i],
@@ -719,10 +764,23 @@ class UniZeroPolicy(MuZeroPolicy):
                 latent_state_roots = latent_state_roots.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
+            if self._cfg.model.continuous_action_space is True:
+                # when the action space of the environment is continuous, action_mask[:] is None.
+                # NOTE: in continuous action space env: we set all legal_actions as -1
+                legal_actions = [
+                    [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_eval_env_num)
+                ]
+            else:
+                legal_actions = [
+                    [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
+                ]
+
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
-                roots = MCTSCtree.roots(active_eval_env_num, legal_actions)
+                roots = MCTSCtree.roots(
+                    active_eval_env_num, legal_actions, self._cfg.model.action_space_size,
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
+                )
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
@@ -732,27 +790,47 @@ class UniZeroPolicy(MuZeroPolicy):
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
-
+            # ==============================================================
+            # sampled related core code
+            # ==============================================================
+            roots_sampled_actions = roots.get_sampled_actions(
+            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
             batch_action = []
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                # print("roots_visit_count_distributions:", distributions, "root_value:", value)
-
+                try:
+                    root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
+                except Exception:
+                    # logging.warning('ctree_sampled_muzero roots.get_sampled_actions() return list')
+                    root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
-                #  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than
-                # sampling during the evaluation phase.
-                action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                # Setting deterministic=True implies choosing the action with the highest value (argmax) rather than sampling during the evaluation phase.
+                action, visit_count_distribution_entropy = select_action(
                     distributions, temperature=1, deterministic=True
                 )
-                # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the
-                # entire action set.
-                action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                # ==============================================================
+                # sampled related core code
+                # ==============================================================
+
+                try:
+                    action = roots_sampled_actions[i][action].value
+                    # logging.warning('ptree_sampled_muzero roots.get_sampled_actions() return array')
+                except Exception:
+                    # logging.warning('ctree_sampled_muzero roots.get_sampled_actions() return list')
+                    action = np.array(roots_sampled_actions[i][action])
+
+                if not self._cfg.model.continuous_action_space:
+                    if len(action.shape) == 0:
+                        action = int(action)
+                    elif len(action.shape) == 1:
+                        action = int(action[0])
 
                 output[env_id] = {
                     'action': action,
                     'visit_count_distributions': distributions,
+                    'root_sampled_actions': root_sampled_actions,
                     'visit_count_distribution_entropy': visit_count_distribution_entropy,
                     'searched_value': value,
                     'predicted_value': pred_values[i],

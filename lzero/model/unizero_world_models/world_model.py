@@ -13,11 +13,12 @@ from einops import rearrange
 
 from lzero.model.common import SimNorm
 from lzero.model.utils import cal_dormant_ratio
-from .slicer import Head
+from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights, to_device_for_kvcache
 from .utils import WorldModelOutput, quantize_state
+from torch.distributions import Categorical, Independent, Normal
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -60,16 +61,27 @@ class WorldModel(nn.Module):
         self.precompute_pos_emb_diff_kv()
         print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
-        # Initialize action embedding table
-        self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
-        print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
+        self.continuous_action_space = self.config.continuous_action_space
 
+        # Initialize action embedding table
+        if self.continuous_action_space:
+            # TODO
+            self.act_embedding_table = nn.Linear(config.action_space_size, config.embed_dim, device=self.device)
+        else:
+            self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
+        print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
         self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim,
                                                    self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
-        self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
+        if self.continuous_action_space:
+            self.sigma_type = self.config.sigma_type
+            # self.fixed_sigma_value = self.config.fixed_sigma_value
+            # self.bound_type = self.config.bound_type
+            self.head_policy = self._create_head_cont(self.value_policy_tokens_pattern, self.action_space_size)
+        else:
+            self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
         self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
 
         # Apply weight initialization, the order is important
@@ -137,11 +149,39 @@ class WorldModel(nn.Module):
             head_module=nn.Sequential(*modules)
         )
 
+    def _create_head_cont(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
+        """Create head modules for the transformer."""
+        # modules = [
+        #     nn.Linear(self.config.embed_dim, self.config.embed_dim),
+        #     nn.GELU(approximate='tanh'),
+        #     nn.Linear(self.config.embed_dim, output_dim*2)
+        # ]
+        from ding.model.common import ReparameterizationHead
+        self.fc_policy_head = ReparameterizationHead(
+            input_size=self.config.embed_dim,
+            output_size=output_dim,
+            layer_num=2,
+            sigma_type=self.sigma_type,
+            # fixed_sigma_value=self.fixed_sigma_value,
+            activation=nn.GELU(approximate='tanh'),
+            norm_type=None,
+            # bound_type=self.bound_type
+        )
+        return PolicyHeadCont(
+            max_blocks=self.config.max_blocks,
+            block_mask=block_mask,
+            head_module=self.fc_policy_head
+        )
+
     def _initialize_last_layer(self) -> None:
         """Initialize the last linear layer."""
-        last_linear_layer_init_zero = True
+        last_linear_layer_init_zero = True  # TODO
         if last_linear_layer_init_zero:
-            for head in [self.head_policy, self.head_value, self.head_rewards, self.head_observations]:
+            if self.continuous_action_space:
+                module_to_initialize = [ self.head_value, self.head_rewards, self.head_observations]
+            else:
+                module_to_initialize = [self.head_policy, self.head_value, self.head_rewards, self.head_observations]
+            for head in module_to_initialize:
                 for layer in reversed(head.head_module):
                     if isinstance(layer, nn.Linear):
                         nn.init.zeros_(layer.weight)
@@ -280,13 +320,21 @@ class WorldModel(nn.Module):
             if len(act_tokens.shape) == 3:
                 act_tokens = act_tokens.squeeze(1)
             num_steps = act_tokens.size(1)
+            if self.continuous_action_space:
+                act_tokens = act_tokens.float()
+                if len(act_tokens.shape) == 2:  # TODO
+                    act_tokens = act_tokens.unsqueeze(-1)
             act_embeddings = self.act_embedding_table(act_tokens)
             sequences = self._add_position_embeddings(act_embeddings, prev_steps, num_steps, kvcache_independent,
                                                       is_init_infer, valid_context_lengths)
 
         # Process combined observation embeddings and action tokens
         else:
-            sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
+            if self.continuous_action_space:
+                sequences, num_steps = self._process_obs_act_combined_cont(obs_embeddings_or_act_tokens, prev_steps)
+            else:
+                sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
+
 
         # Pass sequences through transformer
         x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths)
@@ -327,6 +375,42 @@ class WorldModel(nn.Module):
                 position_embeddings = self.pos_emb(
                     valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
                 return embeddings + position_embeddings
+
+    def _process_obs_act_combined_cont(self, obs_embeddings_or_act_tokens, prev_steps):
+        """
+        Process combined observation embeddings and action tokens.
+
+        Arguments:
+            - obs_embeddings_or_act_tokens (:obj:`dict`): Dictionary containing combined observation embeddings and action tokens.
+            - prev_steps (:obj:`torch.Tensor`): Previous steps.
+        Returns:
+            - torch.Tensor: Combined observation and action embeddings with position information added.
+        """
+        obs_embeddings, act_tokens = obs_embeddings_or_act_tokens['obs_embeddings_and_act_tokens']
+        if len(obs_embeddings.shape) == 3:
+            obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1], self.num_observations_tokens,
+                                                 -1)
+
+        num_steps = int(obs_embeddings.size(1) * (obs_embeddings.size(2) + 1))
+        if self.continuous_action_space:
+            act_tokens = act_tokens.float()
+            if len(act_tokens.shape) == 2:  # TODO
+                act_tokens = act_tokens.unsqueeze(-1)
+        # B, L, E
+        act_embeddings = self.act_embedding_table(act_tokens)
+
+        B, L, K, E = obs_embeddings.size()
+        # B, L*2, E
+        obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=self.device)
+
+        for i in range(L):
+            obs = obs_embeddings[:, i, :, :]
+            act = act_embeddings[:, i, :].unsqueeze(1)
+            obs_act = torch.cat([obs, act], dim=1)
+            obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
+
+        return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
+
 
     def _process_obs_act_combined(self, obs_embeddings_or_act_tokens, prev_steps):
         """
@@ -493,7 +577,10 @@ class WorldModel(nn.Module):
 
             latent_state = latent_state[:, :-1, :]
             buffer_action = torch.from_numpy(buffer_action).to(latent_state.device)
-            act_tokens = rearrange(buffer_action, 'b l -> b l 1')
+            if self.continuous_action_space:
+                act_tokens = buffer_action
+            else:
+                act_tokens = rearrange(buffer_action, 'b l -> b l 1')
 
             # select the last timestep for each sample
             # This will select the last column while keeping the dimensions unchanged, and the target policy/value in the final step itself is not used.
@@ -554,7 +641,10 @@ class WorldModel(nn.Module):
         self.keys_values_wm_size_list = self.retrieve_or_generate_kvcache(latest_state, ready_env_num, simulation_index)
 
         latent_state_list = []
-        token = action.reshape(-1, 1)
+        if not self.continuous_action_space:
+            token = action.reshape(-1, 1)
+        else:
+            token = action.reshape(-1, self.action_space_size)
 
         # ======= Print statistics for debugging =============
         # min_size = min(self.keys_values_wm_size_list)
@@ -932,8 +1022,12 @@ class WorldModel(nn.Module):
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=batch['observations'].dtype)
 
-            # Action tokens
-        act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
+
+        # Action tokens
+        if self.continuous_action_space:
+            act_tokens = batch['actions']
+        else:
+            act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
 
         # Forward pass to obtain predictions for observations, rewards, and policies
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)})
@@ -1010,8 +1104,18 @@ class WorldModel(nn.Module):
 
         # Compute losses for rewards, policy, and value
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
-        loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy, batch,
+
+        if not self.continuous_action_space:
+            loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy, batch,
                                                                                         element='policy')
+        else:
+            # loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss_cont(outputs, labels_policy, batch,
+            #                                                                             element='policy')
+            """NOTE: continuous action space"""
+            orig_policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont_v2(outputs,  batch['target_policy'], batch)
+            loss_policy = self.config.policy_loss_weight * orig_policy_loss + self.config.policy_entropy_weight * policy_entropy_loss
+            policy_entropy = - policy_entropy_loss
+
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
 
         # Compute timesteps
@@ -1084,6 +1188,215 @@ class WorldModel(nn.Module):
             dormant_ratio_world_model=dormant_ratio_world_model,
             latent_state_l2_norms=latent_state_l2_norms,
         )
+
+
+    def _calculate_policy_loss_cont_v2(self, outputs, target_policy: torch.Tensor, batch: dict) -> Tuple[
+        torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Calculate the policy loss for continuous actions.
+
+        Args:
+            - outputs: Model outputs containing policy logits.
+            - target_policy (:obj:`torch.Tensor`): Target policy tensor.
+            - batch (:obj:`dict`): Batch data containing mask and sampled actions.
+
+        Returns:
+            - policy_loss (:obj:`torch.Tensor`): The calculated policy loss.
+            - policy_entropy_loss (:obj:`torch.Tensor`): The entropy loss of the policy.
+            - target_policy_entropy (:obj:`float`): The entropy of the target policy distribution.
+            - target_sampled_actions (:obj:`torch.Tensor`): The actions sampled from the target policy.
+            - mu (:obj:`torch.Tensor`): The mean of the normal distribution.
+            - sigma (:obj:`torch.Tensor`): The standard deviation of the normal distribution.
+        """
+        batch_size, num_unroll_steps, action_space_size = outputs.logits_policy.shape[
+            0], self.config.num_unroll_steps, self.config.action_space_size
+
+        policy_logits_all = outputs.logits_policy
+        mask_batch = batch['mask_padding']
+        child_sampled_actions_batch = batch['child_sampled_actions']
+
+        # Flatten the unroll step dimension for easier vectorized operations
+        policy_logits_all = policy_logits_all.view(batch_size * num_unroll_steps, -1)
+        # mask_batch = mask_batch.view(-1)
+        mask_batch = mask_batch.reshape(-1)
+        child_sampled_actions_batch = child_sampled_actions_batch.reshape(batch_size * num_unroll_steps, -1,
+                                                                       action_space_size)
+
+        mu, sigma = policy_logits_all[:, :action_space_size], policy_logits_all[:, action_space_size:]
+        # sigma = torch.exp(sigma)  # Ensure sigma is positive
+
+        mu = mu.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
+        sigma = sigma.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
+        dist = Independent(Normal(mu, sigma), 1)
+
+        target_normalized_visit_count = target_policy.reshape(batch_size * num_unroll_steps, -1)
+        target_sampled_actions = child_sampled_actions_batch
+
+        policy_entropy = dist.entropy().mean(dim=1)
+        policy_entropy_loss = -policy_entropy * mask_batch
+
+        y = 1 - target_sampled_actions.pow(2)
+        target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
+        target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
+
+        log_prob = dist.log_prob(target_sampled_actions_before_tanh)
+        log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
+        log_prob_sampled_actions = log_prob
+
+        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
+        policy_loss = -torch.sum(
+            torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
+        ) * mask_batch
+
+        # Calculate the entropy of the target policy distribution
+        non_masked_indices = torch.nonzero(mask_batch).squeeze(-1)
+        if len(non_masked_indices) > 0:
+            target_dist = Categorical(target_normalized_visit_count[non_masked_indices])
+            target_policy_entropy = target_dist.entropy().mean().item()
+        else:
+            target_policy_entropy = 0.0
+
+        return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
+
+    def _calculate_policy_loss_cont(self, outputs, target_policy: torch.Tensor, batch: dict) -> Tuple[
+        torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Calculate the policy loss for continuous actions.
+
+        Args:
+            - outputs: Model outputs containing policy logits.
+            - target_policy (:obj:`torch.Tensor`): Target policy tensor.
+            - batch (:obj:`dict`): Batch data containing mask and sampled actions.
+
+        Returns:
+            - policy_loss (:obj:`torch.Tensor`): The calculated policy loss.
+            - policy_entropy_loss (:obj:`torch.Tensor`): The entropy loss of the policy.
+            - target_policy_entropy (:obj:`float`): The entropy of the target policy distribution.
+            - target_sampled_actions (:obj:`torch.Tensor`): The actions sampled from the target policy.
+            - mu (:obj:`torch.Tensor`): The mean of the normal distribution.
+            - sigma (:obj:`torch.Tensor`): The standard deviation of the normal distribution.
+        """
+        batch_size, num_unroll_steps, action_space_size = outputs.logits_policy.shape[0], self.config.num_unroll_steps, self.config.action_space_size
+        policy_loss = torch.zeros(batch_size * num_unroll_steps, device=outputs.logits_policy.device)
+        policy_entropy_loss = torch.zeros(batch_size * num_unroll_steps, device=outputs.logits_policy.device)
+        policy_logits_all = outputs.logits_policy
+        mask_batch = batch['mask_padding']
+        child_sampled_actions_batch = batch['child_sampled_actions']
+
+        for unroll_step in range(num_unroll_steps):
+            policy_logits = policy_logits_all[:, unroll_step, :]
+            mu, sigma = policy_logits[:, :action_space_size], policy_logits[:, action_space_size:]
+            # sigma = torch.exp(sigma)  # Ensure sigma is positive
+
+            # Reshape mu and sigma to match the shape of target_sampled_actions_before_tanh
+            mu = mu.unsqueeze(1).expand(child_sampled_actions_batch.shape[0], child_sampled_actions_batch.shape[2], child_sampled_actions_batch.shape[-1])
+            sigma = sigma.unsqueeze(1).expand(child_sampled_actions_batch.shape[0], child_sampled_actions_batch.shape[2], child_sampled_actions_batch.shape[-1])
+            dist = Independent(Normal(mu, sigma), 1)
+
+            target_normalized_visit_count = target_policy[:, unroll_step]
+            non_masked_indices = torch.nonzero(mask_batch[:, unroll_step]).squeeze(-1)
+            if len(non_masked_indices) > 0:
+                target_normalized_visit_count_masked = target_normalized_visit_count[non_masked_indices]
+                target_dist = Categorical(target_normalized_visit_count_masked)
+                target_policy_entropy = target_dist.entropy().mean().item()
+            else:
+                target_policy_entropy = 0.0
+
+            target_sampled_actions = child_sampled_actions_batch[:, unroll_step]
+            policy_entropy = dist.entropy().mean()
+            policy_entropy_loss[unroll_step * batch_size:(unroll_step + 1) * batch_size] = -policy_entropy
+            # SAC-like log probabilities calculation
+            y = 1 - target_sampled_actions.pow(2)
+            target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
+            target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
+
+            log_prob = dist.log_prob(target_sampled_actions_before_tanh)
+            log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
+            log_prob_sampled_actions = log_prob
+
+            target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
+            policy_loss[unroll_step * batch_size:(unroll_step + 1) * batch_size] = -torch.sum(
+                torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
+            ) * mask_batch[:, unroll_step]
+
+        return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
+
+    def _calculate_policy_loss_cont_v0(self, outputs, target_policy: torch.Tensor, batch: dict) -> Tuple[
+        torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Calculate the policy loss for continuous actions.
+
+        Args:
+            outputs: Model outputs containing policy logits.
+            target_policy (torch.Tensor): Target policy tensor.
+            batch (dict): Batch data containing mask and sampled actions.
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
+                - policy_loss (torch.Tensor): The calculated policy loss.
+                - policy_entropy (torch.Tensor): The entropy of the policy distribution.
+                - policy_entropy_loss (torch.Tensor): The entropy loss of the policy.
+                - target_policy_entropy (float): The entropy of the target policy distribution.
+                - target_sampled_actions (torch.Tensor): The actions sampled from the target policy.
+                - mu (torch.Tensor): The mean of the normal distribution.
+                - sigma (torch.Tensor): The standard deviation of the normal distribution.
+        """
+        # policy_loss = torch.zeros(outputs.logits_policy.shape[0], device=outputs.logits_policy.device)
+        policy_loss = torch.zeros(outputs.logits_policy.shape[0]*outputs.logits_policy.shape[1], device=outputs.logits_policy.device)
+        policy_entropy_loss = torch.zeros(outputs.logits_policy.shape[0]*outputs.logits_policy.shape[1], device=outputs.logits_policy.device)
+
+        policy_logits_all = outputs.logits_policy
+        mask_batch = batch['mask_padding']
+        child_sampled_actions_batch = batch['child_sampled_actions']
+
+        for unroll_step in range(self.config.num_unroll_steps):
+            policy_logits = policy_logits_all[:, unroll_step, :]
+            mu, sigma = policy_logits[:, :self.config.action_space_size], policy_logits[:,
+                                                                          self.config.action_space_size:]
+            dist = Independent(Normal(mu, sigma), 1)
+
+            # Target normalized visit count for the current unroll step
+            target_normalized_visit_count = target_policy[:, unroll_step]
+
+            # Calculate target policy entropy for debugging purposes
+            non_masked_indices = torch.nonzero(mask_batch[:, unroll_step]).squeeze(-1)
+            if len(non_masked_indices) > 0:
+                target_normalized_visit_count_masked = torch.index_select(target_normalized_visit_count, 0,
+                                                                          non_masked_indices)
+                target_dist = Categorical(target_normalized_visit_count_masked)
+                target_policy_entropy = target_dist.entropy().mean().item()
+            else:
+                target_policy_entropy = 0.0
+
+            target_sampled_actions = child_sampled_actions_batch[:, unroll_step]
+            policy_entropy = dist.entropy().mean()
+            # policy_entropy_loss = - policy_entropy
+            policy_entropy_loss[unroll_step*outputs.logits_policy.shape[0]:(unroll_step+1)*outputs.logits_policy.shape[0]] = - policy_entropy
+
+            # Calculate log probabilities of sampled actions
+            log_prob_sampled_actions = []
+            for k in range(self.config.num_of_sampled_actions):
+                y = 1 - target_sampled_actions[:, k, :].pow(2)
+                min_val = torch.tensor(-1 + 1e-6, device=target_sampled_actions.device)
+                max_val = torch.tensor(1 - 1e-6, device=target_sampled_actions.device)
+                target_sampled_actions_clamped = torch.clamp(target_sampled_actions[:, k, :], min_val, max_val)
+                target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
+
+                log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
+                log_prob = log_prob - torch.log(y + 1e-6).sum(-1, keepdim=True)
+                log_prob_sampled_actions.append(log_prob.squeeze(-1))
+
+            log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
+            target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
+
+            # Cross-entropy loss calculation
+            # policy_loss += -torch.sum(
+            #     torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
+            # ) * mask_batch[:, unroll_step]
+            policy_loss[unroll_step*outputs.logits_policy.shape[0]:(unroll_step+1)*outputs.logits_policy.shape[0]] = -torch.sum(
+                torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
+            ) * mask_batch[:, unroll_step]
+
+        return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
 
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
         # Assume outputs is an object with logits attributes like 'rewards', 'policy', and 'value'.
