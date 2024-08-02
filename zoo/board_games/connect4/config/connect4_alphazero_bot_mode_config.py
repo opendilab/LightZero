@@ -31,6 +31,7 @@ connect4_alphazero_config = dict(
         agent_vs_human=False,
         prob_random_agent=0,
         prob_expert_agent=0,
+        prob_random_action_in_bot=0,
         scale=True,
         screen_scaling=9,
         render_mode=None,

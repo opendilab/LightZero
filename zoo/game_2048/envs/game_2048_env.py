@@ -103,7 +103,7 @@ class Game2048Env(gym.Env):
         act_scale=True,
         # (bool) Whether to use the 'channel last' format for the observation space.
         # If False, 'channel first' format is used.
-        channel_last=True,
+        channel_last=False,
         # (str) The type of observation to use. Options are 'raw_board', 'raw_encoded_board', and 'dict_encoded_board'.
         obs_type='dict_encoded_board',
         # (bool) Whether to normalize rewards. If True, rewards are divided by the maximum possible reward.

@@ -1,3 +1,32 @@
+2024.07.12 (v0.1.0)
+- env: SumToThree env from pooltool(#227)
+- algo: UniZero (#232)
+- algo: ReZero (#238)
+- feature: add logs and config documentations (#220)
+- polish: polish atari_env_action_space_map, fix test_muzero_game_buffer
+- polish: polish release.yml
+- style: update discord link and add a new badge in readme (#221)
+
+2024.04.12 (v0.0.5)
+- env: MemoryEnv (#197)
+- env: mountain_car (#181)
+- algo: Gumbel AlphaZero in ctree (#212)
+- feature: add ZeroPal and discord link (#209)
+- feature: add eval_offline option (#188)
+- feature: save the updated searched policy and value to the buffer during reanalyze (#190)
+- feature: add muzero visualization (#181)
+- feature: add efficientzero tictactoe configs (#204)
+- feature: add 2 mcts related iclr2024 papers
+- polish: add load pretrained model option in test_game_segment (#194)
+- polish: polish _forward_learn() and some data process operations (#191)
+- polish: add customization documentation section in readme
+- fix: fix sync_gradients and log in DDP settings (#200)
+- fix: fix channel_last bug
+- fix: fix total_episode_count bug in collector
+- fix: fix memory_lightzero_env return bug
+- fix: fix obs_max_scale bug in memory_env
+- style: add unittest for game_buffer_muzero (#186)
+
 2024.02.08 (v0.0.4)
 - polish: add agent configurations & polish replay video saving method (#184)
 - polish: polish comments in worker files

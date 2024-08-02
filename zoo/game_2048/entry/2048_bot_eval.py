@@ -15,7 +15,7 @@ config = EasyDict(dict(
     replay_name_suffix='bot',
     replay_path=None,
     act_scale=True,
-    channel_last=True,
+    channel_last=False,
     obs_type='raw_board',  # options=['raw_board', 'raw_encoded_board', 'dict_encoded_board']
     reward_type='raw',  # options=['raw', 'merged_tiles_plus_log_max_tile_num']
     reward_normalize=False,

@@ -11,7 +11,7 @@ each_dim_disc_size = 4  # thus the total discrete action number is 4**4=256
 K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = None
-model_update_ratio = 0.25
+replay_ratio = 0.25
 batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
@@ -20,8 +20,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
-    exp_name=
-    f'data_sez_ctree/bipedalwalker_cont_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-mur{model_update_ratio}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez/bipedalwalker_cont_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id='BipedalWalker-v3',
@@ -47,6 +46,8 @@ bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
             res_connection_in_dynamics=True,
             norm_type='BN', 
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=200,
@@ -63,7 +64,7 @@ bipedalwalker_cont_disc_sampled_efficientzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        model_update_ratio=model_update_ratio,
+        replay_ratio=replay_ratio,
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -101,4 +102,4 @@ if __name__ == "__main__":
         """
         from lzero.entry import train_muzero_with_gym_env as train_muzero
 
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

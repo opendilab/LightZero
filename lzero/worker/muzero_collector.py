@@ -80,6 +80,7 @@ class MuZeroCollector(ISerialCollector):
             self._tb_logger = None
 
         self.policy_config = policy_config
+        self.collect_with_pure_policy = self.policy_config.collect_with_pure_policy
 
         self.reset(policy, env)
 
@@ -210,7 +211,7 @@ class MuZeroCollector(ISerialCollector):
         if self.policy_config.use_priority:
             # Calculate priorities. The priorities are the L1 losses between the predicted
             # values and the search values. We use 'none' as the reduction parameter, which
-            # means the loss is calculated for each element individually, instead of being summed or averaged. 
+            # means the loss is calculated for each element individually, instead of being summed or averaged.
             # A small constant (1e-6) is added to the results to avoid zero priorities. This
             # is done because zero priorities could potentially cause issues in some scenarios.
             pred_values = torch.from_numpy(np.array(pred_values_lst[i])).to(self.policy_config.device).float().view(-1)
@@ -304,7 +305,8 @@ class MuZeroCollector(ISerialCollector):
     def collect(self,
                 n_episode: Optional[int] = None,
                 train_iter: int = 0,
-                policy_kwargs: Optional[dict] = None) -> List[Any]:
+                policy_kwargs: Optional[dict] = None,
+                collect_with_pure_policy: bool = False) -> List[Any]:
         """
         Overview:
             Collect `n_episode` episodes of data with policy_kwargs, trained for `train_iter` iterations.
@@ -312,9 +314,11 @@ class MuZeroCollector(ISerialCollector):
             - n_episode (:obj:`Optional[int]`): Number of episodes to collect.
             - train_iter (:obj:`int`): Number of training iterations completed so far.
             - policy_kwargs (:obj:`Optional[dict]`): Additional keyword arguments for the policy.
+            - collect_with_pure_policy (:obj:`bool`): Whether to collect data using pure policy without MCTS.
         Returns:
             - return_data (:obj:`List[Any]`): Collected data in the form of a list.
         """
+        # TODO: collect_with_pure_policy as a separate collector
         if n_episode is None:
             if self._default_n_episode is None:
                 raise RuntimeError("Please specify collect n_episode")
@@ -389,6 +393,8 @@ class MuZeroCollector(ISerialCollector):
 
         ready_env_id = set()
         remain_episode = n_episode
+        if collect_with_pure_policy:
+            temp_visit_list = [0.0 for i in range(self._env.action_space.n)]
 
         while True:
             with self._timer:
@@ -407,64 +413,75 @@ class MuZeroCollector(ISerialCollector):
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
                     chance_dict = {env_id: chance_dict[env_id] for env_id in ready_env_id}
-                    chance = [chance_dict[env_id] for env_id in ready_env_id]
 
                 stack_obs = to_ndarray(stack_obs)
-
+                # return stack_obs shape: [B, S*C, W, H] e.g. [8, 4*1, 96, 96]
                 stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
-
-                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device).float()
+                stack_obs = torch.from_numpy(stack_obs).to(self.policy_config.device)
 
                 # ==============================================================
-                # policy forward
+                # Key policy forward step
                 # ==============================================================
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon)
+                # print(f'ready_env_id:{ready_env_id}')
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
 
-                actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
-                distributions_dict_no_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
+                # Extract relevant policy outputs
+                actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
+                value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
+                pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
+
                 if self.policy_config.sampled_algo:
-                    root_sampled_actions_dict_no_env_id = {
-                        k: v['root_sampled_actions']
-                        for k, v in policy_output.items()
+                    root_sampled_actions_dict_with_env_id = {
+                        k: v['root_sampled_actions'] for k, v in policy_output.items()
                     }
-                value_dict_no_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
-                pred_value_dict_no_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
-                visit_entropy_dict_no_env_id = {
-                    k: v['visit_count_distribution_entropy']
-                    for k, v in policy_output.items()
-                }
 
-                if self.policy_config.gumbel_algo:
-                    improved_policy_dict_no_env_id = {k: v['improved_policy_probs'] for k, v in policy_output.items()}
-                    completed_value_no_env_id = {
-                        k: v['roots_completed_value']
-                        for k, v in policy_output.items()
-                    }
-                # TODO(pu): subprocess
+                if not collect_with_pure_policy:
+                    distributions_dict_with_env_id = {k: v['visit_count_distributions'] for k, v in
+                                                      policy_output.items()}
+                    visit_entropy_dict_with_env_id = {k: v['visit_count_distribution_entropy'] for k, v in
+                                                      policy_output.items()}
+
+                    if self.policy_config.gumbel_algo:
+                        improved_policy_dict_with_env_id = {k: v['improved_policy_probs'] for k, v in
+                                                            policy_output.items()}
+                        completed_value_with_env_id = {k: v['roots_completed_value'] for k, v in policy_output.items()}
+
+                # Initialize dictionaries to store results
                 actions = {}
-                distributions_dict = {}
-                if self.policy_config.sampled_algo:
-                    root_sampled_actions_dict = {}
                 value_dict = {}
                 pred_value_dict = {}
-                visit_entropy_dict = {}
-                if self.policy_config.gumbel_algo:
-                    improved_policy_dict = {}
-                    completed_value_dict = {}
-                for index, env_id in enumerate(ready_env_id):
-                    actions[env_id] = actions_no_env_id.pop(index)
-                    distributions_dict[env_id] = distributions_dict_no_env_id.pop(index)
+
+                if not collect_with_pure_policy:
+                    distributions_dict = {}
+                    visit_entropy_dict = {}
+
                     if self.policy_config.sampled_algo:
-                        root_sampled_actions_dict[env_id] = root_sampled_actions_dict_no_env_id.pop(index)
-                    value_dict[env_id] = value_dict_no_env_id.pop(index)
-                    pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
-                    visit_entropy_dict[env_id] = visit_entropy_dict_no_env_id.pop(index)
+                        root_sampled_actions_dict = {}
+
                     if self.policy_config.gumbel_algo:
-                        improved_policy_dict[env_id] = improved_policy_dict_no_env_id.pop(index)
-                        completed_value_dict[env_id] = completed_value_no_env_id.pop(index)
+                        improved_policy_dict = {}
+                        completed_value_dict = {}
+
+                # Populate the result dictionaries
+                for env_id in ready_env_id:
+                    actions[env_id] = actions_with_env_id.pop(env_id)
+                    value_dict[env_id] = value_dict_with_env_id.pop(env_id)
+                    pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
+
+                    if not collect_with_pure_policy:
+                        distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
+
+                        if self.policy_config.sampled_algo:
+                            root_sampled_actions_dict[env_id] = root_sampled_actions_dict_with_env_id.pop(env_id)
+
+                        visit_entropy_dict[env_id] = visit_entropy_dict_with_env_id.pop(env_id)
+
+                        if self.policy_config.gumbel_algo:
+                            improved_policy_dict[env_id] = improved_policy_dict_with_env_id.pop(env_id)
+                            completed_value_dict[env_id] = completed_value_with_env_id.pop(env_id)
 
                 # ==============================================================
-                # Interact with env.
+                # Interact with the environment
                 # ==============================================================
                 timesteps = self._env.step(actions)
 
@@ -482,15 +499,19 @@ class MuZeroCollector(ISerialCollector):
                         continue
                     obs, reward, done, info = timestep.obs, timestep.reward, timestep.done, timestep.info
 
-                    if self.policy_config.sampled_algo:
-                        game_segments[env_id].store_search_stats(
-                            distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
-                        )
-                    elif self.policy_config.gumbel_algo:
-                        game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id],
-                                                                 improved_policy=improved_policy_dict[env_id])
+                    if collect_with_pure_policy:
+                        game_segments[env_id].store_search_stats(temp_visit_list, 0)
                     else:
-                        game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
+                        if self.policy_config.sampled_algo:
+                            game_segments[env_id].store_search_stats(
+                                distributions_dict[env_id], value_dict[env_id], root_sampled_actions_dict[env_id]
+                            )
+                        elif self.policy_config.gumbel_algo:
+                            game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id],
+                                                                     improved_policy=improved_policy_dict[env_id])
+                        else:
+                            game_segments[env_id].store_search_stats(distributions_dict[env_id], value_dict[env_id])
+
                     # append a transition tuple, including a_t, o_{t+1}, r_{t}, action_mask_{t}, to_play_{t}
                     # in ``game_segments[env_id].init``, we have appended o_{t} in ``self.obs_segment``
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
@@ -516,17 +537,22 @@ class MuZeroCollector(ISerialCollector):
                     else:
                         dones[env_id] = done
 
-                    visit_entropies_lst[env_id] += visit_entropy_dict[env_id]
-                    if self.policy_config.gumbel_algo:
-                        completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
+                    if not collect_with_pure_policy:
+                        visit_entropies_lst[env_id] += visit_entropy_dict[env_id]
+                        if self.policy_config.gumbel_algo:
+                            completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
 
                     eps_steps_lst[env_id] += 1
+                    if self._policy.get_attribute('cfg').type == 'unizero':
+                        # only for UniZero now
+                        self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
+
                     total_transitions += 1
 
                     if self.policy_config.use_priority:
                         pred_values_lst[env_id].append(pred_value_dict[env_id])
                         search_values_lst[env_id].append(value_dict[env_id])
-                        if self.policy_config.gumbel_algo:
+                        if self.policy_config.gumbel_algo and not collect_with_pure_policy:
                             improved_policy_lst[env_id].append(improved_policy_dict[env_id])
 
                     # append the newest obs
@@ -549,7 +575,7 @@ class MuZeroCollector(ISerialCollector):
                         priorities = self._compute_priorities(env_id, pred_values_lst, search_values_lst)
                         pred_values_lst[env_id] = []
                         search_values_lst[env_id] = []
-                        if self.policy_config.gumbel_algo:
+                        if self.policy_config.gumbel_algo and not collect_with_pure_policy:
                             improved_policy_lst[env_id] = []
 
                         # the current game_segments become last_game_segment
@@ -569,16 +595,17 @@ class MuZeroCollector(ISerialCollector):
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
-                    self._total_episode_count += 1
                     reward = timestep.info['eval_episode_return']
                     info = {
                         'reward': reward,
                         'time': self._env_info[env_id]['time'],
                         'step': self._env_info[env_id]['step'],
-                        'visit_entropy': visit_entropies_lst[env_id] / eps_steps_lst[env_id],
                     }
-                    if self.policy_config.gumbel_algo:
-                        info['completed_value'] = completed_value_lst[env_id] / eps_steps_lst[env_id]
+                    if not collect_with_pure_policy:
+                        info['visit_entropy'] = visit_entropies_lst[env_id] / eps_steps_lst[env_id]
+                        if self.policy_config.gumbel_algo:
+                            info['completed_value'] = completed_value_lst[env_id] / eps_steps_lst[env_id]
+
                     collected_episode += 1
                     self._episode_info.append(info)
 
@@ -650,7 +677,8 @@ class MuZeroCollector(ISerialCollector):
 
                     # log
                     self_play_moves_max = max(self_play_moves_max, eps_steps_lst[env_id])
-                    self_play_visit_entropy.append(visit_entropies_lst[env_id] / eps_steps_lst[env_id])
+                    if not collect_with_pure_policy:
+                        self_play_visit_entropy.append(visit_entropies_lst[env_id] / eps_steps_lst[env_id])
                     self_play_moves += eps_steps_lst[env_id]
                     self_play_episodes += 1
 
@@ -660,10 +688,8 @@ class MuZeroCollector(ISerialCollector):
                     visit_entropies_lst[env_id] = 0
 
                     # Env reset is done by env_manager automatically
-                    self._policy.reset([env_id])
+                    self._policy.reset([env_id])  # NOTE: reset the policy for the env_id. Default reset_init_data=True.
                     self._reset_stat(env_id)
-                    # TODO(pu): subprocess mode, when n_episode > self._env_num, occasionally the ready_env_id=()
-                    # and the stack_obs is np.array(None, dtype=object)
                     ready_env_id.remove(env_id)
 
             if collected_episode >= n_episode:
@@ -676,11 +702,6 @@ class MuZeroCollector(ISerialCollector):
                     } for i in range(len(self.game_segment_pool))
                 ]
                 self.game_segment_pool.clear()
-                # for i in range(len(self.game_segment_pool)):
-                #     print(self.game_segment_pool[i][0].obs_segment.__len__())
-                #     print(self.game_segment_pool[i][0].reward_segment)
-                # for i in range(len(return_data[0])):
-                #     print(return_data[0][i].reward_segment)
                 break
 
         collected_duration = sum([d['time'] for d in self._episode_info])
@@ -712,7 +733,10 @@ class MuZeroCollector(ISerialCollector):
             envstep_count = sum([d['step'] for d in self._episode_info])
             duration = sum([d['time'] for d in self._episode_info])
             episode_reward = [d['reward'] for d in self._episode_info]
-            visit_entropy = [d['visit_entropy'] for d in self._episode_info]
+            if not self.collect_with_pure_policy:
+                visit_entropy = [d['visit_entropy'] for d in self._episode_info]
+            else:
+                visit_entropy = [0.0]
             if self.policy_config.gumbel_algo:
                 completed_value = [d['completed_value'] for d in self._episode_info]
             self._total_duration += duration
@@ -731,7 +755,6 @@ class MuZeroCollector(ISerialCollector):
                 'total_episode_count': self._total_episode_count,
                 'total_duration': self._total_duration,
                 'visit_entropy': np.mean(visit_entropy),
-                # 'each_reward': episode_reward,
             }
             if self.policy_config.gumbel_algo:
                 info['completed_value'] = np.mean(completed_value)

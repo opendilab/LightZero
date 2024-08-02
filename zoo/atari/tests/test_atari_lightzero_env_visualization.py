@@ -4,7 +4,7 @@ from test_atari_sampled_efficientzero_config import create_config, main_config
 from gym.wrappers import RecordVideo
 
 @pytest.mark.envtest
-class TestAtariLightZeroEnvVisualization:
+class TestAtariEnvLightZeroVisualization:
 
     def test_naive_env(self):
         import gym, random

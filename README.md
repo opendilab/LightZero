@@ -26,14 +26,17 @@
 [![GitHub pulls](https://img.shields.io/github/issues-pr/opendilab/LightZero)](https://github.com/opendilab/LightZero/pulls)
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
+[![discord badge](https://dcbadge.vercel.app/api/server/dkZS2JF56X?style=flat)](https://discord.gg/dkZS2JF56X)
 
-Updated on 2024.02.08 LightZero-v0.0.4
+Updated on 2024.07.12 LightZero-v0.1.0
 
-> LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL). 
+English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Documentation](https://opendilab.github.io/LightZero) | [LightZero Paper](https://arxiv.org/abs/2310.08348) | [🔥UniZero Paper](https://arxiv.org/abs/2406.10667) | [🔥ReZero Paper](https://arxiv.org/abs/2404.16364)
 
-English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Paper](https://arxiv.org/pdf/2310.08348.pdf)
+> LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL).
+> For any questions about LightZero, you can consult the RAG-based Q&A assistant: [ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal).
 
-## Background
+
+## 🔍 Background
 
 The integration of Monte Carlo Tree Search and Deep Reinforcement Learning,
 exemplified by AlphaZero and MuZero,
@@ -42,9 +45,9 @@ This advanced methodology has also made significant strides in scientific domain
 The following is an overview of the historical evolution of the Monte Carlo Tree Search algorithm series:
 ![pipeline](assets/mcts_rl_evolution_overview.png)
 
-## Overview
+## 🎨 Overview
 
-**LightZero** is an open-source algorithm toolkit that combines MCTS and RL for PyTorch. It provides support for a range of MCTS-based RL algorithms and applications with the following advantages:
+**LightZero** is an open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Reinforcement Learning (RL) for PyTorch. It supports a range of MCTS-based RL algorithms and applications, offering several key advantages:
 - Lightweight.
 - Efficient.
 - Easy-to-understand.
@@ -62,6 +65,7 @@ For further details, please refer to [Features](#features), [Framework Structure
   - [Integrated Algorithms](#integrated-algorithms)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
+- [Documentation](#documentation)
 - [Benchmark](#benchmark)
 - [Awesome-MCTS Notes](#awesome-mcts-notes)
   - [Paper Notes](#paper-notes)
@@ -74,7 +78,7 @@ For further details, please refer to [Features](#features), [Framework Structure
 - [Acknowledgments](#acknowledgments)
 - [License](#license)
 
-### Features
+### 💥 Features
 
 **Lightweight**: LightZero integrates multiple MCTS algorithm families and can solve decision-making problems with various attributes in a lightweight framework. The algorithms and environments LightZero implemented can be found [here](#integrated-algorithms).
 
@@ -82,7 +86,7 @@ For further details, please refer to [Features](#features), [Framework Structure
 
 **Easy-to-understand**: LightZero provides detailed documentation and algorithm framework diagrams for all integrated algorithms to help users understand the algorithm's core and compare the differences and similarities between algorithms under the same paradigm. LightZero also provides function call graphs and network structure diagrams for algorithm code implementation, making it easier for users to locate critical code. All the documentation can be found [here](#paper-notes).
 
-### Framework Structure
+### 🧩 Framework Structure
 
 [comment]: <> (<p align="center">)
 
@@ -109,7 +113,7 @@ The above picture is the framework pipeline of LightZero. We briefly introduce t
 
 For the file structure of LightZero, please refer to [lightzero_file_structure](https://github.com/opendilab/LightZero/blob/main/assets/lightzero_file_structure.svg).
 
-### Integrated Algorithms
+### 🎁 Integrated Algorithms
 LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of MCTS algorithms (sometimes combined with cython and cpp), including:
 - [AlphaZero](https://www.science.org/doi/10.1126/science.aar6404)
 - [MuZero](https://arxiv.org/abs/1911.08265)
@@ -117,25 +121,31 @@ LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of 
 - [Stochastic MuZero](https://openreview.net/pdf?id=X6D9bAHhBQ1)
 - [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Gumbel MuZero](https://openreview.net/pdf?id=bERaNdoegnO&)
+- [ReZero](https://arxiv.org/abs/2404.16364)
+- [UniZero](https://arxiv.org/abs/2406.10667)
 
 The environments and algorithms currently supported by LightZero are shown in the table below:
 
-| Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | 
-|---------------| --------- | ------ |-------------| ------------------ | ---------- |----------------|
-| TicTacToe     | ✔       | ✔      | 🔒           | 🔒                | ✔          | 🔒             |
-| Gomoku        | ✔       | ✔      | 🔒          | 🔒               | ✔          | 🔒             |
-| Connect4      | ✔       | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |
-| 2048          | ✔       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |
-| Chess         | 🔒       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
-| Go            | 🔒       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
-| CartPole      | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
-| Pendulum      | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
-| LunarLander   | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
-| BipedalWalker | ---       | ✔      | ✔           | ✔                | ✔          | 🔒              |
-| Atari         | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
-| MuJoCo        | ---       | ✔     | ✔          | ✔                | 🔒         | 🔒               |
-| MiniGrid      | ---       | ✔     | ✔          | ✔               | 🔒         | 🔒             |
-| Bsuite        | ---       | ✔     | ✔          | ✔               | 🔒         | 🔒             |
+
+| Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | UniZero |ReZero |
+|---------------| -------- | ------ |-------------| ------------------ | ---------- |----------------|---------------|----------------|
+| TicTacToe     | ✔      | ✔      | 🔒           | 🔒                | ✔          | 🔒             |✔|🔒             |
+| Gomoku        | ✔      | ✔      | 🔒          | 🔒               | ✔          | 🔒             |✔|✔          |
+| Connect4      | ✔      | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |✔|✔          |
+| 2048          | ---       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |✔|🔒             |
+| Chess         | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |🔒|🔒             |
+| Go            | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |🔒|🔒             |
+| CartPole      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|✔             |
+| Pendulum      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |🔒|🔒             |
+| LunarLander   | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|🔒             |
+| BipedalWalker | ---      | ✔      | ✔           | ✔                | ✔          | 🔒              |🔒|🔒             |
+| Atari         | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|✔          |
+| MuJoCo        | ---      | ✔     | ✔          | ✔                | 🔒         | 🔒               |🔒|🔒             |
+| MiniGrid      | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
+| Bsuite        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
+| Memory        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
+| SumToThree (billiards) | ---      | 🔒     | 🔒          | ✔               | 🔒         | 🔒             |🔒|🔒             |
+
 
 <sup>(1): "✔" means that the corresponding item is finished and well-tested.</sup>
 
@@ -144,7 +154,7 @@ The environments and algorithms currently supported by LightZero are shown in th
 <sup>(3): "---" means that this algorithm doesn't support this environment.</sup>
 
 
-## Installation
+## ⚙️ Installation
 
 You can install the latest LightZero in development from the GitHub source codes with the following command:
 
@@ -158,7 +168,7 @@ Kindly note that LightZero currently supports compilation only on `Linux` and `m
 We are actively working towards extending this support to the `Windows` platform. 
 Your patience during this transition is greatly appreciated.
 
-## Installation with Docker
+### Installation with Docker
 
 We also provide a Dockerfile that sets up an environment with all dependencies needed to run the LightZero library. This Docker image is based on Ubuntu 20.04 and installs Python 3.8, along with other necessary tools and libraries.
 Here's how to use our Dockerfile to build a Docker image, run a container from this image, and execute LightZero code inside the container.
@@ -184,7 +194,7 @@ Here's how to use our Dockerfile to build a Docker image, run a container from t
 
 [comment]: <> (- [AlphaGo Zero]&#40;https://www.nature.com/articles/nature24270&#41; )
 
-## Quick Start
+## 🚀 Quick Start
 
 Train a MuZero agent to play [CartPole](https://gymnasium.farama.org/environments/classic_control/cart_pole/):
 
@@ -207,9 +217,30 @@ cd LightZero
 python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 ```
 
-## Benchmark
+Train a UniZero agent to play [Pong](http
+g/):
 
-<details open><summary>Click to collapse</summary>
+```bash
+cd LightZero
+python3 -u zoo/atari/config/atari_unizero_config.py
+```
+
+## 📚 Documentation
+
+The LightZero documentation can be found [here](https://opendilab.github.io/LightZero/). It contains tutorials and the API reference.
+
+For those interested in customizing environments and algorithms, we provide relevant guides:
+
+- [Customize Environments](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/envs/customize_envs.md)
+- [Customize Algorithms](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/algos/customize_algos.md)
+- [How to Set Configuration Files?](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/config/config.md)
+- [Logging and Monitoring System](https://github.com/opendilab/LightZero/blob/main/docs/source//tutorials/logs/logs.md)
+
+Should you have any questions, feel free to contact us for support.
+
+## 📊 Benchmark
+
+<details><summary>Click to expand</summary>
 
 - Below are the benchmark results of [AlphaZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/alphazero.py) and [MuZero](https://github.com/opendilab/LightZero/blob/main/lzero/policy/muzero.py) on three board games: [TicTacToe](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/tictactoe/envs/tictactoe_env.py), [Connect4](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/connect4/envs/connect4_env.py), [Gomoku](https://github.com/opendilab/LightZero/blob/main/zoo/board_games/gomoku/envs/gomoku_env.py).
 <p align="center">
@@ -264,7 +295,7 @@ and two MuJoCo continuous action space games: [Hopper-v3](https://github.com/ope
 </details>
 
 
-## Awesome-MCTS Notes
+## 📝 Awesome-MCTS Notes
 
 ### Paper Notes
 The following are the detailed paper notes (in Chinese) of the above algorithms:
@@ -282,6 +313,8 @@ The following are the detailed paper notes (in Chinese) of the above algorithms:
 
 </details>
 
+You can also refer to the relevant Zhihu column (in Chinese): [In-depth Analysis of MCTS+RL Frontier Theories and Applications](https://www.zhihu.com/column/c_1764308735227662336).
+
 ### Algo. Overview
 
 The following are the overview MCTS principle diagrams of the above algorithms:
@@ -290,10 +323,11 @@ The following are the overview MCTS principle diagrams of the above algorithms:
 
 - [MCTS](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/mcts_overview.pdf)
 - [AlphaZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/alphazero_overview.pdf)
-- [MuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/muzero_overview.pdf)
-- [EfficientZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/efficientzero_overview.pdf)
-- [SampledMuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/sampled_muzero_overview.pdf)
-- [GumbelMuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/gumbel_muzero_overview.pdf)
+- [MuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/muzero_overview.png)
+- [EfficientZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/efficientzero_overview.png)
+- [SampledMuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/sampled_muzero_overview.png)
+- [GumbelMuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/gumbel_muzero_overview.png)
+- [StochasticMuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/stochastic_muzero_overview.png)
 
 </details>
 
@@ -326,6 +360,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 - [2022 Online and Offline Reinforcement Learning by Planning with a Learned Model](https://arxiv.org/abs/2104.06294)
 - [2021 Vector Quantized Models for Planning](https://arxiv.org/abs/2106.04615)
 - [2021 Muesli: Combining Improvements in Policy Optimization. ](https://arxiv.org/abs/2104.06159)
+
 #### MCTS Analysis
 - [2020 Monte-Carlo Tree Search as Regularized Policy Optimization](https://arxiv.org/abs/2007.12509)
 - [2021 Self-Consistent Models and Values](https://arxiv.org/abs/2110.12840)
@@ -374,6 +409,14 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - ExpEnv: USPTO datasets
   - [Code](https://github.com/binghong-ml/retro_star)
 #### ICLR
+- [The Update Equivalence Framework for Decision-Time Planning](https://openreview.net/forum?id=JXGph215fL) 2024
+  - Samuel Sokota, Gabriele Farina, David J Wu, Hengyuan Hu, Kevin A. Wang, J Zico Kolter, Noam Brown
+  - Key: imperfect-information games, search, decision-time planning, update equivalence
+  - ExpEnv: Hanabi, 3x3 Abrupt Dark Hex and Phantom Tic-Tac-Toe
+- [Efficient Multi-agent Reinforcement Learning by Planning](https://openreview.net/forum?id=CpnKq3UJwp) 2024
+  - Qihan Liu, Jianing Ye, Xiaoteng Ma, Jun Yang, Bin Liang, Chongjie Zhang
+  - Key: multi-agent reinforcement learning, planning, multi-agent MCTS
+  - ExpEnv: SMAC, LunarLander, MuJoCo, and Google Research Football
 - [Become a Proficient Player with Limited Data through Watching Pure Videos](https://openreview.net/pdf?id=Sy-o2N0hF4f) 2023
   - Weirui Ye, Yunsheng Zhang, Pieter Abbeel, Yang Gao
   - Key: pre-training from action-free videos, forward-inverse cycle consistency (FICC) objective based on vector quantization, pre-training phase, fine-tuning phase.
@@ -442,6 +485,10 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - Yangqing Fu, Ming Sun, Buqing Nie, Yue Gao
   - Key: probability tree state abstraction, transitivity and aggregation error bound
   - ExpEnv: Atari, CartPole, LunarLander, Gomoku
+- [Spending Thinking Time Wisely: Accelerating MCTS with Virtual Expansions](https://openreview.net/pdf?id=B_LdLljS842) 2022
+  - Weirui Ye, Pieter Abbeel, Yang Gao
+  - Key: trade off computation versus performancem, virtual expansions, spend thinking time adaptively.
+  - ExpEnv: Atari, 9x9 Go
 - [Planning for Sample Efficient Imitation Learning](https://openreview.net/forum?id=BkN5UoAqF7) 2022
   - Zhao-Heng Yin, Weirui Ye, Qifeng Chen, Yang Gao
   - Key: Behavioral Cloning，Adversarial Imitation Learning (AIL)，MCTS-based RL.
@@ -461,12 +508,12 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - ExpEnv: synthetic functions for nonlinear optimization, reinforcement learning problems in MuJoCo locomotion environments, and optimization problems in Neural Architecture Search (NAS).
 - [Monte Carlo Tree Search based Variable Selection for High Dimensional Bayesian Optimization](https://openreview.net/pdf?id=SUzPos_pUC) 2022
   - Lei Song∗ , Ke Xue∗ , Xiaobin Huang, Chao Qian
-  - Key:  a low-dimensional subspace via MCTS, optimizes in the subspace with any Bayesian optimization algorithm.
+  - Key: a low-dimensional subspace via MCTS, optimizes in the subspace with any Bayesian optimization algorithm.
   - ExpEnv: NAS-bench problems and MuJoCo locomotion
 - [Monte Carlo Tree Search With Iteratively Refining State Abstractions](https://proceedings.neurips.cc/paper/2021/file/9b0ead00a217ea2c12e06a72eec4923f-Paper.pdf) 2021
   - Samuel Sokota, Caleb Ho, Zaheen Ahmad, J. Zico Kolter
   - Key: stochastic environments, Progressive widening, abstraction refining
-  - ExpEnv:  Blackjack, Trap, five by five Go.
+  - ExpEnv: Blackjack, Trap, five by five Go.
 - [Deep Synoptic Monte Carlo Planning in Reconnaissance Blind Chess](https://proceedings.neurips.cc/paper/2021/file/215a71a12769b056c3c32e7299f1c5ed-Paper.pdf) 2021
   - Gregory Clark
   - Key: imperfect information, belief state with an unweighted particle filter, a novel stochastic abstraction of information states.
@@ -485,13 +532,17 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - [Code](https://github.com/matthewfaw/mixnmatch)
 
 #### Other Conference or Journal
+- [Learning to Stop: Dynamic Simulation Monte-Carlo Tree Search](https://arxiv.org/pdf/2012.07910.pdf) AAAI 2021.
 - [On Monte Carlo Tree Search and Reinforcement Learning](https://www.jair.org/index.php/jair/article/download/11099/26289/20632) Journal of Artificial Intelligence Research 2017.
 - [Sample-Efficient Neural Architecture Search by Learning Actions for Monte Carlo Tree Search](https://arxiv.org/pdf/1906.06832) IEEE Transactions on Pattern Analysis and Machine Intelligence 2022.
 </details>
 
 
-## Feedback and Contribution
+## 💬 Feedback and Contribution
+
 - [File an issue](https://github.com/opendilab/LightZero/issues/new/choose) on Github
+- Open or participate in our [discussion forum](https://github.com/opendilab/LightZero/discussions)
+- Discuss on LightZero [discord server](https://discord.gg/dkZS2JF56X)
 - Contact our email (opendilab@pjlab.org.cn)
 
 - We appreciate all the feedback and contributions to improve LightZero, both algorithms and system designs. 
@@ -501,19 +552,32 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 [comment]: <> (And `CONTRIBUTING.md` offers some necessary information.)
 
 
-## Citation
+## 🌏 Citation
 ```latex
-@misc{lightzero,
-      title={LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios},
-      author={Yazhe Niu and Yuan Pu and Zhenjie Yang and Xueyan Li and Tong Zhou and Jiyuan Ren and Shuai Hu and Hongsheng Li and Yu Liu},
-      year={2023},
-      eprint={2310.08348},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG}
+@article{niu2024lightzero,
+  title={LightZero: A Unified Benchmark for Monte Carlo Tree Search in General Sequential Decision Scenarios},
+  author={Niu, Yazhe and Pu, Yuan and Yang, Zhenjie and Li, Xueyan and Zhou, Tong and Ren, Jiyuan and Hu, Shuai and Li, Hongsheng and Liu, Yu},
+  journal={Advances in Neural Information Processing Systems},
+  volume={36},
+  year={2024}
+}
+
+@article{pu2024unizero,
+  title={UniZero: Generalized and Efficient Planning with Scalable Latent World Models},
+  author={Pu, Yuan and Niu, Yazhe and Ren, Jiyuan and Yang, Zhenjie and Li, Hongsheng and Liu, Yu},
+  journal={arXiv preprint arXiv:2406.10667},
+  year={2024}
+}
+
+@article{xuan2024rezero,
+  title={ReZero: Boosting MCTS-based Algorithms by Backward-view and Entire-buffer Reanalyze},
+  author={Xuan, Chunyu and Niu, Yazhe and Pu, Yuan and Hu, Shuai and Liu, Yu and Yang, Jing},
+  journal={arXiv preprint arXiv:2404.16364},
+  year={2024}
 }
 ```
 
-## Acknowledgments
+## 💓 Acknowledgments
 
 This project has been developed partially based on the following pioneering works on GitHub repositories.
 We express our profound gratitude for these foundational resources:
@@ -531,7 +595,7 @@ Thanks to all who contributed to this project:
 </a>
 
 
-## License
+## 🏷️ License
 All code within this repository is under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
 <p align="right">(<a href="#top">Back to top</a>)</p>

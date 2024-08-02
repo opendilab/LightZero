@@ -118,10 +118,10 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor.
-        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.
+        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.replay_ratio automatically.
         update_per_collect=None,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
-        model_update_ratio=0.1,
+        replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
@@ -179,6 +179,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         fixed_temperature_value=0.25,
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
+        # (bool) Whether to add noise to roots during reanalyze process.
+        reanalyze_noise=True,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
@@ -246,8 +248,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             init_w = self._cfg.init_w
             self._model.prediction_network.fc_policy_head.mu.weight.data.uniform_(-init_w, init_w)
             self._model.prediction_network.fc_policy_head.mu.bias.data.uniform_(-init_w, init_w)
-            self._model.prediction_network.fc_policy_head.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
             try:
+                self._model.prediction_network.fc_policy_head.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
                 self._model.prediction_network.fc_policy_head.log_sigma_layer.bias.data.uniform_(-init_w, init_w)
             except Exception as exception:
                 logging.warning(exception)
@@ -379,7 +381,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # Note: The following lines are just for logging.
         predicted_value_prefixs = []
         if self._cfg.monitor_extra_statistics:
-            latent_state_list = latent_state.detach().cpu().numpy()
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
@@ -424,10 +425,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             latent_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(
                 network_output
             )
-
-            # transform the scaled value or its categorical representation to its original value,
-            # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
-            original_value = self.inverse_scalar_transform_handle(value)
 
             if self._cfg.model.self_supervised_learning_loss:
                 # ==============================================================
@@ -495,7 +492,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 )
                 predicted_value_prefixs.append(original_value_prefixs_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
-                latent_state_list = np.concatenate((latent_state_list, latent_state.detach().cpu().numpy()))
 
         # ==============================================================
         # the core learn model update step.
@@ -716,7 +712,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             - target_sampled_actions (:obj:`torch.Tensor`): The target sampled actions tensor.
         """
         prob = torch.softmax(policy_logits, dim=-1)
-        dist = Categorical(prob)
 
         # take the init hypothetical step k=unroll_step
         target_normalized_visit_count = target_policy[:, unroll_step]
@@ -726,15 +721,17 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             target_normalized_visit_count, 0,
             torch.nonzero(mask_batch[:, unroll_step]).squeeze(-1)
         )
-        target_dist = Categorical(target_normalized_visit_count_masked)
-        target_policy_entropy = target_dist.entropy().mean()
+
+        target_policy_entropy = -((target_normalized_visit_count_masked + 1e-6) * (
+                    target_normalized_visit_count_masked + 1e-6).log()).sum(-1).mean()
 
         # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim) -> (batch_size,
         # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2) ->  (4, 20, 2)
         target_sampled_actions = child_sampled_actions_batch[:, unroll_step]
 
-        policy_entropy = dist.entropy().mean()
-        policy_entropy_loss = -dist.entropy()
+        entropy = -(prob * prob.log()).sum(-1)
+        policy_entropy = entropy.mean()
+        policy_entropy_loss = -entropy
 
         # Project the sampled-based improved policy back onto the space of representable policies. calculate KL
         # loss (batch_size, num_of_sampled_actions) -> (4,20) target_normalized_visit_count is
@@ -823,6 +820,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         self._collect_model.eval()
         self._collect_mcts_temperature = temperature
         active_collect_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_collect_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
@@ -877,11 +877,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
             roots_sampled_actions = roots.get_sampled_actions()  # {list: 1}->{list:6}
-
-            data_id = [i for i in range(active_collect_env_num)]
-            output = {i: None for i in data_id}
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_collect_env_num)
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
@@ -958,6 +953,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
          """
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_eval_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._eval_model.initial_inference(data)
@@ -1010,12 +1008,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             # ==============================================================
             roots_sampled_actions = roots.get_sampled_actions(
             )  # shape: ``{list: batch_size} ->{list: action_space_size}``
-
-            data_id = [i for i in range(active_eval_env_num)]
-            output = {i: None for i in data_id}
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_eval_env_num)
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]

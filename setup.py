@@ -71,7 +71,7 @@ _LINETRACE = not not os.environ.get('LINETRACE', None)
 
 setup(
     name='LightZero',
-    version='0.0.4',
+    version='0.1.0',
     description='A lightweight and efficient MCTS/AlphaZero/MuZero algorithm toolkits.',
     long_description_content_type='text/markdown',
     author='opendilab',
@@ -111,6 +111,7 @@ setup(
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
         'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
         'Topic :: Scientific/Engineering :: Artificial Intelligence',
     ],
 )

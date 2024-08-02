@@ -109,7 +109,7 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor
         update_per_collect=100,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
-        model_update_ratio=0.1,
+        replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam']
@@ -162,6 +162,8 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
         fixed_temperature_value=0.25,
         # (bool) Whether to use the true chance in MCTS. If False, use the predicted chance.
         use_ture_chance_label_in_chance_encoder=False,
+        # (bool) Whether to add noise to roots during reanalyze process.
+        reanalyze_noise=True,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
@@ -347,7 +349,6 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
         # Note: The following lines are just for debugging.
         predicted_rewards = []
         if self._cfg.monitor_extra_statistics:
-            latent_state_list = latent_state.detach().cpu().numpy()
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
             ).detach().cpu()
@@ -474,7 +475,6 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
                 )
                 predicted_rewards.append(original_rewards_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
-                latent_state_list = np.concatenate((latent_state_list, latent_state.detach().cpu().numpy()))
 
         # ==============================================================
         # the core learn model update step.
@@ -522,17 +522,16 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
 
             td_data = (
                 value_priority,
-                target_reward.detach().cpu().numpy(),
-                target_value.detach().cpu().numpy(),
-                transformed_target_reward.detach().cpu().numpy(),
-                transformed_target_value.detach().cpu().numpy(),
-                target_reward_categorical.detach().cpu().numpy(),
-                target_value_categorical.detach().cpu().numpy(),
-                predicted_rewards.detach().cpu().numpy(),
-                predicted_values.detach().cpu().numpy(),
-                target_policy.detach().cpu().numpy(),
-                predicted_policies.detach().cpu().numpy(),
-                latent_state_list,
+                target_reward,
+                target_value,
+                transformed_target_reward,
+                transformed_target_value,
+                target_reward_categorical,
+                target_value_categorical,
+                predicted_rewards,
+                predicted_values,
+                target_policy,
+                predicted_policies,
             )
 
         return {
@@ -547,20 +546,18 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
             'afterstate_policy_loss': loss_info[6],
             'afterstate_value_loss': loss_info[7],
             'commitment_loss': loss_info[8],
-
+            'target_reward': td_data[1].mean().item(),
+            'target_value': td_data[2].mean().item(),
+            'transformed_target_reward': td_data[3].mean().item(),
+            'transformed_target_value': td_data[4].mean().item(),
+            'predicted_rewards': td_data[7].mean().item(),
+            'predicted_values': td_data[8].mean().item(),
+            'total_grad_norm_before_clip': total_grad_norm_before_clip,
             # ==============================================================
             # priority related
             # ==============================================================
             'value_priority_orig': value_priority,
-            'value_priority': td_data[0].flatten().mean().item(),
-            
-            'target_reward': td_data[1].flatten().mean().item(),
-            'target_value': td_data[2].flatten().mean().item(),
-            'transformed_target_reward': td_data[3].flatten().mean().item(),
-            'transformed_target_value': td_data[4].flatten().mean().item(),
-            'predicted_rewards': td_data[7].flatten().mean().item(),
-            'predicted_values': td_data[8].flatten().mean().item(),
-            'total_grad_norm_before_clip': total_grad_norm_before_clip
+            'value_priority': td_data[0].mean().item(),
         }
 
     def _init_collect(self) -> None:
@@ -610,6 +607,9 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
         self._collect_model.eval()
         self._collect_mcts_temperature = temperature
         active_collect_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_collect_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
@@ -640,12 +640,6 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
-
-            data_id = [i for i in range(active_collect_env_num)]
-            output = {i: None for i in data_id}
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_collect_env_num)
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
@@ -703,6 +697,9 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
         """
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_eval_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
@@ -727,12 +724,6 @@ class StochasticMuZeroPolicy(MuZeroPolicy):
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
-
-            data_id = [i for i in range(active_eval_env_num)]
-            output = {i: None for i in data_id}
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_eval_env_num)
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]

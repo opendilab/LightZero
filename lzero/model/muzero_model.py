@@ -11,7 +11,7 @@ from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
 
-from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork
+from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, FeatureAndGradientHook
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -45,6 +45,7 @@ class MuZeroModel(nn.Module):
         downsample: bool = False,
         norm_type: Optional[str] = 'BN',
         discrete_action_encoding_type: str = 'one_hot',
+        analysis_sim_norm: bool = False,
         *args,
         **kwargs
     ):
@@ -84,8 +85,11 @@ class MuZeroModel(nn.Module):
                 we don't need this module.
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - discrete_action_encoding_type (:obj:`str`): The type of encoding for discrete action. Default sets it to 'one_hot'. options = {'one_hot', 'not_one_hot'}
+            - analysis_sim_norm (:obj:`bool`): Whether to enable analysis within the sim_norm of hidden states in the model, the default setting is False.
         """
         super(MuZeroModel, self).__init__()
+        assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
+
         if isinstance(observation_shape, int) or len(observation_shape) == 1:
             # for vector obs input, e.g. classical control and box2d environments
             # to be compatible with LightZero model/policy, transform to shape: [C, W, H]
@@ -100,8 +104,6 @@ class MuZeroModel(nn.Module):
             self.value_support_size = 1
 
         self.action_space_size = action_space_size
-
-        assert discrete_action_encoding_type in ['one_hot', 'not_one_hot'], discrete_action_encoding_type
         self.discrete_action_encoding_type = discrete_action_encoding_type
         if self.discrete_action_encoding_type == 'one_hot':
             self.action_encoding_dim = action_space_size
@@ -115,20 +117,23 @@ class MuZeroModel(nn.Module):
         self.last_linear_layer_init_zero = last_linear_layer_init_zero
         self.state_norm = state_norm
         self.downsample = downsample
+        self.analysis_sim_norm = analysis_sim_norm
+
+        if observation_shape[1] == 96:
+            latent_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
+        elif observation_shape[1] == 64:
+            latent_size = math.ceil(observation_shape[1] / 8) * math.ceil(observation_shape[2] / 8)
 
         flatten_output_size_for_reward_head = (
-            (reward_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
+            (reward_head_channels * latent_size) if downsample else
             (reward_head_channels * observation_shape[1] * observation_shape[2])
         )
         flatten_output_size_for_value_head = (
-            (value_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
+            (value_head_channels * latent_size) if downsample else
             (value_head_channels * observation_shape[1] * observation_shape[2])
         )
         flatten_output_size_for_policy_head = (
-            (policy_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
+            (policy_head_channels * latent_size) if downsample else
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
 
@@ -140,6 +145,12 @@ class MuZeroModel(nn.Module):
             activation=activation,
             norm_type=norm_type
         )
+        
+        # ====== for analysis ======
+        if self.analysis_sim_norm:
+            self.encoder_hook = FeatureAndGradientHook()
+            self.encoder_hook.setup_hooks(self.representation_network)
+
         self.dynamics_network = DynamicsNetwork(
             observation_shape,
             self.action_encoding_dim,
@@ -171,7 +182,8 @@ class MuZeroModel(nn.Module):
             activation=activation,
             norm_type=norm_type
         )
-
+        
+            
         if self.self_supervised_learning_loss:
             # projection used in EfficientZero
             if self.downsample:
@@ -179,8 +191,7 @@ class MuZeroModel(nn.Module):
                 # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
                 # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
                 # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
-                ceil_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
-                self.projection_input_dim = num_channels * ceil_size
+                self.projection_input_dim = num_channels * latent_size
             else:
                 self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
@@ -449,8 +460,8 @@ class DynamicsNetwork(nn.Module):
 
         self.num_channels = num_channels
         self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
-        self.action_encoding_dim = action_encoding_dim
 
+        self.action_encoding_dim = action_encoding_dim
         self.conv = nn.Conv2d(num_channels, num_channels - self.action_encoding_dim, kernel_size=3, stride=1, padding=1, bias=False)
         
         if norm_type == 'BN':
@@ -520,7 +531,7 @@ class DynamicsNetwork(nn.Module):
         x = self.conv1x1_reward(next_latent_state)
         x = self.norm_reward(x)
         x = self.activation(x)
-        x = x.view(-1, self.flatten_output_size_for_reward_head)
+        x = x.view(x.shape[0], -1)
 
         # use the fully connected layer to predict reward
         reward = self.fc_reward_head(x)

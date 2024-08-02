@@ -84,6 +84,7 @@ def test_mcts():
                 action_space_size=2,
                 categorical_distribution=True,
             ),
+            env_type='not_board_games',
         )
     )
 

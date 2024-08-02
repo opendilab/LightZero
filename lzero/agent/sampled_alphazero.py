@@ -198,9 +198,9 @@ class SampledAlphaZeroAgent:
             new_data = sum(new_data, [])
 
             if self.cfg.policy.update_per_collect is None:
-                # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
+                # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
                 collected_transitions_num = len(new_data)
-                update_per_collect = int(collected_transitions_num * self.cfg.policy.model_update_ratio)
+                update_per_collect = int(collected_transitions_num * self.cfg.policy.replay_ratio)
             replay_buffer.push(new_data, cur_collector_envstep=collector.envstep)
 
             # Learn policy from collected data

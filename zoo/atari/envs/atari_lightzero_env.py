@@ -1,8 +1,8 @@
 import copy
-import sys
-from typing import List, Any
+from typing import List
 
-import gymnasium as gym
+# import gymnasium as gym
+import gym 
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
@@ -13,10 +13,10 @@ from zoo.atari.envs.atari_wrappers import wrap_lightzero
 
 
 @ENV_REGISTRY.register('atari_lightzero')
-class AtariLightZeroEnv(BaseEnv):
+class AtariEnvLightZero(BaseEnv):
     """
     Overview:
-        AtariLightZeroEnv is a derived class from BaseEnv and represents the environment for the Atari LightZero game.
+        AtariEnvLightZero is a derived class from BaseEnv and represents the environment for the Atari LightZero game.
         This class provides the necessary interfaces to interact with the environment, including reset, step, seed,
         close, etc. and manages the environment's properties such as observation_space, action_space, and reward_space.
     Properties:
@@ -35,7 +35,7 @@ class AtariLightZeroEnv(BaseEnv):
         # (str) The type of the environment, here it's Atari.
         env_type='Atari',
         # (tuple) The shape of the observation space, which is a stacked frame of 4 images each of 96x96 pixels.
-        obs_shape=(4, 96, 96),
+        observation_shape=(4, 96, 96),
         # (int) The maximum number of steps in each episode during data collection.
         collect_max_episode_steps=int(1.08e5),
         # (int) The maximum number of steps in each episode during evaluation.
@@ -56,7 +56,8 @@ class AtariLightZeroEnv(BaseEnv):
         # (bool) If True, the rewards are clipped to a certain range, usually between -1 and 1, to reduce variance.
         clip_rewards=True,
         # (bool) If True, the channels of the observation images are placed last (e.g., height, width, channels).
-        channel_last=True,
+        # Default is False, which means the channels are placed first (e.g., channels, height, width).
+        channel_last=False,
         # (bool) If True, the pixel values of the game frames are scaled down to the range [0, 1].
         scale=True,
         # (bool) If True, the game frames are preprocessed by cropping irrelevant parts and resizing to a smaller resolution.
@@ -78,7 +79,7 @@ class AtariLightZeroEnv(BaseEnv):
         Overview:
             Return the default configuration for the Atari LightZero environment.
         Arguments:
-            - cls (:obj:`type`): The class AtariLightZeroEnv.
+            - cls (:obj:`type`): The class AtariEnvLightZero.
         Returns:
             - cfg (:obj:`EasyDict`): The default configuration dictionary.
         """
@@ -123,7 +124,12 @@ class AtariLightZeroEnv(BaseEnv):
         elif hasattr(self, '_seed'):
             self._env.env.seed(self._seed)
 
-        obs = self._env.reset()
+        result = self._env.reset()
+        if isinstance(result, tuple):
+            obs, info = result
+        else:
+            obs = result
+
         self.obs = to_ndarray(obs)
         self._eval_episode_return = 0.
         obs = self.observe()

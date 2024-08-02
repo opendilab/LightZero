@@ -17,8 +17,7 @@ mcts_ctree = False
 # end of the most frequently changed config specified by the user
 # ==============================================================
 gomoku_alphazero_config = dict(
-    exp_name=
-    f'data_az_ctree/gomoku_alphazero_bot-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_az/gomoku_alphazero_bot-mode_rand{prob_random_action_in_bot}_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         board_size=board_size,
         battle_mode='play_with_bot_mode',
@@ -47,6 +46,7 @@ gomoku_alphazero_config = dict(
         # for the creation of simulation env
         simulation_env_id='gomoku',
         simulation_env_config_type='play_with_bot',
+        alphazero_mcts_ctree=mcts_ctree,
         # ==============================================================
         torch_compile=False,
         tensor_float_32=False,

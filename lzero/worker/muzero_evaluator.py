@@ -194,7 +194,8 @@ class MuZeroEvaluator(ISerialEvaluator):
             train_iter: int = -1,
             envstep: int = -1,
             n_episode: Optional[int] = None,
-    ) -> Tuple[bool, Dict[str, Any]]:
+            return_trajectory: bool = False,
+    ) -> Tuple[bool, float]:
         """
         Overview:
             Evaluate the current policy, storing the best policy if it achieves the highest historical reward.
@@ -203,6 +204,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             - train_iter (:obj:`int`): The current training iteration count.
             - envstep (:obj:`int`): The current environment step count.
             - n_episode (:obj:`Optional[int]`): Optional number of evaluation episodes; defaults to the evaluator's setting.
+            - return_trajectory (:obj:`bool`): Return the evaluated trajectory `game_segments` in `episode_info` if True.
         Returns:
             - stop_flag (:obj:`bool`): Indicates whether the training can be stopped based on the stop value.
             - episode_info (:obj:`Dict[str, Any]`): A dictionary containing information about the evaluation episodes.
@@ -257,7 +259,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
             ready_env_id = set()
             remain_episode = n_episode
-
+            eps_steps_lst = np.zeros(env_nums)
             with self._timer:
                 while not eval_monitor.is_finished():
                     # Get current ready env obs.
@@ -281,19 +283,19 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     # policy forward
                     # ==============================================================
-                    policy_output = self._policy.forward(stack_obs, action_mask, to_play)
+                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id)
 
-                    actions_no_env_id = {k: v['action'] for k, v in policy_output.items()}
-                    distributions_dict_no_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
+                    actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
+                    distributions_dict_with_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
                     if self.policy_config.sampled_algo:
-                        root_sampled_actions_dict_no_env_id = {
+                        root_sampled_actions_dict_with_env_id = {
                             k: v['root_sampled_actions']
                             for k, v in policy_output.items()
                         }
 
-                    value_dict_no_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
-                    pred_value_dict_no_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
-                    visit_entropy_dict_no_env_id = {
+                    value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
+                    pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
+                    visit_entropy_dict_with_env_id = {
                         k: v['visit_count_distribution_entropy']
                         for k, v in policy_output.items()
                     }
@@ -306,13 +308,13 @@ class MuZeroEvaluator(ISerialEvaluator):
                     pred_value_dict = {}
                     visit_entropy_dict = {}
                     for index, env_id in enumerate(ready_env_id):
-                        actions[env_id] = actions_no_env_id.pop(index)
-                        distributions_dict[env_id] = distributions_dict_no_env_id.pop(index)
+                        actions[env_id] = actions_with_env_id.pop(env_id)
+                        distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
                         if self.policy_config.sampled_algo:
-                            root_sampled_actions_dict[env_id] = root_sampled_actions_dict_no_env_id.pop(index)
-                        value_dict[env_id] = value_dict_no_env_id.pop(index)
-                        pred_value_dict[env_id] = pred_value_dict_no_env_id.pop(index)
-                        visit_entropy_dict[env_id] = visit_entropy_dict_no_env_id.pop(index)
+                            root_sampled_actions_dict[env_id] = root_sampled_actions_dict_with_env_id.pop(env_id)
+                        value_dict[env_id] = value_dict_with_env_id.pop(env_id)
+                        pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
+                        visit_entropy_dict[env_id] = visit_entropy_dict_with_env_id.pop(env_id)
 
                     # ==============================================================
                     # Interact with env.
@@ -322,13 +324,15 @@ class MuZeroEvaluator(ISerialEvaluator):
                     for env_id, t in timesteps.items():
                         obs, reward, done, info = t.obs, t.reward, t.done, t.info
 
+                        eps_steps_lst[env_id] += 1
+                        if self._policy.get_attribute('cfg').type == 'unizero':
+                            # only for UniZero now
+                            self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
+
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
                             to_play_dict[env_id]
                         )
-
-                        # NOTE: in evaluator, we only need save the ``o_{t+1} = obs['observation']``
-                        # game_segments[env_id].obs_segment.append(to_ndarray(obs['observation']))
 
                         # NOTE: the position of code snippet is very important.
                         # the obs['action_mask'] and obs['to_play'] are corresponding to next action
@@ -394,10 +398,10 @@ class MuZeroEvaluator(ISerialEvaluator):
                                     ]
                                 )
 
+                            eps_steps_lst[env_id] = 0
+
                             # Env reset is done by env_manager automatically.
-                            self._policy.reset([env_id])
-                            # TODO(pu): subprocess mode, when n_episode > self._env_num, occasionally the ready_env_id=()
-                            # and the stack_obs is np.array(None, dtype=object)
+                            self._policy.reset([env_id])  # NOTE: reset the policy for the env_id. Default reset_init_data=True.
                             ready_env_id.remove(env_id)
 
                         envstep_count += 1
@@ -422,7 +426,6 @@ class MuZeroEvaluator(ISerialEvaluator):
             if episode_info is not None:
                 info.update(episode_info)
             self._logger.info(self._logger.get_tabulate_vars_hor(info))
-            # self._logger.info(self._logger.get_tabulate_vars(info))
             for k, v in info.items():
                 if k in ['train_iter', 'ckpt_name', 'each_reward']:
                     continue
@@ -450,4 +453,6 @@ class MuZeroEvaluator(ISerialEvaluator):
             stop_flag, episode_info = objects
 
         episode_info = to_item(episode_info)
+        if return_trajectory:
+            episode_info['trajectory'] = game_segments
         return stop_flag, episode_info

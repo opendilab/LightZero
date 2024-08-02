@@ -9,12 +9,14 @@ class TestTicTacToeEnv:
     def test_self_play_mode(self):
         cfg = EasyDict(
             battle_mode='self_play_mode',
-            channel_last=True,
+            channel_last=False,
             scale=True,
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
-            bot_action_type='v0'
+            bot_action_type='v0',
+            # alphazero_mcts_ctree (bool): If True, the Monte Carlo Tree Search from AlphaZero is used.
+            alphazero_mcts_ctree=False,
         )
         env = TicTacToeEnv(cfg)
         env.reset()
@@ -56,14 +58,14 @@ class TestTicTacToeEnv:
     def test_play_with_bot_mode(self):
         cfg = EasyDict(
             battle_mode='play_with_bot_mode',
-            channel_last=True,
+            channel_last=False,
             scale=True,
-            # channel_last=False,
-            # scale=False,
             agent_vs_human=False,
             prob_random_agent=0,
             prob_expert_agent=0,
-            bot_action_type='v0'
+            bot_action_type='v0',
+            # alphazero_mcts_ctree (bool): If True, the Monte Carlo Tree Search from AlphaZero is used.
+            alphazero_mcts_ctree=False,
         )
         env = TicTacToeEnv(cfg)
         env.reset()

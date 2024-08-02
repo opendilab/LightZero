@@ -11,10 +11,6 @@ from lzero.policy import InverseScalarTransform, to_detach_cpu_numpy
 if TYPE_CHECKING:
     from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as ezs_ctree
 
-# ==============================================================
-# Sampled EfficientZero
-# ==============================================================
-
 
 class SampledEfficientZeroMCTSCtree(object):
     """
@@ -136,7 +132,6 @@ class SampledEfficientZeroMCTSCtree(object):
 
             for simulation_index in range(self._cfg.num_simulations):
                 # In each simulation, we expanded a new node, so in one search, we have ``num_simulations`` num of nodes at most.
-
                 latent_states = []
                 hidden_states_c_reward = []
                 hidden_states_h_reward = []
@@ -152,10 +147,17 @@ class SampledEfficientZeroMCTSCtree(object):
                 MCTS stage 1: Selection
                     Each simulation starts from the internal root state s0, and finishes when the simulation reaches a leaf node s_l.
                 """
-                latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
-                    roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
-                    copy.deepcopy(to_play_batch), self._cfg.model.continuous_action_space
-                )
+                if self._cfg.env_type == 'not_board_games':
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        to_play_batch, self._cfg.model.continuous_action_space
+                    )
+                else:
+                    # the ``to_play_batch`` is only used in board games, here we need to deepcopy it to avoid changing the original data.
+                    latent_state_index_in_search_path, latent_state_index_in_batch, last_actions, virtual_to_play_batch = tree_efficientzero.batch_traverse(
+                        roots, pb_c_base, pb_c_init, discount_factor, min_max_stats_lst, results,
+                        copy.deepcopy(to_play_batch), self._cfg.model.continuous_action_space
+                    )
 
                 # obtain the search horizon for leaf nodes
                 search_lens = results.get_search_len()
@@ -164,14 +166,13 @@ class SampledEfficientZeroMCTSCtree(object):
                     latent_states.append(latent_state_batch_in_search_path[ix][iy])
                     hidden_states_c_reward.append(reward_hidden_state_c_pool[ix][0][iy])
                     hidden_states_h_reward.append(reward_hidden_state_h_pool[ix][0][iy])
-                latent_states = torch.from_numpy(np.asarray(latent_states)).to(device).float()
+                latent_states = torch.from_numpy(np.asarray(latent_states)).to(device)
                 hidden_states_c_reward = torch.from_numpy(np.asarray(hidden_states_c_reward)).to(device).unsqueeze(0)
                 hidden_states_h_reward = torch.from_numpy(np.asarray(hidden_states_h_reward)).to(device).unsqueeze(0)
 
                 if self._cfg.model.continuous_action_space is True:
                     # continuous action
-                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).float()
-
+                    last_actions = torch.from_numpy(np.asarray(last_actions)).to(device)
                 else:
                     # discrete action
                     last_actions = torch.from_numpy(np.asarray(last_actions)).to(device).long()

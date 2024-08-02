@@ -16,7 +16,7 @@ reanalyze_ratio = 0
 # ==============================================================
 
 cartpole_stochastic_muzero_config = dict(
-    exp_name=f'data_stochastic_mz_ctree/cartpole_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_stochastic_mz/cartpole_stochastic_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id='CartPole-v0',
         continuous=False,
@@ -38,7 +38,8 @@ cartpole_stochastic_muzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN', 
         ),
-        mcts_ctree=True,
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
@@ -77,4 +78,4 @@ create_config = cartpole_stochastic_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
