@@ -281,7 +281,7 @@ class MetaDrive(BaseEnv):
 
         reward = 0.0
         reward += self.config["driving_reward"] * (long_now - long_last) * lateral_factor * positive_road
-        reward += self.config["speed_reward"] * (vehicle.speed / vehicle.max_speed) * positive_road
+        reward += self.config["speed_reward"] * (vehicle.speed / vehicle.max_speed_km_h) * positive_road
 
         step_info["step_reward"] = reward
 
