@@ -12,6 +12,7 @@ from .game_buffer_muzero import MuZeroGameBuffer
 
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
+from line_profiler import line_profiler
 
 
 @BUFFER_REGISTRY.register('game_buffer_unizero')
@@ -47,9 +48,16 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         self.game_segment_buffer = []
         self.game_pos_priorities = []
         self.game_segment_game_pos_look_up = []
-        # self.task_id = self._cfg.task_id
         self.sample_type = self._cfg.sample_type  # 'transition' or 'episode'
 
+        if hasattr(self._cfg, 'task_id'):
+            self.task_id = self._cfg.task_id
+            print(f"Task ID is set to {self.task_id}.")
+        else:
+            self.task_id = None
+            print("No task_id found in configuration. Task ID is set to None.")
+
+    #@profile
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
     ) -> List[Any]:
@@ -97,6 +105,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         train_data = [current_batch, target_batch]
         return train_data
 
+    #@profile
     def _make_batch(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
         """
         Overview:
@@ -192,6 +201,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         context = reward_value_context, policy_re_context, policy_non_re_context, current_batch
         return context
 
+    #@profile
     def _prepare_policy_reanalyzed_context(
             self, batch_index_list: List[str], game_segment_list: List[Any], pos_in_game_segment_list: List[str]
     ) -> List[Any]:
@@ -245,6 +255,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         ]
         return policy_re_context
 
+    #@profile
     def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any, action_batch) -> np.ndarray:
         """
         Overview:
@@ -289,7 +300,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # calculate the target value
             # action_batch.shape (32, 10)
             # m_obs.shape torch.Size([352, 3, 64, 64]) 32*11=352
-            m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
+            m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num], task_id=self.task_id)  # NOTE: :self.reanalyze_num
             # =======================================================================
 
             if not model.training:
@@ -368,6 +379,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         return batch_target_policies_re
 
+    #@profile
     def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, action_batch) -> Tuple[
         Any, Any]:
         """
@@ -410,7 +422,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # calculate the target value
             # m_obs.shape torch.Size([352, 3, 64, 64]) 32*11 = 352
-            m_output = model.initial_inference(m_obs, action_batch)
+            m_output = model.initial_inference(m_obs, action_batch, task_id=self.task_id)
             # ======================================================================
 
             if not model.training:
