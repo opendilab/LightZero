@@ -432,21 +432,7 @@ class UniZeroPolicy(MuZeroPolicy):
         losses = self._learn_model.world_model.compute_loss(
             batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle, harmony_s_dict=self.harmony_s_dict
         )
-        # if self.harmony_balance:
-        #     weighted_total_loss = torch.tensor(0., device=self._cfg.device)
-        #     print(f"harmony_loss_names is {self.harmony_loss_names}")
-        #     for loss_name in self.harmony_loss_names:
-        #         if f"{loss_name}_s" in self.harmony_s_dict:
-        #             harmony_s = self.harmony_s_dict.get(f"{loss_name}_s")
-        #             loss_tmp = losses.intermediate_losses.get(loss_name)
-        #             loss_tmp = loss_tmp / torch.exp(harmony_s)
-        #             loss_tmp = loss_tmp + torch.log(torch.exp(harmony_s) + 1)
-        #             print(f"{f'{loss_name}_s' in self.harmony_s_dict}", end=", ")
-        #             print(f"{loss_name}_s is {harmony_s}")
-        #         weighted_total_loss += loss_tmp
-                
-            # weighted_total_loss += self.intermediate_losses['first_step_losses']
-            
+        
         # else:
         weighted_total_loss = losses.loss_total
             

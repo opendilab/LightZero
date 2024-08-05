@@ -1054,17 +1054,7 @@ class WorldModel(nn.Module):
             # Last step loss
             last_step_mask = mask_padding[:, -1]
             last_step_losses[loss_name] = loss_tmp[:, -1][last_step_mask].mean()
-        # if harmony_s_dict is not None:
-        #     print(harmony_s_dict.keys())
-        #     for loss_name, loss_tmp in zip(
-        #             ['loss_obs', 'loss_rewards', 'loss_value', 'loss_policy', 'orig_policy_loss', 'policy_entropy'],
-        #             [loss_obs, loss_rewards, loss_value, loss_policy, orig_policy_loss, policy_entropy]
-        #     ):
-        #         if f"{loss_name}_s" in harmony_s_dict:
-        #             harmony_tmp_val = harmony_s_dict.get(f"{loss_name}_s")
-        #             loss_tmp = loss_tmp / torch.exp(harmony_tmp_val)
-        #             loss_tmp = loss_tmp + torch.log(torch.exp(harmony_tmp_val) + 1) 
-        #             print(f"{loss_name}_s in dict: {f'{loss_name}_s' in harmony_s_dict}, harmony_s: {harmony_tmp_val}")
+
         # Discount reconstruction loss and perceptual loss
         discounted_latent_recon_loss = latent_recon_loss
         discounted_perceptual_loss = perceptual_loss
