@@ -344,10 +344,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
         adaptive_batch_size_for_transition=False,
         # (int) The total batch size for all tasks
         adaptive_total_batch_size=1500,
-        # (Optional[float]) The minimum ratio of the max batch size when adaptive batch size is used
-        min_clamp_ratio_for_adaptive_bs=None,
-        # (Optional[float]) The maximum ratio of the max batch size when adaptive batch size is used
-        max_clamp_ratio_for_adaptive_bs=None,
+        # (float) The temperature for softmax when allocating different weights
+        temperature_for_softmax_list=1.0,
         
 
         # ****** Priority ******
