@@ -96,6 +96,7 @@ class WorldModelOutput:
     logits_policy: torch.FloatTensor
     logits_value: torch.FloatTensor
 
+
 @dataclass
 class WorldModelOutputSoftModulization:
     output_sequence: torch.FloatTensor
@@ -178,10 +179,9 @@ class LossWithIntermediateLosses:
         self.policy_loss_weight = 1.
         self.ends_loss_weight = 0.
         
+        # updated from soft modulization 
         self.task_id = kwargs.get("task_id", None)
         self.obs_soft_module_route_weights = kwargs.get("observation_weights_list", None)
-        
-        
         
         self.latent_recon_loss_weight = latent_recon_loss_weight
         self.perceptual_loss_weight = perceptual_loss_weight

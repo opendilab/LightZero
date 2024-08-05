@@ -224,9 +224,14 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 # (float) The threshold for a dormant neuron.
                 dormant_threshold=0.025,
                 
+                # ******** for soft modulization 
+                # (float) If soft modulization is used
                 use_soft_modulization_head=False,
+                # (int) The number of modules per layer in base policy network when soft modulization is used
                 num_modules_per_layer=4,
+                # (int) The num of layers of the base policy network when soft modulization is used
                 num_layers_for_sm=3,
+                # (int) The embedding MLP numbers before the routing weight is calculated when embedding.
                 gating_embed_mlp_num=2,
             ),
         ),
