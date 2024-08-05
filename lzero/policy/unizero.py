@@ -432,7 +432,6 @@ class UniZeroPolicy(MuZeroPolicy):
             batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle, harmony_s_dict=self.harmony_s_dict
         )
         
-        # else:
         weighted_total_loss = losses.loss_total
             
         for loss_name, loss_value in losses.intermediate_losses.items():
