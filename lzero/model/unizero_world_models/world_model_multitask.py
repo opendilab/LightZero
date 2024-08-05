@@ -134,6 +134,7 @@ class WorldModelMT(nn.Module):
             
         elif self.use_soft_modulization_head:
             print('We use soft_modulization head')
+            # Only observation (dynamics) for soft modulization is used
             for task_id in range(self.task_num):
                 self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
                 self.head_policy_multi_task.append(self.head_policy)
@@ -144,6 +145,7 @@ class WorldModelMT(nn.Module):
                 self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
                 self.head_rewards_multi_task.append(self.head_rewards)
                 
+            # We firstly let the input go forward a Head and then to the base soft connected network.
             self.policy_first_head = Head(max_blocks=self.config.max_blocks, block_mask=self.value_policy_tokens_pattern,
                                           head_module=nn.Sequential(
                                               nn.Linear(self.embed_dim, self.embed_dim),
@@ -177,7 +179,6 @@ class WorldModelMT(nn.Module):
                                                                                  num_module_per_layer=self.num_modules_per_layer, 
                                                                                  num_layers=self.num_layers_for_sm,
                                                                                  last_layer_norm=self.sim_norm)
-            print(f"policy_base_network has layer {len(self.policy_base_network_lists)} 个，每个{len(self.policy_base_network_lists[0])}个")
             self.policy_soft_module_router = SoftModulizationHead(task_num=self.task_num, embed_dim=self.embed_dim, gating_embed_mlp_num=2,
                                                                   base_model_modulelists=self.policy_base_network_lists,
                                                                   base_layers_num=self.num_layers_for_sm, 
@@ -586,16 +587,20 @@ class WorldModelMT(nn.Module):
 
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
         if self.use_soft_modulization_head:
+            
+            # Let x go forward the first head 
             tmp_obs = self.observations_first_head(x, num_steps=num_steps, prev_steps=prev_steps)
             tmp_reward = self.rewards_first_head(x, num_steps=num_steps, prev_steps=prev_steps)
             tmp_policy = self.policy_first_head(x, num_steps=num_steps, prev_steps=prev_steps)
             tmp_value = self.value_first_head(x, num_steps=num_steps, prev_steps=prev_steps)
-            # print(f"四者的shape: {tmp_obs.shape}, {tmp_reward.shape}, {tmp_policy.shape}, {tmp_value.shape}")
+            
+            # Start soft modulization with weight return
             logits_observations, observation_weights_list = self.observations_soft_module_router(tmp_obs, task_id=task_id, return_weight=True)
-            # print(f"task_id {task_id}, len weight list is {len(observation_weight_list)}, weight[0] shape {observation_weight_list[0].shape} weight[1] shape {observation_weight_list[1].shape}")
             # logits_rewards = self.rewards_soft_module_router(tmp_reward, task_id=task_id)
             # logits_policy = self.policy_soft_module_router(tmp_policy, task_id=task_id)
             # logits_value = self.value_soft_module_router(tmp_value, task_id=task_id)
+            
+            # reward, policy, value are still remained independent head network for different tasks. 
             logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
             logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
             logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)

@@ -109,7 +109,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_1-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0722_debug/{len(env_id_list)}games_1-encoder-{norm_type}_trans-ffw-moeV2-expert4_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0722_profile/lineprofile_{len(env_id_list)}games_1-encoder-{norm_type}_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_0730/{len(env_id_list)}games_1-encoder-{norm_type}_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_0803/{len(env_id_list)}games_1-encoder-{norm_type}_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -177,7 +177,7 @@ if __name__ == "__main__":
     num_simulations = 50
     max_env_step = int(1e6)
     reanalyze_ratio = 0.
-    batch_size = [32, 32, 32, 32]
+    batch_size = [128, 128, 128, 128]
     # max_batch_size = 2000
     # batch_size = [int(max_batch_size/len(env_id_list)) for i in range(len(env_id_list))]
     num_unroll_steps = 10
@@ -187,11 +187,11 @@ if __name__ == "__main__":
 
 
     # ======== TODO: only for debug ========
-    collector_env_num = 3
-    n_episode = 3
-    evaluator_env_num = 2
-    num_simulations = 2
-    batch_size = [4, 4, 4, 4]
+    # collector_env_num = 3
+    # n_episode = 3
+    # evaluator_env_num = 2
+    # num_simulations = 2
+    # batch_size = [4, 4, 4, 4]
 
     configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed)
 

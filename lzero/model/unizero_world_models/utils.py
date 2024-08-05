@@ -220,11 +220,16 @@ class SoftModulizationHead(nn.Module):
     """
     Overview:
         SoftModulizationHead is an nn.Module class that implements soft modulization for multi-task reinforcement learning.
+    
     Arguments:
         - task_num (:obj:`int`): The number of tasks.
         - embed_dim (:obj:`int`): The embedding dimension.
+        - gating_embed_mlp_num (:obj:`int`): The number of layers in the MLP for gating embeddings.
+        - base_model_modulelists (:obj:`ModuleList[ModuleList[nn.Module]]`): A list of lists including base model modules.
         - base_layers_num (:obj:`int`): The number of base layers in the model.
+        - base_modules_num (:obj:`int`): The number of base modules.
         - device (:obj:`torch.device`): The device to run computations on.
+        
     """
 
     def __init__(self, 
@@ -232,9 +237,9 @@ class SoftModulizationHead(nn.Module):
                  embed_dim: int, 
                  gating_embed_mlp_num: int,
                  base_model_modulelists, 
-                 base_layers_num: int,
-                 base_modules_num: int, 
-                 device: torch.device
+                 base_layers_num: int = 3,
+                 base_modules_num: int = 4, 
+                 device: torch.device = torch.device("cpu")
         ) -> None:
         super(SoftModulizationHead, self).__init__()
         self.task_num = task_num
@@ -254,22 +259,32 @@ class SoftModulizationHead(nn.Module):
         self.gating_fcs = nn.Sequential(*gating_fc_layer_module)
 
         # Initial gating weight layer
-        self.gating_weight_fc_0 = nn.Linear(embed_dim, task_num * task_num)
+        self.gating_weight_fc_0 = nn.Linear(embed_dim, self.base_modules_num * self.base_modules_num)
+        with torch.no_grad():
+            self.gating_weight_fc_0.weight.zero_()
+            bias_vector = 6 * torch.eye(self.base_modules_num, dtype=torch.float32).reshape(-1)
+            self.gating_weight_fc_0.bias = nn.Parameter(bias_vector)
         # (.., 768) -> (.., 16)
         
         # Conditional gating weight layers
         self.gating_weight_fcs = nn.ModuleList()
         self.gating_weight_cond_fcs = nn.ModuleList()
         for k in range(self.base_layers_num - 2):
-            self.gating_weight_cond_fcs.append(nn.Linear((k + 1) * task_num * task_num, embed_dim))
-            self.gating_weight_fcs.append(nn.Linear(embed_dim, task_num * task_num))
+            gating_weight_cond_fc_layer = nn.Linear((k + 1) * self.base_modules_num * self.base_modules_num, embed_dim)
+            self.gating_weight_cond_fcs.append(gating_weight_cond_fc_layer)
+            gating_weight_fc_layer = nn.Linear(embed_dim, self.base_modules_num * self.base_modules_num)
+            with torch.no_grad():
+                gating_weight_fc_layer.weight.zero_()
+                bias_vector = 6 * torch.eye(self.base_modules_num, dtype=torch.float32).reshape(-1)
+                gating_weight_fc_layer.bias = nn.Parameter(bias_vector)
+            self.gating_weight_fcs.append(gating_weight_fc_layer)
         
         # Cond_weight_fcs [Linear(16, 768), Linear(32, 768), Linear(48, 768)]
         # weight_fcs: [Linear]
         
         # Final gating weight layers
-        self.gating_weight_cond_last = nn.Linear((self.base_layers_num - 1) * task_num * task_num, embed_dim)
-        self.gating_weight_last_fc = nn.Linear(embed_dim, task_num)
+        self.gating_weight_cond_last = nn.Linear((self.base_layers_num - 1) * self.base_modules_num * self.base_modules_num, embed_dim)
+        self.gating_weight_last_fc = nn.Linear(embed_dim, self.base_modules_num)
 
     def forward(self, x: torch.Tensor, task_id: int, 
                 final_norm: Optional[nn.Module]=None, return_weight: bool=False
@@ -277,12 +292,19 @@ class SoftModulizationHead(nn.Module):
         """
         Overview:
             Forward pass for soft modulization.
+        
         Arguments:
             - x (:obj:`torch.Tensor`): Input tensor.
             - task_id (:obj:`int`): ID of the task.
-            - base_model (:obj:`nn.Module`): Base model containing the layers to be modularized.
+            - final_norm (:obj:`Optional[nn.Module]`): Optional normalization layer to be applied at the end.
+            - return_weight (:obj:`bool`): Flag indicating whether to return the weights along with the output.
+        
         Returns:
-            - torch.Tensor: Output tensor after soft modulization.
+            - Union[torch.Tensor, Tuple[torch.Tensor, List[torch.Tensor]]]: Output tensor after soft modulization,
+                or a tuple containing the output tensor and a list of weights if `return_weight` is True.
+        
+        Example:
+        
         """
         # print(f"x.shape:  {x.shape}")
         task_id_vector = torch.zeros(self.task_num).to(self.device)
@@ -298,8 +320,8 @@ class SoftModulizationHead(nn.Module):
         weights = []
         flatten_weights = []
         base_shape = task_embedding.shape[:-1]
-        weight_shape = base_shape + torch.Size([self.task_num, self.task_num])
-        flatten_shape = base_shape + torch.Size([self.task_num * self.task_num])
+        weight_shape = base_shape + torch.Size([self.base_modules_num, self.base_modules_num])
+        flatten_shape = base_shape + torch.Size([self.base_modules_num ** 2])
 
         # Calculate weights between layers
         raw_weight = self.gating_weight_fc_0(F.relu(task_embedding))
@@ -324,9 +346,9 @@ class SoftModulizationHead(nn.Module):
             raw_weight = gating_weight_fc(cond)
             raw_weight = raw_weight.view(weight_shape)
             softmax_weight = F.softmax(raw_weight, dim=-1)
-            # print(f"softmax_weight:  {softmax_weight.shape}")
+            flatten_weight = softmax_weight.view(flatten_shape)
             weights.append(softmax_weight)
-            flatten_weights.append(raw_weight.view(flatten_shape))
+            flatten_weights.append(flatten_weight)            
 
         cond = F.relu(torch.cat(flatten_weights, dim=-1))
         # print(f"cond_weight:  {cond.shape}")
