@@ -1,7 +1,6 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 env_id = 'QbertNoFrameskip-v4'  # You can specify any Atari game here
-# 'QbertNoFrameskip-v4'
 action_space_size = atari_env_action_space_map[env_id]
 
 # ==============================================================
