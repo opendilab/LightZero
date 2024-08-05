@@ -142,14 +142,23 @@ class LossWithIntermediateLosses:
     Returns:
         - None
     """
-    def __init__(self, latent_recon_loss_weight=0, perceptual_loss_weight=0, **kwargs):
+    def __init__(self, latent_recon_loss_weight=0, perceptual_loss_weight=0, harmony_s_dict=None, **kwargs):
         # Ensure that kwargs is not empty
         if not kwargs:
             raise ValueError("At least one loss must be provided")
 
         # Get a reference device from one of the provided losses
         device = next(iter(kwargs.values())).device
-
+        
+        if harmony_s_dict is not None:    
+            loss_obs_harmony_s = harmony_s_dict.get("loss_obs_s", None)
+            loss_rewards_harmony_s = harmony_s_dict.get("loss_rewards_s", None)
+            loss_value_harmony_s = harmony_s_dict.get("loss_value_s", None)
+            loss_policy_harmony_s = harmony_s_dict.get("loss_policy_s", None)
+            loss_ends_harmony_s = harmony_s_dict.get("loss_ends_s", None)
+            latent_recon_loss_harmony_s = harmony_s_dict.get("latent_recon_loss_s", None)
+            perceptual_loss_harmony_s = harmony_s_dict.get("perceptual_loss_s", None)
+            
         # Define the weights for each loss type
         self.obs_loss_weight = 10
         self.reward_loss_weight = 1.
@@ -162,21 +171,27 @@ class LossWithIntermediateLosses:
 
         # Initialize the total loss tensor on the correct device
         self.loss_total = torch.tensor(0., device=device)
+        # Define a dictionary for loss weights and harmony_s variables
+        loss_weights = {
+            'loss_obs': (self.obs_loss_weight, loss_obs_harmony_s),
+            'loss_rewards': (self.reward_loss_weight, loss_rewards_harmony_s),
+            'loss_policy': (self.policy_loss_weight, loss_policy_harmony_s),
+            'loss_value': (self.value_loss_weight, loss_value_harmony_s),
+            'loss_ends': (self.ends_loss_weight, loss_ends_harmony_s),
+            'latent_recon_loss': (self.latent_recon_loss_weight, latent_recon_loss_harmony_s),
+            'perceptual_loss': (self.perceptual_loss_weight, perceptual_loss_harmony_s)
+        }
+
+        # Iterate through kwargs to process the losses
         for k, v in kwargs.items():
-            if k == 'loss_obs':
-                self.loss_total += self.obs_loss_weight * v
-            elif k == 'loss_rewards':
-                self.loss_total += self.reward_loss_weight * v
-            elif k == 'loss_policy':
-                self.loss_total += self.policy_loss_weight * v
-            elif k == 'loss_value':
-                self.loss_total += self.value_loss_weight * v
-            elif k == 'loss_ends':
-                self.loss_total += self.ends_loss_weight * v
-            elif k == 'latent_recon_loss':
-                self.loss_total += self.latent_recon_loss_weight * v
-            elif k == 'perceptual_loss':
-                self.loss_total += self.perceptual_loss_weight * v
+            if k in loss_weights:
+                weight, harmony_weight = loss_weights[k]
+                if harmony_s_dict is None:
+                    self.loss_total += weight * v
+                elif harmony_weight is not None:
+                    self.loss_total += (v / torch.exp(harmony_weight)) + torch.log(torch.exp(harmony_weight) + 1)
+                else:
+                    self.loss_total += weight * v
 
         self.intermediate_losses = {
             k: v if isinstance(v, dict) else (v if isinstance(v, float) else v.item())

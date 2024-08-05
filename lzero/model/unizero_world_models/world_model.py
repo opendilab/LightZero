@@ -850,7 +850,8 @@ class WorldModel(nn.Module):
         return self.keys_values_wm_size_list
 
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None, **kwargs: Any) -> LossWithIntermediateLosses:
-        # Encode observations into latent state representations
+        
+        harmony_s_dict = kwargs.get("harmony_s_dict", None)
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
         # ========= for visual analysis =========
@@ -1069,6 +1070,7 @@ class WorldModel(nn.Module):
         return LossWithIntermediateLosses(
             latent_recon_loss_weight=self.latent_recon_loss_weight,
             perceptual_loss_weight=self.perceptual_loss_weight,
+            harmony_s_dict=harmony_s_dict,
             loss_obs=discounted_loss_obs,
             loss_rewards=discounted_loss_rewards,
             loss_value=discounted_loss_value,
