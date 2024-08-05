@@ -268,6 +268,8 @@ class UniZeroPolicy(MuZeroPolicy):
             # (int) The decay steps from start to end eps.
             decay=int(1e5),
         ),
+        
+        moe_in_transformer=False
     )
 
     def default_model(self) -> Tuple[str, List[str]]:

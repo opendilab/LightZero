@@ -17,7 +17,7 @@ from .slicer import Head
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights, to_device_for_kvcache
-from .utils import WorldModelOutput, quantize_state
+from .utils import WorldModelOutput, WorldModelOutputSoftModulization, quantize_state, SoftModulizationHead
 from .moe import MoeLayer, MultiplicationFeedForward
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -62,7 +62,11 @@ class WorldModelMT(nn.Module):
         self.use_normal_head = config.use_normal_head
         self.use_moe_head = config.use_moe_head
         self.use_softmoe_head = config.use_softmoe_head
-
+        
+        self.use_soft_modulization_head = config.use_soft_modulization_head
+        self.num_modules_per_layer = config.num_modules_per_layer
+        self.num_layers_for_sm = config.num_layers_for_sm
+        self.gating_embed_mlp_num = config.gating_embed_mlp_num
         # Move all modules to the specified device
         print(f"self.config.device: {self.config.device}")
         self.to(self.config.device)
@@ -84,7 +88,7 @@ class WorldModelMT(nn.Module):
 
         # if self.num_experts_in_moe_head == -1:
         assert self.num_experts_in_moe_head > 0
-        if self.use_normal_head:
+        if self.use_normal_head and not self.use_soft_modulization_head:
             print('We use normal head')
             # TODO: Normal Head
             for task_id in range(self.task_num):  # TODO
@@ -103,7 +107,7 @@ class WorldModelMT(nn.Module):
                                                         self.obs_per_embdding_dim,
                                                         self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
                 self.head_observations_multi_task.append(self.head_observations)
-        elif self.use_softmoe_head:
+        elif self.use_softmoe_head and not self.use_soft_modulization_head:
             print(f'We use softmoe head, self.num_experts_in_moe_head is {self.num_experts_in_moe_head}')
             # Dictionary to store SoftMoE instances
             self.soft_moe_instances = {}
@@ -115,7 +119,7 @@ class WorldModelMT(nn.Module):
             self.head_value_multi_task.append(self.head_value)
             self.head_rewards_multi_task.append(self.head_rewards)
             self.head_observations_multi_task.append(self.head_observations)
-        elif self.use_moe_head:
+        elif self.use_moe_head and not self.use_soft_modulization_head:
             print(f'We use moe head, self.num_experts_in_moe_head is {self.num_experts_in_moe_head}')
             # Dictionary to store moe instances
             self.moe_instances = {}
@@ -127,11 +131,74 @@ class WorldModelMT(nn.Module):
             self.head_value_multi_task.append(self.head_value)
             self.head_rewards_multi_task.append(self.head_rewards)
             self.head_observations_multi_task.append(self.head_observations)
+            
+        elif self.use_soft_modulization_head:
+            print('We use soft_modulization head')
+            # Only observation (dynamics) for soft modulization is used
+            for task_id in range(self.task_num):
+                self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
+                self.head_policy_multi_task.append(self.head_policy)
 
+                self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
+                self.head_value_multi_task.append(self.head_value)
 
+                self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
+                self.head_rewards_multi_task.append(self.head_rewards)
+                
+            # We firstly let the input go forward a Head and then to the base soft connected network.
+            self.policy_first_head = Head(max_blocks=self.config.max_blocks, block_mask=self.value_policy_tokens_pattern,
+                                          head_module=nn.Sequential(
+                                              nn.Linear(self.embed_dim, self.embed_dim),
+                                              nn.GELU(approximate="tanh")
+                                          ))
+            self.value_first_head = Head(max_blocks=self.config.max_blocks, block_mask=self.value_policy_tokens_pattern,
+                                          head_module=nn.Sequential(
+                                              nn.Linear(self.embed_dim, self.embed_dim),
+                                              nn.GELU(approximate="tanh")
+                                          ))
+            self.rewards_first_head = Head(max_blocks=self.config.max_blocks, block_mask=self.act_tokens_pattern,
+                                          head_module=nn.Sequential(
+                                              nn.Linear(self.embed_dim, self.embed_dim),
+                                              nn.GELU(approximate="tanh")
+                                          ))      
+            self.observations_first_head = Head(max_blocks=self.config.max_blocks, block_mask=self.all_but_last_latent_state_pattern,
+                                          head_module=nn.Sequential(
+                                              nn.Linear(self.embed_dim, self.embed_dim),
+                                              nn.GELU(approximate="tanh")
+                                          ))  
+            self.policy_base_network_lists = self.soft_modulization_base_network(embed_dim=self.embed_dim, output_dim=self.action_space_size,
+                                                                                 num_module_per_layer=self.num_modules_per_layer, 
+                                                                                 num_layers=self.num_layers_for_sm)
+            self.value_base_network_lists = self.soft_modulization_base_network(embed_dim=self.embed_dim, output_dim=self.support_size,
+                                                                                num_module_per_layer=self.num_modules_per_layer, 
+                                                                                num_layers=self.num_layers_for_sm)
+            self.rewards_base_network_lists = self.soft_modulization_base_network(embed_dim=self.embed_dim, output_dim=self.support_size,
+                                                                                  num_module_per_layer=self.num_modules_per_layer, 
+                                                                                  num_layers=self.num_layers_for_sm)
+            self.observations_base_network_lists = self.soft_modulization_base_network(embed_dim=self.embed_dim, output_dim=self.obs_per_embdding_dim,
+                                                                                 num_module_per_layer=self.num_modules_per_layer, 
+                                                                                 num_layers=self.num_layers_for_sm,
+                                                                                 last_layer_norm=self.sim_norm)
+            self.policy_soft_module_router = SoftModulizationHead(task_num=self.task_num, embed_dim=self.embed_dim, gating_embed_mlp_num=2,
+                                                                  base_model_modulelists=self.policy_base_network_lists,
+                                                                  base_layers_num=self.num_layers_for_sm, 
+                                                                  base_modules_num=self.num_modules_per_layer, device=self.device)
+            self.value_soft_module_router = SoftModulizationHead(task_num=self.task_num, embed_dim=self.embed_dim, gating_embed_mlp_num=2,
+                                                                  base_model_modulelists=self.value_base_network_lists,
+                                                                  base_layers_num=self.num_layers_for_sm, 
+                                                                  base_modules_num=self.num_modules_per_layer, device=self.device)
+            self.rewards_soft_module_router = SoftModulizationHead(task_num=self.task_num, embed_dim=self.embed_dim, gating_embed_mlp_num=2,
+                                                                  base_model_modulelists=self.rewards_base_network_lists,
+                                                                  base_layers_num=self.num_layers_for_sm, 
+                                                                  base_modules_num=self.num_modules_per_layer, device=self.device)
+            self.observations_soft_module_router = SoftModulizationHead(task_num=self.task_num, embed_dim=self.embed_dim, gating_embed_mlp_num=2,
+                                                                  base_model_modulelists=self.observations_base_network_lists,
+                                                                  base_layers_num=self.num_layers_for_sm, 
+                                                                  base_modules_num=self.num_modules_per_layer, device=self.device)
         # Apply weight initialization, the order is important
         self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
-        self._initialize_last_layer()
+        if not self.use_soft_modulization_head:
+            self._initialize_last_layer()
 
         # Cache structures
         self._initialize_cache_structures()
@@ -193,7 +260,7 @@ class WorldModelMT(nn.Module):
             block_mask=block_mask,
             head_module=nn.Sequential(*modules)
         )
-
+        
     def _create_head_moe(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, moe=None) -> Head:
         """Create moe head modules for the transformer."""
         modules = [
@@ -253,6 +320,27 @@ class WorldModelMT(nn.Module):
             self.support_size,
             moe=self.get_moe("value_moe")
         )
+        
+    def soft_modulization_base_network(self, embed_dim: int, output_dim: int, 
+                                       num_module_per_layer: int, num_layers: int, 
+                                       last_layer_norm: Optional[nn.Module]=None) -> nn.ModuleList:
+        
+        base_modules_lists = nn.ModuleList()
+        for i in range(num_layers):
+            layer_modules_list = nn.ModuleList()
+            for j in range(num_module_per_layer):
+        # 创建每个模块，这里使用nn.Sequential包装一个线性层后接ReLU激活函数
+                module_list = [
+                    nn.Linear(embed_dim, output_dim if i == num_layers - 1 else embed_dim),
+                    nn.GELU(approximate="tanh")
+                ]
+                if last_layer_norm is not None and i == num_layers - 1:
+                    module_list.append(last_layer_norm)
+                # 将模块添加到当前层的模块列表
+                layer_modules_list.append(nn.Sequential(*module_list))
+            base_modules_lists.append(layer_modules_list)
+            
+        return base_modules_lists
 
     def _create_head_softmoe(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, soft_moe=None) -> Head:
         """Create softmoe head modules for the transformer."""
@@ -316,7 +404,7 @@ class WorldModelMT(nn.Module):
             self.support_size,
             soft_moe=self.get_soft_moe("value_soft_moe")
         )
-
+        
     def _initialize_last_layer(self) -> None:
         """Initialize the last linear layer."""
         last_linear_layer_init_zero = True
@@ -498,8 +586,29 @@ class WorldModelMT(nn.Module):
         # Generate logits
 
         # 1,...,0,1 https://github.com/eloialonso/iris/issues/19
+        if self.use_soft_modulization_head:
+            
+            # Let x go forward the first head 
+            tmp_obs = self.observations_first_head(x, num_steps=num_steps, prev_steps=prev_steps)
+            tmp_reward = self.rewards_first_head(x, num_steps=num_steps, prev_steps=prev_steps)
+            tmp_policy = self.policy_first_head(x, num_steps=num_steps, prev_steps=prev_steps)
+            tmp_value = self.value_first_head(x, num_steps=num_steps, prev_steps=prev_steps)
+            
+            # Start soft modulization with weight return
+            logits_observations, observation_weights_list = self.observations_soft_module_router(tmp_obs, task_id=task_id, return_weight=True)
+            # logits_rewards = self.rewards_soft_module_router(tmp_reward, task_id=task_id)
+            # logits_policy = self.policy_soft_module_router(tmp_policy, task_id=task_id)
+            # logits_value = self.value_soft_module_router(tmp_value, task_id=task_id)
+            
+            # reward, policy, value are still remained independent head network for different tasks. 
+            logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+            # print(f"四者的shape: {logits_observations.shape}, {logits_rewards.shape}, {logits_policy.shape}, {logits_value.shape}")
+            return WorldModelOutputSoftModulization(x, logits_observations, logits_rewards, None, logits_policy, logits_value, 
+                                                    task_id, observation_weights_list, None, None, None)
         # TODO: one head or moe head
-        if self.use_moe_head:
+        elif self.use_moe_head and not self.use_soft_modulization_head:
             logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
             logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
             logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
@@ -1295,26 +1404,49 @@ class WorldModelMT(nn.Module):
         discounted_loss_policy = (loss_policy.view(-1, batch['actions'].shape[1]) * discounts).mean()
         discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).mean()
         discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).mean()
-
-        return LossWithIntermediateLosses(
-            latent_recon_loss_weight=self.latent_recon_loss_weight,
-            perceptual_loss_weight=self.perceptual_loss_weight,
-            loss_obs=discounted_loss_obs,
-            loss_rewards=discounted_loss_rewards,
-            loss_value=discounted_loss_value,
-            loss_policy=discounted_loss_policy,
-            latent_recon_loss=discounted_latent_recon_loss,
-            perceptual_loss=discounted_perceptual_loss,
-            orig_policy_loss=discounted_orig_policy_loss,
-            policy_entropy=discounted_policy_entropy,
-            first_step_losses=first_step_losses,
-            middle_step_losses=middle_step_losses,
-            last_step_losses=last_step_losses,
-            dormant_ratio_encoder=dormant_ratio_encoder,
-            dormant_ratio_world_model=dormant_ratio_world_model,
-            latent_state_l2_norms=latent_state_l2_norms,
-            logits_value=outputs.logits_value,
-        )
+        
+        if self.use_soft_modulization_head:
+            return LossWithIntermediateLosses(
+                    latent_recon_loss_weight=self.latent_recon_loss_weight,
+                    perceptual_loss_weight=self.perceptual_loss_weight,
+                    loss_obs=discounted_loss_obs,
+                    loss_rewards=discounted_loss_rewards,
+                    loss_value=discounted_loss_value,
+                    loss_policy=discounted_loss_policy,
+                    latent_recon_loss=discounted_latent_recon_loss,
+                    perceptual_loss=discounted_perceptual_loss,
+                    orig_policy_loss=discounted_orig_policy_loss,
+                    policy_entropy=discounted_policy_entropy,
+                    first_step_losses=first_step_losses,
+                    middle_step_losses=middle_step_losses,
+                    last_step_losses=last_step_losses,
+                    dormant_ratio_encoder=dormant_ratio_encoder,
+                    dormant_ratio_world_model=dormant_ratio_world_model,
+                    latent_state_l2_norms=latent_state_l2_norms,
+                    logits_value=outputs.logits_value,
+                    task_id=outputs.task_id,
+                    observation_weights_list=outputs.observation_weights_list
+            )
+        else:
+            return LossWithIntermediateLosses(
+                    latent_recon_loss_weight=self.latent_recon_loss_weight,
+                    perceptual_loss_weight=self.perceptual_loss_weight,
+                    loss_obs=discounted_loss_obs,
+                    loss_rewards=discounted_loss_rewards,
+                    loss_value=discounted_loss_value,
+                    loss_policy=discounted_loss_policy,
+                    latent_recon_loss=discounted_latent_recon_loss,
+                    perceptual_loss=discounted_perceptual_loss,
+                    orig_policy_loss=discounted_orig_policy_loss,
+                    policy_entropy=discounted_policy_entropy,
+                    first_step_losses=first_step_losses,
+                    middle_step_losses=middle_step_losses,
+                    last_step_losses=last_step_losses,
+                    dormant_ratio_encoder=dormant_ratio_encoder,
+                    dormant_ratio_world_model=dormant_ratio_world_model,
+                    latent_state_l2_norms=latent_state_l2_norms,
+                    logits_value=outputs.logits_value,
+            )
 
     #@profile
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):

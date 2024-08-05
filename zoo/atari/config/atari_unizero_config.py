@@ -1,13 +1,13 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
-env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
+env_id = 'QbertNoFrameskip-v4'  # You can specify any Atari game here
 action_space_size = atari_env_action_space_map[env_id]
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-update_per_collect = None
+update_per_collect = 1000
 replay_ratio = 0.25
 collector_env_num = 8
 n_episode = 8
@@ -54,14 +54,16 @@ atari_unizero_config = dict(
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,
-                # device='cuda',
-                device='cpu',
+                device='cuda',
+                # device='cpu',
                 action_space_size=action_space_size,
                 num_layers=4,
                 num_heads=8,
                 embed_dim=768,
                 obs_type='image',
                 env_num=max(collector_env_num, evaluator_env_num),
+                moe_in_transformer=False,
+                multiplication_moe_in_transformer=False
             ),
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.

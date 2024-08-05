@@ -61,7 +61,7 @@ def train_unizero(
                          game_buffer_classes[create_cfg.policy.type])
 
     # Set device based on CUDA availability
-    cfg.policy.device = cfg.policy.model.world_model.device if torch.cuda.is_available() else 'cpu'
+    cfg.policy.device = cfg.policy.model.world_model_cfg.device if torch.cuda.is_available() else 'cpu'
     logging.info(f'cfg.policy.device: {cfg.policy.device}')
 
     # Compile the configuration
