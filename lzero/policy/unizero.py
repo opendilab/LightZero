@@ -173,7 +173,7 @@ class UniZeroPolicy(MuZeroPolicy):
         ignore_done=False,
         # (int) How many updates(iterations) to train after collector's one collection.
         # Bigger "update_per_collect" means bigger off-policy.
-        # collect data -> update policy-> collect data -> ...
+        # collect data -> update policy -> collect data -> ...
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor.
         # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.replay_ratio automatically.
@@ -268,11 +268,14 @@ class UniZeroPolicy(MuZeroPolicy):
             # (int) The decay steps from start to end eps.
             decay=int(1e5),
         ),
-        # ****** Harmony Dream for balancing ******
-        harmony_balance=False,
-        harmony_loss_names=['loss_obs', 'loss_rewards', 'loss_value', 'loss_policy']
         
-        #^ ['loss_obs', 'loss_rewards', 'loss_value', 'loss_policy', 'orig_policy_loss', 'policy_entropy']
+        # ****** Harmony Dream for balancing ******
+        # (bool) Whether harmony dream is used to balance different weights of loss functions. 
+        harmony_balance=False,
+        # (List) Loss list involving dynamic balance adjustment when harmony_balance is True. 
+        # If not appeared, the weight of loss will remain fixed as defined.
+        harmony_loss_names=['loss_obs', 'loss_rewards', 'loss_value', 'loss_policy']
+        # ['loss_obs', 'loss_rewards', 'loss_value', 'loss_policy', 'orig_policy_loss', 'policy_entropy']
     )
 
     def default_model(self) -> Tuple[str, List[str]]:
