@@ -309,7 +309,6 @@ class UniZeroPolicy(MuZeroPolicy):
              
         self.harmony_s_dict = {name: getattr(self, name) for name in harmony_s_names} if self.harmony_balance else None
             
-        print(self.harmony_s_dict)  
         self._optimizer_world_model = configure_optimizers_nanogpt(
             model=self._model.world_model,
             learning_rate=self._cfg.learning_rate,
