@@ -13,7 +13,7 @@ from ding.utils import set_pkg_seed, get_rank
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
-from lzero.entry.utils import log_buffer_memory_usage
+from lzero.entry.utils import log_buffer_memory_usage, clamp, softmax_with_temperature
 from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroCollector as Collector, MuZeroEvaluator as Evaluator
 from lzero.mcts import UniZeroGameBuffer as GameBuffer
@@ -192,10 +192,16 @@ def train_unizero_multitask(
             for i in range(update_per_collect):
                 train_data_multi_task = []
                 envstep_multi_task = 0
+                if cfg.policy.adaptive_batch_size_for_transition:
+                    buffer_num_of_transitions_list = [buffer.get_num_of_transitions() for buffer in game_buffers]
+                    buffer_ratio_list = [x / sum(buffer_num_of_transitions_list) for x in buffer_num_of_transitions_list]
+                    softmax_buffer_ratio_list = softmax_with_temperature(buffer_ratio_list, temperature=cfg.policy.temperature_for_softmax_list)
+                    adaptive_batch_size_list = [int(x * cfg.policy.adaptive_total_batch_size) for x in softmax_buffer_ratio_list]
                 for task_id, (cfg, collector, replay_buffer) in enumerate(zip(cfgs, collectors, game_buffers)):
                     envstep_multi_task += collector.envstep
                     if replay_buffer.get_num_of_transitions() > batch_size:
-                        batch_size = cfg.policy.batch_size[task_id]
+                        batch_size = adaptive_batch_size_list[task_id] \
+                            if cfg.policy.adaptive_batch_size_for_transition else cfg.policy.batch_size[task_id]
                         train_data = replay_buffer.sample(batch_size, policy)
                         if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
                             policy.recompute_pos_emb_diff_and_clear_cache()
@@ -210,7 +216,8 @@ def train_unizero_multitask(
                         break
 
                 if train_data_multi_task:
-                    log_vars = learner.train(train_data_multi_task, envstep_multi_task)
+                    batch_size_list = adaptive_batch_size_list if cfg.policy.adaptive_batch_size_for_transition else cfg.policy.batch_size
+                    log_vars = learner.train(train_data_multi_task, envstep_multi_task, policy_kwargs={"batch_size_list": batch_size_list})
                 
                 if cfg.policy.use_priority:
                     for task_id, replay_buffer in enumerate(game_buffers):

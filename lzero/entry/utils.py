@@ -1,12 +1,25 @@
 import os
-from typing import Optional, Callable
+from typing import Optional, Callable, Union, List
 
 import psutil
 from pympler.asizeof import asizeof
 from tensorboardX import SummaryWriter
 from typing import Optional, Callable
 import torch
+import torch.nn.functional as F
 
+def clamp(x: Union[int, float], min: Optional[Union[int, float]]=None, max: Optional[Union[int, float]]=None) -> Union[int, float]:
+    if min is not None and x < min:
+        return min
+    elif max is not None and x > max:
+        return max
+    else:
+        return x
+    
+def softmax_with_temperature(input_list: List[Union[int, float]], temperature: float=1) -> List[Union[int, float]]:
+    list_2_tensor = torch.tensor(input_list, dtype=torch.float32) / temperature
+    softmax_tensor = F.softmax(list_2_tensor, dim=0)
+    return [round(x, 2) for x in softmax_tensor.tolist()]
 
 def initialize_zeros_batch(observation_shape, batch_size, device):
     """
