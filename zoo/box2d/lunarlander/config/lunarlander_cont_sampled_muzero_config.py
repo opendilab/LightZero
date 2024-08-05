@@ -10,13 +10,13 @@ continuous_action_space = True
 K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = None
-replay_ratio = 0.25
+# replay_ratio = 0.25
+replay_ratio = 0.1
 batch_size = 1024  # TODO
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
 # norm_type='BN'
 norm_type = 'LN'
-
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
