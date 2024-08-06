@@ -2,8 +2,8 @@ from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
 # env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
-env_id = 'QbertNoFrameskip-v4'  # You can specify any Atari game here
-# env_id = 'SeaquestNoFrameskip-v4'  # You can specify any Atari game here
+env_id = 'SeaquestNoFrameskip-v4'  # You can specify any Atari game here
+# env_id = 'QbertNoFrameskip-v4'  # You can specify any Atari game here
 
 action_space_size = atari_env_action_space_map[env_id]
 
@@ -14,6 +14,8 @@ update_per_collect = None
 replay_ratio = 0.25
 collector_env_num = 8
 n_episode = 8
+# collector_env_num = 1
+# n_episode = 1
 evaluator_env_num = 3
 num_simulations = 50
 # max_env_step = int(5e5)
@@ -31,7 +33,7 @@ infer_context_length = 4
 # evaluator_env_num = 2
 # num_simulations = 5
 # max_env_step = int(5e5)
-# reanalyze_ratio = 0.
+# reanalyze_ratio = 1
 # batch_size = 2
 # num_unroll_steps = 10
 # ==============================================================
@@ -63,7 +65,7 @@ atari_unizero_config = dict(
                 device='cuda',
                 # device='cpu',
                 action_space_size=action_space_size,
-                num_layers=4,
+                num_layers=2,
                 num_heads=8,
                 embed_dim=768,
                 obs_type='image',
@@ -107,6 +109,6 @@ if __name__ == "__main__":
     seeds = [0,1,2]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_unizero/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
+        main_config.exp_name = f'data_unizero_tune/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

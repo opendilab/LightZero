@@ -823,7 +823,11 @@ class WorldModel(nn.Module):
             cache_key = quantize_state(state_single_env)  # Compute the hash value using the quantized state
 
             # Try to retrieve the cached value from past_kv_cache_init_infer_envs
-            matched_value = self.past_kv_cache_init_infer_envs[i].get(cache_key)
+            try:
+                matched_value = self.past_kv_cache_init_infer_envs[i].get(cache_key)
+            except Exception as e: # TODO
+                # print(e, i)
+                matched_value = None
 
             # If not found, try to retrieve from past_kv_cache_recurrent_infer
             if matched_value is None:

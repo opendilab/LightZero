@@ -4,8 +4,8 @@ import numpy as np
 import torch
 from ding.utils import BUFFER_REGISTRY
 
-from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
-from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
+from lzero.mcts.tree_search.mcts_ctree import UniZeroMCTSCtree as MCTSCtree
+# from lzero.mcts.tree_search.mcts_ptree import UniZeroMCTSPtree as MCTSPtree
 from lzero.mcts.utils import prepare_observation
 from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
 from .game_buffer_muzero import MuZeroGameBuffer
