@@ -133,7 +133,7 @@ class SampledMuZeroModelMLP(nn.Module):
         self.res_connection_in_dynamics = res_connection_in_dynamics
 
         self.representation_network = RepresentationNetworkMLP(
-            observation_shape=self.observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
+            observation_shape=self.observation_shape, hidden_channels=self.latent_state_dim, norm_type=self.norm_type
         )
 
         self.dynamics_network = DynamicsNetwork(
@@ -143,7 +143,7 @@ class SampledMuZeroModelMLP(nn.Module):
             fc_reward_layers=self.fc_reward_layers,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            norm_type=norm_type,
+            norm_type=self.norm_type,
             res_connection_in_dynamics=self.res_connection_in_dynamics,
         )
 
@@ -344,7 +344,6 @@ class SampledMuZeroModelMLP(nn.Module):
 
         next_latent_state, reward = self.dynamics_network(state_action_encoding)
 
-
         if not self.state_norm:
             return next_latent_state, reward
         else:
@@ -376,7 +375,6 @@ class SampledMuZeroModelMLP(nn.Module):
             return self.prediction_head(proj)
         else:
             return proj.detach()
-
 
 
 class PredictionNetworkMLP(nn.Module):
