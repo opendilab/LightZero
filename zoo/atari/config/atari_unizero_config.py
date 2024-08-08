@@ -2,8 +2,10 @@ from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
 # env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
-env_id = 'SeaquestNoFrameskip-v4'  # You can specify any Atari game here
+# env_id = 'SeaquestNoFrameskip-v4'  # You can specify any Atari game here
 # env_id = 'QbertNoFrameskip-v4'  # You can specify any Atari game here
+# env_id = 'MsPacmanNoFrameskip-v4'  # You can specify any Atari game here
+env_id = 'BoxingNoFrameskip-v4'  # You can specify any Atari game here
 
 action_space_size = atari_env_action_space_map[env_id]
 
@@ -22,6 +24,7 @@ num_simulations = 50
 max_env_step = int(1e5)
 
 reanalyze_ratio = 0.25
+# reanalyze_ratio = 0.
 # reanalyze_ratio = 1.
 batch_size = 64
 num_unroll_steps = 10
@@ -109,6 +112,6 @@ if __name__ == "__main__":
     seeds = [0,1,2]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_unizero_tune/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
+        main_config.exp_name = f'data_unizero_tune/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_collectenv{collector_env_num}_rer{reanalyze_ratio}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
