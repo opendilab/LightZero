@@ -1,17 +1,17 @@
 from easydict import EasyDict
-
+import torch.nn as nn
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-continuous_action_space = True
-K = 20  # num_of_sampled_actions
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
+continuous_action_space = True
+K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
-batch_size = 256
+batch_size = 1024
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
 norm_type = 'LN'
@@ -19,12 +19,15 @@ norm_type = 'LN'
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-pendulum_sampled_muzero_config = dict(
-    exp_name=f'data_smz/pendulum_sampled_muzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
+dmc2gym_state_cont_sampled_muzero_config = dict(
+    exp_name=f'data_smz/dmc2gym_state_cont_sampled_muzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
     env=dict(
-        env_id='Pendulum-v1',
+        env_id='dmc2gym-v0',
+        domain_name="cartpole",
+        task_name="swingup",
+        from_pixels=False,  # vector/state obs
+        frame_skip=8,
         continuous=True,
-        manually_discretization=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -32,44 +35,48 @@ pendulum_sampled_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=3,
+            observation_shape=5,
             action_space_size=1,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             sigma_type='conditioned',
-            model_type='mlp', 
-            latent_state_dim=128,
+            model_type='mlp',
+            latent_state_dim=256,
             norm_type=norm_type,
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=50,
+        game_segment_length=125,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        cos_lr_scheduler=True,  # TODO
+        use_priority=False,
+        cos_lr_scheduler=True,
         learning_rate=0.0001,
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
-        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
-        policy_entropy_loss_weight=5e-3,
+        grad_clip_value=0.5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
+        random_collect_episode_num=0,
+        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
+        policy_entropy_loss_weight=5e-3,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_ratio=replay_ratio,
+        replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
 )
-pendulum_sampled_muzero_config = EasyDict(pendulum_sampled_muzero_config)
-main_config = pendulum_sampled_muzero_config
+dmc2gym_state_cont_sampled_muzero_config = EasyDict(dmc2gym_state_cont_sampled_muzero_config)
+main_config = dmc2gym_state_cont_sampled_muzero_config
 
-pendulum_sampled_muzero_create_config = dict(
+dmc2gym_state_cont_sampled_muzero_create_config = dict(
     env=dict(
-        type='pendulum_lightzero',
-        import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
+        type='dmc2gym_lightzero',
+        import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
@@ -77,8 +84,8 @@ pendulum_sampled_muzero_create_config = dict(
         import_names=['lzero.policy.sampled_muzero'],
     ),
 )
-pendulum_sampled_muzero_create_config = EasyDict(pendulum_sampled_muzero_create_config)
-create_config = pendulum_sampled_muzero_create_config
+dmc2gym_state_cont_sampled_muzero_create_config = EasyDict(dmc2gym_state_cont_sampled_muzero_create_config)
+create_config = dmc2gym_state_cont_sampled_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
