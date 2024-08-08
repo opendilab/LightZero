@@ -56,9 +56,11 @@ class WorldModel(nn.Module):
         self._initialize_patterns()
 
         # Position embedding
-        self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
-        self.precompute_pos_emb_diff_kv()
-        print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
+        if not self.config.rotary_emb:
+            self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
+            self.precompute_pos_emb_diff_kv()
+
+            print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
         # Initialize action embedding table
         self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
@@ -271,8 +273,11 @@ class WorldModel(nn.Module):
             if len(obs_embeddings.shape) == 2:
                 obs_embeddings = obs_embeddings.unsqueeze(1)
             num_steps = obs_embeddings.size(1)
-            sequences = self._add_position_embeddings(obs_embeddings, prev_steps, num_steps, kvcache_independent,
+            if not self.config.rotary_emb:
+                sequences = self._add_position_embeddings(obs_embeddings, prev_steps, num_steps, kvcache_independent,
                                                       is_init_infer, valid_context_lengths)
+            else:
+                sequences = obs_embeddings
 
         # Process action tokens
         elif 'act_tokens' in obs_embeddings_or_act_tokens:
@@ -281,8 +286,11 @@ class WorldModel(nn.Module):
                 act_tokens = act_tokens.squeeze(1)
             num_steps = act_tokens.size(1)
             act_embeddings = self.act_embedding_table(act_tokens)
-            sequences = self._add_position_embeddings(act_embeddings, prev_steps, num_steps, kvcache_independent,
+            if not self.config.rotary_emb:
+                sequences = self._add_position_embeddings(act_embeddings, prev_steps, num_steps, kvcache_independent,
                                                       is_init_infer, valid_context_lengths)
+            else:
+                sequences = act_embeddings
 
         # Process combined observation embeddings and action tokens
         else:
