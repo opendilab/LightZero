@@ -174,9 +174,10 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
 
 def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
     ndim = x.ndim
+    print(f"freqs_cis 的 shape是{freqs_cis.shape}, 而 x 的 shape 是{x.shape}")
     assert 0 <= 1 < ndim
-    assert freqs_cis.shape == (x.shape[1], x.shape[-1])
-    shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
+    assert freqs_cis.shape == (x.shape[2], x.shape[-1])
+    shape = [d if i == 2 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
     return freqs_cis.view(*shape)
 
 
@@ -188,8 +189,8 @@ def apply_rotary_emb(
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
     freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
-    xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3)
-    xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(3)
+    xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(-2)
+    xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(-2)
     return xq_out.type_as(xq), xk_out.type_as(xk)
 
 

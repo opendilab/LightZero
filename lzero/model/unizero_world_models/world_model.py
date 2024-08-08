@@ -187,7 +187,8 @@ class WorldModel(nn.Module):
         if self.context_length <= 2:
             # If context length is 2 or less, no context is present
             return
-
+        if self.config.rotary_emb:
+            return 
         # Precompute positional embedding matrices for inference in collect/eval stages, not for training
         self.positional_embedding_k = [
             self._get_positional_embedding(layer, 'key')
@@ -362,8 +363,11 @@ class WorldModel(nn.Module):
             act = act_embeddings[:, i, 0, :].unsqueeze(1)
             obs_act = torch.cat([obs, act], dim=1)
             obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
-
-        return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
+            
+        return_result = obs_act_embeddings
+        if not self.config.rotary_emb:
+            return_result += self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device))
+        return return_result, num_steps
 
     def _transformer_pass(self, sequences, past_keys_values, kvcache_independent, valid_context_lengths):
         """
@@ -742,12 +746,13 @@ class WorldModel(nn.Module):
                         v_cache_trimmed = v_cache_current[:, :, 2:context_length - 1, :].squeeze(0)
 
                         # Index pre-computed positional encoding differences
-                        pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length - 1)]
-                        pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length - 1)]
-                        # ============ NOTE: Very Important ============
-                        # Apply positional encoding correction to k and v
-                        k_cache_trimmed += pos_emb_diff_k.squeeze(0)
-                        v_cache_trimmed += pos_emb_diff_v.squeeze(0)
+                        if not self.config.rotary_emb:
+                            pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length - 1)]
+                            pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length - 1)]
+                            # ============ NOTE: Very Important ============
+                            # Apply positional encoding correction to k and v
+                            k_cache_trimmed += pos_emb_diff_k.squeeze(0)
+                            v_cache_trimmed += pos_emb_diff_v.squeeze(0)
 
                         # Pad the last 3 steps along the third dimension with zeros
                         # F.pad parameters (0, 0, 0, 3) specify padding amounts for each dimension: (left, right, top, bottom). For 3D tensor, they correspond to (dim2 left, dim2 right, dim1 left, dim1 right).
@@ -783,12 +788,13 @@ class WorldModel(nn.Module):
                         v_cache_trimmed = v_cache_current[:, 2:context_length - 1, :]
 
                         # Index pre-computed positional encoding differences
-                        pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length - 1)]
-                        pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length - 1)]
-                        # ============ NOTE: Very Important ============
-                        # Apply positional encoding correction to k and v
-                        k_cache_trimmed += pos_emb_diff_k.squeeze(0)
-                        v_cache_trimmed += pos_emb_diff_v.squeeze(0)
+                        if not self.config.rotary_emb:
+                            pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length - 1)]
+                            pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length - 1)]
+                            # ============ NOTE: Very Important ============
+                            # Apply positional encoding correction to k and v
+                            k_cache_trimmed += pos_emb_diff_k.squeeze(0)
+                            v_cache_trimmed += pos_emb_diff_v.squeeze(0)
 
                         # Pad the last 3 steps along the third dimension with zeros
                         # F.pad parameters (0, 0, 0, 3) specify padding amounts for each dimension: (left, right, top, bottom). For 3D tensor, they correspond to (dim2 left, dim2 right, dim1 left, dim1 right).
