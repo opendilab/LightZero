@@ -52,10 +52,10 @@ def train_unizero(
     cfg, create_cfg = input_cfg
 
     # Ensure the specified policy type is supported
-    assert create_cfg.policy.type in ['unizero'], "train_unizero entry now only supports the following algo.: 'unizero'"
+    assert create_cfg.policy.type in ['unizero', 'sampled_unizero'], "train_unizero entry now only supports the following algo.: 'unizero', 'sampled_unizero'"
 
     # Import the correct GameBuffer class based on the policy type
-    game_buffer_classes = {'unizero': 'UniZeroGameBuffer'}
+    game_buffer_classes = {'unizero': 'UniZeroGameBuffer', 'sampled_unizero': 'SampledUniZeroGameBuffer'}
 
     GameBuffer = getattr(__import__('lzero.mcts', fromlist=[game_buffer_classes[create_cfg.policy.type]]),
                          game_buffer_classes[create_cfg.policy.type])
@@ -107,7 +107,7 @@ def train_unizero(
     batch_size = policy._cfg.batch_size
 
     # TODO: for visualize
-    stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+    # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
     while True:
         # Log buffer memory usage
