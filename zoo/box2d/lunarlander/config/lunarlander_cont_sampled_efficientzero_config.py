@@ -14,7 +14,7 @@ replay_ratio = 0.25
 # update_per_collect = 200
 # batch_size = 256
 batch_size = 1024  # TODO
-max_env_step = int(5e6)
+max_env_step = int(5e5)
 reanalyze_ratio = 0.
 # norm_type='BN'
 norm_type='LN'
@@ -25,7 +25,7 @@ norm_type='LN'
 # ==============================================================
 
 lunarlander_cont_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez/lunarlander_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
+    exp_name=f'data_sez_0808/lunarlander_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
     env=dict(
         env_id='LunarLanderContinuous-v2',
         continuous=True,

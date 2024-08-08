@@ -1,4 +1,5 @@
 from easydict import EasyDict
+import torch.nn as nn
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -12,7 +13,7 @@ num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
 batch_size = 1024  # TODO
-max_env_step = int(5e6)
+max_env_step = int(3e6)
 reanalyze_ratio = 0.
 # norm_type='BN'
 norm_type = 'LN'
@@ -23,7 +24,7 @@ norm_type = 'LN'
 # ==============================================================
 
 bipedalwalker_cont_sampled_muzero_config = dict(
-    exp_name=f'data_smz/bipedalwalker_cont_sampled_muzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
+    exp_name=f'data_smz_0808/bipedalwalker_cont_sampled_muzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
     env=dict(
         env_id='BipedalWalker-v3',
         env_type='normal',
@@ -43,6 +44,10 @@ bipedalwalker_cont_sampled_muzero_config = dict(
             sigma_type='conditioned',
             model_type='mlp',
             latent_state_dim=256,
+            fc_reward_layers=[256],
+            fc_value_layers=[256],
+            fc_policy_layers=[256],
+            activation=nn.GELU(approximate='tanh'),
             res_connection_in_dynamics=True,
             norm_type=norm_type, # TODO
         ),

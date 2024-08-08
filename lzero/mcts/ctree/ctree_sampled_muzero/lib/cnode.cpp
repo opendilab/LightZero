@@ -835,7 +835,7 @@ namespace tree
 //                }
 //
 //                float true_reward = node->value_prefix - parent_value_prefix;
-//                min_max_stats.update(true_reward + discount_factor * node->value());
+               min_max_stats.update(true_reward + discount_factor * node->value());
 
 //                if (is_reset == 1)
 //                {
