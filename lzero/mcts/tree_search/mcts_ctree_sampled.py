@@ -7,7 +7,6 @@ from easydict import EasyDict
 
 from lzero.mcts.ctree.ctree_sampled_efficientzero import ezs_tree as tree_sampled_efficientzero
 from lzero.mcts.ctree.ctree_sampled_muzero import smz_tree as tree_sampled_muzero
-
 from lzero.policy import InverseScalarTransform, to_detach_cpu_numpy
 
 if TYPE_CHECKING:
@@ -181,8 +180,6 @@ class SampledUniZeroMCTSCtree(object):
                     current_latent_state_index, discount_factor, reward_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, virtual_to_play_batch
                 )
-
-
 
 class SampledMuZeroMCTSCtree(object):
     """

@@ -55,6 +55,7 @@ lunarlander_cont_sampled_unizero_config = dict(
                 num_of_sampled_actions=K,
                 sigma_type='conditioned',
                 model_type='mlp',
+                norm_type=norm_type,
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,

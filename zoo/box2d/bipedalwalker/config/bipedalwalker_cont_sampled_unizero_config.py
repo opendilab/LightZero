@@ -57,6 +57,7 @@ bipedalwalker_cont_sampled_unizero_config = dict(
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
                 sigma_type='conditioned',
+                norm_type=norm_type,
                 model_type='mlp',
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action

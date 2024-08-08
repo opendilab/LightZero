@@ -23,7 +23,7 @@ class SampledUniZeroModel(nn.Module):
             num_channels: int = 64,
             activation: nn.Module = nn.GELU(approximate='tanh'),
             downsample: bool = True,
-            norm_type: Optional[str] = 'BN',
+            norm_type: Optional[str] = 'LN',
             world_model_cfg: EasyDict = None,
             *args,
             **kwargs
@@ -75,10 +75,11 @@ class SampledUniZeroModel(nn.Module):
                 hidden_channels=world_model_cfg.embed_dim,
                 layer_num=2,
                 activation=self.activation,
+                norm_type=norm_type,
                 group_size=world_model_cfg.group_size,
             )
             # TODO: only for MemoryEnv now
-            self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
+            self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25, norm_type=norm_type)
             self.tokenizer = Tokenizer(encoder=self.representation_network,
                                        decoder_network=self.decoder_network, with_lpips=False)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
