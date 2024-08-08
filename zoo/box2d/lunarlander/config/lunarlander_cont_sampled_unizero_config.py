@@ -15,6 +15,7 @@ reanalyze_ratio = 0
 batch_size = 64
 num_unroll_steps = 10
 infer_context_length = 4
+norm_type = 'LN'
 
 # for debug
 # collector_env_num = 2
@@ -44,8 +45,7 @@ lunarlander_cont_sampled_unizero_config = dict(
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             sigma_type='conditioned',
-            norm_type='LN',
-            # norm_type=norm_type,
+            norm_type=norm_type,
             model_type='mlp',
             world_model_cfg=dict(
                 num_unroll_steps=num_unroll_steps,

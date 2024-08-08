@@ -10,11 +10,12 @@ evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
-max_env_step = int(5e6)
+max_env_step = int(1e6)
 reanalyze_ratio = 0
 batch_size = 64
 num_unroll_steps = 10
 infer_context_length = 4
+norm_type = 'LN'
 
 # for debug
 # collector_env_num = 2
@@ -47,12 +48,10 @@ bipedalwalker_cont_sampled_unizero_config = dict(
             sigma_type='conditioned',
             self_supervised_learning_loss=True,  # NOTE: default is False.
             discrete_action_encoding_type='one_hot',
-            norm_type='BN',
+            norm_type=norm_type,
             model_type='mlp',
             world_model_cfg=dict(
                 num_unroll_steps=num_unroll_steps,
-                # (float) The weight of policy loss.
-                policy_loss_weight=1,
                 # (float) The weight of policy entropy loss.
                 policy_entropy_loss_weight=1e-4,
                 continuous_action_space=continuous_action_space,

@@ -26,9 +26,9 @@ class SampledEfficientZeroModel(nn.Module):
             reward_head_channels: int = 16,
             value_head_channels: int = 16,
             policy_head_channels: int = 16,
-            fc_reward_layers: SequenceType = [32],
-            fc_value_layers: SequenceType = [32],
-            fc_policy_layers: SequenceType = [32],
+            fc_reward_layers: SequenceType = [256],
+            fc_value_layers: SequenceType = [256],
+            fc_policy_layers: SequenceType = [256],
             reward_support_size: int = 601,
             value_support_size: int = 601,
             proj_hid: int = 1024,
@@ -49,7 +49,7 @@ class SampledEfficientZeroModel(nn.Module):
             sigma_type='conditioned',
             fixed_sigma_value: float = 0.3,
             bound_type: str = None,
-            norm_type: str = 'BN',
+            norm_type: str = 'LN',
             discrete_action_encoding_type: str = 'one_hot',
             use_sim_norm: bool = False,
             *args,
@@ -512,7 +512,7 @@ class PredictionNetwork(nn.Module):
             sigma_type='conditioned',
             fixed_sigma_value: float = 0.3,
             bound_type: str = None,
-            norm_type: str = 'BN',
+            norm_type: str = 'LN',
     ):
         """
         Overview:

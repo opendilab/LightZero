@@ -20,9 +20,9 @@ class SampledEfficientZeroModelMLP(nn.Module):
         action_space_size: int = 6,
         latent_state_dim: int = 256,
         lstm_hidden_size: int = 512,
-        fc_reward_layers: SequenceType = [32],
-        fc_value_layers: SequenceType = [32],
-        fc_policy_layers: SequenceType = [32],
+        fc_reward_layers: SequenceType = [256],
+        fc_value_layers: SequenceType = [256],
+        fc_policy_layers: SequenceType = [256],
         reward_support_size: int = 601,
         value_support_size: int = 601,
         proj_hid: int = 1024,
@@ -31,7 +31,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
         pred_out: int = 1024,
         self_supervised_learning_loss: bool = True,
         categorical_distribution: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        activation: Optional[nn.Module] = nn.GELU(approximate='tanh'),
         last_linear_layer_init_zero: bool = True,
         state_norm: bool = False,
         # ==============================================================
@@ -42,9 +42,9 @@ class SampledEfficientZeroModelMLP(nn.Module):
         sigma_type='conditioned',
         fixed_sigma_value: float = 0.3,
         bound_type: str = None,
-        norm_type: str = 'BN',
+        norm_type: str = 'LN',
         discrete_action_encoding_type: str = 'one_hot',
-        res_connection_in_dynamics: bool = False,
+        res_connection_in_dynamics: bool = True,
         *args,
         **kwargs,
     ):
@@ -134,9 +134,10 @@ class SampledEfficientZeroModelMLP(nn.Module):
         self.norm_type = norm_type
         self.num_of_sampled_actions = num_of_sampled_actions
         self.res_connection_in_dynamics = res_connection_in_dynamics
+        self.activation = activation
 
         self.representation_network = RepresentationNetworkMLP(
-            observation_shape=self.observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
+            observation_shape=self.observation_shape, hidden_channels=self.latent_state_dim, activation=self.activation, norm_type=norm_type
         )
 
         self.dynamics_network = DynamicsNetworkMLP(
@@ -147,6 +148,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
             fc_reward_layers=self.fc_reward_layers,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            activation=self.activation,
             norm_type=norm_type,
             res_connection_in_dynamics=self.res_connection_in_dynamics,
         )
@@ -159,6 +161,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
             fc_policy_layers=self.fc_policy_layers,
             output_support_size=self.value_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            activation=self.activation, 
             sigma_type=self.sigma_type,
             fixed_sigma_value=self.fixed_sigma_value,
             bound_type=self.bound_type,
@@ -169,14 +172,14 @@ class SampledEfficientZeroModelMLP(nn.Module):
             # self_supervised_learning_loss related network proposed in EfficientZero
             self.projection_input_dim = latent_state_dim
             self.projection = nn.Sequential(
-                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), self.activation,
+                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), self.activation,
                 nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
             )
             self.prediction_head = nn.Sequential(
                 nn.Linear(self.proj_out, self.pred_hid),
                 nn.BatchNorm1d(self.pred_hid),
-                activation,
+                self.activation,
                 nn.Linear(self.pred_hid, self.pred_out),
             )
 
@@ -398,14 +401,14 @@ class PredictionNetworkMLP(nn.Module):
         fc_policy_layers: SequenceType = [32],
         output_support_size: int = 601,
         last_linear_layer_init_zero: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        activation: Optional[nn.Module] = nn.GELU(approximate='tanh'),
         # ==============================================================
         # specific sampled related config
         # ==============================================================
         sigma_type='conditioned',
         fixed_sigma_value: float = 0.3,
         bound_type: str = None,
-        norm_type: str = 'BN',
+        norm_type: str = 'LN',
     ):
         """
         Overview:

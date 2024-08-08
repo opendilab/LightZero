@@ -12,19 +12,17 @@ K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
-batch_size = 1024  # TODO
+batch_size = 1024
 max_env_step = int(3e6)
 reanalyze_ratio = 0.
-# norm_type='BN'
 norm_type = 'LN'
-
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 bipedalwalker_cont_sampled_muzero_config = dict(
-    exp_name=f'data_smz_0808/bipedalwalker_cont_sampled_muzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
+    exp_name=f'data_smz/bipedalwalker_cont_sampled_muzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
     env=dict(
         env_id='BipedalWalker-v3',
         env_type='normal',
@@ -44,12 +42,8 @@ bipedalwalker_cont_sampled_muzero_config = dict(
             sigma_type='conditioned',
             model_type='mlp',
             latent_state_dim=256,
-            fc_reward_layers=[256],
-            fc_value_layers=[256],
-            fc_policy_layers=[256],
-            activation=nn.GELU(approximate='tanh'),
             res_connection_in_dynamics=True,
-            norm_type=norm_type, # TODO
+            norm_type=norm_type,
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
@@ -62,7 +56,6 @@ bipedalwalker_cont_sampled_muzero_config = dict(
         learning_rate=0.0001,
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
-        # learning_rate=0.003,
         grad_clip_value=0.5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

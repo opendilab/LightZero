@@ -19,9 +19,9 @@ class SampledMuZeroModelMLP(nn.Module):
         observation_shape: int = 2,
         action_space_size: int = 6,
         latent_state_dim: int = 256,
-        fc_reward_layers: SequenceType = [32],
-        fc_value_layers: SequenceType = [32],
-        fc_policy_layers: SequenceType = [32],
+        fc_reward_layers: SequenceType = [256],
+        fc_value_layers: SequenceType = [256],
+        fc_policy_layers: SequenceType = [256],
         reward_support_size: int = 601,
         value_support_size: int = 601,
         proj_hid: int = 1024,
@@ -43,7 +43,7 @@ class SampledMuZeroModelMLP(nn.Module):
         bound_type: str = None,
         norm_type: str = 'LN',
         discrete_action_encoding_type: str = 'one_hot',
-        res_connection_in_dynamics: bool = False,
+        res_connection_in_dynamics: bool = True,
         *args,
         **kwargs,
     ):
@@ -392,14 +392,14 @@ class PredictionNetworkMLP(nn.Module):
         fc_policy_layers: SequenceType = [32],
         output_support_size: int = 601,
         last_linear_layer_init_zero: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        activation: Optional[nn.Module] = nn.GELU(approximate='tanh'),
         # ==============================================================
         # specific sampled related config
         # ==============================================================
         sigma_type='conditioned',
         fixed_sigma_value: float = 0.3,
         bound_type: str = None,
-        norm_type: str = 'BN',
+        norm_type: str = 'LN',
     ):
         """
         Overview:

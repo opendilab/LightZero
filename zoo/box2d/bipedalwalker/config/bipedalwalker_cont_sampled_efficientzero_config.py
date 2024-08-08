@@ -55,7 +55,6 @@ bipedalwalker_cont_sampled_efficientzero_config = dict(
         learning_rate=0.0001,
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
-        # learning_rate=0.003,
         # NOTE: this parameter is important for stability in bipedalwalker.
         grad_clip_value=0.5,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
@@ -83,11 +82,6 @@ bipedalwalker_cont_sampled_efficientzero_create_config = dict(
         type='sampled_efficientzero',
         import_names=['lzero.policy.sampled_efficientzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        get_train_sample=True,
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 bipedalwalker_cont_sampled_efficientzero_create_config = EasyDict(
     bipedalwalker_cont_sampled_efficientzero_create_config
