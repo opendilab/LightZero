@@ -15,8 +15,6 @@ batch_size = 1024
 max_env_step = int(5e5)
 reanalyze_ratio = 0.
 norm_type = 'LN'
-
-
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -52,7 +50,7 @@ lunarlander_cont_sampled_efficientzero_config = dict(
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        cos_lr_scheduler=True,  # TODO
+        cos_lr_scheduler=True,
         learning_rate=0.0001,
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
