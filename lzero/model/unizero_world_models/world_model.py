@@ -56,9 +56,11 @@ class WorldModel(nn.Module):
         self._initialize_patterns()
 
         # Position embedding
-        self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
-        self.precompute_pos_emb_diff_kv()
-        print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
+        if not self.config.rotary_emb:
+            self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
+            self.precompute_pos_emb_diff_kv()
+
+            print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
         # Initialize action embedding table
         self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
@@ -271,8 +273,11 @@ class WorldModel(nn.Module):
             if len(obs_embeddings.shape) == 2:
                 obs_embeddings = obs_embeddings.unsqueeze(1)
             num_steps = obs_embeddings.size(1)
-            sequences = self._add_position_embeddings(obs_embeddings, prev_steps, num_steps, kvcache_independent,
+            if not self.config.rotary_emb:
+                sequences = self._add_position_embeddings(obs_embeddings, prev_steps, num_steps, kvcache_independent,
                                                       is_init_infer, valid_context_lengths)
+            else:
+                sequences = obs_embeddings
 
         # Process action tokens
         elif 'act_tokens' in obs_embeddings_or_act_tokens:
@@ -281,8 +286,11 @@ class WorldModel(nn.Module):
                 act_tokens = act_tokens.squeeze(1)
             num_steps = act_tokens.size(1)
             act_embeddings = self.act_embedding_table(act_tokens)
-            sequences = self._add_position_embeddings(act_embeddings, prev_steps, num_steps, kvcache_independent,
+            if not self.config.rotary_emb:
+                sequences = self._add_position_embeddings(act_embeddings, prev_steps, num_steps, kvcache_independent,
                                                       is_init_infer, valid_context_lengths)
+            else:
+                sequences = act_embeddings
 
         # Process combined observation embeddings and action tokens
         else:
@@ -355,7 +363,12 @@ class WorldModel(nn.Module):
             obs_act = torch.cat([obs, act], dim=1)
             obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
 
-        return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
+        # return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
+        
+        return_result = obs_act_embeddings
+        if not self.config.rotary_emb:
+            return_result += self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device))
+        return return_result, num_steps
 
     def _transformer_pass(self, sequences, past_keys_values, kvcache_independent, valid_context_lengths):
         """
@@ -733,13 +746,14 @@ class WorldModel(nn.Module):
                         k_cache_trimmed = k_cache_current[:, :, 2:context_length - 1, :].squeeze(0)
                         v_cache_trimmed = v_cache_current[:, :, 2:context_length - 1, :].squeeze(0)
 
-                        # Index pre-computed positional encoding differences
-                        pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length - 1)]
-                        pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length - 1)]
-                        # ============ NOTE: Very Important ============
-                        # Apply positional encoding correction to k and v
-                        k_cache_trimmed += pos_emb_diff_k.squeeze(0)
-                        v_cache_trimmed += pos_emb_diff_v.squeeze(0)
+                        if not self.config.rotary_emb:
+                            # Index pre-computed positional encoding differences
+                            pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length - 1)]
+                            pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length - 1)]
+                            # ============ NOTE: Very Important ============
+                            # Apply positional encoding correction to k and v
+                            k_cache_trimmed += pos_emb_diff_k.squeeze(0)
+                            v_cache_trimmed += pos_emb_diff_v.squeeze(0)
 
                         # Pad the last 3 steps along the third dimension with zeros
                         # F.pad parameters (0, 0, 0, 3) specify padding amounts for each dimension: (left, right, top, bottom). For 3D tensor, they correspond to (dim2 left, dim2 right, dim1 left, dim1 right).
@@ -774,13 +788,14 @@ class WorldModel(nn.Module):
                         k_cache_trimmed = k_cache_current[:, 2:context_length - 1, :]
                         v_cache_trimmed = v_cache_current[:, 2:context_length - 1, :]
 
-                        # Index pre-computed positional encoding differences
-                        pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length - 1)]
-                        pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length - 1)]
-                        # ============ NOTE: Very Important ============
-                        # Apply positional encoding correction to k and v
-                        k_cache_trimmed += pos_emb_diff_k.squeeze(0)
-                        v_cache_trimmed += pos_emb_diff_v.squeeze(0)
+                        if not self.config.rotary_emb:
+                            # Index pre-computed positional encoding differences
+                            pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length - 1)]
+                            pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length - 1)]
+                            # ============ NOTE: Very Important ============
+                            # Apply positional encoding correction to k and v
+                            k_cache_trimmed += pos_emb_diff_k.squeeze(0)
+                            v_cache_trimmed += pos_emb_diff_v.squeeze(0)
 
                         # Pad the last 3 steps along the third dimension with zeros
                         # F.pad parameters (0, 0, 0, 3) specify padding amounts for each dimension: (left, right, top, bottom). For 3D tensor, they correspond to (dim2 left, dim2 right, dim1 left, dim1 right).

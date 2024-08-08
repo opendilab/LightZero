@@ -20,14 +20,14 @@ num_unroll_steps = 10
 infer_context_length = 4
 
 # ====== only for debug =====
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 5
-# max_env_step = int(5e5)
-# reanalyze_ratio = 0.
-# batch_size = 2
-# num_unroll_steps = 10
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+num_simulations = 5
+max_env_step = int(5e5)
+reanalyze_ratio = 0.
+batch_size = 2
+num_unroll_steps = 10
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -51,13 +51,14 @@ atari_unizero_config = dict(
             observation_shape=(3, 64, 64),
             action_space_size=action_space_size,
             world_model_cfg=dict(
+                rotary_emb=True,
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,
                 device='cuda',
                 # device='cpu',
                 action_space_size=action_space_size,
-                num_layers=4,
+                num_layers=2,
                 num_heads=8,
                 embed_dim=768,
                 obs_type='image',
@@ -101,6 +102,6 @@ if __name__ == "__main__":
     seeds = [0]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_unizero/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
+        main_config.exp_name = f'data_unizero_debug/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
