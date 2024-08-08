@@ -12,17 +12,17 @@ action_space_size = atari_env_action_space_map[env_id]
 # ==============================================================
 update_per_collect = None
 replay_ratio = 0.25
-collector_env_num = 8
-n_episode = 8
-# collector_env_num = 1
-# n_episode = 1
+# collector_env_num = 8
+# n_episode = 8
+collector_env_num = 1
+n_episode = 1
 evaluator_env_num = 3
 num_simulations = 50
 # max_env_step = int(5e5)
-max_env_step = int(2e5)
+max_env_step = int(1e5)
 
-# reanalyze_ratio = 0.
-reanalyze_ratio = 1.
+reanalyze_ratio = 0.25
+# reanalyze_ratio = 1.
 batch_size = 64
 num_unroll_steps = 10
 infer_context_length = 4
