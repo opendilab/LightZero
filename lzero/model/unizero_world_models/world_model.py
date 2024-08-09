@@ -66,10 +66,14 @@ class WorldModel(nn.Module):
         # Initialize action embedding table
         if self.continuous_action_space:
             # TODO
-            self.act_embedding_table = nn.Linear(config.action_space_size, config.embed_dim, device=self.device)
-        else:
+            # self.act_embedding_table = nn.Linear(config.action_space_size, config.embed_dim, device=self.device)
+            self.act_embedding_table = nn.Sequential(
+                            nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
+                            SimNorm(simnorm_dim=self.group_size))
+        else: 
+            # for discrete action space
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
-        print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
+            print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)

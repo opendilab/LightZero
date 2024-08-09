@@ -28,7 +28,7 @@ norm_type = 'LN'
 # ==============================================================
 
 bipedalwalker_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero/bipedalwalker_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
+    exp_name=f'data_sampled_unizero/bipedalwalker_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_LN_seed0',
     env=dict(
         env_id='BipedalWalker-v3',
         env_type='normal',

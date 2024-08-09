@@ -10,7 +10,7 @@ evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
-max_env_step = int(2e6)
+max_env_step = int(1e6)
 reanalyze_ratio = 0
 batch_size = 64
 num_unroll_steps = 10
@@ -21,14 +21,14 @@ norm_type = 'LN'
 # collector_env_num = 2
 # n_episode = 2
 # evaluator_env_num = 2
-# num_simulations = 2
+# num_simulations = 5
 # batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 lunarlander_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero/lunarlander_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
+    exp_name=f'data_sampled_unizero/lunarlander_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_LN_lossV2_actembed-SimNorm_seed0',
     env=dict(
         env_id='LunarLanderContinuous-v2',
         continuous=True,

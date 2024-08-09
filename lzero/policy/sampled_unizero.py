@@ -380,7 +380,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim), e.g. (4, 6, 5, 1)
         child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device)
 
-
         target_reward = target_reward.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
 
@@ -413,7 +412,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
         batch_for_gpt['target_policy'] = target_policy[:, :-1]
 
-        #
         batch_for_gpt['child_sampled_actions'] = child_sampled_actions_batch[:, :-1]
 
         # Extract valid target policy data and compute entropy
