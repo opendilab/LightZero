@@ -2,6 +2,7 @@ import copy
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Union
 
+import logging
 import numpy as np
 import torch
 from ding.model import model_wrap
@@ -186,6 +187,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         optim_type='AdamW',
         # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.0001,
+        # (float) Weight uniform initialization range in the last output layer
+        init_w=3e-3,
         # (int) Frequency of hard target network update.
         target_update_freq=100,
         # (int) Frequency of soft target network update.
@@ -297,6 +300,17 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             device_type=self._cfg.device,
             betas=(0.9, 0.95),
         )
+
+        if self._cfg.model.continuous_action_space:
+            # Weight Init for the last output layer of gaussian policy head in prediction network.
+            init_w = self._cfg.init_w
+            self._model.world_model.fc_policy_head.mu.weight.data.uniform_(-init_w, init_w)
+            self._model.world_model.fc_policy_head.mu.bias.data.uniform_(-init_w, init_w)
+            try:
+                self._model.world_model.fc_policy_head.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
+                self._model.world_model.fc_policy_head.log_sigma_layer.bias.data.uniform_(-init_w, init_w)
+            except Exception as exception:
+                logging.warning(exception)
 
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
@@ -442,6 +456,22 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         dormant_ratio_encoder = self.intermediate_losses['dormant_ratio_encoder']
         dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
+        policy_mu = self.intermediate_losses['policy_mu']
+        policy_sigma = self.intermediate_losses['policy_sigma']
+        target_sampled_actions = self.intermediate_losses['target_sampled_actions']
+
+        if self._cfg.model.continuous_action_space:
+            policy_mu_max=policy_mu[:, 0].max().item()
+            policy_mu_min=policy_mu[:, 0].min().item()
+            policy_mu_mean=policy_mu[:, 0].mean().item()
+            policy_sigma_max=policy_sigma.max().item()
+            policy_sigma_min=policy_sigma.min().item()
+            policy_sigma_mean=policy_sigma.mean().item()
+            # take the fist dim in action space
+            target_sampled_actions_max=target_sampled_actions[:, :, 0].max().item()
+            target_sampled_actions_min=target_sampled_actions[:, :, 0].min().item()
+            target_sampled_actions_mean=target_sampled_actions[:, :, 0].mean().item()
+
 
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
@@ -528,6 +558,23 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             'analysis/grad_norm_before': self.grad_norm_before,
             'analysis/grad_norm_after': self.grad_norm_after,
         }
+
+        if self._cfg.model.continuous_action_space:
+            return_loss_dict.update({
+                # ==============================================================
+                # sampled related core code
+                # ==============================================================
+                'policy_mu_max': policy_mu_max,
+                'policy_mu_min': policy_mu_min,
+                'policy_mu_mean': policy_mu_mean,
+                'policy_sigma_max': policy_sigma_max,
+                'policy_sigma_min': policy_sigma_min,
+                'policy_sigma_mean': policy_sigma_mean,
+                # take the fist dim in action space
+                'target_sampled_actions_max': target_sampled_actions_max,
+                'target_sampled_actions_min': target_sampled_actions_min,
+                'target_sampled_actions_mean': target_sampled_actions_mean
+            })
 
         return return_loss_dict
 
@@ -937,7 +984,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             Register the variables to be monitored in learn mode. The registered variables will be logged in
             tensorboard according to the return value ``_forward_learn``.
         """
-        return [
+        if self._cfg.model.continuous_action_space:
+            return [
             'analysis/dormant_ratio_encoder',
             'analysis/dormant_ratio_world_model',
             'analysis/latent_state_l2_norms',
@@ -986,7 +1034,74 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             'commitment_loss',
             'reconstruction_loss',
             'perceptual_loss',
-        ]
+            # ==============================================================
+            # sampled related core code
+            # ==============================================================
+            'policy_entropy',
+            'target_policy_entropy',
+            'policy_mu_max',
+            'policy_mu_min',
+            'policy_mu_mean',
+            'policy_sigma_max',
+            'policy_sigma_min',
+            'policy_sigma_mean',
+            # take the fist dim in action space
+            'target_sampled_actions_max',
+            'target_sampled_actions_min',
+            'target_sampled_actions_mean',
+            'total_grad_norm_before_clip',
+            ]
+        else:
+            return [
+                'analysis/dormant_ratio_encoder',
+                'analysis/dormant_ratio_world_model',
+                'analysis/latent_state_l2_norms',
+                'analysis/l2_norm_before',
+                'analysis/l2_norm_after',
+                'analysis/grad_norm_before',
+                'analysis/grad_norm_after',
+
+                'analysis/first_step_loss_value',
+                'analysis/first_step_loss_policy',
+                'analysis/first_step_loss_rewards',
+                'analysis/first_step_loss_obs',
+
+                'analysis/middle_step_loss_value',
+                'analysis/middle_step_loss_policy',
+                'analysis/middle_step_loss_rewards',
+                'analysis/middle_step_loss_obs',
+
+                'analysis/last_step_loss_value',
+                'analysis/last_step_loss_policy',
+                'analysis/last_step_loss_rewards',
+                'analysis/last_step_loss_obs',
+
+                'Current_GPU',
+                'Max_GPU',
+                'collect_epsilon',
+                'collect_mcts_temperature',
+                'cur_lr_world_model',
+                'cur_lr_tokenizer',
+
+                'weighted_total_loss',
+                'obs_loss',
+                'policy_loss',
+                'orig_policy_loss',
+                'policy_entropy',
+                'latent_recon_loss',
+                'target_policy_entropy',
+                'reward_loss',
+                'value_loss',
+                'consistency_loss',
+                'value_priority',
+                'target_reward',
+                'target_value',
+                'total_grad_norm_before_clip_wm',
+                # tokenizer
+                'commitment_loss',
+                'reconstruction_loss',
+                'perceptual_loss',
+            ]
 
     def _state_dict_learn(self) -> Dict[str, Any]:
         """

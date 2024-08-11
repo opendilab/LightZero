@@ -70,6 +70,9 @@ class WorldModel(nn.Module):
             self.act_embedding_table = nn.Sequential(
                             nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
                             SimNorm(simnorm_dim=self.group_size))
+            # Freeze parameters # TODO
+            # for param in self.act_embedding_table.parameters():
+            #     param.requires_grad = False
         else: 
             # for discrete action space
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
@@ -81,8 +84,8 @@ class WorldModel(nn.Module):
                                                    self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
         if self.continuous_action_space:
             self.sigma_type = self.config.sigma_type
-            # self.fixed_sigma_value = self.config.fixed_sigma_value
-            # self.bound_type = self.config.bound_type
+            self.fixed_sigma_value = self.config.fixed_sigma_value
+            self.bound_type = self.config.bound_type
             self.head_policy = self._create_head_cont(self.value_policy_tokens_pattern, self.action_space_size)
         else:
             self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
@@ -164,13 +167,14 @@ class WorldModel(nn.Module):
         self.fc_policy_head = ReparameterizationHead(
             input_size=self.config.embed_dim,
             output_size=output_dim,
-            layer_num=2,
+            # layer_num=2,
+            layer_num=1,
             sigma_type=self.sigma_type,
-            # fixed_sigma_value=self.fixed_sigma_value,
-            # activation=nn.GELU(approximate='tanh'),
-            activation=nn.ReLU(),
+            fixed_sigma_value=self.fixed_sigma_value,
+            activation=nn.GELU(approximate='tanh'),
+            # activation=nn.ReLU(),
             norm_type=None,
-            # bound_type=self.bound_type
+            bound_type=self.bound_type
         )
         return PolicyHeadCont(
             max_blocks=self.config.max_blocks,
@@ -183,7 +187,7 @@ class WorldModel(nn.Module):
         last_linear_layer_init_zero = True  # TODO
         if last_linear_layer_init_zero:
             if self.continuous_action_space:
-                module_to_initialize = [ self.head_value, self.head_rewards, self.head_observations]
+                module_to_initialize = [self.head_value, self.head_rewards, self.head_observations]
             else:
                 module_to_initialize = [self.head_policy, self.head_value, self.head_rewards, self.head_observations]
             for head in module_to_initialize:
@@ -331,10 +335,7 @@ class WorldModel(nn.Module):
                 if len(act_tokens.shape) == 3:
                     act_tokens = act_tokens.squeeze(1)
                 num_steps = act_tokens.size(1)
-            try:
-                act_embeddings = self.act_embedding_table(act_tokens)
-            except Exception as e:
-                print(e)
+            act_embeddings = self.act_embedding_table(act_tokens)
             sequences = self._add_position_embeddings(act_embeddings, prev_steps, num_steps, kvcache_independent,
                                                       is_init_infer, valid_context_lengths)
 
@@ -1188,24 +1189,47 @@ class WorldModel(nn.Module):
         discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).mean()
         discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).mean()
 
-        return LossWithIntermediateLosses(
-            latent_recon_loss_weight=self.latent_recon_loss_weight,
-            perceptual_loss_weight=self.perceptual_loss_weight,
-            loss_obs=discounted_loss_obs,
-            loss_rewards=discounted_loss_rewards,
-            loss_value=discounted_loss_value,
-            loss_policy=discounted_loss_policy,
-            latent_recon_loss=discounted_latent_recon_loss,
-            perceptual_loss=discounted_perceptual_loss,
-            orig_policy_loss=discounted_orig_policy_loss,
-            policy_entropy=discounted_policy_entropy,
-            first_step_losses=first_step_losses,
-            middle_step_losses=middle_step_losses,
-            last_step_losses=last_step_losses,
-            dormant_ratio_encoder=dormant_ratio_encoder,
-            dormant_ratio_world_model=dormant_ratio_world_model,
-            latent_state_l2_norms=latent_state_l2_norms,
-        )
+        if self.continuous_action_space:
+            return LossWithIntermediateLosses(
+                latent_recon_loss_weight=self.latent_recon_loss_weight,
+                perceptual_loss_weight=self.perceptual_loss_weight,
+                loss_obs=discounted_loss_obs,
+                loss_rewards=discounted_loss_rewards,
+                loss_value=discounted_loss_value,
+                loss_policy=discounted_loss_policy,
+                latent_recon_loss=discounted_latent_recon_loss,
+                perceptual_loss=discounted_perceptual_loss,
+                orig_policy_loss=discounted_orig_policy_loss,
+                policy_entropy=discounted_policy_entropy,
+                first_step_losses=first_step_losses,
+                middle_step_losses=middle_step_losses,
+                last_step_losses=last_step_losses,
+                dormant_ratio_encoder=dormant_ratio_encoder,
+                dormant_ratio_world_model=dormant_ratio_world_model,
+                latent_state_l2_norms=latent_state_l2_norms,
+                policy_mu=mu,
+                policy_sigma=sigma,
+                target_sampled_actions=target_sampled_actions,
+            )
+        else:
+            return LossWithIntermediateLosses(
+                latent_recon_loss_weight=self.latent_recon_loss_weight,
+                perceptual_loss_weight=self.perceptual_loss_weight,
+                loss_obs=discounted_loss_obs,
+                loss_rewards=discounted_loss_rewards,
+                loss_value=discounted_loss_value,
+                loss_policy=discounted_loss_policy,
+                latent_recon_loss=discounted_latent_recon_loss,
+                perceptual_loss=discounted_perceptual_loss,
+                orig_policy_loss=discounted_orig_policy_loss,
+                policy_entropy=discounted_policy_entropy,
+                first_step_losses=first_step_losses,
+                middle_step_losses=middle_step_losses,
+                last_step_losses=last_step_losses,
+                dormant_ratio_encoder=dormant_ratio_encoder,
+                dormant_ratio_world_model=dormant_ratio_world_model,
+                latent_state_l2_norms=latent_state_l2_norms,
+            )
 
 
     def _calculate_policy_loss_cont_v2(self, outputs, target_policy: torch.Tensor, batch: dict) -> Tuple[
