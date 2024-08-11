@@ -167,7 +167,8 @@ class WorldModel(nn.Module):
             layer_num=2,
             sigma_type=self.sigma_type,
             # fixed_sigma_value=self.fixed_sigma_value,
-            activation=nn.GELU(approximate='tanh'),
+            # activation=nn.GELU(approximate='tanh'),
+            activation=nn.ReLU(),
             norm_type=None,
             # bound_type=self.bound_type
         )
@@ -1234,19 +1235,26 @@ class WorldModel(nn.Module):
 
         # Flatten the unroll step dimension for easier vectorized operations
         policy_logits_all = policy_logits_all.view(batch_size * num_unroll_steps, -1)
-        # mask_batch = mask_batch.view(-1)
-        mask_batch = mask_batch.reshape(-1)
-        child_sampled_actions_batch = child_sampled_actions_batch.reshape(batch_size * num_unroll_steps, -1,
-                                                                       action_space_size)
+        mask_batch = mask_batch.contiguous().view(-1)
+        # mask_batch = mask_batch.reshape(-1)
+        # child_sampled_actions_batch = child_sampled_actions_batch.reshape(batch_size * num_unroll_steps, -1,
+        #                                                                action_space_size)
+        child_sampled_actions_batch = child_sampled_actions_batch.contiguous().view(batch_size * num_unroll_steps, -1,
+                                                                    action_space_size)
 
         mu, sigma = policy_logits_all[:, :action_space_size], policy_logits_all[:, action_space_size:]
-        # sigma = torch.exp(sigma)  # Ensure sigma is positive
 
-        mu = mu.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
-        sigma = sigma.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
+        # mu = mu.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
+        # sigma = sigma.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
+        # dist = Independent(Normal(mu, sigma), 1)
+
+        mu = mu.unsqueeze(1).repeat(1, child_sampled_actions_batch.shape[1], 1)
+        sigma = sigma.unsqueeze(1).repeat(1, child_sampled_actions_batch.shape[1], 1)
         dist = Independent(Normal(mu, sigma), 1)
 
-        target_normalized_visit_count = target_policy.reshape(batch_size * num_unroll_steps, -1)
+        # target_normalized_visit_count = target_policy.reshape(batch_size * num_unroll_steps, -1)
+        target_normalized_visit_count = target_policy.contiguous().view(batch_size * num_unroll_steps, -1)
+
         target_sampled_actions = child_sampled_actions_batch
 
         policy_entropy = dist.entropy().mean(dim=1)

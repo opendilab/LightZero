@@ -18,17 +18,17 @@ infer_context_length = 4
 norm_type = 'LN'
 
 # for debug
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 5
-# batch_size = 2
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+num_simulations = 5
+batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 lunarlander_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero/lunarlander_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_LN_lossV2_actembed-SimNorm_seed0',
+    exp_name=f'data_sampled_unizero_debug/lunarlander_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_LN_lossV2_actembed-SimNorm_fix-expand_seed0',
     env=dict(
         env_id='LunarLanderContinuous-v2',
         continuous=True,
