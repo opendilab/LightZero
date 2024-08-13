@@ -1511,7 +1511,11 @@ class WorldModel(nn.Module):
         mask_fill_value = mask_fill.unsqueeze(-1).expand_as(target_value)
         labels_value = target_value.masked_fill(mask_fill_value, -100)
 
-        return labels_policy.reshape(-1, self.action_space_size), labels_value.reshape(-1, self.support_size)
+        if self.continuous_action_space:
+            return None, labels_value.reshape(-1, self.support_size)
+        else:
+            return labels_policy.reshape(-1, self.action_space_size), labels_value.reshape(-1, self.support_size)
+
 
     def clear_caches(self):
         """

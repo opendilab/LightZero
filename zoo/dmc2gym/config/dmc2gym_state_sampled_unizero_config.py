@@ -5,9 +5,10 @@ from easydict import EasyDict
 
 from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
-env_id = 'hopper-hop' # 'cartpole-swingup'  # You can specify any Atari game here
+env_id = 'cheetah-run' # 'hopper-hop' # 'cartpole-swingup'  # You can specify any Atari game here
 action_space_size = dmc_state_env_action_space_map[env_id]
 obs_space_size = dmc_state_env_obs_space_map[env_id]
+print(f'env_id: {env_id}, action_space_size: {action_space_size}, obs_space_size: {obs_space_size}')
 
 domain_name=env_id.split('-')[0]
 task_name=env_id.split('-')[1]
