@@ -13,25 +13,22 @@ replay_ratio = 0.25
 max_env_step = int(5e5)
 reanalyze_ratio = 0
 batch_size = 64
-# num_unroll_steps = 10
-# infer_context_length = 4
-num_unroll_steps = 5
+num_unroll_steps = 10
 infer_context_length = 4
-norm_type = 'LN'
+norm_type = 'BN'
 
 # for debug
 # collector_env_num = 2
 # n_episode = 2
 # evaluator_env_num = 2
-# num_simulations = 5
-# batch_size = 2
+# num_simulations = 20
+# batch_size = 5
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 lunarlander_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero/lunarlander_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_{norm_type}_lossV2_actembed-SimNorm_fix-expand_fixedsigma03_seed0',
-    # exp_name=f'data_sampled_unizero_debug/lunarlander_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_lossV2_actembed-SimNorm_fix-expand_fixed-act_fixedsigma03_seed0',
+    exp_name=f'data_sampled_unizero/lunarlander_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_{norm_type}_policylossV2-expand_actembed-SimNorm_fixactionlong_seed0',
     env=dict(
         env_id='LunarLanderContinuous-v2',
         continuous=True,
@@ -51,15 +48,11 @@ lunarlander_cont_sampled_unizero_config = dict(
             model_type='mlp',
             world_model_cfg=dict(
                 num_unroll_steps=num_unroll_steps,
-                policy_loss_weight=1,
-                # policy_entropy_loss_weight=1e-4,
-                policy_entropy_loss_weight=0,
+                policy_entropy_loss_weight=1e-4,
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
-                # sigma_type='conditioned',
+                sigma_type='conditioned',
                 fixed_sigma_value=0.3,
-                sigma_type='fixed',
-                # bound_type='tanh',
                 bound_type=None,
                 model_type='mlp',
                 norm_type=norm_type,
@@ -70,13 +63,9 @@ lunarlander_cont_sampled_unizero_config = dict(
                 device='cuda',
                 action_space_size=2,
                 num_layers=2,
-                # num_heads=8,
-                # embed_dim=768,
                 num_heads=2,
                 embed_dim=256,
-                env_num=collector_env_num,
-                collector_env_num=collector_env_num,
-                evaluator_env_num=evaluator_env_num,
+                env_num=max(collector_env_num, evaluator_env_num),
                 obs_type='vector',
             ),
         ),
@@ -92,10 +81,7 @@ lunarlander_cont_sampled_unizero_config = dict(
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
-        target_update_freq=100,
-        # grad_clip_value=5,
-        policy_entropy_loss_weight=0,
-        grad_clip_value=0.5,
+        grad_clip_value=5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

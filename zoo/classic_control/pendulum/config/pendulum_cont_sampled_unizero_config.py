@@ -15,6 +15,7 @@ reanalyze_ratio = 0
 batch_size = 64
 num_unroll_steps = 10
 infer_context_length = 4
+norm_type = 'BN'
 
 # for debug
 # collector_env_num = 2
@@ -27,7 +28,7 @@ infer_context_length = 4
 # ==============================================================
 
 pendulum_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero/pendulum_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
+    exp_name=f'data_sampled_unizero_debug/pendulum_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
     env=dict(
         env_id='Pendulum-v1',
         continuous=True,
@@ -44,16 +45,20 @@ pendulum_cont_sampled_unizero_config = dict(
             action_space_size=1,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            norm_type='LN',
+            norm_type=norm_type,
             model_type='mlp',
             world_model_cfg=dict(
                 num_unroll_steps=num_unroll_steps,
-                policy_loss_weight=1,
                 policy_entropy_loss_weight=1e-4,
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
-                sigma_type='conditioned',
+                # sigma_type='conditioned',
+                fixed_sigma_value=0.3,
+                sigma_type='fixed',
+                # bound_type='tanh',
+                bound_type=None,
                 model_type='mlp',
+                norm_type=norm_type,
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,

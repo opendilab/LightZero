@@ -381,8 +381,12 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
         # Prepare action batch and convert to torch tensor
-        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
-            -1).long()  # For discrete action space
+        if self._cfg.model.continuous_action_space:
+            action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
+                -1)  # For discrete action space
+        else:
+            action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
+                -1).long()  # For discrete action space
         data_list = [mask_batch, target_reward.astype('float32'), target_value.astype('float32'), target_policy,
                      weights]
         [mask_batch, target_reward, target_value, target_policy,
@@ -913,7 +917,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             return
 
         # Determine the clear interval based on the environment's sample type
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200  # TODO
 
         # Clear caches if the current steps are a multiple of the clear interval
         if current_steps % clear_interval == 0:
@@ -958,7 +962,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             return
 
         # Determine the clear interval based on the environment's sample type
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200 # TODO
 
         # Clear caches if the current steps are a multiple of the clear interval
         if current_steps % clear_interval == 0:

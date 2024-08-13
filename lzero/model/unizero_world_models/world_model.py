@@ -1132,7 +1132,7 @@ class WorldModel(nn.Module):
             #                                                                             element='policy')
             """NOTE: continuous action space"""
             orig_policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont_v2(outputs,  batch['target_policy'], batch)
-            loss_policy = orig_policy_loss + self.config.policy_entropy_weight * policy_entropy_loss
+            loss_policy = orig_policy_loss + self.config.policy_entropy_loss_weight * policy_entropy_loss
             policy_entropy = - policy_entropy_loss
 
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
@@ -1241,7 +1241,6 @@ class WorldModel(nn.Module):
             - outputs: Model outputs containing policy logits.
             - target_policy (:obj:`torch.Tensor`): Target policy tensor.
             - batch (:obj:`dict`): Batch data containing mask and sampled actions.
-
         Returns:
             - policy_loss (:obj:`torch.Tensor`): The calculated policy loss.
             - policy_entropy_loss (:obj:`torch.Tensor`): The entropy loss of the policy.
@@ -1268,13 +1267,13 @@ class WorldModel(nn.Module):
 
         mu, sigma = policy_logits_all[:, :action_space_size], policy_logits_all[:, action_space_size:]
 
-        # mu = mu.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
-        # sigma = sigma.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
-        # dist = Independent(Normal(mu, sigma), 1)
-
-        mu = mu.unsqueeze(1).repeat(1, child_sampled_actions_batch.shape[1], 1)
-        sigma = sigma.unsqueeze(1).repeat(1, child_sampled_actions_batch.shape[1], 1)
+        mu = mu.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
+        sigma = sigma.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
         dist = Independent(Normal(mu, sigma), 1)
+
+        # mu = mu.unsqueeze(1).repeat(1, child_sampled_actions_batch.shape[1], 1)
+        # sigma = sigma.unsqueeze(1).repeat(1, child_sampled_actions_batch.shape[1], 1)
+        # dist = Independent(Normal(mu, sigma), 1)
 
         # target_normalized_visit_count = target_policy.reshape(batch_size * num_unroll_steps, -1)
         target_normalized_visit_count = target_policy.contiguous().view(batch_size * num_unroll_steps, -1)
@@ -1307,7 +1306,7 @@ class WorldModel(nn.Module):
 
         return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
 
-    def _calculate_policy_loss_cont(self, outputs, target_policy: torch.Tensor, batch: dict) -> Tuple[
+    def _calculate_policy_loss_cont_v1(self, outputs, target_policy: torch.Tensor, batch: dict) -> Tuple[
         torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Calculate the policy loss for continuous actions.

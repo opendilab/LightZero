@@ -11,7 +11,8 @@ replay_ratio = 0.25
 max_env_step = int(1e6)
 reanalyze_ratio = 0
 batch_size = 256
-num_unroll_steps = 5
+num_unroll_steps = 10
+infer_context_length = 4
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -37,11 +38,10 @@ pendulum_cont_disc_unizero_config = dict(
             norm_type='BN',
             model_type='mlp',
             world_model_cfg=dict(
-                max_blocks=10,
-                max_tokens=2 * 10,
-                context_length=2 * 4,
-                context_length_for_recurrent=2 * 4,
-                device='cpu',
+                max_blocks=num_unroll_steps,
+                max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
+                context_length=2 * infer_context_length,
+                device='cuda',
                 action_space_size=11,
                 num_layers=2,
                 num_heads=2,
