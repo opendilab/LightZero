@@ -15,7 +15,7 @@ reanalyze_ratio = 0
 batch_size = 64
 num_unroll_steps = 10
 infer_context_length = 4
-norm_type = 'BN'
+norm_type = 'LN'
 
 # for debug
 # collector_env_num = 2
@@ -28,7 +28,7 @@ norm_type = 'BN'
 # ==============================================================
 
 lunarlander_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero/lunarlander_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_{norm_type}_policylossV2-expand_actembed-SimNorm_fixactionlong_seed0',
+    exp_name=f'data_sampled_unizero/lunarlander_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_{norm_type}_seed0',
     env=dict(
         env_id='LunarLanderContinuous-v2',
         continuous=True,
@@ -63,8 +63,8 @@ lunarlander_cont_sampled_unizero_config = dict(
                 device='cuda',
                 action_space_size=2,
                 num_layers=2,
-                num_heads=2,
-                embed_dim=256,
+                num_heads=8,
+                embed_dim=768,
                 env_num=max(collector_env_num, evaluator_env_num),
                 obs_type='vector',
             ),

@@ -3,6 +3,15 @@ import torch.nn as nn
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
+
+env_id = 'hopper-hop' # 'cartpole-swingup'  # You can specify any Atari game here
+action_space_size = dmc_state_env_action_space_map[env_id]
+obs_space_size = dmc_state_env_obs_space_map[env_id]
+
+domain_name=env_id.split('-')[0]
+task_name=env_id.split('-')[1]
+
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
@@ -15,16 +24,18 @@ batch_size = 1024
 max_env_step = int(1e6)
 reanalyze_ratio = 0.
 norm_type = 'LN'
+seed = 0
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 dmc2gym_state_cont_sampled_muzero_config = dict(
-    exp_name=f'data_smz/dmc2gym_state_cont_sampled_muzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
+    exp_name=f'data_smz/dmc2gym_{env_id}_state_cont_sampled_muzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_{norm_type}_seed{seed}',
     env=dict(
         env_id='dmc2gym-v0',
-        domain_name="cartpole",
-        task_name="swingup",
+        domain_name=domain_name,
+        task_name=task_name,
         from_pixels=False,  # vector/state obs
         frame_skip=8,
         continuous=True,
@@ -35,20 +46,20 @@ dmc2gym_state_cont_sampled_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=5,
-            action_space_size=1,
+            observation_shape=obs_space_size,
+            action_space_size=action_space_size,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             sigma_type='conditioned',
             model_type='mlp',
-            latent_state_dim=256,
+            latent_state_dim=512,
             norm_type=norm_type,
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=125,
+        game_segment_length=100,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         use_priority=False,
@@ -89,4 +100,4 @@ create_config = dmc2gym_state_cont_sampled_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

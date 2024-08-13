@@ -28,7 +28,7 @@ norm_type = 'LN'
 # ==============================================================
 
 bipedalwalker_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero/bipedalwalker_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_LN_seed0',
+    exp_name=f'data_sampled_unizero/bipedalwalker_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed0',
     env=dict(
         env_id='BipedalWalker-v3',
         env_type='normal',
@@ -46,18 +46,17 @@ bipedalwalker_cont_sampled_unizero_config = dict(
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             sigma_type='conditioned',
-            self_supervised_learning_loss=True,  # NOTE: default is False.
-            discrete_action_encoding_type='one_hot',
             norm_type=norm_type,
             model_type='mlp',
             world_model_cfg=dict(
                 num_unroll_steps=num_unroll_steps,
-                # (float) The weight of policy entropy loss.
                 policy_entropy_loss_weight=1e-4,
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
                 sigma_type='conditioned',
                 norm_type=norm_type,
+                fixed_sigma_value=0.3,
+                bound_type=None,
                 model_type='mlp',
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action

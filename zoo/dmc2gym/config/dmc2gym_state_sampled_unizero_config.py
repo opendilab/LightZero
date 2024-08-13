@@ -2,6 +2,17 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+
+from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
+
+env_id = 'hopper-hop' # 'cartpole-swingup'  # You can specify any Atari game here
+action_space_size = dmc_state_env_action_space_map[env_id]
+obs_space_size = dmc_state_env_obs_space_map[env_id]
+
+domain_name=env_id.split('-')[0]
+task_name=env_id.split('-')[1]
+
+
 continuous_action_space = True
 K = 20  # num_of_sampled_actions
 collector_env_num = 8
@@ -10,12 +21,13 @@ evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
-max_env_step = int(2e6)
+max_env_step = int(5e6)
 reanalyze_ratio = 0
 batch_size = 64
 num_unroll_steps = 10
 infer_context_length = 4
 norm_type = 'LN'
+seed = 0
 
 # for debug
 # collector_env_num = 2
@@ -28,11 +40,11 @@ norm_type = 'LN'
 # ==============================================================
 
 dmc2gym_state_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero/dmc2gym_state_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
+    exp_name=f'data_sampled_unizero/dmc2gym_{env_id}_state_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}',
     env=dict(
         env_id='dmc2gym-v0',
-        domain_name="cartpole",
-        task_name="swingup",
+        domain_name=domain_name,
+        task_name=task_name,
         from_pixels=False,  # vector/state obs
         frame_skip=8,
         continuous=True,
@@ -43,8 +55,8 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=5,
-            action_space_size=1,
+            observation_shape=obs_space_size,
+            action_space_size=action_space_size,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             sigma_type='conditioned',
@@ -57,13 +69,15 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
                 sigma_type='conditioned',
+                fixed_sigma_value=0.3,
+                bound_type=None,
                 model_type='mlp',
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,
                 # device='cpu',
                 device='cuda',
-                action_space_size=1,
+                action_space_size=action_space_size,
                 num_layers=2,
                 num_heads=8,
                 embed_dim=768,
@@ -79,7 +93,7 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
         cuda=True,
         use_augmentation=False,
         env_type='not_board_games',
-        game_segment_length=125,
+        game_segment_length=100,
         replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type='AdamW',
@@ -116,4 +130,4 @@ create_config = dmc2gym_state_cont_sampled_unizero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_unizero
-    train_unizero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_unizero([main_config, create_config], seed=seed, max_env_step=max_env_step)

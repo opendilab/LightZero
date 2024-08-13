@@ -49,13 +49,13 @@ dmc2gym_env_info = {
     "cartpole": {
         "balance": {
             "observation_space": dmc2gym_observation_space(5),
-            "state_space": dmc2gym_state_space(5),
+            "state_space": dmc2gym_state_space(4),
             "action_space": dmc2gym_action_space(1),
             "reward_space": dmc2gym_reward_space()
         },
         "swingup": {
             "observation_space": dmc2gym_observation_space(5),
-            "state_space": dmc2gym_state_space(5),
+            "state_space": dmc2gym_state_space(4),
             "action_space": dmc2gym_action_space(1),
             "reward_space": dmc2gym_reward_space()
         }
@@ -63,7 +63,7 @@ dmc2gym_env_info = {
     "cheetah": {
         "run": {
             "observation_space": dmc2gym_observation_space(17),
-            "state_space": dmc2gym_state_space(17),
+            "state_space": dmc2gym_state_space(18),
             "action_space": dmc2gym_action_space(6),
             "reward_space": dmc2gym_reward_space()
         }
@@ -91,7 +91,23 @@ dmc2gym_env_info = {
             "action_space": dmc2gym_action_space(6),
             "reward_space": dmc2gym_reward_space()
         }
+    },
+    "hopper": {
+        "hop": {
+            "observation_space": dmc2gym_observation_space(15),
+            "state_space": dmc2gym_state_space(14),
+            "action_space": dmc2gym_action_space(4),
+            "reward_space": dmc2gym_reward_space()
+        }
+    },
+    "humanoid": {
+    "run": {
+        "observation_space": dmc2gym_observation_space(67),
+        "state_space": dmc2gym_state_space(54),
+        "action_space": dmc2gym_action_space(21),
+        "reward_space": dmc2gym_reward_space()
     }
+}
 }
 
 
