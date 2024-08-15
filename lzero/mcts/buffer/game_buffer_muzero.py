@@ -234,6 +234,7 @@ class MuZeroGameBuffer(GameBuffer):
         game_segment_lens = []
         # for board games
         action_mask_segment, to_play_segment = [], []
+        # step_index_segment = []
 
         td_steps_list = []
         for game_segment, state_index, idx in zip(game_segment_list, pos_in_game_segment_list, batch_index_list):
@@ -252,6 +253,8 @@ class MuZeroGameBuffer(GameBuffer):
             # for board games
             action_mask_segment.append(game_segment.action_mask_segment)
             to_play_segment.append(game_segment.to_play_segment)
+
+            # step_index_segment.append(game_segment.step_index_segment)
 
             for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                 # get the <num_unroll_steps+1>  bootstrapped target obs

@@ -99,6 +99,7 @@ class AtariEnvLightZero(BaseEnv):
         self.channel_last = cfg.channel_last
         self.clip_rewards = cfg.clip_rewards
         self.episode_life = cfg.episode_life
+        self.step_index = 0
 
     def reset(self) -> dict:
         """
@@ -133,6 +134,7 @@ class AtariEnvLightZero(BaseEnv):
         self.obs = to_ndarray(obs)
         self._eval_episode_return = 0.
         obs = self.observe()
+        self.step_index = 0
         return obs
 
     def step(self, action: int) -> BaseEnvTimestep:
@@ -149,9 +151,9 @@ class AtariEnvLightZero(BaseEnv):
         self.reward = np.array(reward).astype(np.float32)
         self._eval_episode_return += self.reward
         observation = self.observe()
+        self.step_index += 1
         if done:
             info['eval_episode_return'] = self._eval_episode_return
-
         return BaseEnvTimestep(observation, self.reward, done, info)
 
     def observe(self) -> dict:
@@ -169,7 +171,7 @@ class AtariEnvLightZero(BaseEnv):
             observation = np.transpose(observation, (2, 0, 1))
 
         action_mask = np.ones(self._action_space.n, 'int8')
-        return {'observation': observation, 'action_mask': action_mask, 'to_play': -1}
+        return {'observation': observation, 'action_mask': action_mask, 'to_play': -1, 'step_index': self.step_index}
 
     @property
     def legal_actions(self):
