@@ -28,7 +28,10 @@ class TransformerConfig:
     embed_pdrop: float
     resid_pdrop: float
     attn_pdrop: float
-
+    
+    # for RoPE
+    rope_theta: float
+    max_seq_len: int
     @property
     def max_tokens(self):
         return self.tokens_per_block * self.max_blocks
@@ -55,8 +58,6 @@ class Transformer(nn.Module):
         self.blocks = nn.ModuleList([Block(config) for _ in range(config.num_layers)])
         self.ln_f = nn.LayerNorm(config.embed_dim)
 
-        self.config.rope_theta = 500000
-        self.config.max_seq_len = 2048
 
         self.freqs_cis = precompute_freqs_cis(
             self.config.embed_dim // self.config.num_heads,
@@ -99,7 +100,7 @@ class Transformer(nn.Module):
         x = self.drop(sequences)
         for i, block in enumerate(self.blocks):
             x = block(x, None if past_keys_values is None else past_keys_values[i], valid_context_lengths, start_pos, freqs_cis)
-
+        # TODO: pass the index into start_pos here
         x = self.ln_f(x)
         return x
 

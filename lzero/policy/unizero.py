@@ -553,11 +553,12 @@ class UniZeroPolicy(MuZeroPolicy):
     def _forward_collect(
             self,
             data: torch.Tensor,
-            action_mask: list = None,
+            action_mask: List = None,
             temperature: float = 1,
             to_play: List = [-1],
             epsilon: float = 0.25,
-            ready_env_id: np.array = None
+            ready_env_id: np.ndarray = None,
+            step_index: List = [0]
     ) -> Dict:
         """
         Overview:
@@ -569,6 +570,7 @@ class UniZeroPolicy(MuZeroPolicy):
             - temperature (:obj:`float`): The temperature of the policy.
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
+            - step_index (:obj:`list`): The step index of the env in one episode
         Shape:
             - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
@@ -578,6 +580,7 @@ class UniZeroPolicy(MuZeroPolicy):
             - temperature: :math:`(1, )`.
             - to_play: :math:`(N, 1)`, where N is the number of collect_env.
             - ready_env_id: None
+            - step_index: :math:`(N, 1)`, where N is the number of collect_env.
         Returns:
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
@@ -655,6 +658,7 @@ class UniZeroPolicy(MuZeroPolicy):
                     'searched_value': value,
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
+                    'step_index': step_index[i]
                 }
                 batch_action.append(action)
 
@@ -683,7 +687,7 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
-                      ready_env_id: np.array = None) -> Dict:
+                      ready_env_id: np.array = None, step_index: int = 0) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.

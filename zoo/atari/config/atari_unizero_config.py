@@ -51,7 +51,7 @@ atari_unizero_config = dict(
             observation_shape=(3, 64, 64),
             action_space_size=action_space_size,
             world_model_cfg=dict(
-                rotary_emb=True,
+                rotary_emb=False,
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,
@@ -61,6 +61,9 @@ atari_unizero_config = dict(
                 num_layers=2,
                 num_heads=8,
                 embed_dim=768,
+                # for RoPE
+                rope_theta=10000,
+                max_seq_len=2048,
                 obs_type='image',
                 env_num=max(collector_env_num, evaluator_env_num),
             ),
@@ -102,6 +105,6 @@ if __name__ == "__main__":
     seeds = [0]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_unizero/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
+        main_config.exp_name = f'data_unizero_debug/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
