@@ -257,6 +257,7 @@
 <div class="viewcode-block" id="DownSample.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.DownSample.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_shape</span><span class="p">:</span> <span class="n">SequenceType</span><span class="p">,</span> <span class="n">out_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
                  <span class="n">activation</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
                  <span class="n">norm_type</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;BN&#39;</span><span class="p">,</span>
+                 <span class="n">num_resblocks</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
                  <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
@@ -269,7 +270,8 @@
 <span class="sd">            - out_channels (:obj:`int`): The output channels of output hidden state.</span>
 <span class="sd">            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(inplace=True). \</span>
 <span class="sd">                Use the inplace operation to speed up.</span>
-<span class="sd">            - norm_type (:obj:`Optional[str]`): The normalization type used in network, defaults to &#39;BN&#39;. </span>
+<span class="sd">            - norm_type (:obj:`Optional[str]`): The normalization type used in network, defaults to &#39;BN&#39;.</span>
+<span class="sd">            - num_resblocks (:obj:`int`): The number of residual blocks. Defaults to 1.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="k">assert</span> <span class="n">norm_type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span> <span class="s1">&#39;LN&#39;</span><span class="p">],</span> <span class="s2">&quot;norm_type must in [&#39;BN&#39;, &#39;LN&#39;]&quot;</span>
@@ -297,7 +299,7 @@
                     <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span><span class="p">,</span>
                     <span class="n">res_type</span><span class="o">=</span><span class="s1">&#39;basic&#39;</span><span class="p">,</span>
                     <span class="n">bias</span><span class="o">=</span><span class="kc">False</span>
-                <span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_resblocks</span><span class="p">)</span>
             <span class="p">]</span>
         <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">downsample_block</span> <span class="o">=</span> <span class="n">ResBlock</span><span class="p">(</span>
@@ -312,7 +314,7 @@
             <span class="p">[</span>
                 <span class="n">ResBlock</span><span class="p">(</span>
                     <span class="n">in_channels</span><span class="o">=</span><span class="n">out_channels</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span> <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span><span class="p">,</span> <span class="n">res_type</span><span class="o">=</span><span class="s1">&#39;basic&#39;</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="kc">False</span>
-                <span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+                <span class="p">)</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_resblocks</span><span class="p">)</span>
             <span class="p">]</span>
         <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">pooling1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">AvgPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
@@ -352,6 +354,9 @@
         <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="mi">96</span><span class="p">:</span>
             <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pooling2</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
             <span class="n">output</span> <span class="o">=</span> <span class="n">x</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;DownSample for observation shape </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">observation_shape</span><span class="si">}</span><span class="s2"> is not implemented now. &quot;</span>
+                                      <span class="sa">f</span><span class="s2">&quot;You should transform the observation shape to 64 or 96 in the env.&quot;</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">output</span></div></div>
 
@@ -428,7 +433,6 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">sim_norm</span> <span class="o">=</span> <span class="n">SimNorm</span><span class="p">(</span><span class="n">simnorm_dim</span><span class="o">=</span><span class="n">group_size</span><span class="p">)</span></div>
 
-
 <div class="viewcode-block" id="RepresentationNetworkUniZero.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkUniZero.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Shapes:</span>
@@ -446,8 +450,9 @@
         <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">resblocks</span><span class="p">:</span>
             <span class="n">x</span> <span class="o">=</span> <span class="n">block</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
 
-        <span class="c1"># NOTE: very important. </span>
-        <span class="c1"># for atari (64,8,8), flatten_size = 4096 -&gt; 768</span>
+        <span class="c1"># Important: Transform the output feature plane to the latent state.</span>
+        <span class="c1"># For example, for an Atari feature plane of shape (64, 8, 8),</span>
+        <span class="c1"># flattening results in a size of 4096, which is then transformed to 768.</span>
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_linear</span><span class="p">(</span><span class="n">x</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">64</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">*</span> <span class="mi">8</span><span class="p">))</span>
         <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">embedding_dim</span><span class="p">)</span>
 
