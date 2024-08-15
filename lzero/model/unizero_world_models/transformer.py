@@ -11,6 +11,7 @@ import torch.nn as nn
 from ding.torch_utils.network import GRUGatingUnit
 from einops import rearrange
 from torch.nn import functional as F
+import numpy as np
 
 from .kv_caching import KeysValues
 
@@ -58,7 +59,6 @@ class Transformer(nn.Module):
         self.blocks = nn.ModuleList([Block(config) for _ in range(config.num_layers)])
         self.ln_f = nn.LayerNorm(config.embed_dim)
 
-
         self.freqs_cis = precompute_freqs_cis(
             self.config.embed_dim // self.config.num_heads,
             self.config.max_seq_len * 2,
@@ -94,13 +94,28 @@ class Transformer(nn.Module):
         """
         seqlen = sequences.shape[1]
         self.freqs_cis = self.freqs_cis.to(sequences.device)
-        freqs_cis = self.freqs_cis[start_pos : start_pos + seqlen]
+
+        # freqs_cis = self.freqs_cis[start_pos: start_pos + seqlen]
+
+        # If the start position is greater than the predefined maximum sequence length, wrap around
+        start_pos = torch.tensor(np.array(start_pos))
+        if len(start_pos.shape) > 1:
+            # TODO: train start pos [0]
+            start_pos = torch.remainder(start_pos, self.config.max_seq_len)[:,0]
+        else:
+            start_pos = torch.remainder(start_pos, self.config.max_seq_len)
+
+        start_pos_list = torch.unbind(start_pos)
+        try:
+            freqs_cis_slices = [self.freqs_cis[int(pos.item()): int(pos.item()) + seqlen] for pos in start_pos_list]
+        except:
+            print('debug')
+        freqs_cis = torch.stack(freqs_cis_slices).squeeze(1)
 
         assert past_keys_values is None or len(past_keys_values) == len(self.blocks)
         x = self.drop(sequences)
         for i, block in enumerate(self.blocks):
-            x = block(x, None if past_keys_values is None else past_keys_values[i], valid_context_lengths, start_pos, freqs_cis)
-        # TODO: pass the index into start_pos here
+            x = block(x, None if past_keys_values is None else past_keys_values[i], valid_context_lengths, freqs_cis)
         x = self.ln_f(x)
         return x
 
@@ -143,7 +158,7 @@ class Block(nn.Module):
         )
 
     def forward(self, x: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
-                valid_context_lengths: Optional[torch.Tensor] = None, start_pos: int = 0, freqs_cis: torch.Tensor = None) -> torch.Tensor:
+                valid_context_lengths: Optional[torch.Tensor] = None, freqs_cis: torch.Tensor = None) -> torch.Tensor:
         """
         Forward pass of the Transformer block.
 
@@ -155,7 +170,7 @@ class Block(nn.Module):
         Returns:
             - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
-        x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths, start_pos, freqs_cis)
+        x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths, freqs_cis)
         if self.gru_gating:
             x = self.gate1(x, x_attn)
             x = self.gate2(x, self.mlp(self.ln2(x)))
@@ -173,12 +188,16 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
     freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64
     return freqs_cis
 
+
 def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
     ndim = x.ndim
-    print(f"freqs_cis 的 shape是{freqs_cis.shape}, 而 x 的 shape 是{x.shape}")
+    # print(f"freqs_cis shape: {freqs_cis.shape}, x shape: {x.shape}")
     assert 0 <= 1 < ndim
-    assert freqs_cis.shape == (x.shape[2], x.shape[-1])
-    shape = [d if i == 2 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
+    # assert freqs_cis.shape == (x.shape[2], x.shape[-1])
+    # shape = [d if i == 2 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
+    # TODO: check
+    shape = [d if i == 2 or i == ndim - 1 or i == 0 else 1 for i, d in enumerate(x.shape)]
+
     return freqs_cis.view(*shape)
 
 
@@ -189,7 +208,10 @@ def apply_rotary_emb(
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
-    freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
+    try:
+        freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
+    except:
+        print('We are at the reset timestep!')
     xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(-2)
     xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(-2)
     return xq_out.type_as(xq), xk_out.type_as(xk)
@@ -232,7 +254,7 @@ class SelfAttention(nn.Module):
         self.register_buffer('mask', causal_mask)
 
     def forward(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None,
-                valid_context_lengths: Optional[torch.Tensor] = None,  start_pos: int = 0, freqs_cis: torch.Tensor = None) -> torch.Tensor:
+                valid_context_lengths: Optional[torch.Tensor] = None,  freqs_cis: torch.Tensor = None) -> torch.Tensor:
         """
         Forward pass for the self-attention mechanism.
 

@@ -243,6 +243,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
 
             to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
+            step_index_dict = {i: to_ndarray(init_obs[i]['step_index']) for i in range(env_nums)}
             dones = np.array([False for _ in range(env_nums)])
 
             game_segments = [
@@ -273,8 +274,10 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                     action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
                     to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
+                    step_index_dict = {env_id: step_index_dict[env_id] for env_id in ready_env_id}
                     action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
                     to_play = [to_play_dict[env_id] for env_id in ready_env_id]
+                    step_index = [step_index_dict[env_id] for env_id in ready_env_id]
 
                     stack_obs = to_ndarray(stack_obs)
                     stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
@@ -283,7 +286,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     # policy forward
                     # ==============================================================
-                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id)
+                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id, step_index=step_index)
 
                     actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                     distributions_dict_with_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
@@ -295,6 +298,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                     value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
                     pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
+                    step_index_dict_with_env_id = {k: v['step_index'] for k, v in policy_output.items()}
                     visit_entropy_dict_with_env_id = {
                         k: v['visit_count_distribution_entropy']
                         for k, v in policy_output.items()
@@ -306,6 +310,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                         root_sampled_actions_dict = {}
                     value_dict = {}
                     pred_value_dict = {}
+                    step_index_dict = {}
                     visit_entropy_dict = {}
                     for index, env_id in enumerate(ready_env_id):
                         actions[env_id] = actions_with_env_id.pop(env_id)
@@ -314,6 +319,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                             root_sampled_actions_dict[env_id] = root_sampled_actions_dict_with_env_id.pop(env_id)
                         value_dict[env_id] = value_dict_with_env_id.pop(env_id)
                         pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
+                        step_index_dict[env_id] = step_index_dict_with_env_id.pop(env_id)
                         visit_entropy_dict[env_id] = visit_entropy_dict_with_env_id.pop(env_id)
 
                     # ==============================================================
@@ -331,13 +337,14 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                            to_play_dict[env_id]
+                            to_play_dict[env_id], step_index_dict[env_id]
                         )
 
                         # NOTE: the position of code snippet is very important.
                         # the obs['action_mask'] and obs['to_play'] are corresponding to next action
                         action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                         to_play_dict[env_id] = to_ndarray(obs['to_play'])
+                        step_index_dict[env_id] = to_ndarray(obs['step_index'])
 
                         dones[env_id] = done
                         if t.done:
@@ -384,6 +391,7 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                                 action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                                 to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
+                                step_index_dict[env_id] = to_ndarray(init_obs[env_id]['step_index'])
 
                                 game_segments[env_id] = GameSegment(
                                     self._env.action_space,

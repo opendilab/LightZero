@@ -244,7 +244,7 @@ class WorldModel(nn.Module):
     def forward(self, obs_embeddings_or_act_tokens: Dict[str, Union[torch.Tensor, tuple]],
                 past_keys_values: Optional[torch.Tensor] = None,
                 kvcache_independent: bool = False, is_init_infer: bool = True,
-                valid_context_lengths: Optional[torch.Tensor] = None) -> WorldModelOutput:
+                valid_context_lengths: Optional[torch.Tensor] = None, start_pos: int = 0) -> WorldModelOutput:
         """
         Forward pass for the model.
 
@@ -298,7 +298,7 @@ class WorldModel(nn.Module):
             sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
 
         # Pass sequences through transformer
-        x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths)
+        x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths, start_pos=start_pos)
 
         # Generate logits
         logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
@@ -369,7 +369,7 @@ class WorldModel(nn.Module):
             return_result += self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device))
         return return_result, num_steps
 
-    def _transformer_pass(self, sequences, past_keys_values, kvcache_independent, valid_context_lengths):
+    def _transformer_pass(self, sequences, past_keys_values, kvcache_independent, valid_context_lengths, start_pos: int = 0):
         """
         Pass sequences through the transformer.
 
@@ -383,14 +383,14 @@ class WorldModel(nn.Module):
         """
         if kvcache_independent:
             x = [self.transformer(sequences[k].unsqueeze(0), past_kv,
-                                  valid_context_lengths=valid_context_lengths[k].unsqueeze(0)) for k, past_kv in
+                                  valid_context_lengths=valid_context_lengths[k].unsqueeze(0), start_pos=start_pos) for k, past_kv in
                  enumerate(past_keys_values)]
             return torch.cat(x, dim=0)
         else:
-            return self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths)
+            return self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths, start_pos=start_pos)
 
     @torch.no_grad()
-    def reset_from_initial_observations(self, obs_act_dict: torch.FloatTensor) -> torch.FloatTensor:
+    def reset_from_initial_observations(self, obs_act_dict: torch.FloatTensor, start_pos: int = 0) -> torch.FloatTensor:
         """
         Reset the model state based on initial observations and actions.
 
@@ -414,18 +414,18 @@ class WorldModel(nn.Module):
             current_obs_embeddings = self.tokenizer.encode_to_obs_embeddings(current_obs)
             # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
             self.latent_state = current_obs_embeddings
-            outputs_wm = self.refresh_kvs_with_initial_latent_state_for_init_infer(obs_embeddings, buffer_action, current_obs_embeddings)
+            outputs_wm = self.refresh_kvs_with_initial_latent_state_for_init_infer(obs_embeddings, buffer_action, current_obs_embeddings, start_pos)
         else:
             # ================ calculate the target value in Train phase ================
             self.latent_state = obs_embeddings
-            outputs_wm = self.refresh_kvs_with_initial_latent_state_for_init_infer(obs_embeddings, buffer_action, None)
+            outputs_wm = self.refresh_kvs_with_initial_latent_state_for_init_infer(obs_embeddings, buffer_action, None, start_pos)
 
         return outputs_wm, self.latent_state
 
     @torch.no_grad()
     def refresh_kvs_with_initial_latent_state_for_init_infer(self, latent_state: torch.LongTensor,
                                                              buffer_action=None,
-                                                             current_obs_embeddings=None) -> torch.FloatTensor:
+                                                             current_obs_embeddings=None, start_pos: int = 0) -> torch.FloatTensor:
         """
         Refresh key-value pairs with the initial latent state for inference.
 
@@ -446,7 +446,7 @@ class WorldModel(nn.Module):
                                                                                       max_tokens=self.context_length)
                     # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
                     outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings},
-                                              past_keys_values=self.keys_values_wm, is_init_infer=True)
+                                              past_keys_values=self.keys_values_wm, is_init_infer=True, start_pos=start_pos)
 
                     # Copy and store keys_values_wm for a single environment
                     self.update_cache_context(current_obs_embeddings, is_init_infer=True)
@@ -455,6 +455,7 @@ class WorldModel(nn.Module):
                     ready_env_num = current_obs_embeddings.shape[0]
                     self.keys_values_wm_list = []
                     self.keys_values_wm_size_list = []
+
                     for i in range(ready_env_num):
                         # Retrieve latent state for a single environment
                         state_single_env = latent_state[i]
@@ -473,10 +474,13 @@ class WorldModel(nn.Module):
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
                             # Reset using zero values
+                            # TODO: This is a temporary solution. We need to handle this case properly.
+                            # start_pos = [start_pos[0]]
+                            start_pos = [np.array(0)]
                             self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
                             outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
                                                       past_keys_values=self.keys_values_wm_single_env,
-                                                      is_init_infer=True)
+                                                      is_init_infer=True, start_pos=start_pos)
                             self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                             self.keys_values_wm_size_list.append(1)
 
@@ -484,14 +488,17 @@ class WorldModel(nn.Module):
                     self.keys_values_wm_size_list_current = self.trim_and_pad_kv_cache(is_init_infer=True)
 
                     buffer_action = buffer_action[:ready_env_num]
+                    # TODO
+                    start_pos = start_pos[:ready_env_num]
+
                     # if ready_env_num < self.env_num:
                     #     print(f'init inference ready_env_num: {ready_env_num} < env_num: {self.env_num}')
                     act_tokens = torch.from_numpy(np.array(buffer_action)).to(latent_state.device).unsqueeze(-1)
                     outputs_wm = self.forward({'act_tokens': act_tokens}, past_keys_values=self.keys_values_wm,
-                                              is_init_infer=True)
+                                              is_init_infer=True, start_pos=start_pos)
 
                     outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings},
-                                              past_keys_values=self.keys_values_wm, is_init_infer=True)
+                                              past_keys_values=self.keys_values_wm, is_init_infer=True, start_pos=start_pos)
 
                     # Copy and store keys_values_wm for a single environment
                     self.update_cache_context(current_obs_embeddings, is_init_infer=True)
@@ -512,7 +519,7 @@ class WorldModel(nn.Module):
             last_steps_act = act_tokens[:, -1:, :]
             act_tokens = torch.cat((act_tokens, last_steps_act), dim=1)
 
-            outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (latent_state, act_tokens)})
+            outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (latent_state, act_tokens)}, start_pos=start_pos)
 
             # select the last timestep for each sample
             last_steps_value = outputs_wm.logits_value[:, -1:, :]
@@ -529,7 +536,7 @@ class WorldModel(nn.Module):
         return outputs_wm
 
     @torch.no_grad()
-    def forward_initial_inference(self, obs_act_dict):
+    def forward_initial_inference(self, obs_act_dict, start_pos: int = 0):
         """
         Perform initial inference based on the given observation-action dictionary.
 
@@ -539,7 +546,7 @@ class WorldModel(nn.Module):
             - tuple: A tuple containing output sequence, latent state, logits rewards, logits policy, and logits value.
         """
         # UniZero has context in the root node
-        outputs_wm, latent_state = self.reset_from_initial_observations(obs_act_dict)
+        outputs_wm, latent_state = self.reset_from_initial_observations(obs_act_dict, start_pos)
         self.past_kv_cache_recurrent_infer.clear()
 
         return (outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards,
@@ -547,7 +554,7 @@ class WorldModel(nn.Module):
 
     @torch.no_grad()
     def forward_recurrent_inference(self, state_action_history, simulation_index=0,
-                                    latent_state_index_in_search_path=[]):
+                                    latent_state_index_in_search_path=[], start_pos: int = 0):
         """
         Perform recurrent inference based on the state-action history.
 
@@ -563,7 +570,7 @@ class WorldModel(nn.Module):
 
         self.keys_values_wm_list = []
         self.keys_values_wm_size_list = []
-        self.keys_values_wm_size_list = self.retrieve_or_generate_kvcache(latest_state, ready_env_num, simulation_index)
+        self.keys_values_wm_size_list = self.retrieve_or_generate_kvcache(latest_state, ready_env_num, simulation_index, start_pos)
 
         latent_state_list = []
         token = action.reshape(-1, 1)
@@ -600,7 +607,8 @@ class WorldModel(nn.Module):
                 obs_embeddings_or_act_tokens,
                 past_keys_values=self.keys_values_wm,
                 kvcache_independent=False,
-                is_init_infer=False
+                is_init_infer=False,
+                start_pos = start_pos
             )
 
             self.keys_values_wm_size_list_current = [i + 1 for i in self.keys_values_wm_size_list_current]
@@ -816,7 +824,7 @@ class WorldModel(nn.Module):
                 self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
 
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
-                                     simulation_index: int = 0) -> list:
+                                     simulation_index: int = 0, start_pos: int = 0) -> list:
         """
         Retrieves or generates key-value caches for each environment based on the latent state.
 
@@ -856,7 +864,7 @@ class WorldModel(nn.Module):
                 )
                 self.forward(
                     {'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)},
-                    past_keys_values=self.keys_values_wm_single_env, is_init_infer=True
+                    past_keys_values=self.keys_values_wm_single_env, is_init_infer=True, start_pos=start_pos
                 )
                 self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                 self.keys_values_wm_size_list.append(1)
@@ -864,6 +872,8 @@ class WorldModel(nn.Module):
         return self.keys_values_wm_size_list
 
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None, **kwargs: Any) -> LossWithIntermediateLosses:
+        start_pos = batch['step_index']
+
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
@@ -950,7 +960,7 @@ class WorldModel(nn.Module):
         act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
 
         # Forward pass to obtain predictions for observations, rewards, and policies
-        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)})
+        outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
 
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio:

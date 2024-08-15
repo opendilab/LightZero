@@ -20,14 +20,14 @@ num_unroll_steps = 10
 infer_context_length = 4
 
 # ====== only for debug =====
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 5
-# max_env_step = int(5e5)
-# reanalyze_ratio = 0.
-# batch_size = 2
-# num_unroll_steps = 10
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+num_simulations = 5
+max_env_step = int(5e5)
+reanalyze_ratio = 0.
+batch_size = 2
+num_unroll_steps = 10
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -51,12 +51,13 @@ atari_unizero_config = dict(
             observation_shape=(3, 64, 64),
             action_space_size=action_space_size,
             world_model_cfg=dict(
-                rotary_emb=False,
+                # rotary_emb=False,
+                rotary_emb=True,
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,
-                device='cuda',
-                # device='cpu',
+                # device='cuda',
+                device='cpu',
                 action_space_size=action_space_size,
                 num_layers=2,
                 num_heads=8,
