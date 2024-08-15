@@ -745,6 +745,7 @@ class MuZeroGameBuffer(GameBuffer):
         NOTE:
             train_data = [current_batch, target_batch]
             current_batch = [obs_list, action_list, improved_policy_list(only in Gumbel MuZero), mask_list, batch_index_list, weights, make_time_list]
+            target_batch = [batch_rewards, batch_target_values, batch_target_policies]
         """
         indices = train_data[0][-3]
         metas = {'make_time': train_data[0][-1], 'batch_priorities': batch_priorities}
