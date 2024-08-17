@@ -16,18 +16,18 @@ class Piece(int):
 NUMBER_OF_PIECES: int = 8
 PIECES: Tuple[Piece] = (Piece.I, Piece.O, Piece.J, Piece.L, Piece.S, Piece.Z, Piece.T, Piece.NONE)
 
-NUMBER_OF_ROWS: int = 10
+NUMBER_OF_ROWS: int = 8
 NUMBER_OF_COLS: int = 10
 
 Rotation = Literal[0, 1, 2, 3]
 NUMBER_OF_ROTATIONS: int = 4
 
-QUEUE_SIZE: int = 2
+QUEUE_SIZE: int = 6
 INCLUDE_CURRENT_PIECE: Literal[0, 1] = 1
 INCLUDE_HELD_PIECE: Literal[0, 1] = 1
 INCLUDE_GARBAGE_QUEUED: Literal[0, 1] = 0
-INCLUDE_COMBO: Literal[0, 1] = 1
-INCLUDE_B2B: Literal[0, 1] = 1
+INCLUDE_COMBO: Literal[0, 1] = 0
+INCLUDE_B2B: Literal[0, 1] = 0
 
 MAX_GARBAGE_QUEUED: int = 15
 MAX_COMBO: int = 11
