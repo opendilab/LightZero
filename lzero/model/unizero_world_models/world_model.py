@@ -17,7 +17,7 @@ from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights, to_device_for_kvcache
-from .utils import WorldModelOutput, quantize_state
+from .utils import WorldModelOutput, hash_state
 from torch.distributions import Categorical, Independent, Normal
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -542,7 +542,7 @@ class WorldModel(nn.Module):
                         state_single_env = latent_state[i]
                         quantized_state = state_single_env.detach().cpu().numpy()
                         # Compute hash value using quantized state
-                        cache_key = quantize_state(quantized_state)
+                        cache_key = hash_state(quantized_state)
                         # Retrieve cached value
                         matched_value = self.past_kv_cache_init_infer_envs[i].get(cache_key)
 
@@ -551,8 +551,9 @@ class WorldModel(nn.Module):
                             # If a matching value is found, add it to the list
                             self.root_hit_cnt += 1
                             # deepcopy is needed because forward modifies matched_value in place
-                            self.keys_values_wm_list.append(
-                                copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
+                            # self.keys_values_wm_list.append(copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
+                            self.keys_values_wm_list.append(to_device_for_kvcache(matched_value, self.device))
+
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
                             # Reset using zero values
@@ -792,7 +793,7 @@ class WorldModel(nn.Module):
             # ============ Iterate over each environment ============
             state_single_env = latent_state[i]
             quantized_state = state_single_env.detach().cpu().numpy()
-            cache_key = quantize_state(quantized_state)
+            cache_key = hash_state(quantized_state)
             context_length = self.context_length
 
             if not is_init_infer:
@@ -911,10 +912,12 @@ class WorldModel(nn.Module):
                 # Store the latest key-value cache for initial inference
                 self.past_kv_cache_init_infer_envs[i][cache_key] = copy.deepcopy(
                     to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                # self.past_kv_cache_init_infer_envs[i][cache_key] = to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu')
             else:
                 # Store the latest key-value cache for recurrent inference
                 self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(
                     to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                # self.past_kv_cache_recurrent_infer[cache_key] = to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu')
 
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
                                      simulation_index: int = 0) -> list:
@@ -935,7 +938,7 @@ class WorldModel(nn.Module):
         for i in range(ready_env_num):
             self.total_query_count += 1
             state_single_env = latent_state[i]  # Get the latent state for a single environment
-            cache_key = quantize_state(state_single_env)  # Compute the hash value using the quantized state
+            cache_key = hash_state(state_single_env)  # Compute the hash value using the quantized state
 
             # Try to retrieve the cached value from past_kv_cache_init_infer_envs
             matched_value = self.past_kv_cache_init_infer_envs[i].get(cache_key)
@@ -948,7 +951,9 @@ class WorldModel(nn.Module):
                 # If a matching cache is found, add it to the lists
                 self.hit_count += 1
                 # Perform a deep copy because the transformer's forward pass might modify matched_value in-place
-                self.keys_values_wm_list.append(copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
+                # self.keys_values_wm_list.append(copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
+                self.keys_values_wm_list.append(to_device_for_kvcache(matched_value, self.device))
+
                 self.keys_values_wm_size_list.append(matched_value.size)
             else:
                 # If no matching cache is found, generate a new one using zero reset

@@ -68,22 +68,40 @@ def calculate_cuda_memory_gb(past_keys_values_cache, num_layers: int):
     return total_memory_gb
 
 
-def quantize_state(state, num_buckets=100):
+# def quantize_state(state, num_buckets=100):
+#     """
+#     Quantize the state vector.
+
+#     Arguments:
+#         state: The state vector to be quantized.
+#         num_buckets: The number of quantization buckets.
+#     Returns:
+#         The hash value of the quantized state vector.
+#     """
+#     # Use np.digitize to map each dimension value of the state vector into num_buckets
+#     quantized_state = np.digitize(state, bins=np.linspace(0, 1, num=num_buckets))
+#     # Use a more stable hash function
+#     quantized_state_bytes = quantized_state.tobytes()
+#     hash_object = hashlib.sha256(quantized_state_bytes)
+#     return hash_object.hexdigest()
+
+import numpy as np
+import xxhash
+
+
+def hash_state(state):
     """
-    Quantize the state vector.
+    Hash the state vector.
 
     Arguments:
-        state: The state vector to be quantized.
-        num_buckets: The number of quantization buckets.
+        state: The state vector to be hashed.
     Returns:
-        The hash value of the quantized state vector.
+        The hash value of the state vector.
     """
-    # Use np.digitize to map each dimension value of the state vector into num_buckets
-    quantized_state = np.digitize(state, bins=np.linspace(0, 1, num=num_buckets))
-    # Use a more stable hash function
-    quantized_state_bytes = quantized_state.tobytes()
-    hash_object = hashlib.sha256(quantized_state_bytes)
-    return hash_object.hexdigest()
+    # Use xxhash for faster hashing
+    hash_value = xxhash.xxh64(state).hexdigest()
+    
+    return hash_value
 
 @dataclass
 class WorldModelOutput:
