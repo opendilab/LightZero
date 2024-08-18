@@ -111,9 +111,9 @@
         <span class="n">action_space_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span>
         <span class="n">latent_state_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span>
         <span class="n">lstm_hidden_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">512</span><span class="p">,</span>
-        <span class="n">fc_reward_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
-        <span class="n">fc_value_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
-        <span class="n">fc_policy_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
+        <span class="n">fc_reward_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">256</span><span class="p">],</span>
+        <span class="n">fc_value_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">256</span><span class="p">],</span>
+        <span class="n">fc_policy_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">256</span><span class="p">],</span>
         <span class="n">reward_support_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">601</span><span class="p">,</span>
         <span class="n">value_support_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">601</span><span class="p">,</span>
         <span class="n">proj_hid</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1024</span><span class="p">,</span>
@@ -122,7 +122,7 @@
         <span class="n">pred_out</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1024</span><span class="p">,</span>
         <span class="n">self_supervised_learning_loss</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">categorical_distribution</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-        <span class="n">activation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+        <span class="n">activation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">(</span><span class="n">approximate</span><span class="o">=</span><span class="s1">&#39;tanh&#39;</span><span class="p">),</span>
         <span class="n">last_linear_layer_init_zero</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">state_norm</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="c1"># ==============================================================</span>
@@ -133,9 +133,9 @@
         <span class="n">sigma_type</span><span class="o">=</span><span class="s1">&#39;conditioned&#39;</span><span class="p">,</span>
         <span class="n">fixed_sigma_value</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>
         <span class="n">bound_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">norm_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;BN&#39;</span><span class="p">,</span>
+        <span class="n">norm_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;LN&#39;</span><span class="p">,</span>
         <span class="n">discrete_action_encoding_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;one_hot&#39;</span><span class="p">,</span>
-        <span class="n">res_connection_in_dynamics</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">res_connection_in_dynamics</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="o">*</span><span class="n">args</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
@@ -225,9 +225,10 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">norm_type</span> <span class="o">=</span> <span class="n">norm_type</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">num_of_sampled_actions</span> <span class="o">=</span> <span class="n">num_of_sampled_actions</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">res_connection_in_dynamics</span> <span class="o">=</span> <span class="n">res_connection_in_dynamics</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">activation</span> <span class="o">=</span> <span class="n">activation</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">representation_network</span> <span class="o">=</span> <span class="n">RepresentationNetworkMLP</span><span class="p">(</span>
-            <span class="n">observation_shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">,</span> <span class="n">hidden_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">latent_state_dim</span><span class="p">,</span> <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span>
+            <span class="n">observation_shape</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">,</span> <span class="n">hidden_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">latent_state_dim</span><span class="p">,</span> <span class="n">activation</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span> <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span>
         <span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">dynamics_network</span> <span class="o">=</span> <span class="n">DynamicsNetworkMLP</span><span class="p">(</span>
@@ -238,6 +239,7 @@
             <span class="n">fc_reward_layers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fc_reward_layers</span><span class="p">,</span>
             <span class="n">output_support_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">reward_support_size</span><span class="p">,</span>
             <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">last_linear_layer_init_zero</span><span class="p">,</span>
+            <span class="n">activation</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span>
             <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span><span class="p">,</span>
             <span class="n">res_connection_in_dynamics</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">res_connection_in_dynamics</span><span class="p">,</span>
         <span class="p">)</span>
@@ -250,6 +252,7 @@
             <span class="n">fc_policy_layers</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fc_policy_layers</span><span class="p">,</span>
             <span class="n">output_support_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">value_support_size</span><span class="p">,</span>
             <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">last_linear_layer_init_zero</span><span class="p">,</span>
+            <span class="n">activation</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span> 
             <span class="n">sigma_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sigma_type</span><span class="p">,</span>
             <span class="n">fixed_sigma_value</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fixed_sigma_value</span><span class="p">,</span>
             <span class="n">bound_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">bound_type</span><span class="p">,</span>
@@ -260,14 +263,14 @@
             <span class="c1"># self_supervised_learning_loss related network proposed in EfficientZero</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">projection_input_dim</span> <span class="o">=</span> <span class="n">latent_state_dim</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">projection</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
-                <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">projection_input_dim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">proj_hid</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm1d</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">proj_hid</span><span class="p">),</span> <span class="n">activation</span><span class="p">,</span>
-                <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">proj_hid</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">proj_hid</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm1d</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">proj_hid</span><span class="p">),</span> <span class="n">activation</span><span class="p">,</span>
+                <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">projection_input_dim</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">proj_hid</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm1d</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">proj_hid</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span>
+                <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">proj_hid</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">proj_hid</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm1d</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">proj_hid</span><span class="p">),</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span>
                 <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">proj_hid</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">proj_out</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm1d</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">proj_out</span><span class="p">)</span>
             <span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">prediction_head</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span>
                 <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">proj_out</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pred_hid</span><span class="p">),</span>
                 <span class="n">nn</span><span class="o">.</span><span class="n">BatchNorm1d</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pred_hid</span><span class="p">),</span>
-                <span class="n">activation</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span>
                 <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">pred_hid</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">pred_out</span><span class="p">),</span>
             <span class="p">)</span>
 
@@ -299,7 +302,7 @@
         <span class="n">batch_size</span> <span class="o">=</span> <span class="n">obs</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
         <span class="n">latent_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_representation</span><span class="p">(</span><span class="n">obs</span><span class="p">)</span>
         <span class="n">policy_logits</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prediction</span><span class="p">(</span><span class="n">latent_state</span><span class="p">)</span>
-        <span class="c1"># zero initialization for reward hidden states</span>
+        <span class="c1"># zero initializations for reward hidden states</span>
         <span class="c1"># (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)</span>
         <span class="n">reward_hidden_state</span> <span class="o">=</span> <span class="p">(</span>
             <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">,</span>
@@ -489,14 +492,14 @@
         <span class="n">fc_policy_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
         <span class="n">output_support_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">601</span><span class="p">,</span>
         <span class="n">last_linear_layer_init_zero</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
-        <span class="n">activation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
+        <span class="n">activation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">(</span><span class="n">approximate</span><span class="o">=</span><span class="s1">&#39;tanh&#39;</span><span class="p">),</span>
         <span class="c1"># ==============================================================</span>
         <span class="c1"># specific sampled related config</span>
         <span class="c1"># ==============================================================</span>
         <span class="n">sigma_type</span><span class="o">=</span><span class="s1">&#39;conditioned&#39;</span><span class="p">,</span>
         <span class="n">fixed_sigma_value</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>
         <span class="n">bound_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="n">norm_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;BN&#39;</span><span class="p">,</span>
+        <span class="n">norm_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;LN&#39;</span><span class="p">,</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
