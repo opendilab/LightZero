@@ -28,7 +28,7 @@
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 [![discord badge](https://dcbadge.vercel.app/api/server/dkZS2JF56X?style=flat)](https://discord.gg/dkZS2JF56X)
 
-Updated on 2024.07.12 LightZero-v0.1.0
+Updated on 2024.08.18 LightZero-v0.1.0
 
 English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Documentation](https://opendilab.github.io/LightZero) | [LightZero Paper](https://arxiv.org/abs/2310.08348) | [🔥UniZero Paper](https://arxiv.org/abs/2406.10667) | [🔥ReZero Paper](https://arxiv.org/abs/2404.16364)
 
@@ -127,25 +127,25 @@ LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of 
 The environments and algorithms currently supported by LightZero are shown in the table below:
 
 
-| Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | UniZero |ReZero |
-|---------------| -------- | ------ |-------------| ------------------ | ---------- |----------------|---------------|----------------|
-| TicTacToe     | ✔      | ✔      | 🔒           | 🔒                | ✔          | 🔒             |✔|🔒             |
-| Gomoku        | ✔      | ✔      | 🔒          | 🔒               | ✔          | 🔒             |✔|✔          |
-| Connect4      | ✔      | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |✔|✔          |
-| 2048          | ---       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |✔|🔒             |
-| Chess         | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |🔒|🔒             |
-| Go            | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |🔒|🔒             |
-| CartPole      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|✔             |
-| Pendulum      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |🔒|🔒             |
-| LunarLander   | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|🔒             |
-| BipedalWalker | ---      | ✔      | ✔           | ✔                | ✔          | 🔒              |🔒|🔒             |
-| Atari         | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|✔          |
-| MuJoCo        | ---      | ✔     | ✔          | ✔                | 🔒         | 🔒               |🔒|🔒             |
-| MiniGrid      | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
-| Bsuite        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
-| Memory        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
-| SumToThree (billiards) | ---      | 🔒     | 🔒          | ✔               | 🔒         | 🔒             |🔒|🔒             |
-
+| Env./Algo.             | AlphaZero | MuZero | Sampled MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | UniZero | Sampled UniZero | ReZero |
+|------------------------| -------- | ---- |---------------| ---------- | ------------------ | ------------- | ---------------- | ------- | --- | ------ |
+| TicTacToe              | ✔        | ✔    | 🔒            | 🔒         | 🔒                | ✔             | 🔒               | ✔      | 🔒   | 🔒     |
+| Gomoku                 | ✔        | ✔    | 🔒            | 🔒         | 🔒                | ✔             | 🔒               | ✔      | 🔒   | ✔      |
+| Connect4               | ✔        | ✔    | 🔒            | 🔒         | 🔒                | 🔒             | 🔒               | ✔      | 🔒   | ✔      |
+| 2048                   | ---      | ✔    | 🔒            | 🔒         | 🔒                | 🔒             | ✔               | ✔      | 🔒   | 🔒     |
+| Chess                  | 🔒        | 🔒   | 🔒            | 🔒         | 🔒                | 🔒             | 🔒               | 🔒      | 🔒  | 🔒     |
+| Go                     | 🔒        | 🔒   | 🔒            | 🔒         | 🔒                | 🔒             | 🔒               | 🔒      | 🔒  | 🔒     |
+| CartPole               | ---      | ✔    | 🔒            | ✔          | ✔                 | ✔             | ✔               | ✔      | 🔒   | ✔      |
+| Pendulum               | ---      | ✔    | ✔             | ✔          | ✔                 | ✔             | ✔               | 🔒      | ✔  | 🔒     |
+| LunarLander            | ---      | ✔    | ✔             | ✔          | ✔                 | ✔             | ✔               | ✔      | ✔  | 🔒     |
+| BipedalWalker          | ---      | ✔    | ✔             | ✔          | ✔                 | ✔             | 🔒               | 🔒      | ✔  | 🔒     |
+| Atari                  | ---      | ✔    | 🔒            | ✔          | ✔                 | ✔             | ✔               | ✔      | 🔒   | ✔      |
+| DeepMind Control       | ---      | ---     | ✔            | ---            | ✔                 | 🔒             | 🔒               | 🔒      | ✔  | 🔒     |
+| MuJoCo                 | ---      | ✔    | 🔒            | ✔          | ✔                 | 🔒             | 🔒               | 🔒      | 🔒  | 🔒     |
+| MiniGrid               | ---      | ✔    | 🔒            | ✔          | ✔                 | 🔒             | 🔒               | ✔      | 🔒   | 🔒     |
+| Bsuite                 | ---      | ✔    | 🔒            | ✔          | ✔                 | 🔒             | 🔒               | ✔      | 🔒   | 🔒     |
+| Memory                 | ---      | ✔    | 🔒              | ✔          | ✔                 | 🔒             | 🔒               | ✔      | 🔒   | 🔒     |
+| SumToThree (billiards) | ---      | 🔒   | 🔒            | 🔒         | ✔                 | 🔒             | 🔒               | 🔒      | 🔒  | 🔒     |
 
 <sup>(1): "✔" means that the corresponding item is finished and well-tested.</sup>
 

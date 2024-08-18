@@ -18,11 +18,11 @@ infer_context_length = 4
 norm_type = 'LN'
 
 # for debug
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-num_simulations = 2
-batch_size = 2
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 2
+# batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
