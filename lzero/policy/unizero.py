@@ -365,7 +365,9 @@ class UniZeroPolicy(MuZeroPolicy):
         # Prepare action batch and convert to torch tensor
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
             -1).long()  # For discrete action space
-        data_list = [mask_batch, target_reward, target_value, target_policy, weights]
+        # data_list = [mask_batch, target_reward, target_value, target_policy, weights]
+        data_list = [mask_batch, target_reward.astype('float32'), target_value.astype('float32'), target_policy,
+                     weights]
         mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
                                                                                                 self._cfg.device)
 
@@ -798,7 +800,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # Clear various caches in the collect model's world model
             world_model = self._collect_model.world_model
-            world_model.past_kv_cache_init_infer.clear()
+            # world_model.past_kv_cache_init_infer.clear()
             for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
                 kv_cache_dict_env.clear()
             world_model.past_kv_cache_recurrent_infer.clear()
@@ -843,7 +845,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # Clear various caches in the eval model's world model
             world_model = self._eval_model.world_model
-            world_model.past_kv_cache_init_infer.clear()
+            # world_model.past_kv_cache_init_infer.clear()
             for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
                 kv_cache_dict_env.clear()
             world_model.past_kv_cache_recurrent_infer.clear()

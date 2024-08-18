@@ -196,7 +196,7 @@ class WorldModel(nn.Module):
     def _initialize_cache_structures(self) -> None:
         """Initialize cache structures for past keys and values."""
         self.past_kv_cache_recurrent_infer = collections.OrderedDict()
-        self.past_kv_cache_init_infer = collections.OrderedDict()
+        # self.past_kv_cache_init_infer = collections.OrderedDict()
         self.past_kv_cache_init_infer_envs = [collections.OrderedDict() for _ in range(self.env_num)]
         self.keys_values_wm_list = []
         self.keys_values_wm_size_list = []
@@ -553,7 +553,6 @@ class WorldModel(nn.Module):
                             # deepcopy is needed because forward modifies matched_value in place
                             # self.keys_values_wm_list.append(copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
                             self.keys_values_wm_list.append(to_device_for_kvcache(matched_value, self.device))
-
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
                             # Reset using zero values
@@ -953,7 +952,6 @@ class WorldModel(nn.Module):
                 # Perform a deep copy because the transformer's forward pass might modify matched_value in-place
                 # self.keys_values_wm_list.append(copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
                 self.keys_values_wm_list.append(to_device_for_kvcache(matched_value, self.device))
-
                 self.keys_values_wm_size_list.append(matched_value.size)
             else:
                 # If no matching cache is found, generate a new one using zero reset
@@ -989,7 +987,7 @@ class WorldModel(nn.Module):
             inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
             dormant_ratio_encoder = cal_dormant_ratio(self.tokenizer.representation_network, inputs.detach(),
                                                       percentage=self.dormant_threshold)
-            self.past_kv_cache_init_infer.clear()
+            # self.past_kv_cache_init_infer.clear()
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
@@ -1068,7 +1066,7 @@ class WorldModel(nn.Module):
             dormant_ratio_world_model = cal_dormant_ratio(self, {
                 'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())},
                                                           percentage=self.dormant_threshold)
-            self.past_kv_cache_init_infer.clear()
+            # self.past_kv_cache_init_infer.clear()
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
@@ -1380,7 +1378,7 @@ class WorldModel(nn.Module):
         """
         Clears the caches of the world model.
         """
-        self.past_kv_cache_init_infer.clear()
+        # self.past_kv_cache_init_infer.clear()
         for kv_cache_dict_env in self.past_kv_cache_init_infer_envs:
             kv_cache_dict_env.clear()
         self.past_kv_cache_recurrent_infer.clear()

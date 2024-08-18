@@ -506,9 +506,12 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 batch_rewards.append(target_rewards)
                 batch_target_values.append(target_values)
 
-        batch_rewards = np.asarray(batch_rewards)
-        batch_target_values = np.asarray(batch_target_values)
-        batch_rewards = np.squeeze(batch_rewards, axis=-1)
-        batch_target_values = np.squeeze(batch_target_values, axis=-1)
+        # batch_rewards = np.asarray(batch_rewards)
+        # batch_target_values = np.asarray(batch_target_values)
+        # batch_rewards = np.squeeze(batch_rewards, axis=-1)
+        # batch_target_values = np.squeeze(batch_target_values, axis=-1)
+
+        batch_rewards = np.asarray(batch_rewards, dtype=object)
+        batch_target_values = np.asarray(batch_target_values, dtype=object)
 
         return batch_rewards, batch_target_values

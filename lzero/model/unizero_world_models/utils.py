@@ -68,7 +68,7 @@ def calculate_cuda_memory_gb(past_keys_values_cache, num_layers: int):
     return total_memory_gb
 
 
-# def quantize_state(state, num_buckets=100):
+# def hash_state(state, num_buckets=100):
 #     """
 #     Quantize the state vector.
 
