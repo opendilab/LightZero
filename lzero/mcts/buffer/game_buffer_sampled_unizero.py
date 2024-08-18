@@ -4,18 +4,18 @@ import numpy as np
 import torch
 from ding.utils import BUFFER_REGISTRY
 
-from lzero.mcts.tree_search.mcts_ctree import MuZeroMCTSCtree as MCTSCtree
-from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
-from lzero.mcts.utils import prepare_observation
+from lzero.mcts.tree_search.mcts_ctree_sampled import SampledUniZeroMCTSCtree as MCTSCtree
+# from lzero.mcts.tree_search.mcts_ptree import MuZeroMCTSPtree as MCTSPtree
+from lzero.mcts.utils import prepare_observation, generate_random_actions_discrete
 from lzero.policy import to_detach_cpu_numpy, concat_output, concat_output_value, inverse_scalar_transform
-from .game_buffer_muzero import MuZeroGameBuffer
+from .game_buffer_unizero import UniZeroGameBuffer
 
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
 
 
-@BUFFER_REGISTRY.register('game_buffer_unizero')
-class UniZeroGameBuffer(MuZeroGameBuffer):
+@BUFFER_REGISTRY.register('game_buffer_sampled_unizero')
+class SampledUniZeroGameBuffer(UniZeroGameBuffer):
     """
     Overview:
         The specific game buffer for MuZero policy.
@@ -33,6 +33,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         default_config.update(cfg)
         self._cfg = default_config
         assert self._cfg.env_type in ['not_board_games', 'board_games']
+        assert self._cfg.action_type in ['fixed_action_space', 'varied_action_space']
         self.replay_buffer_size = self._cfg.replay_buffer_size
         self.batch_size = self._cfg.batch_size
         self._alpha = self._cfg.priority_prob_alpha
@@ -79,20 +80,47 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         # target policy
         batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model,
                                                                           current_batch[1])
+
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
-            policy_non_re_context, self._cfg.model.action_space_size
+            policy_non_re_context, self._cfg.model.num_of_sampled_actions
         )
 
-        # fusion of batch_target_policies_re and batch_target_policies_non_re to batch_target_policies
+        if self._cfg.reanalyze_ratio > 0:
+            # target policy
+            batch_target_policies_re, root_sampled_actions = self._compute_target_policy_reanalyzed(
+                policy_re_context, policy._target_model
+            )
+            # ==============================================================
+            # fix reanalyze in sez:
+            # use the latest root_sampled_actions after the reanalyze process,
+            # because the batch_target_policies_re is corresponding to the latest root_sampled_actions
+            # ==============================================================
+
+            assert (self._cfg.reanalyze_ratio > 0 and self._cfg.reanalyze_outdated is True), \
+                "in sampled effiicientzero, if self._cfg.reanalyze_ratio>0, you must set self._cfg.reanalyze_outdated=True"
+            # current_batch = [obs_list, action_list, root_sampled_actions_list, mask_list, batch_index_list, weights_list, make_time_list]
+            if self._cfg.model.continuous_action_space:
+                current_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
+                    int(batch_size * self._cfg.reanalyze_ratio), self._cfg.num_unroll_steps + 1,
+                    self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size
+                )
+            else:
+                current_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
+                    int(batch_size * self._cfg.reanalyze_ratio), self._cfg.num_unroll_steps + 1,
+                    self._cfg.model.num_of_sampled_actions, 1
+                )
+
         if 0 < self._cfg.reanalyze_ratio < 1:
-            batch_target_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
+            try:
+                batch_target_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
+            except Exception as error:
+                print(error)
         elif self._cfg.reanalyze_ratio == 1:
             batch_target_policies = batch_target_policies_re
         elif self._cfg.reanalyze_ratio == 0:
             batch_target_policies = batch_target_policies_non_re
 
         target_batch = [batch_rewards, batch_target_values, batch_target_policies]
-
         # a batch contains the current_batch and the target_batch
         train_data = [current_batch, target_batch]
         return train_data
@@ -120,6 +148,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
         batch_size = len(batch_index_list)
         obs_list, action_list, mask_list = [], [], []
+        root_sampled_actions_list = []
         # prepare the inputs of a batch
         for i in range(batch_size):
             game = game_segment_list[i]
@@ -127,15 +156,43 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
+
+            # NOTE: self._cfg.num_unroll_steps + 1
+            root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_segment:pos_in_game_segment +
+                                                                 self._cfg.num_unroll_steps + 1]
+
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
-            mask_tmp = [1. for i in range(len(actions_tmp))]
+            mask_tmp = [1. for i in range(len(root_sampled_actions_tmp))]
+
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
-            actions_tmp += [
-                np.random.randint(0, game.action_space_size)
-                for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
-            ]
+            if self._cfg.model.continuous_action_space:
+                actions_tmp += [
+                    np.random.randn(self._cfg.model.action_space_size)
+                    for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
+                ]
+                root_sampled_actions_tmp += [
+                    np.random.rand(self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size)
+                    for _ in range(self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp))
+                ]
+            else:
+                # generate random `padded actions_tmp`
+                actions_tmp += generate_random_actions_discrete(
+                    self._cfg.num_unroll_steps - len(actions_tmp),
+                    self._cfg.model.action_space_size,
+                    1  # Number of sampled actions for actions_tmp is 1
+                )
+
+                # generate random padded `root_sampled_actions_tmp`
+                # root_sampled_action have different shape in mcts_ctree and mcts_ptree, thus we need to pad differently
+                reshape = True if self._cfg.mcts_ctree else False
+                root_sampled_actions_tmp += generate_random_actions_discrete(
+                    self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp),
+                    self._cfg.model.action_space_size,
+                    self._cfg.model.num_of_sampled_actions,
+                    reshape=reshape
+                )
 
             # obtain the input observations
             # pad if length of obs in game_segment is less than stack+num_unroll_steps
@@ -146,13 +203,20 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 )
             )
             action_list.append(actions_tmp)
+            root_sampled_actions_list.append(root_sampled_actions_tmp)
+
             mask_list.append(mask_tmp)
 
         # formalize the input observations
         obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
 
+        # ==============================================================
+        # sampled related core code
+        # ==============================================================
         # formalize the inputs of a batch
-        current_batch = [obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list]
+        current_batch = [
+            obs_list, action_list, root_sampled_actions_list, mask_list, batch_index_list, weights_list, make_time_list
+        ]
         for i in range(len(current_batch)):
             current_batch[i] = np.asarray(current_batch[i])
 
@@ -434,21 +498,18 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 reward_pool = reward_pool.squeeze().tolist()
                 policy_logits_pool = policy_logits_pool.tolist()
                 noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                        ).astype(np.float32).tolist() for j in range(transition_batch_size)
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
+                                        ).astype(np.float32).tolist() for _ in range(transition_batch_size)
                 ]
                 if self._cfg.mcts_ctree:
                     # cpp mcts_tree
-                    roots = MCTSCtree.roots(transition_batch_size, legal_actions)
+                    roots = MCTSCtree.roots(
+                        transition_batch_size, legal_actions, self._cfg.model.action_space_size,
+                        self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
+                    )
                     roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                     # do MCTS for a new policy with the recent target model
                     MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-                else:
-                    # python mcts_tree
-                    roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                    # do MCTS for a new policy with the recent target model
-                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
 
                 roots_values = roots.get_values()
                 value_list = np.array(roots_values)

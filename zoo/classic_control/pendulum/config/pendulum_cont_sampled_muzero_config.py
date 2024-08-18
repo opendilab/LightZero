@@ -12,15 +12,15 @@ num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
 batch_size = 256
-max_env_step = int(1e6)
+max_env_step = int(2e5)
 reanalyze_ratio = 0.
 norm_type = 'LN'
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
-pendulum_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez/pendulum_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
+pendulum_sampled_muzero_config = dict(
+    exp_name=f'data_smz/pendulum_sampled_muzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
     env=dict(
         env_id='Pendulum-v1',
         continuous=True,
@@ -38,6 +38,7 @@ pendulum_sampled_efficientzero_config = dict(
             num_of_sampled_actions=K,
             sigma_type='conditioned',
             model_type='mlp', 
+            latent_state_dim=128,
             norm_type=norm_type,
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
@@ -48,35 +49,35 @@ pendulum_sampled_efficientzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='AdamW',
-        learning_rate=0.0001,
         cos_lr_scheduler=True,
+        learning_rate=0.0001,
         lr_piecewise_constant_decay=False,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
 )
-pendulum_sampled_efficientzero_config = EasyDict(pendulum_sampled_efficientzero_config)
-main_config = pendulum_sampled_efficientzero_config
+pendulum_sampled_muzero_config = EasyDict(pendulum_sampled_muzero_config)
+main_config = pendulum_sampled_muzero_config
 
-pendulum_sampled_efficientzero_create_config = dict(
+pendulum_sampled_muzero_create_config = dict(
     env=dict(
         type='pendulum_lightzero',
         import_names=['zoo.classic_control.pendulum.envs.pendulum_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
     policy=dict(
-        type='sampled_efficientzero',
-        import_names=['lzero.policy.sampled_efficientzero'],
+        type='sampled_muzero',
+        import_names=['lzero.policy.sampled_muzero'],
     ),
 )
-pendulum_sampled_efficientzero_create_config = EasyDict(pendulum_sampled_efficientzero_create_config)
-create_config = pendulum_sampled_efficientzero_create_config
+pendulum_sampled_muzero_create_config = EasyDict(pendulum_sampled_muzero_create_config)
+create_config = pendulum_sampled_muzero_create_config
 
 if __name__ == "__main__":
-    from lzero.entry import train_muzero_with_gym_env as train_muzero
+    from lzero.entry import train_muzero
     train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

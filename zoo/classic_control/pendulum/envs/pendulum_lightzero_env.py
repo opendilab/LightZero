@@ -51,6 +51,7 @@ class PendulumEnv(CartPoleEnv):
         self._init_flag = False
         self._replay_path = cfg.replay_path
         self._continuous = cfg.get("continuous", True)
+        print(f'continuous: {self._continuous}')
         self._observation_space = gym.spaces.Box(
             low=np.array([-1.0, -1.0, -8.0]), high=np.array([1.0, 1.0, 8.0]), shape=(3,), dtype=np.float32
         )

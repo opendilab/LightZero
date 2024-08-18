@@ -260,6 +260,9 @@ class DownSample(nn.Module):
 
         if self.observation_shape[1] == 64:
             output = x
+        elif self.observation_shape[1] == 84:
+            x = self.pooling2(x)
+            output = x
         elif self.observation_shape[1] == 96:
             x = self.pooling2(x)
             output = x
@@ -518,6 +521,7 @@ class RepresentationNetworkMLP(nn.Module):
             - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
         """
         x = self.fc_representation(x)
+        # TODO
         x = self.sim_norm(x)
         return x
 

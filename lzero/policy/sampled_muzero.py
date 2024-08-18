@@ -11,25 +11,24 @@ from ditk import logging
 from torch.distributions import Categorical, Independent, Normal
 from torch.nn import L1Loss
 
-from lzero.mcts import SampledEfficientZeroMCTSCtree as MCTSCtree
-from lzero.mcts import SampledEfficientZeroMCTSPtree as MCTSPtree
+from lzero.mcts import SampledMuZeroMCTSCtree as MCTSCtree
+# from lzero.mcts import SampledMuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, ez_network_output_unpack, select_action, negative_cosine_similarity, \
-    prepare_obs, \
-    configure_optimizers
+    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
+    prepare_obs
 from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
 
 
-@POLICY_REGISTRY.register('sampled_efficientzero')
-class SampledEfficientZeroPolicy(MuZeroPolicy):
+@POLICY_REGISTRY.register('sampled_muzero')
+class SampledMuZeroPolicy(MuZeroPolicy):
     """
     Overview:
-        The policy class for Sampled EfficientZero proposed in the paper https://arxiv.org/abs/2104.06303.
+        The policy class for Sampled MuZero proposed in the paper https://arxiv.org/abs/2104.06303.
     """
 
-    # The default_config for Sampled EfficientZero policy.
+    # The default_config for Sampled MuZero policy.
     config = dict(
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For 3-dimensional image obs, we use conv model.
@@ -37,7 +36,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             # (bool) If True, the action space of the environment is continuous, otherwise discrete.
             continuous_action_space=False,
             # (tuple) the stacked obs shape.
-            # observation_shape=(1, 96, 96),  # if frame_stack_num=1
+            # observation_shape=(1, 96, 96), # if frame_stack_num=1
             observation_shape=(4, 96, 96),  # if frame_stack_num=4
             # (bool) Whether to use the self-supervised learning loss.
             self_supervised_learning_loss=True,
@@ -53,7 +52,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             # (int) The scale of supports used in categorical distribution.
             # This variable is only effective when ``categorical_distribution=True``.
             support_scale=300,
-            # (int) The number of res blocks in Sampled EfficientZero model.
+            # (int) The number of res blocks in Sampled MuZero model.
             num_res_blocks=1,
             # (int) The hidden size in LSTM.
             lstm_hidden_size=512,
@@ -73,7 +72,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # ****** common ******
         # (bool) Whether to use multi-gpu training.
         multi_gpu=False,
-        # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled EfficientZero), which is used in ``collector``.
+        # (bool) ``sampled_algo=True`` means the policy is sampled-based algorithm (e.g. Sampled MuZero), which is used in ``collector``.
         sampled_algo=True,
         # (bool) Whether to enable the gumbel-based algorithm (e.g. Gumbel Muzero)
         gumbel_algo=False,
@@ -129,7 +128,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
         optim_type='AdamW',
-        learning_rate=1e-4,  # init lr for manually decay schedule
+        learning_rate=1e-4,  # init lr for manual decay schedule
         # (float) Weight uniform initialization range in the last output layer
         init_w=3e-3,
         normalize_prob_of_sampled_actions=False,
@@ -159,7 +158,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # (float) The weight of policy loss.
         policy_loss_weight=1,
         # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=5e-3,
+        policy_entropy_loss_weight=0,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=2,
         # (bool) Whether to use the cosine learning rate decay.
@@ -184,7 +183,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
-        use_priority=True,
+        use_priority=False,
         # (float) The degree of prioritization to use. A value of 0 means no prioritization,
         # while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,
@@ -228,12 +227,12 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
         .. note::
             The user can define and use customized network model but must obey the same interface definition indicated \
-            by import_names path. For Sampled EfficientZero, ``lzero.model.sampled_efficientzero_model.SampledEfficientZeroModel``
+            by import_names path. For Sampled MuZero, ``lzero.model.sampled_muzero_model.SampledMuZeroModel``
         """
         if self._cfg.model.model_type == "conv":
-            return 'SampledEfficientZeroModel', ['lzero.model.sampled_efficientzero_model']
+            return 'SampledMuZeroModel', ['lzero.model.sampled_muzero_model']
         elif self._cfg.model.model_type == "mlp":
-            return 'SampledEfficientZeroModelMLP', ['lzero.model.sampled_efficientzero_model_mlp']
+            return 'SampledMuZeroModelMLP', ['lzero.model.sampled_muzero_model_mlp']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
@@ -329,7 +328,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # sampled related core code
         # ==============================================================
         obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights, make_time = current_batch
-        target_value_prefix, target_value, target_policy = target_batch
+        target_reward, target_value, target_policy = target_batch
 
         obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
@@ -344,10 +343,10 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).float()
         data_list = [
             mask_batch,
-            target_value_prefix.astype('float32'),
+            target_reward.astype('float32'),
             target_value.astype('float32'), target_policy, weights
         ]
-        [mask_batch, target_value_prefix, target_value, target_policy,
+        [mask_batch, target_reward, target_value, target_policy,
          weights] = to_torch_float_tensor(data_list, self._cfg.device)
         # ==============================================================
         # sampled related core code
@@ -355,33 +354,33 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim), e.g. (4, 6, 5, 1)
         child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device)
 
-        target_value_prefix = target_value_prefix.view(self._cfg.batch_size, -1)
+        target_reward = target_reward.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
 
-        assert obs_batch.size(0) == self._cfg.batch_size == target_value_prefix.size(0)
+        assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
         # ``scalar_transform`` to transform the original value to the scaled value,
         # i.e. h(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
-        transformed_target_value_prefix = scalar_transform(target_value_prefix)
+        transformed_target_reward = scalar_transform(target_reward)
         transformed_target_value = scalar_transform(target_value)
         # transform a scalar to its categorical_distribution. After this transformation, each scalar is
         # represented as the linear combination of its two adjacent supports.
-        target_value_prefix_categorical = phi_transform(self.reward_support, transformed_target_value_prefix)
+        target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
         target_value_categorical = phi_transform(self.value_support, transformed_target_value)
 
         # ==============================================================
-        # the core initial_inference in SampledEfficientZero policy.
+        # the core initial_inference in SampledMuZero policy.
         # ==============================================================
         network_output = self._learn_model.initial_inference(obs_batch)
-        # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
-        latent_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(network_output)
+        # reward shape: (batch_size, 10), the ``reward`` at the first step is zero padding.
+        latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
         # transform the scaled value or its categorical representation to its original value,
         # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
         original_value = self.inverse_scalar_transform_handle(value)
 
         # Note: The following lines are just for logging.
-        predicted_value_prefixs = []
+        predicted_rewards = []
         if self._cfg.monitor_extra_statistics:
             predicted_values, predicted_policies = original_value.detach().cpu(), torch.softmax(
                 policy_logits, dim=1
@@ -411,20 +410,20 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 policy_loss, policy_logits, target_policy, mask_batch, child_sampled_actions_batch, unroll_step=0
             )
 
-        value_prefix_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+        reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
 
         # ==============================================================
-        # the core recurrent_inference in SampledEfficientZero policy.
+        # the core recurrent_inference in SampledMuZero policy.
         # ==============================================================
         for step_k in range(self._cfg.num_unroll_steps):
-            # unroll with the dynamics function: predict the next ``latent_state``, ``reward_hidden_state``,
-            # `` value_prefix`` given current ``latent_state`` ``reward_hidden_state`` and ``action``.
+            # unroll with the dynamics function: predict the next ``latent_state``,
+            # `` reward`` given current ``latent_state`` and ``action``.
             # And then predict policy_logits and value  with the prediction function.
             network_output = self._learn_model.recurrent_inference(
-                latent_state, reward_hidden_state, action_batch[:, step_k]
+                latent_state, action_batch[:, step_k]
             )
-            latent_state, value_prefix, reward_hidden_state, value, policy_logits = ez_network_output_unpack(
+            latent_state, reward, value, policy_logits = mz_network_output_unpack(
                 network_output
             )
 
@@ -447,7 +446,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
                     consistency_loss += temp_loss
 
-            # NOTE: the target policy, target_value_categorical, target_value_prefix_categorical is calculated in
+            # NOTE: the target policy, target_value_categorical, target_reward_categorical is calculated in
             # game buffer now.
             # ==============================================================
             # sampled related core code:
@@ -476,23 +475,16 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 )
 
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
-            value_prefix_loss += cross_entropy_loss(value_prefix, target_value_prefix_categorical[:, step_k])
-
-            # reset hidden states every ``lstm_horizon_len`` unroll steps.
-            if (step_k + 1) % self._cfg.lstm_horizon_len == 0:
-                reward_hidden_state = (
-                    torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device),
-                    torch.zeros(1, self._cfg.batch_size, self._cfg.model.lstm_hidden_size).to(self._cfg.device)
-                )
+            reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
 
             if self._cfg.monitor_extra_statistics:
-                original_value_prefixs = self.inverse_scalar_transform_handle(value_prefix)
-                original_value_prefixs_cpu = original_value_prefixs.detach().cpu()
+                original_rewards = self.inverse_scalar_transform_handle(reward)
+                original_rewards_cpu = original_rewards.detach().cpu()
 
                 predicted_values = torch.cat(
                     (predicted_values, self.inverse_scalar_transform_handle(value).detach().cpu())
                 )
-                predicted_value_prefixs.append(original_value_prefixs_cpu)
+                predicted_rewards.append(original_rewards_cpu)
                 predicted_policies = torch.cat((predicted_policies, torch.softmax(policy_logits, dim=1).detach().cpu()))
 
         # ==============================================================
@@ -501,7 +493,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
                 self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss +
+                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss +
                 self._cfg.policy_entropy_loss_weight * policy_entropy_loss
         )
         weighted_total_loss = (weights * loss).mean()
@@ -525,8 +517,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         self._target_model.update(self._learn_model.state_dict())
 
         if self._cfg.monitor_extra_statistics:
-            predicted_value_prefixs = torch.stack(predicted_value_prefixs).transpose(1, 0).squeeze(-1)
-            predicted_value_prefixs = predicted_value_prefixs.reshape(-1).unsqueeze(-1)
+            predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
+            predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
 
         return_data = {
             'cur_lr': self._optimizer.param_groups[0]['lr'],
@@ -536,7 +528,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             'policy_loss': policy_loss.mean().item(),
             'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
             'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-            'value_prefix_loss': value_prefix_loss.mean().item(),
+            'reward_loss': reward_loss.mean().item(),
             'value_loss': value_loss.mean().item(),
             'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
 
@@ -545,11 +537,11 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             # ==============================================================
             'value_priority': value_priority.flatten().mean().item(),
             'value_priority_orig': value_priority,
-            'target_value_prefix': target_value_prefix.detach().cpu().numpy().mean().item(),
+            'target_reward': target_reward.detach().cpu().numpy().mean().item(),
             'target_value': target_value.detach().cpu().numpy().mean().item(),
-            'transformed_target_value_prefix': transformed_target_value_prefix.detach().cpu().numpy().mean().item(),
+            'transformed_target_reward': transformed_target_reward.detach().cpu().numpy().mean().item(),
             'transformed_target_value': transformed_target_value.detach().cpu().numpy().mean().item(),
-            'predicted_value_prefixs': predicted_value_prefixs.detach().cpu().numpy().mean().item(),
+            'predicted_rewards': predicted_rewards.detach().cpu().numpy().mean().item(),
             'predicted_values': predicted_values.detach().cpu().numpy().mean().item()
         }
 
@@ -725,7 +717,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         )
 
         target_policy_entropy = -((target_normalized_visit_count_masked + 1e-6) * (
-                    target_normalized_visit_count_masked + 1e-6).log()).sum(-1).mean()
+                target_normalized_visit_count_masked + 1e-6).log()).sum(-1).mean()
 
         # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim) -> (batch_size,
         # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2) ->  (4, 20, 2)
@@ -828,16 +820,12 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
-            latent_state_roots, value_prefix_roots, reward_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
+            latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(
                 network_output
             )
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
-            reward_hidden_state_roots = (
-                reward_hidden_state_roots[0].detach().cpu().numpy(),
-                reward_hidden_state_roots[1].detach().cpu().numpy()
-            )
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             if self._cfg.model.continuous_action_space is True:
@@ -870,9 +858,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                                     ).astype(np.float32).tolist() for j in range(active_collect_env_num)
             ]
 
-            roots.prepare(self._cfg.root_noise_weight, noises, value_prefix_roots, policy_logits, to_play)
+            roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
             self._mcts_collect.search(
-                roots, self._collect_model, latent_state_roots, reward_hidden_state_roots, to_play
+                roots, self._collect_model, latent_state_roots, to_play
             )
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
@@ -931,7 +919,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None,):
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None, ):
         """
          Overview:
              The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -961,7 +949,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._eval_model.initial_inference(data)
-            latent_state_roots, value_prefix_roots, reward_hidden_state_roots, pred_values, policy_logits = ez_network_output_unpack(
+            latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(
                 network_output
             )
 
@@ -969,10 +957,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 # if not in training, obtain the scalars of the value/reward
                 pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
                 latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                reward_hidden_state_roots = (
-                    reward_hidden_state_roots[0].detach().cpu().numpy(),
-                    reward_hidden_state_roots[1].detach().cpu().numpy()
-                )
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
             if self._cfg.model.continuous_action_space is True:
@@ -999,8 +983,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                     self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
 
-            roots.prepare_no_noise(value_prefix_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, reward_hidden_state_roots, to_play)
+            roots.prepare_no_noise(reward_roots, policy_logits, to_play)
+            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
@@ -1016,7 +1000,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 try:
                     root_sampled_actions = np.array([action.value for action in roots_sampled_actions[i]])
                 except Exception:
-                    # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                    # logging.warning('ctree_sampled_muzero roots.get_sampled_actions() return list')
                     root_sampled_actions = np.array([action for action in roots_sampled_actions[i]])
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
                 # the index within the legal action set, rather than the index in the entire action set.
@@ -1030,9 +1014,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
                 try:
                     action = roots_sampled_actions[i][action].value
-                    # logging.warning('ptree_sampled_efficientzero roots.get_sampled_actions() return array')
+                    # logging.warning('ptree_sampled_muzero roots.get_sampled_actions() return array')
                 except Exception:
-                    # logging.warning('ctree_sampled_efficientzero roots.get_sampled_actions() return list')
+                    # logging.warning('ctree_sampled_muzero roots.get_sampled_actions() return list')
                     action = np.array(roots_sampled_actions[i][action])
 
                 if not self._cfg.model.continuous_action_space:
@@ -1066,15 +1050,15 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 'total_loss',
                 'weighted_total_loss',
                 'policy_loss',
-                'value_prefix_loss',
+                'reward_loss',
                 'value_loss',
                 'consistency_loss',
                 'value_priority',
-                'target_value_prefix',
+                'target_reward',
                 'target_value',
-                'predicted_value_prefixs',
+                'predicted_rewards',
                 'predicted_values',
-                'transformed_target_value_prefix',
+                'transformed_target_reward',
                 'transformed_target_value',
 
                 # ==============================================================
@@ -1102,15 +1086,15 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 'weighted_total_loss',
                 'loss_mean',
                 'policy_loss',
-                'value_prefix_loss',
+                'reward_loss',
                 'value_loss',
                 'consistency_loss',
                 'value_priority',
-                'target_value_prefix',
+                'target_reward',
                 'target_value',
-                'predicted_value_prefixs',
+                'predicted_rewards',
                 'predicted_values',
-                'transformed_target_value_prefix',
+                'transformed_target_reward',
                 'transformed_target_value',
 
                 # ==============================================================
@@ -1125,35 +1109,3 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 'target_sampled_actions_mean',
                 'total_grad_norm_before_clip',
             ]
-
-    def _state_dict_learn(self) -> Dict[str, Any]:
-        """
-        Overview:
-            Return the state_dict of learn mode, usually including model and optimizer.
-        Returns:
-            - state_dict (:obj:`Dict[str, Any]`): the dict of current policy learn state, for saving and restoring.
-        """
-        return {
-            'model': self._learn_model.state_dict(),
-            'target_model': self._target_model.state_dict(),
-            'optimizer': self._optimizer.state_dict(),
-        }
-
-    def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
-        """
-        Overview:
-            Load the state_dict variable into policy learn mode.
-        Arguments:
-            - state_dict (:obj:`Dict[str, Any]`): the dict of policy learn state saved before.
-        """
-        self._learn_model.load_state_dict(state_dict['model'])
-        self._target_model.load_state_dict(state_dict['target_model'])
-        self._optimizer.load_state_dict(state_dict['optimizer'])
-
-    def _process_transition(self, obs, policy_output, timestep):
-        # be compatible with DI-engine Policy class
-        pass
-
-    def _get_train_sample(self, data):
-        # be compatible with DI-engine Policy class
-        pass
