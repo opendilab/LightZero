@@ -33,6 +33,7 @@ class WorldModel(nn.Module):
             - a transformer, which processes the input sequences,
             - and heads, which generate the logits for observations, rewards, policy, and value.
     """
+
     def __init__(self, config: TransformerConfig, tokenizer) -> None:
         """
         Overview:
@@ -46,9 +47,13 @@ class WorldModel(nn.Module):
         self.config = config
         self.transformer = Transformer(self.config)
 
+        if self.config.device == 'cpu':
+            self.device = torch.device('cpu')
+        else:
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # Move all modules to the specified device
-        print(f"self.config.device: {self.config.device}")
-        self.to(self.config.device)
+        print(f"self.device: {self.device}")
+        self.to(self.device)
 
         # Initialize configuration parameters
         self._initialize_config_parameters()
@@ -60,20 +65,15 @@ class WorldModel(nn.Module):
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
         self.precompute_pos_emb_diff_kv()
         print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
-
         self.continuous_action_space = self.config.continuous_action_space
 
         # Initialize action embedding table
         if self.continuous_action_space:
-            # TODO
-            # self.act_embedding_table = nn.Linear(config.action_space_size, config.embed_dim, device=self.device)
+            # TODO: check the effect of SimNorm
             self.act_embedding_table = nn.Sequential(
-                            nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
-                            SimNorm(simnorm_dim=self.group_size))
-            # Freeze parameters # TODO
-            # for param in self.act_embedding_table.parameters():
-            #     param.requires_grad = False
-        else: 
+                nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
+                SimNorm(simnorm_dim=self.group_size))
+        else:
             # for discrete action space
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
             print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
@@ -84,7 +84,10 @@ class WorldModel(nn.Module):
                                                    self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
         if self.continuous_action_space:
             self.sigma_type = self.config.sigma_type
-            self.fixed_sigma_value = self.config.fixed_sigma_value
+            if self.sigma_type == 'fixed':
+                self.fixed_sigma_value = self.config.fixed_sigma_value
+            else:
+                self.fixed_sigma_value = 0.3
             self.bound_type = self.config.bound_type
             self.head_policy = self._create_head_cont(self.value_policy_tokens_pattern, self.action_space_size)
         else:
@@ -123,7 +126,6 @@ class WorldModel(nn.Module):
         self.num_observations_tokens = self.config.tokens_per_block - 1
         self.latent_recon_loss_weight = self.config.latent_recon_loss_weight
         self.perceptual_loss_weight = self.config.perceptual_loss_weight
-        self.device = self.config.device
         self.support_size = self.config.support_size
         self.action_space_size = self.config.action_space_size
         self.max_cache_size = self.config.max_cache_size
@@ -158,21 +160,14 @@ class WorldModel(nn.Module):
 
     def _create_head_cont(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
         """Create head modules for the transformer."""
-        # modules = [
-        #     nn.Linear(self.config.embed_dim, self.config.embed_dim),
-        #     nn.GELU(approximate='tanh'),
-        #     nn.Linear(self.config.embed_dim, output_dim*2)
-        # ]
         from ding.model.common import ReparameterizationHead
         self.fc_policy_head = ReparameterizationHead(
             input_size=self.config.embed_dim,
             output_size=output_dim,
-            # layer_num=2,
-            layer_num=1,
+            layer_num=1,  # TODO: check the effect of layer_num
             sigma_type=self.sigma_type,
-            fixed_sigma_value=self.fixed_sigma_value,
             activation=nn.GELU(approximate='tanh'),
-            # activation=nn.ReLU(),
+            fixed_sigma_value=self.fixed_sigma_value,
             norm_type=None,
             bound_type=self.bound_type
         )
@@ -346,7 +341,6 @@ class WorldModel(nn.Module):
             else:
                 sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
 
-
         # Pass sequences through transformer
         x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths)
 
@@ -423,7 +417,6 @@ class WorldModel(nn.Module):
 
         return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
 
-
     def _process_obs_act_combined(self, obs_embeddings_or_act_tokens, prev_steps):
         """
         Process combined observation embeddings and action tokens.
@@ -498,7 +491,8 @@ class WorldModel(nn.Module):
             current_obs_embeddings = self.tokenizer.encode_to_obs_embeddings(current_obs)
             # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
             self.latent_state = current_obs_embeddings
-            outputs_wm = self.refresh_kvs_with_initial_latent_state_for_init_infer(obs_embeddings, buffer_action, current_obs_embeddings)
+            outputs_wm = self.refresh_kvs_with_initial_latent_state_for_init_infer(obs_embeddings, buffer_action,
+                                                                                   current_obs_embeddings)
         else:
             # ================ calculate the target value in Train phase ================
             self.latent_state = obs_embeddings
@@ -557,11 +551,13 @@ class WorldModel(nn.Module):
                             # If a matching value is found, add it to the list
                             self.root_hit_cnt += 1
                             # deepcopy is needed because forward modifies matched_value in place
-                            self.keys_values_wm_list.append(copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
+                            self.keys_values_wm_list.append(
+                                copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
                             # Reset using zero values
-                            self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
+                            self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1,
+                                                                                                         max_tokens=self.context_length)
                             outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
                                                       past_keys_values=self.keys_values_wm_single_env,
                                                       is_init_infer=True)
@@ -572,6 +568,7 @@ class WorldModel(nn.Module):
                     self.keys_values_wm_size_list_current = self.trim_and_pad_kv_cache(is_init_infer=True)
 
                     buffer_action = buffer_action[:ready_env_num]
+                    # # only for debug
                     # if ready_env_num < self.env_num:
                     #     print(f'init inference ready_env_num: {ready_env_num} < env_num: {self.env_num}')
                     if self.continuous_action_space:
@@ -721,7 +718,8 @@ class WorldModel(nn.Module):
             latent_state_index_in_search_path=latent_state_index_in_search_path
         )
 
-        return (outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value)
+        return (
+        outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value)
 
     def trim_and_pad_kv_cache(self, is_init_infer=True) -> list:
         """
@@ -826,9 +824,9 @@ class WorldModel(nn.Module):
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = v_cache_padded.unsqueeze(0)
                     # Update size of self.keys_values_wm_single_env
                     self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = \
-                    self.keys_values_wm_size_list_current[i]
+                        self.keys_values_wm_size_list_current[i]
                     self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = \
-                    self.keys_values_wm_size_list_current[i]
+                        self.keys_values_wm_size_list_current[i]
 
                     # ============ NOTE: Very Important ============
                     if self.keys_values_wm_single_env._keys_values[layer]._k_cache._size >= context_length - 1:
@@ -869,11 +867,17 @@ class WorldModel(nn.Module):
                 for layer in range(self.num_layers):
                     # ============ Apply trimming and padding to each layer of kv_cache ============
 
-                    if self.keys_values_wm._keys_values[layer]._k_cache._size < context_length - 1:  # Keep only the last self.context_length-1 timesteps of context
-                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = self.keys_values_wm._keys_values[layer]._k_cache._cache[i].unsqueeze(0)  # Shape torch.Size([2, 100, 512])
-                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = self.keys_values_wm._keys_values[layer]._v_cache._cache[i].unsqueeze(0)
-                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm._keys_values[layer]._k_cache._size
-                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm._keys_values[layer]._v_cache._size
+                    if self.keys_values_wm._keys_values[
+                        layer]._k_cache._size < context_length - 1:  # Keep only the last self.context_length-1 timesteps of context
+                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = \
+                        self.keys_values_wm._keys_values[layer]._k_cache._cache[i].unsqueeze(
+                            0)  # Shape torch.Size([2, 100, 512])
+                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._cache = \
+                        self.keys_values_wm._keys_values[layer]._v_cache._cache[i].unsqueeze(0)
+                        self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = \
+                        self.keys_values_wm._keys_values[layer]._k_cache._size
+                        self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = \
+                        self.keys_values_wm._keys_values[layer]._v_cache._size
                     else:
                         # Assuming cache dimension is [batch_size, num_heads, sequence_length, features]
                         k_cache_current = self.keys_values_wm._keys_values[layer]._k_cache._cache[i]
@@ -905,10 +909,12 @@ class WorldModel(nn.Module):
 
             if is_init_infer:
                 # Store the latest key-value cache for initial inference
-                self.past_kv_cache_init_infer_envs[i][cache_key] = copy.deepcopy(to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                self.past_kv_cache_init_infer_envs[i][cache_key] = copy.deepcopy(
+                    to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
             else:
                 # Store the latest key-value cache for recurrent inference
-                self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(
+                    to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
 
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
                                      simulation_index: int = 0) -> list:
@@ -958,7 +964,8 @@ class WorldModel(nn.Module):
 
         return self.keys_values_wm_size_list
 
-    def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None, **kwargs: Any) -> LossWithIntermediateLosses:
+    def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None,
+                     **kwargs: Any) -> LossWithIntermediateLosses:
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
@@ -969,7 +976,7 @@ class WorldModel(nn.Module):
         # Uncomment the lines below for visual analysis in visual match
         # self.plot_latent_tsne_each_and_all(obs_embeddings, suffix='visual_match_memlen1-60-15_tsne')
         # self.save_as_image_with_timestep(batch['observations'], suffix='visual_match_memlen1-60-15_tsne')
-        
+
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio:
             # Calculate dormant ratio of the encoder
@@ -1041,7 +1048,6 @@ class WorldModel(nn.Module):
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=batch['observations'].dtype)
 
-
         # Action tokens
         if self.continuous_action_space:
             act_tokens = batch['actions']
@@ -1072,7 +1078,7 @@ class WorldModel(nn.Module):
         # predict_rewards = inverse_scalar_transform_handle(outputs.logits_rewards.reshape(-1, 101)).reshape(batch['observations'].shape[0], batch['observations'].shape[1], 1)
         # import pdb; pdb.set_trace()
         # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=[], suffix='pong_H10_H4_0613')
-        
+
         # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_success_episode')
         # visualize_reward_value_img_policy(original_images, reconstructed_images, target_predict_value, true_rewards, target_policy, predict_value, predict_rewards, predict_policy, not_plot_timesteps=list(np.arange(4,60)), suffix='visual_match_memlen1-60-15/one_fail_episode')
         #  ========== for visualization ==========
@@ -1125,13 +1131,13 @@ class WorldModel(nn.Module):
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
 
         if not self.continuous_action_space:
-            loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy, batch,
-                                                                                        element='policy')
+            loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy,
+                                                                                            batch,
+                                                                                            element='policy')
         else:
-            # loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss_cont(outputs, labels_policy, batch,
-            #                                                                             element='policy')
-            """NOTE: continuous action space"""
-            orig_policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont_v2(outputs,  batch['target_policy'], batch)
+            # NOTE: for continuous action space
+            orig_policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont(
+                outputs, batch)
             loss_policy = orig_policy_loss + self.config.policy_entropy_loss_weight * policy_entropy_loss
             policy_entropy = - policy_entropy_loss
 
@@ -1231,16 +1237,14 @@ class WorldModel(nn.Module):
                 latent_state_l2_norms=latent_state_l2_norms,
             )
 
-
-    def _calculate_policy_loss_cont_v2(self, outputs, target_policy: torch.Tensor, batch: dict) -> Tuple[
+    def _calculate_policy_loss_cont(self, outputs, batch: dict) -> Tuple[
         torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Calculate the policy loss for continuous actions.
 
         Args:
             - outputs: Model outputs containing policy logits.
-            - target_policy (:obj:`torch.Tensor`): Target policy tensor.
-            - batch (:obj:`dict`): Batch data containing mask and sampled actions.
+            - batch (:obj:`dict`): Batch data containing target policy, mask and sampled actions.
         Returns:
             - policy_loss (:obj:`torch.Tensor`): The calculated policy loss.
             - policy_entropy_loss (:obj:`torch.Tensor`): The entropy loss of the policy.
@@ -1255,29 +1259,20 @@ class WorldModel(nn.Module):
         policy_logits_all = outputs.logits_policy
         mask_batch = batch['mask_padding']
         child_sampled_actions_batch = batch['child_sampled_actions']
+        target_policy = batch['target_policy']
 
         # Flatten the unroll step dimension for easier vectorized operations
         policy_logits_all = policy_logits_all.view(batch_size * num_unroll_steps, -1)
         mask_batch = mask_batch.contiguous().view(-1)
-        # mask_batch = mask_batch.reshape(-1)
-        # child_sampled_actions_batch = child_sampled_actions_batch.reshape(batch_size * num_unroll_steps, -1,
-        #                                                                action_space_size)
         child_sampled_actions_batch = child_sampled_actions_batch.contiguous().view(batch_size * num_unroll_steps, -1,
-                                                                    action_space_size)
+                                                                                    action_space_size)
 
         mu, sigma = policy_logits_all[:, :action_space_size], policy_logits_all[:, action_space_size:]
-
         mu = mu.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
         sigma = sigma.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
         dist = Independent(Normal(mu, sigma), 1)
 
-        # mu = mu.unsqueeze(1).repeat(1, child_sampled_actions_batch.shape[1], 1)
-        # sigma = sigma.unsqueeze(1).repeat(1, child_sampled_actions_batch.shape[1], 1)
-        # dist = Independent(Normal(mu, sigma), 1)
-
-        # target_normalized_visit_count = target_policy.reshape(batch_size * num_unroll_steps, -1)
         target_normalized_visit_count = target_policy.contiguous().view(batch_size * num_unroll_steps, -1)
-
         target_sampled_actions = child_sampled_actions_batch
 
         policy_entropy = dist.entropy().mean(dim=1)
@@ -1303,146 +1298,6 @@ class WorldModel(nn.Module):
             target_policy_entropy = target_dist.entropy().mean().item()
         else:
             target_policy_entropy = 0.0
-
-        return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
-
-    def _calculate_policy_loss_cont_v1(self, outputs, target_policy: torch.Tensor, batch: dict) -> Tuple[
-        torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Calculate the policy loss for continuous actions.
-
-        Args:
-            - outputs: Model outputs containing policy logits.
-            - target_policy (:obj:`torch.Tensor`): Target policy tensor.
-            - batch (:obj:`dict`): Batch data containing mask and sampled actions.
-
-        Returns:
-            - policy_loss (:obj:`torch.Tensor`): The calculated policy loss.
-            - policy_entropy_loss (:obj:`torch.Tensor`): The entropy loss of the policy.
-            - target_policy_entropy (:obj:`float`): The entropy of the target policy distribution.
-            - target_sampled_actions (:obj:`torch.Tensor`): The actions sampled from the target policy.
-            - mu (:obj:`torch.Tensor`): The mean of the normal distribution.
-            - sigma (:obj:`torch.Tensor`): The standard deviation of the normal distribution.
-        """
-        batch_size, num_unroll_steps, action_space_size = outputs.logits_policy.shape[0], self.config.num_unroll_steps, self.config.action_space_size
-        policy_loss = torch.zeros(batch_size * num_unroll_steps, device=outputs.logits_policy.device)
-        policy_entropy_loss = torch.zeros(batch_size * num_unroll_steps, device=outputs.logits_policy.device)
-        policy_logits_all = outputs.logits_policy
-        mask_batch = batch['mask_padding']
-        child_sampled_actions_batch = batch['child_sampled_actions']
-
-        for unroll_step in range(num_unroll_steps):
-            policy_logits = policy_logits_all[:, unroll_step, :]
-            mu, sigma = policy_logits[:, :action_space_size], policy_logits[:, action_space_size:]
-            # sigma = torch.exp(sigma)  # Ensure sigma is positive
-
-            # Reshape mu and sigma to match the shape of target_sampled_actions_before_tanh
-            mu = mu.unsqueeze(1).expand(child_sampled_actions_batch.shape[0], child_sampled_actions_batch.shape[2], child_sampled_actions_batch.shape[-1])
-            sigma = sigma.unsqueeze(1).expand(child_sampled_actions_batch.shape[0], child_sampled_actions_batch.shape[2], child_sampled_actions_batch.shape[-1])
-            dist = Independent(Normal(mu, sigma), 1)
-
-            target_normalized_visit_count = target_policy[:, unroll_step]
-            non_masked_indices = torch.nonzero(mask_batch[:, unroll_step]).squeeze(-1)
-            if len(non_masked_indices) > 0:
-                target_normalized_visit_count_masked = target_normalized_visit_count[non_masked_indices]
-                target_dist = Categorical(target_normalized_visit_count_masked)
-                target_policy_entropy = target_dist.entropy().mean().item()
-            else:
-                target_policy_entropy = 0.0
-
-            target_sampled_actions = child_sampled_actions_batch[:, unroll_step]
-            policy_entropy = dist.entropy().mean()
-            policy_entropy_loss[unroll_step * batch_size:(unroll_step + 1) * batch_size] = -policy_entropy
-            # SAC-like log probabilities calculation
-            y = 1 - target_sampled_actions.pow(2)
-            target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
-            target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
-
-            log_prob = dist.log_prob(target_sampled_actions_before_tanh)
-            log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
-            log_prob_sampled_actions = log_prob
-
-            target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
-            policy_loss[unroll_step * batch_size:(unroll_step + 1) * batch_size] = -torch.sum(
-                torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
-            ) * mask_batch[:, unroll_step]
-
-        return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
-
-    def _calculate_policy_loss_cont_v0(self, outputs, target_policy: torch.Tensor, batch: dict) -> Tuple[
-        torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Calculate the policy loss for continuous actions.
-
-        Args:
-            outputs: Model outputs containing policy logits.
-            target_policy (torch.Tensor): Target policy tensor.
-            batch (dict): Batch data containing mask and sampled actions.
-        Returns:
-            Tuple[torch.Tensor, torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
-                - policy_loss (torch.Tensor): The calculated policy loss.
-                - policy_entropy (torch.Tensor): The entropy of the policy distribution.
-                - policy_entropy_loss (torch.Tensor): The entropy loss of the policy.
-                - target_policy_entropy (float): The entropy of the target policy distribution.
-                - target_sampled_actions (torch.Tensor): The actions sampled from the target policy.
-                - mu (torch.Tensor): The mean of the normal distribution.
-                - sigma (torch.Tensor): The standard deviation of the normal distribution.
-        """
-        # policy_loss = torch.zeros(outputs.logits_policy.shape[0], device=outputs.logits_policy.device)
-        policy_loss = torch.zeros(outputs.logits_policy.shape[0]*outputs.logits_policy.shape[1], device=outputs.logits_policy.device)
-        policy_entropy_loss = torch.zeros(outputs.logits_policy.shape[0]*outputs.logits_policy.shape[1], device=outputs.logits_policy.device)
-
-        policy_logits_all = outputs.logits_policy
-        mask_batch = batch['mask_padding']
-        child_sampled_actions_batch = batch['child_sampled_actions']
-
-        for unroll_step in range(self.config.num_unroll_steps):
-            policy_logits = policy_logits_all[:, unroll_step, :]
-            mu, sigma = policy_logits[:, :self.config.action_space_size], policy_logits[:,
-                                                                          self.config.action_space_size:]
-            dist = Independent(Normal(mu, sigma), 1)
-
-            # Target normalized visit count for the current unroll step
-            target_normalized_visit_count = target_policy[:, unroll_step]
-
-            # Calculate target policy entropy for debugging purposes
-            non_masked_indices = torch.nonzero(mask_batch[:, unroll_step]).squeeze(-1)
-            if len(non_masked_indices) > 0:
-                target_normalized_visit_count_masked = torch.index_select(target_normalized_visit_count, 0,
-                                                                          non_masked_indices)
-                target_dist = Categorical(target_normalized_visit_count_masked)
-                target_policy_entropy = target_dist.entropy().mean().item()
-            else:
-                target_policy_entropy = 0.0
-
-            target_sampled_actions = child_sampled_actions_batch[:, unroll_step]
-            policy_entropy = dist.entropy().mean()
-            # policy_entropy_loss = - policy_entropy
-            policy_entropy_loss[unroll_step*outputs.logits_policy.shape[0]:(unroll_step+1)*outputs.logits_policy.shape[0]] = - policy_entropy
-
-            # Calculate log probabilities of sampled actions
-            log_prob_sampled_actions = []
-            for k in range(self.config.num_of_sampled_actions):
-                y = 1 - target_sampled_actions[:, k, :].pow(2)
-                min_val = torch.tensor(-1 + 1e-6, device=target_sampled_actions.device)
-                max_val = torch.tensor(1 - 1e-6, device=target_sampled_actions.device)
-                target_sampled_actions_clamped = torch.clamp(target_sampled_actions[:, k, :], min_val, max_val)
-                target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
-
-                log_prob = dist.log_prob(target_sampled_actions_before_tanh).unsqueeze(-1)
-                log_prob = log_prob - torch.log(y + 1e-6).sum(-1, keepdim=True)
-                log_prob_sampled_actions.append(log_prob.squeeze(-1))
-
-            log_prob_sampled_actions = torch.stack(log_prob_sampled_actions, dim=-1)
-            target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
-
-            # Cross-entropy loss calculation
-            # policy_loss += -torch.sum(
-            #     torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
-            # ) * mask_batch[:, unroll_step]
-            policy_loss[unroll_step*outputs.logits_policy.shape[0]:(unroll_step+1)*outputs.logits_policy.shape[0]] = -torch.sum(
-                torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
-            ) * mask_batch[:, unroll_step]
 
         return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
 
@@ -1515,7 +1370,6 @@ class WorldModel(nn.Module):
             return None, labels_value.reshape(-1, self.support_size)
         else:
             return labels_policy.reshape(-1, self.action_space_size), labels_value.reshape(-1, self.support_size)
-
 
     def clear_caches(self):
         """

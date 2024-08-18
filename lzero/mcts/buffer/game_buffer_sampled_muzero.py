@@ -295,10 +295,6 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
                             m_output.policy_logits
                         ]
                     )
-                    # m_output.reward_hidden_state = (
-                    #     m_output.reward_hidden_state[0].detach().cpu().numpy(),
-                    #     m_output.reward_hidden_state[1].detach().cpu().numpy()
-                    # )
 
                 network_output.append(m_output)
 
@@ -306,9 +302,6 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
             if self._cfg.use_root_value:
                 # use the root values from MCTS
                 # the root values have limited improvement but require much more GPU actors;
-                # _, reward_pool, policy_logits_pool, latent_state_roots, reward_hidden_state_roots = concat_output(
-                #     network_output, data_type='muzero'
-                # )
                 _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
                     network_output, data_type='muzero'
                 )
@@ -394,18 +387,10 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
                             value_list[value_index] += reward * self._cfg.discount_factor ** i
                             # TODO(pu): why value don't use discount_factor factor
 
-                    # # reset every lstm_horizon_len
-                    # if horizon_id % self._cfg.lstm_horizon_len == 0:
-                    #     reward = np.array([0.])
-                    #     base_index = current_index
                     horizon_id += 1
 
                     if current_index < game_segment_len_non_re:
                         target_values.append(value_list[value_index])
-                        # # Since the horizon is small and the discount_factor is close to 1.
-                        # # Compute the reward sum to approximate the value prefix for simplification
-                        # reward += reward_list[current_index]  # * config.discount_factor ** (current_index - base_index)
-                        # target_rewards.append(reward)
                         target_rewards.append(reward_list[current_index])
                     else:
                         target_values.append(np.array([0.]))
@@ -416,15 +401,11 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
                 batch_rewards.append(target_rewards)
                 batch_target_values.append(target_values)
 
-        # batch_rewards = np.asarray(batch_rewards)
-        # batch_target_values = np.asarray(batch_target_values)
-        # batch_rewards = np.squeeze(batch_rewards, axis=-1)
-        # batch_target_values = np.squeeze(batch_target_values, axis=-1)
-        #
-        # return batch_rewards, batch_target_values
+        batch_rewards = np.asarray(batch_rewards)
+        batch_target_values = np.asarray(batch_target_values)
+        batch_rewards = np.squeeze(batch_rewards, axis=-1)
+        batch_target_values = np.squeeze(batch_target_values, axis=-1)
 
-        batch_rewards = np.asarray(batch_rewards, dtype=object)
-        batch_target_values = np.asarray(batch_target_values, dtype=object)
         return batch_rewards, batch_target_values
 
     def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any) -> np.ndarray:
@@ -483,10 +464,6 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
                             m_output.policy_logits
                         ]
                     )
-                    # m_output.reward_hidden_state = (
-                    #     m_output.reward_hidden_state[0].detach().cpu().numpy(),
-                    #     m_output.reward_hidden_state[1].detach().cpu().numpy()
-                    # )
 
                 network_output.append(m_output)
 

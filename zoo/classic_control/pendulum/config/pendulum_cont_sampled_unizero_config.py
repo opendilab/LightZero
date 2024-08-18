@@ -15,20 +15,20 @@ reanalyze_ratio = 0
 batch_size = 64
 num_unroll_steps = 10
 infer_context_length = 4
-norm_type = 'BN'
+norm_type = 'LN'
 
 # for debug
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 2
-# batch_size = 2
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+num_simulations = 2
+batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 pendulum_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero_debug/pendulum_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
+    exp_name=f'data_suz/pendulum_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
     env=dict(
         env_id='Pendulum-v1',
         continuous=True,
@@ -45,24 +45,20 @@ pendulum_cont_sampled_unizero_config = dict(
             action_space_size=1,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            norm_type=norm_type,
             model_type='mlp',
             world_model_cfg=dict(
+                obs_type='vector',
                 num_unroll_steps=num_unroll_steps,
                 policy_entropy_loss_weight=1e-4,
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
-                # sigma_type='conditioned',
-                fixed_sigma_value=0.3,
-                sigma_type='fixed',
-                # bound_type='tanh',
+                sigma_type='conditioned',
                 bound_type=None,
                 model_type='mlp',
                 norm_type=norm_type,
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,
-                # device='cpu',
                 device='cuda',
                 action_space_size=1,
                 num_layers=2,
@@ -71,7 +67,6 @@ pendulum_cont_sampled_unizero_config = dict(
                 env_num=collector_env_num,
                 collector_env_num=collector_env_num,
                 evaluator_env_num=evaluator_env_num,
-                obs_type='vector',
             ),
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
@@ -86,8 +81,6 @@ pendulum_cont_sampled_unizero_config = dict(
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
-        target_update_freq=100,
-        grad_clip_value=5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

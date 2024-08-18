@@ -33,24 +33,18 @@ pendulum_cont_disc_unizero_config = dict(
         model=dict(
             observation_shape=3,
             action_space_size=11,
-            self_supervised_learning_loss=True,  # NOTE: default is False.
-            discrete_action_encoding_type='one_hot',
-            norm_type='BN',
             model_type='mlp',
             world_model_cfg=dict(
+                obs_type='vector',
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,
                 device='cuda',
                 action_space_size=11,
-                num_layers=2,
-                num_heads=2,
-                embed_dim=64,
                 env_num=collector_env_num,
                 collector_env_num=collector_env_num,
                 evaluator_env_num=evaluator_env_num,
-                obs_type='vector',
-                norm_type='BN',
+                norm_type='LN',
             ),
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
@@ -63,10 +57,7 @@ pendulum_cont_disc_unizero_config = dict(
         replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type='AdamW',
-        lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
-        target_update_freq=100,
-        grad_clip_value=5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

@@ -68,7 +68,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
-            norm_type='BN',
+            norm_type='LN',
         ),
         # ****** common ******
         # (bool) Whether to use multi-gpu training.
@@ -130,9 +130,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
         optim_type='AdamW',
         learning_rate=1e-4,  # init lr for manually decay schedule
-        # optim_type='Adam',
-        # lr_piecewise_constant_decay=False,
-        # learning_rate=0.003,  # lr for Adam optimizer
         # (float) Weight uniform initialization range in the last output layer
         init_w=3e-3,
         normalize_prob_of_sampled_actions=False,
@@ -162,7 +159,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # (float) The weight of policy loss.
         policy_loss_weight=1,
         # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=0,
+        policy_entropy_loss_weight=5e-3,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=2,
         # (bool) Whether to use the cosine learning rate decay.

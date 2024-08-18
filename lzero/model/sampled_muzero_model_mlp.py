@@ -8,44 +8,44 @@ from ding.utils import MODEL_REGISTRY, SequenceType
 
 from .common import MZNetworkOutput, RepresentationNetworkMLP
 from .muzero_model_mlp import DynamicsNetwork
-from .utils import renormalize, get_params_mean
+from .utils import renormalize
 
 
 @MODEL_REGISTRY.register('SampledMuZeroModelMLP')
 class SampledMuZeroModelMLP(nn.Module):
 
     def __init__(
-        self,
-        observation_shape: int = 2,
-        action_space_size: int = 6,
-        latent_state_dim: int = 256,
-        fc_reward_layers: SequenceType = [256],
-        fc_value_layers: SequenceType = [256],
-        fc_policy_layers: SequenceType = [256],
-        reward_support_size: int = 601,
-        value_support_size: int = 601,
-        proj_hid: int = 1024,
-        proj_out: int = 1024,
-        pred_hid: int = 512,
-        pred_out: int = 1024,
-        self_supervised_learning_loss: bool = True,
-        categorical_distribution: bool = True,
-        activation: Optional[nn.Module] = nn.GELU(approximate='tanh'),
-        last_linear_layer_init_zero: bool = True,
-        state_norm: bool = False,
-        # ==============================================================
-        # specific sampled related config
-        # ==============================================================
-        continuous_action_space: bool = False,
-        num_of_sampled_actions: int = 6,
-        sigma_type='conditioned',
-        fixed_sigma_value: float = 0.3,
-        bound_type: str = None,
-        norm_type: str = 'LN',
-        discrete_action_encoding_type: str = 'one_hot',
-        res_connection_in_dynamics: bool = True,
-        *args,
-        **kwargs,
+            self,
+            observation_shape: int = 2,
+            action_space_size: int = 6,
+            latent_state_dim: int = 256,
+            fc_reward_layers: SequenceType = [256],
+            fc_value_layers: SequenceType = [256],
+            fc_policy_layers: SequenceType = [256],
+            reward_support_size: int = 601,
+            value_support_size: int = 601,
+            proj_hid: int = 1024,
+            proj_out: int = 1024,
+            pred_hid: int = 512,
+            pred_out: int = 1024,
+            self_supervised_learning_loss: bool = True,
+            categorical_distribution: bool = True,
+            activation: Optional[nn.Module] = nn.GELU(approximate='tanh'),
+            last_linear_layer_init_zero: bool = True,
+            state_norm: bool = False,
+            # ==============================================================
+            # specific sampled related config
+            # ==============================================================
+            continuous_action_space: bool = False,
+            num_of_sampled_actions: int = 6,
+            sigma_type='conditioned',
+            fixed_sigma_value: float = 0.3,
+            bound_type: str = None,
+            norm_type: str = 'LN',
+            discrete_action_encoding_type: str = 'one_hot',
+            res_connection_in_dynamics: bool = True,
+            *args,
+            **kwargs,
     ):
         """
         Overview:
@@ -134,7 +134,8 @@ class SampledMuZeroModelMLP(nn.Module):
         self.activation = activation
 
         self.representation_network = RepresentationNetworkMLP(
-            observation_shape=self.observation_shape, hidden_channels=self.latent_state_dim, activation=self.activation, norm_type=self.norm_type
+            observation_shape=self.observation_shape, hidden_channels=self.latent_state_dim, activation=self.activation,
+            norm_type=self.norm_type
         )
 
         self.dynamics_network = DynamicsNetwork(
@@ -144,7 +145,7 @@ class SampledMuZeroModelMLP(nn.Module):
             fc_reward_layers=self.fc_reward_layers,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            activation=self.activation, 
+            activation=self.activation,
             norm_type=self.norm_type,
             res_connection_in_dynamics=self.res_connection_in_dynamics,
         )
@@ -157,7 +158,7 @@ class SampledMuZeroModelMLP(nn.Module):
             fc_policy_layers=self.fc_policy_layers,
             output_support_size=self.value_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            activation=self.activation, 
+            activation=self.activation,
             sigma_type=self.sigma_type,
             fixed_sigma_value=self.fixed_sigma_value,
             bound_type=self.bound_type,
@@ -213,15 +214,6 @@ class SampledMuZeroModelMLP(nn.Module):
             policy_logits,
             latent_state,
         )
-
-        # # zero initializations for reward hidden states
-        # # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
-        # reward_hidden_state = (
-        #     torch.zeros(1, batch_size,
-        #                 self.lstm_hidden_size).to(obs.device), torch.zeros(1, batch_size,
-        #                                                                    self.lstm_hidden_size).to(obs.device)
-        # )
-        # return MZNetworkOutput(value, [0. for _ in range(batch_size)], policy_logits, latent_state, reward_hidden_state)
 
     def recurrent_inference(self, latent_state: torch.Tensor, action: torch.Tensor) -> MZNetworkOutput:
         """
@@ -284,7 +276,8 @@ class SampledMuZeroModelMLP(nn.Module):
         policy, value = self.prediction_network(latent_state)
         return policy, value
 
-    def _dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor, Tuple[torch.Tensor], torch.Tensor]:
+    def _dynamics(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[
+        torch.Tensor, Tuple[torch.Tensor], torch.Tensor]:
         """
         Overview:
             Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state``
@@ -337,6 +330,8 @@ class SampledMuZeroModelMLP(nn.Module):
                 # (batch_size, action_dim, 1) -> (batch_size,  action_dim)
                 # e.g., torch.Size([8, 2, 1]) ->  torch.Size([8, 2])
                 action = action.squeeze(-1)
+            else:
+                raise ValueError("The shape of action is not supported.")
 
             action_encoding = action
 
@@ -352,6 +347,7 @@ class SampledMuZeroModelMLP(nn.Module):
         else:
             next_latent_state_normalized = renormalize(next_latent_state)
             return next_latent_state_normalized, reward
+
     def project(self, latent_state: torch.Tensor, with_grad=True) -> torch.Tensor:
         """
         Overview:
@@ -383,23 +379,23 @@ class SampledMuZeroModelMLP(nn.Module):
 class PredictionNetworkMLP(nn.Module):
 
     def __init__(
-        self,
-        continuous_action_space,
-        action_space_size,
-        num_channels,
-        common_layer_num: int = 2,
-        fc_value_layers: SequenceType = [32],
-        fc_policy_layers: SequenceType = [32],
-        output_support_size: int = 601,
-        last_linear_layer_init_zero: bool = True,
-        activation: Optional[nn.Module] = nn.GELU(approximate='tanh'),
-        # ==============================================================
-        # specific sampled related config
-        # ==============================================================
-        sigma_type='conditioned',
-        fixed_sigma_value: float = 0.3,
-        bound_type: str = None,
-        norm_type: str = 'LN',
+            self,
+            continuous_action_space,
+            action_space_size,
+            num_channels,
+            common_layer_num: int = 2,
+            fc_value_layers: SequenceType = [32],
+            fc_policy_layers: SequenceType = [32],
+            output_support_size: int = 601,
+            last_linear_layer_init_zero: bool = True,
+            activation: Optional[nn.Module] = nn.GELU(approximate='tanh'),
+            # ==============================================================
+            # specific sampled related config
+            # ==============================================================
+            sigma_type='conditioned',
+            fixed_sigma_value: float = 0.3,
+            bound_type: str = None,
+            norm_type: str = 'LN',
     ):
         """
         Overview:

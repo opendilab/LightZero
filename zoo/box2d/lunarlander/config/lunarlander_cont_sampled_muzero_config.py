@@ -1,5 +1,4 @@
 from easydict import EasyDict
-import torch.nn as nn
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
@@ -38,27 +37,20 @@ lunarlander_cont_sampled_muzero_config = dict(
             num_of_sampled_actions=K,
             sigma_type='conditioned',
             model_type='mlp',
-            latent_state_dim=256,
             norm_type=norm_type,
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
         cuda=True,
-        env_type='not_board_games',
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        use_priority=False,
-        cos_lr_scheduler=True,  # TODO
-        learning_rate=0.0001,
-        optim_type='Adam',
-        lr_piecewise_constant_decay=False,
-        grad_clip_value=0.5,
+        optim_type='AdamW',
+        cos_lr_scheduler=True,
+        learning_rate=1e-4,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         random_collect_episode_num=0,
-        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
-        policy_entropy_loss_weight=5e-3,
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_ratio=replay_ratio,

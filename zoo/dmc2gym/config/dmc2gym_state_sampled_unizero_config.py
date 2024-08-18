@@ -5,14 +5,13 @@ from easydict import EasyDict
 
 from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
-env_id = 'cheetah-run' # 'hopper-hop' # 'cartpole-swingup'  # You can specify any Atari game here
+env_id = 'cartpole-swingup'  # You can specify any DMC task here
 action_space_size = dmc_state_env_action_space_map[env_id]
 obs_space_size = dmc_state_env_obs_space_map[env_id]
 print(f'env_id: {env_id}, action_space_size: {action_space_size}, obs_space_size: {obs_space_size}')
 
-domain_name=env_id.split('-')[0]
-task_name=env_id.split('-')[1]
-
+domain_name = env_id.split('-')[0]
+task_name = env_id.split('-')[1]
 
 continuous_action_space = True
 K = 20  # num_of_sampled_actions
@@ -47,7 +46,7 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
         domain_name=domain_name,
         task_name=task_name,
         from_pixels=False,  # vector/state obs
-        frame_skip=8,
+        frame_skip=2,
         continuous=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -60,12 +59,10 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
             action_space_size=action_space_size,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            sigma_type='conditioned',
-            norm_type=norm_type,
             model_type='mlp',
             world_model_cfg=dict(
+                obs_type='vector',
                 num_unroll_steps=num_unroll_steps,
-                policy_loss_weight=1,
                 policy_entropy_loss_weight=1e-4,
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
@@ -82,10 +79,7 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
                 num_layers=2,
                 num_heads=8,
                 embed_dim=768,
-                env_num=collector_env_num,
-                collector_env_num=collector_env_num,
-                evaluator_env_num=evaluator_env_num,
-                obs_type='vector',
+                env_num=max(collector_env_num, evaluator_env_num),
             ),
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
@@ -131,4 +125,5 @@ create_config = dmc2gym_state_cont_sampled_unizero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_unizero
+
     train_unizero([main_config, create_config], seed=seed, max_env_step=max_env_step)

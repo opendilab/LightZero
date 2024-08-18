@@ -41,7 +41,7 @@ class TestDMC2GymEnv:
                 # assert timestep.obs['observation'].shape == (3, 3, 84, 84)
                 assert timestep.obs['observation'].shape == (3, 84, 84)
 
-                assert timestep.reward.shape == (1, )
+                assert timestep.reward.shape == (1,)
                 assert timestep.reward >= env.reward_space.low
                 assert timestep.reward <= env.reward_space.high
         print(env.observation_space, env.action_space, env.reward_space)

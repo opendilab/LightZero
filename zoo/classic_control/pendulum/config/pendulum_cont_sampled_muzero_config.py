@@ -12,7 +12,7 @@ num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
 batch_size = 256
-max_env_step = int(1e6)
+max_env_step = int(2e5)
 reanalyze_ratio = 0.
 norm_type = 'LN'
 # ==============================================================
@@ -48,17 +48,15 @@ pendulum_sampled_muzero_config = dict(
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        cos_lr_scheduler=True,  # TODO
+        optim_type='AdamW',
+        cos_lr_scheduler=True,
         learning_rate=0.0001,
-        optim_type='Adam',
         lr_piecewise_constant_decay=False,
-        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
-        policy_entropy_loss_weight=5e-3,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

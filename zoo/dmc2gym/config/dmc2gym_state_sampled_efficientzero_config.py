@@ -3,6 +3,15 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
+
+env_id = 'cartpole-swingup'  # You can specify any DMC tasks here
+action_space_size = dmc_state_env_action_space_map[env_id]
+obs_space_size = dmc_state_env_obs_space_map[env_id]
+
+domain_name = env_id.split('-')[0]
+task_name = env_id.split('-')[1]
+
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
@@ -23,10 +32,10 @@ dmc2gym_state_sampled_efficientzero_config = dict(
     exp_name=f'data_sez/dmc2gym_state_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
     env=dict(
         env_id='dmc2gym-v0',
-        domain_name="cartpole",
-        task_name="swingup",
+        domain_name=domain_name,
+        task_name=task_name,
         from_pixels=False,  # vector/state obs
-        frame_skip=8,
+        frame_skip=2,
         continuous=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -40,9 +49,7 @@ dmc2gym_state_sampled_efficientzero_config = dict(
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             sigma_type='conditioned',
-            model_type='mlp', 
-            lstm_hidden_size=512,
-            latent_state_dim=256,
+            model_type='mlp',
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
             norm_type=norm_type,
@@ -55,11 +62,9 @@ dmc2gym_state_sampled_efficientzero_config = dict(
         game_segment_length=125,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
+        optim_type='AdamW',
         cos_lr_scheduler=True,
         learning_rate=0.0001,
-        optim_type='Adam',
-        grad_clip_value=0.5,
-        lr_piecewise_constant_decay=False,
         policy_entropy_loss_weight=5e-3,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

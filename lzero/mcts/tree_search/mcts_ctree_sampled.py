@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class SampledUniZeroMCTSCtree(object):
     """
     Overview:
-        MCTSCtree for UniZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in C++.
+        MCTSCtree for Sampled UniZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in C++.
 
     Interfaces:
         __init__, roots, search
@@ -155,8 +155,9 @@ class SampledUniZeroMCTSCtree(object):
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
-                # for UniZero
-                network_output = model.recurrent_inference(state_action_history, simulation_index, latent_state_index_in_search_path)
+                # for Sampled UniZero
+                network_output = model.recurrent_inference(state_action_history, simulation_index,
+                                                           latent_state_index_in_search_path)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
@@ -180,6 +181,7 @@ class SampledUniZeroMCTSCtree(object):
                     current_latent_state_index, discount_factor, reward_batch, value_batch, policy_logits_batch,
                     min_max_stats_lst, results, virtual_to_play_batch
                 )
+
 
 class SampledMuZeroMCTSCtree(object):
     """
@@ -593,5 +595,3 @@ class SampledEfficientZeroMCTSCtree(object):
                     current_latent_state_index, discount_factor, value_prefix_pool, value_pool, policy_logits_pool,
                     min_max_stats_lst, results, is_reset_list, virtual_to_play_batch
                 )
-
-

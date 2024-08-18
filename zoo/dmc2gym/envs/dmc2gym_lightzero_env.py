@@ -2,16 +2,18 @@ import copy
 from datetime import datetime
 from typing import Optional, Callable, Union, Dict
 
+import dmc2gym
 import gym
-from gym.spaces import Box
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
+from ding.envs import WarpFrameWrapper, ScaledFloatFrameWrapper, ClipRewardWrapper, ActionRepeatWrapper, \
+    FrameStackWrapper
 from ding.envs.common.common_function import affine_transform
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
-import dmc2gym
 from easydict import EasyDict
-from ding.envs import WarpFrameWrapper, ScaledFloatFrameWrapper, ClipRewardWrapper, ActionRepeatWrapper, FrameStackWrapper
+from gym.spaces import Box
+
 
 def dmc2gym_observation_space(dim, minimum=-np.inf, maximum=np.inf, dtype=np.float32) -> Callable:
     def observation_space(from_pixels=True, height=84, width=84, channels_first=True) -> Box:
@@ -20,13 +22,17 @@ def dmc2gym_observation_space(dim, minimum=-np.inf, maximum=np.inf, dtype=np.flo
             return Box(low=0, high=255, shape=shape, dtype=np.uint8)
         else:
             return Box(np.repeat(minimum, dim).astype(dtype), np.repeat(maximum, dim).astype(dtype), dtype=dtype)
+
     return observation_space
+
 
 def dmc2gym_state_space(dim, minimum=-np.inf, maximum=np.inf, dtype=np.float32) -> Box:
     return Box(np.repeat(minimum, dim).astype(dtype), np.repeat(maximum, dim).astype(dtype), dtype=dtype)
 
+
 def dmc2gym_action_space(dim, minimum=-1, maximum=1, dtype=np.float32) -> Box:
     return Box(np.repeat(minimum, dim).astype(dtype), np.repeat(maximum, dim).astype(dtype), dtype=dtype)
+
 
 def dmc2gym_reward_space(minimum=0, maximum=1, dtype=np.float32) -> Callable:
     def reward_space(frame_skip=1) -> Box:
@@ -35,7 +41,9 @@ def dmc2gym_reward_space(minimum=0, maximum=1, dtype=np.float32) -> Callable:
             np.repeat(maximum * frame_skip, 1).astype(dtype),
             dtype=dtype
         )
+
     return reward_space
+
 
 dmc2gym_env_info = {
     "ball_in_cup": {
@@ -101,13 +109,13 @@ dmc2gym_env_info = {
         }
     },
     "humanoid": {
-    "run": {
-        "observation_space": dmc2gym_observation_space(67),
-        "state_space": dmc2gym_state_space(54),
-        "action_space": dmc2gym_action_space(21),
-        "reward_space": dmc2gym_reward_space()
+        "run": {
+            "observation_space": dmc2gym_observation_space(67),
+            "state_space": dmc2gym_state_space(54),
+            "action_space": dmc2gym_action_space(21),
+            "reward_space": dmc2gym_reward_space()
+        }
     }
-}
 }
 
 
@@ -166,7 +174,8 @@ class DMC2GymEnv(BaseEnv):
             channels_first=self._cfg["channels_first"]
         )
         self._action_space = dmc2gym_env_info[self._cfg.domain_name][self._cfg.task_name]["action_space"]
-        self._reward_space = dmc2gym_env_info[self._cfg.domain_name][self._cfg.task_name]["reward_space"](self._cfg["frame_skip"])
+        self._reward_space = dmc2gym_env_info[self._cfg.domain_name][self._cfg.task_name]["reward_space"](
+            self._cfg["frame_skip"])
 
     def reset(self) -> Dict[str, np.ndarray]:
         """

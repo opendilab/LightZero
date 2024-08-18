@@ -80,9 +80,6 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         # target policy
         batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model,
                                                                           current_batch[1])
-        # batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
-        #     policy_non_re_context, self._cfg.model.action_space_size
-        # )
 
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
             policy_non_re_context, self._cfg.model.num_of_sampled_actions
@@ -159,8 +156,6 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
-            # # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
-            # mask_tmp = [1. for i in range(len(actions_tmp))]
 
             # NOTE: self._cfg.num_unroll_steps + 1
             root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_segment:pos_in_game_segment +
@@ -502,10 +497,6 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                 )
                 reward_pool = reward_pool.squeeze().tolist()
                 policy_logits_pool = policy_logits_pool.tolist()
-                # noises = [
-                #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                #                         ).astype(np.float32).tolist() for j in range(transition_batch_size)
-                # ]
                 noises = [
                     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
                                         ).astype(np.float32).tolist() for _ in range(transition_batch_size)
@@ -576,6 +567,9 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                 batch_rewards.append(target_rewards)
                 batch_target_values.append(target_values)
 
-        batch_rewards = np.asarray(batch_rewards, dtype=object)
-        batch_target_values = np.asarray(batch_target_values, dtype=object)
+        batch_rewards = np.asarray(batch_rewards)
+        batch_target_values = np.asarray(batch_target_values)
+        batch_rewards = np.squeeze(batch_rewards, axis=-1)
+        batch_target_values = np.squeeze(batch_target_values, axis=-1)
+
         return batch_rewards, batch_target_values

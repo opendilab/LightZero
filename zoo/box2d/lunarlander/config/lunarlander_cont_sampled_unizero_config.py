@@ -28,7 +28,7 @@ norm_type = 'LN'
 # ==============================================================
 
 lunarlander_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero/lunarlander_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_{norm_type}_seed0',
+    exp_name=f'data_suz/lunarlander_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_{norm_type}_seed0',
     env=dict(
         env_id='LunarLanderContinuous-v2',
         continuous=True,
@@ -44,9 +44,9 @@ lunarlander_cont_sampled_unizero_config = dict(
             action_space_size=2,
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
-            norm_type=norm_type,
             model_type='mlp',
             world_model_cfg=dict(
+                obs_type='vector',
                 num_unroll_steps=num_unroll_steps,
                 policy_entropy_loss_weight=1e-4,
                 continuous_action_space=continuous_action_space,
@@ -59,14 +59,10 @@ lunarlander_cont_sampled_unizero_config = dict(
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,
-                # device='cpu',
-                device='cuda',
+                device='cpu',
+                # device='cuda',
                 action_space_size=2,
-                num_layers=2,
-                num_heads=8,
-                embed_dim=768,
                 env_num=max(collector_env_num, evaluator_env_num),
-                obs_type='vector',
             ),
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
@@ -79,9 +75,7 @@ lunarlander_cont_sampled_unizero_config = dict(
         replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type='AdamW',
-        lr_piecewise_constant_decay=False,
-        learning_rate=0.0001,
-        grad_clip_value=5,
+        learning_rate=1e-4,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

@@ -1,16 +1,15 @@
 from easydict import EasyDict
-import torch.nn as nn
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
-env_id = 'hopper-hop' # 'cartpole-swingup'  # You can specify any Atari game here
+env_id = 'cartpole-swingup'  # You can specify any DMC tasks here
 action_space_size = dmc_state_env_action_space_map[env_id]
 obs_space_size = dmc_state_env_obs_space_map[env_id]
 
-domain_name=env_id.split('-')[0]
-task_name=env_id.split('-')[1]
+domain_name = env_id.split('-')[0]
+task_name = env_id.split('-')[1]
 
 collector_env_num = 8
 n_episode = 8
@@ -37,7 +36,7 @@ dmc2gym_state_cont_sampled_muzero_config = dict(
         domain_name=domain_name,
         task_name=task_name,
         from_pixels=False,  # vector/state obs
-        frame_skip=8,
+        frame_skip=2,
         continuous=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -62,16 +61,11 @@ dmc2gym_state_cont_sampled_muzero_config = dict(
         game_segment_length=100,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        use_priority=False,
+        optim_type='AdamW',
         cos_lr_scheduler=True,
         learning_rate=0.0001,
-        optim_type='Adam',
-        lr_piecewise_constant_decay=False,
-        grad_clip_value=0.5,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        random_collect_episode_num=0,
-        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
         policy_entropy_loss_weight=5e-3,
         n_episode=n_episode,
         eval_freq=int(2e3),
@@ -100,4 +94,6 @@ create_config = dmc2gym_state_cont_sampled_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+
+    train_muzero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path,
+                 max_env_step=max_env_step)

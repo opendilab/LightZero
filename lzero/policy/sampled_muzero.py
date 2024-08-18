@@ -36,7 +36,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
             # (bool) If True, the action space of the environment is continuous, otherwise discrete.
             continuous_action_space=False,
             # (tuple) the stacked obs shape.
-            # observation_shape=(1, 96, 96),  # if frame_stack_num=1
+            # observation_shape=(1, 96, 96), # if frame_stack_num=1
             observation_shape=(4, 96, 96),  # if frame_stack_num=4
             # (bool) Whether to use the self-supervised learning loss.
             self_supervised_learning_loss=True,
@@ -67,7 +67,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
-            norm_type='BN',
+            norm_type='LN',
         ),
         # ****** common ******
         # (bool) Whether to use multi-gpu training.
@@ -128,10 +128,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
         optim_type='AdamW',
-        learning_rate=1e-4,  # init lr for manually decay schedule
-        # optim_type='Adam',
-        # lr_piecewise_constant_decay=False,
-        # learning_rate=0.003,  # lr for Adam optimizer
+        learning_rate=1e-4,  # init lr for manual decay schedule
         # (float) Weight uniform initialization range in the last output layer
         init_w=3e-3,
         normalize_prob_of_sampled_actions=False,
@@ -186,7 +183,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
-        use_priority=True,
+        use_priority=False,
         # (float) The degree of prioritization to use. A value of 0 means no prioritization,
         # while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,
@@ -480,7 +477,6 @@ class SampledMuZeroPolicy(MuZeroPolicy):
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
 
-
             if self._cfg.monitor_extra_statistics:
                 original_rewards = self.inverse_scalar_transform_handle(reward)
                 original_rewards_cpu = original_rewards.detach().cpu()
@@ -721,7 +717,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
         )
 
         target_policy_entropy = -((target_normalized_visit_count_masked + 1e-6) * (
-                    target_normalized_visit_count_masked + 1e-6).log()).sum(-1).mean()
+                target_normalized_visit_count_masked + 1e-6).log()).sum(-1).mean()
 
         # shape: (batch_size, num_unroll_steps, num_of_sampled_actions, action_dim) -> (batch_size,
         # num_of_sampled_actions, action_dim) e.g. (4, 6, 20, 2) ->  (4, 20, 2)
@@ -923,7 +919,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
         else:
             self._mcts_eval = MCTSPtree(self._cfg)
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None,):
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: -1, ready_env_id: np.array = None, ):
         """
          Overview:
              The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -1113,35 +1109,3 @@ class SampledMuZeroPolicy(MuZeroPolicy):
                 'target_sampled_actions_mean',
                 'total_grad_norm_before_clip',
             ]
-
-    def _state_dict_learn(self) -> Dict[str, Any]:
-        """
-        Overview:
-            Return the state_dict of learn mode, usually including model and optimizer.
-        Returns:
-            - state_dict (:obj:`Dict[str, Any]`): the dict of current policy learn state, for saving and restoring.
-        """
-        return {
-            'model': self._learn_model.state_dict(),
-            'target_model': self._target_model.state_dict(),
-            'optimizer': self._optimizer.state_dict(),
-        }
-
-    def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
-        """
-        Overview:
-            Load the state_dict variable into policy learn mode.
-        Arguments:
-            - state_dict (:obj:`Dict[str, Any]`): the dict of policy learn state saved before.
-        """
-        self._learn_model.load_state_dict(state_dict['model'])
-        self._target_model.load_state_dict(state_dict['target_model'])
-        self._optimizer.load_state_dict(state_dict['optimizer'])
-
-    def _process_transition(self, obs, policy_output, timestep):
-        # be compatible with DI-engine Policy class
-        pass
-
-    def _get_train_sample(self, data):
-        # be compatible with DI-engine Policy class
-        pass

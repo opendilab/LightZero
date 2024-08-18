@@ -93,7 +93,8 @@ class PolicyHeadCont(Slicer):
     def __init__(self, max_blocks: int, block_mask: torch.Tensor, head_module: nn.Module) -> None:
         """
         Overview:
-            Head module extends Slicer to include a head module for processing sliced inputs.
+            Head module extends Slicer to include a head module for processing sliced inputs. This head module
+            is used for continuous action spaces.
         Arguments:
             - max_blocks (:obj:`int`): The maximum number of blocks to process.
             - block_mask (:obj:`torch.Tensor`): A tensor mask indicating which blocks to keep.
@@ -122,10 +123,12 @@ class PolicyHeadCont(Slicer):
 
         output = self.head_module(x_sliced)
 
-        # if self.continuous_action_space:
+        # NOTE: The output is a dictionary with keys 'mu' and 'sigma'. We concatenate them to form a single tensor.
+        # This is done to simplify the implementation of the model.
         output = torch.cat([output['mu'], output['sigma']], dim=-1)
 
         return output
+
 
 class Embedder(nn.Module):
     def __init__(self, max_blocks: int, block_masks: List[torch.Tensor], embedding_tables: List[nn.Embedding]) -> None:
@@ -162,39 +165,3 @@ class Embedder(nn.Module):
             s = slicer.compute_slice(num_steps, prev_steps)
             output[:, s] = emb(tokens[:, s])
         return output
-
-
-# class ActEmbedder(nn.Module):
-#     def __init__(self, max_blocks: int, block_masks: List[torch.Tensor], embedding_tables: List[nn.Embedding]) -> None:
-#         """
-#         Overview:
-#             ActEmbedder module is similar to Embedder but can be used for different purposes.
-#         Arguments:
-#             - max_blocks (:obj:`int`): The maximum number of blocks to process.
-#             - block_masks (:obj:`List[torch.Tensor]`): List of tensor masks indicating which blocks to keep.
-#             - embedding_tables (:obj:`List[nn.Embedding]`): List of embedding tables for tokens.
-#         """
-#         super().__init__()
-#         assert len(block_masks) == len(embedding_tables)
-#         self.embedding_dim = embedding_tables[0].embedding_dim
-#         assert all([e.embedding_dim == self.embedding_dim for e in embedding_tables])
-#         self.embedding_tables = embedding_tables
-#         self.slicers = [Slicer(max_blocks, block_mask) for block_mask in block_masks]
-#
-#     def forward(self, tokens: torch.Tensor, num_steps: int, prev_steps: int) -> torch.Tensor:
-#         """
-#         Overview:
-#             Forward method embeds the tokens using the precomputed slices.
-#         Arguments:
-#             - tokens (:obj:`torch.Tensor`): The input tokens tensor.
-#             - num_steps (:obj:`int`): The number of steps to consider.
-#             - prev_steps (:obj:`int`): The number of previous steps to consider.
-#         Returns:
-#             - torch.Tensor: The embedded tokens tensor.
-#         """
-#         assert tokens.ndim == 2  # x is (B, T)
-#         output = torch.zeros(*tokens.size(), self.embedding_dim, device=tokens.device)
-#         for slicer, emb in zip(self.slicers, self.embedding_tables):
-#             s = slicer.compute_slice(num_steps, prev_steps)
-#             output[:, s] = emb(tokens[:, s])
-#         return output

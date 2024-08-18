@@ -155,7 +155,6 @@ class LossWithIntermediateLosses:
         self.reward_loss_weight = 1.
         self.value_loss_weight = 0.25
         self.policy_loss_weight = 1.
-        # self.policy_loss_weight = 5.
         self.ends_loss_weight = 0.
 
         self.latent_recon_loss_weight = latent_recon_loss_weight

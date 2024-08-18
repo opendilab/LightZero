@@ -1,7 +1,3 @@
-import os
-# os.environ['MUJOCO_GL']="osmesa"
-os.environ['MUJOCO_GL']="glfw" 
-os.environ['DISABLE_MUJOCO_RENDERING'] = '1'
 from easydict import EasyDict
 
 # ==============================================================
@@ -23,7 +19,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 dmc2gym_pixels_sampled_efficientzero_config = dict(
-    exp_name=f'data_dmc2gym_sez/dmc2gym_pixels_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez/dmc2gym_pixels_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id='dmc2gym-v0',
         domain_name="cartpole",
@@ -57,7 +53,7 @@ dmc2gym_pixels_sampled_efficientzero_config = dict(
             downsample=True,
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
-            norm_type='BN',
+            norm_type='LN',
             use_sim_norm=False,
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
@@ -89,9 +85,7 @@ dmc2gym_pixels_sampled_efficientzero_create_config = dict(
         type='dmc2gym_lightzero',
         import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
     ),
-    # When using subprocess_env_manager, it may lead to errors during the call to obs = self._env.reset().
-    # env_manager=dict(type='subprocess'),
-    env_manager=dict(type='base'),
+    env_manager=dict(type='subprocess'),
     policy=dict(
         type='sampled_efficientzero',
         import_names=['lzero.policy.sampled_efficientzero'],
