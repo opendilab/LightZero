@@ -146,6 +146,8 @@ The environments and algorithms currently supported by LightZero are shown in th
 | Bsuite                 | ---      | ✔    | 🔒            | ✔          | ✔                 | 🔒             | 🔒               | ✔      | 🔒   | 🔒     |
 | Memory                 | ---      | ✔    | 🔒              | ✔          | ✔                 | 🔒             | 🔒               | ✔      | 🔒   | 🔒     |
 | SumToThree (billiards) | ---      | 🔒   | 🔒            | 🔒         | ✔                 | 🔒             | 🔒               | 🔒      | 🔒  | 🔒     |
+| MetaDrive     | ---      | 🔒     | 🔒      | 🔒  | ✔               | 🔒         | 🔒           | 🔒  | 🔒 |🔒             |
+
 
 <sup>(1): "✔" means that the corresponding item is finished and well-tested.</sup>
 
