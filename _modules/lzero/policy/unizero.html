@@ -154,6 +154,8 @@
             <span class="c1"># (int) The save interval of the model.</span>
             <span class="n">learn</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">learner</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">hook</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">save_ckpt_after_iter</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span> <span class="p">),</span> <span class="p">),</span> <span class="p">),</span>
             <span class="n">world_model_cfg</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+                <span class="c1"># (bool) If True, the action space of the environment is continuous, otherwise discrete.</span>
+                <span class="n">continuous_action_space</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
                 <span class="c1"># (int) The number of tokens per block.</span>
                 <span class="n">tokens_per_block</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
                 <span class="c1"># (int) The maximum number of blocks.</span>
@@ -177,7 +179,7 @@
                 <span class="c1"># (str) The type of attention mechanism used. Options could be [&#39;causal&#39;].</span>
                 <span class="n">attention</span><span class="o">=</span><span class="s1">&#39;causal&#39;</span><span class="p">,</span>
                 <span class="c1"># (int) The number of layers in the model.</span>
-                <span class="n">num_layers</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+                <span class="n">num_layers</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
                 <span class="c1"># (int) The number of attention heads.</span>
                 <span class="n">num_heads</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
                 <span class="c1"># (int) The dimension of the embedding.</span>

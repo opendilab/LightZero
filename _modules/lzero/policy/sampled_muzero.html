@@ -434,8 +434,8 @@
         <span class="n">action_batch</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">action_batch</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
         <span class="n">data_list</span> <span class="o">=</span> <span class="p">[</span>
             <span class="n">mask_batch</span><span class="p">,</span>
-            <span class="n">target_reward</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float32&#39;</span><span class="p">),</span>
-            <span class="n">target_value</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s1">&#39;float32&#39;</span><span class="p">),</span> <span class="n">target_policy</span><span class="p">,</span> <span class="n">weights</span>
+            <span class="n">target_reward</span><span class="p">,</span>
+            <span class="n">target_value</span><span class="p">,</span> <span class="n">target_policy</span><span class="p">,</span> <span class="n">weights</span>
         <span class="p">]</span>
         <span class="p">[</span><span class="n">mask_batch</span><span class="p">,</span> <span class="n">target_reward</span><span class="p">,</span> <span class="n">target_value</span><span class="p">,</span> <span class="n">target_policy</span><span class="p">,</span>
          <span class="n">weights</span><span class="p">]</span> <span class="o">=</span> <span class="n">to_torch_float_tensor</span><span class="p">(</span><span class="n">data_list</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
