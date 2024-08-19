@@ -909,14 +909,14 @@ class WorldModel(nn.Module):
 
             if is_init_infer:
                 # Store the latest key-value cache for initial inference
-                self.past_kv_cache_init_infer_envs[i][cache_key] = copy.deepcopy(
-                    to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-                # self.past_kv_cache_init_infer_envs[i][cache_key] = to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu')
+                # self.past_kv_cache_init_infer_envs[i][cache_key] = copy.deepcopy(
+                #     to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                self.past_kv_cache_init_infer_envs[i][cache_key] = to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu')
             else:
                 # Store the latest key-value cache for recurrent inference
-                self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(
-                    to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-                # self.past_kv_cache_recurrent_infer[cache_key] = to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu')
+                # self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(
+                #     to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
+                self.past_kv_cache_recurrent_infer[cache_key] = to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu')
 
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
                                      simulation_index: int = 0) -> list:

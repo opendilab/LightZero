@@ -5,7 +5,7 @@ script='source activate cloud-ai-lab && cd /mnt/miaohua/niuyazhe/code/LightZero 
 echo "The final script is: " $script
 sco acp jobs create --workspace-name=miaohua \
 --aec2-name=miaohua \
---job-name="unizero-pong-200k-origin-s0" \
+--job-name="unizero-pong-200k-optimizehash-0deepcopy-s0-run2" \
 --container-image-url='registry.ms-sc-01.maoshanwangtech.com/ccr_2/aicl-ding-v1:20240719-18h48m08s' \
 --training-framework=pytorch \
 --enable-mpi \
