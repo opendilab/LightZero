@@ -343,8 +343,8 @@ class SampledMuZeroPolicy(MuZeroPolicy):
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).float()
         data_list = [
             mask_batch,
-            target_reward.astype('float32'),
-            target_value.astype('float32'), target_policy, weights
+            target_reward,
+            target_value, target_policy, weights
         ]
         [mask_batch, target_reward, target_value, target_policy,
          weights] = to_torch_float_tensor(data_list, self._cfg.device)

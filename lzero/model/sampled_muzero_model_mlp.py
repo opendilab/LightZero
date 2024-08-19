@@ -330,8 +330,6 @@ class SampledMuZeroModelMLP(nn.Module):
                 # (batch_size, action_dim, 1) -> (batch_size,  action_dim)
                 # e.g., torch.Size([8, 2, 1]) ->  torch.Size([8, 2])
                 action = action.squeeze(-1)
-            else:
-                raise ValueError("The shape of action is not supported.")
 
             action_encoding = action
 

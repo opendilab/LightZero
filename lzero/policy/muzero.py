@@ -71,7 +71,7 @@ class MuZeroPolicy(Policy):
             # (bool) Whether to analyze dormant ratio.
             analysis_dormant_ratio=False,
             # (bool) Whether to use HarmonyDream to balance weights between different losses. Default to False.
-            # More details can be found in https://arxiv.org/abs/2310.00344
+            # More details can be found in https://arxiv.org/abs/2310.00344.
             harmony_balance=False
         ),
         # ****** common ******
@@ -367,12 +367,10 @@ class MuZeroPolicy(Policy):
                 obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
         # shape: (batch_size, num_unroll_steps, action_dim)
-        # NOTE: .long(), in discrete action space.
+        # NOTE: .long() is only  for discrete action space.
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
-        data_list = [
-            mask_batch,
-            target_reward.astype('float32'),
-            target_value.astype('float32'), target_policy, weights
+        data_list = [mask_batch, target_reward,
+            target_value, target_policy, weights
         ]
         [mask_batch, target_reward, target_value, target_policy,
          weights] = to_torch_float_tensor(data_list, self._cfg.device)

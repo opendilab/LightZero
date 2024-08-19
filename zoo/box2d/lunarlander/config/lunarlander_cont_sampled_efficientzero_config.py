@@ -15,6 +15,10 @@ batch_size = 1024
 max_env_step = int(5e5)
 reanalyze_ratio = 0.
 norm_type = 'LN'
+
+# only for debug
+# num_simulations = 5
+# batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================

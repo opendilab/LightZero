@@ -340,12 +340,12 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
         # shape: (batch_size, num_unroll_steps, action_dim)
-        # NOTE: .float(), in continuous action space.
-        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).float()
+        # NOTE: .float() in continuous action space.
+        action_batch = torch.from_numpy(action_batch).to(self._cfg.device)
         data_list = [
             mask_batch,
-            target_value_prefix.astype('float32'),
-            target_value.astype('float32'), target_policy, weights
+            target_value_prefix,
+            target_value, target_policy, weights
         ]
         [mask_batch, target_value_prefix, target_value, target_policy,
          weights] = to_torch_float_tensor(data_list, self._cfg.device)
@@ -535,7 +535,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             'total_loss': loss.mean().item(),
             'policy_loss': policy_loss.mean().item(),
             'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-            'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+            'target_policy_entropy': target_policy_entropy / (self._cfg.num_unroll_steps + 1),
             'value_prefix_loss': value_prefix_loss.mean().item(),
             'value_loss': value_loss.mean().item(),
             'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,

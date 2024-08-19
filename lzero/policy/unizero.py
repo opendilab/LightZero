@@ -63,6 +63,8 @@ class UniZeroPolicy(MuZeroPolicy):
             # (int) The save interval of the model.
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000, ), ), ),
             world_model_cfg=dict(
+                # (bool) If True, the action space of the environment is continuous, otherwise discrete.
+                continuous_action_space=False,
                 # (int) The number of tokens per block.
                 tokens_per_block=2,
                 # (int) The maximum number of blocks.
@@ -86,7 +88,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 # (str) The type of attention mechanism used. Options could be ['causal'].
                 attention='causal',
                 # (int) The number of layers in the model.
-                num_layers=4,
+                num_layers=2,
                 # (int) The number of attention heads.
                 num_heads=8,
                 # (int) The dimension of the embedding.

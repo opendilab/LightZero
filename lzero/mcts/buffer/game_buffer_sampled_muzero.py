@@ -371,11 +371,9 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
                 target_values = []
                 target_rewards = []
 
-                reward = np.array([0.])
                 base_index = state_index
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
-                    # for i, reward in enumerate(game.rewards[current_index:bootstrap_index]):
                     for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
                         if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
                             # TODO(pu): for board_games, very important, to check
@@ -390,11 +388,11 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
                     horizon_id += 1
 
                     if current_index < game_segment_len_non_re:
-                        target_values.append(value_list[value_index])
-                        target_rewards.append(reward_list[current_index])
+                        target_values.append(value_list[value_index].item())
+                        target_rewards.append(reward_list[current_index].item())
                     else:
-                        target_values.append(np.array([0.]))
-                        target_rewards.append(np.array([0.]))
+                        target_values.append(np.array(0.))
+                        target_rewards.append(np.array(0.))
 
                     value_index += 1
 
@@ -403,8 +401,6 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
 
         batch_rewards = np.asarray(batch_rewards)
         batch_target_values = np.asarray(batch_target_values)
-        batch_rewards = np.squeeze(batch_rewards, axis=-1)
-        batch_target_values = np.squeeze(batch_target_values, axis=-1)
 
         return batch_rewards, batch_target_values
 
