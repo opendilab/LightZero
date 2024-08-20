@@ -106,7 +106,7 @@ def train_alphazero(
         )
 
         # Evaluate policy performance
-        if evaluator.should_eval(learner.train_iter):
+        if evaluator.should_eval(learner.train_iter) and learner.train_iter>0:
             stop, reward = evaluator.eval(
                 learner.save_checkpoint,
                 learner.train_iter,
@@ -118,6 +118,8 @@ def train_alphazero(
         # Collect data by default config n_sample/n_episode
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         new_data = sum(new_data, [])
+        for i in range(len(new_data)):
+            new_data[i]['obs']['observation'] = str(new_data[i]['obs']['observation']) 
         if cfg.policy.update_per_collect is None:
             # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
             collected_transitions_num = len(new_data)

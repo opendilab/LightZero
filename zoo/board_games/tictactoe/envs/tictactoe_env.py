@@ -94,7 +94,8 @@ class TicTacToeEnv(BaseEnv):
         self.bot_action_type = cfg.bot_action_type
         if 'alpha_beta_pruning' in self.bot_action_type:
             self.alpha_beta_pruning_player = AlphaBetaPruningBot(self, cfg, 'alpha_beta_pruning_player')
-        self.alphazero_mcts_ctree = cfg.alphazero_mcts_ctree
+        # self.alphazero_mcts_ctree = cfg.alphazero_mcts_ctree
+        self.alphazero_mcts_ctree = False
         self._replay_path = cfg.replay_path if hasattr(cfg, "replay_path") and cfg.replay_path is not None else None
         self._save_replay_count = 0
 

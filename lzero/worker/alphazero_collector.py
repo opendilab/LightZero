@@ -368,16 +368,17 @@ class AlphaZeroCollector(ISerialCollector):
             - transitions (:obj:`List[dict]`): List of data transitions.
         """
         reward = transitions[-1]['reward']
-        to_play = transitions[-1]['obs']['to_play']
+        # to_play = transitions[-1]['obs']['to_play']
         for t in transitions:
-            if t['obs']['to_play'] == -1:
-                # play_with_bot_mode
-                # the eval_episode_return is calculated from Player 1's perspective
-                t['reward'] = eval_episode_return
-            else:
-                # self_play_mode
-                if t['obs']['to_play'] == to_play:
-                    t['reward'] = int(reward)
-                else:
-                    t['reward'] = int(-reward)
+            t['reward'] = eval_episode_return
+            # if t['obs']['to_play'] == -1:
+            #     # play_with_bot_mode
+            #     # the eval_episode_return is calculated from Player 1's perspective
+            #     t['reward'] = eval_episode_return
+            # else:
+            #     # self_play_mode
+            #     if t['obs']['to_play'] == to_play:
+            #         t['reward'] = int(reward)
+            #     else:
+            #         t['reward'] = int(-reward)
         return transitions

@@ -28,14 +28,14 @@ class AlphaZeroPolicy(Policy):
         torch_compile=False,
         # (bool) Whether to use TF32 for our model.
         tensor_float_32=False,
-        model=dict(
-            # (tuple) The stacked obs shape.
-            observation_shape=(3, 6, 6),
-            # (int) The number of res blocks in AlphaZero model.
-            num_res_blocks=1,
-            # (int) The number of channels of hidden states in AlphaZero model.
-            num_channels=32,
-        ),
+        # model=dict(
+        #     # (tuple) The stacked obs shape.
+        #     # observation_shape=(3, 6, 6),
+        #     # (int) The number of res blocks in AlphaZero model.
+        #     # num_res_blocks=1,
+        #     # (int) The number of channels of hidden states in AlphaZero model.
+        #     # num_channels=32,
+        # ),
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
         # this variable is used in ``collector``.
         sampled_algo=False,
@@ -113,7 +113,8 @@ class AlphaZeroPolicy(Policy):
             - model_type (:obj:`str`): The model type used in this algorithm, which is registered in ModelRegistry.
             - import_names (:obj:`List[str]`): The model class path list used in this algorithm.
         """
-        return 'AlphaZeroModel', ['lzero.model.alphazero_model']
+        # return 'AlphaZeroModel', ['lzero.model.alphazero_model']
+        return 'AlphaZeroModel', ['lzero.model.alphazero_model_language']
 
     def _init_learn(self) -> None:
         assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
@@ -154,6 +155,9 @@ class AlphaZeroPolicy(Policy):
             self._learn_model = torch.compile(self._learn_model)
 
     def _forward_learn(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, float]:
+        # inputs_copy = copy.deepcopy(inputs)
+        # for i in range(len(inputs)):
+        #     inputs[i]['obs']['observation'] = str(inputs[i]['obs']['observation']) 
         inputs = default_collate(inputs)
         if self._cuda:
             inputs = to_device(inputs, self._device)
@@ -163,7 +167,7 @@ class AlphaZeroPolicy(Policy):
         mcts_probs = inputs['probs']
         reward = inputs['reward']
 
-        state_batch = state_batch.to(device=self._device, dtype=torch.float)
+        # state_batch = state_batch.to(device=self._device, dtype=torch.float)
         mcts_probs = mcts_probs.to(device=self._device, dtype=torch.float)
         reward = reward.to(device=self._device, dtype=torch.float)
 
@@ -250,19 +254,18 @@ class AlphaZeroPolicy(Policy):
         """
         self.collect_mcts_temperature = temperature
         ready_env_id = list(obs.keys())
-        init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
-        # If 'katago_game_state' is in the observation of the given environment ID, it's value is used.
-        # If it's not present (which will raise a KeyError), None is used instead.
-        # This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.
-        katago_game_state = {env_id: obs[env_id].get('katago_game_state', None) for env_id in ready_env_id}
-        start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
+        history = {env_id: obs[env_id]['observation'] for env_id in ready_env_id}
+        round_cnt = {env_id: obs[env_id]['round_cnt'] for env_id in ready_env_id}
+
+        # # If 'katago_game_state' is in the observation of the given environment ID, it's value is used.
+        # # If it's not present (which will raise a KeyError), None is used instead.
+        # # This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.
+        # katago_game_state = {env_id: obs[env_id].get('katago_game_state', None) for env_id in ready_env_id}
+        # start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
         output = {}
         self._policy_model = self._collect_model
         for env_id in ready_env_id:
-            state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
-                                                                  init_state=init_state[env_id],
-                                                                  katago_policy_init=False,
-                                                                  katago_game_state=katago_game_state[env_id]))
+            state_config_for_simulation_env_reset = EasyDict(dict(history=history[env_id], round_cnt=round_cnt[env_id]))
             action, mcts_probs = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self.collect_mcts_temperature, True)
 
             output[env_id] = {
@@ -294,7 +297,7 @@ class AlphaZeroPolicy(Policy):
                 from lzero.mcts.ptree.ptree_az import MCTS
             mcts_eval_config = copy.deepcopy(self._cfg.mcts)
             # TODO(pu): how to set proper num_simulations for evaluation
-            mcts_eval_config.num_simulations = min(800, mcts_eval_config.num_simulations * 4)
+            mcts_eval_config.num_simulations = min(800, mcts_eval_config.num_simulations)
             self._eval_mcts = MCTS(mcts_eval_config, self.simulate_env)
 
         self._eval_model = self._model
@@ -311,19 +314,12 @@ class AlphaZeroPolicy(Policy):
                 the corresponding policy output in this timestep, including action, probs and so on.
         """
         ready_env_id = list(obs.keys())
-        init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
-        # If 'katago_game_state' is in the observation of the given environment ID, it's value is used.
-        # If it's not present (which will raise a KeyError), None is used instead.
-        # This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.
-        katago_game_state = {env_id: obs[env_id].get('katago_game_state', None) for env_id in ready_env_id}
-        start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
+        history = {env_id: obs[env_id]['observation'] for env_id in ready_env_id}
+        round_cnt = {env_id: obs[env_id]['round_cnt'] for env_id in ready_env_id}
         output = {}
         self._policy_model = self._eval_model
         for env_id in ready_env_id:
-            state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
-                                                                  init_state=init_state[env_id],
-                                                                  katago_policy_init=False,
-                                                                  katago_game_state=katago_game_state[env_id]))
+            state_config_for_simulation_env_reset = EasyDict(dict(history=history[env_id], round_cnt=round_cnt[env_id]))
             action, mcts_probs = self._eval_mcts.get_next_action(
                 state_config_for_simulation_env_reset, self._policy_value_fn, 1.0, False
             )
@@ -364,16 +360,24 @@ class AlphaZeroPolicy(Policy):
             else:
                 raise NotImplementedError
             self.simulate_env = Connect4Env(connect4_alphazero_config.env)
+        elif self._cfg.simulation_env_id == 'seller':
+            from zoo.seller.seller_env import SellerEnv
+            if self._cfg.simulation_env_config_type == 'play_with_bot':
+                from zoo.seller.config.seller_alphazero_config import seller_alphazero_config
+            else:
+                raise NotImplementedError
+            self.simulate_env = SellerEnv(seller_alphazero_config.env)
         else:
             raise NotImplementedError
 
     @torch.no_grad()
     def _policy_value_fn(self, env: 'Env') -> Tuple[Dict[int, np.ndarray], float]:  # noqa
         legal_actions = env.legal_actions
-        current_state, current_state_scale = env.current_state()
-        current_state_scale = torch.from_numpy(current_state_scale).to(
-            device=self._device, dtype=torch.float
-        ).unsqueeze(0)
+        # current_state, current_state_scale = env.current_state()
+        # current_state_scale = torch.from_numpy(current_state_scale).to(
+        #     device=self._device, dtype=torch.float
+        # ).unsqueeze(0)
+        current_state_scale = str(env.history)
         with torch.no_grad():
             action_probs, value = self._policy_model.compute_policy_value(current_state_scale)
         action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
