@@ -20,6 +20,7 @@ class TreeNode:
         # 将当前节点的环境状态进行深拷贝
         history = copy.deepcopy(self.state.history)
         round_cnt = self.state.round_cnt
+        self.state.save_replay = False
         for action in actions:
             self.state.step([action])
         
@@ -66,42 +67,43 @@ class MCTSBot:
     def search(self, env):
         root = TreeNode(env)
         
-        select_time = 0
-        expand_time = 0
-        rollout_time = 0
-        backprop_time = 0
+        # select_time = 0
+        # expand_time = 0
+        # rollout_time = 0
+        # backprop_time = 0
         
         for _ in range(self.n_iterations):
             node = root
             
             # selection
-            start_time = time.time()
+            # start_time = time.time()
             while node.children:
                 node = node.select_best_child()
-            select_time += time.time() - start_time
+            # select_time += time.time() - start_time
             
             # expansion
-            start_time = time.time()
+            # start_time = time.time()
             legal_actions = list(range(len(env.commands))) 
             if not node.state.finished and legal_actions:
-                node.expand(node.state, legal_actions)
+                # node.expand(node.state, legal_actions)
+                node.expand(legal_actions)
                 node = random.choice(node.children)
-            expand_time += time.time() - start_time
+            # expand_time += time.time() - start_time
             
             # rollout  
-            start_time = time.time()
+            # start_time = time.time()
             reward = node.rollout()
-            rollout_time += time.time() - start_time
+            # rollout_time += time.time() - start_time
             
             # backpropagation
-            start_time = time.time() 
+            # start_time = time.time() 
             node.backpropagate(reward)
-            backprop_time += time.time() - start_time
+            # backprop_time += time.time() - start_time
         
-        print(f"Selection time: {select_time:.4f}s")
-        print(f"Expansion time: {expand_time:.4f}s") 
-        print(f"Rollout time: {rollout_time:.4f}s")
-        print(f"Backpropagation time: {backprop_time:.4f}s")
+        # print(f"Selection time: {select_time:.4f}s")
+        # print(f"Expansion time: {expand_time:.4f}s") 
+        # print(f"Rollout time: {rollout_time:.4f}s")
+        # print(f"Backpropagation time: {backprop_time:.4f}s")
         
         return root
     
@@ -112,31 +114,74 @@ class MCTSBot:
 
 if __name__ == '__main__':
     env_cfg = EasyDict(
-        dict(
-            agent='deepseek',
-            api_key='sk-c4a8fe52693a4aaab64e648c42f40be6',
-            commands=[
-                '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
-                '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
-            ],
-            max_round=5,
-            seed=0,
-            lang='zh',
-            log_suffix='mcts_sim5'
+    dict(
+        agent='deepseek',
+        api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
+        commands=[
+            '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
+            '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
+        ],
+        # commands=[
+        #     '将你的产品推销给用户'
+        # ],
+        max_round=5,
+        seed=0,
+        lang='zh',
+        log_suffix='mcts_sim3',
+        save_replay=True,
         )
     )
 
     env = SellerEnv(cfg=env_cfg)
-    state = env.reset()
 
-    mcts_bot = MCTSBot(n_iterations=5)
+    avg_return = 0
+    mcts_bot = MCTSBot(n_iterations=3)
+    for seed in range(1, 11):
+        env.seed(seed)
+        env.reset()
+        while not env.finished:
+            action = mcts_bot.get_action(env)  
+            env.save_replay = True
+            env_step = env.step([action])
+            print(f'########## Round {env.round_cnt} ##########')
+            print(f'MCTS Bot 选择动作: {env.commands[action]}')
+            for k in env_step.info:
+                print(f'【{k} 的回复】')
+                print(env_step.info[k])
+            print(f'【reward: {env_step.reward}, done: {env_step.done}】')
+        avg_return += env_step.reward
+    print(f'对话结束,最终平均收益: {avg_return/10}')
+    
 
-    while not env.finished:
-        action = mcts_bot.get_action(env)  
-        state, reward, done, info = env.step([action])
-        print(f'='*50)
-        print(f'{env._replay}')
-        # print(f'MCTS Bot 选择动作: {env.commands[action]}')
+
+    # ================ 下面是单局的测试 ================
+
+    # env_cfg = EasyDict(
+    #     dict(
+    #         agent='deepseek',
+    #         api_key='sk-c4a8fe52693a4aaab64e648c42f40be6',
+    #         commands=[
+    #             '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
+    #             '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
+    #         ],
+    #         max_round=5,
+    #         seed=0,
+    #         lang='zh',
+    #         log_suffix='mcts_sim5'
+    #     )
+    # )
+
+    # env = SellerEnv(cfg=env_cfg)
+    # state = env.reset()
+
+    # mcts_bot = MCTSBot(n_iterations=5)
+
+    # while not env.finished:
+    #     action = mcts_bot.get_action(env)  
+    #     state, reward, done, info = env.step([action])
+    #     print(f'='*50)
+    #     print(f'{env._replay}')
+    #     # print(f'MCTS Bot 选择动作: {env.commands[action]}')
         
-    print(f'='*50)
-    print(f'对话结束,最终收益: {reward}')
+    # print(f'='*50)
+    # print(f'对话结束,最终收益: {reward}')

@@ -117,8 +117,8 @@ class SellerEnv(BaseEnv):
             # self.history = history
             self.history = copy.deepcopy(history)  
             self.round_cnt = copy.deepcopy(round_cnt)
-        
-        # self.round_cnt = 0
+        else:
+            self.round_cnt = 0
         self.finished = False
         self._init_flag = True
         self._replay = ''
@@ -137,7 +137,7 @@ class SellerEnv(BaseEnv):
 
         return obs
     
-    def reset_from_history(self, history, round_cnt, replay, replay_csv):
+    def reset_from_history(self, history, round_cnt, replay=None, replay_csv=None):
         self.history = copy.deepcopy(history)  
         self.round_cnt = copy.deepcopy(round_cnt)
         self.finished = False
@@ -174,6 +174,8 @@ class SellerEnv(BaseEnv):
         # command = self.commands[action[0]]
         if isinstance(action, int):
             command = self.commands[action]
+        elif isinstance(action, list):
+            command = self.commands[action[0]]
         else:
             command = self.commands[int(action.item())]
         self.round_cnt += 1
@@ -228,27 +230,29 @@ class SellerEnv(BaseEnv):
             if self.round_cnt == 1:
                 self._replay += f'【产品信息】： {self.good_info}\n'
                 self._replay += f'【个性信息】： {self.persona_info}\n'
-                self._replay_csv.append([f'【卖家产品信息】： {self.good_info}'])
-                self._replay_csv.append([f'【买家个性信息】： {self.persona_info}'])
+                self._replay_csv.append([f'【卖家产品信息】', f'{self.good_info}'])
+                self._replay_csv.append([f'【买家个性信息】', f'{self.persona_info}'])
 
             self._replay += f'########## Round {self.round_cnt} ##########\n'
             self._replay += f'【动作序号】 {action}\n'
             # self._replay_csv.append([f'【动作序号】 {action}'])
 
             for kk in env_step.info:
+                if kk == 'eval_episode_return':
+                    continue
                 self._replay += f'【{kk} 的回复】\n'
                 self._replay += env_step.info[kk] + '\n'
                 self._replay_csv.append([f'【{kk} 的回复】', env_step.info[kk]])
 
-            self._replay += f'【reward: {rew}, done: {self.finished}】\n'
-            self._replay_csv.append([f'【reward: {rew}, done: {self.finished}】'])
+            self._replay += f'【Round {self.round_cnt}: reward: {rew}, done: {self.finished}】\n'
+            self._replay_csv.append([f'【Round {self.round_cnt}】', f'【reward: {rew}, done: {self.finished}】'])
 
             if self.finished:
                 if not os.path.exists('./logs'):
                     os.mkdir('./logs')
-                with open(f'./logs/evaluate_log_{self._seed}_{self._suffix}.txt', 'w', encoding='utf-8') as f:
+                with open(f'./logs/evaluate_log_sees{self._seed}_{self._suffix}.txt', 'w', encoding='utf-8') as f:
                     f.write(self._replay + '\n')
-                with open(f'./logs/evaluate_log_{self._seed}_{self._suffix}.csv', 'w', newline='', encoding='utf-8-sig') as csvfile:
+                with open(f'./logs/evaluate_log_seed{self._seed}_{self._suffix}.csv', 'w', newline='', encoding='utf-8-sig') as csvfile:
                     writer = csv.writer(csvfile)
                     writer.writerows(self._replay_csv)
 
@@ -287,29 +291,34 @@ if __name__ == '__main__':
         dict(
             agent='deepseek',
             api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
+            # commands=[
+            #     '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
+            #     '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑', '将你的产品推销给用户'
+            # ],
             commands=[
-                '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
-                '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
+                '将你的产品推销给用户'
             ],
-            # max_round=5,
-            max_round=2,
+            max_round=5,
             seed=0,
             lang='zh',
-            log_suffix='',
+            log_suffix='direct',
+            save_replay=True,
         )
     )
 
     env = SellerEnv(cfg=env_cfg)
-    history = env.reset()
+    for seed in range(1, 11):
+        env.seed(seed)
+        env.reset()
+        # commander = Commander()
+        while not env.finished:
+            print(f'Legal actions: {" ".join([str(i) + ": " + env.commands[i] for i in range(len(env.commands))])}')
+            # command = commander.call()
+            command = 0
+            env_step = env.step([command])
+            print(f'########## Round {env.round_cnt} ##########')
+            for k in env_step.info:
+                print(f'【{k} 的回复】')
+                print(env_step.info[k])
+            print(f'【reward: {env_step.reward}, done: {env_step.done}】')
 
-    commander = Commander()
-
-    while not env.finished:
-        print(f'Legal actions: {" ".join([str(i) + ": " + env.commands[i] for i in range(len(env.commands))])}')
-        command = commander.call()
-        env_step = env.step([command])
-        print(f'########## Round {env.round_cnt} ##########')
-        for k in env_step.info:
-            print(f'【{k} 的回复】')
-            print(env_step.info[k])
-        print(f'【reward: {env_step.reward}, done: {env_step.done}】')
