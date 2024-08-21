@@ -7,10 +7,10 @@ import jsonlines
 import copy, csv
 
 from ding.utils import ENV_REGISTRY
-from dizoo.seller.utils import APIClient, extract_json
+from zoo.seller.utils import APIClient, extract_json
 from ding.envs import BaseEnv, BaseEnvTimestep
 
-path_prefix = '/mnt/miaohua/niuyazhe/code/RolePlay/'
+path_prefix = '/mnt/afs/niuyazhe/code/LightZero/'
 
 class BaseRole:
 
@@ -94,7 +94,7 @@ class SellerEnv(BaseEnv):
 
     def _init_settings(self):
         # Init the personas.
-        with open(path_prefix+"dizoo/seller/data/persona.jsonl", "r+", encoding="utf8") as f:
+        with open(path_prefix+"zoo/seller/data/persona.jsonl", "r+", encoding="utf8") as f:
             cnt = 0
             for item in jsonlines.Reader(f):
                 SellerEnv.personas.append(item['persona'])
@@ -103,7 +103,7 @@ class SellerEnv(BaseEnv):
                     break
 
         # Init the descriptions to goods.
-        with open(path_prefix+"dizoo/seller/data/good.jsonl", "r+", encoding="utf8") as f:
+        with open(path_prefix+"zoo/seller/data/good.jsonl", "r+", encoding="utf8") as f:
             cnt = 0
             for item in jsonlines.Reader(f):
                 new_item = {'title': item['title'], 'description': item['description']}
@@ -151,17 +151,17 @@ class SellerEnv(BaseEnv):
         SellerEnv.executor = Executor(
             agent=self.cfg.agent,
             api_key=self.cfg.api_key,
-            template_path=f'dizoo/seller/prompt_templates/executor_template_{self.lang}.txt'
+            template_path=f'zoo/seller/prompt_templates/executor_template_{self.lang}.txt'
         )
         SellerEnv.judge = Judge(
             agent=self.cfg.agent,
             api_key=self.cfg.api_key,
-            template_path=f'dizoo/seller/prompt_templates/judge_template_{self.lang}.txt'
+            template_path=f'zoo/seller/prompt_templates/judge_template_{self.lang}.txt'
         )
         SellerEnv.buyer = Buyer(
             agent=self.cfg.agent,
             api_key=self.cfg.api_key,
-            template_path=f'dizoo/seller/prompt_templates/buyer_template_{self.lang}.txt'
+            template_path=f'zoo/seller/prompt_templates/buyer_template_{self.lang}.txt'
         )
 
     def close(self) -> None:
