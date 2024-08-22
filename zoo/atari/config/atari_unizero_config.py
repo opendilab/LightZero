@@ -104,7 +104,7 @@ if __name__ == "__main__":
     for seed in seeds:
         # Update exp_name to include the current seed
         # main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_origin'
-        main_config.exp_name = f'data_unizero_efficiency_debug/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_optimizehash_custom-deepcopy_targevalue-cuda'
+        main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_optimizehash_custom-deepcopy_targevalue-cuda_optimize-computeloss_optimize-value-lst'
 
         # main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_optimizehash_1deepcopy-init-infer'
         from lzero.entry import train_unizero

@@ -368,7 +368,72 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         return batch_target_policies_re
 
-    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, action_batch) -> Tuple[
+    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, action_batch) -> Tuple[np.ndarray, np.ndarray]:
+        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, to_play_segment = reward_value_context
+        transition_batch_size = len(value_obs_list)
+
+        with torch.no_grad():
+            value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
+            m_obs = torch.from_numpy(value_obs_list).to(self._cfg.device)
+            m_output = model.initial_inference(m_obs, action_batch)
+
+            if self._cfg.device == 'cuda':
+                [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                    [
+                        m_output.latent_state,
+                        inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                        m_output.policy_logits
+                    ]
+                )
+            elif self._cfg.device == 'cpu':
+                [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                    [
+                        m_output.latent_state,
+                        inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                        m_output.policy_logits
+                    ]
+                )
+
+            value_numpy = concat_output_value([m_output]).reshape(-1)
+
+            if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
+                value_numpy = value_numpy * np.array(
+                    [
+                        self._cfg.discount_factor ** td_steps_list[i] if int(td_steps_list[i]) % 2 == 0 else -self._cfg.discount_factor ** td_steps_list[i]
+                        for i in range(transition_batch_size)
+                    ]
+                )
+            else:
+                value_numpy = value_numpy * (np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list)
+
+            value_numpy = value_numpy * np.array(value_mask)
+
+        batch_rewards = np.zeros((len(game_segment_lens), self._cfg.num_unroll_steps + 1))
+        batch_target_values = np.zeros((len(game_segment_lens), self._cfg.num_unroll_steps + 1))
+
+        value_index = 0
+        for i, (game_segment_len_non_re, reward_list, state_index, to_play_list) in enumerate(zip(game_segment_lens, rewards_list, pos_in_game_segment_list, to_play_segment)):
+            base_index = state_index
+            for j in range(state_index, min(state_index + self._cfg.num_unroll_steps + 1, game_segment_len_non_re + 1)):
+                bootstrap_index = min(j + td_steps_list[value_index], len(reward_list))
+                discount_factors = self._cfg.discount_factor ** np.arange(bootstrap_index - j)
+
+                if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
+                    rewards = np.where(to_play_list[base_index] == to_play_list[j:bootstrap_index], reward_list[j:bootstrap_index], -reward_list[j:bootstrap_index])
+                else:
+                    rewards = reward_list[j:bootstrap_index]
+
+                value_numpy[value_index] += np.sum(rewards * discount_factors[:len(rewards)])
+
+                if j < game_segment_len_non_re:
+                    batch_target_values[i, j - state_index] = value_numpy[value_index]
+                    batch_rewards[i, j - state_index] = reward_list[j]
+
+                value_index += 1
+
+        return batch_rewards, batch_target_values
+
+    def _compute_target_reward_value_v1(self, reward_value_context: List[Any], model: Any, action_batch) -> Tuple[
         Any, Any]:
         """
         Overview:
@@ -384,22 +449,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             to_play_segment = reward_value_context  # noqa
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
         transition_batch_size = len(value_obs_list)
-        game_segment_batch_size = len(pos_in_game_segment_list)
-
-        to_play, action_mask = self._preprocess_to_play_and_action_mask(
-            game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
-        )
-        if self._cfg.model.continuous_action_space is True:
-            # when the action space of the environment is continuous, action_mask[:] is None.
-            action_mask = [
-                list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
-            ]
-            # NOTE: in continuous action space env: we set all legal_actions as -1
-            legal_actions = [
-                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
-            ]
-        else:
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
 
         batch_target_values, batch_rewards = [], []
         with torch.no_grad():
@@ -435,42 +484,13 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             network_output.append(m_output)
 
-            # concat the output slices after model inference
-            if self._cfg.use_root_value:
-                # use the root values from MCTS, as in EfficientZero
-                # the root values have limited improvement but require much more GPU actors;
-                _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
-                    network_output, data_type='muzero'
-                )
-                reward_pool = reward_pool.squeeze().tolist()
-                policy_logits_pool = policy_logits_pool.tolist()
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                        ).astype(np.float32).tolist() for j in range(transition_batch_size)
-                ]
-                if self._cfg.mcts_ctree:
-                    # cpp mcts_tree
-                    roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                    # do MCTS for a new policy with the recent target model
-                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-                else:
-                    # python mcts_tree
-                    roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                    # do MCTS for a new policy with the recent target model
-                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-
-                roots_values = roots.get_values()
-                value_list = np.array(roots_values)
-            else:
-                # use the predicted values
-                value_list = concat_output_value(network_output)
+            # use the predicted values
+            value_numpy = concat_output_value(network_output)
 
             # get last state value
             if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
                 # TODO(pu): for board_games, very important, to check
-                value_list = value_list.reshape(-1) * np.array(
+                value_numpy = value_numpy.reshape(-1) * np.array(
                     [
                         self._cfg.discount_factor ** td_steps_list[i] if int(td_steps_list[i]) %
                                                                          2 == 0 else -self._cfg.discount_factor **
@@ -479,12 +499,12 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                     ]
                 )
             else:
-                value_list = value_list.reshape(-1) * (
+                value_numpy = value_numpy.reshape(-1) * (
                         np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list
                 )
 
-            value_list = value_list * np.array(value_mask)
-            value_list = value_list.tolist()
+            value_numpy= value_numpy * np.array(value_mask)
+            value_list = value_numpy.tolist()
             horizon_id, value_index = 0, 0
 
             for game_segment_len_non_re, reward_list, state_index, to_play_list in zip(game_segment_lens, rewards_list,
@@ -521,3 +541,157 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         batch_target_values = np.asarray(batch_target_values)
 
         return batch_rewards, batch_target_values
+
+    # def _compute_target_reward_value_origin(self, reward_value_context: List[Any], model: Any, action_batch) -> Tuple[
+    #     Any, Any]:
+    #     """
+    #     Overview:
+    #         prepare reward and value targets from the context of rewards and values.
+    #     Arguments:
+    #         - reward_value_context (:obj:'list'): the reward value context
+    #         - model (:obj:'torch.tensor'):model of the target model
+    #     Returns:
+    #         - batch_value_prefixs (:obj:'np.ndarray): batch of value prefix
+    #         - batch_target_values (:obj:'np.ndarray): batch of value estimation
+    #     """
+    #     value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
+    #         to_play_segment = reward_value_context  # noqa
+    #     # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
+    #     transition_batch_size = len(value_obs_list)
+    #     game_segment_batch_size = len(pos_in_game_segment_list)
+
+    #     to_play, action_mask = self._preprocess_to_play_and_action_mask(
+    #         game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
+    #     )
+    #     if self._cfg.model.continuous_action_space is True:
+    #         # when the action space of the environment is continuous, action_mask[:] is None.
+    #         action_mask = [
+    #             list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
+    #         ]
+    #         # NOTE: in continuous action space env: we set all legal_actions as -1
+    #         legal_actions = [
+    #             [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
+    #         ]
+    #     else:
+    #         legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
+
+    #     batch_target_values, batch_rewards = [], []
+    #     with torch.no_grad():
+    #         value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
+    #         network_output = []
+    #         m_obs = torch.from_numpy(value_obs_list).to(self._cfg.device)
+
+    #         # =============== NOTE: The key difference with MuZero =================
+    #         # calculate the target value
+    #         # m_obs.shape torch.Size([352, 3, 64, 64]) 32*11 = 352
+    #         m_output = model.initial_inference(m_obs, action_batch)
+    #         # ======================================================================
+
+    #         # if not model.training:
+    #         if self._cfg.device == 'cuda':
+    #             # if not in training, obtain the scalars of the value/reward
+    #             [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+    #                 [
+    #                     m_output.latent_state,
+    #                     inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+    #                     m_output.policy_logits
+    #                 ]
+    #             )
+    #         elif self._cfg.device == 'cpu':
+    #             # TODO
+    #             [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+    #                 [
+    #                     m_output.latent_state,
+    #                     inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+    #                     m_output.policy_logits
+    #                 ]
+    #             )
+
+    #         network_output.append(m_output)
+
+    #         # concat the output slices after model inference
+    #         if self._cfg.use_root_value:
+    #             # use the root values from MCTS, as in EfficientZero
+    #             # the root values have limited improvement but require much more GPU actors;
+    #             _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
+    #                 network_output, data_type='muzero'
+    #             )
+    #             reward_pool = reward_pool.squeeze().tolist()
+    #             policy_logits_pool = policy_logits_pool.tolist()
+    #             noises = [
+    #                 np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
+    #                                     ).astype(np.float32).tolist() for j in range(transition_batch_size)
+    #             ]
+    #             if self._cfg.mcts_ctree:
+    #                 # cpp mcts_tree
+    #                 roots = MCTSCtree.roots(transition_batch_size, legal_actions)
+    #                 roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+    #                 # do MCTS for a new policy with the recent target model
+    #                 MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+    #             else:
+    #                 # python mcts_tree
+    #                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
+    #                 roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+    #                 # do MCTS for a new policy with the recent target model
+    #                 MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+
+    #             roots_values = roots.get_values()
+    #             value_list = np.array(roots_values)
+    #         else:
+    #             # use the predicted values
+    #             value_list = concat_output_value(network_output)
+
+    #         # get last state value
+    #         if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
+    #             # TODO(pu): for board_games, very important, to check
+    #             value_list = value_list.reshape(-1) * np.array(
+    #                 [
+    #                     self._cfg.discount_factor ** td_steps_list[i] if int(td_steps_list[i]) %
+    #                                                                      2 == 0 else -self._cfg.discount_factor **
+    #                                                                                   td_steps_list[i]
+    #                     for i in range(transition_batch_size)
+    #                 ]
+    #             )
+    #         else:
+    #             value_list = value_list.reshape(-1) * (
+    #                     np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list
+    #             )
+
+    #         value_list = value_list * np.array(value_mask)
+    #         value_list = value_list.tolist()
+    #         horizon_id, value_index = 0, 0
+
+    #         for game_segment_len_non_re, reward_list, state_index, to_play_list in zip(game_segment_lens, rewards_list,
+    #                                                                                    pos_in_game_segment_list,
+    #                                                                                    to_play_segment):
+    #             target_values = []
+    #             target_rewards = []
+    #             base_index = state_index
+    #             for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
+    #                 bootstrap_index = current_index + td_steps_list[value_index]
+    #                 for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
+    #                     if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
+    #                         # TODO(pu): for board_games, very important, to check
+    #                         if to_play_list[base_index] == to_play_list[i]:
+    #                             value_list[value_index] += reward * self._cfg.discount_factor ** i
+    #                         else:
+    #                             value_list[value_index] += -reward * self._cfg.discount_factor ** i
+    #                     else:
+    #                         value_list[value_index] += reward * self._cfg.discount_factor ** i
+    #                 horizon_id += 1
+
+    #                 if current_index < game_segment_len_non_re:
+    #                     target_values.append(value_list[value_index])
+    #                     target_rewards.append(reward_list[current_index])
+    #                 else:
+    #                     target_values.append(np.array(0.))
+    #                     target_rewards.append(np.array(0.))
+    #                 value_index += 1
+
+    #             batch_rewards.append(target_rewards)
+    #             batch_target_values.append(target_values)
+
+    #     batch_rewards = np.asarray(batch_rewards)
+    #     batch_target_values = np.asarray(batch_target_values)
+
+    #     return batch_rewards, batch_target_values
