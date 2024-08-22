@@ -18,38 +18,43 @@ def custom_copy_kv_cache_to_dict(src_kv: KeysValues, dst_dict: dict, cache_key: 
         - dst_dict (:obj:`dict`): The destination dictionary to copy to.
         - cache_key (:obj:`str`): The key for the new entry in the destination dictionary.
     """
+    src_kv_shape = src_kv._keys_values[0].shape
     dst_kv = KeysValues(
-        src_kv._keys_values[0].shape[0],  # n
-        src_kv._keys_values[0].shape[1],  # num_heads
-        src_kv._keys_values[0].shape[2],  # max_tokens
-        src_kv._keys_values[0].shape[3] * src_kv._keys_values[0].shape[1],  # embed_dim
+        src_kv_shape[0],  # n
+        src_kv_shape[1],  # num_heads
+        src_kv_shape[2],  # max_tokens
+        src_kv_shape[3] * src_kv_shape[1],  # embed_dim
         len(src_kv),  # num_layers
         src_kv._keys_values[0]._k_cache._cache.device,  # device
     )
     
-    for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
-        dst_layer._k_cache._cache = src_layer._k_cache._cache.detach().clone()
-        dst_layer._v_cache._cache = src_layer._v_cache._cache.detach().clone()
-        dst_layer._k_cache._size = src_layer._k_cache._size
-        dst_layer._v_cache._size = src_layer._v_cache._size
+    with torch.no_grad():
+        for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
+            dst_layer._k_cache._cache = src_layer._k_cache._cache.clone()
+            dst_layer._v_cache._cache = src_layer._v_cache._cache.clone()
+            dst_layer._k_cache._size = src_layer._k_cache._size
+            dst_layer._v_cache._size = src_layer._v_cache._size
     
     dst_dict[cache_key] = dst_kv
 
-def custom_copy_kv_cache(src_kv: KeysValues) -> None:
+
+def custom_copy_kv_cache(src_kv: KeysValues) -> KeysValues:
+    src_kv_shape = src_kv._keys_values[0].shape
     dst_kv = KeysValues(
-        src_kv._keys_values[0].shape[0],  # n
-        src_kv._keys_values[0].shape[1],  # num_heads
-        src_kv._keys_values[0].shape[2],  # max_tokens
-        src_kv._keys_values[0].shape[3] * src_kv._keys_values[0].shape[1],  # embed_dim
+        src_kv_shape[0],  # n
+        src_kv_shape[1],  # num_heads
+        src_kv_shape[2],  # max_tokens
+        src_kv_shape[3] * src_kv_shape[1],  # embed_dim
         len(src_kv),  # num_layers
         src_kv._keys_values[0]._k_cache._cache.device,  # device
     )
     
-    for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
-        dst_layer._k_cache._cache = src_layer._k_cache._cache.detach().clone()
-        dst_layer._v_cache._cache = src_layer._v_cache._cache.detach().clone()
-        dst_layer._k_cache._size = src_layer._k_cache._size
-        dst_layer._v_cache._size = src_layer._v_cache._size
+    with torch.no_grad():
+        for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
+            dst_layer._k_cache._cache = src_layer._k_cache._cache.clone()
+            dst_layer._v_cache._cache = src_layer._v_cache._cache.clone()
+            dst_layer._k_cache._size = src_layer._k_cache._size
+            dst_layer._v_cache._size = src_layer._v_cache._size
 
     return dst_kv
 
