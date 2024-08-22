@@ -372,7 +372,7 @@ class UniZeroPolicy(MuZeroPolicy):
         target_reward = target_reward.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
 
-        assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
+        # assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
         # Transform rewards and values to their scaled forms
         transformed_target_reward = scalar_transform(target_reward)

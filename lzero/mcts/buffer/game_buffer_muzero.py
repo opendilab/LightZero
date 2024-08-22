@@ -236,7 +236,7 @@ class MuZeroGameBuffer(GameBuffer):
         action_mask_segment, to_play_segment = [], []
 
         td_steps_list = []
-        for game_segment, state_index, idx in zip(game_segment_list, pos_in_game_segment_list, batch_index_list):
+        for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
             game_segment_len = len(game_segment)
             game_segment_lens.append(game_segment_len)
 

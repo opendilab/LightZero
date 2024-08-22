@@ -192,6 +192,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         context = reward_value_context, policy_re_context, policy_non_re_context, current_batch
         return context
 
+
     def _prepare_policy_reanalyzed_context(
             self, batch_index_list: List[str], game_segment_list: List[Any], pos_in_game_segment_list: List[str]
     ) -> List[Any]:
@@ -368,6 +369,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         return batch_target_policies_re
 
+    # 可以直接替换game_buffer_muzero中相应函数
     def _compute_target_policy_non_reanalyzed(
             self, policy_non_re_context: List[Any], policy_shape: Optional[int]
     ) -> np.ndarray:

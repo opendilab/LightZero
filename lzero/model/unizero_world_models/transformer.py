@@ -215,7 +215,7 @@ class SelfAttention(nn.Module):
 
         if kv_cache is not None:
             kv_cache.update(k, v)  # time 21% 
-            k, v = kv_cache.get()
+            k, v = kv_cache.get() # time 5% 
 
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
 
