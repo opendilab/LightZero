@@ -58,7 +58,6 @@ def custom_copy_kv_cache(src_kv: KeysValues) -> KeysValues:
 
     return dst_kv
 
-
 def to_device_for_kvcache(keys_values: KeysValues, device: str) -> KeysValues:
     """
     Transfer all KVCache objects within the KeysValues object to a certain device.
@@ -69,12 +68,32 @@ def to_device_for_kvcache(keys_values: KeysValues, device: str) -> KeysValues:
     Returns:
         - keys_values (KeysValues): The KeysValues object with its caches transferred to the specified device.
     """
-    # device = torch.device(device if torch.cuda.is_available() else 'cpu')
+    target_device = torch.device(device)
 
     for kv_cache in keys_values:
-        kv_cache._k_cache._cache = kv_cache._k_cache._cache.to(device)
-        kv_cache._v_cache._cache = kv_cache._v_cache._cache.to(device)
+        if kv_cache._k_cache._cache.device != target_device:
+            kv_cache._k_cache._cache = kv_cache._k_cache._cache.to(target_device)
+        if kv_cache._v_cache._cache.device != target_device:
+            kv_cache._v_cache._cache = kv_cache._v_cache._cache.to(target_device)
     return keys_values
+
+
+# def to_device_for_kvcache(keys_values: KeysValues, device: str) -> KeysValues:
+#     """
+#     Transfer all KVCache objects within the KeysValues object to a certain device.
+
+#     Arguments:
+#         - keys_values (KeysValues): The KeysValues object to be transferred.
+#         - device (str): The device to transfer to.
+#     Returns:
+#         - keys_values (KeysValues): The KeysValues object with its caches transferred to the specified device.
+#     """
+#     # device = torch.device(device if torch.cuda.is_available() else 'cpu')
+
+#     for kv_cache in keys_values:
+#         kv_cache._k_cache._cache = kv_cache._k_cache._cache.to(device)
+#         kv_cache._v_cache._cache = kv_cache._v_cache._cache.to(device)
+#     return keys_values
 
 
 def convert_to_depth(search_path, depth_map, last_depth):
