@@ -354,7 +354,7 @@ class UniZeroPolicy(MuZeroPolicy):
         if self._cfg.model.frame_stack_num == 4:
             obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
         else:
-            obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+            obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)  # TODO: optimize
 
         # Apply augmentations if needed
         if self._cfg.use_augmentation:
@@ -365,9 +365,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # Prepare action batch and convert to torch tensor
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
             -1).long()  # For discrete action space
-        # data_list = [mask_batch, target_reward, target_value, target_policy, weights]
-        data_list = [mask_batch, target_reward.astype('float32'), target_value.astype('float32'), target_policy,
-                     weights]
+        data_list = [mask_batch, target_reward, target_value, target_policy, weights]
         mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
                                                                                                 self._cfg.device)
 

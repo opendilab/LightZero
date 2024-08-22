@@ -413,7 +413,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             m_output = model.initial_inference(m_obs, action_batch)
             # ======================================================================
 
-            if not model.training:
+            # if not model.training:
+            if self._cfg.device == 'cuda':
                 # if not in training, obtain the scalars of the value/reward
                 [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                     [
@@ -422,6 +423,16 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                         m_output.policy_logits
                     ]
                 )
+            elif self._cfg.device == 'cpu':
+                # TODO
+                [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                    [
+                        m_output.latent_state,
+                        inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                        m_output.policy_logits
+                    ]
+                )
+
             network_output.append(m_output)
 
             # concat the output slices after model inference
@@ -499,19 +510,14 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                         target_values.append(value_list[value_index])
                         target_rewards.append(reward_list[current_index])
                     else:
-                        target_values.append(np.array([0.]))
-                        target_rewards.append(np.array([0.]))
+                        target_values.append(np.array(0.))
+                        target_rewards.append(np.array(0.))
                     value_index += 1
 
                 batch_rewards.append(target_rewards)
                 batch_target_values.append(target_values)
 
-        # batch_rewards = np.asarray(batch_rewards)
-        # batch_target_values = np.asarray(batch_target_values)
-        # batch_rewards = np.squeeze(batch_rewards, axis=-1)
-        # batch_target_values = np.squeeze(batch_target_values, axis=-1)
-
-        batch_rewards = np.asarray(batch_rewards, dtype=object)
-        batch_target_values = np.asarray(batch_target_values, dtype=object)
+        batch_rewards = np.asarray(batch_rewards)
+        batch_target_values = np.asarray(batch_target_values)
 
         return batch_rewards, batch_target_values

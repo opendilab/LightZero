@@ -1,4 +1,5 @@
 import hashlib
+import xxhash
 from dataclasses import dataclass
 
 import numpy as np
@@ -6,6 +7,51 @@ import torch
 import torch.nn as nn
 
 from .kv_caching import KeysValues
+
+
+def custom_copy_kv_cache_to_dict(src_kv: KeysValues, dst_dict: dict, cache_key: str) -> None:
+    """
+    Overview:
+        Efficiently copy the contents of a KeysValues object to a new entry in a dictionary.
+    Arguments:
+        - src_kv (:obj:`KeysValues`): The source KeysValues object to copy from.
+        - dst_dict (:obj:`dict`): The destination dictionary to copy to.
+        - cache_key (:obj:`str`): The key for the new entry in the destination dictionary.
+    """
+    dst_kv = KeysValues(
+        src_kv._keys_values[0].shape[0],  # n
+        src_kv._keys_values[0].shape[1],  # num_heads
+        src_kv._keys_values[0].shape[2],  # max_tokens
+        src_kv._keys_values[0].shape[3] * src_kv._keys_values[0].shape[1],  # embed_dim
+        len(src_kv),  # num_layers
+        src_kv._keys_values[0]._k_cache._cache.device,  # device
+    )
+    
+    for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
+        dst_layer._k_cache._cache = src_layer._k_cache._cache.detach().clone()
+        dst_layer._v_cache._cache = src_layer._v_cache._cache.detach().clone()
+        dst_layer._k_cache._size = src_layer._k_cache._size
+        dst_layer._v_cache._size = src_layer._v_cache._size
+    
+    dst_dict[cache_key] = dst_kv
+
+def custom_copy_kv_cache(src_kv: KeysValues) -> None:
+    dst_kv = KeysValues(
+        src_kv._keys_values[0].shape[0],  # n
+        src_kv._keys_values[0].shape[1],  # num_heads
+        src_kv._keys_values[0].shape[2],  # max_tokens
+        src_kv._keys_values[0].shape[3] * src_kv._keys_values[0].shape[1],  # embed_dim
+        len(src_kv),  # num_layers
+        src_kv._keys_values[0]._k_cache._cache.device,  # device
+    )
+    
+    for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
+        dst_layer._k_cache._cache = src_layer._k_cache._cache.detach().clone()
+        dst_layer._v_cache._cache = src_layer._v_cache._cache.detach().clone()
+        dst_layer._k_cache._size = src_layer._k_cache._size
+        dst_layer._v_cache._size = src_layer._v_cache._size
+
+    return dst_kv
 
 
 def to_device_for_kvcache(keys_values: KeysValues, device: str) -> KeysValues:
@@ -18,7 +64,7 @@ def to_device_for_kvcache(keys_values: KeysValues, device: str) -> KeysValues:
     Returns:
         - keys_values (KeysValues): The KeysValues object with its caches transferred to the specified device.
     """
-    device = torch.device(device if torch.cuda.is_available() else 'cpu')
+    # device = torch.device(device if torch.cuda.is_available() else 'cpu')
 
     for kv_cache in keys_values:
         kv_cache._k_cache._cache = kv_cache._k_cache._cache.to(device)
@@ -68,7 +114,7 @@ def calculate_cuda_memory_gb(past_keys_values_cache, num_layers: int):
     return total_memory_gb
 
 
-# def hash_state(state, num_buckets=100):
+# def hash_state_origin(state, num_buckets=100):
 #     """
 #     Quantize the state vector.
 
@@ -85,9 +131,6 @@ def calculate_cuda_memory_gb(past_keys_values_cache, num_layers: int):
 #     hash_object = hashlib.sha256(quantized_state_bytes)
 #     return hash_object.hexdigest()
 
-import numpy as np
-import xxhash
-
 
 def hash_state(state):
     """
@@ -99,9 +142,8 @@ def hash_state(state):
         The hash value of the state vector.
     """
     # Use xxhash for faster hashing
-    hash_value = xxhash.xxh64(state).hexdigest()
-    
-    return hash_value
+    # return xxhash.xxh64(state.view(-1).cpu().numpy()).hexdigest()
+    return xxhash.xxh64(state).hexdigest()
 
 @dataclass
 class WorldModelOutput:
