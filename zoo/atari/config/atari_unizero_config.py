@@ -20,14 +20,14 @@ num_unroll_steps = 10
 infer_context_length = 4
 
 # ====== only for debug =====
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-num_simulations = 2
-max_env_step = int(2e5)
-reanalyze_ratio = 0.
-batch_size = 2
-num_unroll_steps = 10
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# num_simulations = 2
+# max_env_step = int(2e5)
+# reanalyze_ratio = 0.
+# batch_size = 2
+# num_unroll_steps = 10
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -43,8 +43,8 @@ atari_unizero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: only for debug
-        collect_max_episode_steps=int(50),
-        eval_max_episode_steps=int(50),
+        # collect_max_episode_steps=int(50),
+        # eval_max_episode_steps=int(50),
     ),
     policy=dict(
         model=dict(
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     for seed in seeds:
         # Update exp_name to include the current seed
         # main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_origin'
-        main_config.exp_name = f'data_unizero_efficiency_debug/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_optimizehash_custom-deepcopy_targevalue-cuda_optimize-computeloss_optimize-value-lst_optimize-targetpolicy-nonrer'
+        main_config.exp_name = f'data_unizero_efficiency_debug/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_custom-dc_targevalue-cuda_opt-computeloss_opt-value-lst_opt-targetpolicy-nonrer_opt-kvcaching-update_kv-nocpu'
 
         # main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_optimizehash_1deepcopy-init-infer'
         from lzero.entry import train_unizero

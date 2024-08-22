@@ -61,6 +61,8 @@ class WorldModel(nn.Module):
         # Initialize patterns for block masks
         self._initialize_patterns()
 
+        self.hidden_size = config.embed_dim // config.num_heads
+
         # Position embedding
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
         self.precompute_pos_emb_diff_kv()
@@ -561,7 +563,9 @@ class WorldModel(nn.Module):
                             self.root_hit_cnt += 1
                             # deepcopy is needed because forward modifies matched_value in place
                             # self.keys_values_wm_list.append(copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
-                            self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=to_device_for_kvcache(matched_value, self.device)))
+                            # self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=to_device_for_kvcache(matched_value, self.device)))
+                            self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=matched_value))
+
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
                             # Reset using zero values
@@ -729,6 +733,7 @@ class WorldModel(nn.Module):
 
         return (outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value)
 
+
     def trim_and_pad_kv_cache(self, is_init_infer=True) -> list:
         """
         Adjusts the key-value cache for each environment to ensure they all have the same size.
@@ -874,8 +879,7 @@ class WorldModel(nn.Module):
                 for layer in range(self.num_layers):
                     # ============ Apply trimming and padding to each layer of kv_cache ============
 
-                    if self.keys_values_wm._keys_values[
-                        layer]._k_cache._size < context_length - 1:  # Keep only the last self.context_length-1 timesteps of context
+                    if self.keys_values_wm._keys_values[layer]._k_cache._size < context_length - 1:  # Keep only the last self.context_length-1 timesteps of context
                         self.keys_values_wm_single_env._keys_values[layer]._k_cache._cache = \
                         self.keys_values_wm._keys_values[layer]._k_cache._cache[i].unsqueeze(
                             0)  # Shape torch.Size([2, 100, 512])
@@ -918,12 +922,16 @@ class WorldModel(nn.Module):
                 # Store the latest key-value cache for initial inference
                 # self.past_kv_cache_init_infer_envs[i][cache_key] = copy.deepcopy(
                 #     to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-                custom_copy_kv_cache_to_dict(to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'), self.past_kv_cache_init_infer_envs[i], cache_key)
+                # custom_copy_kv_cache_to_dict(to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'), self.past_kv_cache_init_infer_envs[i], cache_key)
+                custom_copy_kv_cache_to_dict(self.keys_values_wm_single_env, self.past_kv_cache_init_infer_envs[i], cache_key)
+
             else:
                 # Store the latest key-value cache for recurrent inference
                 # self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(
                 #     to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-                custom_copy_kv_cache_to_dict(to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'), self.past_kv_cache_recurrent_infer, cache_key)
+                # custom_copy_kv_cache_to_dict(to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'), self.past_kv_cache_recurrent_infer, cache_key)
+                custom_copy_kv_cache_to_dict(self.keys_values_wm_single_env, self.past_kv_cache_recurrent_infer, cache_key)
+
 
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
                                      simulation_index: int = 0) -> list:
