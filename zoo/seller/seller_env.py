@@ -67,9 +67,9 @@ class SellerEnv(BaseEnv):
         self._seed = 0
 
         self.persona_info = None
-        self.persona_num = cfg.get('persona_num', 6)
+        self.persona_num = cfg.get('persona_num', 100)
         self.good_info = None
-        self.good_num = cfg.get('good_num', 6)
+        self.good_num = cfg.get('good_num', 100)
 
         if not (SellerEnv.executor and SellerEnv.judge and SellerEnv.buyer):
             self._init_roles()
@@ -114,11 +114,11 @@ class SellerEnv(BaseEnv):
 
     def reset(self, history=[], round_cnt = 0):
         if round_cnt > 0:
-            # self.history = history
             self.history = copy.deepcopy(history)  
             self.round_cnt = copy.deepcopy(round_cnt)
         else:
             self.round_cnt = 0
+            self.history = history
         self.finished = False
         self._init_flag = True
         self._replay = ''
@@ -131,7 +131,10 @@ class SellerEnv(BaseEnv):
         obs = {'observation': self.history, 'action_mask': self.action_mask, 'round_cnt': self.round_cnt}
 
         self.persona_info = SellerEnv.personas[self._seed % self.persona_num]
-        self.good_info = SellerEnv.goods[self._seed % self.good_num]
+        # self.good_info = SellerEnv.goods[self._seed % self.good_num]
+        # self.good_info = SellerEnv.goods[0]  # TODO
+        self.good_info = SellerEnv.goods[2]  # TODO
+
 
         self.eval_episode_return = None
 
@@ -248,11 +251,11 @@ class SellerEnv(BaseEnv):
             self._replay_csv.append([f'【Round {self.round_cnt}】', f'【reward: {rew}, done: {self.finished}】'])
 
             if self.finished:
-                if not os.path.exists('./logs'):
-                    os.mkdir('./logs')
-                with open(f'./logs/evaluate_log_sees{self._seed}_{self._suffix}.txt', 'w', encoding='utf-8') as f:
+                if not os.path.exists(f'./logs_{self._suffix}'):
+                    os.mkdir(f'./logs_{self._suffix}')
+                with open(f'./logs_{self._suffix}/evaluate_log_sees{self._seed}_{self._suffix}.txt', 'w', encoding='utf-8') as f:
                     f.write(self._replay + '\n')
-                with open(f'./logs/evaluate_log_seed{self._seed}_{self._suffix}.csv', 'w', newline='', encoding='utf-8-sig') as csvfile:
+                with open(f'./logs_{self._suffix}/evaluate_log_seed{self._seed}_{self._suffix}.csv', 'w', newline='', encoding='utf-8-sig') as csvfile:
                     writer = csv.writer(csvfile)
                     writer.writerows(self._replay_csv)
 
@@ -293,7 +296,7 @@ if __name__ == '__main__':
             api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
             # commands=[
             #     '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
-            #     '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑', '将你的产品推销给用户'
+            #     '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
             # ],
             commands=[
                 '将你的产品推销给用户'
@@ -301,13 +304,13 @@ if __name__ == '__main__':
             max_round=5,
             seed=0,
             lang='zh',
-            log_suffix='direct',
+            log_suffix='direct_example3',
             save_replay=True,
         )
     )
 
     env = SellerEnv(cfg=env_cfg)
-    for seed in range(1, 11):
+    for seed in range(0, 6):
         env.seed(seed)
         env.reset()
         # commander = Commander()
