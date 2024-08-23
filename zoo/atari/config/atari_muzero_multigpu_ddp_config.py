@@ -34,6 +34,7 @@ atari_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        model_path=None,
         model=dict(
             observation_shape=(4, 96, 96),
             frame_stack_num=4,
