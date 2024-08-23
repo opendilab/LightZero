@@ -7,23 +7,25 @@ action_space_size = atari_env_action_space_map[env_id]
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-gpu_num = 2
+gpu_num = 4
 update_per_collect = None
 replay_ratio = 0.25
 collector_env_num = 8
 n_episode = int(8*gpu_num)
-evaluator_env_num = 3
+evaluator_env_num = 4
 num_simulations = 50
 max_env_step = int(2e5)
 reanalyze_ratio = 0.
 batch_size = 64
 num_unroll_steps = 10
 infer_context_length = 4
+seed=0
 
 # ====== only for debug =====
 # collector_env_num = 2
 # n_episode = 2
 # evaluator_env_num = 2
+
 # num_simulations = 2
 # max_env_step = int(2e5)
 # reanalyze_ratio = 0.
@@ -34,7 +36,7 @@ infer_context_length = 4
 # ==============================================================
 
 atari_unizero_config = dict(
-    exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_custom-dc-v2_targevalue-cuda_opt-computeloss_opt-value-lst_opt-targetpolicy-nonrer_opt-kvcaching-update_kv-nocpu-v2'
+    exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_custom-dc-v2_targevalue-cuda_opt-computeloss_opt-value-lst_opt-targetpolicy-nonrer_opt-kvcaching-update_kv-nocpu-v2',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -45,8 +47,8 @@ atari_unizero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: only for debug
-        # collect_max_episode_steps=int(50),
-        # eval_max_episode_steps=int(50),
+        collect_max_episode_steps=int(50),
+        eval_max_episode_steps=int(50),
     ),
     policy=dict(
         model=dict(
@@ -106,14 +108,14 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=2 ./LightZero/zoo/atari/config/atari_muzero_multigpu_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=2 ./zoo/atari/config/atari_unizero_multigpu_ddp_config.py
     """
     from ding.utils import DDPContext
     from lzero.entry import train_unizero
     from lzero.config.utils import lz_to_ddp_config
     with DDPContext():
         main_config = lz_to_ddp_config(main_config)
-        train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+        train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
     # # Define a list of seeds for multiple runs

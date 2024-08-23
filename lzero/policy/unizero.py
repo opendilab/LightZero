@@ -404,7 +404,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # Extract valid target policy data and compute entropy
         valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
         target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
-        average_target_policy_entropy = target_policy_entropy.mean().item()
+        average_target_policy_entropy = target_policy_entropy.mean()
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
@@ -492,24 +492,24 @@ class UniZeroPolicy(MuZeroPolicy):
             'collect_epsilon': self._collect_epsilon,
             'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
-            'obs_loss': obs_loss,
-            'latent_recon_loss': latent_recon_loss,
-            'perceptual_loss': perceptual_loss,
-            'policy_loss': policy_loss,
-            'orig_policy_loss': orig_policy_loss,
-            'policy_entropy': policy_entropy,
-            'target_policy_entropy': average_target_policy_entropy,
-            'reward_loss': reward_loss,
-            'value_loss': value_loss,
-            'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
+            'obs_loss': obs_loss.item(),
+            'latent_recon_loss': latent_recon_loss.item(),
+            'perceptual_loss': perceptual_loss.item(),
+            'policy_loss': policy_loss.item(),
+            'orig_policy_loss': orig_policy_loss.item(),
+            'policy_entropy': policy_entropy.item(),
+            'target_policy_entropy': average_target_policy_entropy.item(),
+            'reward_loss': reward_loss.item(),
+            'value_loss': value_loss.item(),
+            # 'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
             'target_reward': target_reward.mean().item(),
             'target_value': target_value.mean().item(),
             'transformed_target_reward': transformed_target_reward.mean().item(),
             'transformed_target_value': transformed_target_value.mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
-            'analysis/dormant_ratio_encoder': dormant_ratio_encoder,
-            'analysis/dormant_ratio_world_model': dormant_ratio_world_model,
-            'analysis/latent_state_l2_norms': latent_state_l2_norms,
+            'analysis/dormant_ratio_encoder': dormant_ratio_encoder.item(),
+            'analysis/dormant_ratio_world_model': dormant_ratio_world_model.item(),
+            'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
             'analysis/l2_norm_before': self.l2_norm_before,
             'analysis/l2_norm_after': self.l2_norm_after,
             'analysis/grad_norm_before': self.grad_norm_before,
