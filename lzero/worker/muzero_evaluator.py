@@ -449,6 +449,8 @@ class MuZeroEvaluator(ISerialEvaluator):
 
         if get_world_size() > 1:
             objects = [stop_flag, episode_info]
+            print(f'objects: {objects}')
+            assert len(objects) == 2, f"Expected 2 objects to broadcast, got {len(objects)}"
             broadcast_object_list(objects, src=0)
             stop_flag, episode_info = objects
 

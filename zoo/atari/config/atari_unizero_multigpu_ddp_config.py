@@ -1,3 +1,9 @@
+import os
+os.environ["NCCL_BLOCKING_WAIT"] = "1"
+os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "1" 
+os.environ["NCCL_DEBUG"] = "INFO"
+os.environ["NCCL_TIMEOUT"] = "3600"
+
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
@@ -12,7 +18,7 @@ update_per_collect = None
 replay_ratio = 0.25
 collector_env_num = 8
 n_episode = int(8*gpu_num)
-evaluator_env_num = 4
+evaluator_env_num = 3
 num_simulations = 50
 max_env_step = int(2e5)
 reanalyze_ratio = 0.
@@ -22,9 +28,6 @@ infer_context_length = 4
 seed=0
 
 # ====== only for debug =====
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
 
 # num_simulations = 2
 # max_env_step = int(2e5)
@@ -47,8 +50,8 @@ atari_unizero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: only for debug
-        collect_max_episode_steps=int(50),
-        eval_max_episode_steps=int(50),
+        # collect_max_episode_steps=int(50),
+        # eval_max_episode_steps=int(50),
     ),
     policy=dict(
         model=dict(
@@ -109,6 +112,8 @@ if __name__ == "__main__":
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
         python -m torch.distributed.launch --nproc_per_node=2 ./zoo/atari/config/atari_unizero_multigpu_ddp_config.py
+        torchrun --nproc_per_node=2 ./zoo/atari/config/atari_unizero_multigpu_ddp_config.py
+
     """
     from ding.utils import DDPContext
     from lzero.entry import train_unizero
