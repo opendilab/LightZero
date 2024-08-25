@@ -21,16 +21,42 @@ class TreeNode:
         self.eval_episode_return = None
         
     def expand(self, actions):
-        for action in actions:
-            _, reward, done, _  = self.env.step([action])
-            child_node = TreeNode(self.env, self, action)
-            if done:
-                child_node.eval_episode_return = reward
-            self.children.append(child_node)
+        if self.env.finished:
+            return  # 如果环境已经完成，不进行扩展
+        
+        # 选择具有最高UCB值的动作进行扩展
+        ucb_values = [self.ucb(a) for a in actions]
+        best_action_index = ucb_values.index(max(ucb_values))
+        action = actions[best_action_index]
+        
+        _, reward, done, _ = self.env.step([action])
+        child_node = TreeNode(self.env, self, action)
+        if done:
+            child_node.eval_episode_return = reward
+        self.children.append(child_node)
+        
+        # 重置环境到之前的状态
+        self.env.reset_from_history(self.history_deepcopy, self.round_cnt_deepcopy)
 
-            # 重置环境到之前的状态
-            self.env.reset_from_history(self.history_deepcopy, self.round_cnt_deepcopy)
+        # for action in actions:
+        #     _, reward, done, _  = self.env.step([action])
+        #     child_node = TreeNode(self.env, self, action)
+        #     if done:
+        #         child_node.eval_episode_return = reward
+        #     self.children.append(child_node)
+
+        #     # 重置环境到之前的状态
+        #     self.env.reset_from_history(self.history_deepcopy, self.round_cnt_deepcopy)
     
+    def ucb(self, action):
+        child = next((c for c in self.children if c.action == action), None)
+        if child is None:
+            return float('inf')  # 未访问过的节点具有最高优先级
+        
+        exploitation = child.reward / (child.visits + EPS)
+        exploration = math.sqrt(2 * math.log(self.visits) / (child.visits + EPS))
+        return exploitation + 1.4 * exploration
+
     def rollout(self):
         if self.eval_episode_return is not None:
             return self.eval_episode_return
@@ -88,7 +114,8 @@ class MCTSBot:
             legal_actions = list(range(len(env.commands))) 
             if not node.env.finished and legal_actions:
                 node.expand(legal_actions)
-                node = random.choice(node.children)
+                if node.children:  # 确保存在子节点
+                    node = random.choice(node.children)
             # expand_time += time.time() - start_time
             
             # rollout  
@@ -111,13 +138,15 @@ class MCTSBot:
     def get_action(self, env):
         root = self.search(env)
         
+        # 选择访问次数最多的子节点作为最佳动作
         return max(root.children, key=lambda c: c.visits).action
 
 if __name__ == '__main__':
     env_cfg = EasyDict(
     dict(
         agent='deepseek',
-        api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
+        api_key='sk-c4a8fe52693a4aaab64e648c42f40be6',
+        # api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
         # commands=[
         #     '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
         #     '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
@@ -132,7 +161,7 @@ if __name__ == '__main__':
         # max_round=2,
         seed=0,
         lang='zh',
-        log_suffix='mcts_sim3_c5_mr5_v2',
+        log_suffix='mcts_0805',
         save_replay=False,
         )
     )
@@ -141,13 +170,15 @@ if __name__ == '__main__':
 
     avg_return = 0
     mcts_bot = MCTSBot(n_iterations=3)
-    for seed in range(1, 6): # TODO
+    # for seed in range(1, 6): # TODO
+    for seed in [0]: # TODO
         env = SellerEnv(cfg=env_cfg)
         env.seed(seed)
         env.reset()
         while not env.finished:
             action = mcts_bot.get_action(copy.deepcopy(env))
-            env.save_replay = True
+            # env.save_replay = True
+            env.save_replay = False
             env_step = env.step([action])
             env.save_replay = False
             print(f'########## Round {env.round_cnt} ##########')
@@ -159,35 +190,3 @@ if __name__ == '__main__':
         avg_return += env_step.reward
     print(f'对话结束,最终平均收益: {avg_return/6}')
     
-
-    # ================ 下面是单局的测试 ================
-
-    # env_cfg = EasyDict(
-    #     dict(
-    #         agent='deepseek',
-    #         api_key='sk-c4a8fe52693a4aaab64e648c42f40be6',
-    #         commands=[
-    #             '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
-    #             '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
-    #         ],
-    #         max_round=5,
-    #         seed=0,
-    #         lang='zh',
-    #         log_suffix='mcts_sim5'
-    #     )
-    # )
-
-    # env = SellerEnv(cfg=env_cfg)
-    # state = env.reset()
-
-    # mcts_bot = MCTSBot(n_iterations=5)
-
-    # while not env.finished:
-    #     action = mcts_bot.get_action(env)  
-    #     state, reward, done, info = env.step([action])
-    #     print(f'='*50)
-    #     print(f'{env._replay}')
-    #     # print(f'MCTS Bot 选择动作: {env.commands[action]}')
-        
-    # print(f'='*50)
-    # print(f'对话结束,最终收益: {reward}')

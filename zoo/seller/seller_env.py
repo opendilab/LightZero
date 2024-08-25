@@ -132,18 +132,17 @@ class SellerEnv(BaseEnv):
 
         self.persona_info = SellerEnv.personas[self._seed % self.persona_num]
         # self.good_info = SellerEnv.goods[self._seed % self.good_num]
-        # self.good_info = SellerEnv.goods[0]  # TODO
-        self.good_info = SellerEnv.goods[2]  # TODO
-
-
-        self.eval_episode_return = None
+        self.good_info = SellerEnv.goods[0]  # TODO
+        # self.good_info = SellerEnv.goods[2]  # TODO
+        self.eval_episode_return = 0
 
         return obs
     
-    def reset_from_history(self, history, round_cnt, replay=None, replay_csv=None):
+    def reset_from_history(self, history, round_cnt, eval_episode_return=0, replay=None, replay_csv=None):
         self.history = copy.deepcopy(history)  
         self.round_cnt = copy.deepcopy(round_cnt)
-        self.finished = False
+        self.eval_episode_return = copy.deepcopy(eval_episode_return)
+        self.finished = self.round_cnt >= self.max_round
         # self.replay = replay
         # self.replay_csv = replay_csv
 
@@ -184,11 +183,13 @@ class SellerEnv(BaseEnv):
         self.round_cnt += 1
         executor_resp = SellerEnv.executor.call(command=command, history=self.history, info=self.good_info)
         role = '卖家' if self.lang == 'zh' else 'seller'
-        self.history.append({role: executor_resp})
+        # self.history.append({role: executor_resp})
+        self.history.append({"role": role, "round": self.round_cnt, "content": executor_resp})
 
         role = '买家' if self.lang == 'zh' else 'customer'
         buyer_resp = SellerEnv.buyer.call(self.history, info=self.persona_info)
-        self.history.append({role: buyer_resp})
+        # self.history.append({role: buyer_resp})
+        self.history.append({"role": role, "round": self.round_cnt, "content": buyer_resp})
 
         judge_resp = SellerEnv.judge.call(self.history)
 
@@ -211,6 +212,8 @@ class SellerEnv(BaseEnv):
             if rew == 0:
                 rew = -1
 
+        self.eval_episode_return += rew
+
         # obs = {'observation': str(self.history), 'candidate_samples': self.commands}
         action_mask = np.ones(len(self.commands), 'int8')
         # obs = {'observation': str(self.history), 'action_mask': action_mask}
@@ -225,8 +228,7 @@ class SellerEnv(BaseEnv):
             }
         )
         if self.finished:
-            self.eval_episode_return = rew
-            env_step.info['eval_episode_return'] = rew
+            env_step.info['eval_episode_return'] = self.eval_episode_return
         # print(f'self.history: {self.history}')
 
         if self.save_replay:
@@ -293,14 +295,15 @@ if __name__ == '__main__':
     env_cfg = EasyDict(
         dict(
             agent='deepseek',
-            api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
-            # commands=[
-            #     '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
-            #     '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
-            # ],
+            api_key='sk-c4a8fe52693a4aaab64e648c42f40be6',
+            # api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
             commands=[
-                '将你的产品推销给用户'
+                '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
+                '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
             ],
+            # commands=[
+            #     '将你的产品推销给用户'
+            # ],
             max_round=5,
             seed=0,
             lang='zh',
@@ -313,11 +316,11 @@ if __name__ == '__main__':
     for seed in range(0, 6):
         env.seed(seed)
         env.reset()
-        # commander = Commander()
+        commander = Commander()
         while not env.finished:
             print(f'Legal actions: {" ".join([str(i) + ": " + env.commands[i] for i in range(len(env.commands))])}')
-            # command = commander.call()
-            command = 0
+            command = commander.call()
+            # command = 0
             env_step = env.step([command])
             print(f'########## Round {env.round_cnt} ##########')
             for k in env_step.info:
