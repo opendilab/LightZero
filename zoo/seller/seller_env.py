@@ -132,8 +132,8 @@ class SellerEnv(BaseEnv):
 
         self.persona_info = SellerEnv.personas[self._seed % self.persona_num]
         # self.good_info = SellerEnv.goods[self._seed % self.good_num]
-        self.good_info = SellerEnv.goods[0]  # TODO
-        # self.good_info = SellerEnv.goods[1]  # TODO
+        # self.good_info = SellerEnv.goods[0]  # TODO
+        self.good_info = SellerEnv.goods[1]  # TODO
         self.eval_episode_return = 0
 
         return obs
@@ -307,7 +307,7 @@ if __name__ == '__main__':
             max_round=5,
             seed=0,
             lang='zh',
-            log_suffix='direct_example1_run2',
+            log_suffix='direct_example2',
             save_replay=True,  # TODO
         )
     )
