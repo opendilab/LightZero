@@ -16,7 +16,7 @@ from lzero.model.utils import cal_dormant_ratio
 from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
-from .utils import LossWithIntermediateLosses, init_weights, to_device_for_kvcache, custom_copy_kv_cache, custom_copy_kv_cache_to_dict
+from .utils import LossWithIntermediateLosses, init_weights, to_device_for_kvcache, custom_copy_kv_cache, custom_copy_kv_cache_only_size, custom_copy_kv_cache_to_dict
 from .utils import WorldModelOutput, hash_state
 from torch.distributions import Categorical, Independent, Normal
 
@@ -231,6 +231,8 @@ class WorldModel(nn.Module):
     def _initialize_transformer_keys_values(self) -> None:
         """Initialize keys and values for the transformer."""
         self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1,
+                                                                                     max_tokens=self.context_length)
+        self.keys_values_wm_single_env_tmp = self.transformer.generate_empty_keys_values(n=1,
                                                                                      max_tokens=self.context_length)
         self.keys_values_wm = self.transformer.generate_empty_keys_values(n=self.env_num,
                                                                           max_tokens=self.context_length)
@@ -564,8 +566,14 @@ class WorldModel(nn.Module):
                             # deepcopy is needed because forward modifies matched_value in place
                             # self.keys_values_wm_list.append(copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
                             # self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=to_device_for_kvcache(matched_value, self.device)))
-                            self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=matched_value))
-
+                            # self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=matched_value))
+                            # TODO: check 
+                            # 提前创建好self.keys_values_wm_single_env_tmp, 检索出来latent_state_t的kv_cache后，只deepcopy latent_state_t的kv_size, 
+                            # transformer推理一次后，虽然kv_cache后面新加了一步的kv_cache, 通过deepcopy将新的下一个latent_state_{t+1}的kv_cache存好，
+                            # 只有在 self.keys_values_wm._keys_values[layer]._k_cache._size < context_length - 1
+                            # self.keys_values_wm_list.append(custom_copy_kv_cache_only_size(src_kv=matched_value, dst_kv=self.keys_values_wm_single_env_tmp)
+                            # init_infer 每个env, 每次都得到新的latent_state，旧的kv_cache不需要保留，因此这里不需要deepcopy
+                            self.keys_values_wm_list.append(matched_value)
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
                             # Reset using zero values
@@ -922,14 +930,17 @@ class WorldModel(nn.Module):
                 # self.past_kv_cache_init_infer_envs[i][cache_key] = copy.deepcopy(
                 #     to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
                 # custom_copy_kv_cache_to_dict(to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'), self.past_kv_cache_init_infer_envs[i], cache_key)
-                custom_copy_kv_cache_to_dict(self.keys_values_wm_single_env, self.past_kv_cache_init_infer_envs[i], cache_key)
+                # custom_copy_kv_cache_to_dict(self.keys_values_wm_single_env, self.past_kv_cache_init_infer_envs[i], cache_key)
+                self.past_kv_cache_init_infer_envs[i][cache_key] = self.keys_values_wm_single_env
 
             else:
                 # Store the latest key-value cache for recurrent inference
                 # self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(
                 #     to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
                 # custom_copy_kv_cache_to_dict(to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'), self.past_kv_cache_recurrent_infer, cache_key)
-                custom_copy_kv_cache_to_dict(self.keys_values_wm_single_env, self.past_kv_cache_recurrent_infer, cache_key)
+                # custom_copy_kv_cache_to_dict(self.keys_values_wm_single_env, self.past_kv_cache_recurrent_infer, cache_key)
+                # TODO: 取的时候deepcopy, 存的时候就不需要了
+                self.past_kv_cache_recurrent_infer[cache_key] = self.keys_values_wm_single_env
 
 
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
@@ -958,7 +969,10 @@ class WorldModel(nn.Module):
 
             # If not found, try to retrieve from past_kv_cache_recurrent_infer
             if matched_value is None:
+                init_infer_hit_flag = False
                 matched_value = self.past_kv_cache_recurrent_infer.get(cache_key)
+            else:
+                init_infer_hit_flag = True
 
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists
@@ -966,7 +980,12 @@ class WorldModel(nn.Module):
                 # Perform a deep copy because the transformer's forward pass might modify matched_value in-place
                 # self.keys_values_wm_list.append(copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
                 # self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=to_device_for_kvcache(matched_value, self.device)))
-                self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=matched_value))
+                if init_infer_hit_flag:
+                    self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=matched_value))
+                else:
+                    # TODO
+                    self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=matched_value))
+
                 self.keys_values_wm_size_list.append(matched_value.size)
             else:
                 # If no matching cache is found, generate a new one using zero reset
