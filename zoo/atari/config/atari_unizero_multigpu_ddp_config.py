@@ -13,7 +13,7 @@ action_space_size = atari_env_action_space_map[env_id]
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-gpu_num = 4
+gpu_num = 2
 update_per_collect = None
 replay_ratio = 0.25
 collector_env_num = 8
@@ -39,7 +39,7 @@ seed=0
 # ==============================================================
 
 atari_unizero_config = dict(
-    exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_custom-dc-v2_targevalue-cuda_opt-computeloss_opt-value-lst_opt-targetpolicy-nonrer_opt-kvcaching-update_kv-nocpu-v2',
+    exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_custom-onlyload2dc_targevalue-cuda_opt-computeloss_opt-value-lst_opt-targetpolicy-nonrer_opt-kvcaching-update_kv-nocpu-v2',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,

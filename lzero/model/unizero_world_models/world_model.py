@@ -566,14 +566,14 @@ class WorldModel(nn.Module):
                             # deepcopy is needed because forward modifies matched_value in place
                             # self.keys_values_wm_list.append(copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
                             # self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=to_device_for_kvcache(matched_value, self.device)))
-                            # self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=matched_value))
+                            self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=matched_value))
                             # TODO: check 
                             # 提前创建好self.keys_values_wm_single_env_tmp, 检索出来latent_state_t的kv_cache后，只deepcopy latent_state_t的kv_size, 
                             # transformer推理一次后，虽然kv_cache后面新加了一步的kv_cache, 通过deepcopy将新的下一个latent_state_{t+1}的kv_cache存好，
                             # 只有在 self.keys_values_wm._keys_values[layer]._k_cache._size < context_length - 1
                             # self.keys_values_wm_list.append(custom_copy_kv_cache_only_size(src_kv=matched_value, dst_kv=self.keys_values_wm_single_env_tmp)
                             # init_infer 每个env, 每次都得到新的latent_state，旧的kv_cache不需要保留，因此这里不需要deepcopy
-                            self.keys_values_wm_list.append(matched_value)
+                            # self.keys_values_wm_list.append(matched_value)
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
                             # Reset using zero values
