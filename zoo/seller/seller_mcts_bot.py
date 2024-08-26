@@ -143,15 +143,16 @@ if __name__ == '__main__':
         # max_round=2,
         seed=0,
         lang='zh',
-        log_suffix='mcts_sim10_a9_0825',
+        # log_suffix='mcts_sim10_a9_0826_example1_run2',
+        # log_suffix='random_a9_0826_example1_run2',
         save_replay=False,
         )
     )
 
     env = SellerEnv(cfg=env_cfg)
     avg_return = 0
-    eval_episodes = 1
-
+    eval_episodes = 5
+    import numpy as np
     mcts_bot = MCTSBot(n_iterations=10)
     # mcts_bot = MCTSBot(n_iterations=1)
 
@@ -159,8 +160,9 @@ if __name__ == '__main__':
         env.reset()
         env.seed(seed)
         while not env.finished:
-            action = mcts_bot.get_action(env)
-            env.save_replay = True # TODO
+            action = mcts_bot.get_action(env) # TODO
+            # action = np.random.randint(9)
+            env.save_replay = True  # TODO
             # env.save_replay = False
             env_step = env.step([action])
             env.save_replay = False

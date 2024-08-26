@@ -118,7 +118,7 @@ class SellerEnv(BaseEnv):
             self.round_cnt = copy.deepcopy(round_cnt)
         else:
             self.round_cnt = 0
-            self.history = history
+            self.history = []
         self.finished = False
         self._init_flag = True
         self._replay = ''
@@ -133,7 +133,7 @@ class SellerEnv(BaseEnv):
         self.persona_info = SellerEnv.personas[self._seed % self.persona_num]
         # self.good_info = SellerEnv.goods[self._seed % self.good_num]
         self.good_info = SellerEnv.goods[0]  # TODO
-        # self.good_info = SellerEnv.goods[2]  # TODO
+        # self.good_info = SellerEnv.goods[1]  # TODO
         self.eval_episode_return = 0
 
         return obs
@@ -297,30 +297,31 @@ if __name__ == '__main__':
             agent='deepseek',
             api_key='sk-c4a8fe52693a4aaab64e648c42f40be6',
             # api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
-            commands=[
-                '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
-                '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
-            ],
             # commands=[
-            #     '将你的产品推销给用户'
+            #     '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
+            #     '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
             # ],
+            commands=[
+                '将你的产品推销给用户'
+            ],
             max_round=5,
             seed=0,
             lang='zh',
-            log_suffix='direct_example3',
-            save_replay=True,
+            log_suffix='direct_example1_run2',
+            save_replay=True,  # TODO
         )
     )
 
     env = SellerEnv(cfg=env_cfg)
-    for seed in range(0, 6):
+    eval_episodes = 5
+    for seed in range(0, eval_episodes):
         env.seed(seed)
         env.reset()
-        commander = Commander()
+        # commander = Commander()
         while not env.finished:
             print(f'Legal actions: {" ".join([str(i) + ": " + env.commands[i] for i in range(len(env.commands))])}')
-            command = commander.call()
-            # command = 0
+            # command = commander.call()
+            command = 0
             env_step = env.step([command])
             print(f'########## Round {env.round_cnt} ##########')
             for k in env_step.info:
