@@ -58,6 +58,17 @@ def custom_copy_kv_cache(src_kv: KeysValues) -> KeysValues:
 
     return dst_kv
 
+
+
+def custom_copy_kv_cache_only_size(src_kv: KeysValues, dst_kv: KeysValues) -> None:
+    with torch.no_grad():
+        for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
+            dst_layer._k_cache._cache = src_layer._k_cache._cache
+            dst_layer._v_cache._cache = src_layer._v_cache._cache
+            dst_layer._k_cache._size = copy.deepcopy(src_layer._k_cache._size)
+            dst_layer._v_cache._size = copy.deepcopy(src_layer._v_cache._size)
+
+
 def to_device_for_kvcache(keys_values: KeysValues, device: str) -> KeysValues:
     """
     Transfer all KVCache objects within the KeysValues object to a certain device.
