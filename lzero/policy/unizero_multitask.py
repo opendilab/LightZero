@@ -18,8 +18,8 @@ from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 from line_profiler import line_profiler
 
-sys.path.append('/Users/puyuan/code/LibMTL/')
-from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+# sys.path.append('/Users/puyuan/code/LibMTL/')
+# from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 # from LibMTL.weighting.FAMO_unizero import FAMO as GradCorrect  # NOTE: FAMO have bugs now
 
@@ -469,9 +469,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # 将 wrapped_model 作为 share_model 传递给 GradCorrect
         # ========= 初始化 MoCo CAGrad 参数 =========
         self.task_num = self._cfg.task_num
-        self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
-        self.grad_correct.init_param()  
-        self.grad_correct.rep_grad = False
+        # self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
+        # self.grad_correct.init_param()  
+        # self.grad_correct.rep_grad = False
 
         #  =========only for FAMO =========
         # self.grad_correct.set_min_losses(torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)) 
