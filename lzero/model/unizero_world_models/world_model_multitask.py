@@ -13,13 +13,13 @@ from einops import rearrange
 
 from lzero.model.common import SimNorm
 from lzero.model.utils import cal_dormant_ratio
-from .slicer import Head
+from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights, to_device_for_kvcache
 from .utils import WorldModelOutput, quantize_state
 from .moe import MoeLayer, MultiplicationFeedForward
-
+from torch.distributions import Categorical, Independent, Normal
 logging.getLogger().setLevel(logging.DEBUG)
 
 
@@ -77,9 +77,17 @@ class WorldModelMT(nn.Module):
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
         self.precompute_pos_emb_diff_kv()
         print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
+        self.continuous_action_space = self.config.continuous_action_space
 
         # Initialize action embedding table
-        self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
+        if self.continuous_action_space:
+            self.act_embedding_table = nn.Sequential(
+                nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
+                SimNorm(simnorm_dim=self.group_size)
+            )
+        else:
+            # for discrete action space
+            self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
         print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
         # if self.num_experts_in_moe_head == -1:
@@ -90,7 +98,16 @@ class WorldModelMT(nn.Module):
             for task_id in range(self.task_num):  # TODO
                 action_space_size = self.action_space_size # TODO:======================
                 # action_space_size=18  # TODO:======================
-                self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
+                if self.continuous_action_space:
+                    self.sigma_type = self.config.sigma_type
+                    if self.sigma_type == 'fixed':
+                        self.fixed_sigma_value = self.config.fixed_sigma_value
+                    else:
+                        self.fixed_sigma_value = 0.3
+                    self.bound_type = self.config.bound_type
+                    self.head_policy = self._create_head_cont(self.value_policy_tokens_pattern, self.action_space_size)
+                else:
+                    self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
                 self.head_policy_multi_task.append(self.head_policy)
 
                 self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
@@ -193,7 +210,26 @@ class WorldModelMT(nn.Module):
             block_mask=block_mask,
             head_module=nn.Sequential(*modules)
         )
-
+        
+    def _create_head_cont(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
+        """Create continuous head modules for the transformer."""
+        from ding.model.common import ReparameterizationHead
+        self.fc_policy_head = ReparameterizationHead(
+            input_size=self.config.embed_dim,
+            output_size=output_dim,
+            layer_num=1,  # TODO: check the effect of layer_num
+            sigma_type=self.sigma_type,
+            activation=nn.GELU(approximate='tanh'),
+            fixed_sigma_value=self.fixed_sigma_value,
+            norm_type=None,
+            bound_type=self.bound_type
+        )
+        return PolicyHeadCont(
+            max_blocks=self.config.max_blocks,
+            block_mask=block_mask,
+            head_module=self.fc_policy_head
+        )
+        
     def _create_head_moe(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, moe=None) -> Head:
         """Create moe head modules for the transformer."""
         modules = [
@@ -323,7 +359,11 @@ class WorldModelMT(nn.Module):
         if last_linear_layer_init_zero:
             # TODO: multitask
             if self.task_num == 1:
-                for head in [self.head_policy, self.head_value, self.head_rewards, self.head_observations]:
+                if self.continuous_action_space:
+                    module_to_initialize = [self.head_value, self.head_rewards, self.head_observations]
+                else:
+                    module_to_initialize = [self.head_policy, self.head_value, self.head_rewards, self.head_observations]
+                for head in module_to_initialize:
                     for layer in reversed(head.head_module):
                         if isinstance(layer, nn.Linear):
                             nn.init.zeros_(layer.weight)
@@ -331,7 +371,11 @@ class WorldModelMT(nn.Module):
                                 nn.init.zeros_(layer.bias)
                             break
             elif self.task_num > 1:
-                for head in self.head_policy_multi_task + self.head_value_multi_task + self.head_rewards_multi_task + self.head_observations_multi_task:
+                if self.continuous_action_space:
+                    module_to_initialize = self.head_value_multi_task + self.head_rewards_multi_task + self.head_observations_multi_task
+                else:
+                    module_to_initialize = self.head_policy_multi_task + self.head_value_multi_task + self.head_rewards_multi_task + self.head_observations_multi_task
+                for head in module_to_initialize:
                     for layer in reversed(head.head_module):
                         if isinstance(layer, nn.Linear):
                             nn.init.zeros_(layer.weight)
@@ -476,9 +520,15 @@ class WorldModelMT(nn.Module):
         # Process action tokens
         elif 'act_tokens' in obs_embeddings_or_act_tokens:
             act_tokens = obs_embeddings_or_act_tokens['act_tokens']
-            if len(act_tokens.shape) == 3:
-                act_tokens = act_tokens.squeeze(1)
-            num_steps = act_tokens.size(1)
+            if self.continuous_action_space:
+                num_steps = 1
+                act_tokens = act_tokens.float()
+                if len(act_tokens.shape) == 2:
+                    act_tokens = act_tokens.unsqueeze(1)
+            else:
+                if len(act_tokens.shape) == 3:
+                    act_tokens = act_tokens.squeeze(1)
+                num_steps = act_tokens.size(1)
             act_embeddings = self.act_embedding_table(act_tokens)
             sequences = self._add_position_embeddings(act_embeddings, prev_steps, num_steps, kvcache_independent,
                                                       is_init_infer, valid_context_lengths)
@@ -490,7 +540,10 @@ class WorldModelMT(nn.Module):
 
         # Process combined observation embeddings and action tokens
         else:
-            sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
+            if self.continuous_action_space:
+                sequences, num_steps = self._process_obs_act_combined_cont(obs_embeddings_or_act_tokens, prev_steps)
+            else:
+                sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
 
         # Pass sequences through transformer
         x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths)
@@ -543,6 +596,43 @@ class WorldModelMT(nn.Module):
                 position_embeddings = self.pos_emb(
                     valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
                 return embeddings + position_embeddings
+            
+    def _process_obs_act_combined_cont(self, obs_embeddings_or_act_tokens, prev_steps):
+        """
+        Process combined observation embeddings and action tokens.
+
+        Arguments:
+            - obs_embeddings_or_act_tokens (:obj:`dict`): Dictionary containing combined observation embeddings and action tokens.
+            - prev_steps (:obj:`torch.Tensor`): Previous steps.
+        Returns:
+            - torch.Tensor: Combined observation and action embeddings with position information added.
+        """
+        obs_embeddings, act_tokens = obs_embeddings_or_act_tokens['obs_embeddings_and_act_tokens']
+        if len(obs_embeddings.shape) == 3:
+            obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1], self.num_observations_tokens,
+                                                 -1)
+
+        num_steps = int(obs_embeddings.size(1) * (obs_embeddings.size(2) + 1))
+        if self.continuous_action_space:
+            act_tokens = act_tokens.float()
+            if len(act_tokens.shape) == 2:  # TODO
+                act_tokens = act_tokens.unsqueeze(-1)
+
+        # B, L, E
+        act_embeddings = self.act_embedding_table(act_tokens)
+
+        B, L, K, E = obs_embeddings.size()
+        # B, L*2, E
+        obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=self.device)
+
+        for i in range(L):
+            obs = obs_embeddings[:, i, :, :]
+            act = act_embeddings[:, i, :].unsqueeze(1)
+            obs_act = torch.cat([obs, act], dim=1)
+            obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
+
+        return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
+
 
     #@profile
     def _process_obs_act_combined(self, obs_embeddings_or_act_tokens, prev_steps):
@@ -650,7 +740,11 @@ class WorldModelMT(nn.Module):
         if n <= self.env_num:
             # ================ Collect and Evaluation Phase ================
             if current_obs_embeddings is not None:
-                if max(buffer_action) == -1:
+                if self.continuous_action_space:
+                    first_step_flag = not isinstance(buffer_action[0], np.ndarray)
+                else:
+                    first_step_flag = max(buffer_action) == -1
+                if first_step_flag:
                     # First step in an episode
                     self.keys_values_wm = self.transformer.generate_empty_keys_values(n=current_obs_embeddings.shape[0],
                                                                                       max_tokens=self.context_length)
@@ -696,7 +790,10 @@ class WorldModelMT(nn.Module):
                     buffer_action = buffer_action[:ready_env_num]
                     # if ready_env_num < self.env_num:
                     #     print(f'init inference ready_env_num: {ready_env_num} < env_num: {self.env_num}')
-                    act_tokens = torch.from_numpy(np.array(buffer_action)).to(latent_state.device).unsqueeze(-1)
+                    if self.continuous_action_space:
+                        act_tokens = torch.from_numpy(np.array(buffer_action)).to(latent_state.device).unsqueeze(1)
+                    else:
+                        act_tokens = torch.from_numpy(np.array(buffer_action)).to(latent_state.device).unsqueeze(-1)
                     outputs_wm = self.forward({'act_tokens': act_tokens}, past_keys_values=self.keys_values_wm,
                                               is_init_infer=True, task_id=task_id)
 
@@ -715,7 +812,10 @@ class WorldModelMT(nn.Module):
 
             latent_state = latent_state[:, :-1, :]
             buffer_action = torch.from_numpy(buffer_action).to(latent_state.device)
-            act_tokens = rearrange(buffer_action, 'b l -> b l 1')
+            if self.continuous_action_space:
+                act_tokens = buffer_action
+            else:
+                act_tokens = rearrange(buffer_action, 'b l -> b l 1')
 
             # select the last timestep for each sample
             # This will select the last column while keeping the dimensions unchanged, and the target policy/value in the final step itself is not used.
@@ -779,7 +879,10 @@ class WorldModelMT(nn.Module):
         self.keys_values_wm_size_list = self.retrieve_or_generate_kvcache(latest_state, ready_env_num, simulation_index, task_id=task_id)
 
         latent_state_list = []
-        token = action.reshape(-1, 1)
+        if not self.continuous_action_space:
+            token = action.reshape(-1, 1)
+        else:
+            token = action.reshape(-1, self.action_space_size)
 
         # ======= Print statistics for debugging =============
         # min_size = min(self.keys_values_wm_size_list)
@@ -1162,8 +1265,11 @@ class WorldModelMT(nn.Module):
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=batch['observations'].dtype)
 
-            # Action tokens
-        act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
+        # Action tokens
+        if self.continuous_action_space:
+            act_tokens = batch['actions']
+        else:
+            act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
 
         # Forward pass to obtain predictions for observations, rewards, and policies
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, task_id=task_id)
@@ -1240,8 +1346,20 @@ class WorldModelMT(nn.Module):
 
         # Compute losses for rewards, policy, and value
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
-        loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy, batch,
-                                                                                        element='policy')
+        # loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy, batch,
+        #                                                                                 element='policy')
+
+        if not self.continuous_action_space:
+            loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy,
+                                                                                            batch,
+                                                                                            element='policy')
+        else:
+            # NOTE: for continuous action space
+            orig_policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont(
+                outputs, batch)
+            loss_policy = orig_policy_loss + self.config.policy_entropy_loss_weight * policy_entropy_loss
+            policy_entropy = - policy_entropy_loss
+
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
 
         # Compute timesteps
@@ -1296,25 +1414,111 @@ class WorldModelMT(nn.Module):
         discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).mean()
         discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).mean()
 
-        return LossWithIntermediateLosses(
-            latent_recon_loss_weight=self.latent_recon_loss_weight,
-            perceptual_loss_weight=self.perceptual_loss_weight,
-            loss_obs=discounted_loss_obs,
-            loss_rewards=discounted_loss_rewards,
-            loss_value=discounted_loss_value,
-            loss_policy=discounted_loss_policy,
-            latent_recon_loss=discounted_latent_recon_loss,
-            perceptual_loss=discounted_perceptual_loss,
-            orig_policy_loss=discounted_orig_policy_loss,
-            policy_entropy=discounted_policy_entropy,
-            first_step_losses=first_step_losses,
-            middle_step_losses=middle_step_losses,
-            last_step_losses=last_step_losses,
-            dormant_ratio_encoder=dormant_ratio_encoder,
-            dormant_ratio_world_model=dormant_ratio_world_model,
-            latent_state_l2_norms=latent_state_l2_norms,
-            logits_value=outputs.logits_value,
-        )
+        if self.continuous_action_space:
+            return LossWithIntermediateLosses(
+                latent_recon_loss_weight=self.latent_recon_loss_weight,
+                perceptual_loss_weight=self.perceptual_loss_weight,
+                loss_obs=discounted_loss_obs,
+                loss_rewards=discounted_loss_rewards,
+                loss_value=discounted_loss_value,
+                loss_policy=discounted_loss_policy,
+                latent_recon_loss=discounted_latent_recon_loss,
+                perceptual_loss=discounted_perceptual_loss,
+                orig_policy_loss=discounted_orig_policy_loss,
+                policy_entropy=discounted_policy_entropy,
+                first_step_losses=first_step_losses,
+                middle_step_losses=middle_step_losses,
+                last_step_losses=last_step_losses,
+                dormant_ratio_encoder=dormant_ratio_encoder,
+                dormant_ratio_world_model=dormant_ratio_world_model,
+                latent_state_l2_norms=latent_state_l2_norms,
+                policy_mu=mu,
+                policy_sigma=sigma,
+                target_sampled_actions=target_sampled_actions,
+            )
+        else:
+            return LossWithIntermediateLosses(
+                latent_recon_loss_weight=self.latent_recon_loss_weight,
+                perceptual_loss_weight=self.perceptual_loss_weight,
+                loss_obs=discounted_loss_obs,
+                loss_rewards=discounted_loss_rewards,
+                loss_value=discounted_loss_value,
+                loss_policy=discounted_loss_policy,
+                latent_recon_loss=discounted_latent_recon_loss,
+                perceptual_loss=discounted_perceptual_loss,
+                orig_policy_loss=discounted_orig_policy_loss,
+                policy_entropy=discounted_policy_entropy,
+                first_step_losses=first_step_losses,
+                middle_step_losses=middle_step_losses,
+                last_step_losses=last_step_losses,
+                dormant_ratio_encoder=dormant_ratio_encoder,
+                dormant_ratio_world_model=dormant_ratio_world_model,
+                latent_state_l2_norms=latent_state_l2_norms,
+            )
+
+    def _calculate_policy_loss_cont(self, outputs, batch: dict) -> Tuple[
+        torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        Calculate the policy loss for continuous actions.
+
+        Args:
+            - outputs: Model outputs containing policy logits.
+            - batch (:obj:`dict`): Batch data containing target policy, mask and sampled actions.
+        Returns:
+            - policy_loss (:obj:`torch.Tensor`): The calculated policy loss.
+            - policy_entropy_loss (:obj:`torch.Tensor`): The entropy loss of the policy.
+            - target_policy_entropy (:obj:`float`): The entropy of the target policy distribution.
+            - target_sampled_actions (:obj:`torch.Tensor`): The actions sampled from the target policy.
+            - mu (:obj:`torch.Tensor`): The mean of the normal distribution.
+            - sigma (:obj:`torch.Tensor`): The standard deviation of the normal distribution.
+        """
+        batch_size, num_unroll_steps, action_space_size = outputs.logits_policy.shape[
+            0], self.config.num_unroll_steps, self.config.action_space_size
+
+        policy_logits_all = outputs.logits_policy
+        mask_batch = batch['mask_padding']
+        child_sampled_actions_batch = batch['child_sampled_actions']
+        target_policy = batch['target_policy']
+
+        # Flatten the unroll step dimension for easier vectorized operations
+        policy_logits_all = policy_logits_all.view(batch_size * num_unroll_steps, -1)
+        mask_batch = mask_batch.contiguous().view(-1)
+        child_sampled_actions_batch = child_sampled_actions_batch.contiguous().view(batch_size * num_unroll_steps, -1,
+                                                                                    action_space_size)
+
+        mu, sigma = policy_logits_all[:, :action_space_size], policy_logits_all[:, action_space_size:]
+        mu = mu.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
+        sigma = sigma.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
+        dist = Independent(Normal(mu, sigma), 1)
+
+        target_normalized_visit_count = target_policy.contiguous().view(batch_size * num_unroll_steps, -1)
+        target_sampled_actions = child_sampled_actions_batch
+
+        policy_entropy = dist.entropy().mean(dim=1)
+        policy_entropy_loss = -policy_entropy * mask_batch
+
+        y = 1 - target_sampled_actions.pow(2)
+        target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
+        target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
+
+        log_prob = dist.log_prob(target_sampled_actions_before_tanh)
+        log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
+        log_prob_sampled_actions = log_prob
+
+        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
+        policy_loss = -torch.sum(
+            torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
+        ) * mask_batch
+
+        # Calculate the entropy of the target policy distribution
+        non_masked_indices = torch.nonzero(mask_batch).squeeze(-1)
+        if len(non_masked_indices) > 0:
+            target_dist = Categorical(target_normalized_visit_count[non_masked_indices])
+            target_policy_entropy = target_dist.entropy().mean().item()
+        else:
+            target_policy_entropy = 0.0
+
+        return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
 
     #@profile
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
@@ -1385,7 +1589,10 @@ class WorldModelMT(nn.Module):
         mask_fill_value = mask_fill.unsqueeze(-1).expand_as(target_value)
         labels_value = target_value.masked_fill(mask_fill_value, -100)
 
-        return labels_policy.reshape(-1, self.action_space_size), labels_value.reshape(-1, self.support_size)
+        if self.continuous_action_space:
+            return None, labels_value.reshape(-1, self.support_size)
+        else:
+            return labels_policy.reshape(-1, self.action_space_size), labels_value.reshape(-1, self.support_size)
 
     #@profile
     def clear_caches(self):

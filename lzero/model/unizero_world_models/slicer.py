@@ -89,6 +89,47 @@ class Head(Slicer):
         return self.head_module(x_sliced)
 
 
+class PolicyHeadCont(Slicer):
+    def __init__(self, max_blocks: int, block_mask: torch.Tensor, head_module: nn.Module) -> None:
+        """
+        Overview:
+            Head module extends Slicer to include a head module for processing sliced inputs. This head module
+            is used for continuous action spaces.
+        Arguments:
+            - max_blocks (:obj:`int`): The maximum number of blocks to process.
+            - block_mask (:obj:`torch.Tensor`): A tensor mask indicating which blocks to keep.
+            - head_module (:obj:`nn.Module`): The head module to process the sliced inputs.
+        """
+        super().__init__(max_blocks, block_mask)
+        assert isinstance(head_module, nn.Module)
+        self.head_module = head_module
+
+    def forward(self, x: torch.Tensor, num_steps: int, prev_steps: int) -> torch.Tensor:
+        """
+        Overview:
+            Forward method processes the input tensor through the head module using computed slices.
+        Arguments:
+            - x (:obj:`torch.Tensor`): The input tensor.
+            - num_steps (:obj:`int`): The number of steps to consider.
+            - prev_steps (:obj:`int | :obj:`torch.Tensor`): The number of previous steps to consider.
+        Returns:
+            - torch.Tensor: The processed tensor.
+        """
+        if isinstance(prev_steps, torch.Tensor):
+            x_sliced = [x[i, self.compute_slice(num_steps, prev_steps[i].item())] for i in range(prev_steps.shape[0])]
+            x_sliced = torch.cat(x_sliced, dim=0)
+        elif isinstance(prev_steps, int):
+            x_sliced = x[:, self.compute_slice(num_steps, prev_steps)]  # x is (B, T, E)
+
+        output = self.head_module(x_sliced)
+
+        # NOTE: The output is a dictionary with keys 'mu' and 'sigma'. We concatenate them to form a single tensor.
+        # This is done to simplify the implementation of the model.
+        output = torch.cat([output['mu'], output['sigma']], dim=-1)
+
+        return output
+    
+    
 class Embedder(nn.Module):
     def __init__(self, max_blocks: int, block_masks: List[torch.Tensor], embedding_tables: List[nn.Embedding]) -> None:
         """
