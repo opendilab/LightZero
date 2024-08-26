@@ -364,6 +364,15 @@ class AlphaZeroPolicy(Policy):
             else:
                 raise NotImplementedError
             self.simulate_env = Connect4Env(connect4_alphazero_config.env)
+        elif self._cfg.simulation_env_id == 'chess':
+            from zoo.board_games.chess.envs.chess_lightzero_env import ChessLightZeroEnv
+            if self._cfg.simulation_env_config_type == 'play_with_bot':
+                from zoo.board_games.chess.config.chess_alphazero_bot_mode_config import chess_alphazero_config
+            elif self._cfg.simulation_env_config_type == 'self_play':
+                from zoo.board_games.chess.config.chess_alphazero_sp_mode_config import chess_alphazero_config
+            else:
+                raise NotImplementedError
+            self.simulate_env = ChessLightZeroEnv(chess_alphazero_config.env)
         else:
             raise NotImplementedError
 
