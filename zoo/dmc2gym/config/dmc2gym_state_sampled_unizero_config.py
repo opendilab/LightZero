@@ -5,7 +5,7 @@ from easydict import EasyDict
 
 from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
-env_id = 'cartpole-swingup'  # You can specify any DMC task here
+env_id = 'humanoid-run' # 'cartpole-swingup'  # You can specify any DMC task here
 action_space_size = dmc_state_env_action_space_map[env_id]
 obs_space_size = dmc_state_env_obs_space_map[env_id]
 print(f'env_id: {env_id}, action_space_size: {action_space_size}, obs_space_size: {obs_space_size}')
@@ -19,8 +19,10 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
+# num_simulations = 100
 update_per_collect = None
-replay_ratio = 0.25
+# replay_ratio = 0.25
+replay_ratio = 1
 max_env_step = int(5e6)
 reanalyze_ratio = 0
 batch_size = 64
@@ -40,7 +42,7 @@ seed = 0
 # ==============================================================
 
 dmc2gym_state_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero/dmc2gym_{env_id}_state_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}',
+    exp_name=f'data_sampled_unizero/dmc2gym_{env_id}_state_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac099_rbs5e5',
     env=dict(
         env_id='dmc2gym-v0',
         domain_name=domain_name,
@@ -63,7 +65,7 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
             world_model_cfg=dict(
                 obs_type='vector',
                 num_unroll_steps=num_unroll_steps,
-                policy_entropy_loss_weight=1e-4,
+                policy_entropy_loss_weight=5e-3,
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
                 sigma_type='conditioned',
@@ -91,6 +93,7 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
         game_segment_length=100,
         replay_ratio=replay_ratio,
         batch_size=batch_size,
+        discount_factor=0.99,
         optim_type='AdamW',
         lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
@@ -100,7 +103,8 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        replay_buffer_size=int(1e6),
+        # replay_buffer_size=int(1e6),
+        replay_buffer_size=int(5e5), # TODO
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),

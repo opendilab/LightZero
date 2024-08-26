@@ -164,7 +164,7 @@ class WorldModel(nn.Module):
         self.fc_policy_head = ReparameterizationHead(
             input_size=self.config.embed_dim,
             output_size=output_dim,
-            layer_num=1,  # TODO: check the effect of layer_num
+            layer_num=2,  # TODO: check the effect of layer_num
             sigma_type=self.sigma_type,
             activation=nn.GELU(approximate='tanh'),
             fixed_sigma_value=self.fixed_sigma_value,
