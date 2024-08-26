@@ -169,6 +169,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # (int) The save interval of the model.
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000, ), ), ),
             world_model_cfg=dict(
+                # (bool) If True, the action space of the environment is continuous, otherwise discrete.
+                continuous_action_space=False,
                 # (int) The number of tokens per block.
                 tokens_per_block=2,
                 # (int) The maximum number of blocks.
