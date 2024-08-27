@@ -39,7 +39,7 @@ seed=0
 # ==============================================================
 
 atari_unizero_config = dict(
-    exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_custom-onlyload2dc_targevalue-cuda_opt-computeloss_opt-value-lst_opt-targetpolicy-nonrer_opt-kvcaching-update_kv-nocpu-v2',
+    exp_name = f'data_unizero_efficiency/ddp/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_custom-onlyload2dc_targevalue-cuda_opt-computeloss_opt-value-lst_opt-targetpolicy-nonrer_opt-kvcaching-update_kv-nocpu-v2',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,

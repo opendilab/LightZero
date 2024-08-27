@@ -5,11 +5,46 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 import torch.nn as nn
-
+import time
 from .kv_caching import KeysValues
 
+def custom_copy_kv_cache_to_shared(self, src_kv: KeysValues) -> int:
+    """
+    Overview:
+        Efficiently copy the contents of a KeysValues object to the shared pool.
+    Arguments:
+        - src_kv (:obj:`KeysValues`): The source KeysValues object to copy from.
+    Returns:
+        - index (:obj:`int`): The index of the copied KeysValues object in the shared pool.
+    """
+    src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
+    
+    if self.shared_pool[self.shared_pool_index] is None:
+        self.shared_pool[self.shared_pool_index] = KeysValues(
+            src_kv_shape[0],  # n
+            src_kv_shape[1],  # num_heads
+            src_kv_shape[2],  # max_tokens
+            src_kv_shape[3] * src_kv_shape[1],  # embed_dim
+            len(src_kv),  # num_layers
+            src_kv._keys_values[0]._k_cache._cache.device,  # device
+        )
+    
+    dst_kv = self.shared_pool[self.shared_pool_index]
+    
+    with torch.no_grad():
+        for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
+            # Copy the key and value caches using torch.copy_()
+            dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
+            dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
+            dst_layer._k_cache._size = src_layer._k_cache._size
+            dst_layer._v_cache._size = src_layer._v_cache._size
+    
+    index = self.shared_pool_index
+    self.shared_pool_index = (self.shared_pool_index + 1) % self.shared_pool_size
+    
+    return index
 
-def custom_copy_kv_cache_to_dict(src_kv: KeysValues, dst_dict: dict, cache_key: str) -> None:
+def custom_copy_kv_cache_to_dict_speed(src_kv: KeysValues, dst_dict: dict, cache_key: str, reuse_cache: bool = True) -> None:
     """
     Overview:
         Efficiently copy the contents of a KeysValues object to a new entry in a dictionary.
@@ -17,29 +52,91 @@ def custom_copy_kv_cache_to_dict(src_kv: KeysValues, dst_dict: dict, cache_key: 
         - src_kv (:obj:`KeysValues`): The source KeysValues object to copy from.
         - dst_dict (:obj:`dict`): The destination dictionary to copy to.
         - cache_key (:obj:`str`): The key for the new entry in the destination dictionary.
+        - reuse_cache (:obj:`bool`, optional): Whether to reuse the existing cache if the cache_key already exists.
+                                               If True, the existing cache will not be overwritten.
+                                               If False, the cache will be overwritten every time.
+                                               Default: True.
     """
-    src_kv_shape = src_kv._keys_values[0].shape
+    if reuse_cache and cache_key in dst_dict:
+        print(f"Cache key '{cache_key}' already exists in the destination dictionary. Reusing the existing cache.")
+        print(f"Dictionary size: {len(dst_dict)}")
+        return
+
+    start_time = time.time()
+    src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
     dst_kv = KeysValues(
         src_kv_shape[0],  # n
         src_kv_shape[1],  # num_heads
         src_kv_shape[2],  # max_tokens
         src_kv_shape[3] * src_kv_shape[1],  # embed_dim
-        len(src_kv),  # num_layers
+        len(src_kv._keys_values),  # num_layers
         src_kv._keys_values[0]._k_cache._cache.device,  # device
     )
-    
+    shape_time = time.time() - start_time
+
+    start_time = time.time()
     with torch.no_grad():
         for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
-            dst_layer._k_cache._cache = src_layer._k_cache._cache.clone()
-            dst_layer._v_cache._cache = src_layer._v_cache._cache.clone()
+            # dst_layer._k_cache._cache = src_layer._k_cache._cache.clone()
+            # dst_layer._v_cache._cache = src_layer._v_cache._cache.clone()
+            # Copy the key and value caches using torch.copy_()
+            dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
+            dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
             dst_layer._k_cache._size = src_layer._k_cache._size
             dst_layer._v_cache._size = src_layer._v_cache._size
-    
+    copy_time = time.time() - start_time
+
+    dst_dict[cache_key] = dst_kv
+
+    print(f"Shape initialization time: {shape_time:.6f} seconds")
+    print(f"Cache copy time: {copy_time:.6f} seconds")
+    print(f"Total time: {shape_time + copy_time:.6f} seconds")
+
+    # print(f"Cache key '{cache_key}' has been copied to the destination dictionary.")
+    # print(f"Dictionary size: {len(dst_dict)}")
+
+
+def custom_copy_kv_cache_to_dict(src_kv: KeysValues, dst_dict: dict, cache_key: str, reuse_cache: bool = True) -> None:
+    """
+    Overview:
+        Efficiently copy the contents of a KeysValues object to a new entry in a dictionary.
+    Arguments:
+        - src_kv (:obj:`KeysValues`): The source KeysValues object to copy from.
+        - dst_dict (:obj:`dict`): The destination dictionary to copy to.
+        - cache_key (:obj:`str`): The key for the new entry in the destination dictionary.
+        - reuse_cache (:obj:`bool`, optional): Whether to reuse the existing cache if the cache_key already exists.
+                                               If True, the existing cache will not be overwritten.
+                                               If False, the cache will be overwritten every time.
+                                               Default: True.
+    """
+    if reuse_cache and cache_key in dst_dict:
+        print(f"Cache key '{cache_key}' already exists in the destination dictionary. Reusing the existing cache.")
+        print(f"Dictionary size: {len(dst_dict)}")
+        return
+
+    src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
+    dst_kv = KeysValues(
+        src_kv_shape[0],  # n
+        src_kv_shape[1],  # num_heads
+        src_kv_shape[2],  # max_tokens
+        src_kv_shape[3] * src_kv_shape[1],  # embed_dim
+        len(src_kv._keys_values),  # num_layers
+        src_kv._keys_values[0]._k_cache._cache.device,  # device
+    )
+
+    with torch.no_grad():
+        for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
+            # Copy the key and value caches using torch.copy_()
+            dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
+            dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
+            dst_layer._k_cache._size = src_layer._k_cache._size
+            dst_layer._v_cache._size = src_layer._v_cache._size
+
     dst_dict[cache_key] = dst_kv
 
 
 def custom_copy_kv_cache(src_kv: KeysValues) -> KeysValues:
-    src_kv_shape = src_kv._keys_values[0].shape
+    src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
     dst_kv = KeysValues(
         src_kv_shape[0],  # n
         src_kv_shape[1],  # num_heads
@@ -51,8 +148,11 @@ def custom_copy_kv_cache(src_kv: KeysValues) -> KeysValues:
     
     with torch.no_grad():
         for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
-            dst_layer._k_cache._cache = src_layer._k_cache._cache.clone()
-            dst_layer._v_cache._cache = src_layer._v_cache._cache.clone()
+            # dst_layer._k_cache._cache = src_layer._k_cache._cache.clone()
+            # dst_layer._v_cache._cache = src_layer._v_cache._cache.clone()
+            # Copy the key and value caches using torch.copy_()
+            dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
+            dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
             dst_layer._k_cache._size = src_layer._k_cache._size
             dst_layer._v_cache._size = src_layer._v_cache._size
 

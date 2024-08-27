@@ -16,9 +16,18 @@ from lzero.model.utils import cal_dormant_ratio
 from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
-from .utils import LossWithIntermediateLosses, init_weights, to_device_for_kvcache, custom_copy_kv_cache, custom_copy_kv_cache_only_size, custom_copy_kv_cache_to_dict
+from .utils import LossWithIntermediateLosses, init_weights, to_device_for_kvcache, custom_copy_kv_cache, custom_copy_kv_cache_only_size, custom_copy_kv_cache_to_dict, custom_copy_kv_cache_to_shared
 from .utils import WorldModelOutput, hash_state
 from torch.distributions import Categorical, Independent, Normal
+import hashlib
+import xxhash
+from dataclasses import dataclass
+
+import numpy as np
+import torch
+import torch.nn as nn
+import time
+from .kv_caching import KeysValues
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -115,6 +124,48 @@ class WorldModel(nn.Module):
         # TODO: check
         self.latent_recon_loss = torch.tensor(0., device=self.device)
         self.perceptual_loss = torch.tensor(0., device=self.device)
+
+        # TODO: check
+        self.shared_pool_size = int(50*8)  # 根据需要调整大小
+        self.shared_pool_recur = [None] * self.shared_pool_size
+        self.shared_pool_index = 0
+
+
+    def custom_copy_kv_cache_to_shared(self, src_kv: KeysValues) -> int:
+        """
+        Overview:
+            Efficiently copy the contents of a KeysValues object to the shared pool.
+        Arguments:
+            - src_kv (:obj:`KeysValues`): The source KeysValues object to copy from.
+        Returns:
+            - index (:obj:`int`): The index of the copied KeysValues object in the shared pool.
+        """
+        src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
+        
+        if self.shared_pool_recur[self.shared_pool_index] is None:
+            self.shared_pool_recur[self.shared_pool_index] = KeysValues(
+                src_kv_shape[0],  # n
+                src_kv_shape[1],  # num_heads
+                src_kv_shape[2],  # max_tokens
+                src_kv_shape[3] * src_kv_shape[1],  # embed_dim
+                len(src_kv),  # num_layers
+                src_kv._keys_values[0]._k_cache._cache.device,  # device
+            )
+        
+        dst_kv = self.shared_pool_recur[self.shared_pool_index]
+        
+        with torch.no_grad():
+            for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
+                # Copy the key and value caches using torch.copy_()
+                dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
+                dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
+                dst_layer._k_cache._size = src_layer._k_cache._size
+                dst_layer._v_cache._size = src_layer._v_cache._size
+        
+        index = self.shared_pool_index
+        self.shared_pool_index = (self.shared_pool_index + 1) % self.shared_pool_size
+        
+        return index
 
     def _initialize_config_parameters(self) -> None:
         """Initialize configuration parameters."""
@@ -565,7 +616,6 @@ class WorldModel(nn.Module):
                             self.root_hit_cnt += 1
                             # deepcopy is needed because forward modifies matched_value in place
                             # self.keys_values_wm_list.append(copy.deepcopy(to_device_for_kvcache(matched_value, self.device)))
-                            # self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=to_device_for_kvcache(matched_value, self.device)))
                             self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=matched_value))
                             # TODO: check 
                             # 提前创建好self.keys_values_wm_single_env_tmp, 检索出来latent_state_t的kv_cache后，只deepcopy latent_state_t的kv_size, 
@@ -927,20 +977,16 @@ class WorldModel(nn.Module):
 
             if is_init_infer:
                 # Store the latest key-value cache for initial inference
-                # self.past_kv_cache_init_infer_envs[i][cache_key] = copy.deepcopy(
-                #     to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-                # custom_copy_kv_cache_to_dict(to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'), self.past_kv_cache_init_infer_envs[i], cache_key)
-                # custom_copy_kv_cache_to_dict(self.keys_values_wm_single_env, self.past_kv_cache_init_infer_envs[i], cache_key)
-                self.past_kv_cache_init_infer_envs[i][cache_key] = self.keys_values_wm_single_env
-
+                custom_copy_kv_cache_to_dict(self.keys_values_wm_single_env, self.past_kv_cache_init_infer_envs[i], cache_key, reuse_cache=False)
+                # self.past_kv_cache_init_infer_envs[i][cache_key] = self.keys_values_wm_single_env
             else:
                 # Store the latest key-value cache for recurrent inference
-                # self.past_kv_cache_recurrent_infer[cache_key] = copy.deepcopy(
-                #     to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'))
-                # custom_copy_kv_cache_to_dict(to_device_for_kvcache(self.keys_values_wm_single_env, 'cpu'), self.past_kv_cache_recurrent_infer, cache_key)
-                # custom_copy_kv_cache_to_dict(self.keys_values_wm_single_env, self.past_kv_cache_recurrent_infer, cache_key)
-                # TODO: 取的时候deepcopy, 存的时候就不需要了
-                self.past_kv_cache_recurrent_infer[cache_key] = self.keys_values_wm_single_env
+                # custom_copy_kv_cache_to_dict(self.keys_values_wm_single_env, self.past_kv_cache_recurrent_infer, cache_key, reuse_cache=True)
+
+                # Store the latest key-value cache for recurrent inference
+                # TODO：使用self.shared_pool_recur来存储最新的key-value cache
+                cache_index = self.custom_copy_kv_cache_to_shared(self.keys_values_wm_single_env)
+                self.past_kv_cache_recurrent_infer[cache_key] = cache_index
 
 
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
@@ -970,7 +1016,9 @@ class WorldModel(nn.Module):
             # If not found, try to retrieve from past_kv_cache_recurrent_infer
             if matched_value is None:
                 init_infer_hit_flag = False
-                matched_value = self.past_kv_cache_recurrent_infer.get(cache_key)
+                # matched_value = self.past_kv_cache_recurrent_infer.get(cache_key)
+                # NOTE: TODO
+                matched_value = self.shared_pool_recur[self.past_kv_cache_recurrent_infer.get(cache_key)]
             else:
                 init_infer_hit_flag = True
 
@@ -985,6 +1033,7 @@ class WorldModel(nn.Module):
                 else:
                     # TODO
                     self.keys_values_wm_list.append(custom_copy_kv_cache(src_kv=matched_value))
+                    # self.keys_values_wm_list.append(matched_value)
 
                 self.keys_values_wm_size_list.append(matched_value.size)
             else:

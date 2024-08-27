@@ -23,7 +23,7 @@ infer_context_length = 4
 # collector_env_num = 2
 # n_episode = 2
 # evaluator_env_num = 2
-# num_simulations = 2
+# num_simulations = 5
 # max_env_step = int(2e5)
 # reanalyze_ratio = 0.
 # batch_size = 2
@@ -100,17 +100,19 @@ create_config = atari_unizero_create_config
 
 if __name__ == "__main__":
     # Define a list of seeds for multiple runs
-    # seeds = [0]  # You can add more seed values here
-    # for seed in seeds:
-    #     # Update exp_name to include the current seed
-    #     main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_only-recur-load-dc_targevalue-cuda_opt-computeloss_opt-value-lst_opt-targetpolicy-nonrer_opt-kvcaching-update_kv-nocpu-v2'
-    #     from lzero.entry import train_unizero
-    #     train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    seeds = [0]  # You can add more seed values here
+    for seed in seeds:
+        # Update exp_name to include the current seed
+        # main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_targevalue-cuda_opt-computeloss_opt-value-lst_opt-kvcaching-update_kv-nocpu-v2_recur-2cdc_targetpolicy-nonrer-v2_0827'
+        main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_targevalue-cuda_opt-computeloss_opt-value-lst_opt-kvcaching-update_kv-nocpu-v2_targetpolicy-nonrer-v2_share-pool-recur-_copy_0827'
+        
+        from lzero.entry import train_unizero
+        train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
-    from lzero.entry import train_unizero
-    main_config.exp_name = f'data_unizero_efficiency_cprofile_300k/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0_nlayer2_opt-hash_only-load-2dc_targevalue-cuda_opt-computeloss_opt-value-lst_opt-targetpolicy-nonrer_opt-kvcaching-update_kv-nocpu-v2'
-    def run(max_env_step: int):
-        train_unizero([main_config, create_config], seed=1, model_path=main_config.policy.model_path, max_env_step=max_env_step)
-    import cProfile
-    cProfile.run(f"run({300000})", filename="pong_uz_cprofile_300k_envstep_s0", sort="cumulative")
+    # from lzero.entry import train_unizero
+    # main_config.exp_name = f'data_unizero_efficiency_cprofile_300k/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0_nlayer2_load-save-4dc_targetpolicy-nonrer-v2_0827'
+    # def run(max_env_step: int):
+    #     train_unizero([main_config, create_config], seed=1, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    # import cProfile
+    # cProfile.run(f"run({300000})", filename="pong_uz_cprofile_300k_envstep_4dc_s1", sort="cumulative")
