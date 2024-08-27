@@ -424,64 +424,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         return batch_target_policies_non_re
 
-    # def _compute_target_policy_non_reanalyzed(
-    #         self, policy_non_re_context: List[Any], policy_shape: Optional[int]
-    # ) -> np.ndarray:
-    #     """
-    #     Overview:
-    #         prepare policy targets from the non-reanalyzed context of policies
-    #     Arguments:
-    #         - policy_non_re_context (:obj:`List`): List containing:
-    #             - pos_in_game_segment_list
-    #             - child_visits
-    #             - game_segment_lens
-    #             - action_mask_segment
-    #             - to_play_segment
-    #         - policy_shape: self._cfg.model.action_space_size
-    #     Returns:
-    #         - batch_target_policies_non_re
-    #     """
-    #     if policy_non_re_context is None:
-    #         return np.array([])
-
-    #     pos_in_game_segment_list, child_visits, game_segment_lens, action_mask_segment, to_play_segment = policy_non_re_context
-    #     game_segment_batch_size = len(pos_in_game_segment_list)
-    #     transition_batch_size = game_segment_batch_size * (self._cfg.num_unroll_steps + 1)
-
-    #     if self._cfg.action_type != 'fixed_action_space':
-    #         to_play, action_mask = self._preprocess_to_play_and_action_mask(
-    #             game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
-    #         )
-
-    #     if self._cfg.model.continuous_action_space:
-    #         action_mask = np.ones((transition_batch_size, self._cfg.model.action_space_size), dtype=np.int8)
-    #         legal_actions = np.full((transition_batch_size, self._cfg.model.action_space_size), -1)
-    #     else:
-    #         if self._cfg.action_type != 'fixed_action_space':
-    #             legal_actions = np.array([[i for i, x in enumerate(mask) if x == 1] for mask in action_mask])
-
-    #     batch_target_policies_non_re = np.zeros((game_segment_batch_size, self._cfg.num_unroll_steps + 1, policy_shape))
-    #     policy_mask = np.zeros((game_segment_batch_size, self._cfg.num_unroll_steps + 1), dtype=np.int8)
-
-    #     for i, (game_segment_len, child_visit, state_index) in enumerate(zip(game_segment_lens, child_visits, pos_in_game_segment_list)):
-    #         valid_steps = min(game_segment_len - state_index, self._cfg.num_unroll_steps + 1)
-    #         policy_mask[i, :valid_steps] = 1
-
-    #         for j in range(valid_steps):
-    #             current_index = state_index + j
-    #             distributions = child_visit[current_index]
-
-    #             if self._cfg.action_type == 'fixed_action_space':
-    #                 batch_target_policies_non_re[i, j] = distributions
-    #             else:
-    #                 policy_tmp = np.zeros(policy_shape)
-    #                 policy_tmp[legal_actions[i * (self._cfg.num_unroll_steps + 1) + j]] = distributions
-    #                 batch_target_policies_non_re[i, j] = policy_tmp
-
-    #     batch_target_policies_non_re *= policy_mask[:, :, np.newaxis]
-
-    #     return batch_target_policies_non_re
-
     def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, action_batch) -> Tuple[np.ndarray, np.ndarray]:
         value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, to_play_segment = reward_value_context
         transition_batch_size = len(value_obs_list)

@@ -8,41 +8,6 @@ import torch.nn as nn
 import time
 from .kv_caching import KeysValues
 
-def custom_copy_kv_cache_to_shared(self, src_kv: KeysValues) -> int:
-    """
-    Overview:
-        Efficiently copy the contents of a KeysValues object to the shared pool.
-    Arguments:
-        - src_kv (:obj:`KeysValues`): The source KeysValues object to copy from.
-    Returns:
-        - index (:obj:`int`): The index of the copied KeysValues object in the shared pool.
-    """
-    src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
-    
-    if self.shared_pool[self.shared_pool_index] is None:
-        self.shared_pool[self.shared_pool_index] = KeysValues(
-            src_kv_shape[0],  # n
-            src_kv_shape[1],  # num_heads
-            src_kv_shape[2],  # max_tokens
-            src_kv_shape[3] * src_kv_shape[1],  # embed_dim
-            len(src_kv),  # num_layers
-            src_kv._keys_values[0]._k_cache._cache.device,  # device
-        )
-    
-    dst_kv = self.shared_pool[self.shared_pool_index]
-    
-    with torch.no_grad():
-        for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
-            # Copy the key and value caches using torch.copy_()
-            dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
-            dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
-            dst_layer._k_cache._size = src_layer._k_cache._size
-            dst_layer._v_cache._size = src_layer._v_cache._size
-    
-    index = self.shared_pool_index
-    self.shared_pool_index = (self.shared_pool_index + 1) % self.shared_pool_size
-    
-    return index
 
 def custom_copy_kv_cache_to_dict_speed(src_kv: KeysValues, dst_dict: dict, cache_key: str, reuse_cache: bool = True) -> None:
     """
@@ -148,8 +113,6 @@ def custom_copy_kv_cache(src_kv: KeysValues) -> KeysValues:
     
     with torch.no_grad():
         for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
-            # dst_layer._k_cache._cache = src_layer._k_cache._cache.clone()
-            # dst_layer._v_cache._cache = src_layer._v_cache._cache.clone()
             # Copy the key and value caches using torch.copy_()
             dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
             dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
@@ -159,14 +122,6 @@ def custom_copy_kv_cache(src_kv: KeysValues) -> KeysValues:
     return dst_kv
 
 
-
-def custom_copy_kv_cache_only_size(src_kv: KeysValues, dst_kv: KeysValues) -> None:
-    with torch.no_grad():
-        for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
-            dst_layer._k_cache._cache = src_layer._k_cache._cache
-            dst_layer._v_cache._cache = src_layer._v_cache._cache
-            dst_layer._k_cache._size = copy.deepcopy(src_layer._k_cache._size)
-            dst_layer._v_cache._size = copy.deepcopy(src_layer._v_cache._size)
 
 
 def to_device_for_kvcache(keys_values: KeysValues, device: str) -> KeysValues:
