@@ -33,8 +33,8 @@ def merge_csv_files(directory, file_prefix, file_suffix, num_files, first_column
 
 
 # 配置参数
-# log_suffix = 'mcts_sim10_a9_0826_example1_run2'
-log_suffix = 'random_a9_0826_example2'
+# log_suffix = 'mcts_sim10_a9_0826_example2'
+log_suffix = 'random_a9_0826_example2_run2'
 # log_suffix = 'direct_example2'
 
 

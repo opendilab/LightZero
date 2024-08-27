@@ -187,8 +187,8 @@ if __name__ == '__main__':
     avg_return = 0
     eval_episodes = 1
     for seed in range(eval_episodes):  # 单次测试
-        env.reset()
         env.seed(seed)
+        env.reset()
         while not env.finished:
             action = mcts_bot.get_action(env)
 

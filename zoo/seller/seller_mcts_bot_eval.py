@@ -84,31 +84,70 @@ class TreeNode:
 class MCTSBot:
     def __init__(self, n_iterations=50):
         self.n_iterations = n_iterations
+        self.total_selection_time = 0
+        self.total_expansion_time = 0
+        self.total_rollout_time = 0
+        self.total_backpropagation_time = 0
         
     def search(self, env):
         root = TreeNode(env, root_base_return=env.eval_episode_return)
         
-        for _ in range(self.n_iterations):
+        start_time = time.time()  # 记录搜索开始时间
+        
+        for i in range(self.n_iterations):
             node = root
 
             # selection
+            selection_start_time = time.time()
             while node.children:
                 node = node.select_best_child()
+            selection_end_time = time.time()
+            selection_time = selection_end_time - selection_start_time
+            self.total_selection_time += selection_time
             
             # expansion
+            expansion_start_time = time.time()
             if not node.env.finished:
                 actions = list(range(len(env.commands)))  # 获取所有可能的动作
                 node.expand(actions)
                 if node.children:  # 确保存在未访问的子节点
-                    # node = random.choice(node.children)  # 改为选择 UCB 值最高的子节点
                     node = node.select_best_child()
+            expansion_end_time = time.time()
+            expansion_time = expansion_end_time - expansion_start_time
+            self.total_expansion_time += expansion_time
             
             # rollout  
+            rollout_start_time = time.time()
             rollout_return = node.rollout()
+            rollout_end_time = time.time()
+            rollout_time = rollout_end_time - rollout_start_time
+            self.total_rollout_time += rollout_time
             
             # backpropagation
+            backpropagation_start_time = time.time()
             node.backpropagate(rollout_return)
+            backpropagation_end_time = time.time()
+            backpropagation_time = backpropagation_end_time - backpropagation_start_time
+            self.total_backpropagation_time += backpropagation_time
             
+            # 打印每次迭代的各步骤耗时和百分比
+            iteration_time = selection_time + expansion_time + rollout_time + backpropagation_time
+            print(f"迭代 {i+1}: selection: {selection_time:.4f}s ({selection_time/iteration_time*100:.2f}%), "
+                  f"expansion: {expansion_time:.4f}s ({expansion_time/iteration_time*100:.2f}%), "
+                  f"rollout: {rollout_time:.4f}s ({rollout_time/iteration_time*100:.2f}%), "
+                  f"backpropagation: {backpropagation_time:.4f}s ({backpropagation_time/iteration_time*100:.2f}%)")
+            
+        end_time = time.time()  # 记录搜索结束时间
+        search_time = end_time - start_time  # 计算搜索时间
+        
+        print(f"搜索完成，共进行了 {self.n_iterations} 次迭代，耗时 {search_time:.2f} 秒。")
+        
+        # 打印所有迭代的各步骤总耗时和百分比
+        total_time = self.total_selection_time + self.total_expansion_time + self.total_rollout_time + self.total_backpropagation_time
+        print(f"所有迭代总耗时: selection: {self.total_selection_time:.4f}s ({self.total_selection_time/total_time*100:.2f}%), "
+              f"expansion: {self.total_expansion_time:.4f}s ({self.total_expansion_time/total_time*100:.2f}%), "
+              f"rollout: {self.total_rollout_time:.4f}s ({self.total_rollout_time/total_time*100:.2f}%), "
+              f"backpropagation: {self.total_backpropagation_time:.4f}s ({self.total_backpropagation_time/total_time*100:.2f}%)")
         
         return root
     
@@ -143,8 +182,8 @@ if __name__ == '__main__':
         # max_round=2,
         seed=0,
         lang='zh',
-        # log_suffix='mcts_sim10_a9_0826_example2_run2',
-        log_suffix='random_a9_0826_example2_run2',
+        log_suffix='mcts_sim10_a9_0827_example2_speed',
+        # log_suffix='random_a9_0826_example2',
         save_replay=False,
         )
     )
@@ -156,12 +195,17 @@ if __name__ == '__main__':
     mcts_bot = MCTSBot(n_iterations=10)
     # mcts_bot = MCTSBot(n_iterations=1)
 
+    start_time = time.time()  # 记录总体开始时间
+
     for seed in range(0, eval_episodes): # TODO
-        env.seed(seed) # NOTE: seed must be before reset
+        print(f"开始第 {seed + 1} 个评估回合...")
+        episode_start_time = time.time()  # 记录每个回合开始时间
+        
+        env.seed(seed)
         env.reset()
         while not env.finished:
-            # action = mcts_bot.get_action(env) # TODO
-            action = np.random.randint(9)
+            action = mcts_bot.get_action(env) # TODO
+            # action = np.random.randint(9)
             env.save_replay = True  # TODO
             # env.save_replay = False
             env_step = env.step([action])
@@ -175,5 +219,13 @@ if __name__ == '__main__':
         
         print(f'episode {seed}: evaluation return: {env.eval_episode_return}')
         avg_return += env.eval_episode_return
-    print(f'对话结束,最终平均收益: {avg_return}')
+
+        episode_end_time = time.time()  # 记录每个回合结束时间
+        episode_time = episode_end_time - episode_start_time  # 计算每个回合耗时
+        print(f"第 {seed + 1} 个评估回合结束，耗时 {episode_time:.2f} 秒。")
+
+    end_time = time.time()  # 记录总体结束时间
+    total_time = end_time - start_time  # 计算总体耗时
+    print(f"所有评估回合结束，共进行了 {eval_episodes} 个回合，总耗时 {total_time:.2f} 秒。")
     
+    print(f'对话结束,最终平均收益: {avg_return}')

@@ -3,19 +3,22 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 1
-# num_simulations = 10
-# update_per_collect = 20
-# batch_size = 256
+collector_env_num = 4
+n_episode = 4
+evaluator_env_num = 4
+num_simulations = 10
+update_per_collect = 20
+batch_size = 20 # 64
 max_env_step = int(2e5)
 mcts_ctree = False
 
 # for debug
-num_simulations = 1
-update_per_collect = 10
-batch_size = 2
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 1
+# num_simulations = 1
+# update_per_collect = 10
+# batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -24,16 +27,17 @@ seller_alphazero_config = dict(
     exp_name=f'data_az_ptree/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         agent='deepseek',
-        api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
+        # api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
+        api_key='sk-c4a8fe52693a4aaab64e648c42f40be6',
         commands=[
             '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
             '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
         ],
-        # max_round=5,
-        max_round=2,
+        max_round=5,
+        # max_round=2,
         seed=0,
         lang='zh',
-        log_suffix='',
+        log_suffix='az',
 
         # board_size=3,
         battle_mode='play_with_bot_mode',
@@ -69,12 +73,12 @@ seller_alphazero_config = dict(
         board_size=3,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
+        optim_type='AdamW',
         lr_piecewise_constant_decay=False,
-        learning_rate=0.003,
-        grad_clip_value=0.5,
+        learning_rate=0.0001,
+        grad_clip_value=5,
         value_weight=1.0,
-        entropy_weight=0.0,
+        entropy_weight=1e-4,
         n_episode=n_episode,
         eval_freq=int(2e3),
         mcts=dict(num_simulations=num_simulations),

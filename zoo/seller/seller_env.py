@@ -132,6 +132,7 @@ class SellerEnv(BaseEnv):
 
         self.persona_info = SellerEnv.personas[self._seed % self.persona_num]
         # self.good_info = SellerEnv.goods[self._seed % self.good_num]
+        # self.good_info = SellerEnv.goods[self._seed % 3]
         # self.good_info = SellerEnv.goods[0]  # TODO
         self.good_info = SellerEnv.goods[1]  # TODO
         self.eval_episode_return = 0
@@ -284,8 +285,8 @@ class SellerEnv(BaseEnv):
         env_copy.persona_info = self.persona_info
         env_copy.good_info = self.good_info
         env_copy.history = copy.deepcopy(self.history)
-        env_copy.round_cnt = self.round_cnt
-        env_copy.finished = self.finished
+        env_copy.round_cnt = copy.deepcopy(self.round_cnt)
+        env_copy.finished = copy.deepcopy(self.finished)
         env_copy.eval_episode_return = self.eval_episode_return
         env_copy._init_flag = self._init_flag
         env_copy._replay = self._replay
