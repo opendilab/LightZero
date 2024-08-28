@@ -120,6 +120,8 @@ def train_alphazero(
         new_data = sum(new_data, [])
         for i in range(len(new_data)): # TODO
             new_data[i]['obs']['observation'] = str(new_data[i]['obs']['observation']) 
+            new_data[i]['next_obs']['observation'] = str(new_data[i]['next_obs']['observation']) 
+
         if cfg.policy.update_per_collect is None:
             # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
             collected_transitions_num = len(new_data)

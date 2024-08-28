@@ -112,30 +112,34 @@ class SellerEnv(BaseEnv):
                 if cnt >= self.good_num:
                     break
 
-    def reset(self, history=[], round_cnt = 0):
+    def reset(self, history=[], round_cnt = 0, eval_episode_return=0):
         if round_cnt > 0:
             self.history = copy.deepcopy(history)  
             self.round_cnt = copy.deepcopy(round_cnt)
         else:
             self.round_cnt = 0
             self.history = []
-        self.finished = False
+        
+        self.eval_episode_return = copy.deepcopy(eval_episode_return)
+        self.finished = self.round_cnt >= self.max_round
+        # self.finished = False
+
         self._init_flag = True
         self._replay = ''
         self._replay_csv = []
         # obs = {'observation': str(self.history), 'candidate_samples': str(self.commands)}
         self.action_mask = np.ones(len(self.commands), 'int8')
         self.legal_actions = np.arange(len(self.commands))
+        self.eval_episode_return = 0
 
         # obs = {'observation': str(self.history), 'action_mask': action_mask}
-        obs = {'observation': self.history, 'action_mask': self.action_mask, 'round_cnt': self.round_cnt}
+        obs = {'observation': self.history, 'action_mask': self.action_mask, 'round_cnt': self.round_cnt, 'eval_episode_return': self.eval_episode_return}
 
         self.persona_info = SellerEnv.personas[self._seed % self.persona_num]
         # self.good_info = SellerEnv.goods[self._seed % self.good_num]
-        # self.good_info = SellerEnv.goods[self._seed % 3]
+        self.good_info = SellerEnv.goods[self._seed % 3]
         # self.good_info = SellerEnv.goods[0]  # TODO
-        self.good_info = SellerEnv.goods[1]  # TODO
-        self.eval_episode_return = 0
+        # self.good_info = SellerEnv.goods[1]  # TODO
 
         return obs
     
@@ -218,7 +222,7 @@ class SellerEnv(BaseEnv):
         # obs = {'observation': str(self.history), 'candidate_samples': self.commands}
         action_mask = np.ones(len(self.commands), 'int8')
         # obs = {'observation': str(self.history), 'action_mask': action_mask}
-        obs = {'observation': self.history, 'action_mask': action_mask, 'round_cnt': self.round_cnt}
+        obs = {'observation': self.history, 'action_mask': action_mask, 'round_cnt': self.round_cnt, 'eval_episode_return': self.eval_episode_return}
 
         env_step = BaseEnvTimestep(
             obs, rew, self.finished, {

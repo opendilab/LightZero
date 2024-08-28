@@ -143,8 +143,8 @@ if __name__ == '__main__':
         # max_round=2,
         seed=0,
         lang='zh',
-        # log_suffix='mcts_sim10_a9_0826_example2_run2',
-        log_suffix='random_a9_0826_example2_run2',
+        log_suffix='mcts_sim10_a9_0826_example2_run2',
+        # log_suffix='random_a9_0826_example2_run2',
         save_replay=False,
         )
     )
@@ -156,12 +156,14 @@ if __name__ == '__main__':
     mcts_bot = MCTSBot(n_iterations=10)
     # mcts_bot = MCTSBot(n_iterations=1)
 
-    for seed in range(0, eval_episodes): # TODO
+    # for seed in range(0, eval_episodes): # TODO
+    for seed in range(2, eval_episodes): # TODO
+    # for seed in range(2, 3): # TODO
         env.seed(seed) # NOTE: seed must be before reset
         env.reset()
         while not env.finished:
-            # action = mcts_bot.get_action(env) # TODO
-            action = np.random.randint(9)
+            action = mcts_bot.get_action(env) # TODO
+            # action = np.random.randint(9)
             env.save_replay = True  # TODO
             # env.save_replay = False
             env_step = env.step([action])

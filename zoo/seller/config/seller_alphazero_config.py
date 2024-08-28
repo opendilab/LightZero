@@ -5,11 +5,11 @@ from easydict import EasyDict
 # ==============================================================
 collector_env_num = 4
 n_episode = 4
-evaluator_env_num = 4
+evaluator_env_num = 3
 num_simulations = 10
-update_per_collect = 20
+update_per_collect = 50
 batch_size = 20 # 64
-max_env_step = int(2e5)
+max_env_step = int(1e5)
 mcts_ctree = False
 
 # for debug
@@ -17,14 +17,15 @@ mcts_ctree = False
 # n_episode = 1
 # evaluator_env_num = 1
 # num_simulations = 1
-# update_per_collect = 10
+# update_per_collect = 2
 # batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 seller_alphazero_config = dict(
-    exp_name=f'data_az_ptree/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_seed0',
+    exp_name=f'data_az_ptree_debug/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_seed0',
+    # exp_name=f'data_az_ptree/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_adam_fixreturn_seed0',
     env=dict(
         agent='deepseek',
         # api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
@@ -34,7 +35,10 @@ seller_alphazero_config = dict(
             '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
         ],
         max_round=5,
-        # max_round=2,
+        # max_round=2, # debug
+        # commands=[
+        #     '将你的产品推销给用户'
+        # ],
         seed=0,
         lang='zh',
         log_suffix='az',
@@ -67,13 +71,15 @@ seller_alphazero_config = dict(
         simulation_env_config_type='play_with_bot',
         # ==============================================================
         model=dict(
-            action_space_size=9,
+            action_space_size=9, # debug
+            # action_space_size=1, # debug
         ),
         cuda=True,
         board_size=3,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='AdamW',
+        # optim_type='AdamW',
+        optim_type='Adam',
         lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
         grad_clip_value=5,
