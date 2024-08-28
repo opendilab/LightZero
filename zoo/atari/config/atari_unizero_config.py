@@ -76,7 +76,7 @@ atari_unizero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         replay_buffer_size=int(1e6),
-        eval_freq=int(4e3),
+        eval_freq=int(5e3),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
@@ -100,20 +100,20 @@ create_config = atari_unizero_create_config
 
 if __name__ == "__main__":
     # Define a list of seeds for multiple runs
-    # seeds = [0]  # You can add more seed values here
-    # for seed in seeds:
-    #     # Update exp_name to include the current seed
-    #     # main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_targevalue-cuda_opt-computeloss_opt-value-lst_opt-kvcaching-update_kv-nocpu-v2_recur-2cdc_targetpolicy-nonrer-v2_0827'
-    #     # main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_targevalue-cuda_opt-computeloss_opt-value-lst_opt-kvcaching-update_kv-nocpu-v2_targetpolicy-nonrer-v2_share-pool-recur-_copy_0827'
-    #     main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_targevalue-cuda_opt-computeloss_opt-value-lst_opt-kvcaching-update_kv-nocpu-v2_targetpolicy-nonrer-v2_all-share-pool-_copy_0827'
+    seeds = [0]  # You can add more seed values here
+    for seed in seeds:
+        # Update exp_name to include the current seed
+        # main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_targevalue-cuda_opt-computeloss_opt-value-lst_opt-kvcaching-update_kv-nocpu-v2_recur-2cdc_targetpolicy-nonrer-v2_0827'
+        # main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_targevalue-cuda_opt-computeloss_opt-value-lst_opt-kvcaching-update_kv-nocpu-v2_targetpolicy-nonrer-v2_share-pool-recur-_copy_0827'
+        main_config.exp_name = f'data_unizero_efficiency/line_profile/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_targevalue-cuda_opt-computeloss_opt-value-lst_opt-kvcaching-update_kv-nocpu-v2_targetpolicy-nonrer-v2_all-share-pool-_copy_0827'
 
-    #     from lzero.entry import train_unizero
-    #     train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+        from lzero.entry import train_unizero
+        train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
-    from lzero.entry import train_unizero
-    main_config.exp_name = f'data_unizero_efficiency_cprofile_250k/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0_nlayer2_all-share-pool-_copy_0827'
-    def run(max_env_step: int):
-        train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
-    import cProfile
-    cProfile.run(f"run({250000})", filename="pong_uz_cprofile_250k_envstep_allpool_s0", sort="cumulative")
+    # from lzero.entry import train_unizero
+    # main_config.exp_name = f'data_unizero_efficiency_cprofile_250k/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0_nlayer2_all-share-pool-_copy_0827'
+    # def run(max_env_step: int):
+    #     train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    # import cProfile
+    # cProfile.run(f"run({250000})", filename="pong_uz_cprofile_250k_envstep_allpool_s0", sort="cumulative")
