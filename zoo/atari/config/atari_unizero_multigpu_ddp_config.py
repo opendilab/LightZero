@@ -1,8 +1,11 @@
 import os
-os.environ["NCCL_BLOCKING_WAIT"] = "1"
+os.environ["NCCL_BLOCKING_WAIT"] = "0"
 os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "1" 
-os.environ["NCCL_DEBUG"] = "INFO"
-os.environ["NCCL_TIMEOUT"] = "3600"
+# os.environ["NCCL_DEBUG"] = "INFO"
+os.environ["NCCL_DEBUG"] = "WARN"
+
+# os.environ["NCCL_TIMEOUT"] = "3600"
+os.environ["NCCL_TIMEOUT"] = "7200"
 
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
@@ -22,7 +25,8 @@ evaluator_env_num = 3
 num_simulations = 50
 max_env_step = int(2e5)
 reanalyze_ratio = 0.
-batch_size = 64
+# batch_size = 64
+batch_size = 8
 num_unroll_steps = 10
 infer_context_length = 4
 seed=0
@@ -39,7 +43,7 @@ seed=0
 # ==============================================================
 
 atari_unizero_config = dict(
-    exp_name = f'data_unizero_efficiency/ddp_0828/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2',
+    exp_name = f'data_unizero_efficiency/ddp_0829_allreduce/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -84,7 +88,7 @@ atari_unizero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         replay_buffer_size=int(1e6),
-        eval_freq=int(4e3),
+        eval_freq=int(5e3),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
@@ -121,15 +125,3 @@ if __name__ == "__main__":
     with DDPContext():
         main_config = lz_to_ddp_config(main_config)
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
-
-
-    # # Define a list of seeds for multiple runs
-    # seeds = [0]  # You can add more seed values here
-    # for seed in seeds:
-    #     # Update exp_name to include the current seed
-    #     # main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_origin'
-    #     main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_custom-dc-v2_targevalue-cuda_opt-computeloss_opt-value-lst_opt-targetpolicy-nonrer_opt-kvcaching-update_kv-nocpu-v2'
-
-    #     # main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_optimizehash_1deepcopy-init-infer'
-    #     from lzero.entry import train_unizero
-    #     train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

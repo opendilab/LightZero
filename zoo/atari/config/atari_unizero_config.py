@@ -13,7 +13,7 @@ collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
-max_env_step = int(2.5e5)
+max_env_step = int(3e5)
 reanalyze_ratio = 0.
 batch_size = 64
 num_unroll_steps = 10
@@ -105,7 +105,7 @@ if __name__ == "__main__":
         # Update exp_name to include the current seed
         # main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_targevalue-cuda_opt-computeloss_opt-value-lst_opt-kvcaching-update_kv-nocpu-v2_recur-2cdc_targetpolicy-nonrer-v2_0827'
         # main_config.exp_name = f'data_unizero_efficiency/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_targevalue-cuda_opt-computeloss_opt-value-lst_opt-kvcaching-update_kv-nocpu-v2_targetpolicy-nonrer-v2_share-pool-recur-_copy_0827'
-        main_config.exp_name = f'data_unizero_efficiency/line_profile/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_targevalue-cuda_opt-computeloss_opt-value-lst_opt-kvcaching-update_kv-nocpu-v2_targetpolicy-nonrer-v2_all-share-pool-_copy_0827'
+        main_config.exp_name = f'data_unizero_efficiency_0829/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2_opt-hash_targevalue-cuda_opt-computeloss_opt-value-lst_opt-kvcaching-update_kv-nocpu-v2_targetpolicy-nonrer-v2_all-share-pool-_copy'
 
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

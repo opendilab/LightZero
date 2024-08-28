@@ -448,10 +448,10 @@ class UniZeroPolicy(MuZeroPolicy):
             self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
             self._target_model.encoder_hook.clear_data()
 
-        if self._cfg.multi_gpu:
-            self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
                                                                         self._cfg.grad_clip_value)
+        if self._cfg.multi_gpu:
+            self.sync_gradients(self._learn_model)
 
         self._optimizer_world_model.step()
         if self._cfg.lr_piecewise_constant_decay:
