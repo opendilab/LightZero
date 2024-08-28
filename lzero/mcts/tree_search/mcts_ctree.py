@@ -421,6 +421,7 @@ class MuZeroMCTSCtree(object):
             average_infer = infer_sum / self._cfg.num_simulations
         return length, average_infer
 
+
 class MuZeroRNNFullObsMCTSCtree(object):
     """
     Overview:
