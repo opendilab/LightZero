@@ -97,18 +97,6 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed):
     configs = []
     # TODO
-    # exp_name_prefix = f'data_unizero_mt_0711/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head-softmoe4_1-encoder-{norm_type}_lsd768-nlayer4-nh8_seed{seed}/'
-    
-    # exp_name_prefix = f'data_unizero_mt_0716_debug/{len(env_id_list)}games_1-head-softmoe4-dynamics_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_upc1000_value-priority_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0716_debug/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_lsd768-nlayer4-nh8_max-bs1500_upc1000_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_CAGrad_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_MoCo_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_pong-boxing-envnum2_4-head_1-encoder-{norm_type}_trans-ffw-moe1-same_lsd768-nlayer4-nh8_max-bs1500_upc1000_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0719/{len(env_id_list)}games_pong-boxing-envnum2_4-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer2-nh8_max-bs1500_upc1000_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_1-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0722/{len(env_id_list)}games_1-encoder-{norm_type}_trans-ffw-moeV2-expert4_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0722/{len(env_id_list)}games_1-encoder-{norm_type}_1-head-moeV2-expert4_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
     exp_name_prefix = f'data_unizero_mt_0722/{len(env_id_list)}games_1-encoder-{norm_type}_26-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):

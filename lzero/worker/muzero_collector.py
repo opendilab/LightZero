@@ -362,7 +362,7 @@ class MuZeroCollector(ISerialCollector):
             GameSegment(
                 self._env.action_space,
                 game_segment_length=self.policy_config.game_segment_length,
-                config=self.policy_config
+                config=self.policy_config, task_id=self.task_id
             ) for _ in range(env_nums)
         ]
         # stacked observation windows in reset stage for init game_segments
@@ -547,9 +547,9 @@ class MuZeroCollector(ISerialCollector):
                             completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
 
                     eps_steps_lst[env_id] += 1
-                    if self._policy.get_attribute('cfg').type in ['unizero', 'unizero_multitask']:
+                    if self._policy.get_attribute('cfg').type in ['unizero', 'unizero_multitask', 'sampled_unizero_multitask']:
                         # only for UniZero now
-                        self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)  # NOTE: reset_init_data=False
+                        self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False, task_id=self.task_id)  # NOTE: reset_init_data=False
 
                     total_transitions += 1
 

@@ -31,7 +31,7 @@ class GameSegment:
         - store_search_stats
     """
 
-    def __init__(self, action_space: int, game_segment_length: int = 200, config: EasyDict = None) -> None:
+    def __init__(self, action_space: int, game_segment_length: int = 200, config: EasyDict = None, task_id=None) -> None:
         """
         Overview:
             Init the ``GameSegment`` according to the provided arguments.
@@ -45,7 +45,7 @@ class GameSegment:
         self.td_steps = config.td_steps
         self.frame_stack_num = config.model.frame_stack_num
         self.discount_factor = config.discount_factor
-        self.action_space_size = config.model.action_space_size
+        self.action_space_size = config.model.action_space_sizes[task_id] if task_id is not None else config.model.action_space_size
         self.gray_scale = config.gray_scale
         self.transform2string = config.transform2string
         self.sampled_algo = config.sampled_algo

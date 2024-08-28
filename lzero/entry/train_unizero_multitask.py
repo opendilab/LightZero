@@ -16,7 +16,6 @@ from tensorboardX import SummaryWriter
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroCollector as Collector, MuZeroEvaluator as Evaluator
-from lzero.mcts import UniZeroGameBuffer as GameBuffer
 
 from line_profiler import line_profiler
 
@@ -54,7 +53,12 @@ def train_unizero_multitask(
     task_id, [cfg, create_cfg] = input_cfg_list[0]
 
     # Ensure the specified policy type is supported
-    assert create_cfg.policy.type in ['unizero_multitask'], "train_unizero entry now only supports 'unizero'"
+    assert create_cfg.policy.type in ['unizero_multitask', 'sampled_unizero_multitask'], "train_unizero entry now only supports 'unizero'"
+
+    if create_cfg.policy.type == 'unizero_multitask':
+        from lzero.mcts import UniZeroGameBuffer as GameBuffer
+    elif create_cfg.policy.type == 'sampled_unizero_multitask':
+        from lzero.mcts import SampledUniZeroGameBuffer as GameBuffer
 
     # Set device based on CUDA availability
     cfg.policy.device = cfg.policy.model.world_model_cfg.device if torch.cuda.is_available() else 'cpu'
@@ -171,7 +175,7 @@ def train_unizero_multitask(
             print(f'collect task_id: {task_id}...')
 
             # Reset initial data before each collection
-            collector._policy.reset(reset_init_data=True)
+            collector._policy.reset(reset_init_data=True, task_id=task_id)
             new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
             # Determine updates per collection

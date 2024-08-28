@@ -90,7 +90,7 @@ class Head(Slicer):
 
 
 class PolicyHeadCont(Slicer):
-    def __init__(self, max_blocks: int, block_mask: torch.Tensor, head_module: nn.Module) -> None:
+    def __init__(self, max_blocks: int, block_mask: torch.Tensor, head_module: nn.Module, action_space_size_list=None) -> None:
         """
         Overview:
             Head module extends Slicer to include a head module for processing sliced inputs. This head module
@@ -103,6 +103,7 @@ class PolicyHeadCont(Slicer):
         super().__init__(max_blocks, block_mask)
         assert isinstance(head_module, nn.Module)
         self.head_module = head_module
+        self.action_space_size_list = action_space_size_list
 
     def forward(self, x: torch.Tensor, num_steps: int, prev_steps: int) -> torch.Tensor:
         """

@@ -81,14 +81,21 @@ class WorldModelMT(nn.Module):
 
         # Initialize action embedding table
         if self.continuous_action_space:
-            self.act_embedding_table = nn.Sequential(
-                nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
-                SimNorm(simnorm_dim=self.group_size)
-            )
+            if isinstance(config.action_space_size, list):
+                # for continuous action space
+                self.act_embedding_table = [nn.Sequential(
+                    nn.Linear(config.action_space_size[task_id], config.embed_dim, device=self.device, bias=False),
+                    SimNorm(simnorm_dim=self.group_size)
+                ) for task_id in range(self.task_num)]
+            else:
+                self.act_embedding_table = nn.Sequential(
+                    nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
+                    SimNorm(simnorm_dim=self.group_size)
+                )
         else:
             # for discrete action space
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
-        print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
+        # print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
         # if self.num_experts_in_moe_head == -1:
         assert self.num_experts_in_moe_head > 0
@@ -105,7 +112,9 @@ class WorldModelMT(nn.Module):
                     else:
                         self.fixed_sigma_value = 0.3
                     self.bound_type = self.config.bound_type
-                    self.head_policy = self._create_head_cont(self.value_policy_tokens_pattern, self.action_space_size)
+                    # self.head_policy = self._create_head_cont(self.value_policy_tokens_pattern, self.action_space_size) # TODO
+                    self.head_policy = self._create_head_cont(self.value_policy_tokens_pattern, self.action_space_size[task_id]) # TODO
+
                 else:
                     self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
                 self.head_policy_multi_task.append(self.head_policy)
@@ -214,21 +223,40 @@ class WorldModelMT(nn.Module):
     def _create_head_cont(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
         """Create continuous head modules for the transformer."""
         from ding.model.common import ReparameterizationHead
-        self.fc_policy_head = ReparameterizationHead(
-            input_size=self.config.embed_dim,
-            output_size=output_dim,
-            layer_num=1,  # TODO: check the effect of layer_num
-            sigma_type=self.sigma_type,
-            activation=nn.GELU(approximate='tanh'),
-            fixed_sigma_value=self.fixed_sigma_value,
-            norm_type=None,
-            bound_type=self.bound_type
-        )
-        return PolicyHeadCont(
-            max_blocks=self.config.max_blocks,
-            block_mask=block_mask,
-            head_module=self.fc_policy_head
-        )
+        if isinstance(output_dim, int):
+            self.fc_policy_head = ReparameterizationHead(
+                input_size=self.config.embed_dim,
+                output_size=output_dim,
+                layer_num=2,  # TODO: check the effect of layer_num
+                sigma_type=self.sigma_type,
+                activation=nn.GELU(approximate='tanh'),
+                fixed_sigma_value=self.fixed_sigma_value,
+                norm_type=None,
+                bound_type=self.bound_type
+            )
+            return PolicyHeadCont(
+                max_blocks=self.config.max_blocks,
+                block_mask=block_mask,
+                head_module=self.fc_policy_head
+            )
+        elif isinstance(output_dim, list):
+            # TODO
+            self.fc_policy_head = ReparameterizationHead(
+                input_size=self.config.embed_dim,
+                output_size=max(output_dim),  # TODO
+                layer_num=2,  # TODO: check the effect of layer_num
+                sigma_type=self.sigma_type,
+                activation=nn.GELU(approximate='tanh'),
+                fixed_sigma_value=self.fixed_sigma_value,
+                norm_type=None,
+                bound_type=self.bound_type
+            )
+            return PolicyHeadCont(
+                max_blocks=self.config.max_blocks,
+                block_mask=block_mask,
+                head_module=self.fc_policy_head,
+                action_space_size_list=output_dim, # TODO
+            )
         
     def _create_head_moe(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None, moe=None) -> Head:
         """Create moe head modules for the transformer."""
@@ -529,7 +557,11 @@ class WorldModelMT(nn.Module):
                 if len(act_tokens.shape) == 3:
                     act_tokens = act_tokens.squeeze(1)
                 num_steps = act_tokens.size(1)
-            act_embeddings = self.act_embedding_table(act_tokens)
+            if self.task_num > 1:
+                act_embeddings = self.act_embedding_table[task_id](act_tokens)
+            else:
+                act_embeddings = self.act_embedding_table(act_tokens)
+
             sequences = self._add_position_embeddings(act_embeddings, prev_steps, num_steps, kvcache_independent,
                                                       is_init_infer, valid_context_lengths)
 
@@ -541,7 +573,7 @@ class WorldModelMT(nn.Module):
         # Process combined observation embeddings and action tokens
         else:
             if self.continuous_action_space:
-                sequences, num_steps = self._process_obs_act_combined_cont(obs_embeddings_or_act_tokens, prev_steps)
+                sequences, num_steps = self._process_obs_act_combined_cont(obs_embeddings_or_act_tokens, prev_steps, task_id=task_id)
             else:
                 sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
 
@@ -597,7 +629,7 @@ class WorldModelMT(nn.Module):
                     valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
                 return embeddings + position_embeddings
             
-    def _process_obs_act_combined_cont(self, obs_embeddings_or_act_tokens, prev_steps):
+    def _process_obs_act_combined_cont(self, obs_embeddings_or_act_tokens, prev_steps, task_id=0):
         """
         Process combined observation embeddings and action tokens.
 
@@ -619,7 +651,7 @@ class WorldModelMT(nn.Module):
                 act_tokens = act_tokens.unsqueeze(-1)
 
         # B, L, E
-        act_embeddings = self.act_embedding_table(act_tokens)
+        act_embeddings = self.act_embedding_table(act_tokens, task_id=task_id)
 
         B, L, K, E = obs_embeddings.size()
         # B, L*2, E

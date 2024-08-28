@@ -15,31 +15,40 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
     prepare_obs_stack4_for_unizero
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
+from lzero.policy.sampled_unizero import get_action
 from lzero.entry.utils import initialize_zeros_batch
 
 
-def get_action(roots_sampled_actions, i, action):
-    try:
-        # Attempt to access the action assuming it's an attribute
-        return roots_sampled_actions[i][action].value  # for ctrre
-    except (AttributeError, KeyError, TypeError):
-        # Fallback if the previous access fails
-        return np.array(roots_sampled_actions[i][action])  # for ptree
+def generate_task_loss_dict(multi_task_losses, task_name_template):
+    """
+    生成每个任务的损失字典
+    :param multi_task_losses: 包含每个任务损失的列表
+    :param task_name_template: 任务名称模板，例如 'obs_loss_task{}'
+    :return: 一个字典，包含每个任务的损失
+    """
+    task_loss_dict = {}
+    for task_idx, task_loss in enumerate(multi_task_losses):
+        task_name = task_name_template.format(task_idx)
+        try:
+            task_loss_dict[task_name] = task_loss.item() if hasattr(task_loss, 'item') else task_loss
+        except Exception as e:
+            task_loss_dict[task_name] = task_loss
+    return task_loss_dict
 
 
-@POLICY_REGISTRY.register('sampled_unizero')
-class SampledUniZeroPolicy(UniZeroPolicy):
+@POLICY_REGISTRY.register('sampled_unizero_multitask')
+class SampledUniZeroMTPolicy(UniZeroPolicy):
     """
     Overview:
         The policy class for Sampled UniZero, official implementation for paper UniZero: Generalized and Efficient Planning
-        with Scalable LatentWorld Models. UniZero aims to enhance the planning capabilities of reinforcement learning agents
+        with Scalable Latent World Models. UniZero aims to enhance the planning capabilities of reinforcement learning agents
         by addressing the limitations found in MuZero-style algorithms, particularly in environments requiring the
         capture of long-term dependencies. More details can be found in https://arxiv.org/abs/2406.10667.
     """
 
     # The default_config for UniZero policy.
     config = dict(
-        type='sampled_unizero',
+        type='sampled_unizero_multitask',
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.
             model_type='conv',  # options={'mlp', 'conv'}
@@ -289,12 +298,12 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         Returns:
             - model_info (:obj:`Tuple[str, List[str]]`): model name and model import_names.
                 - model_type (:obj:`str`): The model type used in this algorithm, which is registered in ModelRegistry.
-                - import_names (:obj:`List[str]`): The model class path list used in this algorithm.
+                - import_names (:obj:`List[str]]`): The model class path list used in this algorithm.
         .. note::
             The user can define and use customized network model but must obey the same interface definition indicated \
             by import_names path. For MuZero, ``lzero.model.unizero_model.MuZeroModel``
         """
-        return 'SampledUniZeroModel', ['lzero.model.sampled_unizero_model']
+        return 'SampledUniZeroMTModel', ['lzero.model.sampled_unizero_model_multitask']
 
     def _init_learn(self) -> None:
         """
@@ -369,129 +378,151 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         self._learn_model.train()
         self._target_model.train()
 
-        current_batch, target_batch, _ = data
-        # ==============================================================
-        # sampled related core code
-        # ==============================================================
-        # obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
-        obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights, make_time = current_batch
-        target_reward, target_value, target_policy = target_batch
+        obs_loss_multi_task = []
+        reward_loss_multi_task = []
+        policy_loss_multi_task = []
+        value_loss_multi_task = []
+        latent_recon_loss_multi_task = []
+        perceptual_loss_multi_task = []
+        orig_policy_loss_multi_task = []
+        policy_entropy_multi_task = []
+        first_step_losses_multi_task = []
+        middle_step_losses_multi_task = []
+        last_step_losses_multi_task = []
+        weighted_total_loss = 0.0  # 初始化为0,避免使用in-place操作
 
-        # Prepare observations based on frame stack number
-        if self._cfg.model.frame_stack_num == 4:
-            obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
-        else:
-            obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+        latent_state_l2_norms_multi_task = []
+        dormant_ratio_encoder_multi_task = []
+        dormant_ratio_world_model_multi_task = []
 
-        # Apply augmentations if needed
-        if self._cfg.use_augmentation:
-            obs_batch = self.image_transforms.transform(obs_batch)
-            if self._cfg.model.self_supervised_learning_loss:
-                obs_target_batch = self.image_transforms.transform(obs_target_batch)
+        policy_mu_multi_task = []
+        policy_sigma_multi_task = []
+        target_sampled_actions_multi_task = []
 
-        # Prepare action batch and convert to torch tensor
-        if self._cfg.model.continuous_action_space:
-            action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
-                -1)  # For discrete action space
-        else:
-            action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
-                -1).long()  # For discrete action space
-        data_list = [mask_batch, target_reward.astype('float32'), target_value.astype('float32'), target_policy,
-                     weights]
-        [mask_batch, target_reward, target_value, target_policy,
-         weights] = to_torch_float_tensor(data_list, self._cfg.device)
+        losses_list = []  # 用于存储每个任务的损失
 
-        # ==============================================================
-        # sampled related core code
-        # ==============================================================
-        # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim), e.g. (4, 6, 5, 1)
-        child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device)
+        for task_id, data_one_task in enumerate(data):
+            current_batch, target_batch, task_id = data_one_task
+            obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights, make_time = current_batch
+            target_reward, target_value, target_policy = target_batch
 
-        target_reward = target_reward.view(self._cfg.batch_size, -1)
-        target_value = target_value.view(self._cfg.batch_size, -1)
+            # Prepare observations based on frame stack number
+            if self._cfg.model.frame_stack_num == 4:
+                obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
+            else:
+                obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
-        assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
+            # Apply augmentations if needed
+            if self._cfg.use_augmentation:
+                obs_batch = self.image_transforms.transform(obs_batch)
+                if self._cfg.model.self_supervised_learning_loss:
+                    obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
-        # Transform rewards and values to their scaled forms
-        transformed_target_reward = scalar_transform(target_reward)
-        transformed_target_value = scalar_transform(target_value)
+            # Prepare action batch and convert to torch tensor
+            if self._cfg.model.continuous_action_space:
+                action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
+                    -1)  # For discrete action space
+            else:
+                action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
+                    -1).long()  # For discrete action space
+            data_list = [mask_batch, target_reward.astype('float32'), target_value.astype('float32'), target_policy,
+                         weights]
+            [mask_batch, target_reward, target_value, target_policy,
+             weights] = to_torch_float_tensor(data_list, self._cfg.device)
 
-        # Convert to categorical distributions
-        target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
-        target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+            # shape: (batch_size, num_unroll_steps+1, num_of_sampled_actions, action_dim), e.g. (4, 6, 5, 1)
+            child_sampled_actions_batch = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device)
 
-        # Prepare batch for GPT model
-        batch_for_gpt = {}
-        if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
-            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                self._cfg.batch_size, -1, self._cfg.model.observation_shape)
-        elif len(self._cfg.model.observation_shape) == 3:
-            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                self._cfg.batch_size, -1, *self._cfg.model.observation_shape)
+            target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
+            target_value = target_value.view(self._cfg.batch_size[task_id], -1)
 
-        batch_for_gpt['actions'] = action_batch.squeeze(-1)
-        batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
-        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
-        batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
-        batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
-        batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long,
-                                            device=self._cfg.device)
-        batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
-        batch_for_gpt['target_policy'] = target_policy[:, :-1]
+            # Transform rewards and values to their scaled forms
+            transformed_target_reward = scalar_transform(target_reward)
+            transformed_target_value = scalar_transform(target_value)
 
-        batch_for_gpt['child_sampled_actions'] = child_sampled_actions_batch[:, :-1]
+            # Convert to categorical distributions
+            target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
+            target_value_categorical = phi_transform(self.value_support, transformed_target_value)
 
-        # Extract valid target policy data and compute entropy
-        valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
-        target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
-        average_target_policy_entropy = target_policy_entropy.mean().item()
+            # Prepare batch for GPT model
+            batch_for_gpt = {}
+            if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
+                batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+                    self._cfg.batch_size[task_id], -1, self._cfg.model.observation_shape)
+            elif len(self._cfg.model.observation_shape) == 3:
+                batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+                    self._cfg.batch_size[task_id], -1, *self._cfg.model.observation_shape)
 
-        # Update world model
-        losses = self._learn_model.world_model.compute_loss(
-            batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle
-        )
+            batch_for_gpt['actions'] = action_batch.squeeze(-1)
+            batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
+            batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
+            batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
+            batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
+            batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long,
+                                                device=self._cfg.device)
+            batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
+            batch_for_gpt['target_policy'] = target_policy[:, :-1]
 
-        weighted_total_loss = losses.loss_total
-        for loss_name, loss_value in losses.intermediate_losses.items():
-            self.intermediate_losses[f"{loss_name}"] = loss_value
+            batch_for_gpt['child_sampled_actions'] = child_sampled_actions_batch[:, :-1]
 
-        obs_loss = self.intermediate_losses['loss_obs']
-        reward_loss = self.intermediate_losses['loss_rewards']
-        policy_loss = self.intermediate_losses['loss_policy']
-        value_loss = self.intermediate_losses['loss_value']
-        latent_recon_loss = self.intermediate_losses['latent_recon_loss']
-        perceptual_loss = self.intermediate_losses['perceptual_loss']
-        orig_policy_loss = self.intermediate_losses['orig_policy_loss']
-        policy_entropy = self.intermediate_losses['policy_entropy']
-        first_step_losses = self.intermediate_losses['first_step_losses']
-        middle_step_losses = self.intermediate_losses['middle_step_losses']
-        last_step_losses = self.intermediate_losses['last_step_losses']
-        dormant_ratio_encoder = self.intermediate_losses['dormant_ratio_encoder']
-        dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
-        latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
-        policy_mu = self.intermediate_losses['policy_mu']
-        policy_sigma = self.intermediate_losses['policy_sigma']
-        target_sampled_actions = self.intermediate_losses['target_sampled_actions']
+            # Extract valid target policy data and compute entropy
+            valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
+            target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
+            average_target_policy_entropy = target_policy_entropy.mean().item()
 
-        if self._cfg.model.continuous_action_space:
-            policy_mu_max = policy_mu[:, 0].max().item()
-            policy_mu_min = policy_mu[:, 0].min().item()
-            policy_mu_mean = policy_mu[:, 0].mean().item()
-            policy_sigma_max = policy_sigma.max().item()
-            policy_sigma_min = policy_sigma.min().item()
-            policy_sigma_mean = policy_sigma.mean().item()
-            # take the fist dim in action space
-            target_sampled_actions_max = target_sampled_actions[:, :, 0].max().item()
-            target_sampled_actions_min = target_sampled_actions[:, :, 0].min().item()
-            target_sampled_actions_mean = target_sampled_actions[:, :, 0].mean().item()
+            # Update world model
+            losses = self._learn_model.world_model.compute_loss(
+                batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle,
+                task_id=task_id
+            )
 
-        assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
-        assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
+            weighted_total_loss += losses.loss_total
+            losses_list.append(losses.loss_total)  # TODO: for moco
+
+            for loss_name, loss_value in losses.intermediate_losses.items():
+                self.intermediate_losses[f"{loss_name}"] = loss_value
+
+            obs_loss = self.intermediate_losses['loss_obs']
+            reward_loss = self.intermediate_losses['loss_rewards']
+            policy_loss = self.intermediate_losses['loss_policy']
+            value_loss = self.intermediate_losses['loss_value']
+            latent_recon_loss = self.intermediate_losses['latent_recon_loss']
+            perceptual_loss = self.intermediate_losses['perceptual_loss']
+            orig_policy_loss = self.intermediate_losses['orig_policy_loss']
+            policy_entropy = self.intermediate_losses['policy_entropy']
+            first_step_losses = self.intermediate_losses['first_step_losses']
+            middle_step_losses = self.intermediate_losses['middle_step_losses']
+            last_step_losses = self.intermediate_losses['last_step_losses']
+            dormant_ratio_encoder = self.intermediate_losses['dormant_ratio_encoder']
+            dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
+            latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
+            policy_mu = self.intermediate_losses['policy_mu']
+            policy_sigma = self.intermediate_losses['policy_sigma']
+            target_sampled_actions = self.intermediate_losses['target_sampled_actions']
+
+            obs_loss_multi_task.append(obs_loss)
+            reward_loss_multi_task.append(reward_loss)
+            policy_loss_multi_task.append(policy_loss)
+            value_loss_multi_task.append(value_loss)
+            latent_recon_loss_multi_task.append(latent_recon_loss)
+            perceptual_loss_multi_task.append(perceptual_loss)
+            orig_policy_loss_multi_task.append(orig_policy_loss)
+            policy_entropy_multi_task.append(policy_entropy)
+            first_step_losses_multi_task.append(first_step_losses)
+            middle_step_losses_multi_task.append(middle_step_losses)
+            last_step_losses_multi_task.append(last_step_losses)
+            latent_state_l2_norms_multi_task.append(latent_state_l2_norms)
+            dormant_ratio_encoder_multi_task.append(dormant_ratio_encoder)
+            dormant_ratio_world_model_multi_task.append(dormant_ratio_world_model)
+            policy_mu_multi_task.append(policy_mu)
+            policy_sigma_multi_task.append(policy_sigma)
+            target_sampled_actions_multi_task.append(target_sampled_actions)
 
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
         weighted_total_loss.backward()
 
+        # 可选项：为调试目的打印梯度
         #  ========== for debugging ==========
         # for name, param in self._learn_model.world_model.tokenizer.encoder.named_parameters():
         #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
@@ -525,68 +556,40 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             current_memory_allocated_gb = 0.
             max_memory_allocated_gb = 0.
 
+        # 用于存储多任务损失的字典
+        multi_task_loss_dicts = {
+            **generate_task_loss_dict(obs_loss_multi_task, 'obs_loss_task{}'),
+            **generate_task_loss_dict(latent_recon_loss_multi_task, 'latent_recon_loss_task{}'),
+            **generate_task_loss_dict(perceptual_loss_multi_task, 'perceptual_loss_task{}'),
+            **generate_task_loss_dict(latent_state_l2_norms_multi_task, 'latent_state_l2_norms_task{}'),
+
+            **generate_task_loss_dict(policy_loss_multi_task, 'policy_loss_task{}'),
+            **generate_task_loss_dict(orig_policy_loss_multi_task, 'orig_policy_loss_task{}'),
+            **generate_task_loss_dict(policy_entropy_multi_task, 'policy_entropy_task{}'),
+            **generate_task_loss_dict(reward_loss_multi_task, 'reward_loss_task{}'),
+            **generate_task_loss_dict(value_loss_multi_task, 'value_loss_task{}'),
+            **generate_task_loss_dict(first_step_losses_multi_task, 'first_step_losses_task{}'),
+            **generate_task_loss_dict(middle_step_losses_multi_task, 'middle_step_losses_task{}'),
+            **generate_task_loss_dict(last_step_losses_multi_task, 'last_step_losses_task{}'),
+            **generate_task_loss_dict(dormant_ratio_encoder_multi_task, 'dormant_ratio_encoder_task{}'),
+            **generate_task_loss_dict(dormant_ratio_world_model_multi_task, 'dormant_ratio_world_model_task{}'),
+            **generate_task_loss_dict(policy_mu_multi_task, 'policy_mu_task{}'),
+            **generate_task_loss_dict(policy_sigma_multi_task, 'policy_sigma_task{}'),
+            **generate_task_loss_dict(target_sampled_actions_multi_task, 'target_sampled_actions_task{}'),
+        }
+
         return_loss_dict = {
-            'analysis/first_step_loss_value': first_step_losses['loss_value'].item(),
-            'analysis/first_step_loss_policy': first_step_losses['loss_policy'].item(),
-            'analysis/first_step_loss_rewards': first_step_losses['loss_rewards'].item(),
-            'analysis/first_step_loss_obs': first_step_losses['loss_obs'].item(),
-
-            'analysis/middle_step_loss_value': middle_step_losses['loss_value'].item(),
-            'analysis/middle_step_loss_policy': middle_step_losses['loss_policy'].item(),
-            'analysis/middle_step_loss_rewards': middle_step_losses['loss_rewards'].item(),
-            'analysis/middle_step_loss_obs': middle_step_losses['loss_obs'].item(),
-
-            'analysis/last_step_loss_value': last_step_losses['loss_value'].item(),
-            'analysis/last_step_loss_policy': last_step_losses['loss_policy'].item(),
-            'analysis/last_step_loss_rewards': last_step_losses['loss_rewards'].item(),
-            'analysis/last_step_loss_obs': last_step_losses['loss_obs'].item(),
-
             'Current_GPU': current_memory_allocated_gb,
             'Max_GPU': max_memory_allocated_gb,
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self._collect_epsilon,
             'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
-            'obs_loss': obs_loss,
-            'latent_recon_loss': latent_recon_loss,
-            'perceptual_loss': perceptual_loss,
-            'policy_loss': policy_loss,
-            'orig_policy_loss': orig_policy_loss,
-            'policy_entropy': policy_entropy,
-            'target_policy_entropy': average_target_policy_entropy,
-            'reward_loss': reward_loss,
-            'value_loss': value_loss,
-            'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
-            'target_reward': target_reward.mean().item(),
-            'target_value': target_value.mean().item(),
-            'transformed_target_reward': transformed_target_reward.mean().item(),
-            'transformed_target_value': transformed_target_value.mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
-            'analysis/dormant_ratio_encoder': dormant_ratio_encoder,
-            'analysis/dormant_ratio_world_model': dormant_ratio_world_model,
-            'analysis/latent_state_l2_norms': latent_state_l2_norms,
-            'analysis/l2_norm_before': self.l2_norm_before,
-            'analysis/l2_norm_after': self.l2_norm_after,
-            'analysis/grad_norm_before': self.grad_norm_before,
-            'analysis/grad_norm_after': self.grad_norm_after,
         }
 
-        if self._cfg.model.continuous_action_space:
-            return_loss_dict.update({
-                # ==============================================================
-                # sampled related core code
-                # ==============================================================
-                'policy_mu_max': policy_mu_max,
-                'policy_mu_min': policy_mu_min,
-                'policy_mu_mean': policy_mu_mean,
-                'policy_sigma_max': policy_sigma_max,
-                'policy_sigma_min': policy_sigma_min,
-                'policy_sigma_mean': policy_sigma_mean,
-                # take the fist dim in action space
-                'target_sampled_actions_max': target_sampled_actions_max,
-                'target_sampled_actions_min': target_sampled_actions_min,
-                'target_sampled_actions_mean': target_sampled_actions_mean
-            })
+        # 合并两个字典
+        return_loss_dict.update(multi_task_loss_dicts)
 
         return return_loss_dict
 
@@ -618,8 +621,10 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 [self.collector_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape]).to(
-                self._cfg.device)
+            # self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape]).to(
+            #     self._cfg.device)
+            self.last_batch_obs = [torch.zeros([self.collector_env_num, obs_shape]).to(
+                self._cfg.device) for obs_shape in self._cfg.model.observation_shapes]
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
 
     # @profile
@@ -630,7 +635,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             temperature: float = 1,
             to_play: List = [-1],
             epsilon: float = 0.25,
-            ready_env_id: np.array = None
+            ready_env_id: np.array = None,
+            task_id=None
     ) -> Dict:
         """
         Overview:
@@ -665,7 +671,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         output = {i: None for i in ready_env_id}
 
         with torch.no_grad():
-            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
+            network_output = self._collect_model.initial_inference(self.last_batch_obs[task_id], self.last_batch_action, data,
+                                                                   task_id=task_id)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
@@ -709,8 +716,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             # ==============================================================
             # sampled related core code
             # ==============================================================
-            roots_sampled_actions = roots.get_sampled_actions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_sampled_actions = roots.get_sampled_actions()  # shape: ``{list: batch_size} -> {list: action_space_size}``
 
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
@@ -778,12 +784,14 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 [self.evaluator_env_num, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape]).to(
-                self._cfg.device)
+            # self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape]).to(
+            #     self._cfg.device)
+            self.last_batch_obs = [torch.zeros([self.collector_env_num, obs_shape]).to(
+                self._cfg.device) for obs_shape in self._cfg.model.observation_shapes]
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
-                      ready_env_id: np.array = None) -> Dict:
+                      ready_env_id: np.array = None, task_id=None) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -811,12 +819,15 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
-            latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
+            network_output = self._eval_model.initial_inference(self.last_batch_obs[task_id], self.last_batch_action,
+                                                                data, task_id=task_id)
+            latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(
+                network_output)
 
             if not self._eval_model.training:
                 # if not in training, obtain the scalars of the value/reward
-                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
+                pred_values = self.inverse_scalar_transform_handle(
+                    pred_values).detach().cpu().numpy()  # shape（B, 1）
                 latent_state_roots = latent_state_roots.detach().cpu().numpy()
                 policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
@@ -824,7 +835,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 # when the action space of the environment is continuous, action_mask[:] is None.
                 # NOTE: in continuous action space env: we set all legal_actions as -1
                 legal_actions = [
-                    [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(active_eval_env_num)
+                    [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in
+                    range(active_eval_env_num)
                 ]
             else:
                 legal_actions = [
@@ -849,8 +861,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             # ==============================================================
             # sampled related core code
             # ==============================================================
-            roots_sampled_actions = roots.get_sampled_actions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_sampled_actions = roots.get_sampled_actions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
             batch_action = []
 
             for i, env_id in enumerate(ready_env_id):
@@ -1014,3 +1025,108 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 'perceptual_loss',
             ]
 
+    def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True,
+                       task_id=None) -> None:
+        """
+        Overview:
+            This method resets the collection process for a specific environment. It clears caches and memory
+            when certain conditions are met, ensuring optimal performance. If reset_init_data is True, the initial data
+            will be reset.
+        Arguments:
+            - env_id (:obj:`int`, optional): The ID of the environment to reset. If None or list, the function returns immediately.
+            - current_steps (:obj:`int`, optional): The current step count in the environment. Used to determine
+              whether to clear caches.
+            - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
+        """
+        if reset_init_data:
+            if task_id is not None:
+                self.last_batch_obs = initialize_zeros_batch(
+                    self._cfg.model.observation_shapes[task_id],
+                    self._cfg.collector_env_num,
+                    self._cfg.device
+                )
+            else:
+                self.last_batch_obs = initialize_zeros_batch(
+                    self._cfg.model.observation_shape,
+                    self._cfg.collector_env_num,
+                    self._cfg.device
+                )
+            self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
+
+        # Return immediately if env_id is None or a list
+        if env_id is None or isinstance(env_id, list):
+            return
+
+        # Determine the clear interval based on the environment's sample type
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+
+        # Clear caches if the current steps are a multiple of the clear interval
+        if current_steps % clear_interval == 0:
+            print(f'clear_interval: {clear_interval}')
+
+            # Clear various caches in the collect model's world model
+            world_model = self._collect_model.world_model
+            world_model.past_kv_cache_init_infer.clear()
+            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+                kv_cache_dict_env.clear()
+            world_model.past_kv_cache_recurrent_infer.clear()
+            world_model.keys_values_wm_list.clear()
+
+            # Free up GPU memory
+            torch.cuda.empty_cache()
+
+            print('collector: collect_model clear()')
+            print(f'eps_steps_lst[{env_id}]: {current_steps}')
+
+    def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True,
+                    task_id=None) -> None:
+        """
+        Overview:
+            This method resets the evaluation process for a specific environment. It clears caches and memory
+            when certain conditions are met, ensuring optimal performance. If reset_init_data is True,
+            the initial data will be reset.
+        Arguments:
+            - env_id (:obj:`int`, optional): The ID of the environment to reset. If None or list, the function returns immediately.
+            - current_steps (:obj:`int`, optional): The current step count in the environment. Used to determine
+              whether to clear caches.
+            - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
+        """
+        if reset_init_data:
+            if task_id is not None:
+                self.last_batch_obs = initialize_zeros_batch(
+                    self._cfg.model.observation_shapes[task_id],
+                    self._cfg.evaluator_env_num,
+                    self._cfg.device
+                )
+            else:
+                self.last_batch_obs = initialize_zeros_batch(
+                    self._cfg.model.observation_shape,
+                    self._cfg.evaluator_env_num,
+                    self._cfg.device
+                )
+            self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
+
+        # Return immediately if env_id is None or a list
+        if env_id is None or isinstance(env_id, list):
+            return
+
+        # Determine the clear interval based on the environment's sample type
+        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+
+        # Clear caches if the current steps are a multiple of the clear interval
+        if current_steps % clear_interval == 0:
+            print(f'clear_interval: {clear_interval}')
+
+            # Clear various caches in the eval model's world model
+            world_model = self._eval_model.world_model
+            world_model.past_kv_cache_init_infer.clear()
+            for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+                kv_cache_dict_env.clear()
+            world_model.past_kv_cache_recurrent_infer.clear()
+            world_model.keys_values_wm_list.clear()
+
+            # Free up GPU memory
+            torch.cuda.empty_cache()
+
+            print('evaluator: eval_model clear()')
+            print(f'eps_steps_lst[{env_id}]: {current_steps}')

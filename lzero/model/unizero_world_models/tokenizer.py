@@ -65,8 +65,8 @@ class Tokenizer(nn.Module):
         if task_id is None:
             task_id = 0
         else:
-            task_id = 0  # one encoder
-            # task_id = task_id
+            # task_id = 0  # TODO: one encoder
+            task_id = task_id
         # Process input tensor based on its dimensionality
         if len(shape) == 2:
             # Case when input is 2D (B, E)
@@ -75,7 +75,9 @@ class Tokenizer(nn.Module):
         elif len(shape) == 3:
             # Case when input is 3D (B, T, E)
             x = x.contiguous().view(-1, shape[-1])  # Flatten the last two dimensions (B * T, E)
-            obs_embeddings = self.encoder[task_id](x)
+            # obs_embeddings = self.encoder[task_id](x)
+            obs_embeddings = self.encoder(x, task_id) # TODO
+
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 4:
             # Case when input is 4D (B, C, H, W)
