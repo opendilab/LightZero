@@ -375,7 +375,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                 target_values = []
                 target_value_prefixs = []
 
-                value_prefix = 0.0
+                value_prefix = np.array(0.)
                 base_index = state_index
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
@@ -393,7 +393,7 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
 
                     # reset every lstm_horizon_len
                     if horizon_id % self._cfg.lstm_horizon_len == 0:
-                        value_prefix = 0.0
+                        value_prefix = np.array(0.)
                         base_index = current_index
                     horizon_id += 1
 
@@ -401,20 +401,19 @@ class SampledEfficientZeroGameBuffer(EfficientZeroGameBuffer):
                         target_values.append(value_list[value_index])
                         # Since the horizon is small and the discount_factor is close to 1.
                         # Compute the reward sum to approximate the value prefix for simplification
-                        value_prefix += reward_list[current_index
-                                                    ]  # * config.discount_factor ** (current_index - base_index)
-                        target_value_prefixs.append(value_prefix)
+                        value_prefix += reward_list[current_index].item()  # * config.discount_factor ** (current_index - base_index)
+                        target_value_prefixs.append(value_prefix.item())
                     else:
-                        target_values.append(0)
-                        target_value_prefixs.append(value_prefix)
+                        target_values.append(np.array(0.))
+                        target_value_prefixs.append(value_prefix.item())
 
                     value_index += 1
 
                 batch_value_prefixs.append(target_value_prefixs)
                 batch_target_values.append(target_values)
 
-        batch_value_prefixs = np.asarray(batch_value_prefixs, dtype=object)
-        batch_target_values = np.asarray(batch_target_values, dtype=object)
+        batch_value_prefixs = np.asarray(batch_value_prefixs)
+        batch_target_values = np.asarray(batch_target_values)
 
         return batch_value_prefixs, batch_target_values
 

@@ -63,6 +63,8 @@ class UniZeroPolicy(MuZeroPolicy):
             # (int) The save interval of the model.
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000, ), ), ),
             world_model_cfg=dict(
+                # (bool) If True, the action space of the environment is continuous, otherwise discrete.
+                continuous_action_space=False,
                 # (int) The number of tokens per block.
                 tokens_per_block=2,
                 # (int) The maximum number of blocks.
@@ -86,7 +88,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 # (str) The type of attention mechanism used. Options could be ['causal'].
                 attention='causal',
                 # (int) The number of layers in the model.
-                num_layers=4,
+                num_layers=2,
                 # (int) The number of attention heads.
                 num_heads=8,
                 # (int) The dimension of the embedding.
@@ -176,10 +178,10 @@ class UniZeroPolicy(MuZeroPolicy):
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor.
-        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.
+        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.replay_ratio automatically.
         update_per_collect=None,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
-        model_update_ratio=0.25,
+        replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam']
@@ -365,8 +367,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # Prepare action batch and convert to torch tensor
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
             -1).long()  # For discrete action space
-        data_list = [mask_batch, target_reward.astype('float32'), target_value.astype('float32'), target_policy,
-                     weights]
+        data_list = [mask_batch, target_reward, target_value, target_policy, weights]
         mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
                                                                                                 self._cfg.device)
 

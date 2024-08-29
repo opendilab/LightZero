@@ -1,4 +1,4 @@
-# **How to Customize Your Algorithms in LightZero?**
+# How to Customize Your Algorithms in LightZero?
 
 LightZero is an MCTS+RL reinforcement learning framework that provides a set of high-level APIs, enabling users to customize their algorithms within it. Here are some steps and considerations on how to customize an algorithm in LightZero.
 

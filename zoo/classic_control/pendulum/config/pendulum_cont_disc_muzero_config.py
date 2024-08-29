@@ -20,7 +20,7 @@ reanalyze_ratio = 0
 # ==============================================================
 
 pendulum_disc_muzero_config = dict(
-    exp_name=f'data_ez/pendulum_disc_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
+    exp_name=f'data_muzero/pendulum_disc_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id='Pendulum-v1',
         continuous=False,

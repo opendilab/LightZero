@@ -1,3 +1,12 @@
+2024.07.12 (v0.1.0)
+- env: SumToThree env from pooltool(#227)
+- algo: UniZero (#232)
+- algo: ReZero (#238)
+- feature: add logs and config documentations (#220)
+- polish: polish atari_env_action_space_map, fix test_muzero_game_buffer
+- polish: polish release.yml
+- style: update discord link and add a new badge in readme (#221)
+
 2024.04.12 (v0.0.5)
 - env: MemoryEnv (#197)
 - env: mountain_car (#181)
