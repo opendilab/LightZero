@@ -180,7 +180,7 @@ class SampledUniZeroMTModel(nn.Module):
             - reward (:obj=`torch.Tensor`): :math=`(B, reward_support_size)`, where B is batch_size.
             - policy_logits (:obj=`torch.Tensor`): :math=`(B, action_dim)`, where B is batch_size.
             - latent_state (:obj=`torch.Tensor`): :math=`(B, H_, W_)`, where B is batch_size, H_ is the height of latent state, W_ is the width of latent state.
-         """
+        """
         batch_size = obs_batch.size(0)
         obs_act_dict = {'obs': obs_batch, 'action': action_batch, 'current_obs': current_obs_batch}
         _, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(obs_act_dict, task_id=task_id)
@@ -196,7 +196,7 @@ class SampledUniZeroMTModel(nn.Module):
         )
 
     def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index=0,
-                            latent_state_index_in_search_path=[], task_id=None) -> MZNetworkOutput:
+                            latent_state_index_in_search_path=[], task_id=0) -> MZNetworkOutput:
         """
         Overview:
             Recurrent inference of UniZero model. To perform the recurrent inference, we concurrently predict the latent dynamics (reward/next_latent_state)

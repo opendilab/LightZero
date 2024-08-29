@@ -30,6 +30,7 @@ def create_config(env_id, observation_shapes, action_space_sizes, collector_env_
             task_id=0,
             model=dict(
                 observation_shapes=observation_shapes,
+                action_space_size=4,
                 action_space_sizes=action_space_sizes,
                 continuous_action_space=True,
                 num_of_sampled_actions=20,
@@ -161,7 +162,7 @@ if __name__ == "__main__":
     ]
 
     seed = 0
-    collector_env_num = 8
+    collector_env_num = 6
     n_episode = 8
     evaluator_env_num = 3
     num_simulations = 50

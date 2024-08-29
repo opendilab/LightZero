@@ -914,7 +914,7 @@ class WorldModelMT(nn.Module):
         if not self.continuous_action_space:
             token = action.reshape(-1, 1)
         else:
-            token = action.reshape(-1, self.action_space_size)
+            token = action
 
         # ======= Print statistics for debugging =============
         # min_size = min(self.keys_values_wm_size_list)

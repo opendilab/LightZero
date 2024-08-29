@@ -671,7 +671,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         output = {i: None for i in ready_env_id}
 
         with torch.no_grad():
-            network_output = self._collect_model.initial_inference(self.last_batch_obs[task_id], self.last_batch_action, data,
+            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data,
                                                                    task_id=task_id)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
@@ -699,7 +699,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             if self._cfg.mcts_ctree:
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(
-                    active_collect_env_num, legal_actions, self._cfg.model.action_space_size,
+                    active_collect_env_num, legal_actions, self._cfg.model.action_space_sizes[task_id],
                     self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
                 )
             else:
