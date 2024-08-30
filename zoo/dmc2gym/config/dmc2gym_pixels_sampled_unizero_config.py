@@ -30,11 +30,11 @@ norm_type = 'LN'
 seed = 0
 
 # for debug
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 2
-# batch_size = 2
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 1
+num_simulations = 2
+batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -65,7 +65,7 @@ dmc2gym_pixels_cont_sampled_unizero_config = dict(
             world_model_cfg=dict(
                 obs_type='image',
                 num_unroll_steps=num_unroll_steps,
-                policy_entropy_loss_weight=1e-4,
+                policy_entropy_loss_weight=5e-3,
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
                 sigma_type='conditioned',
@@ -116,7 +116,8 @@ dmc2gym_pixels_cont_sampled_unizero_create_config = dict(
         type='dmc2gym_lightzero',
         import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
     ),
-    env_manager=dict(type='subprocess'),
+    # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
     policy=dict(
         type='sampled_unizero',
         import_names=['lzero.policy.sampled_unizero'],

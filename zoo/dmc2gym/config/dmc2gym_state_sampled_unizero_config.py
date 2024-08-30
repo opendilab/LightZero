@@ -5,7 +5,9 @@ from easydict import EasyDict
 
 from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
-env_id = 'humanoid-run' # 'cartpole-swingup'  # You can specify any DMC task here
+env_id = 'humanoid-run'  # 'cartpole-swingup'  # You can specify any DMC task here
+# env_id =  'cartpole-swingup' # 'cartpole-swingup'  # You can specify any DMC task here
+
 action_space_size = dmc_state_env_action_space_map[env_id]
 obs_space_size = dmc_state_env_obs_space_map[env_id]
 print(f'env_id: {env_id}, action_space_size: {action_space_size}, obs_space_size: {obs_space_size}')
@@ -35,7 +37,7 @@ seed = 0
 # collector_env_num = 2
 # n_episode = 2
 # evaluator_env_num = 2
-# num_simulations = 2
+# num_simulations = 1
 # batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -48,8 +50,11 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
         domain_name=domain_name,
         task_name=task_name,
         from_pixels=False,  # vector/state obs
+        # from_pixels=True,  # vector/state obs
         frame_skip=2,
         continuous=True,
+        save_replay_gif=True,
+        replay_path_gif='./replay_gif_humanoid_0830',
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -85,7 +90,8 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
             ),
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
-        model_path=None,
+        # model_path=None,
+        model_path='/Users/puyuan/code/LightZero/data_suz_0830/dmc2gym_humanoid-run_state_cont_sampled_unizero_ns50_upcNone-rr1_rer0_H10_bs64_LN_seed0_policy-head-layer-num2_pew5e-3_disfac099_rbs1e6/ckpt/ckpt_best.pth.tar',
         num_unroll_steps=num_unroll_steps,
         cuda=True,
         use_augmentation=False,
@@ -103,8 +109,8 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(2e3),
-        # replay_buffer_size=int(1e6),
-        replay_buffer_size=int(5e5), # TODO
+        replay_buffer_size=int(1e6),
+        # replay_buffer_size=int(5e5), # TODO
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
@@ -118,7 +124,8 @@ dmc2gym_state_cont_sampled_unizero_create_config = dict(
         type='dmc2gym_lightzero',
         import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
     ),
-    env_manager=dict(type='subprocess'),
+    # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
     policy=dict(
         type='sampled_unizero',
         import_names=['lzero.policy.sampled_unizero'],
