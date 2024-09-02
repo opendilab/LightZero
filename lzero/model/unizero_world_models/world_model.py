@@ -1237,6 +1237,56 @@ class WorldModel(nn.Module):
                 latent_state_l2_norms=latent_state_l2_norms,
             )
 
+    # TODO: 测试正确性
+    def _calculate_policy_loss_cont_v2(self, outputs, batch: dict) -> Tuple[
+            torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
+        
+        batch_size, num_unroll_steps, action_space_size = outputs.logits_policy.shape[
+            0], self.config.num_unroll_steps, self.config.action_space_size
+
+        policy_logits_all = outputs.logits_policy
+        mask_batch = batch['mask_padding']
+        child_sampled_actions_batch = batch['child_sampled_actions']
+        target_policy = batch['target_policy']
+
+        policy_logits_all = policy_logits_all.view(batch_size * num_unroll_steps, -1)
+        mask_batch = mask_batch.contiguous().view(-1)
+        child_sampled_actions_batch = child_sampled_actions_batch.contiguous().view(batch_size * num_unroll_steps, -1,
+                                                                                    action_space_size)
+        mask_sum = mask_batch.sum()
+
+        mu, sigma = policy_logits_all[:, :action_space_size], policy_logits_all[:, action_space_size:]
+        mu = mu.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
+        sigma = sigma.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
+        dist = Independent(Normal(mu, sigma), 1)
+
+        target_normalized_visit_count = target_policy.contiguous().view(batch_size * num_unroll_steps, -1)
+        target_sampled_actions = child_sampled_actions_batch
+
+        policy_entropy = dist.entropy()  
+        policy_entropy_loss = (-policy_entropy * mask_batch).sum() / mask_sum
+
+        y = 1 - target_sampled_actions.pow(2)
+        target_sampled_actions_before_tanh = torch.arctanh(torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6))
+
+        log_prob = dist.log_prob(target_sampled_actions_before_tanh)
+        log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
+        log_prob_sampled_actions = log_prob
+
+        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
+        policy_loss = (-torch.sum(
+            torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
+        ) * mask_batch).sum() / mask_sum
+
+        non_masked_visit_count = torch.masked_select(target_normalized_visit_count, mask_batch.bool())
+        if non_masked_visit_count.numel() > 0:  
+            target_dist = Categorical(non_masked_visit_count)
+            target_policy_entropy = target_dist.entropy().sum().item() / mask_sum
+        else:
+            target_policy_entropy = 0.0
+
+        return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
+
     def _calculate_policy_loss_cont(self, outputs, batch: dict) -> Tuple[
         torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
         """

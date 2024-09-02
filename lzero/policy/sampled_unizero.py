@@ -229,6 +229,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         policy_entropy_loss_weight=1e-4,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
+        # (bool) Whether to use the cosine learning rate decay.
+        cos_lr_scheduler=False,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
         lr_piecewise_constant_decay=False,
@@ -308,6 +310,10 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             device_type=self._cfg.device,
             betas=(0.9, 0.95),
         )
+
+        if self._cfg.cos_lr_scheduler is True:
+            from torch.optim.lr_scheduler import CosineAnnealingLR
+            self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e6, eta_min=0, last_epoch=-1)
 
         if self._cfg.model.continuous_action_space:
             # Weight Init for the last output layer of gaussian policy head in prediction network.
@@ -508,7 +514,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                                                                         self._cfg.grad_clip_value)
 
         self._optimizer_world_model.step()
-        if self._cfg.lr_piecewise_constant_decay:
+        
+        if self._cfg.cos_lr_scheduler or self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()
 
         # Core target model update step
