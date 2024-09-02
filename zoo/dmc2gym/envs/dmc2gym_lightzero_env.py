@@ -285,7 +285,7 @@ class DMC2GymEnv(BaseEnv):
         action = action.astype('float32')
         action = affine_transform(action, min_val=self._env.action_space.low, max_val=self._env.action_space.high)
         obs, rew, done, info = self._env.step(action)
-
+        self._current_step += 1
         if self._cfg["from_pixels"]:
             image_obs = obs
         else:
