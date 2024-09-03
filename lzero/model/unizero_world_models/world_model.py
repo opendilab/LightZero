@@ -110,6 +110,8 @@ class WorldModel(nn.Module):
         # Initialize keys and values for transformer
         self._initialize_transformer_keys_values()
 
+        self.reanalyze_phase = False
+
     def _initialize_config_parameters(self) -> None:
         """Initialize configuration parameters."""
         self.policy_entropy_weight = self.config.policy_entropy_weight
@@ -937,8 +939,11 @@ class WorldModel(nn.Module):
             state_single_env = latent_state[i]  # Get the latent state for a single environment
             cache_key = quantize_state(state_single_env)  # Compute the hash value using the quantized state
 
-            # Try to retrieve the cached value from past_kv_cache_init_infer_envs
-            matched_value = self.past_kv_cache_init_infer_envs[i].get(cache_key)
+            if self.reanalyze_phase:
+                matched_value = None
+            else:
+                # Try to retrieve the cached value from past_kv_cache_init_infer_envs
+                matched_value = self.past_kv_cache_init_infer_envs[i].get(cache_key)
 
             # If not found, try to retrieve from past_kv_cache_recurrent_infer
             if matched_value is None:

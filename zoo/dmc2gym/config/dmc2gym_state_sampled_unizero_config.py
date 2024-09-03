@@ -29,13 +29,12 @@ num_simulations = 50
 # num_simulations = 100
 update_per_collect = None
 # replay_ratio = 0.25
-
 replay_ratio = 0.1
 
-
-# replay_ratio = 1
 max_env_step = int(4e6)
-reanalyze_ratio = 0
+# reanalyze_ratio = 0
+reanalyze_ratio = 0.1
+
 batch_size = 64
 # num_unroll_steps = 10
 # infer_context_length = 4
@@ -53,14 +52,14 @@ seed = 0
 # collector_env_num = 2
 # n_episode = 2
 # evaluator_env_num = 2
-# num_simulations = 30
+# num_simulations = 3
 # batch_size = 3
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 dmc2gym_state_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero_0901/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac1_tempdecay_rbs5e4',
+    exp_name=f'data_sampled_unizero_0901/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_current-model_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac1_tempdecay_rbs1e6',
     # exp_name=f'data_sampled_unizero_0901_debug/dmc2gym_{env_id}_state_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac1',
     env=dict(
         env_id='dmc2gym-v0',
@@ -77,6 +76,9 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
+        # TODO: only for debug
+        # collect_max_episode_steps=int(20),
+        # eval_max_episode_steps=int(20),
     ),
     policy=dict(
         model=dict(
@@ -109,7 +111,7 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
                 env_num=max(collector_env_num, evaluator_env_num),
             ),
         ),
-        learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000,),),),  # default is 10000
+        learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=50000,),),),  # default is 10000
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_sampled_unizero_0901/dmc2gym_cheetah-run_state_cont_sampled_unizero_ns50_upcNone-rr0.25_rer0_H10_bs64_LN_seed0_policy-head-layer-num2_pew5e-3_disfac1/ckpt/iteration_100000.pth.tar',
@@ -136,9 +138,9 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(5e3),
-        # replay_buffer_size=int(1e6),
+        replay_buffer_size=int(1e6),
         # replay_buffer_size=int(1e5), # TODO
-        replay_buffer_size=int(5e4), # TODO
+        # replay_buffer_size=int(5e4), # TODO
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
