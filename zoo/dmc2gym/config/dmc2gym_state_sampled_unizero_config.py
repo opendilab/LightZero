@@ -60,8 +60,8 @@ seed = 0
 # ==============================================================
 
 dmc2gym_state_cont_sampled_unizero_config = dict(
-    # exp_name=f'data_sampled_unizero_0901/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac1_tempdecay_coslr',
-    exp_name=f'data_sampled_unizero_0901_debug/dmc2gym_{env_id}_state_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac1',
+    exp_name=f'data_sampled_unizero_0901/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac1_tempdecay_rbs5e4',
+    # exp_name=f'data_sampled_unizero_0901_debug/dmc2gym_{env_id}_state_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac1',
     env=dict(
         env_id='dmc2gym-v0',
         domain_name=domain_name,
@@ -130,13 +130,15 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
         # grad_clip_value=5,
         grad_clip_value=10,
         manual_temperature_decay=True,  # TODO
-        cos_lr_scheduler=True,
+        # cos_lr_scheduler=True,
+        cos_lr_scheduler=False,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(5e3),
-        replay_buffer_size=int(1e6),
-        # replay_buffer_size=int(5e5), # TODO
+        # replay_buffer_size=int(1e6),
+        # replay_buffer_size=int(1e5), # TODO
+        replay_buffer_size=int(5e4), # TODO
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
