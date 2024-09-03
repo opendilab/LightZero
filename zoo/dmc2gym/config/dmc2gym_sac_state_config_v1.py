@@ -1,14 +1,17 @@
 from easydict import EasyDict
 
 dmc2gym_sac_config = dict(
-    exp_name='dmc2gym_cheetah_run_sac_state_seed0',
+    # exp_name='dmc2gym_cheetah_run_sac_state_seed0',
+    exp_name='dmc2gym_walker_walk_sac_state_seed0',
     env=dict(
         env_id='dmc2gym-v0',
         # domain_name="cartpole",
         # task_name="swingup",
         # frame_skip=8,
-        domain_name="cheetah",
-        task_name="run",
+        # domain_name="cheetah",
+        # task_name="run",
+        domain_name="walker",
+        task_name="walk",
         frame_skip=2,
         frame_stack=1,
         from_pixels=False,  # state obs
@@ -26,7 +29,7 @@ dmc2gym_sac_config = dict(
         model=dict(
             # obs_shape=5,
             # action_shape=1,
-            obs_shape=17,
+            obs_shape=24,
             action_shape=6,
             twin_critic=True,
             action_space='reparameterization',

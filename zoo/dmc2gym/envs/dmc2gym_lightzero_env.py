@@ -159,6 +159,7 @@ class DMC2GymEnv(BaseEnv):
         save_replay_gif=False,
         # (str or None) The path to save the replay gif. If None, the replay gif will not be saved.
         replay_path_gif=None,
+        render_image=False,
     )
 
     def __init__(self, cfg: dict = {}) -> None:
@@ -205,6 +206,7 @@ class DMC2GymEnv(BaseEnv):
                 width=self._cfg["width"],
                 frame_skip=self._cfg["frame_skip"],
                 channels_first=self._cfg["channels_first"],
+                render_image=self._cfg["render_image"]
             )
 
             # optional env wrapper
@@ -244,11 +246,7 @@ class DMC2GymEnv(BaseEnv):
         self._eval_episode_return = 0
         obs = self._env.reset()  # This line will cause errors when subprocess_env_manager is used
 
-        if self._cfg["from_pixels"]:
-            obs = obs
-        else:
-            image_obs = obs['image']
-            obs = obs['state']
+        obs = obs['state']
 
         obs = to_ndarray(obs).astype(np.float32)
         action_mask = None
@@ -286,9 +284,14 @@ class DMC2GymEnv(BaseEnv):
         action = affine_transform(action, min_val=self._env.action_space.low, max_val=self._env.action_space.high)
         obs, rew, done, info = self._env.step(action)
         self._current_step += 1
+
+        # print(f'action: {action}, obs: {obs}, rew: {rew}, done: {done}, info: {info}')
+        # print(f'step {self._current_step}: action: {action}, rew: {rew}, done: {done}')
+
         if self._cfg["from_pixels"]:
-            image_obs = obs
+            obs = obs
         else:
+            info['image_obs'] = info['image_obs'].copy()
             image_obs = info['image_obs']
 
         self._eval_episode_return += rew
