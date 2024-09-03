@@ -37,7 +37,6 @@ replay_ratio = 0.1
 max_env_step = int(4e6)
 reanalyze_ratio = 0
 batch_size = 64
-
 # num_unroll_steps = 10
 # infer_context_length = 4
 
