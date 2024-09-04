@@ -24,7 +24,7 @@ mcts_ctree = False
 # ==============================================================
 
 seller_alphazero_config = dict(
-    exp_name=f'data_az_ptree/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
+    exp_name=f'data_az_ptree/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_simulate-cache_seed0',
     # exp_name=f'data_az_ptree_debug/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_adam_fixreturn_seed0',
     env=dict(
         agent='deepseek',
@@ -117,4 +117,4 @@ if __name__ == '__main__':
     def run(max_env_step: int):
         train_alphazero([main_config, create_config], model_path=main_config.policy.model_path, seed=0, max_env_step=max_env_step)
     import cProfile
-    cProfile.run(f"run({100000})", filename="seller_az_cprofile_100k_envstep", sort="cumulative")
+    cProfile.run(f"run({100000})", filename="seller_az_cprofile_100k_envstep_cache", sort="cumulative")

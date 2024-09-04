@@ -161,7 +161,7 @@ class SellerEnv(BaseEnv):
         self._replay_csv = []
         self.action_mask = np.ones(len(self.commands), 'int8')
         self.legal_actions = np.arange(len(self.commands))
-        self.eval_episode_return = 0
+        # self.eval_episode_return = 0
 
         obs = {'observation': self.history, 'action_mask': self.action_mask, 'round_cnt': self.round_cnt, 'eval_episode_return': self.eval_episode_return}
 
@@ -317,18 +317,10 @@ class SellerEnv(BaseEnv):
         # Convert NumPy arrays to nested tuples to make them hashable.
         return self.finished, -1
 
-    def copy(self):
-        env_copy = SellerEnv(self.cfg)
-        env_copy._seed = self._seed
-        env_copy.persona_info = self.persona_info
-        env_copy.good_info = self.good_info
-        env_copy.history = copy.deepcopy(self.history)
-        env_copy.round_cnt = copy.deepcopy(self.round_cnt)
-        env_copy.finished = copy.deepcopy(self.finished)
-        env_copy.eval_episode_return = self.eval_episode_return
-        env_copy._init_flag = self._init_flag
-        env_copy._replay = self._replay
-        return env_copy
+    def clone(self):
+        env_clone = SellerEnv(self.cfg)
+        env_clone.reset(history=copy.deepcopy(self.history), round_cnt = copy.deepcopy(self.round_cnt), eval_episode_return=self.eval_episode_return, is_simulation_env=True)
+        return env_clone
     
     @staticmethod
     def create_collector_env_cfg(cfg: dict) -> List[dict]:
