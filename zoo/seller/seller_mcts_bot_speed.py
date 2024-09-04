@@ -191,7 +191,6 @@ if __name__ == '__main__':
     env = SellerEnv(cfg=env_cfg)
     avg_return = 0
     eval_episodes = 5
-    import numpy as np
     mcts_bot = MCTSBot(n_iterations=10)
     # mcts_bot = MCTSBot(n_iterations=1)
 

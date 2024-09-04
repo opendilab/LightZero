@@ -75,15 +75,17 @@ class SellerEnv(BaseEnv):
         self.eval_good_num = cfg.get('eval_good_num', 10)
 
         self.is_eval = cfg.get('is_eval', False)
+        print(f'is_eval: {self.is_eval}')
 
         self.seed_for_persona = np.random.randint(0, self.total_persona_num)
-
-        self._seed = 0
         if self.is_eval:
-            np_seed = np.random.randint(0, self.eval_good_num)
-            self.seed(self.train_good_num + np_seed)
+            # TODO
+            np_seed = np.random.randint(0, self.train_good_num + self.eval_good_num)
+            # self._seed = np_seed
+            self.seed(np_seed)
         else:
             np_seed = np.random.randint(0, self.train_good_num)
+            # self._seed = np_seed
             self.seed(np_seed)
 
         if not (SellerEnv.executor and SellerEnv.judge and SellerEnv.buyer):
@@ -127,7 +129,7 @@ class SellerEnv(BaseEnv):
                 if cnt >= self.total_good_num:
                     break
 
-    def reset(self, history=[], round_cnt = 0, eval_episode_return=0):
+    def reset(self, history=[], round_cnt = 0, eval_episode_return=0, is_simulation_env=False):
         if round_cnt > 0:
             self.history = copy.deepcopy(history)  
             self.round_cnt = copy.deepcopy(round_cnt)
@@ -135,28 +137,38 @@ class SellerEnv(BaseEnv):
             self.round_cnt = 0
             self.history = []
 
+        if not is_simulation_env:
+            print(f'is_eval: {self.is_eval}, is_simulation_env: {is_simulation_env}')
+            self.seed_for_persona = np.random.randint(0, self.total_persona_num)
+            if self.is_eval:
+                # TODO: train on N goods, eval on 2N goods
+                np_seed = np.random.randint(0, self.train_good_num + self.eval_good_num)
+                # 下面一行相当于 self._seed = np_seed
+                self.seed(np_seed)
+            else:
+                np_seed = np.random.randint(0, self.train_good_num)
+                # 下面一行相当于 self._seed = np_seed
+                self.seed(np_seed)
+
+                print(f' ======= current seed for goods: {self._seed} ========= ')
+                print(f' ======= current seed for persona: {self.seed_for_persona} ========= ')
+
         self.eval_episode_return = copy.deepcopy(eval_episode_return)
         self.finished = self.round_cnt >= self.max_round
-        # self.finished = False
 
         self._init_flag = True
         self._replay = ''
         self._replay_csv = []
-        # obs = {'observation': str(self.history), 'candidate_samples': str(self.commands)}
         self.action_mask = np.ones(len(self.commands), 'int8')
         self.legal_actions = np.arange(len(self.commands))
         self.eval_episode_return = 0
 
-        # obs = {'observation': str(self.history), 'action_mask': action_mask}
         obs = {'observation': self.history, 'action_mask': self.action_mask, 'round_cnt': self.round_cnt, 'eval_episode_return': self.eval_episode_return}
 
-        print(f' ======= current seed for goods: {self._seed} ========= ')
-        print(f' ======= current seed for persona: {self.seed_for_persona} ========= ')
         self.persona_info = SellerEnv.personas[self.seed_for_persona % self.total_persona_num]
         self.good_info = SellerEnv.goods[self._seed % self.total_good_num]
         # self.good_info = SellerEnv.goods[self._seed % 3]
         # self.good_info = SellerEnv.goods[0]  # TODO
-        # self.good_info = SellerEnv.goods[1]  # TODO
 
         return obs
     
@@ -338,17 +350,17 @@ if __name__ == '__main__':
             agent='deepseek',
             api_key='sk-c4a8fe52693a4aaab64e648c42f40be6',
             # api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
-            # commands=[
-            #     '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
-            #     '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
-            # ],
             commands=[
-                '将你的产品推销给用户'
+                '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
+                '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
             ],
+            # commands=[
+            #     '将你的产品推销给用户'
+            # ],
             max_round=5,
             seed=0,
             lang='zh',
-            log_suffix='direct_example2',
+            log_suffix='human', # TODO
             save_replay=True,  # TODO
         )
     )
@@ -358,11 +370,11 @@ if __name__ == '__main__':
     for seed in range(0, eval_episodes):
         env.seed(seed)
         env.reset()
-        # commander = Commander()
+        commander = Commander()
         while not env.finished:
             print(f'Legal actions: {" ".join([str(i) + ": " + env.commands[i] for i in range(len(env.commands))])}')
-            # command = commander.call()
-            command = 0
+            command = commander.call()
+            # command = 0
             env_step = env.step([command])
             print(f'########## Round {env.round_cnt} ##########')
             for k in env_step.info:

@@ -204,7 +204,8 @@ class MCTS(object):
         self.simulate_env.reset(
                 history=state_config_for_simulate_env_reset.history,
                 round_cnt = state_config_for_simulate_env_reset.round_cnt,
-                eval_episode_return = state_config_for_simulate_env_reset.eval_episode_return
+                eval_episode_return = state_config_for_simulate_env_reset.eval_episode_return,
+                is_simulation_env=True
             )  
         # Expand the root node by adding children to it.
         self._expand_leaf_node(root, self.simulate_env, policy_forward_fn)
@@ -223,7 +224,8 @@ class MCTS(object):
             self.simulate_env.reset(
                 history=state_config_for_simulate_env_reset.history,
                 round_cnt = state_config_for_simulate_env_reset.round_cnt,
-                eval_episode_return = state_config_for_simulate_env_reset.eval_episode_return
+                eval_episode_return = state_config_for_simulate_env_reset.eval_episode_return,
+                is_simulation_env=True
             )  
 
             # Set the battle mode adopted by the environment during the MCTS process.
