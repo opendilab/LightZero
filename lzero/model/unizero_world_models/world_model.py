@@ -1243,57 +1243,8 @@ class WorldModel(nn.Module):
             )
 
     # TODO: 测试正确性
-    def _calculate_policy_loss_cont_v2(self, outputs, batch: dict) -> Tuple[
-            torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
-        
-        batch_size, num_unroll_steps, action_space_size = outputs.logits_policy.shape[
-            0], self.config.num_unroll_steps, self.config.action_space_size
 
-        policy_logits_all = outputs.logits_policy
-        mask_batch = batch['mask_padding']
-        child_sampled_actions_batch = batch['child_sampled_actions']
-        target_policy = batch['target_policy']
-
-        policy_logits_all = policy_logits_all.view(batch_size * num_unroll_steps, -1)
-        mask_batch = mask_batch.contiguous().view(-1)
-        child_sampled_actions_batch = child_sampled_actions_batch.contiguous().view(batch_size * num_unroll_steps, -1,
-                                                                                    action_space_size)
-        mask_sum = mask_batch.sum()
-
-        mu, sigma = policy_logits_all[:, :action_space_size], policy_logits_all[:, action_space_size:]
-        mu = mu.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
-        sigma = sigma.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
-        dist = Independent(Normal(mu, sigma), 1)
-
-        target_normalized_visit_count = target_policy.contiguous().view(batch_size * num_unroll_steps, -1)
-        target_sampled_actions = child_sampled_actions_batch
-
-        policy_entropy = dist.entropy()  
-        policy_entropy_loss = (-policy_entropy * mask_batch).sum() / mask_sum
-
-        y = 1 - target_sampled_actions.pow(2)
-        target_sampled_actions_before_tanh = torch.arctanh(torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6))
-
-        log_prob = dist.log_prob(target_sampled_actions_before_tanh)
-        log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
-        log_prob_sampled_actions = log_prob
-
-        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
-        policy_loss = (-torch.sum(
-            torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
-        ) * mask_batch).sum() / mask_sum
-
-        non_masked_visit_count = torch.masked_select(target_normalized_visit_count, mask_batch.bool())
-        if non_masked_visit_count.numel() > 0:  
-            target_dist = Categorical(non_masked_visit_count)
-            target_policy_entropy = target_dist.entropy().sum().item() / mask_sum
-        else:
-            target_policy_entropy = 0.0
-
-        return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
-
-    def _calculate_policy_loss_cont(self, outputs, batch: dict) -> Tuple[
-        torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _calculate_policy_loss_cont(self, outputs, batch: dict) -> Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Calculate the policy loss for continuous actions.
 
@@ -1341,10 +1292,27 @@ class WorldModel(nn.Module):
         log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
         log_prob_sampled_actions = log_prob
 
-        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
+        # target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
+        # TODO: 在计算target_log_prob_sampled_actions时加一个较大的平滑项
+        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-3)
+
+        # KL as projector
         policy_loss = -torch.sum(
             torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
         ) * mask_batch
+
+        # TODO
+        # 使用Wasserstein距离来替代KL散度
+        # 计算Wasserstein距离
+        # mu_diff = mu - target_sampled_actions_clamped
+        # sigma_squared = sigma.pow(2)
+        # policy_loss = mu_diff.pow(2) + sigma_squared - torch.log(sigma_squared) - 1
+        # # 调整target_normalized_visit_count的形状以匹配policy_loss
+        # target_normalized_visit_count = target_normalized_visit_count.unsqueeze(-1)
+        # # 计算加权的policy_loss
+        # policy_loss = torch.sum(target_normalized_visit_count.detach() * policy_loss, dim=1)
+        # # 应用mask
+        # policy_loss = torch.sum(policy_loss * mask_batch.unsqueeze(-1), dim=1) / torch.sum(mask_batch)
 
         # Calculate the entropy of the target policy distribution
         non_masked_indices = torch.nonzero(mask_batch).squeeze(-1)
@@ -1355,6 +1323,70 @@ class WorldModel(nn.Module):
             target_policy_entropy = 0.0
 
         return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
+
+    # def _calculate_policy_loss_cont_v0(self, outputs, batch: dict) -> Tuple[
+    #     torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
+    #     """
+    #     Calculate the policy loss for continuous actions.
+
+    #     Args:
+    #         - outputs: Model outputs containing policy logits.
+    #         - batch (:obj:`dict`): Batch data containing target policy, mask and sampled actions.
+    #     Returns:
+    #         - policy_loss (:obj:`torch.Tensor`): The calculated policy loss.
+    #         - policy_entropy_loss (:obj:`torch.Tensor`): The entropy loss of the policy.
+    #         - target_policy_entropy (:obj:`float`): The entropy of the target policy distribution.
+    #         - target_sampled_actions (:obj:`torch.Tensor`): The actions sampled from the target policy.
+    #         - mu (:obj:`torch.Tensor`): The mean of the normal distribution.
+    #         - sigma (:obj:`torch.Tensor`): The standard deviation of the normal distribution.
+    #     """
+    #     batch_size, num_unroll_steps, action_space_size = outputs.logits_policy.shape[
+    #         0], self.config.num_unroll_steps, self.config.action_space_size
+
+    #     policy_logits_all = outputs.logits_policy
+    #     mask_batch = batch['mask_padding']
+    #     child_sampled_actions_batch = batch['child_sampled_actions']
+    #     target_policy = batch['target_policy']
+
+    #     # Flatten the unroll step dimension for easier vectorized operations
+    #     policy_logits_all = policy_logits_all.view(batch_size * num_unroll_steps, -1)
+    #     mask_batch = mask_batch.contiguous().view(-1)
+    #     child_sampled_actions_batch = child_sampled_actions_batch.contiguous().view(batch_size * num_unroll_steps, -1,
+    #                                                                                 action_space_size)
+
+    #     mu, sigma = policy_logits_all[:, :action_space_size], policy_logits_all[:, action_space_size:]
+    #     mu = mu.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
+    #     sigma = sigma.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
+    #     dist = Independent(Normal(mu, sigma), 1)
+
+    #     target_normalized_visit_count = target_policy.contiguous().view(batch_size * num_unroll_steps, -1)
+    #     target_sampled_actions = child_sampled_actions_batch
+
+    #     policy_entropy = dist.entropy().mean(dim=1)
+    #     policy_entropy_loss = -policy_entropy * mask_batch
+
+    #     y = 1 - target_sampled_actions.pow(2)
+    #     target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
+    #     target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
+
+    #     log_prob = dist.log_prob(target_sampled_actions_before_tanh)
+    #     log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
+    #     log_prob_sampled_actions = log_prob
+
+    #     target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
+    #     policy_loss = -torch.sum(
+    #         torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
+    #     ) * mask_batch
+
+    #     # Calculate the entropy of the target policy distribution
+    #     non_masked_indices = torch.nonzero(mask_batch).squeeze(-1)
+    #     if len(non_masked_indices) > 0:
+    #         target_dist = Categorical(target_normalized_visit_count[non_masked_indices])
+    #         target_policy_entropy = target_dist.entropy().mean().item()
+    #     else:
+    #         target_policy_entropy = 0.0
+
+    #     return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
 
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
         # Assume outputs is an object with logits attributes like 'rewards', 'policy', and 'value'.
