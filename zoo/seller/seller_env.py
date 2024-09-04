@@ -1,4 +1,5 @@
 import os.path
+from typing import List
 
 import numpy as np
 import gym
@@ -64,12 +65,26 @@ class SellerEnv(BaseEnv):
         self.cfg = cfg
         self.lang = cfg.get('lang', 'zh')
         assert self.lang in ['zh', 'en']
-        self._seed = 0
 
         self.persona_info = None
-        self.persona_num = cfg.get('persona_num', 100)
+        self.total_persona_num = cfg.get('total_persona_num', 10)
+
         self.good_info = None
-        self.good_num = cfg.get('good_num', 100)
+        self.total_good_num = cfg.get('total_good_num', 20)
+        self.train_good_num = cfg.get('train_good_num', 10)
+        self.eval_good_num = cfg.get('eval_good_num', 10)
+
+        self.is_eval = cfg.get('is_eval', False)
+
+        self.seed_for_persona = np.random.randint(0, self.total_persona_num)
+
+        self._seed = 0
+        if self.is_eval:
+            np_seed = np.random.randint(0, self.eval_good_num)
+            self.seed(self.train_good_num + np_seed)
+        else:
+            np_seed = np.random.randint(0, self.train_good_num)
+            self.seed(np_seed)
 
         if not (SellerEnv.executor and SellerEnv.judge and SellerEnv.buyer):
             self._init_roles()
@@ -99,7 +114,7 @@ class SellerEnv(BaseEnv):
             for item in jsonlines.Reader(f):
                 SellerEnv.personas.append(item['persona'])
                 cnt += 1
-                if cnt >= self.persona_num:
+                if cnt >= self.total_persona_num:
                     break
 
         # Init the descriptions to goods.
@@ -109,7 +124,7 @@ class SellerEnv(BaseEnv):
                 new_item = {'title': item['title'], 'description': item['description']}
                 SellerEnv.goods.append(str(new_item))
                 cnt += 1
-                if cnt >= self.good_num:
+                if cnt >= self.total_good_num:
                     break
 
     def reset(self, history=[], round_cnt = 0, eval_episode_return=0):
@@ -119,7 +134,7 @@ class SellerEnv(BaseEnv):
         else:
             self.round_cnt = 0
             self.history = []
-        
+
         self.eval_episode_return = copy.deepcopy(eval_episode_return)
         self.finished = self.round_cnt >= self.max_round
         # self.finished = False
@@ -135,9 +150,11 @@ class SellerEnv(BaseEnv):
         # obs = {'observation': str(self.history), 'action_mask': action_mask}
         obs = {'observation': self.history, 'action_mask': self.action_mask, 'round_cnt': self.round_cnt, 'eval_episode_return': self.eval_episode_return}
 
-        self.persona_info = SellerEnv.personas[self._seed % self.persona_num]
-        # self.good_info = SellerEnv.goods[self._seed % self.good_num]
-        self.good_info = SellerEnv.goods[self._seed % 3]
+        print(f' ======= current seed for goods: {self._seed} ========= ')
+        print(f' ======= current seed for persona: {self.seed_for_persona} ========= ')
+        self.persona_info = SellerEnv.personas[self.seed_for_persona % self.total_persona_num]
+        self.good_info = SellerEnv.goods[self._seed % self.total_good_num]
+        # self.good_info = SellerEnv.goods[self._seed % 3]
         # self.good_info = SellerEnv.goods[0]  # TODO
         # self.good_info = SellerEnv.goods[1]  # TODO
 
@@ -151,8 +168,13 @@ class SellerEnv(BaseEnv):
         # self.replay = replay
         # self.replay_csv = replay_csv
 
-    def seed(self, seed: int, dynamic_seed: bool = False) -> None:
+    def seed(self, seed: int, dynamic_seed: bool = True) -> None:
+        """
+        Set the seed for the environment.
+        """
         self._seed = seed
+        self._dynamic_seed = dynamic_seed
+        np.random.seed(self._seed)
 
     def _init_roles(self):
         SellerEnv.executor = Executor(
@@ -295,6 +317,20 @@ class SellerEnv(BaseEnv):
         env_copy._init_flag = self._init_flag
         env_copy._replay = self._replay
         return env_copy
+    
+    @staticmethod
+    def create_collector_env_cfg(cfg: dict) -> List[dict]:
+        collector_env_num = cfg.pop('collector_env_num')
+        cfg = copy.deepcopy(cfg)
+        cfg.is_eval = False
+        return [cfg for _ in range(collector_env_num)]
+
+    @staticmethod
+    def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
+        evaluator_env_num = cfg.pop('evaluator_env_num')
+        cfg = copy.deepcopy(cfg)
+        cfg.is_eval = True
+        return [cfg for _ in range(evaluator_env_num)]
 
 if __name__ == '__main__':
     env_cfg = EasyDict(
