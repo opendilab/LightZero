@@ -18,11 +18,25 @@
 #include <time.h>
 #include <cassert>
 
+
 #ifdef _WIN32
 #include "..\..\common_lib\utils.cpp"
 #else
 #include "../../common_lib/utils.cpp"
 #endif
+
+
+void print_vector(const std::vector<float>& vec) {
+    std::cout << "[";
+    for (size_t i = 0; i < vec.size(); ++i) {
+        std::cout << vec[i];
+        if (i != vec.size() - 1) {
+            std::cout << ", ";
+        }
+    }
+    std::cout << "]";
+}
+
 
 
 
@@ -437,20 +451,31 @@ namespace tree
         float noise, prior;
         for (int i = 0; i < this->num_of_sampled_actions; ++i)
         {
-
             noise = noises[i];
             CNode *child = this->get_child(this->legal_actions[i]);
             prior = child->prior;
+
+            // 打印当前的prior和noise
+            // std::cout << "Action: ";
+            // print_vector(this->legal_actions[i].value);
+            // std::cout << std::endl;
+            // std::cout << ", Prior: " << prior 
+            //         << ", Noise: " << noise 
+            //         << std::endl;
+
             if (this->continuous_action_space == true)
             {
-                // if prior is log_prob
+                // 如果prior是log_prob
                 child->prior = log(exp(prior) * (1 - exploration_fraction) + noise * exploration_fraction + 1e-6);
             }
             else
             {
-                // if prior is prob
+                // 如果prior是prob
                 child->prior = prior * (1 - exploration_fraction) + noise * exploration_fraction;
             }
+
+            // 打印更新后的prior
+            // std::cout << "Updated Prior: " << child->prior << std::endl;
         }
     }
 
@@ -912,7 +937,9 @@ namespace tree
 
         // sampled related core code
         // TODO(pu): empirical distribution
-        std::string empirical_distribution_type = "density";
+        // std::string empirical_distribution_type = "density";
+        std::string empirical_distribution_type = "uniform";
+
         if (empirical_distribution_type.compare("density"))
         {
             if (continuous_action_space == true)

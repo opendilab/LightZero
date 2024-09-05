@@ -1292,9 +1292,9 @@ class WorldModel(nn.Module):
         log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
         log_prob_sampled_actions = log_prob
 
-        # target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
+        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
         # TODO: 在计算target_log_prob_sampled_actions时加一个较大的平滑项
-        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-3)
+        # target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-3)
 
         # KL as projector
         policy_loss = -torch.sum(

@@ -47,6 +47,7 @@ infer_context_length = 2
 
 norm_type = 'LN'
 seed = 0
+fixed_sigma_value = 2
 
 # for debug
 # collector_env_num = 2
@@ -59,9 +60,9 @@ seed = 0
 # ==============================================================
 
 dmc2gym_state_cont_sampled_unizero_config = dict(
+    exp_name=f'data_sampled_unizero_0901/ucb-uniform-prior/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_current-model_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_fixedsigma{fixed_sigma_value}',
     # exp_name=f'data_sampled_unizero_0901/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_current-model_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac1_tempdecay_rbs1e6_policlossW',
-    exp_name=f'data_sampled_unizero_0901/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_current-model_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac1_tempdecay_rbs1e6_policylossKL-eps1e-3',
-
+    # exp_name=f'data_sampled_unizero_0901/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_current-model_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac1_tempdecay_rbs1e6_policylossKL-eps1e-3',
     # exp_name=f'data_sampled_unizero_0901_debug/dmc2gym_{env_id}_state_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac1',
     env=dict(
         env_id='dmc2gym-v0',
@@ -97,7 +98,7 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
                 num_of_sampled_actions=K,
                 # sigma_type='conditioned',
                 sigma_type='fixed',
-                fixed_sigma_value=0.5,
+                fixed_sigma_value=fixed_sigma_value,
                 # fixed_sigma_value=0.1, # 性能差
                 bound_type=None,
                 model_type='mlp',
