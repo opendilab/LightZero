@@ -341,7 +341,12 @@ class RepresentationNetworkUniZero(nn.Module):
         self.activation = activation
         self.embedding_dim = embedding_dim
 
-        self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
+        
+        if self.observation_shape[1] == 64:
+            self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
+
+        elif self.observation_shape[1] == 96:
+            self.last_linear = nn.Linear(64 * 6 * 6, self.embedding_dim, bias=False)
 
         self.sim_norm = SimNorm(simnorm_dim=group_size)
 
@@ -365,7 +370,8 @@ class RepresentationNetworkUniZero(nn.Module):
         # Important: Transform the output feature plane to the latent state.
         # For example, for an Atari feature plane of shape (64, 8, 8),
         # flattening results in a size of 4096, which is then transformed to 768.
-        x = self.last_linear(x.reshape(-1, 64 * 8 * 8))
+        x = self.last_linear(x.view(x.size(0), -1))
+
         x = x.view(-1, self.embedding_dim)
 
         # NOTE: very important for training stability.

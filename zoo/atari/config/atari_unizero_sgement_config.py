@@ -14,7 +14,9 @@ replay_ratio = 0.25
 # replay_ratio = 1
 
 collector_env_num = 8
-n_episode = 8
+# num_segments = 8
+num_segments = 1
+
 evaluator_env_num = 3
 num_simulations = 50
 max_env_step = int(3e5)
@@ -25,7 +27,7 @@ infer_context_length = 4
 
 # ====== only for debug =====
 # collector_env_num = 2
-# n_episode = 2
+# num_segments = 2
 # evaluator_env_num = 2
 # num_simulations = 5
 # max_env_step = int(2e5)
@@ -82,7 +84,7 @@ atari_unizero_config = dict(
         optim_type='AdamW',
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        n_episode=n_episode,
+        num_segments=num_segments,
         replay_buffer_size=int(1e6),
         eval_freq=int(5e3),
         collector_env_num=collector_env_num,
@@ -102,6 +104,14 @@ atari_unizero_create_config = dict(
         type='unizero',
         import_names=['lzero.policy.unizero'],
     ),
+    collector=dict(
+        type='segment_muzero',
+        import_names=['lzero.worker.muzero_segment_collector'],
+    ),
+    evaluator=dict(
+        type='muzero',
+        import_names=['lzero.worker.muzero_evaluator'],
+    )
 )
 atari_unizero_create_config = EasyDict(atari_unizero_create_config)
 create_config = atari_unizero_create_config
@@ -111,7 +121,7 @@ if __name__ == "__main__":
     seeds = [0]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0905/obshape96_no-augmentation/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
+        main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0905_numsegments-{num_segments}/obshape96_no-augmentation/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
         # main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0905/obshape96_use-augmentation/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
 
         from lzero.entry import train_unizero
