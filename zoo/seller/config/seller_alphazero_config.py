@@ -25,11 +25,19 @@ mcts_ctree = False
 
 seller_alphazero_config = dict(
     exp_name=f'data_az_ptree/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_simulate-cache_seed0',
+    # exp_name=f'data_az_ptree/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
+
     # exp_name=f'data_az_ptree_debug/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_adam_fixreturn_seed0',
     env=dict(
         agent='deepseek',
         # api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
-        api_key='sk-c4a8fe52693a4aaab64e648c42f40be6',
+        # api_key='sk-c4a8fe52693a4aaab64e648c42f40be6',
+        api_key=[
+            'sk-f50d634a123f4c84bc08fa880387ff76', 'sk-f8e6d25f99e5434c9ebda6e447fa8a7a',
+            'sk-d020afbebe1e4d1ba1db7d32700c068c', 'sk-514a633560104439a4324dc30deab907',
+            'sk-c4a8fe52693a4aaab64e648c42f40be6', 'sk-7866ab6ea8ca408a91971ef18eed4b75',
+
+        ],
         commands=[
             '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
             '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
@@ -117,4 +125,6 @@ if __name__ == '__main__':
     def run(max_env_step: int):
         train_alphazero([main_config, create_config], model_path=main_config.policy.model_path, seed=0, max_env_step=max_env_step)
     import cProfile
-    cProfile.run(f"run({100000})", filename="seller_az_cprofile_100k_envstep_cache", sort="cumulative")
+    cProfile.run(f"run({100000})", filename="seller_az_cprofile_100k_envstep_cache_run2", sort="cumulative")
+    # cProfile.run(f"run({100000})", filename="seller_az_cprofile_100k_envstep_run2", sort="cumulative")
+
