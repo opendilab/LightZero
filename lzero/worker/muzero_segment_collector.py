@@ -140,6 +140,12 @@ class MuZeroSegmentCollector(ISerialCollector):
 
         self._env_info = {env_id: {'time': 0., 'step': 0} for env_id in range(self._env_num)}
 
+        # 在此处初始化action_mask_dict, to_play_dict和chance_dict,确保它们包含所有env_id的值
+        self.action_mask_dict = {i: None for i in range(self._env_num)}
+        self.to_play_dict = {i: None for i in range(self._env_num)}
+        if self.policy_config.use_ture_chance_label_in_chance_encoder:
+            self.chance_dict = {i: None for i in range(self._env_num)}
+
         self._episode_info = []
         self._total_envstep_count = 0
         self._total_episode_count = 0
@@ -337,10 +343,17 @@ class MuZeroSegmentCollector(ISerialCollector):
         # initializations
         init_obs = self._env.ready_obs
 
-        action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
-        to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
-        if self.policy_config.use_ture_chance_label_in_chance_encoder:
-            chance_dict = {i: to_ndarray(init_obs[i]['chance']) for i in range(env_nums)}
+        # action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
+        # to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
+        # if self.policy_config.use_ture_chance_label_in_chance_encoder:
+        #     chance_dict = {i: to_ndarray(init_obs[i]['chance']) for i in range(env_nums)}
+
+        # 改为直接使用self.action_mask_dict等变量
+        for env_id in range(env_nums):
+            self.action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
+            self.to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
+            if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                self.chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
         game_segments = [
             GameSegment(
@@ -387,12 +400,12 @@ class MuZeroSegmentCollector(ISerialCollector):
                 stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in new_available_env_id}
                 stack_obs = list(stack_obs.values())
 
-                action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in new_available_env_id} 
-                to_play_dict = {env_id: to_play_dict[env_id] for env_id in new_available_env_id}
-                action_mask = [action_mask_dict[env_id] for env_id in new_available_env_id]
-                to_play = [to_play_dict[env_id] for env_id in new_available_env_id]  
+                action_mask_dict = {env_id: self.action_mask_dict[env_id] for env_id in new_available_env_id} 
+                to_play_dict = {env_id: self.to_play_dict[env_id] for env_id in new_available_env_id}
+                action_mask = [self.action_mask_dict[env_id] for env_id in new_available_env_id]
+                to_play = [self.to_play_dict[env_id] for env_id in new_available_env_id]  
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
-                    chance_dict = {env_id: chance_dict[env_id] for env_id in new_available_env_id}
+                    chance_dict = {env_id: self.chance_dict[env_id] for env_id in new_available_env_id}
 
                 stack_obs = to_ndarray(stack_obs)
                 stack_obs = prepare_observation(stack_obs, self.policy_config.model.model_type)
@@ -500,10 +513,16 @@ class MuZeroSegmentCollector(ISerialCollector):
                             to_play_dict[env_id]
                         )
 
-                    action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
-                    to_play_dict[env_id] = to_ndarray(obs['to_play'])
+                    # action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
+                    # to_play_dict[env_id] = to_ndarray(obs['to_play'])
+                    # if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                    #     chance_dict[env_id] = to_ndarray(obs['chance'])
+
+                    # 在更新observation时,同步更新action_mask_dict,to_play_dict和chance_dict
+                    self.action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
+                    self.to_play_dict[env_id] = to_ndarray(obs['to_play'])
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
-                        chance_dict[env_id] = to_ndarray(obs['chance'])
+                        self.chance_dict[env_id] = to_ndarray(obs['chance'])
 
                     if self.policy_config.ignore_done:
                         dones[env_id] = False  
@@ -592,10 +611,10 @@ class MuZeroSegmentCollector(ISerialCollector):
                         break
 
                     # reset env
-                    action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
-                    to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
-                    if self.policy_config.use_ture_chance_label_in_chance_encoder:
-                        chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
+                    # action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
+                    # to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
+                    # if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                    #     chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
                     game_segments[env_id] = GameSegment(
                         self._env.action_space,
