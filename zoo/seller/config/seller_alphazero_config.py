@@ -35,8 +35,7 @@ seller_alphazero_config = dict(
         api_key=[
             'sk-f50d634a123f4c84bc08fa880387ff76', 'sk-f8e6d25f99e5434c9ebda6e447fa8a7a',
             'sk-d020afbebe1e4d1ba1db7d32700c068c', 'sk-514a633560104439a4324dc30deab907',
-            'sk-c4a8fe52693a4aaab64e648c42f40be6', 'sk-7866ab6ea8ca408a91971ef18eed4b75',
-
+            # 'sk-c4a8fe52693a4aaab64e648c42f40be6', 'sk-7866ab6ea8ca408a91971ef18eed4b75',
         ],
         commands=[
             '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
