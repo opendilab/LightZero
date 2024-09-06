@@ -197,7 +197,7 @@
         <span class="p">)</span>
 
         <span class="c1"># Evaluate policy performance</span>
-        <span class="k">if</span> <span class="n">evaluator</span><span class="o">.</span><span class="n">should_eval</span><span class="p">(</span><span class="n">learner</span><span class="o">.</span><span class="n">train_iter</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">evaluator</span><span class="o">.</span><span class="n">should_eval</span><span class="p">(</span><span class="n">learner</span><span class="o">.</span><span class="n">train_iter</span><span class="p">)</span> <span class="ow">and</span> <span class="n">learner</span><span class="o">.</span><span class="n">train_iter</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
             <span class="n">stop</span><span class="p">,</span> <span class="n">reward</span> <span class="o">=</span> <span class="n">evaluator</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span>
                 <span class="n">learner</span><span class="o">.</span><span class="n">save_checkpoint</span><span class="p">,</span>
                 <span class="n">learner</span><span class="o">.</span><span class="n">train_iter</span><span class="p">,</span>
