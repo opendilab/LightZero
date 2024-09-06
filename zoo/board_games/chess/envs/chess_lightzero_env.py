@@ -1,25 +1,25 @@
-"""
-Adapt the Chess environment in PettingZoo (https://github.com/Farama-Foundation/PettingZoo) to the BaseEnv interface.
-"""
-
 import copy
 import logging
 import os
-import sys
+from collections import defaultdict
 from datetime import datetime
 from typing import List
 
 import chess
 import numpy as np
-from ding.envs.env.base_env import BaseEnv, BaseEnvTimestep
+from ding.envs.env.base_env import BaseEnvTimestep
 from ding.utils.registry_factory import ENV_REGISTRY
 from gymnasium import spaces
 from pettingzoo.classic.chess import chess_utils
 
+from zoo.board_games.chess.envs.chess_env import ChessEnv
+
 
 @ENV_REGISTRY.register('chess_lightzero')
-class ChessLightZeroEnv(BaseEnv):
+class ChessLightZeroEnv(ChessEnv):
     def __init__(self, cfg=None):
+        if cfg is None:
+            cfg = {}
         self.cfg = cfg
         self.board_size = 8
         self.players = [1, 2]
@@ -33,7 +33,6 @@ class ChessLightZeroEnv(BaseEnv):
         assert (self.prob_random_agent >= 0 and self.prob_expert_agent == 0) or (
                 self.prob_random_agent == 0 and self.prob_expert_agent >= 0), \
             f'self.prob_random_agent:{self.prob_random_agent}, self.prob_expert_agent:{self.prob_expert_agent}'
-        self._env = self
         self.agent_vs_human = cfg.agent_vs_human
         self.alphazero_mcts_ctree = cfg.alphazero_mcts_ctree
         self._replay_path = cfg.replay_path if hasattr(cfg, "replay_path") and cfg.replay_path is not None else None
@@ -41,16 +40,37 @@ class ChessLightZeroEnv(BaseEnv):
         self._observation_space = None
         self._action_space = None
 
+        # self.board_history = np.zeros((8, 8, 104), dtype=bool)
+
+        self.render_mode = self.cfg.get("render_mode", None)
+        self.screen_height = self.screen_width = self.cfg.get("screen_size", 800)
+        assert self.render_mode is None or self.render_mode in self.metadata["render_modes"]
+
+        self.transposition_table = defaultdict(dict)
+
     @property
     def legal_actions(self):
         return chess_utils.legal_moves(self.board)
 
     def observe(self, agent_index):
-        # Get observation for the specified agent.
         try:
             observation = chess_utils.get_observation(self.board, agent_index).astype(float)  # TODO
         except Exception as e:
             print('debug')
+
+        # TODO:
+        # observation = np.dstack((observation[:, :, :7], self.board_history))
+        # We need to swap the white 6 channels with black 6 channels
+        # if agent_index == 1:
+        #     # 1. Mirror the board
+        #     observation = np.flip(observation, axis=0)
+        #     # 2. Swap the white 6 channels with the black 6 channels
+        #     for i in range(1, 9):
+        #         tmp = observation[..., 13 * i - 6 : 13 * i].copy()
+        #         observation[..., 13 * i - 6 : 13 * i] = observation[
+        #             ..., 13 * i : 13 * i + 6
+        #         ]
+        #         observation[..., 13 * i : 13 * i + 6] = tmp
 
         action_mask = np.zeros(4672, dtype=np.int8)
         action_mask[chess_utils.legal_moves(self.board)] = 1
@@ -118,6 +138,7 @@ class ChessLightZeroEnv(BaseEnv):
 
         action_mask = np.zeros(4672, dtype=np.int8)
         action_mask[chess_utils.legal_moves(self.board)] = 1
+        # self.board_history = np.zeros((8, 8, 104), dtype=bool)
 
         if self.battle_mode == 'play_with_bot_mode' or self.battle_mode == 'eval_mode':
             obs = {
@@ -137,6 +158,8 @@ class ChessLightZeroEnv(BaseEnv):
             }
         if self._replay_path is not None:
             self._frames = []
+
+        self.transposition_table = defaultdict(dict)
 
         return obs
 
@@ -196,10 +219,10 @@ class ChessLightZeroEnv(BaseEnv):
                 bot_action = self.bot_action()
 
             if self._replay_path is not None:
-                self._frames.append(self._env.render(mode='rgb_array'))
+                self._frames.append(self.render(mode='rgb_array'))
             timestep_player2 = self._player_step(bot_action)
             if self._replay_path is not None:
-                self._frames.append(self._env.render(mode='rgb_array'))
+                self._frames.append(self.render(mode='rgb_array'))
 
             timestep_player2.info['eval_episode_return'] = -timestep_player2.reward
             timestep_player2 = timestep_player2._replace(reward=-timestep_player2.reward)
@@ -234,11 +257,12 @@ class ChessLightZeroEnv(BaseEnv):
             action = np.random.choice(self.legal_actions)
 
         current_agent = self.current_player_index
-        try:
-            chosen_move = chess_utils.action_to_move(self.board, action, current_agent)
-        except Exception as e:
-            print('debug')
 
+        # TODO: Update board history
+        # next_board = chess_utils.get_observation(self.board, current_agent)
+        # self.board_history = np.dstack((next_board[:, :, 7:], self.board_history[:, :, :-13]))
+
+        chosen_move = chess_utils.action_to_move(self.board, action, current_agent)
         assert chosen_move in self.board.legal_moves
         self.board.push(chosen_move)
 
@@ -290,123 +314,6 @@ class ChessLightZeroEnv(BaseEnv):
     def random_action(self):
         action_list = chess_utils.legal_moves(self.board)
         return np.random.choice(action_list)
-
-    def bot_action(self):
-        # Get all legal moves
-        legal_moves = list(self.board.legal_moves)
-        legal_actions = chess_utils.legal_moves(self.board)
-
-        # Create a temporary board to simulate moves
-        temp_board = self.board.copy()
-
-        best_action = None
-        best_score = -np.inf
-
-        # Evaluate each legal move
-        for action, move in zip(legal_actions, legal_moves):
-            # Simulate the move
-            temp_board.push(move)
-
-            # Evaluate the board after the move
-            score = self.evaluate_board(temp_board)
-
-            # Update best_action if the current move has a higher score
-            if score > best_score:
-                best_action = action
-                best_score = score
-
-            # Undo the move to return to the original state
-            temp_board.pop()
-
-        # Return the action with the highest score
-        return best_action
-
-    def evaluate_board(self, board):
-        # Evaluate the board based on rules
-
-        # Check if the game is over
-        outcome = board.outcome()
-        if outcome is not None:
-            # If the game is over, return a definitive score
-            if outcome.winner == chess.WHITE:
-                return 10000  # White wins
-            elif outcome.winner == chess.BLACK:
-                return -10000  # Black wins
-            else:
-                return 0  # Draw
-
-        # If the game is not over, calculate a score based on various factors
-        score = 0
-
-        # 1. Assign points based on the value of pieces
-        # Piece values: Queen 9, Rook 5, Knight 3, Bishop 3, Pawn 1
-        piece_values = {
-            chess.PAWN: 1,
-            chess.KNIGHT: 3,
-            chess.BISHOP: 3,
-            chess.ROOK: 5,
-            chess.QUEEN: 9,
-            chess.KING: 0
-        }
-        for piece_type, value in piece_values.items():
-            score += len(board.pieces(piece_type, chess.WHITE)) * value
-            score -= len(board.pieces(piece_type, chess.BLACK)) * value
-
-        # 2. Pawn positions are also valued; pawns closer to the opponent's back rank are more valuable
-        # Pawn position value table
-        pawn_position_scores = [
-            [0, 0, 0, 0, 0, 0, 0, 0],
-            [5, 5, 5, 5, 5, 5, 5, 5],
-            [1, 1, 2, 3, 3, 2, 1, 1],
-            [0.5, 0.5, 1, 2.5, 2.5, 1, 0.5, 0.5],
-            [0, 0, 0, 2, 2, 0, 0, 0],
-            [0.5, -0.5, -1, 0, 0, -1, -0.5, 0.5],
-            [0.5, 1, 1, -2, -2, 1, 1, 0.5],
-            [0, 0, 0, 0, 0, 0, 0, 0]
-        ]
-        for pawn_square in board.pieces(chess.PAWN, chess.WHITE):
-            score += pawn_position_scores[chess.square_rank(pawn_square)][chess.square_file(pawn_square)]
-        for pawn_square in board.pieces(chess.PAWN, chess.BLACK):
-            score -= pawn_position_scores[7 - chess.square_rank(pawn_square)][chess.square_file(pawn_square)]
-
-        # 3. Add points for rooks on open files
-        score += 3 * self.count_open_files(board, chess.WHITE)
-        score -= 3 * self.count_open_files(board, chess.BLACK)
-
-        # Additional rules can be added here, such as:
-        # - Knight position value
-        # - Control of the center
-        # - Bonus for having both bishops
-        # - Specific endgame scores
-        # - King safety
-        # - Penalties for isolated pawns
-        # ...
-
-        # Finally, return the evaluated score
-        # Note that this score is not absolute and can be adjusted according to your understanding
-        return score
-
-    def count_open_files(self, board, color):
-        # Count the number of open files occupied by the rooks of a given color
-        open_files = 0
-        for file_idx in range(8):
-            if (not board.pieces(chess.PAWN, color) & chess.SquareSet(chess.BB_FILES[file_idx])
-                    and board.pieces(chess.ROOK, color) & chess.SquareSet(chess.BB_FILES[file_idx])):
-                open_files += 1
-        return open_files
-
-    def human_to_action(self):
-        while True:
-            try:
-                print(f"Current available actions for the player {self.to_play()} are:{self.legal_moves()}")
-                choice = int(input(f"Enter the index of next move for the player {self.to_play()}: "))
-                if choice in chess_utils.legal_moves(self.board):
-                    break
-            except KeyboardInterrupt:
-                sys.exit(0)
-            except Exception as e:
-                print("Wrong input, try again")
-        return choice
 
     def simulate_action(self, action):
         if action not in chess_utils.legal_moves(self.board):
