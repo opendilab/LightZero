@@ -119,6 +119,7 @@ class SellerEnv(BaseEnv):
                     break
 
     def reset(self, history=[], round_cnt = 0, eval_episode_return=0, is_eval=False, seed=None):
+        # for collect and eval env, not for mcts simulate_env!
         if round_cnt > 0:
             self.history = copy.deepcopy(history)  
             self.round_cnt = copy.deepcopy(round_cnt)
@@ -151,26 +152,32 @@ class SellerEnv(BaseEnv):
         self.action_mask = np.ones(len(self.commands), 'int8')
         self.legal_actions = np.arange(len(self.commands))
 
-        obs = {'observation': self.history, 'action_mask': self.action_mask, 'round_cnt': self.round_cnt, 'eval_episode_return': self.eval_episode_return}
+        obs = {'observation': self.history, 'action_mask': self.action_mask, 'round_cnt': self.round_cnt, 'eval_episode_return': self.eval_episode_return, 'seed_for_goods':self.seed_for_goods, 'seed_for_persona':self.seed_for_persona}
 
         self.persona_info = SellerEnv.personas[self.seed_for_persona % self.total_persona_num]
         self.good_info = SellerEnv.goods[self.seed_for_goods % self.total_good_num]
 
         return obs
     
-    def reset_from_history(self, history, round_cnt, eval_episode_return=0, replay='', replay_csv=[]):
+    def reset_from_history(self, history, round_cnt, eval_episode_return=0, seed_for_goods=0, seed_for_persona=0, replay='', replay_csv=[]):
         # for MCTS and alphazero: simulation_env
         # NOTE
         self.save_replay = False
         
+        self.seed_for_goods = seed_for_goods
+        self.seed_for_persona = seed_for_persona
+        self.persona_info = SellerEnv.personas[self.seed_for_persona % self.total_persona_num]
+        self.good_info = SellerEnv.goods[self.seed_for_goods % self.total_good_num]
+
         self.history = copy.deepcopy(history)  
         self.round_cnt = copy.deepcopy(round_cnt)
         self.eval_episode_return = copy.deepcopy(eval_episode_return)
         self.finished = self.round_cnt >= self.max_round
 
-        print(f'======= reset_from_history: is_eval: {self.is_eval}, is_simulation_env: True =======')
-        print(f' simulation_env reset, current seed for goods: {self.seed_for_goods}, ')
-        print(f' simulation_env reset, current seed for persona: {self.seed_for_persona}, ')
+        # print(f'======= reset_from_history: is_eval: {self.is_eval}, is_simulation_env: True =======')
+        # print(f' simulation_env reset, current seed for goods: {self.seed_for_goods}, ')
+        # print(f' simulation_env reset, current seed for persona: {self.seed_for_persona}, ')
+        
         self._replay = replay
         self._replay_csv = replay_csv
 
@@ -250,7 +257,7 @@ class SellerEnv(BaseEnv):
         # obs = {'observation': str(self.history), 'candidate_samples': self.commands}
         action_mask = np.ones(len(self.commands), 'int8')
         # obs = {'observation': str(self.history), 'action_mask': action_mask}
-        obs = {'observation': self.history, 'action_mask': action_mask, 'round_cnt': self.round_cnt, 'eval_episode_return': self.eval_episode_return}
+        obs = {'observation': self.history, 'action_mask': action_mask, 'round_cnt': self.round_cnt, 'eval_episode_return': self.eval_episode_return, 'seed_for_goods':self.seed_for_goods, 'seed_for_persona':self.seed_for_persona}
 
         env_step = BaseEnvTimestep(
             obs, rew, self.finished, {

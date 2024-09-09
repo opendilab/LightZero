@@ -264,6 +264,8 @@ class AlphaZeroPolicy(Policy):
         history = {env_id: obs[env_id]['observation'] for env_id in ready_env_id}
         round_cnt = {env_id: obs[env_id]['round_cnt'] for env_id in ready_env_id}
         eval_episode_return = {env_id: obs[env_id]['eval_episode_return'] for env_id in ready_env_id}
+        seed_for_goods = {env_id: obs[env_id]['seed_for_goods'] for env_id in ready_env_id}
+        seed_for_persona = {env_id: obs[env_id]['seed_for_persona'] for env_id in ready_env_id}
 
         # # If 'katago_game_state' is in the observation of the given environment ID, it's value is used.
         # # If it's not present (which will raise a KeyError), None is used instead.
@@ -273,7 +275,8 @@ class AlphaZeroPolicy(Policy):
         output = {}
         self._policy_model = self._collect_model
         for env_id in ready_env_id:
-            state_config_for_simulation_env_reset = EasyDict(dict(history=history[env_id], round_cnt=round_cnt[env_id], eval_episode_return=eval_episode_return[env_id]))
+            state_config_for_simulation_env_reset = EasyDict(dict(history=history[env_id], round_cnt=round_cnt[env_id], eval_episode_return=eval_episode_return[env_id], \
+            seed_for_goods =seed_for_goods[env_id], seed_for_persona=seed_for_persona[env_id]))
             action, mcts_probs = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self.collect_mcts_temperature, True)
 
             output[env_id] = {
@@ -325,11 +328,14 @@ class AlphaZeroPolicy(Policy):
         history = {env_id: obs[env_id]['observation'] for env_id in ready_env_id}
         round_cnt = {env_id: obs[env_id]['round_cnt'] for env_id in ready_env_id}
         eval_episode_return = {env_id: obs[env_id]['eval_episode_return'] for env_id in ready_env_id}
+        seed_for_goods = {env_id: obs[env_id]['seed_for_goods'] for env_id in ready_env_id}
+        seed_for_persona = {env_id: obs[env_id]['seed_for_persona'] for env_id in ready_env_id}
 
         output = {}
         self._policy_model = self._eval_model
         for env_id in ready_env_id:
-            state_config_for_simulation_env_reset = EasyDict(dict(history=history[env_id], round_cnt=round_cnt[env_id], eval_episode_return=eval_episode_return[env_id]))
+            state_config_for_simulation_env_reset = EasyDict(dict(history=history[env_id], round_cnt=round_cnt[env_id], eval_episode_return=eval_episode_return[env_id], \
+                        seed_for_goods =seed_for_goods[env_id], seed_for_persona=seed_for_persona[env_id]))
             action, mcts_probs = self._eval_mcts.get_next_action(
                 state_config_for_simulation_env_reset, self._policy_value_fn, 1.0, False
             )

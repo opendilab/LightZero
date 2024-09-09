@@ -3,10 +3,11 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 8
-n_episode = 8
+collector_env_num = 4
+n_episode = 4
 evaluator_env_num = 3
-num_simulations = 10
+# num_simulations = 10
+num_simulations = 5
 update_per_collect = 20
 batch_size = 32
 max_env_step = int(1e5)
@@ -15,7 +16,7 @@ mcts_ctree = False
 # for debug
 # collector_env_num = 1
 # n_episode = 1
-# evaluator_env_num = 1
+# evaluator_env_num = 2
 # num_simulations = 1
 # update_per_collect = 2
 # batch_size = 2
@@ -25,7 +26,7 @@ mcts_ctree = False
 
 seller_alphazero_config = dict(
     # exp_name=f'data_az_ptree/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_simulate-cache_seed0',
-    exp_name=f'data_az_ptree_0909/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
+    exp_name=f'data_az_ptree/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
 
     # exp_name=f'data_az_ptree_debug/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(

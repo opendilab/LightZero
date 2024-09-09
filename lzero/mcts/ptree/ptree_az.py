@@ -200,6 +200,8 @@ class MCTS(object):
                 history=state_config_for_simulate_env_reset.history,
                 round_cnt = state_config_for_simulate_env_reset.round_cnt,
                 eval_episode_return = state_config_for_simulate_env_reset.eval_episode_return,
+                seed_for_goods=state_config_for_simulate_env_reset.seed_for_goods, 
+                seed_for_persona=state_config_for_simulate_env_reset.seed_for_persona
             )  
         # Expand the root node by adding children to it.
         self._expand_leaf_node(root, self.simulate_env, policy_forward_fn)
@@ -215,6 +217,8 @@ class MCTS(object):
                 history=state_config_for_simulate_env_reset.history,
                 round_cnt = state_config_for_simulate_env_reset.round_cnt,
                 eval_episode_return = state_config_for_simulate_env_reset.eval_episode_return,
+                seed_for_goods=state_config_for_simulate_env_reset.seed_for_goods, 
+                seed_for_persona=state_config_for_simulate_env_reset.seed_for_persona
             )  
             # Run the simulation from the root to a leaf node and update the node values along the way.
             self._simulate(root, self.simulate_env, policy_forward_fn)
