@@ -26,10 +26,6 @@ except ImportError:
     logging.warning("not found transformer, please install it using: pip install transformers")
     sys.exit(1)
 
-from FlagEmbedding import BGEM3FlagModel
-
-
-
 
 # @MODEL_REGISTRY.register('language_transformer')
 # class LanguageTransformer(nn.Module):
@@ -40,16 +36,13 @@ class AlphaZeroModel(nn.Module):
             self,
             model_name: str = "bert-base-uncased",
             add_linear: bool = True,
-            embedding_size: int = 1024,
+            embedding_size: int = 128,
             freeze_encoder: bool = True,
             action_space_size: int = 9
     ) -> None:
         super().__init__()
-        # self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        # self.model = AutoModelForTokenClassification.from_pretrained(model_name)
-
-        self.model = BGEM3FlagModel('BAAI/bge-m3',  
-                            use_fp16=True) # Setting use_fp16 to True speeds up computation with a slight performance degradation
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForTokenClassification.from_pretrained(model_name)
 
         # Freeze transformer encoder and only train the linear layer
         if freeze_encoder:
@@ -70,13 +63,29 @@ class AlphaZeroModel(nn.Module):
         self.value_head = nn.Linear(self.embedding_size, value_support_size)  # 768 for bert-base-uncased, distilbert-base-uncased
         self.policy_head = nn.Linear(self.embedding_size, action_space_size)  # 768 for bert-base-uncased, distilbert-base-uncased
 
+        # self.policy_head = MLP(
+        #         in_channels=self.model.config.hidden_size,
+        #         hidden_channels=256,
+        #         out_channels=action_space_size,
+        #         layer_num=2,
+        #         activation=nn.GELU(),
+        #         norm_type='LN',
+        #         output_activation=False,
+        #         output_norm=False,
+        #         last_linear_layer_init_zero=True,
+        #     )
 
     def _calc_embedding(self, x: list) -> torch.Tensor:
-        # import ipdb; ipdb.set_trace()
-        sentence_embedding = self.model.encode(x, 
-                            batch_size=32, 
-                            max_length=8192, # If you don't need such a long length, you can set a smaller value to speed up the encoding process.
-                            )['dense_vecs']
+        # ``truncation=True`` means that if the length of the prompt exceed the ``max_length`` of the tokenizer,
+        # the exceeded part will be truncated. ``padding=True`` means that if the length of the prompt does not reach
+        # the ``max_length``, the latter part will be padded. These settings ensure the length of encoded tokens is
+        # exactly ``max_length``, which can enable batch-wise computing.
+        input = self.tokenizer(x, truncation=True, padding=True, return_tensors="pt").to(self.model.device)
+        output = self.model(**input, output_hidden_states=True)
+        # Get last layer hidden states
+        last_hidden_states = output.hidden_states[-1]
+        # Get [CLS] hidden states
+        sentence_embedding = last_hidden_states[:, 0, :]  # len(input_list) x hidden_size
 
         if self.linear:
             sentence_embedding = self.linear(sentence_embedding)  # len(input_list) x embedding_size
