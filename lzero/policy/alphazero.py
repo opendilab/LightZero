@@ -25,7 +25,7 @@ class AlphaZeroPolicy(Policy):
     # The default_config for AlphaZero policy.
     config = dict(
         # (bool) Whether to use torch.compile method to speed up our model, which required torch>=2.0.
-        torch_compile=False,
+        torch_compile=True,
         # (bool) Whether to use TF32 for our model.
         tensor_float_32=False,
         # model=dict(
@@ -151,6 +151,8 @@ class AlphaZeroPolicy(Policy):
         self._learn_model = self._model
 
         # TODO(pu): test the effect of torch 2.0
+        # Ensure that the installed torch version is greater than or equal to 2.0
+        assert int(''.join(filter(str.isdigit, torch.__version__))) >= 200, "We need torch version >= 2.0"
         if self._cfg.torch_compile:
             self._learn_model = torch.compile(self._learn_model)
 
@@ -225,7 +227,7 @@ class AlphaZeroPolicy(Policy):
         Overview:
             Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
-        self._get_simulation_env()
+        self._get_simulation_env(is_eval=False)
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
             import sys
@@ -285,7 +287,7 @@ class AlphaZeroPolicy(Policy):
         Overview:
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
-        self._get_simulation_env()
+        self._get_simulation_env(is_eval=True)
         if self._cfg.mcts_ctree:
             import sys
             sys.path.append('/Users/your_user_name/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
@@ -337,7 +339,7 @@ class AlphaZeroPolicy(Policy):
             }
         return output
 
-    def _get_simulation_env(self):
+    def _get_simulation_env(self, is_eval=False):
         if self._cfg.simulation_env_id == 'tictactoe':
             from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
             if self._cfg.simulation_env_config_type == 'play_with_bot':
@@ -375,6 +377,7 @@ class AlphaZeroPolicy(Policy):
             else:
                 raise NotImplementedError
             self.simulate_env = SellerEnv(seller_alphazero_config.env)
+            self.simulate_env.reset(is_eval=is_eval)  # NOTE
         else:
             raise NotImplementedError
 

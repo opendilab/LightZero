@@ -74,19 +74,8 @@ class SellerEnv(BaseEnv):
         self.train_good_num = cfg.get('train_good_num', 10)
         self.eval_good_num = cfg.get('eval_good_num', 10)
 
-        self.is_eval = cfg.get('is_eval', False)
-        print(f'is_eval: {self.is_eval}')
-
-        self.seed_for_persona = np.random.randint(0, self.total_persona_num)
-        if self.is_eval:
-            # TODO
-            np_seed = np.random.randint(0, self.train_good_num + self.eval_good_num)
-            # self._seed = np_seed
-            self.seed(np_seed)
-        else:
-            np_seed = np.random.randint(0, self.train_good_num)
-            # self._seed = np_seed
-            self.seed(np_seed)
+        # self.is_eval = cfg.get('is_eval', False)
+        # print(f'is_eval: {self.is_eval}')
 
         if not (SellerEnv.executor and SellerEnv.judge and SellerEnv.buyer):
             self._init_roles()
@@ -129,7 +118,7 @@ class SellerEnv(BaseEnv):
                 if cnt >= self.total_good_num:
                     break
 
-    def reset(self, history=[], round_cnt = 0, eval_episode_return=0, is_simulation_env=False):
+    def reset(self, history=[], round_cnt = 0, eval_episode_return=0, is_eval=False, seed=None):
         if round_cnt > 0:
             self.history = copy.deepcopy(history)  
             self.round_cnt = copy.deepcopy(round_cnt)
@@ -137,21 +126,21 @@ class SellerEnv(BaseEnv):
             self.round_cnt = 0
             self.history = []
 
-        if not is_simulation_env:
-            print(f'is_eval: {self.is_eval}, is_simulation_env: {is_simulation_env}')
+        self.is_eval = is_eval
+        if seed is not None:
+            self.seed_for_persona = seed
+            self.seed_for_goods = seed
+        else:
             self.seed_for_persona = np.random.randint(0, self.total_persona_num)
             if self.is_eval:
                 # TODO: train on N goods, eval on 2N goods
-                np_seed = np.random.randint(0, self.train_good_num + self.eval_good_num)
-                # 下面一行相当于 self._seed = np_seed
-                self.seed(np_seed)
+                self.seed_for_goods = np.random.randint(0, self.train_good_num + self.eval_good_num)
             else:
-                np_seed = np.random.randint(0, self.train_good_num)
-                # 下面一行相当于 self._seed = np_seed
-                self.seed(np_seed)
+                self.seed_for_goods = np.random.randint(0, self.train_good_num)
 
-                print(f' ======= current seed for goods: {self._seed} ========= ')
-                print(f' ======= current seed for persona: {self.seed_for_persona} ========= ')
+        print(f'======= reset, is_eval: {self.is_eval} ======= ')
+        print(f'current seed for goods: {self.seed_for_goods}, ')
+        print(f'current seed for persona: {self.seed_for_persona}')
 
         self.eval_episode_return = copy.deepcopy(eval_episode_return)
         self.finished = self.round_cnt >= self.max_round
@@ -161,32 +150,37 @@ class SellerEnv(BaseEnv):
         self._replay_csv = []
         self.action_mask = np.ones(len(self.commands), 'int8')
         self.legal_actions = np.arange(len(self.commands))
-        # self.eval_episode_return = 0
 
         obs = {'observation': self.history, 'action_mask': self.action_mask, 'round_cnt': self.round_cnt, 'eval_episode_return': self.eval_episode_return}
 
         self.persona_info = SellerEnv.personas[self.seed_for_persona % self.total_persona_num]
-        self.good_info = SellerEnv.goods[self._seed % self.total_good_num]
-        # self.good_info = SellerEnv.goods[self._seed % 3]
-        # self.good_info = SellerEnv.goods[0]  # TODO
+        self.good_info = SellerEnv.goods[self.seed_for_goods % self.total_good_num]
 
         return obs
     
-    def reset_from_history(self, history, round_cnt, eval_episode_return=0, replay=None, replay_csv=None):
+    def reset_from_history(self, history, round_cnt, eval_episode_return=0, replay='', replay_csv=[]):
+        # for MCTS and alphazero: simulation_env
+        # NOTE
+        self.save_replay = False
+        
         self.history = copy.deepcopy(history)  
         self.round_cnt = copy.deepcopy(round_cnt)
         self.eval_episode_return = copy.deepcopy(eval_episode_return)
         self.finished = self.round_cnt >= self.max_round
-        # self.replay = replay
-        # self.replay_csv = replay_csv
+
+        print(f'======= reset_from_history: is_eval: {self.is_eval}, is_simulation_env: True =======')
+        print(f' simulation_env reset, current seed for goods: {self.seed_for_goods}, ')
+        print(f' simulation_env reset, current seed for persona: {self.seed_for_persona}, ')
+        self._replay = replay
+        self._replay_csv = replay_csv
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
         """
         Set the seed for the environment.
         """
         self._seed = seed
-        self._dynamic_seed = dynamic_seed
         np.random.seed(self._seed)
+        self._dynamic_seed = dynamic_seed
 
     def _init_roles(self):
         SellerEnv.executor = Executor(
@@ -356,7 +350,9 @@ if __name__ == '__main__':
             seed=0,
             lang='zh',
             log_suffix='human', # TODO
-            save_replay=True,  # TODO
+            # save_replay=True,  # TODO
+            save_replay=False,  # TODO
+
         )
     )
 

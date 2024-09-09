@@ -89,12 +89,12 @@ def train_alphazero(
     )
 
     # TODO
-    # stop, reward = evaluator.eval(
-    #             learner.save_checkpoint,
-    #             learner.train_iter,
-    #             collector.envstep,
-    #         )
-    # sys.exit(0)
+    stop, reward = evaluator.eval(
+                learner.save_checkpoint,
+                learner.train_iter,
+                collector.envstep,
+            )
+    import sys; sys.exit(0)
 
     # ==============================================================
     # Main loop

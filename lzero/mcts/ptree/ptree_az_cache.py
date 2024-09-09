@@ -192,14 +192,17 @@ class MCTS(object):
             - action (:obj:`Int`): The selected action to take.
             - action_probs (:obj:`List`): The output probability of each action.
         """
+        self.simulate_env_cache = {}  # 引入一个字典来缓存已有的action序列对应的simulate_env
+    
 
         # Create a new root node for the MCTS search.
         root = Node()
             
-        self.simulate_env.reset_from_history(
+        self.simulate_env.reset(
                 history=state_config_for_simulate_env_reset.history,
                 round_cnt = state_config_for_simulate_env_reset.round_cnt,
                 eval_episode_return = state_config_for_simulate_env_reset.eval_episode_return,
+                is_simulation_env=True
             )  
         # Expand the root node by adding children to it.
         self._expand_leaf_node(root, self.simulate_env, policy_forward_fn)
@@ -211,10 +214,11 @@ class MCTS(object):
         # Perform MCTS search for a fixed number of iterations.
         for n in range(self._num_simulations):
             # Initialize the simulated environment and reset it to the root node.
-            self.simulate_env.reset_from_history(
+            self.simulate_env.reset(
                 history=state_config_for_simulate_env_reset.history,
                 round_cnt = state_config_for_simulate_env_reset.round_cnt,
                 eval_episode_return = state_config_for_simulate_env_reset.eval_episode_return,
+                is_simulation_env=True
             )  
             # Run the simulation from the root to a leaf node and update the node values along the way.
             self._simulate(root, self.simulate_env, policy_forward_fn)
@@ -257,13 +261,22 @@ class MCTS(object):
             - simulate_env (:obj:`Class BaseGameEnv`): The class of simulate env.
             - policy_forward_fn (:obj:`Function`): The Callable to compute the action probs and state value.
         """
+        action_sequence = []  # 记录从根节点到当前节点的action序列
         while not node.is_leaf():
-            # Traverse the tree until the leaf node.
             action, node = self._select_child(node, simulate_env)
             # When there are no common elements in ``node.children`` and ``simulate_env.legal_actions``, action would be None, and we set the node to be a leaf node.
             if action is None:
                 break
-            simulate_env.step(action)
+            action_sequence.append(action)
+            
+            # 检查当前的action序列是否已经被缓存
+            action_sequence_key = tuple(action_sequence)
+            if action_sequence_key in self.simulate_env_cache:
+                simulate_env = self.simulate_env_cache[action_sequence_key].clone()
+                print(f"action_sequence:{action_sequence}, 从缓存中获取模拟环境")
+            else:
+                simulate_env.step(action)
+                self.simulate_env_cache[action_sequence_key] = simulate_env.clone()  # 缓存当前的simulate_env
 
         done, _ = simulate_env.get_done_winner()
         """
