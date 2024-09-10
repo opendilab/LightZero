@@ -5,8 +5,8 @@ from easydict import EasyDict
 
 from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
-# env_id = 'humanoid-run'  # 'cartpole-swingup'  # You can specify any DMC task here
-env_id = 'cheetah-run'  # 'cartpole-swingup'  # You can specify any DMC task here
+env_id = 'humanoid-run'  # 'cartpole-swingup'  # You can specify any DMC task here
+# env_id = 'cheetah-run'  # 'cartpole-swingup'  # You can specify any DMC task here
 # env_id = 'hopper-hop'  # 'cartpole-swingup'  # You can specify any DMC task here
 
 # env_id =  'cartpole-swingup' # 'cartpole-swingup'  # You can specify any DMC task here
@@ -28,10 +28,12 @@ evaluator_env_num = 3
 num_simulations = 50
 # num_simulations = 100
 update_per_collect = None
-# replay_ratio = 0.25
-replay_ratio = 0.1
+replay_ratio = 0.25
+# replay_ratio = 0.1
 
 max_env_step = int(4e6)
+# max_env_step = int(10e6)
+
 reanalyze_ratio = 0
 # reanalyze_ratio = 0.1
 
@@ -47,7 +49,7 @@ infer_context_length = 2
 
 norm_type = 'LN'
 seed = 0
-fixed_sigma_value = 2
+# fixed_sigma_value = 2
 
 # for debug
 # collector_env_num = 2
@@ -60,7 +62,8 @@ fixed_sigma_value = 2
 # ==============================================================
 
 dmc2gym_state_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero_0901/ucb-uniform-prior/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_current-model_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_fixedsigma{fixed_sigma_value}',
+    exp_name=f'data_sampled_unizero_0909/ucb-uniform-prior/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_current-model_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_clamp09-1',
+    # exp_name=f'data_sampled_unizero_0901/ucb-uniform-prior/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_current-model_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_fixedsigma{fixed_sigma_value}',
     # exp_name=f'data_sampled_unizero_0901/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_current-model_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac1_tempdecay_rbs1e6_policlossW',
     # exp_name=f'data_sampled_unizero_0901/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_current-model_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac1_tempdecay_rbs1e6_policylossKL-eps1e-3',
     # exp_name=f'data_sampled_unizero_0901_debug/dmc2gym_{env_id}_state_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}_policy-head-layer-num2_pew5e-3_disfac1',
@@ -96,10 +99,10 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
                 policy_entropy_loss_weight=5e-3,
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
-                # sigma_type='conditioned',
-                sigma_type='fixed',
-                fixed_sigma_value=fixed_sigma_value,
-                # fixed_sigma_value=0.1, # 性能差
+                sigma_type='conditioned',
+                # sigma_type='fixed',
+                # fixed_sigma_value=fixed_sigma_value,
+                fixed_sigma_value=0.5,
                 bound_type=None,
                 model_type='mlp',
                 max_blocks=num_unroll_steps,
@@ -133,7 +136,7 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
         learning_rate=0.0001,
         target_update_freq=100,
         # grad_clip_value=5,
-        grad_clip_value=10,
+        grad_clip_value=20,
         manual_temperature_decay=True,  # TODO
         # cos_lr_scheduler=True,
         cos_lr_scheduler=False,

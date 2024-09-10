@@ -282,6 +282,11 @@ class DMC2GymEnv(BaseEnv):
         """
         action = action.astype('float32')
         action = affine_transform(action, min_val=self._env.action_space.low, max_val=self._env.action_space.high)
+
+        # 使用NumPy的np.where()函数对action进行修改
+        action = np.where(action > 0.9000, 0.9999, action)
+        action = np.where(action < -0.9000, -0.9999, action)
+
         obs, rew, done, info = self._env.step(action)
         self._current_step += 1
 
