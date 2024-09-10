@@ -29,38 +29,31 @@ except ImportError:
 from FlagEmbedding import BGEM3FlagModel
 
 
-
-
-# @MODEL_REGISTRY.register('language_transformer')
-# class LanguageTransformer(nn.Module):
 @MODEL_REGISTRY.register('AlphaZeroModel')
 class AlphaZeroModel(nn.Module):
 
     def __init__(
             self,
-            model_name: str = "bert-base-uncased",
+            model_name: str = "BAAI/bge-m3",
             add_linear: bool = True,
             embedding_size: int = 1024,
             freeze_encoder: bool = True,
             action_space_size: int = 9
     ) -> None:
         super().__init__()
-        # self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        # self.model = AutoModelForTokenClassification.from_pretrained(model_name)
-
         self.model = BGEM3FlagModel('BAAI/bge-m3',  
                             use_fp16=True) # Setting use_fp16 to True speeds up computation with a slight performance degradation
 
         # Freeze transformer encoder and only train the linear layer
-        if freeze_encoder:
-            for param in self.model.parameters():
-                param.requires_grad = False
+        # if freeze_encoder:
+        #     for param in self.model.parameters():
+        #         param.requires_grad = False
 
         if add_linear:
             # Add an additional small, adjustable linear layer on top of BERT tuned through RL
             self.embedding_size = embedding_size
             self.linear = nn.Linear(
-                self.model.config.hidden_size, embedding_size
+                1024, embedding_size
             )  # 768 for bert-base-uncased, distilbert-base-uncased
         else:
             self.linear = None
@@ -77,7 +70,8 @@ class AlphaZeroModel(nn.Module):
                             batch_size=32, 
                             max_length=8192, # If you don't need such a long length, you can set a smaller value to speed up the encoding process.
                             )['dense_vecs']
-
+        sentence_embedding = torch.from_numpy(sentence_embedding).to(self.value_head.weight.device).float()
+        
         if self.linear:
             sentence_embedding = self.linear(sentence_embedding)  # len(input_list) x embedding_size
 
@@ -95,11 +89,6 @@ class AlphaZeroModel(nn.Module):
 
         # return {'dist': torch.distributions.Categorical(logits=scores), 'logit': scores, 'value': value}
         return policy_logits, value
-
-    # def forward(self, state_batch: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-    #     encoded_state = self.representation_network(state_batch)
-    #     logit, value = self.prediction_network(encoded_state)
-    #     return logit, value
 
     def compute_policy_value(self, train_samples: list, candidate_samples: list = None) -> Tuple[torch.Tensor, torch.Tensor]:
         logit, value = self.forward(train_samples, candidate_samples)

@@ -6,29 +6,29 @@ from easydict import EasyDict
 collector_env_num = 4
 n_episode = 4
 evaluator_env_num = 3
-# num_simulations = 10
-num_simulations = 5
-update_per_collect = 20
+num_simulations = 10
+# num_simulations = 5
+update_per_collect = 50
 batch_size = 32
 max_env_step = int(1e5)
 mcts_ctree = False
 
 # for debug
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 2
-num_simulations = 1
-update_per_collect = 2
-batch_size = 2
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 2
+# num_simulations = 1
+# update_per_collect = 2
+# batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 seller_alphazero_config = dict(
     # exp_name=f'data_az_ptree/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_simulate-cache_seed0',
-    # exp_name=f'data_az_ptree/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
+    exp_name=f'data_az_ptree_0910/bge/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
 
-    exp_name=f'data_az_ptree_debug/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_seed0',
+    # exp_name=f'data_az_ptree_debug/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         agent='deepseek',
         # api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
@@ -85,7 +85,7 @@ seller_alphazero_config = dict(
         value_weight=1.0,
         entropy_weight=1e-4,
         n_episode=n_episode,
-        eval_freq=int(5e3),
+        eval_freq=int(2e3),
         mcts=dict(num_simulations=num_simulations),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

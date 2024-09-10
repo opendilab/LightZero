@@ -6,7 +6,7 @@ import gym
 from easydict import EasyDict
 import jsonlines
 import copy, csv
-
+import ast
 from ding.utils import ENV_REGISTRY
 from zoo.seller.utils import APIClient, extract_json
 from ding.envs import BaseEnv, BaseEnvTimestep
@@ -49,7 +49,21 @@ class Executor(BaseRole):
         return self.model.generate(str([{'role': 'user', 'content': query}]))
 
 
-class Commander:
+class Commander(BaseRole):
+
+    def call(self, history):
+        query = self.template.replace('{{history}}', str(history))
+        response = self.model.generate(str([{'role': 'user', 'content': query}]), temperature=0.5)  # TODO: temperature
+        try:
+            self.commands = ast.literal_eval(response.strip())
+        except (SyntaxError, ValueError):
+            print(f"Failed to parse response as Python list: {response}")
+            self.commands = []
+        # print(f'commands: {self.commands}')
+        return self.commands
+
+
+class InputCommand:
 
     def call(self):
         response = input('Please type in the command: ')
@@ -83,6 +97,8 @@ class SellerEnv(BaseEnv):
             self._init_settings()
         self.history = []  # TODO: for default_collate
         self.commands = cfg.commands
+        self.dynamic_action_space = cfg.get('dynamic_action_space', False)
+
         self.max_round = cfg.max_round
         self.round_cnt = 0
 
@@ -149,6 +165,10 @@ class SellerEnv(BaseEnv):
         self._init_flag = True
         self._replay = ''
         self._replay_csv = []
+
+        if self.dynamic_action_space:
+            self.commands = SellerEnv.commander.call(history=self.history)
+
         self.action_mask = np.ones(len(self.commands), 'int8')
         self.legal_actions = np.arange(len(self.commands))
 
@@ -156,6 +176,8 @@ class SellerEnv(BaseEnv):
 
         self.persona_info = SellerEnv.personas[self.seed_for_persona % self.total_persona_num]
         self.good_info = SellerEnv.goods[self.seed_for_goods % self.total_good_num]
+
+
 
         return obs
     
@@ -205,6 +227,11 @@ class SellerEnv(BaseEnv):
             api_key=self.cfg.api_key,
             template_path=f'zoo/seller/prompt_templates/buyer_template_{self.lang}.txt'
         )
+        SellerEnv.commander = Commander(
+        agent=self.cfg.agent,
+        api_key=self.cfg.api_key,
+        template_path=f'zoo/seller/prompt_templates/commander_template_{self.lang}.txt'
+    )
 
     def close(self) -> None:
         self._init_flag = False
@@ -213,7 +240,6 @@ class SellerEnv(BaseEnv):
         return "LightZero SELLER Env"
 
     def step(self, action):
-        # command = self.commands[action[0]]
         if isinstance(action, int):
             command = self.commands[action]
         elif isinstance(action, list):
@@ -221,6 +247,7 @@ class SellerEnv(BaseEnv):
         else:
             command = self.commands[int(action.item())]
         self.round_cnt += 1
+        
         executor_resp = SellerEnv.executor.call(command=command, history=self.history, info=self.good_info)
         role = '卖家' if self.lang == 'zh' else 'seller'
         # self.history.append({role: executor_resp})
@@ -301,6 +328,10 @@ class SellerEnv(BaseEnv):
                     writer = csv.writer(csvfile)
                     writer.writerows(self._replay_csv)
 
+
+        if self.dynamic_action_space:
+            self.commands = SellerEnv.commander.call(history=self.history)
+
         return env_step
 
 
@@ -359,19 +390,20 @@ if __name__ == '__main__':
             log_suffix='human', # TODO
             # save_replay=True,  # TODO
             save_replay=False,  # TODO
-
+            dynamic_action_space=True,
         )
     )
+
+    input_command = InputCommand()
 
     env = SellerEnv(cfg=env_cfg)
     eval_episodes = 5
     for seed in range(0, eval_episodes):
         env.seed(seed)
         env.reset()
-        commander = Commander()
         while not env.finished:
-            print(f'Legal actions: {" ".join([str(i) + ": " + env.commands[i] for i in range(len(env.commands))])}')
-            command = commander.call()
+            print(f'commands: {env.commands}')
+            command = input_command.call()
             # command = 0
             env_step = env.step([command])
             print(f'########## Round {env.round_cnt} ##########')
