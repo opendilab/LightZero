@@ -50,7 +50,7 @@ class Executor(BaseRole):
 
 
 class Commander(BaseRole):
-    def call(self, history, retry=3):
+    def call(self, history, retry=10):
         """
         Calls the model to generate commands and retries if parsing fails.
         
@@ -133,7 +133,6 @@ class SellerEnv(BaseEnv):
         self._suffix = cfg.get('log_suffix', '')
         self.save_replay = cfg.get('save_replay', False)
 
-
     def _init_settings(self):
         # Init the personas.
         with open(path_prefix+"zoo/seller/data/persona.jsonl", "r+", encoding="utf8") as f:
@@ -198,7 +197,6 @@ class SellerEnv(BaseEnv):
         self.good_info = SellerEnv.goods[self.seed_for_goods % self.total_good_num]
 
 
-
         return obs
     
     def reset_from_history(self, history, round_cnt, eval_episode_return=0, seed_for_goods=0, seed_for_persona=0, replay='', replay_csv=[]):
@@ -216,6 +214,9 @@ class SellerEnv(BaseEnv):
         self.eval_episode_return = copy.deepcopy(eval_episode_return)
         self.finished = self.round_cnt >= self.max_round
 
+        if self.dynamic_action_space:
+            self.commands = SellerEnv.commander.call(history=self.history)
+
         # print(f'======= reset_from_history: is_eval: {self.is_eval}, is_simulation_env: True =======')
         # print(f' simulation_env reset, current seed for goods: {self.seed_for_goods}, ')
         # print(f' simulation_env reset, current seed for persona: {self.seed_for_persona}, ')
@@ -228,8 +229,10 @@ class SellerEnv(BaseEnv):
         Set the seed for the environment.
         """
         self._seed = seed
-        np.random.seed(self._seed)
-        self._dynamic_seed = dynamic_seed
+        self.seed_for_persona = self._seed
+        self.seed_for_goods = self._seed
+
+        np.random.seed(0)
 
     def _init_roles(self):
         SellerEnv.executor = Executor(
@@ -248,10 +251,10 @@ class SellerEnv(BaseEnv):
             template_path=f'zoo/seller/prompt_templates/buyer_template_{self.lang}.txt'
         )
         SellerEnv.commander = Commander(
-        agent=self.cfg.agent,
-        api_key=self.cfg.api_key,
-        template_path=f'zoo/seller/prompt_templates/commander_template_{self.lang}.txt'
-    )
+            agent=self.cfg.agent,
+            api_key=self.cfg.api_key,
+            template_path=f'zoo/seller/prompt_templates/commander_template_{self.lang}.txt'
+        )
 
     def close(self) -> None:
         self._init_flag = False
@@ -340,11 +343,31 @@ class SellerEnv(BaseEnv):
             self._replay_csv.append([f'【Round {self.round_cnt}】', f'【reward: {rew}, done: {self.finished}】'])
 
             if self.finished:
-                if not os.path.exists(f'./logs_{self._suffix}'):
-                    os.mkdir(f'./logs_{self._suffix}')
-                with open(f'./logs_{self._suffix}/evaluate_log_sees{self._seed}_{self._suffix}.txt', 'w', encoding='utf-8') as f:
+                log_dir = f'./logs_{self._suffix}'
+                
+                # 创建目录（如果不存在）
+                if not os.path.exists(log_dir):
+                    os.mkdir(log_dir)
+                
+                # 生成基本的日志文件名
+                base_filename = f'log_goods-{self.seed_for_goods}_persona-{self.seed_for_persona}_{self._suffix}'
+                
+                # 处理txt文件
+                txt_filename = f'{log_dir}/{base_filename}.txt'
+                if os.path.exists(txt_filename):
+                    timestamp = time.strftime('%Y%m%d_%H%M%S')  # 获取当前时间戳
+                    txt_filename = f'{log_dir}/{base_filename}_{timestamp}.txt'
+                
+                with open(txt_filename, 'w', encoding='utf-8') as f:
                     f.write(self._replay + '\n')
-                with open(f'./logs_{self._suffix}/evaluate_log_seed{self._seed}_{self._suffix}.csv', 'w', newline='', encoding='utf-8-sig') as csvfile:
+                
+                # 处理csv文件
+                csv_filename = f'{log_dir}/{base_filename}.csv'
+                if os.path.exists(csv_filename):
+                    # timestamp = time.strftime('%Y%m%d_%H%M%S')  # 再次获取当前时间戳
+                    csv_filename = f'{log_dir}/{base_filename}_{timestamp}.csv'
+                
+                with open(csv_filename, 'w', newline='', encoding='utf-8-sig') as csvfile:
                     writer = csv.writer(csvfile)
                     writer.writerows(self._replay_csv)
 
@@ -407,24 +430,39 @@ if __name__ == '__main__':
             max_round=5,
             seed=0,
             lang='zh',
-            log_suffix='human', # TODO
-            # save_replay=True,  # TODO
-            save_replay=False,  # TODO
-            dynamic_action_space=True,
+            log_suffix='direct_0910_20eps', # TODO
+            # log_suffix='random_0910_20eps', # TODO
+
+            save_replay=True,  # TODO
+            # save_replay=False,  # TODO
+            # dynamic_action_space=True,
+            dynamic_action_space=False,
+
         )
     )
 
     input_command = InputCommand()
 
     env = SellerEnv(cfg=env_cfg)
-    eval_episodes = 5
+
+
+    # eval_episodes = 20
+    eval_episodes = 1
+
     for seed in range(0, eval_episodes):
-        env.seed(seed)
-        env.reset()
+        env.seed(seed=seed)
+        env.reset(is_eval=True) # NOTE
         while not env.finished:
-            print(f'commands: {env.commands}')
-            command = input_command.call()
-            # command = 0
+            # ===== for human input command =====
+            # print(f'commands: {env.commands}')
+            # command = input_command.call()
+
+            # === direct policy =====
+            command = 0
+
+            # === random policy =====
+            # command = int(np.random.randint(0,9,1))
+
             env_step = env.step([command])
             print(f'########## Round {env.round_cnt} ##########')
             for k in env_step.info:

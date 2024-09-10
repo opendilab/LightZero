@@ -35,7 +35,7 @@ class APIClient:
             raise ValueError()
 
     @lru_cache(50000)
-    def generate(self, history, max_retry=6, **kwargs):
+    def generate(self, history, max_retry=10, **kwargs):
         history = eval(history)
         generate_cfg = copy.deepcopy(self.default_generate_cfg)
         generate_cfg.update(kwargs)
