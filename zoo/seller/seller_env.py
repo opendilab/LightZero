@@ -50,17 +50,37 @@ class Executor(BaseRole):
 
 
 class Commander(BaseRole):
-
-    def call(self, history):
+    def call(self, history, retry=3):
+        """
+        Calls the model to generate commands and retries if parsing fails.
+        
+        Parameters:
+        - history: The history data used to generate the query.
+        - retry: Number of retry attempts in case of failure. Default is 3.
+        
+        Returns:
+        - A list of parsed commands. If parsing fails after all retries, returns an empty list.
+        """
         query = self.template.replace('{{history}}', str(history))
         response = self.model.generate(str([{'role': 'user', 'content': query}]), temperature=0.5)  # TODO: temperature
-        try:
-            self.commands = ast.literal_eval(response.strip())
-        except (SyntaxError, ValueError):
-            print(f"Failed to parse response as Python list: {response}")
-            self.commands = []
-        # print(f'commands: {self.commands}')
-        return self.commands
+
+        for attempt in range(retry):
+            try:
+                # Try to parse the response as a Python list
+                self.commands = ast.literal_eval(response.strip())
+                # If parsing succeeds, return the commands
+                return self.commands
+            except (SyntaxError, ValueError):
+                # Print error log and retry
+                print(f"Attempt {attempt + 1}/{retry}: Failed to parse response as Python list: {response}")
+                if attempt < retry - 1:
+                    # If there are remaining retries, regenerate the response
+                    response = self.model.generate(str([{'role': 'user', 'content': query}]), temperature=0.5)
+                else:
+                    # If max retries are reached, return an empty list
+                    print(f"Max retry attempts reached. Returning empty command list.")
+                    self.commands = []
+                    return self.commands
 
 
 class InputCommand:
