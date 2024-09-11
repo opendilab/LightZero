@@ -1,6 +1,7 @@
 import os.path
 from typing import List
 
+import time
 import numpy as np
 import gym
 from easydict import EasyDict
@@ -126,7 +127,10 @@ class SellerEnv(BaseEnv):
         self._init_flag = False
 
         self.observation_space = gym.spaces.Dict()
-        self.action_space = gym.spaces.Discrete(len(self.commands))
+        if self.dynamic_action_space:
+            self.action_space = gym.spaces.Discrete(5)  # TODO 
+        else:
+            self.action_space = gym.spaces.Discrete(len(self.commands))
         self.reward_space = gym.spaces.Box(low=-1, high=1, shape=(1, ), dtype=np.int32)
 
         self._replay = ''
@@ -167,12 +171,11 @@ class SellerEnv(BaseEnv):
             self.seed_for_persona = seed
             self.seed_for_goods = seed
         else:
-            self.seed_for_persona = np.random.randint(0, self.total_persona_num)
-            if self.is_eval:
+            if not self.is_eval:
+                self.seed_for_persona = np.random.randint(0, self.total_persona_num)
                 # TODO: train on N goods, eval on 2N goods
-                self.seed_for_goods = np.random.randint(0, self.train_good_num + self.eval_good_num)
-            else:
                 self.seed_for_goods = np.random.randint(0, self.train_good_num)
+                # self.seed_for_goods = np.random.randint(0, self.train_good_num + self.eval_good_num)
 
         print(f'======= reset, is_eval: {self.is_eval} ======= ')
         print(f'current seed for goods: {self.seed_for_goods}, ')
@@ -231,8 +234,10 @@ class SellerEnv(BaseEnv):
         self._seed = seed
         self.seed_for_persona = self._seed
         self.seed_for_goods = self._seed
-
-        np.random.seed(0)
+        if not dynamic_seed:
+            np.random.seed(self._seed)
+        else:
+            np.random.seed(100 * np.random.randint(1, 1000))
 
     def _init_roles(self):
         SellerEnv.executor = Executor(
@@ -414,23 +419,24 @@ class SellerEnv(BaseEnv):
 if __name__ == '__main__':
     env_cfg = EasyDict(
         dict(
-            agent='deepseek',
+            # agent='deepseek',
+            agent='lmdeploy',
             api_key=[
             'sk-f50d634a123f4c84bc08fa880387ff76', 'sk-f8e6d25f99e5434c9ebda6e447fa8a7a',
             'sk-d020afbebe1e4d1ba1db7d32700c068c', 'sk-514a633560104439a4324dc30deab907',
             # 'sk-c4a8fe52693a4aaab64e648c42f40be6', 'sk-7866ab6ea8ca408a91971ef18eed4b75',
         ],
-            commands=[
-                '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
-                '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
-            ],
             # commands=[
-            #     '将你的产品推销给用户'
+            #     '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
+            #     '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
             # ],
+            commands=[
+                '将你的产品推销给用户'
+            ],
             max_round=5,
             seed=0,
             lang='zh',
-            log_suffix='direct_0910_20eps', # TODO
+            log_suffix='direct_0911_3eps_qwen2', # TODO
             # log_suffix='random_0910_20eps', # TODO
 
             save_replay=True,  # TODO
@@ -450,7 +456,7 @@ if __name__ == '__main__':
     eval_episodes = 1
 
     for seed in range(0, eval_episodes):
-        env.seed(seed=seed)
+        env.seed(seed=seed, dynamic_seed=False)
         env.reset(is_eval=True) # NOTE
         while not env.finished:
             # ===== for human input command =====

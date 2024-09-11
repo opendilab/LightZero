@@ -16,7 +16,7 @@ class APIClient:
         self.api_key_pool = api_key
         self.cur_api_idx = 0
 
-        self.default_generate_cfg = dict(temperature=0.9, top_p=0.7, frequency_penalty=0, presence_penalty=0, stop=None)
+        self.default_generate_cfg = dict(temperature=0.9, top_p=0.7, frequency_penalty=0, presence_penalty=0, stop=None, max_tokens=512)
         if self.agent == 'gpt3.5':
             self.client = openai.AzureOpenAI(
                 azure_endpoint="https://normanhus-canadaeast.openai.azure.com/",
@@ -31,6 +31,14 @@ class APIClient:
             )
         elif self.agent == 'deepseek':
             self.client = openai.OpenAI(api_key=api_key[0], base_url="https://api.deepseek.com")
+        elif self.agent == 'lmdeploy':
+            self.client = openai.OpenAI(
+                api_key='YOUR_API_KEY',
+                    # base_url="http://10.119.16.54:23333/v1" # interlm25
+                # base_url="http://10.119.16.101:23333/v1"  # qwen2
+                # base_url="http://10.119.16.204:23333/v1"  # qwen2
+                base_url="http://10.119.17.105:23333/v1"  # qwen2
+            )
         else:
             raise ValueError()
 
@@ -56,6 +64,11 @@ class APIClient:
                     elif self.agent == 'deepseek':
                         response_i = self.client.chat.completions.create(
                             model='deepseek-chat', messages=history, **generate_cfg
+                        )
+                    elif self.agent == 'lmdeploy':
+                        model_name = self.client.models.list().data[0].id
+                        response_i = self.client.chat.completions.create(
+                            model=model_name, messages=history, **generate_cfg
                         )
                     else:
                         raise ValueError

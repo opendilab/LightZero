@@ -1,17 +1,20 @@
+import openai
+openai.api_timeout = 60  # 设置超时时间为60秒
+
 from easydict import EasyDict
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 32
-n_episode = 32
-# collector_env_num = 8
-# n_episode = 8
+# collector_env_num = 32
+# n_episode = 32
+collector_env_num = 4
+n_episode = 4
 evaluator_env_num = 3
-# num_simulations = 10
-num_simulations = 5
-# update_per_collect = 50
-update_per_collect = 200
+num_simulations = 10
+# num_simulations = 5
+update_per_collect = 50
+# update_per_collect = 200
 batch_size = 32
 max_env_step = int(1e5)
 mcts_ctree = False
@@ -28,13 +31,13 @@ mcts_ctree = False
 # ==============================================================
 
 seller_alphazero_config = dict(
-    # exp_name=f'data_az_ptree/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_simulate-cache_seed0',
-    exp_name=f'data_az_ptree_0910/bge_collectenv{collector_env_num}/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
-    # exp_name=f'data_az_ptree_0910/bge_dynamic-actions-5_collectenv{collector_env_num}/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
-
+    # exp_name=f'data_az_ptree_0911/internlm_bge_collectenv{collector_env_num}/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
+    # exp_name=f'data_az_ptree_0911/qwen_bge_collectenv{collector_env_num}/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
+    exp_name=f'data_az_ptree_0911/qwen_bge_dynamic-actions-5_collectenv{collector_env_num}/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
     # exp_name=f'data_az_ptree_debug/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
-        agent='deepseek',
+        agent='lmdeploy',
+        # agent='deepseek',
         # api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
         # api_key='sk-c4a8fe52693a4aaab64e648c42f40be6',
         api_key=[
@@ -59,8 +62,8 @@ seller_alphazero_config = dict(
         # save_replay=True,  # TODO
         save_replay=False,  # TODO
         
-        # dynamic_action_space=True, # TODO
-        dynamic_action_space=False,
+        dynamic_action_space=True, # TODO
+        # dynamic_action_space=False,
 
         battle_mode='play_with_bot_mode',
         battle_mode_in_simulation_env='play_with_bot_mode',
@@ -77,10 +80,11 @@ seller_alphazero_config = dict(
         # for the creation of simulation env
         simulation_env_id='seller',
         simulation_env_config_type='play_with_bot',
+        # dynamic_action_space=True,  # TODO
         # ==============================================================
         model=dict(
-            action_space_size=9, # debug
-            # action_space_size=5, # debug
+            # action_space_size=9, # debug
+            action_space_size=5, # debug
             # action_space_size=1, # debug
         ),
         cuda=True,
