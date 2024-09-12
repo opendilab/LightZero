@@ -289,14 +289,14 @@ class SellerEnv(BaseEnv):
         judge_resp = SellerEnv.judge.call(self.history)
 
         rew = 0
-        success_flag = '愿意购买' if self.lang == 'zh' else 'Purchase'
+        success_flag = '决定购买' if self.lang == 'zh' else 'Purchase'
         fail_flag = '拒绝购买' if self.lang == 'zh' else 'Refuse'
         try:
             extracted_judge = extract_json(judge_resp)
-            if extracted_judge['decision'] == success_flag:
+            if extracted_judge['评估结论'] == success_flag:
                 rew = 1
                 self.finished = True
-            elif extracted_judge['decision'] == fail_flag:
+            elif extracted_judge['评估结论'] == fail_flag:
                 rew = -1
                 self.finished = True
         except:
@@ -436,9 +436,10 @@ if __name__ == '__main__':
             max_round=5,
             seed=0,
             lang='zh',
-            log_suffix='direct_0911_3eps_qwen2', # TODO
+            # log_suffix='direct_0911_3eps_qwen2', # TODO
+            # log_suffix='eval_direct_0911_20eps_interlm', # TODO
+            log_suffix='eval_direct_0911_20eps_qwen2', # TODO
             # log_suffix='random_0910_20eps', # TODO
-
             save_replay=True,  # TODO
             # save_replay=False,  # TODO
             # dynamic_action_space=True,
@@ -452,8 +453,8 @@ if __name__ == '__main__':
     env = SellerEnv(cfg=env_cfg)
 
 
-    # eval_episodes = 20
-    eval_episodes = 1
+    eval_episodes = 20
+    # eval_episodes = 2
 
     for seed in range(0, eval_episodes):
         env.seed(seed=seed, dynamic_seed=False)

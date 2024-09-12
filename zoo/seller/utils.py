@@ -16,7 +16,7 @@ class APIClient:
         self.api_key_pool = api_key
         self.cur_api_idx = 0
 
-        self.default_generate_cfg = dict(temperature=0.9, top_p=0.7, frequency_penalty=0, presence_penalty=0, stop=None, max_tokens=512)
+        self.default_generate_cfg = dict(temperature=0.9, top_p=0.7, frequency_penalty=0, presence_penalty=0, stop=None)
         if self.agent == 'gpt3.5':
             self.client = openai.AzureOpenAI(
                 azure_endpoint="https://normanhus-canadaeast.openai.azure.com/",
@@ -34,10 +34,11 @@ class APIClient:
         elif self.agent == 'lmdeploy':
             self.client = openai.OpenAI(
                 api_key='YOUR_API_KEY',
-                    # base_url="http://10.119.16.54:23333/v1" # interlm25
+                base_url="http://10.119.16.54:23333/v1" # qwen2 dev
+
                 # base_url="http://10.119.16.101:23333/v1"  # qwen2
-                # base_url="http://10.119.16.204:23333/v1"  # qwen2
-                base_url="http://10.119.17.105:23333/v1"  # qwen2
+                # base_url="http://10.119.16.204:23333/v1"  # interlm25
+                # base_url="http://10.119.17.105:23333/v1"  # interlm25
             )
         else:
             raise ValueError()
@@ -88,10 +89,26 @@ class APIClient:
         return None
 
 
+# def extract_json(text):
+#     match = re.search(r'```json\s*([\s\S]*?)\s*```', text)
+#     if match:
+#         json_str = match.group(1)
+#         return json.loads(json_str)
+#     else:
+#         return None
+
 def extract_json(text):
+    # Try to match ```json ... ``` block first
     match = re.search(r'```json\s*([\s\S]*?)\s*```', text)
     if match:
         json_str = match.group(1)
         return json.loads(json_str)
-    else:
-        return None
+    
+    # If no match, try to match content inside curly braces {...}
+    match = re.search(r'\{[\s\S]*?\}', text)
+    if match:
+        json_str = match.group(0)  # Get the full match for the JSON object
+        return json.loads(json_str)
+    
+    # If still no match, return None
+    return None

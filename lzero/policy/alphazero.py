@@ -383,6 +383,7 @@ class AlphaZeroPolicy(Policy):
             else:
                 raise NotImplementedError
             self.simulate_env = SellerEnv(seller_alphazero_config.env)
+            self.simulate_env.seed(seed=0, dynamic_seed=False)
             self.simulate_env.reset(is_eval=is_eval)  # NOTE
         else:
             raise NotImplementedError

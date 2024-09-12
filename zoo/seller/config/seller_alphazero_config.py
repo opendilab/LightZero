@@ -1,5 +1,5 @@
-import openai
-openai.api_timeout = 60  # 设置超时时间为60秒
+# import openai
+# openai.api_timeout = 60  # 设置超时时间为60秒
 
 from easydict import EasyDict
 
@@ -10,7 +10,7 @@ from easydict import EasyDict
 # n_episode = 32
 collector_env_num = 4
 n_episode = 4
-evaluator_env_num = 3
+evaluator_env_num = 20
 num_simulations = 10
 # num_simulations = 5
 update_per_collect = 50
@@ -32,9 +32,9 @@ mcts_ctree = False
 
 seller_alphazero_config = dict(
     # exp_name=f'data_az_ptree_0911/internlm_bge_collectenv{collector_env_num}/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
-    # exp_name=f'data_az_ptree_0911/qwen_bge_collectenv{collector_env_num}/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
-    exp_name=f'data_az_ptree_0911/qwen_bge_dynamic-actions-5_collectenv{collector_env_num}/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
-    # exp_name=f'data_az_ptree_debug/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_seed0',
+    # exp_name=f'data_az_ptree_0911/qwen2_bge_collectenv{collector_env_num}/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
+    # exp_name=f'data_az_ptree_0911/qwen_bge_dynamic-actions-5_collectenv{collector_env_num}/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_goods-train10test20_persona10_seed0',
+    exp_name=f'data_az_ptree_debug/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
         agent='lmdeploy',
         # agent='deepseek',
@@ -57,13 +57,13 @@ seller_alphazero_config = dict(
         #     '将你的产品推销给用户'
         # ],
         lang='zh',
-        log_suffix='az_a9_0909_debug',
+        log_suffix='az_a9_0919_qwen2',
 
-        # save_replay=True,  # TODO
-        save_replay=False,  # TODO
+        save_replay=True,  # TODO
+        # save_replay=False,  # TODO
         
-        dynamic_action_space=True, # TODO
-        # dynamic_action_space=False,
+        # dynamic_action_space=True, # TODO
+        dynamic_action_space=False,
 
         battle_mode='play_with_bot_mode',
         battle_mode_in_simulation_env='play_with_bot_mode',
@@ -73,8 +73,9 @@ seller_alphazero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        model_path='/mnt/afs/niuyazhe/code/LightZero/data_az_ptree_0911/qwen2_bge_collectenv4/seller_alphazero_ns10_upc50_goods-train10test20_persona10_seed0_240911_175030/ckpt/ckpt_best.pth.tar',
         # model_path='/mnt/afs/niuyazhe/code/LightZero/data_az_ptree/seller_alphazero_ns10_upc20_goods-train10test20_persona10_seed0_240906_122107/ckpt/ckpt_best.pth.tar',
-        model_path=None,
+        # model_path=None,
         mcts_ctree=mcts_ctree,
         # ==============================================================
         # for the creation of simulation env
@@ -83,8 +84,8 @@ seller_alphazero_config = dict(
         # dynamic_action_space=True,  # TODO
         # ==============================================================
         model=dict(
-            # action_space_size=9, # debug
-            action_space_size=5, # debug
+            action_space_size=9, # debug
+            # action_space_size=5, # debug
             # action_space_size=1, # debug
         ),
         cuda=True,
