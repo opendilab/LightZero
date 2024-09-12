@@ -1,7 +1,7 @@
 import copy
 import os
 from datetime import datetime
-from typing import Callable, Union, Dict
+from typing import Callable, Union, Dict, List
 from typing import Optional
 
 import dmc2gym
@@ -160,6 +160,8 @@ class DMC2GymEnv(BaseEnv):
         # (str or None) The path to save the replay gif. If None, the replay gif will not be saved.
         replay_path_gif=None,
         render_image=False,
+        collect_max_episode_steps=1000,
+        eval_max_episode_steps=1000,
     )
 
     def __init__(self, cfg: dict = {}) -> None:
@@ -284,8 +286,15 @@ class DMC2GymEnv(BaseEnv):
         action = affine_transform(action, min_val=self._env.action_space.low, max_val=self._env.action_space.high)
 
         # 使用NumPy的np.where()函数对action进行修改
-        action = np.where(action > 0.9000, 0.9999, action)
-        action = np.where(action < -0.9000, -0.9999, action)
+        # action = np.where(action > 0.9000, 0.9999, action)
+        # action = np.where(action < -0.9000, -0.9999, action)
+
+        if self._cfg.is_eval:
+            # NOTE
+            # action = np.where(action > 0.9500, 0.9999, action)
+            # action = np.where(action < -0.9500, -0.9999, action)
+            action = np.where(action > 0.9000, 0.9999, action)
+            action = np.where(action < -0.9000, -0.9999, action)
 
         obs, rew, done, info = self._env.step(action)
         self._current_step += 1
@@ -379,3 +388,19 @@ class DMC2GymEnv(BaseEnv):
         String representation of the environment.
         """
         return "LightZero DMC2Gym Env({}:{})".format(self._cfg["domain_name"], self._cfg["task_name"])
+    
+    @staticmethod
+    def create_collector_env_cfg(cfg: dict) -> List[dict]:
+        collector_env_num = cfg.pop('collector_env_num')
+        cfg = copy.deepcopy(cfg)
+        cfg.max_episode_steps = cfg.collect_max_episode_steps
+        cfg.is_eval = False
+        return [cfg for _ in range(collector_env_num)]
+
+    @staticmethod
+    def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
+        evaluator_env_num = cfg.pop('evaluator_env_num')
+        cfg = copy.deepcopy(cfg)
+        cfg.max_episode_steps = cfg.eval_max_episode_steps
+        cfg.is_eval = True
+        return [cfg for _ in range(evaluator_env_num)]
