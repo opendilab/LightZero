@@ -343,7 +343,7 @@ class MuZeroSegmentCollector(ISerialCollector):
         # initializations
         init_obs = self._env.ready_obs
 
-        retry_waiting_time = 0.001
+        retry_waiting_time = 0.05
         while len(init_obs.keys()) != self._env_num:
             # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
             # len(self._env.ready_obs), especially in tictactoe env.
@@ -710,8 +710,8 @@ class MuZeroSegmentCollector(ISerialCollector):
             #     print(f'collect {self.collected_game_segments} segments now! one_episode_done: {one_episode_done}')
             #     self.collected_game_segments = 0
 
-            # v1应该是丢失了部分环境的样本
-            # v2
+            # 如果放到for循环里面去的v1版本，应该是丢失了部分环境的样本
+            # 下面的v2版本，是将<env_num>个环境的样本都正确返回了
             if len(self.game_segment_pool) >= self._default_num_segments or one_episode_done: # game_segment_length = 400
                 print(f'collect {len(self.game_segment_pool)} segments now! one_episode_done: {one_episode_done}')
                 collected_enough_segments = True  # 条件满足，设置标志变量为 True

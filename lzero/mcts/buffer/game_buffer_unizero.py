@@ -64,6 +64,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         """
         policy._target_model.to(self._cfg.device)
         policy._target_model.eval()
+        self.policy = policy
 
         # obtain the current_batch and prepare target context
         reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(
@@ -431,6 +432,11 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         with torch.no_grad():
             value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
             m_obs = torch.from_numpy(value_obs_list).to(self._cfg.device)
+
+            if self._cfg.use_augmentation:
+                # NOTE: TODO
+                m_obs = self.policy.image_transforms.transform(m_obs)
+
             m_output = model.initial_inference(m_obs, action_batch)
 
             if self._cfg.device == 'cuda':

@@ -356,6 +356,38 @@ class UniZeroPolicy(MuZeroPolicy):
         else:
             obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)  # TODO: optimize
 
+        # import torch
+        # import matplotlib.pyplot as plt
+        # import torchvision.utils as vutils
+        # # 使用 torchvision.utils.make_grid 来将多个图像组合成网格
+        # grid = vutils.make_grid(obs_batch.cpu(), nrow=2)
+        # # 转换为 numpy 数组以便用 matplotlib 可视化
+        # grid = grid.permute(1, 2, 0).numpy()  # 转换为 (H, W, C) 格式
+        # # 绘制图像并保存为 PNG 文件
+        # plt.imshow(grid)
+        # plt.axis('off')  # 不显示坐标轴
+        # plt.savefig('/mnt/afs/niuyazhe/code/LightZero/render/orig.png', bbox_inches='tight', pad_inches=0)
+        # plt.show()
+
+        # import torch
+        # import matplotlib.pyplot as plt
+        # import torchvision.utils as vutils
+        # # 假设 obs_target_batch 是已经存在的张量，形状为 torch.Size([2, 30, 96, 96])
+        # # 这里我们创建一个示例的 obs_target_batch
+        # # 将 obs_target_batch reshape 为 (2, 10, 3, 96, 96)
+        # obs_target_batch = obs_target_batch.cpu().reshape(2, 10, 3, 96, 96)
+        # # 将两组 10 张图像合并为同一批次，形状变为 (20, 3, 96, 96)
+        # obs_target_batch = obs_target_batch.reshape(-1, 3, 96, 96)
+        # # 使用 torchvision.utils.make_grid 来将 20 张图像组合成 2 行 10 列的网格
+        # grid = vutils.make_grid(obs_target_batch, nrow=10)
+        # # 转换为 numpy 数组以便用 matplotlib 可视化
+        # grid = grid.permute(1, 2, 0).numpy()  # 转换为 (H, W, C) 格式
+        # # 绘制图像并保存为 PNG 文件
+        # plt.imshow(grid)
+        # plt.axis('off')  # 不显示坐标轴
+        # plt.savefig('/mnt/afs/niuyazhe/code/LightZero/render/target_aug.png', bbox_inches='tight', pad_inches=0)
+        # plt.show()
+
         # Apply augmentations if needed
         if self._cfg.use_augmentation:
             obs_batch = self.image_transforms.transform(obs_batch)
