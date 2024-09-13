@@ -633,7 +633,7 @@ class WorldModel(nn.Module):
         """
         # Extract observations, actions, and current observations from the dictionary.
         if isinstance(obs_act_dict, dict):
-            observations = obs_act_dict['obs']
+            observations = obs_act_dict['obs']  # is self.last_batch_obs
             buffer_action = obs_act_dict['action']
             current_obs = obs_act_dict['current_obs']
 
@@ -695,6 +695,7 @@ class WorldModel(nn.Module):
                     self.keys_values_wm_size_list = []
                     for i in range(ready_env_num):
                         # Retrieve latent state for a single environment
+                        # NOTE: latent_state is last_obs, current_obs_embeddings is current obs, len(last_obs)可能小于len(current obs)，因为有可能有的环境先done了
                         state_single_env = latent_state[i]
                         # Compute hash value using latent state for a single environment
                         cache_key = hash_state(state_single_env.view(-1).cpu().numpy())  # latent_state[i] is torch.Tensor

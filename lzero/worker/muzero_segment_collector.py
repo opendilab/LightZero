@@ -429,6 +429,9 @@ class MuZeroSegmentCollector(ISerialCollector):
                 obs = self._env.ready_obs
                 ready_env_id = set(obs.keys())
 
+                if len(ready_env_id) < self._env_num:
+                    print(f'ready_env_id: {ready_env_id}')
+
                 stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
 
@@ -449,6 +452,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
+
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
 
                 # Extract relevant policy outputs
@@ -570,7 +574,7 @@ class MuZeroSegmentCollector(ISerialCollector):
 
                     eps_steps_lst[env_id] += 1
                     if self._policy.get_attribute('cfg').type == 'unizero':
-                        # only for UniZero now
+                        # ============ only for UniZero now ============
                         self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
 
                     total_transitions += 1
@@ -620,8 +624,10 @@ class MuZeroSegmentCollector(ISerialCollector):
                     collected_step += 1
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
+                # =========== NOTE: =========== 
                 if timestep.done:
                     one_episode_done = True
+                    print(f'========env {env_id} done!========')
                     self._total_episode_count += 1
 
                     reward = timestep.info['eval_episode_return']
@@ -660,7 +666,6 @@ class MuZeroSegmentCollector(ISerialCollector):
                     if len(game_segments[env_id].reward_segment) != 0:
                         self.game_segment_pool.append((game_segments[env_id], priorities, self.dones[env_id]))
 
-
                     # log
                     self_play_moves_max = max(self_play_moves_max, eps_steps_lst[env_id])
                     if not collect_with_pure_policy:
@@ -674,15 +679,25 @@ class MuZeroSegmentCollector(ISerialCollector):
                     visit_entropies_lst[env_id] = 0
 
                     # Env reset is done by env_manager automatically
-                    self._policy.reset([env_id])  # NOTE: reset the policy for the env_id. Default reset_init_data=True.
+                    # NOTE: ============ reset the policy for the env_id. Default reset_init_data=True. ================
+                    self._policy.reset([env_id])
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
+
+                    # ===== TODO: if done not return =======
+                    # create new GameSegment
+                    game_segments[env_id] =  GameSegment(
+                            self._env.action_space,
+                            game_segment_length=self.policy_config.game_segment_length,
+                            config=self.policy_config
+                        )
+                    game_segments[env_id].reset(observation_window_stack[env_id])
 
 
             # 如果放到for循环里面去的v1版本，应该是丢失了部分环境的样本
             # 下面的v2版本，是将<env_num>个环境的样本都正确返回了
-            # if len(self.game_segment_pool) >= self._default_num_segments or one_episode_done: # game_segment_length = 400
-            if len(self.game_segment_pool) >= self._default_num_segments: # game_segment_length = 400
+            if len(self.game_segment_pool) >= self._default_num_segments or one_episode_done: # game_segment_length = 400
+            # if len(self.game_segment_pool) >= self._default_num_segments: # game_segment_length = 400
                 print(f'collect {len(self.game_segment_pool)} segments now! one_episode_done: {one_episode_done}')
                 collected_enough_segments = True  # 条件满足，设置标志变量为 True
 

@@ -691,6 +691,11 @@ class UniZeroPolicy(MuZeroPolicy):
 
             self.last_batch_obs = data
             self.last_batch_action = batch_action
+            # TODO
+            if active_collect_env_num < self.collector_env_num:
+                print('='*20)
+                print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
+                self._reset_collect(reset_init_data=True) 
 
         return output
 
