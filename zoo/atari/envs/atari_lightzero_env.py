@@ -132,7 +132,10 @@ class AtariEnvLightZero(BaseEnv):
 
         self.obs = to_ndarray(obs)
         self._eval_episode_return = 0.
+        self.timestep = 0
+
         obs = self.observe()
+
         return obs
 
     def step(self, action: int) -> BaseEnvTimestep:
@@ -148,6 +151,8 @@ class AtariEnvLightZero(BaseEnv):
         self.obs = to_ndarray(obs)
         self.reward = np.array(reward).astype(np.float32)
         self._eval_episode_return += self.reward
+        self.timestep += 1
+        # print(f'self.timestep: {self.timestep}')
         observation = self.observe()
         if done:
             info['eval_episode_return'] = self._eval_episode_return
@@ -169,6 +174,7 @@ class AtariEnvLightZero(BaseEnv):
             observation = np.transpose(observation, (2, 0, 1))
 
         action_mask = np.ones(self._action_space.n, 'int8')
+        # return {'observation': observation, 'action_mask': action_mask, 'to_play': -1, 'timestep': self.timestep}
         return {'observation': observation, 'action_mask': action_mask, 'to_play': -1}
 
     @property

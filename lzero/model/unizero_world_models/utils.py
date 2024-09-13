@@ -301,6 +301,8 @@ class LossWithIntermediateLosses:
 
         # Define the weights for each loss type
         self.obs_loss_weight = 10
+        # self.obs_loss_weight = 1  # for use_aug
+
         self.reward_loss_weight = 1.
         self.value_loss_weight = 0.25
         self.policy_loss_weight = 1.
