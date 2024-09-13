@@ -5,8 +5,8 @@ from easydict import EasyDict
 
 from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
-env_id = 'humanoid-run'  # 'cartpole-swingup'  # You can specify any DMC task here
-# env_id = 'cheetah-run'  # 'cartpole-swingup'  # You can specify any DMC task here
+# env_id = 'humanoid-run'  # 'cartpole-swingup'  # You can specify any DMC task here
+env_id = 'cheetah-run'  # 'cartpole-swingup'  # You can specify any DMC task here
 # env_id = 'hopper-hop'  # 'cartpole-swingup'  # You can specify any DMC task here
 
 # env_id =  'cartpole-swingup' # 'cartpole-swingup'  # You can specify any DMC task here
@@ -31,8 +31,8 @@ update_per_collect = None
 # replay_ratio = 0.25
 replay_ratio = 0.1
 
-# max_env_step = int(5e6)
-max_env_step = int(10e6)
+max_env_step = int(5e6)
+# max_env_step = int(10e6)
 
 reanalyze_ratio = 0
 # reanalyze_ratio = 0.1
@@ -63,7 +63,7 @@ seed = 0
 
 dmc2gym_state_cont_sampled_unizero_config = dict(
     # exp_name=f'data_sampled_unizero_0912/ucb-uniform-prior_fs8/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_eval-clamp090-1',
-    exp_name=f'data_sampled_unizero_0912/ucb-uniform-prior_fs8/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_eval-clamp090-1_fixedsigma2',
+    exp_name=f'data_sampled_unizero_0912/ucb-uniform-prior_fs8/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_eval-clamp090-1_fixedsigma05',
 
     # exp_name=f'data_sampled_unizero_0912/ucb-density-prior/dmc2gym_{env_id}_state_cont_sampled_unizero_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}',
 
@@ -108,7 +108,8 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
                 # sigma_type='conditioned',
                 sigma_type='fixed',
                 # fixed_sigma_value=fixed_sigma_value,
-                fixed_sigma_value=2,
+                fixed_sigma_value=0.5
+                ,
                 bound_type=None,
                 model_type='mlp',
                 max_blocks=num_unroll_steps,
