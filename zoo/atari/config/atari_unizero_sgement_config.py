@@ -11,10 +11,12 @@ action_space_size = atari_env_action_space_map[env_id]
 # ==============================================================
 update_per_collect = None
 replay_ratio = 0.25
-replay_ratio = 1
+# replay_ratio = 1
 
 collector_env_num = 8
-num_segments = 8
+# num_segments = 8
+num_segments = 16
+
 # num_segments = 1
 # game_segment_length=20
 # game_segment_length=100
@@ -90,7 +92,7 @@ atari_unizero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         num_segments=num_segments,
-        train_start_after_envsteps=2000,
+        train_start_after_envsteps=8000,
         game_segment_length=game_segment_length, # debug
         replay_buffer_size=int(1e6),
         eval_freq=int(5e3),
@@ -128,9 +130,9 @@ if __name__ == "__main__":
     seeds = [0]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0912/numsegments-{num_segments}_gsl{game_segment_length}/obshape96_no-augmentation/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
+        main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0914/numsegments-{num_segments}_gsl{game_segment_length}_origin-target-value-policy_fixinitkv/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
         # main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0912/numsegments-{num_segments}_gsl{game_segment_length}/obshape96_use-augmentation-obsw10/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
-        # main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0912_debug/numsegments-{num_segments}_gsl{game_segment_length}_fix/obshape96_use-augmentation-obsw10/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
+        # main_config.exp_name = f'data_efficiency0829_plus_tune-uz_debug/numsegments-{num_segments}_gsl{game_segment_length}_fix/obshape96_use-augmentation-obsw10/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
 
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

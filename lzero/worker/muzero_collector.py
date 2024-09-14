@@ -400,9 +400,24 @@ class MuZeroCollector(ISerialCollector):
             with self._timer:
                 # Get current ready env obs.
                 obs = self._env.ready_obs
-                new_available_env_id = set(obs.keys()).difference(ready_env_id)
-                ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
-                remain_episode -= min(len(new_available_env_id), remain_episode)
+
+                ready_env_id = set(obs.keys())
+                while len(obs.keys()) != self._env_num:
+                    # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
+                    # len(self._env.ready_obs), especially in tictactoe env.
+                    self._logger.info('The current init_obs.keys() is {}'.format(obs.keys()))
+                    self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
+                    time.sleep(retry_waiting_time)
+                    self._logger.info('=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
+                    self._logger.info(
+                        'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time, self._env._env_states)
+                    )
+                    obs = self._env.ready_obs
+                    ready_env_id = set(obs.keys())
+
+                # new_available_env_id = set(obs.keys()).difference(ready_env_id)
+                # ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
+                # remain_episode -= min(len(new_available_env_id), remain_episode)
 
                 stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
@@ -691,6 +706,15 @@ class MuZeroCollector(ISerialCollector):
                     self._policy.reset([env_id])  # NOTE: reset the policy for the env_id. Default reset_init_data=True.
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
+
+                    # ===== TODO: if done not return =======
+                    # create new GameSegment
+                    game_segments[env_id] =  GameSegment(
+                            self._env.action_space,
+                            game_segment_length=self.policy_config.game_segment_length,
+                            config=self.policy_config
+                        )
+                    game_segments[env_id].reset(observation_window_stack[env_id])
 
             if collected_episode >= n_episode:
                 # [data, meta_data]
