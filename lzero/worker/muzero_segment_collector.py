@@ -428,25 +428,22 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # Get current ready env obs.
                 obs = self._env.ready_obs
                 ready_env_id = set(obs.keys())
-                # if len(ready_env_id) < self._env_num:
-                #     print(f'ready_env_id: {ready_env_id}')
+                if len(ready_env_id) < self._env_num:
+                    print(f'ready_env_id: {ready_env_id}')
                 
-                while len(obs.keys()) != self._env_num:
-                    # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
-                    # len(self._env.ready_obs), especially in tictactoe env.
-                    self._logger.info('The current init_obs.keys() is {}'.format(obs.keys()))
-                    self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
-                    time.sleep(retry_waiting_time)
-                    self._logger.info('=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
-                    self._logger.info(
-                        'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time, self._env._env_states)
-                    )
-                    obs = self._env.ready_obs
-                    ready_env_id = set(obs.keys())
-
-                # TODO
-                # new_available_env_id = set(obs.keys()).difference(ready_env_id)
-                # ready_env_id = ready_env_id.union(set(list(new_available_env_id)))
+                # fix init_infer kv_cache
+                # while len(obs.keys()) != self._env_num:
+                #     # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
+                #     # len(self._env.ready_obs), especially in tictactoe env.
+                #     self._logger.info('The current init_obs.keys() is {}'.format(obs.keys()))
+                #     self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
+                #     time.sleep(retry_waiting_time)
+                #     self._logger.info('=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
+                #     self._logger.info(
+                #         'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time, self._env._env_states)
+                #     )
+                #     obs = self._env.ready_obs
+                #     ready_env_id = set(obs.keys())
 
                 stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())

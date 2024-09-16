@@ -214,8 +214,6 @@ class UniZeroPolicy(MuZeroPolicy):
         value_loss_weight=0.25,
         # (float) The weight of policy loss.
         policy_loss_weight=1,
-        # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=0,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
@@ -691,11 +689,12 @@ class UniZeroPolicy(MuZeroPolicy):
 
             self.last_batch_obs = data
             self.last_batch_action = batch_action
+
             # ========= TODO: for muzero_segment_collector now =========
-            # if active_collect_env_num < self.collector_env_num:
-            #     print('='*20)
-            #     print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
-            #     self._reset_collect(reset_init_data=True) 
+            if active_collect_env_num < self.collector_env_num:
+                print('='*20)
+                print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
+                self._reset_collect(reset_init_data=True) 
 
         return output
 

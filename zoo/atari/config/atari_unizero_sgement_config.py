@@ -14,17 +14,17 @@ replay_ratio = 0.25
 # replay_ratio = 1
 
 collector_env_num = 8
-# num_segments = 8
-num_segments = 16
+num_segments = 8
+# num_segments = 16
 
 # num_segments = 1
-# game_segment_length=20
+game_segment_length=20
 # game_segment_length=100
-game_segment_length=400
+# game_segment_length=400
 
 evaluator_env_num = 3
 num_simulations = 50
-max_env_step = int(5e5)
+max_env_step = int(3e5)
 reanalyze_ratio = 0.
 batch_size = 64
 num_unroll_steps = 10
@@ -34,7 +34,7 @@ infer_context_length = 4
 # collector_env_num = 8
 # num_segments = 8
 # evaluator_env_num = 2
-# num_simulations = 3
+# num_simulations = 5
 # max_env_step = int(2e5)
 # reanalyze_ratio = 0.
 # batch_size = 2
@@ -66,6 +66,7 @@ atari_unizero_config = dict(
             observation_shape=(3, 96, 96),
             action_space_size=action_space_size,
             world_model_cfg=dict(
+                policy_entropy_weight=0,  # NOTE
                 continuous_action_space=False,
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
@@ -82,17 +83,26 @@ atari_unizero_config = dict(
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
+        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_efficiency0829_plus_tune-uz_0914/numsegments-8_gsl20_origin-target-value-policy/Pong_stack1_unizero_upcNone-rr0.25_H10_bs64_seed0_nlayer2/ckpt/ckpt_best.pth.tar',
         # use_augmentation=True,
         use_augmentation=False,
+
+        manual_temperature_decay=True,  # TODO
+        # manual_temperature_decay=False,  # TODO
+
         num_unroll_steps=num_unroll_steps,
         update_per_collect=update_per_collect,
         replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type='AdamW',
+
+        # learning_rate=0.0001,
+        learning_rate=0.001,  # TODO
+
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         num_segments=num_segments,
-        train_start_after_envsteps=8000,
+        train_start_after_envsteps=2000,
         game_segment_length=game_segment_length, # debug
         replay_buffer_size=int(1e6),
         eval_freq=int(5e3),
@@ -130,8 +140,9 @@ if __name__ == "__main__":
     seeds = [0]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0914/numsegments-{num_segments}_gsl{game_segment_length}_origin-target-value-policy_fixinitkv/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
-        # main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0912/numsegments-{num_segments}_gsl{game_segment_length}/obshape96_use-augmentation-obsw10/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
+        # main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0916/numsegments-{num_segments}_gsl{game_segment_length}_origin-target-value-policy_pew0_fixsample_temp025/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
+
+        main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0916/numsegments-{num_segments}_gsl{game_segment_length}_origin-target-value-policy_pew0_fixsample_decaytemp_lr0001/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
         # main_config.exp_name = f'data_efficiency0829_plus_tune-uz_debug/numsegments-{num_segments}_gsl{game_segment_length}_fix/obshape96_use-augmentation-obsw10/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
 
         from lzero.entry import train_unizero
