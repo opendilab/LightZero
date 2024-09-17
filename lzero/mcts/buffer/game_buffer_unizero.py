@@ -168,7 +168,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         0: reanalyze_num -> reanalyzed policy, reanalyze_num:end -> non reanalyzed policy
         """
         reanalyze_num = max(int(batch_size * reanalyze_ratio), 1) if reanalyze_ratio > 0 else 0
-        print(f'reanalyze_ratio: {reanalyze_ratio}, reanalyze_num: {reanalyze_num}')
+        # print(f'reanalyze_ratio: {reanalyze_ratio}, reanalyze_num: {reanalyze_num}')
         self.reanalyze_num = reanalyze_num
         # reanalyzed policy
         if reanalyze_num > 0:

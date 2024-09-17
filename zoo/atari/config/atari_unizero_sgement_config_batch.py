@@ -1,0 +1,157 @@
+from easydict import EasyDict
+from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
+
+def main(env_id, seed):
+
+    action_space_size = atari_env_action_space_map[env_id]
+
+    # ==============================================================
+    # begin of the most frequently changed config specified by the user
+    # ==============================================================
+    update_per_collect = None
+    replay_ratio = 0.25
+
+    collector_env_num = 8
+    num_segments = 8
+
+    game_segment_length=20
+    # game_segment_length=400
+
+    evaluator_env_num = 3
+    num_simulations = 50
+    max_env_step = int(2e5)
+
+    reanalyze_ratio = 0.
+
+    batch_size = 64
+    num_unroll_steps = 10
+    infer_context_length = 4
+
+    # ====== only for debug =====
+    # collector_env_num = 8
+    # num_segments = 8
+    # evaluator_env_num = 2
+    # num_simulations = 5
+    # max_env_step = int(2e5)
+    # reanalyze_ratio = 0.1
+    # batch_size = 64
+    # num_unroll_steps = 10
+    # replay_ratio = 0.01
+
+    # ==============================================================
+    # end of the most frequently changed config specified by the user
+    # ==============================================================
+
+    atari_unizero_config = dict(
+        env=dict(
+            stop_value=int(1e6),
+            env_id=env_id,
+            # observation_shape=(3, 64, 64),
+            observation_shape=(3, 96, 96),
+            gray_scale=False,
+            collector_env_num=collector_env_num,
+            evaluator_env_num=evaluator_env_num,
+            n_evaluator_episode=evaluator_env_num,
+            manager=dict(shared_memory=False, ),
+            # TODO: only for debug
+            # collect_max_episode_steps=int(20),
+            # eval_max_episode_steps=int(20),
+        ),
+        policy=dict(
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000,),),),  # default is 10000
+            model=dict(
+                # observation_shape=(3, 64, 64),
+                observation_shape=(3, 96, 96),
+                action_space_size=action_space_size,
+                world_model_cfg=dict(
+                    # policy_entropy_weight=0,  # NOTE
+                    policy_entropy_weight=1e-4,
+                    continuous_action_space=False,
+                    max_blocks=num_unroll_steps,
+                    max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
+                    context_length=2 * infer_context_length,
+                    device='cuda',
+                    # device='cpu',
+                    action_space_size=action_space_size,
+                    num_layers=2,
+                    num_heads=8,
+                    embed_dim=768,
+                    obs_type='image',
+                    env_num=max(collector_env_num, evaluator_env_num),
+                ),
+            ),
+            # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+            model_path=None,
+            # model_path='/mnt/afs/niuyazhe/code/LightZero/data_efficiency0829_plus_tune-uz_0914/numsegments-8_gsl20_origin-target-value-policy/Pong_stack1_unizero_upcNone-rr0.25_H10_bs64_seed0_nlayer2/ckpt/ckpt_best.pth.tar',
+            # use_augmentation=True,
+            use_augmentation=False,
+
+            manual_temperature_decay=True,  # TODO
+            threshold_training_steps_for_final_temperature=int(2.5e4),
+            # manual_temperature_decay=False,  # TODO
+
+            # use_priority=True, # TODO
+            use_priority=False, # TODO
+
+            num_unroll_steps=num_unroll_steps,
+            update_per_collect=update_per_collect,
+            replay_ratio=replay_ratio,
+            batch_size=batch_size,
+            optim_type='AdamW',
+            learning_rate=0.0001,
+            # learning_rate=0.001,  # TODO
+            num_simulations=num_simulations,
+            reanalyze_ratio=reanalyze_ratio,
+            num_segments=num_segments,
+            train_start_after_envsteps=2000,
+            game_segment_length=game_segment_length, # debug
+            replay_buffer_size=int(1e6),
+            eval_freq=int(5e3),
+            collector_env_num=collector_env_num,
+            evaluator_env_num=evaluator_env_num,
+        ),
+    )
+    atari_unizero_config = EasyDict(atari_unizero_config)
+    main_config = atari_unizero_config
+
+    atari_unizero_create_config = dict(
+        env=dict(
+            type='atari_lightzero',
+            import_names=['zoo.atari.envs.atari_lightzero_env'],
+        ),
+        env_manager=dict(type='subprocess'),
+        policy=dict(
+            type='unizero',
+            import_names=['lzero.policy.unizero'],
+        ),
+        collector=dict(
+            type='segment_muzero',
+            import_names=['lzero.worker.muzero_segment_collector'],
+        ),
+        evaluator=dict(
+            type='muzero',
+            import_names=['lzero.worker.muzero_evaluator'],
+        )
+    )
+    atari_unizero_create_config = EasyDict(atari_unizero_create_config)
+    create_config = atari_unizero_create_config
+
+
+    # Update exp_name to include the current seed
+    main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0918/{env_id[:-14]}/{env_id[:-14]}_uz_numsegments-{num_segments}_gsl{game_segment_length}_pew1e-4_decaytemp25k_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
+
+    from lzero.entry import train_unizero
+    train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description='Process some environment.')
+    
+    parser.add_argument('--env', type=str, help='The environment to use')
+    parser.add_argument('--seed', type=int, help='The environment to use')
+    
+    args = parser.parse_args()
+    main(args.env, args.seed)
+

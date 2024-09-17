@@ -3,8 +3,8 @@ from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_m
 
 env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
 # env_id = 'SeaquestNoFrameskip-v4'  # You can specify any Atari game here
-
 # env_id = 'QbertNoFrameskip-v4'  # You can specify any Atari game here
+
 
 action_space_size = atari_env_action_space_map[env_id]
 
@@ -19,13 +19,15 @@ replay_ratio = 0.25
 
 collector_env_num = 8
 num_segments = 8
-# num_segments = 16
+
+# collector_env_num = 4
+# num_segments = 4
+
 
 # num_segments = 1
 game_segment_length=20
 # game_segment_length=15
 # game_segment_length=50
-
 # game_segment_length=100
 # game_segment_length=400
 
@@ -33,7 +35,8 @@ evaluator_env_num = 3
 num_simulations = 50
 max_env_step = int(2e5)
 
-reanalyze_ratio = 0.1
+# reanalyze_ratio = 0.1
+reanalyze_ratio = 0.
 
 batch_size = 64
 num_unroll_steps = 10
@@ -70,12 +73,14 @@ atari_unizero_config = dict(
         # eval_max_episode_steps=int(20),
     ),
     policy=dict(
+        learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=20000,),),),  # default is 10000
         model=dict(
             # observation_shape=(3, 64, 64),
             observation_shape=(3, 96, 96),
             action_space_size=action_space_size,
             world_model_cfg=dict(
-                policy_entropy_weight=0,  # NOTE
+                # policy_entropy_weight=0,  # NOTE
+                policy_entropy_weight=1e-4,
                 continuous_action_space=False,
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
@@ -96,8 +101,9 @@ atari_unizero_config = dict(
         # use_augmentation=True,
         use_augmentation=False,
 
-        # manual_temperature_decay=True,  # TODO
-        manual_temperature_decay=False,  # TODO
+        manual_temperature_decay=True,  # TODO
+        threshold_training_steps_for_final_temperature=int(2.5e4),
+        # manual_temperature_decay=False,  # TODO
 
         # use_priority=True, # TODO
         use_priority=False, # TODO
@@ -150,7 +156,7 @@ if __name__ == "__main__":
     seeds = [0]  # You can add more seed values here
     for seed in seeds:
         # Update exp_name to include the current seed
-        main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0917/numsegments-{num_segments}_gsl{game_segment_length}_origin-target-value-policy_pew0_fixsample_temp025/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
+        main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0918/{env_id[:-14]}/{env_id[:-14]}_uz_numsegments-{num_segments}_gsl{game_segment_length}_pew1e-4_decaytemp25k_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
         # main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0917/numsegments-{num_segments}_gsl{game_segment_length}_origin-target-value-policy_pew0_fixsample_temp025_useprio/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
 
         # main_config.exp_name = f'data_efficiency0829_plus_tune-uz_debug/numsegments-{num_segments}_gsl{game_segment_length}_fix/obshape96_use-augmentation-obsw10/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
