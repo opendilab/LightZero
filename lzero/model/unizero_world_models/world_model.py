@@ -140,6 +140,8 @@ class WorldModel(nn.Module):
         self.shared_pool_wm = [None] * self.shared_pool_size_wm
         self.shared_pool_index_wm = 0
 
+        self.reanalyze_phase = False
+
     #@profile
     def custom_copy_kv_cache_to_shared_init_envs(self, src_kv: KeysValues, env_id) -> int:
         """
@@ -1117,22 +1119,22 @@ class WorldModel(nn.Module):
             state_single_env = latent_state[i]  # latent_state[i] is np.array
             cache_key = hash_state(state_single_env)
 
-            # Try to retrieve the cached value from past_kv_cache_init_infer_envs
-            # TODO
-            # matched_value = self.past_kv_cache_init_infer_envs[i].get(cache_key)
 
-            # matched_value = self.shared_pool_init_infer[i][self.past_kv_cache_init_infer_envs[i].get(cache_key)] # bug
-            cache_index = self.past_kv_cache_init_infer_envs[i].get(cache_key)
-            if cache_index is not None:
-                matched_value = self.shared_pool_init_infer[i][cache_index]
-            else:
+            if self.reanalyze_phase: # TODO
                 matched_value = None
+            else:
+                # Try to retrieve the cached value from past_kv_cache_init_infer_envs
+                cache_index = self.past_kv_cache_init_infer_envs[i].get(cache_key)
+                if cache_index is not None:
+                    matched_value = self.shared_pool_init_infer[i][cache_index]
+                else:
+                    matched_value = None
 
-            # If not found, try to retrieve from past_kv_cache_recurrent_infer
-            if matched_value is None:
-                # matched_value = self.past_kv_cache_recurrent_infer.get(cache_key)
-                # NOTE: TODO
-                matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
+                # If not found, try to retrieve from past_kv_cache_recurrent_infer
+                if matched_value is None:
+                    # matched_value = self.past_kv_cache_recurrent_infer.get(cache_key)
+                    # NOTE: TODO
+                    matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
 
             if matched_value is not None:
                 # If a matching cache is found, add it to the lists
@@ -1333,6 +1335,10 @@ class WorldModel(nn.Module):
             policy_entropy = - policy_entropy_loss
 
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
+
+        # ==== TODO: calculate the new priorities for each transition. ====
+        # value_priority = L1Loss(reduction='none')(labels_value.squeeze(-1), outputs['logits_value'][:, 0])
+        # value_priority = value_priority.data.cpu().numpy() + 1e-6
 
         # Compute timesteps
         timesteps = torch.arange(batch['actions'].shape[1], device=batch['actions'].device)
