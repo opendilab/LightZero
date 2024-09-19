@@ -310,7 +310,7 @@ class Connect4Env(BaseEnv):
         if init_state is None:
             self.board = [0] * (6 * 7)
         else:
-            self.board = init_state
+            self.board = np.array(copy.deepcopy(init_state), dtype="int32")
         self.players = [1, 2]
         self.start_player_index = start_player_index
         self._current_player = self.players[self.start_player_index]
