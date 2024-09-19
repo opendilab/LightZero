@@ -77,7 +77,6 @@ class TreeNode:
         
         exploitation = child.total_return / (child.visits + 1)
         exploration = math.sqrt(2 * math.log(self.visits + 1) / (child.visits + 1))
-        # return exploitation + math.sqrt(2) * exploration  # 探索常数为 sqrt(2)
         return exploitation + 1.41 * exploration  # 可以调节探索常数
 
 
@@ -165,25 +164,16 @@ class MCTSBot:
 if __name__ == '__main__':
     env_cfg = EasyDict(
     dict(
-        agent='deepseek',
-        api_key='sk-c4a8fe52693a4aaab64e648c42f40be6',
-        # api_key='sk-7866ab6ea8ca408a91971ef18eed4b75',
+        agent='deepseek',  # or 'lmdeploy'
+        api_key=['your deepseek api key'],
         commands=[
             '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
             '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
         ],
-        # commands=[
-        #     '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '和用户共情，从用户的角度解释选择的原因'
-        # ],
         max_round=5,
-        # commands=[
-        #     '将你的产品推销给用户'
-        # ],
-        # max_round=2,
         seed=0,
         lang='zh',
-        log_suffix='mcts_sim10_a9_0827_example2_speed',
-        # log_suffix='random_a9_0826_example2',
+        log_suffix='mcts_sim10_a9_speed',
         save_replay=False,
         )
     )
@@ -192,23 +182,19 @@ if __name__ == '__main__':
     avg_return = 0
     eval_episodes = 5
     mcts_bot = MCTSBot(n_iterations=10)
-    # mcts_bot = MCTSBot(n_iterations=1)
-
     start_time = time.time()  # 记录总体开始时间
 
-    for seed in range(0, eval_episodes): # TODO
+    for seed in range(0, eval_episodes):
         print(f"开始第 {seed + 1} 个评估回合...")
         episode_start_time = time.time()  # 记录每个回合开始时间
         
         env.seed(seed)
         env.reset()
         while not env.finished:
-            action = mcts_bot.get_action(env) # TODO
-            # action = np.random.randint(9)
-            env.save_replay = True  # TODO
-            # env.save_replay = False
+            action = mcts_bot.get_action(env)
+            env.save_replay = True  # NOTE
             env_step = env.step([action])
-            env.save_replay = False
+            env.save_replay = False # NOTE: 不存储simulation_env里面的replay
             print(f'============= Round {env.round_cnt} =============')
             print(f'MCTS Bot 选择动作: {env.commands[action]}')
             for k in env_step.info:

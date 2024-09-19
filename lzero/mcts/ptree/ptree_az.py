@@ -75,16 +75,39 @@ class Node(object):
         # Updates the sum of the values of all child nodes of this node.
         self._value_sum += value
 
-    def update_recursive(self, leaf_value: float) -> None:
-        # Update the current node's information.
-        self.update(leaf_value)
-        # If the current node is the root node, return.
-        if self.is_root():
-            return
-        # Update the parent node's information recursively. In ``play_with_bot_mode``, since the nodes' values
-        # are always evaluated from the perspective of the agent player, there is no need to negate the value
-        # during value propagation.
-        self._parent.update_recursive(leaf_value)
+    def update_recursive(self, leaf_value: float, battle_mode_in_simulation_env: str) -> None:
+        """
+        Overview:
+            Update node information recursively.
+            The same game state has opposite values in the eyes of two players playing against each other. 
+            The value of a node is evaluated from the perspective of the player corresponding to its parent node. 
+            In ``self_play_mode``, because the player corresponding to a node changes every step during the backpropagation process, the value needs to be negated once. 
+            In ``play_with_bot_mode``, since all nodes correspond to the same player, the value does not need to be negated.
+
+        Arguments:
+            - leaf_value (:obj:`Float`): The value of the node.
+            - battle_mode_in_simulation_env (:obj:`str`): The mode of MCTS, can be 'self_play_mode' or 'play_with_bot_mode'.
+        """
+        # Update the node information recursively based on the MCTS mode.
+        if battle_mode_in_simulation_env == 'self_play_mode':
+            # Update the current node's information.
+            self.update(leaf_value)
+            # If the current node is the root node, return.
+            if self.is_root():
+                return
+            # Update the parent node's information recursively. When propagating the value back to the parent node,
+            # the value needs to be negated once because the perspective of evaluation has changed.
+            self._parent.update_recursive(-leaf_value, battle_mode_in_simulation_env)
+        if battle_mode_in_simulation_env == 'play_with_bot_mode':
+            # Update the current node's information.
+            self.update(leaf_value)
+            # If the current node is the root node, return.
+            if self.is_root():
+                return
+            # Update the parent node's information recursively. In ``play_with_bot_mode``, since the nodes' values
+            # are always evaluated from the perspective of the agent player, there is no need to negate the value
+            # during value propagation.
+            self._parent.update_recursive(leaf_value, battle_mode_in_simulation_env)
 
     def is_leaf(self) -> bool:
         """
@@ -195,14 +218,11 @@ class MCTS(object):
 
         # Create a new root node for the MCTS search.
         root = Node()
-            
-        self.simulate_env.reset_from_history(
-                history=state_config_for_simulate_env_reset.history,
-                round_cnt = state_config_for_simulate_env_reset.round_cnt,
-                eval_episode_return = state_config_for_simulate_env_reset.eval_episode_return,
-                seed_for_goods=state_config_for_simulate_env_reset.seed_for_goods, 
-                seed_for_persona=state_config_for_simulate_env_reset.seed_for_persona
-            )  
+
+        self.simulate_env.reset(
+                start_player_index=state_config_for_simulate_env_reset.start_player_index,
+                init_state=state_config_for_simulate_env_reset.init_state,
+            )
         # Expand the root node by adding children to it.
         self._expand_leaf_node(root, self.simulate_env, policy_forward_fn)
 
@@ -213,13 +233,17 @@ class MCTS(object):
         # Perform MCTS search for a fixed number of iterations.
         for n in range(self._num_simulations):
             # Initialize the simulated environment and reset it to the root node.
-            self.simulate_env.reset_from_history(
-                history=state_config_for_simulate_env_reset.history,
-                round_cnt = state_config_for_simulate_env_reset.round_cnt,
-                eval_episode_return = state_config_for_simulate_env_reset.eval_episode_return,
-                seed_for_goods=state_config_for_simulate_env_reset.seed_for_goods, 
-                seed_for_persona=state_config_for_simulate_env_reset.seed_for_persona
-            )  
+            self.simulate_env.reset(
+                start_player_index=state_config_for_simulate_env_reset.start_player_index,
+                init_state=state_config_for_simulate_env_reset.init_state,
+            )
+            # Set the battle mode adopted by the environment during the MCTS process.
+            # In ``self_play_mode``, when the environment calls the step function once, it will play one move based on the incoming action.
+            # In ``play_with_bot_mode``, when the step function is called, it will play one move based on the incoming action,
+            # and then it will play another move based on the action generated by the built-in bot in the environment, which means two moves in total.
+            # Therefore, in the MCTS process, except for the terminal nodes, the player corresponding to each node is the same player as the root node.
+            self.simulate_env.battle_mode = self.simulate_env.battle_mode_in_simulation_env
+            self.simulate_env.render_mode = None
             # Run the simulation from the root to a leaf node and update the node values along the way.
             self._simulate(root, self.simulate_env, policy_forward_fn)
 
@@ -269,7 +293,7 @@ class MCTS(object):
                 break
             simulate_env.step(action)
 
-        done, _ = simulate_env.get_done_winner()
+        done, winner = simulate_env.get_done_winner()
         """
         in ``self_play_mode``, the leaf_value is calculated from the perspective of player ``simulate_env.current_player``.
         in ``play_with_bot_mode``, the leaf_value is calculated from the perspective of player 1.
@@ -282,10 +306,38 @@ class MCTS(object):
             # game state from the perspective of player 1.
             leaf_value = self._expand_leaf_node(node, simulate_env, policy_forward_fn)
         else:
-            leaf_value = simulate_env.eval_episode_return
+            if simulate_env.battle_mode_in_simulation_env == 'self_play_mode':
+                # In a tie game, the value corresponding to a terminal node is 0.
+                if winner == -1:
+                    leaf_value = 0
+                else:
+                    # To maintain consistency with the perspective of the neural network, the value of a terminal
+                    # node is also calculated from the perspective of the current_player of the terminal node,
+                    # which is convenient for subsequent updates.
+                    leaf_value = 1 if simulate_env.current_player == winner else -1
+
+            if simulate_env.battle_mode_in_simulation_env == 'play_with_bot_mode':
+                # in ``play_with_bot_mode``, the leaf_value should be transformed to the perspective of player 1.
+                if winner == -1:
+                    leaf_value = 0
+                elif winner == 1:
+                    leaf_value = 1
+                elif winner == 2:
+                    leaf_value = -1
 
         # Update value and visit count of nodes in this traversal.
-        node.update_recursive(leaf_value)
+        if simulate_env.battle_mode_in_simulation_env == 'play_with_bot_mode':
+            node.update_recursive(leaf_value, simulate_env.battle_mode_in_simulation_env)
+        elif simulate_env.battle_mode_in_simulation_env == 'self_play_mode':
+            # NOTE: e.g.
+            #       to_play: 1  ---------->  2  ---------->  1  ----------> 2
+            #         state: s1 ---------->  s2 ---------->  s3 ----------> s4
+            #                                     action    node
+            #                                            leaf_value
+            # leaf_value is calculated from the perspective of player 1, leaf_value = value_func(s3),
+            # but node.value should be the value of E[q(s2, action)], i.e. calculated from the perspective of player 2.
+            # thus we add the negative when call update_recursive().
+            node.update_recursive(-leaf_value, simulate_env.battle_mode_in_simulation_env)
 
     def _select_child(self, node: Node, simulate_env: Type[BaseEnv]) -> Tuple[Union[int, float], Node]:
         """

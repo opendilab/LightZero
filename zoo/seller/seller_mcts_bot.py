@@ -126,35 +126,17 @@ class MCTSBot:
 if __name__ == '__main__':
     env_cfg = EasyDict(
     dict(
-        agent='lmdeploy',
-        # agent='deepseek',
-        api_key=[
-            'sk-f50d634a123f4c84bc08fa880387ff76', 'sk-f8e6d25f99e5434c9ebda6e447fa8a7a',
-            'sk-d020afbebe1e4d1ba1db7d32700c068c', 'sk-514a633560104439a4324dc30deab907',
-            # 'sk-c4a8fe52693a4aaab64e648c42f40be6', 'sk-7866ab6ea8ca408a91971ef18eed4b75',
-        ],
-        # commands=[
-        #     '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
-        #     '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
-        # ],
+        agent='deepseek',  # or 'lmdeploy'
+        api_key=['your deepseek api key'],
         commands=[
             '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因',
             '询问用户的具体使用情景', '询问用户当前还有哪些疑虑'
-        ], # action_space_size=7
-        # commands=[
-        #     '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '和用户共情，从用户的角度解释选择的原因'
-        # ],
+        ],
         max_round=5,
-        # commands=[
-        #     '将你的产品推销给用户'
-        # ],
-        # max_round=2,
         seed=0,
         lang='zh',
-        log_suffix='mcts_sim10_a9_0911_eps20',
-        # log_suffix='random_a9_0826_example2_run2',
+        log_suffix='mcts_sim10_a9_eps20',
         save_replay=False,
-        # dynamic_action_space=True,
         dynamic_action_space=False,
         )
     )
@@ -165,17 +147,14 @@ if __name__ == '__main__':
     mcts_bot = MCTSBot(n_iterations=10)
 
     for seed in range(0, eval_episodes): # TODO
-    # for seed in range(2, eval_episodes): # TODO
         env.seed(seed=seed, dynamic_seed=False) # NOTE: seed must be before reset
         env.reset(is_eval=True) # NOTE
         while not env.finished:
             print(f'commands: {env.commands}')
-            action = mcts_bot.get_action(env) # TODO
-            # action = np.random.randint(9)
-            env.save_replay = True  # TODO
-            # env.save_replay = False
+            action = mcts_bot.get_action(env)
+            env.save_replay = True  # NOTE
             env_step = env.step([action])
-            env.save_replay = False
+            env.save_replay = False  # NOTE: 不存储simulation_env里面的replay
             print(f'============= Round {env.round_cnt} =============')
             print(f'MCTS Bot 选择动作: {env.commands[action]}')
             for k in env_step.info:

@@ -75,7 +75,6 @@ class TreeNode:
         
         exploitation = child.total_return / (child.visits + 1)
         exploration = math.sqrt(2 * math.log(self.visits + 1) / (child.visits + 1))
-        # return exploitation + math.sqrt(2) * exploration  # 探索常数为 sqrt(2)
         return exploitation + 1.41 * exploration  # 可以调节探索常数
 
 
@@ -98,7 +97,6 @@ class MCTSBot:
                 actions = list(range(len(env.commands)))  # 获取所有可能的动作
                 node.expand(actions)
                 if node.children:  # 确保存在未访问的子节点
-                    # node = random.choice(node.children)  # 改为选择 UCB 值最高的子节点
                     node = node.select_best_child()
             
             # rollout  

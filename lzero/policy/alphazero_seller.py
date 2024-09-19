@@ -15,7 +15,7 @@ from easydict import EasyDict
 from lzero.policy import configure_optimizers
 
 
-@POLICY_REGISTRY.register('alphazero')
+@POLICY_REGISTRY.register('alphazero_seller')
 class AlphaZeroPolicy(Policy):
     """
     Overview:
@@ -24,18 +24,11 @@ class AlphaZeroPolicy(Policy):
 
     # The default_config for AlphaZero policy.
     config = dict(
+        simulation_env_config_type='play_with_bot',
         # (bool) Whether to use torch.compile method to speed up our model, which required torch>=2.0.
-        torch_compile=False,
+        torch_compile=True,
         # (bool) Whether to use TF32 for our model.
         tensor_float_32=False,
-        model=dict(
-            # (tuple) The stacked obs shape.
-            observation_shape=(3, 6, 6),
-            # (int) The number of res blocks in AlphaZero model.
-            num_res_blocks=1,
-            # (int) The number of channels of hidden states in AlphaZero model.
-            num_channels=32,
-        ),
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
         # this variable is used in ``collector``.
         sampled_algo=False,
@@ -113,7 +106,8 @@ class AlphaZeroPolicy(Policy):
             - model_type (:obj:`str`): The model type used in this algorithm, which is registered in ModelRegistry.
             - import_names (:obj:`List[str]`): The model class path list used in this algorithm.
         """
-        return 'AlphaZeroModel', ['lzero.model.alphazero_model']
+        # return 'AlphaZeroModel', ['lzero.model.alphazero_model']
+        return 'AlphaZeroModel', ['lzero.model.alphazero_model_language']
 
     def _init_learn(self) -> None:
         assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
@@ -150,6 +144,8 @@ class AlphaZeroPolicy(Policy):
         self._learn_model = self._model
 
         # TODO(pu): test the effect of torch 2.0
+        # Ensure that the installed torch version is greater than or equal to 2.0
+        assert int(''.join(filter(str.isdigit, torch.__version__))) >= 200, "We need torch version >= 2.0"
         if self._cfg.torch_compile:
             self._learn_model = torch.compile(self._learn_model)
 
@@ -163,7 +159,6 @@ class AlphaZeroPolicy(Policy):
         mcts_probs = inputs['probs']
         reward = inputs['reward']
 
-        state_batch = state_batch.to(device=self._device, dtype=torch.float)
         mcts_probs = mcts_probs.to(device=self._device, dtype=torch.float)
         reward = reward.to(device=self._device, dtype=torch.float)
 
@@ -216,7 +211,7 @@ class AlphaZeroPolicy(Policy):
         Overview:
             Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.
         """
-        self._get_simulation_env()
+        self._get_simulation_env(is_eval=False)
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
             import sys
@@ -230,7 +225,10 @@ class AlphaZeroPolicy(Policy):
             if self._cfg.sampled_algo:
                 from lzero.mcts.ptree.ptree_az_sampled import MCTS
             else:
-                from lzero.mcts.ptree.ptree_az import MCTS
+                if self._cfg.simulation_env_id == 'seller':
+                    from lzero.mcts.ptree.ptree_az_seller import MCTS
+                else:
+                    from lzero.mcts.ptree.ptree_az import MCTS
             self._collect_mcts = MCTS(self._cfg.mcts, self.simulate_env)
 
         self.collect_mcts_temperature = 1
@@ -250,19 +248,17 @@ class AlphaZeroPolicy(Policy):
         """
         self.collect_mcts_temperature = temperature
         ready_env_id = list(obs.keys())
-        init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
-        # If 'katago_game_state' is in the observation of the given environment ID, it's value is used.
-        # If it's not present (which will raise a KeyError), None is used instead.
-        # This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.
-        katago_game_state = {env_id: obs[env_id].get('katago_game_state', None) for env_id in ready_env_id}
-        start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
+        history = {env_id: obs[env_id]['observation'] for env_id in ready_env_id}
+        round_cnt = {env_id: obs[env_id]['round_cnt'] for env_id in ready_env_id}
+        eval_episode_return = {env_id: obs[env_id]['eval_episode_return'] for env_id in ready_env_id}
+        seed_for_goods = {env_id: obs[env_id]['seed_for_goods'] for env_id in ready_env_id}
+        seed_for_persona = {env_id: obs[env_id]['seed_for_persona'] for env_id in ready_env_id}
+
         output = {}
         self._policy_model = self._collect_model
         for env_id in ready_env_id:
-            state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
-                                                                  init_state=init_state[env_id],
-                                                                  katago_policy_init=False,
-                                                                  katago_game_state=katago_game_state[env_id]))
+            state_config_for_simulation_env_reset = EasyDict(dict(history=history[env_id], round_cnt=round_cnt[env_id], eval_episode_return=eval_episode_return[env_id], \
+            seed_for_goods =seed_for_goods[env_id], seed_for_persona=seed_for_persona[env_id]))
             action, mcts_probs = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self.collect_mcts_temperature, True)
 
             output[env_id] = {
@@ -276,7 +272,7 @@ class AlphaZeroPolicy(Policy):
         Overview:
             Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
         """
-        self._get_simulation_env()
+        self._get_simulation_env(is_eval=True)
         if self._cfg.mcts_ctree:
             import sys
             sys.path.append('/Users/your_user_name/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
@@ -291,10 +287,13 @@ class AlphaZeroPolicy(Policy):
             if self._cfg.sampled_algo:
                 from lzero.mcts.ptree.ptree_az_sampled import MCTS
             else:
-                from lzero.mcts.ptree.ptree_az import MCTS
+                if self._cfg.simulation_env_id == 'seller':
+                    from lzero.mcts.ptree.ptree_az_seller import MCTS
+                else:
+                    from lzero.mcts.ptree.ptree_az import MCTS
             mcts_eval_config = copy.deepcopy(self._cfg.mcts)
             # TODO(pu): how to set proper num_simulations for evaluation
-            mcts_eval_config.num_simulations = min(800, mcts_eval_config.num_simulations * 4)
+            mcts_eval_config.num_simulations = min(800, mcts_eval_config.num_simulations)
             self._eval_mcts = MCTS(mcts_eval_config, self.simulate_env)
 
         self._eval_model = self._model
@@ -311,19 +310,17 @@ class AlphaZeroPolicy(Policy):
                 the corresponding policy output in this timestep, including action, probs and so on.
         """
         ready_env_id = list(obs.keys())
-        init_state = {env_id: obs[env_id]['board'] for env_id in ready_env_id}
-        # If 'katago_game_state' is in the observation of the given environment ID, it's value is used.
-        # If it's not present (which will raise a KeyError), None is used instead.
-        # This approach is taken to maintain compatibility with the handling of 'katago' related parts of 'alphazero_mcts_ctree' in Go.
-        katago_game_state = {env_id: obs[env_id].get('katago_game_state', None) for env_id in ready_env_id}
-        start_player_index = {env_id: obs[env_id]['current_player_index'] for env_id in ready_env_id}
+        history = {env_id: obs[env_id]['observation'] for env_id in ready_env_id}
+        round_cnt = {env_id: obs[env_id]['round_cnt'] for env_id in ready_env_id}
+        eval_episode_return = {env_id: obs[env_id]['eval_episode_return'] for env_id in ready_env_id}
+        seed_for_goods = {env_id: obs[env_id]['seed_for_goods'] for env_id in ready_env_id}
+        seed_for_persona = {env_id: obs[env_id]['seed_for_persona'] for env_id in ready_env_id}
+
         output = {}
         self._policy_model = self._eval_model
         for env_id in ready_env_id:
-            state_config_for_simulation_env_reset = EasyDict(dict(start_player_index=start_player_index[env_id],
-                                                                  init_state=init_state[env_id],
-                                                                  katago_policy_init=False,
-                                                                  katago_game_state=katago_game_state[env_id]))
+            state_config_for_simulation_env_reset = EasyDict(dict(history=history[env_id], round_cnt=round_cnt[env_id], eval_episode_return=eval_episode_return[env_id], \
+                        seed_for_goods =seed_for_goods[env_id], seed_for_persona=seed_for_persona[env_id]))
             action, mcts_probs = self._eval_mcts.get_next_action(
                 state_config_for_simulation_env_reset, self._policy_value_fn, 1.0, False
             )
@@ -333,56 +330,24 @@ class AlphaZeroPolicy(Policy):
             }
         return output
 
-    def _get_simulation_env(self):
-        if self._cfg.simulation_env_id == 'tictactoe':
-            from zoo.board_games.tictactoe.envs.tictactoe_env import TicTacToeEnv
+    def _get_simulation_env(self, is_eval=False):
+        if self._cfg.simulation_env_id == 'seller':
+            from zoo.seller.seller_env import SellerEnv
             if self._cfg.simulation_env_config_type == 'play_with_bot':
-                from zoo.board_games.tictactoe.config.tictactoe_alphazero_bot_mode_config import \
-                    tictactoe_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'self_play':
-                from zoo.board_games.tictactoe.config.tictactoe_alphazero_sp_mode_config import \
-                    tictactoe_alphazero_config
+                from zoo.seller.config.seller_alphazero_config import seller_alphazero_config
             else:
                 raise NotImplementedError
-            self.simulate_env = TicTacToeEnv(tictactoe_alphazero_config.env)
-
-        elif self._cfg.simulation_env_id == 'gomoku':
-            from zoo.board_games.gomoku.envs.gomoku_env import GomokuEnv
-            if self._cfg.simulation_env_config_type == 'play_with_bot':
-                from zoo.board_games.gomoku.config.gomoku_alphazero_bot_mode_config import gomoku_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'self_play':
-                from zoo.board_games.gomoku.config.gomoku_alphazero_sp_mode_config import gomoku_alphazero_config
-            else:
-                raise NotImplementedError
-            self.simulate_env = GomokuEnv(gomoku_alphazero_config.env)
-        elif self._cfg.simulation_env_id == 'connect4':
-            from zoo.board_games.connect4.envs.connect4_env import Connect4Env
-            if self._cfg.simulation_env_config_type == 'play_with_bot':
-                from zoo.board_games.connect4.config.connect4_alphazero_bot_mode_config import connect4_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'self_play':
-                from zoo.board_games.connect4.config.connect4_alphazero_sp_mode_config import connect4_alphazero_config
-            else:
-                raise NotImplementedError
-            self.simulate_env = Connect4Env(connect4_alphazero_config.env)
-        elif self._cfg.simulation_env_id == 'chess':
-            from zoo.board_games.chess.envs.chess_lightzero_env import ChessLightZeroEnv
-            if self._cfg.simulation_env_config_type == 'play_with_bot':
-                from zoo.board_games.chess.config.chess_alphazero_bot_mode_config import chess_alphazero_config
-            elif self._cfg.simulation_env_config_type == 'self_play':
-                from zoo.board_games.chess.config.chess_alphazero_sp_mode_config import chess_alphazero_config
-            else:
-                raise NotImplementedError
-            self.simulate_env = ChessLightZeroEnv(chess_alphazero_config.env)
+            self.simulate_env = SellerEnv(seller_alphazero_config.env)
+            self.simulate_env.seed(seed=0, dynamic_seed=False)
+            self.simulate_env.reset(is_eval=is_eval)  # NOTE
         else:
             raise NotImplementedError
 
     @torch.no_grad()
     def _policy_value_fn(self, env: 'Env') -> Tuple[Dict[int, np.ndarray], float]:  # noqa
         legal_actions = env.legal_actions
-        current_state, current_state_scale = env.current_state()
-        current_state_scale = torch.from_numpy(current_state_scale).to(
-            device=self._device, dtype=torch.float
-        ).unsqueeze(0)
+        # TODO: NOTE
+        current_state_scale = str(env.history)
         with torch.no_grad():
             action_probs, value = self._policy_model.compute_policy_value(current_state_scale)
         action_probs_dict = dict(zip(legal_actions, action_probs.squeeze(0)[legal_actions].detach().cpu().numpy()))
@@ -404,6 +369,10 @@ class AlphaZeroPolicy(Policy):
         Overview:
             Generate the dict type transition (one timestep) data from policy learning.
         """
+        # for seller_env
+        # obs['observation'] = str(obs['observation']) 
+        # timestep.obs['observation'] = str(timestep.obs['observation']) 
+
         return {
             'obs': obs,
             'next_obs': timestep.obs,

@@ -12,7 +12,8 @@ from ding.utils import ENV_REGISTRY
 from zoo.seller.utils import APIClient, extract_json
 from ding.envs import BaseEnv, BaseEnvTimestep
 
-path_prefix = '/mnt/afs/niuyazhe/code/LightZero/'
+# path_prefix = './code/LightZero/'
+path_prefix='/mnt/afs/niuyazhe/code/LightZero/'
 
 class BaseRole:
 
@@ -109,14 +110,12 @@ class SellerEnv(BaseEnv):
         self.train_good_num = cfg.get('train_good_num', 10)
         self.eval_good_num = cfg.get('eval_good_num', 10)
 
-        # self.is_eval = cfg.get('is_eval', False)
-        # print(f'is_eval: {self.is_eval}')
 
         if not (SellerEnv.executor and SellerEnv.judge and SellerEnv.buyer):
             self._init_roles()
         if not (SellerEnv.personas and SellerEnv.goods):
             self._init_settings()
-        self.history = []  # TODO: for default_collate
+        self.history = []
         self.commands = cfg.commands
         self.dynamic_action_space = cfg.get('dynamic_action_space', False)
 
@@ -172,10 +171,9 @@ class SellerEnv(BaseEnv):
             self.seed_for_goods = seed
         else:
             if not self.is_eval:
+                # for collect env
                 self.seed_for_persona = np.random.randint(0, self.total_persona_num)
-                # TODO: train on N goods, eval on 2N goods
                 self.seed_for_goods = np.random.randint(0, self.train_good_num)
-                # self.seed_for_goods = np.random.randint(0, self.train_good_num + self.eval_good_num)
 
         print(f'======= reset, is_eval: {self.is_eval} ======= ')
         print(f'current seed for goods: {self.seed_for_goods}, ')
@@ -203,10 +201,9 @@ class SellerEnv(BaseEnv):
         return obs
     
     def reset_from_history(self, history, round_cnt, eval_episode_return=0, seed_for_goods=0, seed_for_persona=0, replay='', replay_csv=[]):
-        # for MCTS and alphazero: simulation_env
-        # NOTE
+        # NOTE: only for the simulation_env in MCTS and alphazero
+
         self.save_replay = False
-        
         self.seed_for_goods = seed_for_goods
         self.seed_for_persona = seed_for_persona
         self.persona_info = SellerEnv.personas[self.seed_for_persona % self.total_persona_num]
@@ -278,12 +275,10 @@ class SellerEnv(BaseEnv):
         
         executor_resp = SellerEnv.executor.call(command=command, history=self.history, info=self.good_info)
         role = '卖家' if self.lang == 'zh' else 'seller'
-        # self.history.append({role: executor_resp})
         self.history.append({"role": role, "round": self.round_cnt, "content": executor_resp})
 
         role = '买家' if self.lang == 'zh' else 'customer'
         buyer_resp = SellerEnv.buyer.call(self.history, info=self.persona_info)
-        # self.history.append({role: buyer_resp})
         self.history.append({"role": role, "round": self.round_cnt, "content": buyer_resp})
 
         judge_resp = SellerEnv.judge.call(self.history)
@@ -309,9 +304,7 @@ class SellerEnv(BaseEnv):
 
         self.eval_episode_return += rew
 
-        # obs = {'observation': str(self.history), 'candidate_samples': self.commands}
         action_mask = np.ones(len(self.commands), 'int8')
-        # obs = {'observation': str(self.history), 'action_mask': action_mask}
         obs = {'observation': self.history, 'action_mask': action_mask, 'round_cnt': self.round_cnt, 'eval_episode_return': self.eval_episode_return, 'seed_for_goods':self.seed_for_goods, 'seed_for_persona':self.seed_for_persona}
 
         env_step = BaseEnvTimestep(
@@ -324,7 +317,6 @@ class SellerEnv(BaseEnv):
         )
         if self.finished:
             env_step.info['eval_episode_return'] = self.eval_episode_return
-        # print(f'self.history: {self.history}')
 
         if self.save_replay:
             if self.round_cnt == 1:
@@ -335,7 +327,6 @@ class SellerEnv(BaseEnv):
 
             self._replay += f'########## Round {self.round_cnt} ##########\n'
             self._replay += f'【动作序号】 {action}\n'
-            # self._replay_csv.append([f'【动作序号】 {action}'])
 
             for kk in env_step.info:
                 if kk == 'eval_episode_return':
@@ -350,26 +341,21 @@ class SellerEnv(BaseEnv):
             if self.finished:
                 log_dir = f'./logs_{self._suffix}'
                 
-                # 创建目录（如果不存在）
                 if not os.path.exists(log_dir):
                     os.mkdir(log_dir)
                 
-                # 生成基本的日志文件名
                 base_filename = f'log_goods-{self.seed_for_goods}_persona-{self.seed_for_persona}_{self._suffix}'
                 
-                # 处理txt文件
                 txt_filename = f'{log_dir}/{base_filename}.txt'
                 if os.path.exists(txt_filename):
-                    timestamp = time.strftime('%Y%m%d_%H%M%S')  # 获取当前时间戳
+                    timestamp = time.strftime('%Y%m%d_%H%M%S')
                     txt_filename = f'{log_dir}/{base_filename}_{timestamp}.txt'
                 
                 with open(txt_filename, 'w', encoding='utf-8') as f:
                     f.write(self._replay + '\n')
                 
-                # 处理csv文件
                 csv_filename = f'{log_dir}/{base_filename}.csv'
                 if os.path.exists(csv_filename):
-                    # timestamp = time.strftime('%Y%m%d_%H%M%S')  # 再次获取当前时间戳
                     csv_filename = f'{log_dir}/{base_filename}_{timestamp}.csv'
                 
                 with open(csv_filename, 'w', newline='', encoding='utf-8-sig') as csvfile:
@@ -399,7 +385,7 @@ class SellerEnv(BaseEnv):
 
     def clone(self):
         env_clone = SellerEnv(self.cfg)
-        env_clone.reset(history=copy.deepcopy(self.history), round_cnt = copy.deepcopy(self.round_cnt), eval_episode_return=self.eval_episode_return, is_simulation_env=True)
+        env_clone.reset(history=copy.deepcopy(self.history), round_cnt = copy.deepcopy(self.round_cnt), eval_episode_return=self.eval_episode_return)
         return env_clone
     
     @staticmethod
@@ -419,53 +405,35 @@ class SellerEnv(BaseEnv):
 if __name__ == '__main__':
     env_cfg = EasyDict(
         dict(
-            # agent='deepseek',
-            agent='lmdeploy',
-            api_key=[
-            'sk-f50d634a123f4c84bc08fa880387ff76', 'sk-f8e6d25f99e5434c9ebda6e447fa8a7a',
-            'sk-d020afbebe1e4d1ba1db7d32700c068c', 'sk-514a633560104439a4324dc30deab907',
-            # 'sk-c4a8fe52693a4aaab64e648c42f40be6', 'sk-7866ab6ea8ca408a91971ef18eed4b75',
+        agent='deepseek',  # or 'lmdeploy'
+        api_key=['your deepseek api key'],
+        commands=[
+            '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
+            '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
         ],
-            # commands=[
-            #     '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
-            #     '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
-            # ],
-            commands=[
-                '将你的产品推销给用户'
-            ],
-            max_round=5,
-            seed=0,
-            lang='zh',
-            # log_suffix='direct_0911_3eps_qwen2', # TODO
-            # log_suffix='eval_direct_0911_20eps_interlm', # TODO
-            log_suffix='eval_direct_0911_20eps_qwen2', # TODO
-            # log_suffix='random_0910_20eps', # TODO
-            save_replay=True,  # TODO
-            # save_replay=False,  # TODO
-            # dynamic_action_space=True,
-            dynamic_action_space=False,
-
+        max_round=5,
+        seed=0,
+        lang='zh',
+        log_suffix='eval_direct_20eps', # TODO: log的后缀
+        save_replay=True,  # TODO: 是否存储环境的replay
+        dynamic_action_space=False,
         )
     )
 
     input_command = InputCommand()
-
     env = SellerEnv(cfg=env_cfg)
 
-
     eval_episodes = 20
-    # eval_episodes = 2
-
     for seed in range(0, eval_episodes):
         env.seed(seed=seed, dynamic_seed=False)
         env.reset(is_eval=True) # NOTE
         while not env.finished:
             # ===== for human input command =====
-            # print(f'commands: {env.commands}')
-            # command = input_command.call()
+            print(f'commands: {env.commands}')
+            command = input_command.call()
 
             # === direct policy =====
-            command = 0
+            # command = 0
 
             # === random policy =====
             # command = int(np.random.randint(0,9,1))
