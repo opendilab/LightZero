@@ -1,6 +1,7 @@
 import os.path
 from typing import List
-
+import os
+import re
 import time
 import numpy as np
 import gym
@@ -12,14 +13,22 @@ from ding.utils import ENV_REGISTRY
 from zoo.seller.utils import APIClient, extract_json
 from ding.envs import BaseEnv, BaseEnvTimestep
 
-# path_prefix = './code/LightZero/'
-path_prefix='/mnt/afs/niuyazhe/code/LightZero/'
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+
+match = re.search(r'.*LightZero', current_dir)
+
+if match:
+    path_prefix = match.group(0)
+    print("path_prefix:", path_prefix)
+else:
+    print("'LightZero' not found in the path.")
 
 class BaseRole:
 
     def __init__(self, agent, api_key, template_path):
         self.model = APIClient(api_key=api_key, agent=agent)
-        with open(path_prefix+template_path, encoding='utf-8') as f:
+        with open(path_prefix + '/' + template_path, encoding='utf-8') as f:
             self.template = f.read().strip()
 
 
@@ -138,7 +147,7 @@ class SellerEnv(BaseEnv):
 
     def _init_settings(self):
         # Init the personas.
-        with open(path_prefix+"zoo/seller/data/persona.jsonl", "r+", encoding="utf8") as f:
+        with open(path_prefix+"/zoo/seller/data/persona.jsonl", "r+", encoding="utf8") as f:
             cnt = 0
             for item in jsonlines.Reader(f):
                 SellerEnv.personas.append(item['persona'])
@@ -147,7 +156,7 @@ class SellerEnv(BaseEnv):
                     break
 
         # Init the descriptions to goods.
-        with open(path_prefix+"zoo/seller/data/good.jsonl", "r+", encoding="utf8") as f:
+        with open(path_prefix+"/zoo/seller/data/good.jsonl", "r+", encoding="utf8") as f:
             cnt = 0
             for item in jsonlines.Reader(f):
                 new_item = {'title': item['title'], 'description': item['description']}
@@ -405,7 +414,7 @@ class SellerEnv(BaseEnv):
 if __name__ == '__main__':
     env_cfg = EasyDict(
         dict(
-        agent='deepseek',  # or 'lmdeploy'
+        agent='lmdeploy',  # deepseek or 'lmdeploy'
         api_key=['your deepseek api key'],
         commands=[
             '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',

@@ -13,12 +13,12 @@ max_env_step = int(1e5)
 mcts_ctree = False
 
 # for debug
-collector_env_num = 1
-n_episode = 1
-evaluator_env_num = 2
-num_simulations = 1
-update_per_collect = 2
-batch_size = 2
+# collector_env_num = 1
+# n_episode = 1
+# evaluator_env_num = 2
+# num_simulations = 1
+# update_per_collect = 2
+# batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -26,19 +26,15 @@ batch_size = 2
 seller_alphazero_config = dict(
     exp_name=f'data_alphazero/seller_alphazero_ns{num_simulations}_upc{update_per_collect}_seed0',
     env=dict(
-        agent='lmdeploy',
-        # agent='deepseek',
-        api_key=[
-            'sk-f50d634a123f4c84bc08fa880387ff76', 'sk-f8e6d25f99e5434c9ebda6e447fa8a7a',
-            'sk-d020afbebe1e4d1ba1db7d32700c068c', 'sk-514a633560104439a4324dc30deab907',
-        ],
+        agent='deepseek',  # or 'lmdeploy'
+        api_key=['your deepseek api key'],
         commands=[
             '向用户问好', '介绍产品的简要情况', '根据用户的疑虑进一步解答', '询问用户最关心的产品要求', '和用户共情，从用户的角度解释选择的原因', '威胁用户，如果不买就打他',
             '询问用户的具体使用情景', '向用户表示不耐烦，让他尽快做出决定', '询问用户当前还有哪些疑虑'
         ],
         max_round=5,
         lang='zh',
-        log_suffix='az_a9_qwen2',
+        log_suffix='az_seller',
         save_replay=False,  # TODO
         dynamic_action_space=False,
         collector_env_num=collector_env_num,
@@ -49,10 +45,7 @@ seller_alphazero_config = dict(
     policy=dict(
         model_path=None,
         mcts_ctree=mcts_ctree,
-        # ==============================================================
-        # for the creation of simulation env
         simulation_env_id='seller',
-        # ==============================================================
         model=dict(
             action_space_size=9, # NOTE
         ),
