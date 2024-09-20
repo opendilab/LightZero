@@ -5,7 +5,6 @@ env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
 # env_id = 'SeaquestNoFrameskip-v4'  # You can specify any Atari game here
 # env_id = 'QbertNoFrameskip-v4'  # You can specify any Atari game here
 
-
 action_space_size = atari_env_action_space_map[env_id]
 
 # ==============================================================
@@ -13,36 +12,20 @@ action_space_size = atari_env_action_space_map[env_id]
 # ==============================================================
 update_per_collect = None
 replay_ratio = 0.25
-# replay_ratio = 0.1
-
-# replay_ratio = 1
-
 collector_env_num = 8
 num_segments = 8
-
-# collector_env_num = 4
-# num_segments = 4
-
-
-# num_segments = 1
 game_segment_length=20
-# game_segment_length=15
-# game_segment_length=50
-# game_segment_length=100
-# game_segment_length=400
 
 evaluator_env_num = 3
 num_simulations = 50
 max_env_step = int(2e5)
-
-# reanalyze_ratio = 0.1
 reanalyze_ratio = 0.
-
 batch_size = 64
 num_unroll_steps = 10
 infer_context_length = 4
-
 num_layers = 2
+buffer_reanalyze_freq = 1/10  # modify according to num_segments
+reanalyze_batch_size = 2000
 
 # ====== only for debug =====
 collector_env_num = 8
@@ -53,7 +36,9 @@ max_env_step = int(2e5)
 reanalyze_ratio = 0.
 batch_size = 64
 num_unroll_steps = 10
-replay_ratio = 0.05
+# buffer_reanalyze_freq = 1
+buffer_reanalyze_freq = 1/2
+reanalyze_batch_size = 20
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -63,7 +48,6 @@ atari_unizero_config = dict(
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
-        # observation_shape=(3, 64, 64),
         observation_shape=(3, 96, 96),
         gray_scale=False,
         collector_env_num=collector_env_num,
@@ -127,6 +111,9 @@ atari_unizero_config = dict(
         eval_freq=int(5e3),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
+        # ============= The key different params for ReZero =============
+        buffer_reanalyze_freq=buffer_reanalyze_freq, # 1 means reanalyze one times per epoch, 2 means reanalyze one times each two epoch
+        reanalyze_batch_size=reanalyze_batch_size,
     ),
 )
 atari_unizero_config = EasyDict(atari_unizero_config)
@@ -160,12 +147,14 @@ if __name__ == "__main__":
     for seed in seeds:
         # Update exp_name to include the current seed
         # main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0920/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_temp025_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_seed{seed}'
-        # main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0917/numsegments-{num_segments}_gsl{game_segment_length}_origin-target-value-policy_pew0_fixsample_temp025_useprio/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
 
         main_config.exp_name = f'data_efficiency0829_plus_tune-uz_debug/numsegments-{num_segments}_gsl{game_segment_length}_fix/obshape96_use-augmentation-obsw10/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
 
-        from lzero.entry import train_unizero
-        train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+        # from lzero.entry import train_unizero
+        # train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+
+        from lzero.entry import train_rezero_uz
+        train_rezero_uz([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
     # from lzero.entry import train_unizero

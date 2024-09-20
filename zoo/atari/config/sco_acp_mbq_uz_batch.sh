@@ -64,7 +64,7 @@ for env in "${envs[@]}"; do
 
 sco acp jobs create --workspace-name=fb1861da-1c6c-42c7-87ed-e08d8b314a99 \
     --aec2-name=eb37789e-90bb-418d-ad4a-19ce4b81ab0c\
-    --job-name="uz-nlayer2-H10-seg1-gsl20-$env-s$seed" \
+    --job-name="uz-nlayer2-H10-seg8-gsl20-brf1-5-$env-s$seed" \
     --container-image-url='registry.cn-sh-01.sensecore.cn/basemodel-ccr/aicl-b27637a9-660e-4927:20231222-17h24m12s' \
     --training-framework=pytorch \
     --enable-mpi \
