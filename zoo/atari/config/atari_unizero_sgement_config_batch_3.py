@@ -35,11 +35,11 @@ def main(env_id, seed):
     # infer_context_length = 4
 
     num_layers = 2
-    buffer_reanalyze_freq = 1/10  # modify according to num_segments
-    # buffer_reanalyze_freq = 1/5  # modify according to num_segments
+    # buffer_reanalyze_freq = 1/10  # modify according to num_segments
+    buffer_reanalyze_freq = 1/5  # modify according to num_segments
     # buffer_reanalyze_freq = 1/2  # modify according to num_segments
 
-    reanalyze_batch_size = 80   # in total of num_unroll_steps
+    reanalyze_batch_size = 2000
 
     # ====== only for debug =====
     # collector_env_num = 8
@@ -159,7 +159,7 @@ def main(env_id, seed):
     # from lzero.entry import train_unizero
     # train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
-    main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0921/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}_nlayer{num_layers}_eval5_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_temp025_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0920/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}_nlayer{num_layers}_eval5_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_temp025_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_rezero_uz
     train_rezero_uz([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 

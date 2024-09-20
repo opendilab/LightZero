@@ -38,7 +38,7 @@ batch_size = 64
 num_unroll_steps = 10
 # buffer_reanalyze_freq = 1
 buffer_reanalyze_freq = 1/2
-reanalyze_batch_size = 20
+reanalyze_batch_size = 2   # in total of num_unroll_steps
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -107,6 +107,7 @@ atari_unizero_config = dict(
         num_segments=num_segments,
         train_start_after_envsteps=2000,
         game_segment_length=game_segment_length, # debug
+        grad_clip_value=20,
         replay_buffer_size=int(1e6),
         eval_freq=int(5e3),
         collector_env_num=collector_env_num,

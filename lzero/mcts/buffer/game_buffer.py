@@ -160,6 +160,63 @@ class GameBuffer(ABC, object):
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
         return orig_data
     
+    def _sample_orig_reanalyze_data_uz(self, batch_size: int) -> Tuple:
+        """
+        Overview:
+             sample orig_data that contains:
+                game_segment_list: a list of game segments
+                pos_in_game_segment_list: transition index in game (relative index)
+                batch_index_list: the index of start transition of sampled minibatch in replay buffer
+                weights_list: the weight concerning the priority
+                make_time: the time the batch is made (for correctly updating replay buffer when data is deleted)
+        Arguments:
+            - batch_size (:obj:`int`): batch size
+            - beta: float the parameter in PER for calculating the priority
+        """
+        assert self._beta > 0
+        train_sample_num = (self.get_num_of_transitions()//self._cfg.num_unroll_steps)
+
+        # batch_index_list = np.random.choice(train_sample_num, batch_size, replace=False)
+
+        # TODO: 动态调整衰减率，假设你希望衰减率与 train_sample_num 成反比
+        base_decay_rate = 5  # 基础衰减率，可以根据经验设定
+        decay_rate = base_decay_rate / train_sample_num  # 随着样本数量增加，衰减率变小
+
+        # 生成指数衰减的权重
+        weights = np.exp(-decay_rate * np.arange(train_sample_num))
+        # 将权重归一化为概率分布
+        probabilities = weights / np.sum(weights)
+
+        # 按照概率分布进行采样
+        batch_index_list = np.random.choice(train_sample_num, batch_size, replace=False, p=probabilities)
+
+        if self._cfg.reanalyze_outdated is True:
+            # NOTE: used in reanalyze part
+            batch_index_list.sort()
+
+        game_segment_list = []
+        pos_in_game_segment_list = []
+
+        for idx in batch_index_list:
+            game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx*self._cfg.num_unroll_steps]
+            game_segment_idx -= self.base_idx
+            game_segment = self.game_segment_buffer[game_segment_idx]
+
+            game_segment_list.append(game_segment)
+            pos_in_game_segment_list.append(pos_in_game_segment)
+            
+            # pos_in_game_segment_list.append(max(pos_in_game_segment, self._cfg.game_segment_length - self._cfg.num_unroll_steps)) 
+            # # TODO
+            # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
+            #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
+            # pos_in_game_segment_list.append(pos_in_game_segment)
+            
+
+        make_time = [time.time() for _ in range(len(batch_index_list))]
+
+        orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, [], make_time)
+        return orig_data
+
     def _sample_orig_reanalyze_data(self, batch_size: int) -> Tuple:
         """
         Overview:

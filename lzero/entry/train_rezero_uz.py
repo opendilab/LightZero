@@ -115,6 +115,9 @@ def train_rezero_uz(
     train_epoch = 0
     reanalyze_batch_size = cfg.policy.reanalyze_batch_size
 
+    from ding.utils import BUFFER_REGISTRY, EasyTimer
+    timer = EasyTimer()
+
     while True:
         # Log buffer memory usage
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
@@ -166,12 +169,14 @@ def train_rezero_uz(
             reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
         else:
             # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
-            if train_epoch % (1//cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions() > reanalyze_batch_size:
+            if train_epoch % (1//cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > reanalyze_batch_size:
                 # When reanalyzing the buffer, the samples in the entire buffer are processed in mini-batches with a batch size of reanalyze_batch_size.
                 # This is an empirically selected value for optimal efficiency.
-                replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+                with timer:
+                    replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
                 buffer_reanalyze_count += 1
                 logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
+                logging.info(f'Buffer reanalyze time: {timer.value}')
 
 
         # Train the policy if sufficient data is available
@@ -191,7 +196,7 @@ def train_rezero_uz(
 
                 if cfg.policy.buffer_reanalyze_freq >= 1:
                     # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
-                    if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions() > reanalyze_batch_size:
+                    if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > reanalyze_batch_size:
                         # When reanalyzing the buffer, the samples in the entire buffer are processed in mini-batches with a batch size of reanalyze_batch_size.
                         # This is an empirically selected value for optimal efficiency.
                         replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
@@ -209,6 +214,7 @@ def train_rezero_uz(
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
+        train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()
 
         # Check stopping criteria

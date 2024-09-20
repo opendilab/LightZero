@@ -67,12 +67,9 @@ class UniZeroReGameBuffer(MuZeroGameBuffer):
         self.policy = policy
 
         # obtain the current_batch and prepare target context
-        reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(
-            batch_size, 1
-        )
+        policy_re_context, current_batch = self._make_batch_for_reanalyze(batch_size, 1)
         # target policy
-        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model,
-                                                                          current_batch[1])
+        self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1])
 
           
     def sample(
@@ -219,6 +216,75 @@ class UniZeroReGameBuffer(MuZeroGameBuffer):
         context = reward_value_context, policy_re_context, policy_non_re_context, current_batch
         return context
 
+    def _make_batch_for_reanalyze(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
+        """
+        Overview:
+            first sample orig_data through ``_sample_orig_data()``,
+            then prepare the context of a batch:
+                reward_value_context:        the context of reanalyzed value targets
+                policy_re_context:           the context of reanalyzed policy targets
+                policy_non_re_context:       the context of non-reanalyzed policy targets
+                current_batch:                the inputs of batch
+        Arguments:
+            - batch_size (:obj:`int`): the batch size of orig_data from replay buffer.
+            - reanalyze_ratio (:obj:`float`): ratio of reanalyzed policy (value is 100% reanalyzed)
+        Returns:
+            - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch
+        """
+        # obtain the batch context from replay buffer
+        if self.sample_type == 'transition':
+            orig_data = self._sample_orig_reanalyze_data_uz(batch_size)
+        # elif self.sample_type == 'episode': # TODO
+        #     orig_data = self._sample_orig_data_episode(batch_size)
+        game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
+        batch_size = len(batch_index_list)
+        obs_list, action_list, mask_list = [], [], []
+        # prepare the inputs of a batch
+        for i in range(batch_size):
+            game = game_segment_list[i]
+            pos_in_game_segment = pos_in_game_segment_list[i]
+
+            actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
+                                                                  self._cfg.num_unroll_steps].tolist()
+            # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
+            mask_tmp = [1. for i in range(len(actions_tmp))]
+            mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
+
+            # pad random action
+            actions_tmp += [
+                np.random.randint(0, game.action_space_size)
+                for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
+            ]
+
+            # obtain the input observations
+            # pad if length of obs in game_segment is less than stack+num_unroll_steps
+            # e.g. stack+num_unroll_steps = 4+5
+            obs_list.append(
+                game_segment_list[i].get_unroll_obs(
+                    pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
+                )
+            )
+            action_list.append(actions_tmp)
+            mask_list.append(mask_tmp)
+
+        # formalize the input observations
+        obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
+
+        # formalize the inputs of a batch
+        current_batch = [obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list]
+        for i in range(len(current_batch)):
+            current_batch[i] = np.asarray(current_batch[i])
+
+        # reanalyzed policy
+        # obtain the context of reanalyzed policy targets
+        policy_re_context = self._prepare_policy_reanalyzed_context(
+            batch_index_list, game_segment_list,
+            pos_in_game_segment_list
+        )
+
+        context = policy_re_context, current_batch
+        self.reanalyze_num = batch_size
+        return context
 
     def _prepare_policy_reanalyzed_context(
             self, batch_index_list: List[str], game_segment_list: List[Any], pos_in_game_segment_list: List[str]

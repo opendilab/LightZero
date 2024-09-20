@@ -39,7 +39,7 @@ def main(env_id, seed):
     # buffer_reanalyze_freq = 1/5  # modify according to num_segments
     # buffer_reanalyze_freq = 1/2  # modify according to num_segments
 
-    reanalyze_batch_size = 80   # in total of num_unroll_steps
+    reanalyze_batch_size = 160   # in total of num_unroll_steps
 
     # ====== only for debug =====
     # collector_env_num = 8
