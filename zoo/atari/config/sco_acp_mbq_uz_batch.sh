@@ -58,21 +58,21 @@ envs=(
     # 'DemonAttackNoFrameskip-v4'
     # 'GopherNoFrameskip-v4'
     # 'HeroNoFrameskip-v4'
-    # 'KrullNoFrameskip-v4'
+    # 'KungFuMasterNoFrameskip-v4'
     # 'RoadRunnerNoFrameskip-v4'
     # 'UpNDownNoFrameskip-v4'
     # 'BreakoutNoFrameskip-v4'
 )
 seed=0
 for env in "${envs[@]}"; do
-    script='source activate base &&  export HTTPS_PROXY=http://172.16.1.135:3128/ && cd /mnt/afs/niuyazhe/code/LightZero && pip install -e . -i  https://pkg.sensetime.com/repository/pypi-proxy/simple/ && pip3 install ale-py autorom && AutoROM --accept-license && python3 -u /mnt/afs/niuyazhe/code/LightZero/zoo/atari/config/atari_unizero_sgement_config_batch_2.py --env %q --seed %d'
+    script='source activate base &&  export HTTPS_PROXY=http://172.16.1.135:3128/ && cd /mnt/afs/niuyazhe/code/LightZero && pip install -e . -i  https://pkg.sensetime.com/repository/pypi-proxy/simple/ && pip3 install ale-py autorom && AutoROM --accept-license && python3 -u /mnt/afs/niuyazhe/code/LightZero/zoo/atari/config/atari_unizero_sgement_config_batch_3.py --env %q --seed %d'
 	script=${script/\%q/$env}
     script=${script/\%d/$seed}
 	echo "The final script is: " $script
 
 sco acp jobs create --workspace-name=fb1861da-1c6c-42c7-87ed-e08d8b314a99 \
     --aec2-name=eb37789e-90bb-418d-ad4a-19ce4b81ab0c\
-    --job-name="uz-nlayer2-H10-seg8-gsl20-brf1-10-rbs160-$env-s$seed" \
+    --job-name="uz-nlayer4-H10-seg8-gsl20-brf1-10-rbs640-3-4-rr1-$env-s$seed" \
     --container-image-url='registry.cn-sh-01.sensecore.cn/basemodel-ccr/aicl-b27637a9-660e-4927:20231222-17h24m12s' \
     --training-framework=pytorch \
     --enable-mpi \
@@ -84,3 +84,5 @@ done
 
 
 # --job-name="uz-nlayer2-H5-$env-s$seed" \
+    # --job-name="uz-nlayer2-H10-seg1-gsl20-brf1-10-rbs20-rr1-$env-s$seed" \
+

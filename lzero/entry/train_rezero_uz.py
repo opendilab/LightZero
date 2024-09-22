@@ -75,6 +75,7 @@ def train_rezero_uz(
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
     collector_env.seed(cfg.seed)
+    # collector_env.seed(cfg.seed, dynamic_seed=False)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=torch.cuda.is_available())
 
@@ -169,7 +170,7 @@ def train_rezero_uz(
             reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
         else:
             # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
-            if train_epoch % (1//cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > reanalyze_batch_size:
+            if train_epoch % (1//cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
                 # When reanalyzing the buffer, the samples in the entire buffer are processed in mini-batches with a batch size of reanalyze_batch_size.
                 # This is an empirically selected value for optimal efficiency.
                 with timer:
@@ -196,7 +197,7 @@ def train_rezero_uz(
 
                 if cfg.policy.buffer_reanalyze_freq >= 1:
                     # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
-                    if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > reanalyze_batch_size:
+                    if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
                         # When reanalyzing the buffer, the samples in the entire buffer are processed in mini-batches with a batch size of reanalyze_batch_size.
                         # This is an empirically selected value for optimal efficiency.
                         replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)

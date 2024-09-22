@@ -176,19 +176,17 @@ class GameBuffer(ABC, object):
         assert self._beta > 0
         train_sample_num = (self.get_num_of_transitions()//self._cfg.num_unroll_steps)
 
-        # batch_index_list = np.random.choice(train_sample_num, batch_size, replace=False)
-
-        # TODO: 动态调整衰减率，假设你希望衰减率与 train_sample_num 成反比
+        # TODO: 只选择前 3/4 的样本
+        valid_sample_num = int(train_sample_num * self._cfg.reanalyze_partition)
+        # TODO: 动态调整衰减率，假设你希望衰减率与 valid_sample_num 成反比
         base_decay_rate = 5  # 基础衰减率，可以根据经验设定
-        decay_rate = base_decay_rate / train_sample_num  # 随着样本数量增加，衰减率变小
-
-        # 生成指数衰减的权重
-        weights = np.exp(-decay_rate * np.arange(train_sample_num))
+        decay_rate = base_decay_rate / valid_sample_num  # 随着样本数量增加，衰减率变小
+        # 生成指数衰减的权重 (仅对前 3/4 的样本)
+        weights = np.exp(-decay_rate * np.arange(valid_sample_num))
         # 将权重归一化为概率分布
         probabilities = weights / np.sum(weights)
-
-        # 按照概率分布进行采样
-        batch_index_list = np.random.choice(train_sample_num, batch_size, replace=False, p=probabilities)
+        # 按照概率分布进行采样 (仅在前 3/4 中采样)
+        batch_index_list = np.random.choice(valid_sample_num, batch_size, replace=False, p=probabilities)
 
         if self._cfg.reanalyze_outdated is True:
             # NOTE: used in reanalyze part
