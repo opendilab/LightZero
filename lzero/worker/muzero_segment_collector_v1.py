@@ -15,8 +15,8 @@ from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
 
 
-@SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
-class MuZeroCollector(ISerialCollector):
+@SERIAL_COLLECTOR_REGISTRY.register('segment_muzero')
+class MuZeroSegmentCollector(ISerialCollector):
     """
     Overview:
         The Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.
@@ -114,6 +114,9 @@ class MuZeroCollector(ISerialCollector):
         if _policy is not None:
             self._policy = _policy
             self._default_n_episode = _policy.get_attribute('cfg').get('n_episode', None)
+
+            self._default_num_segments = _policy.get_attribute('cfg').get('num_segments', None)
+
             self._logger.debug(
                 'Set default n_episode mode(n_episode({}), env_num({}))'.format(self._default_n_episode, self._env_num)
             )
@@ -293,12 +296,15 @@ class MuZeroCollector(ISerialCollector):
 
         last_game_segments[i].game_segment_to_array()
 
+        self.collected_game_segments += 1
+
         # put the game segment into the pool
         self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
 
         # reset last game_segments
         last_game_segments[i] = None
         last_game_priorities[i] = None
+
 
         return None
 
@@ -337,7 +343,7 @@ class MuZeroCollector(ISerialCollector):
         # initializations
         init_obs = self._env.ready_obs
 
-        retry_waiting_time = 0.001
+        retry_waiting_time = 0.05
         while len(init_obs.keys()) != self._env_num:
             # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
             # len(self._env.ready_obs), especially in tictactoe env.
@@ -396,28 +402,17 @@ class MuZeroCollector(ISerialCollector):
         if collect_with_pure_policy:
             temp_visit_list = [0.0 for i in range(self._env.action_space.n)]
 
+        self.collected_game_segments = 0
+        one_episode_done = False
+        collected_enough_segments = False  # 标志变量
+        
         while True:
             with self._timer:
                 # Get current ready env obs.
                 obs = self._env.ready_obs
-
-                ready_env_id = set(obs.keys())
-                while len(obs.keys()) != self._env_num:
-                    # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
-                    # len(self._env.ready_obs), especially in tictactoe env.
-                    self._logger.info('The current init_obs.keys() is {}'.format(obs.keys()))
-                    self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
-                    time.sleep(retry_waiting_time)
-                    self._logger.info('=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
-                    self._logger.info(
-                        'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time, self._env._env_states)
-                    )
-                    obs = self._env.ready_obs
-                    ready_env_id = set(obs.keys())
-
-                # new_available_env_id = set(obs.keys()).difference(ready_env_id)
-                # ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
-                # remain_episode -= min(len(new_available_env_id), remain_episode)
+                new_available_env_id = set(obs.keys()).difference(ready_env_id)
+                ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
+                remain_episode -= min(len(new_available_env_id), remain_episode)
 
                 stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
@@ -610,6 +605,9 @@ class MuZeroCollector(ISerialCollector):
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
+                    one_episode_done = True
+                    self._total_episode_count += 1
+
                     reward = timestep.info['eval_episode_return']
                     info = {
                         'reward': reward,
@@ -707,16 +705,18 @@ class MuZeroCollector(ISerialCollector):
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
 
-                    # ===== TODO: if done not return =======
-                    # create new GameSegment
-                    game_segments[env_id] =  GameSegment(
-                            self._env.action_space,
-                            game_segment_length=self.policy_config.game_segment_length,
-                            config=self.policy_config
-                        )
-                    game_segments[env_id].reset(observation_window_stack[env_id])
+            # if collected_episode >= n_episode:
+            # if self.collected_game_segments >= self._default_num_segments or one_episode_done: # game_segment_length = 400
+            #     print(f'collect {self.collected_game_segments} segments now! one_episode_done: {one_episode_done}')
+            #     self.collected_game_segments = 0
 
-            if collected_episode >= n_episode:
+            # 如果放到for循环里面去的v1版本，应该是丢失了部分环境的样本
+            # 下面的v2版本，是将<env_num>个环境的样本都正确返回了
+            if len(self.game_segment_pool) >= self._default_num_segments or one_episode_done: # game_segment_length = 400
+                print(f'collect {len(self.game_segment_pool)} segments now! one_episode_done: {one_episode_done}')
+                collected_enough_segments = True  # 条件满足，设置标志变量为 True
+                # one_episode_done = False
+
                 # [data, meta_data]
                 return_data = [self.game_segment_pool[i][0] for i in range(len(self.game_segment_pool))], [
                     {
@@ -727,6 +727,9 @@ class MuZeroCollector(ISerialCollector):
                 ]
                 self.game_segment_pool.clear()
                 break
+                
+            # if collected_enough_segments:  # 如果满足条件，则跳出外层 for 循环
+            #     break
 
         collected_duration = sum([d['time'] for d in self._episode_info])
         # reduce data when enables DDP

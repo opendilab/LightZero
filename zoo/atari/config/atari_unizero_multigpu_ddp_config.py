@@ -1,33 +1,39 @@
+import os
+os.environ["NCCL_BLOCKING_WAIT"] = "0"
+os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "1" 
+# os.environ["NCCL_DEBUG"] = "INFO"
+os.environ["NCCL_DEBUG"] = "WARN"
+
+# os.environ["NCCL_TIMEOUT"] = "3600"
+os.environ["NCCL_TIMEOUT"] = "7200"
+
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
 env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
-# env_id = 'QbertNoFrameskip-v4'  # You can specify any Atari game here
-
 action_space_size = atari_env_action_space_map[env_id]
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+gpu_num = 2
 update_per_collect = None
 replay_ratio = 0.25
-# replay_ratio = 1
-
 collector_env_num = 8
-n_episode = 8
+n_episode = int(8*gpu_num)
 evaluator_env_num = 3
 num_simulations = 50
-max_env_step = int(5e5)
+max_env_step = int(2e5)
 reanalyze_ratio = 0.
-batch_size = 64
+# batch_size = 64
+batch_size = 8
 num_unroll_steps = 10
 infer_context_length = 4
+seed=0
 
 # ====== only for debug =====
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# num_simulations = 5
+
+# num_simulations = 2
 # max_env_step = int(2e5)
 # reanalyze_ratio = 0.
 # batch_size = 2
@@ -37,11 +43,11 @@ infer_context_length = 4
 # ==============================================================
 
 atari_unizero_config = dict(
+    exp_name = f'data_unizero_efficiency/ddp_0829_allreduce/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
-        # observation_shape=(3, 64, 64),
-        observation_shape=(3, 96, 96),
+        observation_shape=(3, 64, 64),
         gray_scale=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -53,8 +59,7 @@ atari_unizero_config = dict(
     ),
     policy=dict(
         model=dict(
-            # observation_shape=(3, 64, 64),
-            observation_shape=(3, 96, 96),
+            observation_shape=(3, 64, 64),
             action_space_size=action_space_size,
             world_model_cfg=dict(
                 continuous_action_space=False,
@@ -62,6 +67,7 @@ atari_unizero_config = dict(
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,
                 device='cuda',
+                # device='cpu',
                 action_space_size=action_space_size,
                 num_layers=2,
                 num_heads=8,
@@ -72,8 +78,7 @@ atari_unizero_config = dict(
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
-        # use_augmentation=True,
-        use_augmentation=False,
+        multi_gpu=True,
         num_unroll_steps=num_unroll_steps,
         update_per_collect=update_per_collect,
         replay_ratio=replay_ratio,
@@ -106,20 +111,17 @@ atari_unizero_create_config = EasyDict(atari_unizero_create_config)
 create_config = atari_unizero_create_config
 
 if __name__ == "__main__":
-    # Define a list of seeds for multiple runs
-    seeds = [0]  # You can add more seed values here
-    for seed in seeds:
-        # Update exp_name to include the current seed
-        main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0914/obshape96_no-augmentation_origin-target-value-policy_fixinitkv/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
-        # main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0914/obshape96_use-augmentation-targetvalue/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2'
+    """
+    Overview:
+        This script should be executed with <nproc_per_node> GPUs.
+        Run the following command to launch the script:
+        python -m torch.distributed.launch --nproc_per_node=2 ./zoo/atari/config/atari_unizero_multigpu_ddp_config.py
+        torchrun --nproc_per_node=2 ./zoo/atari/config/atari_unizero_multigpu_ddp_config.py
 
-        from lzero.entry import train_unizero
+    """
+    from ding.utils import DDPContext
+    from lzero.entry import train_unizero
+    from lzero.config.utils import lz_to_ddp_config
+    with DDPContext():
+        main_config = lz_to_ddp_config(main_config)
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
-
-
-    # from lzero.entry import train_unizero
-    # main_config.exp_name = f'data_unizero_efficiency_cprofile_250k/{env_id[:-14]}_stack1_unizero_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0_nlayer2_all-share-pool-_copy_0827'
-    # def run(max_env_step: int):
-    #     train_unizero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)
-    # import cProfile
-    # cProfile.run(f"run({250000})", filename="pong_uz_cprofile_250k_envstep_allpool_s0", sort="cumulative")

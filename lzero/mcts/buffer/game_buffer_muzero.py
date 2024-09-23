@@ -72,6 +72,53 @@ class MuZeroGameBuffer(GameBuffer):
         self.sample_times = 0
         self.active_root_num = 0
 
+    def reanalyze_buffer(
+            self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
+    ) -> List[Any]:
+        """
+        Overview:
+            sample data from ``GameBuffer`` and prepare the current and target batch for training.
+        Arguments:
+            - batch_size (:obj:`int`): batch size.
+            - policy (:obj:`Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]`): policy.
+        Returns:
+            - train_data (:obj:`List`): List of train data, including current_batch and target_batch.
+        """
+        policy._target_model.to(self._cfg.device)
+        policy._target_model.eval()
+        self.policy = policy
+        # obtain the current_batch and prepare target context
+        policy_re_context = self._make_batch_for_reanalyze(batch_size, 1)
+        # target policy
+        self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
+
+    def _make_batch_for_reanalyze(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
+        """
+        Overview:
+            first sample orig_data through ``_sample_orig_data()``,
+            then prepare the context of a batch:
+                reward_value_context:        the context of reanalyzed value targets
+                policy_re_context:           the context of reanalyzed policy targets
+                policy_non_re_context:       the context of non-reanalyzed policy targets
+                current_batch:                the inputs of batch
+        Arguments:
+            - batch_size (:obj:`int`): the batch size of orig_data from replay buffer.
+            - reanalyze_ratio (:obj:`float`): ratio of reanalyzed policy (value is 100% reanalyzed)
+        Returns:
+            - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch
+        """
+        # obtain the batch context from replay buffer
+        orig_data = self._sample_orig_reanalyze_data_uz(batch_size)
+        game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
+        batch_size = len(batch_index_list)
+        # obtain the context of reanalyzed policy targets
+        policy_re_context = self._prepare_policy_reanalyzed_context(
+            batch_index_list, game_segment_list,
+            pos_in_game_segment_list
+        )
+        self.reanalyze_num = batch_size
+        return policy_re_context
+
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
     ) -> List[Any]:
@@ -236,7 +283,7 @@ class MuZeroGameBuffer(GameBuffer):
         action_mask_segment, to_play_segment = [], []
 
         td_steps_list = []
-        for game_segment, state_index, idx in zip(game_segment_list, pos_in_game_segment_list, batch_index_list):
+        for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
             game_segment_len = len(game_segment)
             game_segment_lens.append(game_segment_len)
 

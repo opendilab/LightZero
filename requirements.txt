@@ -10,3 +10,4 @@ pycolab
 pytest
 pooltool-billiards>=0.3.1
 line_profiler
+xxhash

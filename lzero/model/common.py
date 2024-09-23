@@ -344,7 +344,7 @@ class RepresentationNetworkUniZero(nn.Module):
         if self.observation_shape[1] == 64:
             self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
 
-        elif self.observation_shape[1] == 84:
+        elif self.observation_shape[1] in [84, 96]:
             self.last_linear = nn.Linear(64 * 6 * 6, self.embedding_dim, bias=False)
 
         self.sim_norm = SimNorm(simnorm_dim=group_size)

@@ -23,7 +23,7 @@ from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 
 
-def train_unizero(
+def train_rezero_uz(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -56,7 +56,8 @@ def train_unizero(
     assert create_cfg.policy.type in ['unizero', 'sampled_unizero'], "train_unizero entry now only supports the following algo.: 'unizero', 'sampled_unizero'"
 
     # Import the correct GameBuffer class based on the policy type
-    game_buffer_classes = {'unizero': 'UniZeroGameBuffer', 'sampled_unizero': 'SampledUniZeroGameBuffer'}
+    # game_buffer_classes = {'unizero': 'UniZeroGameBuffer', 'sampled_unizero': 'SampledUniZeroGameBuffer'}
+    game_buffer_classes = {'unizero': 'UniZeroReGameBuffer', 'sampled_unizero': 'SampledUniZeroGameBuffer'}
 
     GameBuffer = getattr(__import__('lzero.mcts', fromlist=[game_buffer_classes[create_cfg.policy.type]]),
                          game_buffer_classes[create_cfg.policy.type])
@@ -72,10 +73,8 @@ def train_unizero(
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
-    # TODO
-    # evaluator_env.enable_save_replay(replay_path='./replay_cartpole')
 
-    collector_env.seed(cfg.seed) # TODO
+    collector_env.seed(cfg.seed)
     # collector_env.seed(cfg.seed, dynamic_seed=False)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=torch.cuda.is_available())
@@ -111,8 +110,14 @@ def train_unizero(
     batch_size = policy._cfg.batch_size
 
     # TODO: for visualize
-    stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-    # import sys; sys.exit(0)
+    # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+    
+    buffer_reanalyze_count = 0
+    train_epoch = 0
+    reanalyze_batch_size = cfg.policy.reanalyze_batch_size
+
+    from ding.utils import BUFFER_REGISTRY, EasyTimer
+    timer = EasyTimer()
 
     while True:
         # Log buffer memory usage
@@ -158,6 +163,23 @@ def train_unizero(
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
 
+
+        # Periodically reanalyze buffer
+        if cfg.policy.buffer_reanalyze_freq >= 1:
+            # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+            reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
+        else:
+            # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
+            if train_epoch % (1//cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+                # When reanalyzing the buffer, the samples in the entire buffer are processed in mini-batches with a batch size of reanalyze_batch_size.
+                # This is an empirically selected value for optimal efficiency.
+                with timer:
+                    replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+                buffer_reanalyze_count += 1
+                logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
+                logging.info(f'Buffer reanalyze time: {timer.value}')
+
+
         # Train the policy if sufficient data is available
         if collector.envstep > cfg.policy.train_start_after_envsteps:
             if cfg.policy.sample_type == 'episode':
@@ -172,6 +194,16 @@ def train_unizero(
                 continue
 
             for i in range(update_per_collect):
+
+                if cfg.policy.buffer_reanalyze_freq >= 1:
+                    # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+                    if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+                        # When reanalyzing the buffer, the samples in the entire buffer are processed in mini-batches with a batch size of reanalyze_batch_size.
+                        # This is an empirically selected value for optimal efficiency.
+                        replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+                        buffer_reanalyze_count += 1
+                        logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
+
                 train_data = replay_buffer.sample(batch_size, policy)
                 if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
                     # Clear caches and precompute positional embedding matrices
@@ -183,6 +215,7 @@ def train_unizero(
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
+        train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()
 
         # Check stopping criteria
