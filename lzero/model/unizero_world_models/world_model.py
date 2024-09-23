@@ -673,7 +673,7 @@ class WorldModel(nn.Module):
             - torch.FloatTensor: The outputs from the world model.
         """
         n, num_observations_tokens, _ = latent_state.shape
-        if n <= self.env_num:
+        if n <= self.env_num and current_obs_embeddings is not None:
             # ================ Collect and Evaluation Phase ================
             if current_obs_embeddings is not None:
                 if self.continuous_action_space:
@@ -760,7 +760,7 @@ class WorldModel(nn.Module):
             # ================ calculate the target value in Train phase ================
             # [192, 16, 64] -> [32, 6, 16, 64]
             latent_state = latent_state.contiguous().view(buffer_action.shape[0], -1, num_observations_tokens,
-                                                          self.obs_per_embdding_dim)  # (BL, K) for unroll_step=1
+                                                        self.obs_per_embdding_dim)  # (BL, K) for unroll_step=1
 
             latent_state = latent_state[:, :-1, :]
             buffer_action = torch.from_numpy(buffer_action).to(latent_state.device)

@@ -51,7 +51,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         # self.task_id = self._cfg.task_id
         self.sample_type = self._cfg.sample_type  # 'transition' or 'episode'
 
-    def sample(
+    def reanalyze_buffer(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
     ) -> List[Any]:
         """
@@ -67,6 +67,151 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         policy._target_model.eval()
 
         # obtain the current_batch and prepare target context
+        policy_re_context, current_batch = self._make_batch_for_reanalyze(batch_size, 1)
+        # target policy: current_batch[1]: action, current_batch[2]: child_sampled_actions
+        _, root_sampled_actions = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1])
+
+        # current_batch = [obs_list, action_list, root_sampled_actions_list, mask_list, batch_index_list, weights_list, make_time_list]
+        if self._cfg.model.continuous_action_space:
+            # check current_batch[2]对应的root_sampled_actions_list是否正确的更新
+            current_batch[2] = root_sampled_actions.reshape(
+                batch_size, self._cfg.num_unroll_steps + 1,
+                self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size
+            )
+        else:
+            current_batch[2] = root_sampled_actions.reshape(
+                batch_size, self._cfg.num_unroll_steps + 1,
+                self._cfg.model.num_of_sampled_actions, 1
+            )
+
+    
+    def _make_batch_for_reanalyze(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
+        """
+        Overview:
+            first sample orig_data through ``_sample_orig_data()``,
+            then prepare the context of a batch:
+                reward_value_context:        the context of reanalyzed value targets
+                policy_re_context:           the context of reanalyzed policy targets
+                policy_non_re_context:       the context of non-reanalyzed policy targets
+                current_batch:                the inputs of batch
+        Arguments:
+            - batch_size (:obj:`int`): the batch size of orig_data from replay buffer.
+            - reanalyze_ratio (:obj:`float`): ratio of reanalyzed policy (value is 100% reanalyzed)
+        Returns:
+            - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch
+        """
+        # obtain the batch context from replay buffer
+        if self.sample_type == 'transition':
+            # orig_data = self._sample_orig_data(batch_size)
+            orig_data = self._sample_orig_reanalyze_data_uz(batch_size)
+        elif self.sample_type == 'episode':
+            orig_data = self._sample_orig_data_episode(batch_size)
+        game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
+        batch_size = len(batch_index_list)
+        obs_list, action_list, mask_list = [], [], []
+        root_sampled_actions_list = []
+        # prepare the inputs of a batch
+        for i in range(batch_size):
+            game = game_segment_list[i]
+            pos_in_game_segment = pos_in_game_segment_list[i]
+
+            actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
+                                                                  self._cfg.num_unroll_steps].tolist()
+
+            # NOTE: self._cfg.num_unroll_steps + 1
+            root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_segment:pos_in_game_segment +
+                                                                 self._cfg.num_unroll_steps + 1]
+
+            # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
+            mask_tmp = [1. for i in range(len(root_sampled_actions_tmp))]
+
+            mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
+
+            # pad random action
+            if self._cfg.model.continuous_action_space:
+                actions_tmp += [
+                    np.random.randn(self._cfg.model.action_space_size)
+                    for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
+                ]
+                root_sampled_actions_tmp += [
+                    np.random.rand(self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size)
+                    for _ in range(self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp))
+                ]
+            else:
+                # generate random `padded actions_tmp`
+                actions_tmp += generate_random_actions_discrete(
+                    self._cfg.num_unroll_steps - len(actions_tmp),
+                    self._cfg.model.action_space_size,
+                    1  # Number of sampled actions for actions_tmp is 1
+                )
+
+                # generate random padded `root_sampled_actions_tmp`
+                # root_sampled_action have different shape in mcts_ctree and mcts_ptree, thus we need to pad differently
+                reshape = True if self._cfg.mcts_ctree else False
+                root_sampled_actions_tmp += generate_random_actions_discrete(
+                    self._cfg.num_unroll_steps + 1 - len(root_sampled_actions_tmp),
+                    self._cfg.model.action_space_size,
+                    self._cfg.model.num_of_sampled_actions,
+                    reshape=reshape
+                )
+
+            # obtain the input observations
+            # pad if length of obs in game_segment is less than stack+num_unroll_steps
+            # e.g. stack+num_unroll_steps = 4+5
+            obs_list.append(
+                game_segment_list[i].get_unroll_obs(
+                    pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
+                )
+            )
+            action_list.append(actions_tmp)
+            root_sampled_actions_list.append(root_sampled_actions_tmp)
+
+            mask_list.append(mask_tmp)
+
+        # formalize the input observations
+        obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
+
+        # ==============================================================
+        # sampled related core code
+        # ==============================================================
+        # formalize the inputs of a batch
+        current_batch = [
+            obs_list, action_list, root_sampled_actions_list, mask_list, batch_index_list, weights_list, make_time_list
+        ]
+        for i in range(len(current_batch)):
+            current_batch[i] = np.asarray(current_batch[i])
+
+        # reanalyzed policy
+        # obtain the context of reanalyzed policy targets
+        policy_re_context = self._prepare_policy_reanalyzed_context(
+            batch_index_list, game_segment_list,
+            pos_in_game_segment_list
+        )
+
+        context = policy_re_context, current_batch
+        self.reanalyze_num = batch_size
+
+        return context
+
+    def sample(
+            self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
+    ) -> List[Any]:
+        """
+        Overview:
+            sample data from ``GameBuffer`` and prepare the current and target batch for training.
+        Arguments:
+            - batch_size (:obj:`int`): batch size.
+            - policy (:obj:`Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]`): policy.
+        Returns:
+            - train_data (:obj:`List`): List of train data, including current_batch and target_batch.
+        """
+        policy._target_model.to(self._cfg.device)
+        policy._target_model.eval()
+        # TODO
+        # policy._model.to(self._cfg.device)
+        # policy._model.eval()
+
+        # obtain the current_batch and prepare target context
         reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(
             batch_size, self._cfg.reanalyze_ratio
         )
@@ -77,9 +222,6 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         batch_rewards, batch_target_values = self._compute_target_reward_value(
             reward_value_context, policy._target_model, current_batch[1]  # current_batch[1] is action_batch
         )
-        # target policy
-        # batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model,
-        #                                                                   current_batch[1])
 
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
             policy_non_re_context, self._cfg.model.num_of_sampled_actions
@@ -87,13 +229,13 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
         if self._cfg.reanalyze_ratio > 0:
             # target policy
-            # batch_target_policies_re, root_sampled_actions = self._compute_target_policy_reanalyzed(
-            #     policy_re_context, policy._target_model, current_batch[1]
-            # )
-            # TODO
             batch_target_policies_re, root_sampled_actions = self._compute_target_policy_reanalyzed(
-                policy_re_context, policy._model, current_batch[1]
+                policy_re_context, policy._target_model, current_batch[1]
             )
+            # TODO
+            # batch_target_policies_re, root_sampled_actions = self._compute_target_policy_reanalyzed(
+            #     policy_re_context, policy._model, current_batch[1]
+            # )
             # ==============================================================
             # fix reanalyze in suz:
             # use the latest root_sampled_actions after the reanalyze process,
@@ -342,11 +484,11 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         if self._cfg.model.continuous_action_space is True:
             # when the action space of the environment is continuous, action_mask[:] is None.
             action_mask = [
-                list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
+                list(np.ones(self._cfg.model.num_of_sampled_actions, dtype=np.int8)) for _ in range(transition_batch_size)
             ]
             # NOTE: in continuous action space env: we set all legal_actions as -1
             legal_actions = [
-                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
+                [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(transition_batch_size)
             ]
         else:
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
@@ -382,7 +524,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             reward_pool = reward_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
             noises = [
-                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
+                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
                                     ).astype(np.float32).tolist() for _ in range(transition_batch_size)
             ]
             if self._cfg.mcts_ctree:
@@ -468,8 +610,10 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
         # NOTE: TODO
         model.world_model.reanalyze_phase = False
+        
 
         return batch_target_policies_re, root_sampled_actions
+
 
     def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, action_batch) -> Tuple[
         Any, Any]:
@@ -499,7 +643,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             ]
             # NOTE: in continuous action space env: we set all legal_actions as -1
             legal_actions = [
-                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
+                [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(transition_batch_size)
             ]
         else:
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]

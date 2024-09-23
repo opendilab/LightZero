@@ -111,7 +111,7 @@ def train_unizero(
     batch_size = policy._cfg.batch_size
 
     # TODO: for visualize
-    stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+    # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
     # import sys; sys.exit(0)
 
     while True:

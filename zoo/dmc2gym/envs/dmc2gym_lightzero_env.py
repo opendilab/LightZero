@@ -289,12 +289,12 @@ class DMC2GymEnv(BaseEnv):
         # action = np.where(action > 0.9000, 0.9999, action)
         # action = np.where(action < -0.9000, -0.9999, action)
 
-        if self._cfg.is_eval:
-            # NOTE
-            # action = np.where(action > 0.9500, 0.9999, action)
-            # action = np.where(action < -0.9500, -0.9999, action)
-            action = np.where(action > 0.9000, 0.9999, action)
-            action = np.where(action < -0.9000, -0.9999, action)
+        # if self._cfg.is_eval:
+        #     # NOTE
+        #     # action = np.where(action > 0.9500, 0.9999, action)
+        #     # action = np.where(action < -0.9500, -0.9999, action)
+        #     action = np.where(action > 0.9000, 0.9999, action)
+        #     action = np.where(action < -0.9000, -0.9999, action)
 
         obs, rew, done, info = self._env.step(action)
         self._current_step += 1

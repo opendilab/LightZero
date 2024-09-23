@@ -79,7 +79,8 @@ def main(env_id, seed):
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             random_collect_episode_num=0,
-            use_augmentation=True,
+            # use_augmentation=True,
+            use_augmentation=False,
             use_priority=False,
             replay_ratio=replay_ratio,
             update_per_collect=update_per_collect,
@@ -96,6 +97,8 @@ def main(env_id, seed):
             replay_buffer_size=int(1e6),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
+            manual_temperature_decay=True,  # TODO
+            threshold_training_steps_for_final_temperature=int(5e4),
             # ============= The key different params for ReZero =============
             num_unroll_steps=num_unroll_steps,
             buffer_reanalyze_freq=buffer_reanalyze_freq, # 1 means reanalyze one times per epoch, 2 means reanalyze one times each two epoch

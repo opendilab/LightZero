@@ -762,8 +762,15 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 }
                 batch_action.append(action)
 
+
             self.last_batch_obs = data
             self.last_batch_action = batch_action
+
+            # ========= TODO: for muzero_segment_collector now =========
+            if active_collect_env_num < self.collector_env_num:
+                print('='*20)
+                print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
+                self._reset_collect(reset_init_data=True) 
 
         return output
 
