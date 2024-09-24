@@ -105,10 +105,12 @@ def main(env_id, seed):
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
                 model_type='mlp',
+                norm_type = norm_type,
                 world_model_cfg=dict(
                     obs_type='vector',
                     num_unroll_steps=num_unroll_steps,
                     policy_entropy_loss_weight=5e-3,
+                    # policy_entropy_loss_weight=1e-4,
                     continuous_action_space=continuous_action_space,
                     num_of_sampled_actions=K,
                     sigma_type='conditioned',
@@ -147,14 +149,15 @@ def main(env_id, seed):
             optim_type='AdamW',
             lr_piecewise_constant_decay=False,
             learning_rate=0.0001,
-            target_update_freq=100,
-            # grad_clip_value=5,
-            grad_clip_value=20,
-            manual_temperature_decay=True,  # TODO
+            grad_clip_value=5, # TODO
+            # grad_clip_value=20,
+            # manual_temperature_decay=True,  # TODO
+            manual_temperature_decay=False,  # TODO
             # cos_lr_scheduler=True,
             cos_lr_scheduler=False,
             num_segments=num_segments,
-            train_start_after_envsteps=2000,
+            # train_start_after_envsteps=2000,
+            train_start_after_envsteps=0, # TODO
             game_segment_length=game_segment_length, # debug
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
@@ -194,13 +197,13 @@ def main(env_id, seed):
     dmc2gym_state_cont_sampled_unizero_create_config = EasyDict(dmc2gym_state_cont_sampled_unizero_create_config)
     create_config = dmc2gym_state_cont_sampled_unizero_create_config
     
-    main_config.exp_name=f'data_efficiency0829_plus_tune-suz_0923/ucb-uniform-prior_fs2/dmc2gym_{env_id}_state_cont_suz_norer_nlayer{num_layers}_eval3_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
-    from lzero.entry import train_unizero
-    train_unizero([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
+    # main_config.exp_name=f'data_efficiency0829_plus_tune-suz_0924/ucb-uniform-prior_fs2/dmc2gym_{env_id}_state_cont_suz_norer_nlayer{num_layers}_eval3_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    # from lzero.entry import train_unizero
+    # train_unizero([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 
-    # main_config.exp_name=f'data_efficiency0829_plus_tune-suz_0923/ucb-uniform-prior_fs2/dmc2gym_{env_id}_state_cont_suz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_nlayer{num_layers}_eval3_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
-    # from lzero.entry import train_rezero_uz
-    # train_rezero_uz([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    main_config.exp_name=f'data_efficiency0829_plus_tune-suz_0924/ucb-uniform-prior_fs2/dmc2gym_{env_id}_state_cont_suz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_nlayer{num_layers}_eval3_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    from lzero.entry import train_rezero_uz
+    train_rezero_uz([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
 if __name__ == "__main__":

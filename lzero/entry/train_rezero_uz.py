@@ -163,7 +163,6 @@ def train_rezero_uz(
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
 
-
         # Periodically reanalyze buffer
         if cfg.policy.buffer_reanalyze_freq >= 1:
             # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
