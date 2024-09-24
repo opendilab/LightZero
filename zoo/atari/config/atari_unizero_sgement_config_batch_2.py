@@ -12,20 +12,17 @@ def main(env_id, seed):
     # replay_ratio = 0.25
     replay_ratio = 1
     # replay_ratio = 0.5
-    game_segment_length=20
 
     # collector_env_num = 8 # TODO
     # num_segments = 8
-    # buffer_reanalyze_freq = 1/10  # modify according to num_segments
-    # reanalyze_batch_size = 160   # in total of num_unroll_steps
 
     # collector_env_num = 4 # TODO
     # num_segments = 4
     # game_segment_length=10
     collector_env_num = 1 # TODO
     num_segments = 1
-    buffer_reanalyze_freq = 1/10  # modify according to num_segments
-    reanalyze_batch_size = 20   # in total of num_unroll_steps
+
+    game_segment_length=20
 
     evaluator_env_num = 5  # TODO
     num_simulations = 50
@@ -41,12 +38,12 @@ def main(env_id, seed):
     # infer_context_length = 4
 
     num_layers = 4
-
-
+    buffer_reanalyze_freq = 1/10  # modify according to num_segments
     # buffer_reanalyze_freq = 1/5  # modify according to num_segments
     # buffer_reanalyze_freq = 1/2  # modify according to num_segments
 
-
+    reanalyze_batch_size = 20   # in total of num_unroll_steps
+    # reanalyze_batch_size = 160   # in total of num_unroll_steps
     # reanalyze_batch_size = 640   # in total of num_unroll_steps
     # reanalyze_partition=3/4
     reanalyze_partition=1
@@ -84,7 +81,7 @@ def main(env_id, seed):
             # eval_max_episode_steps=int(20),
         ),
         policy=dict(
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=100000,),),),  # default is 10000
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000,),),),  # default is 10000
             model=dict(
                 # observation_shape=(3, 64, 64),
                 observation_shape=(3, 96, 96),

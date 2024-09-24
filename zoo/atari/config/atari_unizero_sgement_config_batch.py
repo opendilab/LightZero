@@ -26,7 +26,7 @@ def main(env_id, seed):
 
     evaluator_env_num = 5  # TODO
     num_simulations = 50
-    max_env_step = int(2e5)  # TODO
+    max_env_step = int(5e5)  # TODO
 
     reanalyze_ratio = 0.
 
@@ -80,7 +80,7 @@ def main(env_id, seed):
             # eval_max_episode_steps=int(20),
         ),
         policy=dict(
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=100000,),),),  # default is 10000
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000,),),),  # default is 10000
             model=dict(
                 # observation_shape=(3, 64, 64),
                 observation_shape=(3, 96, 96),

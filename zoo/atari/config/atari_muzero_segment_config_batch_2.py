@@ -68,8 +68,8 @@ def main(env_id, seed):
                 self_supervised_learning_loss=True,  # default is False
                 discrete_action_encoding_type='one_hot',
                 norm_type='BN',
-                use_sim_norm=True,
-                # use_sim_norm=False,
+                # use_sim_norm=True,
+                use_sim_norm=False,
                 use_sim_norm_kl_loss=False,
                 model_type='conv'
             ),
@@ -125,7 +125,7 @@ def main(env_id, seed):
     atari_muzero_create_config = EasyDict(atari_muzero_create_config)
     create_config = atari_muzero_create_config
 
-    main_config.exp_name = f'data_efficiency0829_plus_tune-mz_0924/{env_id[:-14]}/{env_id[:-14]}_mz_temp0.25_rr{replay_ratio}_simnorm_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_eval5_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_efficiency0829_plus_tune-mz_0924/{env_id[:-14]}/{env_id[:-14]}_mz_temp0.25_rr{replay_ratio}_nosimnorm_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_eval5_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_muzero_rer
     train_muzero_rer([main_config, create_config], seed=seed, max_env_step=max_env_step)
 
