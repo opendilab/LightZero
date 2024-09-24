@@ -110,7 +110,7 @@ def train_rezero_uz(
     batch_size = policy._cfg.batch_size
 
     # TODO: for visualize
-    # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+    stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
     
     buffer_reanalyze_count = 0
     train_epoch = 0

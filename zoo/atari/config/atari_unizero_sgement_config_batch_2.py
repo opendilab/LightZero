@@ -12,21 +12,24 @@ def main(env_id, seed):
     # replay_ratio = 0.25
     replay_ratio = 1
     # replay_ratio = 0.5
+    game_segment_length=20
 
-    collector_env_num = 8 # TODO
-    num_segments = 8
+    # collector_env_num = 8 # TODO
+    # num_segments = 8
+    # buffer_reanalyze_freq = 1/10  # modify according to num_segments
+    # reanalyze_batch_size = 160   # in total of num_unroll_steps
 
     # collector_env_num = 4 # TODO
     # num_segments = 4
     # game_segment_length=10
-    # collector_env_num = 1 # TODO
-    # num_segments = 1
-
-    game_segment_length=20
+    collector_env_num = 1 # TODO
+    num_segments = 1
+    buffer_reanalyze_freq = 1/10  # modify according to num_segments
+    reanalyze_batch_size = 20   # in total of num_unroll_steps
 
     evaluator_env_num = 5  # TODO
     num_simulations = 50
-    max_env_step = int(1e5)  # TODO
+    max_env_step = int(2e5)  # TODO
 
     reanalyze_ratio = 0.
 
@@ -38,11 +41,12 @@ def main(env_id, seed):
     # infer_context_length = 4
 
     num_layers = 4
-    buffer_reanalyze_freq = 1/10  # modify according to num_segments
+
+
     # buffer_reanalyze_freq = 1/5  # modify according to num_segments
     # buffer_reanalyze_freq = 1/2  # modify according to num_segments
 
-    reanalyze_batch_size = 160   # in total of num_unroll_steps
+
     # reanalyze_batch_size = 640   # in total of num_unroll_steps
     # reanalyze_partition=3/4
     reanalyze_partition=1
@@ -108,8 +112,8 @@ def main(env_id, seed):
             # use_augmentation=True,
             use_augmentation=False,
 
-            manual_temperature_decay=True,  # TODO
-            # manual_temperature_decay=False,  # TODO
+            # manual_temperature_decay=True,  # TODO
+            manual_temperature_decay=False,  # TODO
             # threshold_training_steps_for_final_temperature=int(2.5e4),
             threshold_training_steps_for_final_temperature=int(5e4),
             # manual_temperature_decay=False,  # TODO
@@ -169,7 +173,7 @@ def main(env_id, seed):
     # from lzero.entry import train_unizero
     # train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
-    main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0923/{env_id[:-14]}/{env_id[:-14]}_uz_tempdecay50k_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_nlayer{num_layers}_eval5_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_temp025_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0923/{env_id[:-14]}/{env_id[:-14]}_uz_temp025_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_nlayer{num_layers}_eval5_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_rezero_uz
     train_rezero_uz([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 

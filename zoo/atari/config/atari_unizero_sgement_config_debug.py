@@ -1,9 +1,9 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
-env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
+# env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
 # env_id = 'SeaquestNoFrameskip-v4'  # You can specify any Atari game here
-# env_id = 'QbertNoFrameskip-v4'  # You can specify any Atari game here
+env_id = 'QbertNoFrameskip-v4'  # You can specify any Atari game here
 
 action_space_size = atari_env_action_space_map[env_id]
 
@@ -11,34 +11,54 @@ action_space_size = atari_env_action_space_map[env_id]
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 update_per_collect = None
-replay_ratio = 0.25
-collector_env_num = 8
+# replay_ratio = 0.25
+replay_ratio = 1
+# replay_ratio = 0.5
+
+collector_env_num = 8 # TODO
 num_segments = 8
+
+# collector_env_num = 4 # TODO
+# num_segments = 4
+# game_segment_length=10
+# collector_env_num = 1 # TODO
+# num_segments = 1
+
 game_segment_length=20
 
-evaluator_env_num = 3
+evaluator_env_num = 5  # TODO
 num_simulations = 50
-max_env_step = int(2e5)
+max_env_step = int(2e5)  # TODO
+
 reanalyze_ratio = 0.
+
 batch_size = 64
 num_unroll_steps = 10
 infer_context_length = 4
-num_layers = 2
+
+# num_unroll_steps = 5
+# infer_context_length = 4
+
+num_layers = 4
 buffer_reanalyze_freq = 1/10  # modify according to num_segments
-reanalyze_batch_size = 2000
+# buffer_reanalyze_freq = 1/5  # modify according to num_segments
+# buffer_reanalyze_freq = 1/2  # modify according to num_segments
+
+reanalyze_batch_size = 160   # in total of num_unroll_steps
+# reanalyze_batch_size = 640   # in total of num_unroll_steps
+# reanalyze_partition=3/4
+reanalyze_partition=1
 
 # ====== only for debug =====
-collector_env_num = 8
-num_segments = 8
-evaluator_env_num = 2
-num_simulations = 5
-max_env_step = int(2e5)
-reanalyze_ratio = 0.
-batch_size = 64
-num_unroll_steps = 10
-# buffer_reanalyze_freq = 1
-buffer_reanalyze_freq = 1/2
-reanalyze_batch_size = 2   # in total of num_unroll_steps
+# collector_env_num = 8
+# num_segments = 8
+# evaluator_env_num = 2
+# num_simulations = 5
+# max_env_step = int(2e5)
+# reanalyze_ratio = 0.1
+# batch_size = 64
+# num_unroll_steps = 10
+# replay_ratio = 0.01
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -48,6 +68,7 @@ atari_unizero_config = dict(
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
+        # observation_shape=(3, 64, 64),
         observation_shape=(3, 96, 96),
         gray_scale=False,
         collector_env_num=collector_env_num,
@@ -55,8 +76,8 @@ atari_unizero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: only for debug
-        collect_max_episode_steps=int(20),
-        eval_max_episode_steps=int(20),
+        # collect_max_episode_steps=int(20),
+        # eval_max_episode_steps=int(20),
     ),
     policy=dict(
         learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=100000,),),),  # default is 10000
@@ -82,14 +103,15 @@ atari_unizero_config = dict(
             ),
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
-        model_path=None,
-        # model_path='/mnt/afs/niuyazhe/code/LightZero/data_efficiency0829_plus_tune-uz_0914/numsegments-8_gsl20_origin-target-value-policy/Pong_stack1_unizero_upcNone-rr0.25_H10_bs64_seed0_nlayer2/ckpt/ckpt_best.pth.tar',
+        # model_path=None,
+        model_path='/mnt/afs/niuyazhe/code/LightZero/data_efficiency0829_plus_tune-uz_0921/Qbert/Qbert_uz_brf0.1-rbs160_nlayer4_eval5_collect8-numsegments-8_gsl20_temp025_upcNone-rr1_rer0.0_H10-infer4_bs64_seed0/ckpt/iteration_200000.pth.tar',
         # use_augmentation=True,
         use_augmentation=False,
 
         # manual_temperature_decay=True,  # TODO
         manual_temperature_decay=False,  # TODO
-        threshold_training_steps_for_final_temperature=int(2.5e4),
+        # threshold_training_steps_for_final_temperature=int(2.5e4),
+        threshold_training_steps_for_final_temperature=int(5e4),
         # manual_temperature_decay=False,  # TODO
 
         # use_priority=True, # TODO
@@ -100,8 +122,7 @@ atari_unizero_config = dict(
         replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type='AdamW',
-        # learning_rate=0.0001,
-        learning_rate=0.1,  # TODO
+        learning_rate=0.0001,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         num_segments=num_segments,
@@ -115,6 +136,7 @@ atari_unizero_config = dict(
         # ============= The key different params for ReZero =============
         buffer_reanalyze_freq=buffer_reanalyze_freq, # 1 means reanalyze one times per epoch, 2 means reanalyze one times each two epoch
         reanalyze_batch_size=reanalyze_batch_size,
+        reanalyze_partition=reanalyze_partition,
     ),
 )
 atari_unizero_config = EasyDict(atari_unizero_config)
@@ -141,6 +163,7 @@ atari_unizero_create_config = dict(
 )
 atari_unizero_create_config = EasyDict(atari_unizero_create_config)
 create_config = atari_unizero_create_config
+
 
 if __name__ == "__main__":
     # Define a list of seeds for multiple runs
