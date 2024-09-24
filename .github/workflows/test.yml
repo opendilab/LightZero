@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - 'self-hosted-ubuntu'
+          - 'self-hosted'
           - 'macos-12'
         python-version:
           - '3.8'
@@ -30,6 +30,8 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         shell: bash
         run: |
+          sudo apt-get update -y
+          sudo apt-get install swig -y
           echo "OS_NAME=Linux" >> $GITHUB_ENV
           echo "IS_WIN=" >> $GITHUB_ENV
           echo "IS_MAC=" >> $GITHUB_ENV
@@ -64,13 +66,13 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip
-          pip install --upgrade flake8 setuptools wheel twine
-          pip install -r requirements.txt
-          pip install -r requirements-build.txt
-          pip install -r requirements-test.txt
+          pip install --no-cache-dir --upgrade flake8 setuptools wheel twine -i https://pypi.tuna.tsinghua.edu.cn/simple
+          pip install -r requirements.txt --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
+          pip install -r requirements-build.txt --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
+          pip install -r requirements-test.txt --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip uninstall DI-engine -y
-          pip install git+http://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env]
-          pip install transformers
+          pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple git+http://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env] --upgrade
+          pip install --no-cache-dir transformers --upgrade -i https://pypi.tuna.tsinghua.edu.cn/simple
       - name: Run unittest on MacOS or Linux
         if: ${{ env.OS_NAME == 'MacOS' || env.OS_NAME == 'Linux'}}
         env:

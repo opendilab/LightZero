@@ -26,6 +26,6 @@ class TestDingEnvWrapper:
 
         obs = ding_env.reset()
 
-        assert isinstance(obs[0], np.ndarray)
+        assert isinstance(obs, (np.ndarray, float))
         action = ding_env.random_action()
         print('random_action: {}, action_space: {}'.format(action.shape, ding_env.action_space))

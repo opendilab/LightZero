@@ -28,7 +28,7 @@
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 [![discord badge](https://dcbadge.vercel.app/api/server/dkZS2JF56X?style=flat)](https://discord.gg/dkZS2JF56X)
 
-Updated on 2024.07.12 LightZero-v0.1.0
+Updated on 2024.08.18 LightZero-v0.1.0
 
 English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Documentation](https://opendilab.github.io/LightZero) | [LightZero Paper](https://arxiv.org/abs/2310.08348) | [🔥UniZero Paper](https://arxiv.org/abs/2406.10667) | [🔥ReZero Paper](https://arxiv.org/abs/2404.16364)
 
@@ -121,28 +121,32 @@ LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of 
 - [Stochastic MuZero](https://openreview.net/pdf?id=X6D9bAHhBQ1)
 - [EfficientZero](https://arxiv.org/abs/2111.00210)
 - [Gumbel MuZero](https://openreview.net/pdf?id=bERaNdoegnO&)
+- [ReZero](https://arxiv.org/abs/2404.16364)
+- [UniZero](https://arxiv.org/abs/2406.10667)
 
 The environments and algorithms currently supported by LightZero are shown in the table below:
 
 
-| Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | UniZero |ReZero |
-|---------------| -------- | ------ |-------------| ------------------ | ---------- |----------------|---------------|----------------|
-| TicTacToe     | ✔      | ✔      | 🔒           | 🔒                | ✔          | 🔒             |✔|🔒             |
-| Gomoku        | ✔      | ✔      | 🔒          | 🔒               | ✔          | 🔒             |✔|✔          |
-| Connect4      | ✔      | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |✔|✔          |
-| 2048          | ---       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |✔|🔒             |
-| Chess         | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |🔒|🔒             |
-| Go            | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |🔒|🔒             |
-| CartPole      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|✔             |
-| Pendulum      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |🔒|🔒             |
-| LunarLander   | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|🔒             |
-| BipedalWalker | ---      | ✔      | ✔           | ✔                | ✔          | 🔒              |🔒|🔒             |
-| Atari         | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|✔          |
-| MuJoCo        | ---      | ✔     | ✔          | ✔                | 🔒         | 🔒               |🔒|🔒             |
-| MiniGrid      | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
-| Bsuite        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
-| Memory        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
-| SumToThree (billiards) | ---      | 🔒     | 🔒          | ✔               | 🔒         | 🔒             |🔒|🔒             |
+| Env./Algo.             | AlphaZero | MuZero | Sampled MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | UniZero | Sampled UniZero | ReZero |
+|------------------------| -------- | ---- |---------------| ---------- | ------------------ | ------------- | ---------------- | ------- | --- | ------ |
+| TicTacToe              | ✔        | ✔    | 🔒            | 🔒         | 🔒                | ✔             | 🔒               | ✔      | 🔒   | 🔒     |
+| Gomoku                 | ✔        | ✔    | 🔒            | 🔒         | 🔒                | ✔             | 🔒               | ✔      | 🔒   | ✔      |
+| Connect4               | ✔        | ✔    | 🔒            | 🔒         | 🔒                | 🔒             | 🔒               | ✔      | 🔒   | ✔      |
+| 2048                   | ---      | ✔    | 🔒            | 🔒         | 🔒                | 🔒             | ✔               | ✔      | 🔒   | 🔒     |
+| Chess                  | 🔒        | 🔒   | 🔒            | 🔒         | 🔒                | 🔒             | 🔒               | 🔒      | 🔒  | 🔒     |
+| Go                     | 🔒        | 🔒   | 🔒            | 🔒         | 🔒                | 🔒             | 🔒               | 🔒      | 🔒  | 🔒     |
+| CartPole               | ---      | ✔    | 🔒            | ✔          | ✔                 | ✔             | ✔               | ✔      | 🔒   | ✔      |
+| Pendulum               | ---      | ✔    | ✔             | ✔          | ✔                 | ✔             | ✔               | 🔒      | ✔  | 🔒     |
+| LunarLander            | ---      | ✔    | ✔             | ✔          | ✔                 | ✔             | ✔               | ✔      | ✔  | 🔒     |
+| BipedalWalker          | ---      | ✔    | ✔             | ✔          | ✔                 | ✔             | 🔒               | 🔒      | ✔  | 🔒     |
+| Atari                  | ---      | ✔    | 🔒            | ✔          | ✔                 | ✔             | ✔               | ✔      | 🔒   | ✔      |
+| DeepMind Control       | ---      | ---     | ✔            | ---            | ✔                 | 🔒             | 🔒               | 🔒      | ✔  | 🔒     |
+| MuJoCo                 | ---      | ✔    | 🔒            | ✔          | ✔                 | 🔒             | 🔒               | 🔒      | 🔒  | 🔒     |
+| MiniGrid               | ---      | ✔    | 🔒            | ✔          | ✔                 | 🔒             | 🔒               | ✔      | 🔒   | 🔒     |
+| Bsuite                 | ---      | ✔    | 🔒            | ✔          | ✔                 | 🔒             | 🔒               | ✔      | 🔒   | 🔒     |
+| Memory                 | ---      | ✔    | 🔒              | ✔          | ✔                 | 🔒             | 🔒               | ✔      | 🔒   | 🔒     |
+| SumToThree (billiards) | ---      | 🔒   | 🔒            | 🔒         | ✔                 | 🔒             | 🔒               | 🔒      | 🔒  | 🔒     |
+| MetaDrive     | ---      | 🔒     | 🔒      | 🔒  | ✔               | 🔒         | 🔒           | 🔒  | 🔒 |🔒             |
 
 
 <sup>(1): "✔" means that the corresponding item is finished and well-tested.</sup>
@@ -213,6 +217,14 @@ Train a MuZero agent to play [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-t
 ```bash
 cd LightZero
 python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
+```
+
+Train a UniZero agent to play [Pong](http
+g/):
+
+```bash
+cd LightZero
+python3 -u zoo/atari/config/atari_unizero_config.py
 ```
 
 ## 📚 Documentation
@@ -313,10 +325,11 @@ The following are the overview MCTS principle diagrams of the above algorithms:
 
 - [MCTS](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/mcts_overview.pdf)
 - [AlphaZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/alphazero_overview.pdf)
-- [MuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/muzero_overview.pdf)
-- [EfficientZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/efficientzero_overview.pdf)
-- [SampledMuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/sampled_muzero_overview.pdf)
-- [GumbelMuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/gumbel_muzero_overview.pdf)
+- [MuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/muzero_overview.png)
+- [EfficientZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/efficientzero_overview.png)
+- [SampledMuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/sampled_muzero_overview.png)
+- [GumbelMuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/gumbel_muzero_overview.png)
+- [StochasticMuZero](https://github.com/opendilab/LightZero/blob/main/assets/algo_overview/stochastic_muzero_overview.png)
 
 </details>
 

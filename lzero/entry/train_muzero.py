@@ -47,7 +47,7 @@ def train_muzero(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'muzero_context', 'muzero_rnn_full_obs', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'muzero_context', 'muzero_rnn_full_obs', 'sampled_efficientzero', 'sampled_muzero', 'gumbel_muzero', 'stochastic_muzero'], \
         "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'"
 
     if create_cfg.policy.type in ['muzero', 'muzero_context', 'muzero_rnn_full_obs']:
@@ -56,6 +56,8 @@ def train_muzero(
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
+    elif create_cfg.policy.type == 'sampled_muzero':
+        from lzero.mcts import SampledMuZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'gumbel_muzero':
         from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'stochastic_muzero':

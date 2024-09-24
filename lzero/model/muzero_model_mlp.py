@@ -126,8 +126,7 @@ class MuZeroModelMLP(nn.Module):
             norm_type=norm_type
         )
         
-            
-            
+
         if self.self_supervised_learning_loss:
             # self_supervised_learning_loss related network proposed in EfficientZero
             self.projection_input_dim = latent_state_dim
@@ -358,6 +357,8 @@ class DynamicsNetwork(nn.Module):
             - res_connection_in_dynamics (:obj:`bool`): Whether to use residual connection in dynamics network.
         """
         super().__init__()
+        assert num_channels > action_encoding_dim, f'num_channels:{num_channels} <= action_encoding_dim:{action_encoding_dim}'
+
         self.num_channels = num_channels
         self.action_encoding_dim = action_encoding_dim
         self.latent_state_dim = self.num_channels - self.action_encoding_dim

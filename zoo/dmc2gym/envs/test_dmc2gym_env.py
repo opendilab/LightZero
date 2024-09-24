@@ -1,0 +1,48 @@
+import numpy as np
+import pytest
+from easydict import EasyDict
+
+from zoo.dmc2gym.envs import DMC2GymEnv
+
+
+@pytest.mark.envtest
+class TestDMC2GymEnv:
+
+    def test_naive(self):
+        env = DMC2GymEnv(EasyDict({
+            "domain_name": "cartpole",
+            "task_name": "balance",
+            "frame_skip": 2,
+            "from_pixels": True,
+            "from_stack": 1,
+            # "from_stack": 3,
+        }))
+        env.seed(314, dynamic_seed=False)
+        assert env._seed == 314
+        obs = env.reset()
+        # assert obs['observation'].shape == (3, 3, 84, 84)
+        assert obs['observation'].shape == (3, 84, 84)
+
+        for _ in range(5):
+            env.reset()
+            np.random.seed(314)
+            print('=' * 60)
+            for i in range(10):
+                # Both ``env.random_action()``, and utilizing ``np.random`` as well as action space,
+                # can generate legal random action.
+                if i < 5:
+                    random_action = np.array(env.action_space.sample(), dtype=np.float32)
+                else:
+                    random_action = env.random_action()
+                timestep = env.step(random_action)
+                print(timestep)
+                assert isinstance(timestep.obs['observation'], np.ndarray)
+                assert isinstance(timestep.done, bool)
+                # assert timestep.obs['observation'].shape == (3, 3, 84, 84)
+                assert timestep.obs['observation'].shape == (3, 84, 84)
+
+                assert timestep.reward.shape == (1,)
+                assert timestep.reward >= env.reward_space.low
+                assert timestep.reward <= env.reward_space.high
+        print(env.observation_space, env.action_space, env.reward_space)
+        env.close()
