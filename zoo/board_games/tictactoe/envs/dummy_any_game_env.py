@@ -15,14 +15,14 @@ class AnyGameEnv(TicTacToeEnv):
     """
     Overview:
         AnyGameEnv is a simplified test environment for both two-player non-zero-sum games and single-player games where
-        each step has a reward. This environment is designed to test the functionality of MCTS algorithms.
+        each step has a reward. This environment is designed to test the functionality of AlphaZero algorithms.
     """
 
     config = dict(
         # (str): The name of the environment.
         env_id="DummyAnyGame",
         # (bool) If True, means that the game is not a zero-sum game.
-        non_zero_sum=True,  # NOTE
+        non_zero_sum=True,
         # (str): The mode of the battle. Choices are 'self_play_mode' or 'alpha_beta_pruning'.
         battle_mode='self_play_mode',
         # (str): The mode of Monte Carlo Tree Search. This is only used in AlphaZero.
@@ -120,6 +120,7 @@ class AnyGameEnv(TicTacToeEnv):
         action_mask = np.zeros(self.total_num_actions, 'int8')
         action_mask[self.legal_actions] = 1
 
+        # if non_zero_sum, the episode return is not 0, we need to record the return of each player
         self.eval_episode_return_player_1 = 0
         self.eval_episode_return_player_2 = 0
 
@@ -198,7 +199,9 @@ class AnyGameEnv(TicTacToeEnv):
         elif self._current_player == 2:
             self.eval_episode_return_player_2 += reward
             self.eval_return_current_player = self.eval_episode_return_player_2
+
         return done, winner, reward, self.eval_return_current_player
+
     @property
     def next_player(self) -> int:
         """

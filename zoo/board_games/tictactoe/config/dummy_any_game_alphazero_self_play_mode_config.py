@@ -18,7 +18,7 @@ mcts_ctree = False
 # end of the most frequently changed config specified by the user
 # ==============================================================
 dummy_any_game_alphazero_config = dict(
-    exp_name='data_az/tictactoe_sp-mode_alphazero_seed0',
+    exp_name='data_az/dummy_any_game_sp-mode_alphazero_seed0',
     env=dict(
         board_size=3,
         battle_mode='self_play_mode',
@@ -49,7 +49,6 @@ dummy_any_game_alphazero_config = dict(
         model=dict(
             observation_shape=(3, 3, 3),
             action_space_size=int(1 * 3 * 3),
-            # We use the small size model for tictactoe.
             num_res_blocks=1,
             num_channels=16,
             fc_value_layers=[8],
