@@ -13,14 +13,14 @@ def main(env_id, seed):
     replay_ratio = 1
     # replay_ratio = 0.5
 
-    # collector_env_num = 8 # TODO
-    # num_segments = 8
+    collector_env_num = 8 # TODO
+    num_segments = 8
 
     # collector_env_num = 4 # TODO
     # num_segments = 4
     # game_segment_length=10
-    collector_env_num = 1 # TODO
-    num_segments = 1
+    # collector_env_num = 1 # TODO
+    # num_segments = 1
 
     game_segment_length=20
 
@@ -42,8 +42,8 @@ def main(env_id, seed):
     # buffer_reanalyze_freq = 1/5  # modify according to num_segments
     # buffer_reanalyze_freq = 1/2  # modify according to num_segments
 
-    reanalyze_batch_size = 20   # in total of num_unroll_steps
-    # reanalyze_batch_size = 160   # in total of num_unroll_steps
+    # reanalyze_batch_size = 20   # in total of num_unroll_steps
+    reanalyze_batch_size = 160   # in total of num_unroll_steps
     # reanalyze_batch_size = 640   # in total of num_unroll_steps
     # reanalyze_partition=3/4
     reanalyze_partition=1
@@ -87,7 +87,8 @@ def main(env_id, seed):
                 observation_shape=(3, 96, 96),
                 action_space_size=action_space_size,
                 world_model_cfg=dict(
-                    policy_entropy_weight=0,  # NOTE
+                    # policy_entropy_weight=0,  # NOTE
+                    policy_entropy_weight=0.1,  # NOTE
                     # policy_entropy_weight=1e-4,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
@@ -170,7 +171,7 @@ def main(env_id, seed):
     # from lzero.entry import train_unizero
     # train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
-    main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0923/{env_id[:-14]}/{env_id[:-14]}_uz_temp025_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_nlayer{num_layers}_eval5_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0923/{env_id[:-14]}/{env_id[:-14]}_uz_temp025_pew01_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_nlayer{num_layers}_eval5_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_rezero_uz
     train_rezero_uz([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 

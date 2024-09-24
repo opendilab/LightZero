@@ -13,20 +13,20 @@ def main(env_id, seed):
     replay_ratio = 1
     # replay_ratio = 0.5
 
-    # collector_env_num = 8 # TODO
-    # num_segments = 8
+    collector_env_num = 8 # TODO
+    num_segments = 8
 
     # collector_env_num = 4 # TODO
     # num_segments = 4
     # game_segment_length=10
-    collector_env_num = 1 # TODO
-    num_segments = 1
+    # collector_env_num = 1 # TODO
+    # num_segments = 1
 
     game_segment_length=20
 
     evaluator_env_num = 5  # TODO
     num_simulations = 50
-    max_env_step = int(2e5)  # TODO
+    max_env_step = int(3e5)  # TODO
 
     reanalyze_ratio = 0.
 
@@ -42,13 +42,11 @@ def main(env_id, seed):
     # buffer_reanalyze_freq = 1/5  # modify according to num_segments
     # buffer_reanalyze_freq = 1/2  # modify according to num_segments
 
-    reanalyze_batch_size = 20   # in total of num_unroll_steps
-    # reanalyze_batch_size = 160   # in total of num_unroll_steps
+    reanalyze_batch_size = 160   # in total of num_unroll_steps
     # reanalyze_batch_size = 640   # in total of num_unroll_steps
     # reanalyze_partition=3/4
     reanalyze_partition=1
-
-
+    policy_entropy_weight=0.1
 
     # ====== only for debug =====
     # collector_env_num = 8
@@ -81,14 +79,15 @@ def main(env_id, seed):
             # eval_max_episode_steps=int(20),
         ),
         policy=dict(
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000,),),),  # default is 10000
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000,),),),  # default is 10000
             model=dict(
                 # observation_shape=(3, 64, 64),
                 observation_shape=(3, 96, 96),
                 action_space_size=action_space_size,
                 world_model_cfg=dict(
-                    policy_entropy_weight=0,  # NOTE
+                    # policy_entropy_weight=0,  # NOTE
                     # policy_entropy_weight=1e-4,
+                    policy_entropy_weight=policy_entropy_weight,  # NOTE
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
@@ -170,7 +169,7 @@ def main(env_id, seed):
     # from lzero.entry import train_unizero
     # train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
-    main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0923/{env_id[:-14]}/{env_id[:-14]}_uz_temp025_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_nlayer{num_layers}_eval5_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_efficiency0829_plus_tune-uz_0923/{env_id[:-14]}/{env_id[:-14]}_uz_temp025_pew{policy_entropy_weight}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_nlayer{num_layers}_eval5_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_rezero_uz
     train_rezero_uz([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
