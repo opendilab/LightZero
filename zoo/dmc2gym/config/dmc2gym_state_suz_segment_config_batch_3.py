@@ -26,8 +26,8 @@ def main(env_id, seed):
     collector_env_num = 8
     n_episode = 8
     num_segments = 8
-    # game_segment_length=20
-    game_segment_length=100
+    game_segment_length=20
+    # game_segment_length=100
     evaluator_env_num = 3
     num_simulations = 50
     update_per_collect = None
@@ -196,7 +196,7 @@ def main(env_id, seed):
     dmc2gym_state_cont_sampled_unizero_create_config = EasyDict(dmc2gym_state_cont_sampled_unizero_create_config)
     create_config = dmc2gym_state_cont_sampled_unizero_create_config
     
-    main_config.exp_name=f'data_efficiency0829_plus_tune-suz_0924/ucb-uniform-prior_fs2_orig-collector-true-gsl100-origsctre-density/dmc2gym_{env_id}_state_cont_suz_norer_nlayer{num_layers}_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_fixsigma'
+    main_config.exp_name=f'data_efficiency0829_plus_tune-suz_0924/fs2_segment-collector-origsctre-density/dmc2gym_{env_id}_state_cont_suz_norer_nlayer{num_layers}_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_fixsigma'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 

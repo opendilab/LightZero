@@ -707,14 +707,14 @@ class MuZeroCollector(ISerialCollector):
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
 
-                    # ===== TODO: if done not return =======
+                    # ===== TODO: if done not return: bug? =======
                     # create new GameSegment
-                    game_segments[env_id] =  GameSegment(
-                            self._env.action_space,
-                            game_segment_length=self.policy_config.game_segment_length,
-                            config=self.policy_config
-                        )
-                    game_segments[env_id].reset(observation_window_stack[env_id])
+                    # game_segments[env_id] =  GameSegment(
+                    #         self._env.action_space,
+                    #         game_segment_length=self.policy_config.game_segment_length,
+                    #         config=self.policy_config
+                    #     )
+                    # game_segments[env_id].reset(observation_window_stack[env_id])
 
             if collected_episode >= n_episode:
                 # [data, meta_data]

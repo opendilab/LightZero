@@ -611,7 +611,6 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         # NOTE: TODO
         model.world_model.reanalyze_phase = False
         
-
         return batch_target_policies_re, root_sampled_actions
 
 

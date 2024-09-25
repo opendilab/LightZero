@@ -607,18 +607,62 @@ namespace tree
 
     //*********************************************************
 
+    // CRoots::CRoots()
+    // {
+    //     this->root_num = 0;
+    //     this->num_of_sampled_actions = 20;
+    // }
+
+    // // polished on 20240903
+    // CRoots::CRoots(int root_num, std::vector<std::vector<float> >& legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space)
+    //         : root_num(root_num), legal_actions_list(legal_actions_list), 
+    //       continuous_action_space(continuous_action_space), 
+    //       num_of_sampled_actions(num_of_sampled_actions), 
+    //       action_space_size(action_space_size) 
+    // {
+    //     /*
+    //     Overview:
+    //         Initialization of CNode with root_num, legal_actions_list, action_space_size, num_of_sampled_actions, continuous_action_space.
+    //     Arguments:
+    //         - root_num: the number of the current root.
+    //         - legal_action_list: the vector of the legal action of this root.
+    //         - action_space_size: the size of action space of the current env.
+    //         - num_of_sampled_actions: the number of sampled actions, i.e. K in the Sampled MuZero papers.
+    //         - continuous_action_space: whether the action space is continous in current env.
+    //     */
+    //     bool is_legal_actions_empty = legal_actions_list.empty() || 
+    //                                   (legal_actions_list[0].size() == 1 && legal_actions_list[0][0] == -1);
+
+    //     std::vector<CAction> legal_actions;
+
+    //     if (continuous_action_space || is_legal_actions_empty) {
+    //         // Continuous action space or no legal actions provided
+    //         legal_actions = {};  // Empty legal actions
+    //     } else {
+    //         // Discrete action space with valid legal actions
+    //         for (const auto& action : legal_actions_list) {
+    //             legal_actions.emplace_back(action, 0);  // Construct CAction using each legal action
+    //         }
+    //     }
+
+    //     roots.reserve(root_num);  // Reserve space to avoid reallocations
+
+    //     for (int i = 0; i < root_num; ++i) {
+    //         roots.emplace_back(0, legal_actions, action_space_size, 
+    //                            num_of_sampled_actions, continuous_action_space);
+    //     }
+    // }
+
+    
+    // CRoots::~CRoots() {}
+
     CRoots::CRoots()
     {
         this->root_num = 0;
         this->num_of_sampled_actions = 20;
     }
 
-    // polished on 20240903
-    CRoots::CRoots(int root_num, std::vector<std::vector<float> >& legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space)
-            : root_num(root_num), legal_actions_list(legal_actions_list), 
-          continuous_action_space(continuous_action_space), 
-          num_of_sampled_actions(num_of_sampled_actions), 
-          action_space_size(action_space_size) 
+    CRoots::CRoots(int root_num, std::vector<std::vector<float> > legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space)
     {
         /*
         Overview:
@@ -630,30 +674,44 @@ namespace tree
             - num_of_sampled_actions: the number of sampled actions, i.e. K in the Sampled MuZero papers.
             - continuous_action_space: whether the action space is continous in current env.
         */
-        bool is_legal_actions_empty = legal_actions_list.empty() || 
-                                      (legal_actions_list[0].size() == 1 && legal_actions_list[0][0] == -1);
+        this->root_num = root_num;
+        this->legal_actions_list = legal_actions_list;
+        this->continuous_action_space = continuous_action_space;
 
-        std::vector<CAction> legal_actions;
+        // sampled related core code
+        this->num_of_sampled_actions = num_of_sampled_actions;
+        this->action_space_size = action_space_size;
 
-        if (continuous_action_space || is_legal_actions_empty) {
-            // Continuous action space or no legal actions provided
-            legal_actions = {};  // Empty legal actions
-        } else {
-            // Discrete action space with valid legal actions
-            for (const auto& action : legal_actions_list) {
-                legal_actions.emplace_back(action, 0);  // Construct CAction using each legal action
+        for (int i = 0; i < this->root_num; ++i)
+        {
+            if (this->continuous_action_space == true and this->legal_actions_list[0][0] == -1)
+            {
+                // continous action space
+                std::vector<CAction> legal_actions;
+                this->roots.push_back(CNode(0, legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space));
             }
-        }
+            else if (this->continuous_action_space == false or this->legal_actions_list[0][0] == -1)
+            {
+                // sampled
+                // discrete action space without action mask
+                                std::vector<CAction> legal_actions;
+                this->roots.push_back(CNode(0, legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space));
+            }
 
-        roots.reserve(root_num);  // Reserve space to avoid reallocations
-
-        for (int i = 0; i < root_num; ++i) {
-            roots.emplace_back(0, legal_actions, action_space_size, 
-                               num_of_sampled_actions, continuous_action_space);
+            else
+            {
+                // TODO(pu): discrete action space
+                std::vector<CAction> c_legal_actions;
+                for (int i = 0; i < this->legal_actions_list.size(); ++i)
+                {
+                    CAction c_legal_action = CAction(legal_actions_list[i], 0);
+                    c_legal_actions.push_back(c_legal_action);
+                }
+                this->roots.push_back(CNode(0, c_legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space));
+            }
         }
     }
 
-    
     CRoots::~CRoots() {}
 
     void CRoots::prepare(float root_noise_weight, const std::vector<std::vector<float> > &noises, const std::vector<float> &rewards, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch)
@@ -804,9 +862,9 @@ namespace tree
                 node->value_sum += bootstrap_value;
                 node->visit_count += 1;
                 float true_reward = node->reward;
-               min_max_stats.update(true_reward + discount_factor * node->value());
 
-
+                min_max_stats.update(true_reward + discount_factor * node->value());
+                
                 bootstrap_value = true_reward + discount_factor * bootstrap_value;
             }
         }
@@ -937,8 +995,8 @@ namespace tree
 
         // sampled related core code
         // TODO(pu): empirical distribution
-        // std::string empirical_distribution_type = "density";
-        std::string empirical_distribution_type = "uniform";
+        std::string empirical_distribution_type = "density";
+        // std::string empirical_distribution_type = "uniform";
 
         if (empirical_distribution_type.compare("density"))
         {
