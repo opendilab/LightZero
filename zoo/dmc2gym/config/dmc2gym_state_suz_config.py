@@ -6,9 +6,9 @@ from easydict import EasyDict
 from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
 # env_id = 'humanoid-run'  # 'cartpole-swingup'  # You can specify any DMC task here
-env_id = 'cheetah-run'  # 'cartpole-swingup'  # You can specify any DMC task here
+# env_id = 'cheetah-run'  # 'cartpole-swingup'  # You can specify any DMC task here
 # env_id = 'hopper-hop'  # 'cartpole-swingup'  # You can specify any DMC task here
-# env_id =  'cartpole-swingup' # 'cartpole-swingup'  # You can specify any DMC task here
+env_id =  'cartpole-swingup' # 'cartpole-swingup'  # You can specify any DMC task here
 
 action_space_size = dmc_state_env_action_space_map[env_id]
 obs_space_size = dmc_state_env_obs_space_map[env_id]

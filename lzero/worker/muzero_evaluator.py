@@ -325,7 +325,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                         obs, reward, done, info = t.obs, t.reward, t.done, t.info
 
                         eps_steps_lst[env_id] += 1
-                        if self._policy.get_attribute('cfg').type == 'unizero':
+                        if self._policy.get_attribute('cfg').type in ['unizero', 'samplled_unizero']:
                             # only for UniZero now
                             self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
 

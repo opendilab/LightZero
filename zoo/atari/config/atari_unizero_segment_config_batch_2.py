@@ -10,23 +10,23 @@ def main(env_id, seed):
     # ==============================================================
     update_per_collect = None
     # replay_ratio = 0.25
-    replay_ratio = 1
-    # replay_ratio = 0.5
+    # replay_ratio = 1
+    replay_ratio = 0.1
 
-    # collector_env_num = 8 # TODO
-    # num_segments = 8
+    collector_env_num = 8 # TODO
+    num_segments = 8
 
     # collector_env_num = 4 # TODO
     # num_segments = 4
     # game_segment_length=10
-    collector_env_num = 1 # TODO
-    num_segments = 1
+    # collector_env_num = 1 # TODO
+    # num_segments = 1
 
     game_segment_length=20
 
     evaluator_env_num = 5  # TODO
     num_simulations = 50
-    max_env_step = int(2e5)  # TODO
+    max_env_step = int(5e5)  # TODO
 
     reanalyze_ratio = 0.
 
@@ -42,8 +42,8 @@ def main(env_id, seed):
     # buffer_reanalyze_freq = 1/5  # modify according to num_segments
     # buffer_reanalyze_freq = 1/2  # modify according to num_segments
 
-    reanalyze_batch_size = 20   # in total of num_unroll_steps
-    # reanalyze_batch_size = 160   # in total of num_unroll_steps
+    # reanalyze_batch_size = 20   # in total of num_unroll_steps
+    reanalyze_batch_size = 160   # in total of num_unroll_steps
     # reanalyze_batch_size = 640   # in total of num_unroll_steps
     # reanalyze_partition=3/4
     reanalyze_partition=1

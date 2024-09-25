@@ -586,7 +586,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                             # we replace the data at the corresponding location with the latest search results to keep the most up-to-date targets
                             sim_num = sum(distributions)
                             child_visit[current_index] = [visit_count/sim_num for visit_count in distributions]
-                            root_value[policy_index] = searched_value
+                            root_value[current_index] = searched_value
                             
                             if self._cfg.action_type == 'fixed_action_space':
                                 sum_visits = sum(distributions)
