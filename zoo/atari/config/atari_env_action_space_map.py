@@ -12,7 +12,7 @@ atari_env_action_space_map = EasyDict({
     'DemonAttackNoFrameskip-v4': 6,
     'FreewayNoFrameskip-v4': 3,
     'FrostbiteNoFrameskip-v4': 18,
-    'GopherNoFrameskip-v4': 8, 
+    'GopherNoFrameskip-v4': 8,
     'HeroNoFrameskip-v4': 18,
     'JamesbondNoFrameskip-v4': 18,
     'KangarooNoFrameskip-v4': 18,

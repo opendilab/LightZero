@@ -1,12 +1,3 @@
-import os
-os.environ["NCCL_BLOCKING_WAIT"] = "0"
-os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "1" 
-# os.environ["NCCL_DEBUG"] = "INFO"
-os.environ["NCCL_DEBUG"] = "WARN"
-
-# os.environ["NCCL_TIMEOUT"] = "3600"
-os.environ["NCCL_TIMEOUT"] = "7200"
-
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
@@ -20,22 +11,19 @@ gpu_num = 2
 update_per_collect = None
 replay_ratio = 0.25
 collector_env_num = 8
+num_segments = int(8*gpu_num)
 n_episode = int(8*gpu_num)
 evaluator_env_num = 3
 num_simulations = 50
 max_env_step = int(2e5)
-reanalyze_ratio = 0.
-# batch_size = 64
-batch_size = 8
+batch_size = 64
 num_unroll_steps = 10
 infer_context_length = 4
-seed=0
+seed = 0
 
 # ====== only for debug =====
-
 # num_simulations = 2
 # max_env_step = int(2e5)
-# reanalyze_ratio = 0.
 # batch_size = 2
 # num_unroll_steps = 10
 # ==============================================================
@@ -43,7 +31,7 @@ seed=0
 # ==============================================================
 
 atari_unizero_config = dict(
-    exp_name = f'data_unizero_efficiency/ddp_0829_allreduce/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}_nlayer2',
+    exp_name = f'data_unizero/{env_id[:-14]}/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -85,7 +73,7 @@ atari_unizero_config = dict(
         batch_size=batch_size,
         optim_type='AdamW',
         num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
+        num_segments=num_segments,
         n_episode=n_episode,
         replay_buffer_size=int(1e6),
         eval_freq=int(5e3),
@@ -124,4 +112,5 @@ if __name__ == "__main__":
     from lzero.config.utils import lz_to_ddp_config
     with DDPContext():
         main_config = lz_to_ddp_config(main_config)
+        # TODO: first test muzero_collector
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

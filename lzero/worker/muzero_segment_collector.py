@@ -620,7 +620,6 @@ class MuZeroSegmentCollector(ISerialCollector):
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 # =========== NOTE: =========== 
                 if timestep.done:
-                    one_episode_done = True
                     print(f'========env {env_id} done!========')
                     self._total_episode_count += 1
 

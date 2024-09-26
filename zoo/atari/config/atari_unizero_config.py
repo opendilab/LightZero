@@ -80,7 +80,6 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             optim_type='AdamW',
             learning_rate=0.0001,
             num_simulations=num_simulations,
-            reanalyze_ratio=0,
             num_segments=num_segments,
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
