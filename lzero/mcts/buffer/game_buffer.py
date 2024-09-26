@@ -125,9 +125,6 @@ class GameBuffer(ABC, object):
         probs /= probs.sum()
 
         # sample according to transition index
-        # TODO(pu): replace=True
-        # print(f"num transitions is {num_of_transitions}")
-        # print(f"length of probs is {len(probs)}")
         batch_index_list = np.random.choice(num_of_transitions, batch_size, p=probs, replace=False)
 
         if self._cfg.reanalyze_outdated is True:
@@ -147,9 +144,7 @@ class GameBuffer(ABC, object):
 
             game_segment_list.append(game_segment)
             # pos_in_game_segment_list.append(pos_in_game_segment)
-            
-            # pos_in_game_segment_list.append(max(pos_in_game_segment, self._cfg.game_segment_length - self._cfg.num_unroll_steps)) 
-            # TODO
+            # TODO: check
             if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
                 pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
             pos_in_game_segment_list.append(pos_in_game_segment)
@@ -160,7 +155,7 @@ class GameBuffer(ABC, object):
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
         return orig_data
     
-    def _sample_orig_reanalyze_data_uz(self, batch_size: int) -> Tuple:
+    def _sample_orig_reanalyze_batch_data(self, batch_size: int) -> Tuple:
         """
         Overview:
              sample orig_data that contains:
@@ -176,16 +171,14 @@ class GameBuffer(ABC, object):
         assert self._beta > 0
         train_sample_num = (self.get_num_of_transitions()//self._cfg.num_unroll_steps)
 
-        # TODO: 只选择前 3/4 的样本
         valid_sample_num = int(train_sample_num * self._cfg.reanalyze_partition)
-        # TODO: 动态调整衰减率，假设你希望衰减率与 valid_sample_num 成反比
-        base_decay_rate = 5  # 基础衰减率，可以根据经验设定
-        decay_rate = base_decay_rate / valid_sample_num  # 随着样本数量增加，衰减率变小
-        # 生成指数衰减的权重 (仅对前 3/4 的样本)
+        base_decay_rate = 5
+        # decay rate becomes smaller as the number of samples increases
+        decay_rate = base_decay_rate / valid_sample_num
+        # Generate exponentially decaying weights (only for the first 3/4 of the samples)
         weights = np.exp(-decay_rate * np.arange(valid_sample_num))
-        # 将权重归一化为概率分布
+        # Normalize the weights to a probability distribution
         probabilities = weights / np.sum(weights)
-        # 按照概率分布进行采样 (仅在前 3/4 中采样)
         batch_index_list = np.random.choice(valid_sample_num, batch_size, replace=False, p=probabilities)
 
         if self._cfg.reanalyze_outdated is True:
@@ -202,12 +195,6 @@ class GameBuffer(ABC, object):
 
             game_segment_list.append(game_segment)
             pos_in_game_segment_list.append(pos_in_game_segment)
-            
-            # pos_in_game_segment_list.append(max(pos_in_game_segment, self._cfg.game_segment_length - self._cfg.num_unroll_steps)) 
-            # # TODO
-            # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
-            #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
-            # pos_in_game_segment_list.append(pos_in_game_segment)
             
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
@@ -250,10 +237,6 @@ class GameBuffer(ABC, object):
 
             game_segment_list.append(game_segment)
             pos_in_game_segment_list.append(pos_in_game_segment)
-            # TODO
-            # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
-            #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
-            # pos_in_game_segment_list.append(pos_in_game_segment)
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
 

@@ -88,11 +88,11 @@ class MuZeroGameBuffer(GameBuffer):
         policy._target_model.eval()
         self.policy = policy
         # obtain the current_batch and prepare target context
-        policy_re_context = self._make_batch_for_reanalyze(batch_size, 1)
+        policy_re_context = self._make_batch_for_reanalyze(batch_size)
         # target policy
         self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
 
-    def _make_batch_for_reanalyze(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
+    def _make_batch_for_reanalyze(self, batch_size: int) -> Tuple[Any]:
         """
         Overview:
             first sample orig_data through ``_sample_orig_data()``,
@@ -103,12 +103,11 @@ class MuZeroGameBuffer(GameBuffer):
                 current_batch:                the inputs of batch
         Arguments:
             - batch_size (:obj:`int`): the batch size of orig_data from replay buffer.
-            - reanalyze_ratio (:obj:`float`): ratio of reanalyzed policy (value is 100% reanalyzed)
         Returns:
             - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch
         """
         # obtain the batch context from replay buffer
-        orig_data = self._sample_orig_reanalyze_data_uz(batch_size)
+        orig_data = self._sample_orig_reanalyze_batch_data(batch_size)
         game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
         batch_size = len(batch_index_list)
         # obtain the context of reanalyzed policy targets

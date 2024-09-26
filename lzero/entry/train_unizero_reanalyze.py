@@ -57,8 +57,7 @@ def train_unizero_reanalyze(
     assert create_cfg.policy.type in ['unizero', 'sampled_unizero'], "train_unizero entry now only supports the following algo.: 'unizero', 'sampled_unizero'"
 
     # Import the correct GameBuffer class based on the policy type
-    # game_buffer_classes = {'unizero': 'UniZeroGameBuffer', 'sampled_unizero': 'SampledUniZeroGameBuffer'}
-    game_buffer_classes = {'unizero': 'UniZeroReGameBuffer', 'sampled_unizero': 'SampledUniZeroGameBuffer'}
+    game_buffer_classes = {'unizero': 'UniZeroGameBuffer', 'sampled_unizero': 'SampledUniZeroGameBuffer'}
 
     GameBuffer = getattr(__import__('lzero.mcts', fromlist=[game_buffer_classes[create_cfg.policy.type]]),
                          game_buffer_classes[create_cfg.policy.type])
