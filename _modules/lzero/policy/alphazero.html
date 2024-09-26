@@ -464,6 +464,17 @@
             <span class="k">else</span><span class="p">:</span>
                 <span class="k">raise</span> <span class="ne">NotImplementedError</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">simulate_env</span> <span class="o">=</span> <span class="n">ChessLightZeroEnv</span><span class="p">(</span><span class="n">chess_alphazero_config</span><span class="o">.</span><span class="n">env</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">simulation_env_id</span> <span class="o">==</span> <span class="s1">&#39;dummy_any_game&#39;</span><span class="p">:</span>
+            <span class="kn">from</span> <span class="nn">zoo.board_games.tictactoe.envs.dummy_any_game_env</span> <span class="kn">import</span> <span class="n">AnyGameEnv</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">simulation_env_config_type</span> <span class="o">==</span> <span class="s1">&#39;single_player_mode&#39;</span><span class="p">:</span>
+                <span class="kn">from</span> <span class="nn">zoo.board_games.tictactoe.config.dummy_any_game_alphazero_single_player_mode_config</span> <span class="kn">import</span> \
+                    <span class="n">dummy_any_game_alphazero_config</span>
+            <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">simulation_env_config_type</span> <span class="o">==</span> <span class="s1">&#39;self_play&#39;</span><span class="p">:</span>
+                <span class="kn">from</span> <span class="nn">zoo.board_games.tictactoe.config.dummy_any_game_alphazero_self_play_mode_config</span> <span class="kn">import</span> \
+                    <span class="n">dummy_any_game_alphazero_config</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">NotImplementedError</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">simulate_env</span> <span class="o">=</span> <span class="n">AnyGameEnv</span><span class="p">(</span><span class="n">dummy_any_game_alphazero_config</span><span class="o">.</span><span class="n">env</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
 
