@@ -31,8 +31,8 @@ def main(env_id, seed):
     evaluator_env_num = 3
     num_simulations = 50
     update_per_collect = None
-    replay_ratio = 0.25
-    # replay_ratio = 0.1
+    # replay_ratio = 0.25
+    replay_ratio = 0.1
     # replay_ratio = 1
 
     if env_id ==  'cartpole-swingup':
@@ -41,32 +41,20 @@ def main(env_id, seed):
         max_env_step = int(4e6)
 
     reanalyze_ratio = 0
-    # reanalyze_ratio = 0.1
-
     batch_size = 64
-    # num_unroll_steps = 10
-    # infer_context_length = 4
 
-    # num_layers = 4
-    # num_unroll_steps = 10
-
-    num_layers = 4
-    num_unroll_steps = 10
+    num_layers = 2
+    num_unroll_steps = 5
     infer_context_length = 2
 
     norm_type = 'LN'
     seed = 0
 
-    buffer_reanalyze_freq = 1/10  # modify according to num_segments
-    # buffer_reanalyze_freq = 1/5  # modify according to num_segments
-    # buffer_reanalyze_freq = 1/2  # modify according to num_segments
-
     # 20*8*10/5=320
-    reanalyze_batch_size = 160   # in total of num_unroll_steps
+    buffer_reanalyze_freq = 1/10  # modify according to num_segments
+    reanalyze_batch_size = 20   # in total of num_unroll_steps
     # reanalyze_partition=3/4
     reanalyze_partition=1
-
-    # fixed_sigma_value = 2
 
     # for debug
     # collector_env_num = 2
@@ -101,6 +89,7 @@ def main(env_id, seed):
             # eval_max_episode_steps=int(20),
         ),
         policy=dict(
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000,),),),  # default is 10000
             model=dict(
                 observation_shape=obs_space_size,
                 action_space_size=action_space_size,
@@ -109,7 +98,8 @@ def main(env_id, seed):
                 model_type='mlp',
                 norm_type = norm_type,
                 world_model_cfg=dict(
-                    policy_loss_type='kl', # 'simple'
+                    # policy_loss_type='kl', # 'simple'
+                    policy_loss_type='simple', # 'simple'
                     obs_type='vector',
                     num_unroll_steps=num_unroll_steps,
                     policy_entropy_weight=5e-3,
@@ -133,7 +123,6 @@ def main(env_id, seed):
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),
             ),
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000,),),),  # default is 10000
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
             model_path=None,
             # model_path='/mnt/afs/niuyazhe/code/LightZero/data_sampled_unizero_0901/dmc2gym_cheetah-run_state_cont_sampled_unizero_ns50_upcNone-rr0.1_rer0_H5-eval2_bs64_LN_seed0_policy-head-layer-num2_pew5e-3_disfac1_tempdecay/ckpt/iteration_400000.pth.tar',
@@ -196,12 +185,13 @@ def main(env_id, seed):
     dmc2gym_state_cont_sampled_unizero_create_config = EasyDict(dmc2gym_state_cont_sampled_unizero_create_config)
     create_config = dmc2gym_state_cont_sampled_unizero_create_config
     
-    # main_config.exp_name=f'data_efficiency0829_plus_tune-suz_0924/fs2_segment-collector-origsctre-density/dmc2gym_{env_id}_state_cont_suz_norer_nlayer{num_layers}_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_fixsigma'
-    # from lzero.entry import train_unizero
-    # train_unizero([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
+    # 调整train_unizero里面的collector
+    # main_config.exp_name=f'data_efficiency0829_plus_tune-suz_0926/ucb-uniform-prior_fs2_seg-collector-origsctre_simple-pi-loss/dmc2gym_{env_id}_state_cont_suz_norer_nlayer{num_layers}_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_fixsigma'
+    # from lzero.entry import train_unizero_segment
+    # train_unizero_segment([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 
-    main_config.exp_name=f'data_efficiency0829_plus_tune-suz_0924/fs2_segment-collector-origsctre-density_rer/dmc2gym_{env_id}_state_cont_suz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_nlayer{num_layers}_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_fixsigma'
-    from lzero.entry import train_rezero_uz
+    main_config.exp_name=f'data_efficiency0829_plus_tune-suz_0926/ucb-uniform-prior_fs2_seg-collector-origsctre/dmc2gym_{env_id}_state_cont_suz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_nlayer{num_layers}_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_fixsigma'
+    from lzero.entry import train_rezero_uz # MuZeroSegmentCollector
     train_rezero_uz([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 

@@ -995,8 +995,8 @@ namespace tree
 
         // sampled related core code
         // TODO(pu): empirical distribution
-        std::string empirical_distribution_type = "density";
-        // std::string empirical_distribution_type = "uniform";
+        // std::string empirical_distribution_type = "density";
+        std::string empirical_distribution_type = "uniform";
 
         if (empirical_distribution_type.compare("density"))
         {

@@ -282,8 +282,11 @@ class MuZeroGameBuffer(GameBuffer):
         # for board games
         action_mask_segment, to_play_segment = [], []
 
+        root_values = []
+
         td_steps_list = []
         for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
+
             game_segment_len = len(game_segment)
             game_segment_lens.append(game_segment_len)
 
@@ -293,6 +296,20 @@ class MuZeroGameBuffer(GameBuffer):
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
             # t=2+3 -> o[2+3, 2+3+4+5] -> o[5, 14]
             game_obs = game_segment.get_unroll_obs(state_index + td_steps, self._cfg.num_unroll_steps)
+
+            # TODO
+            if state_index + td_steps < game_segment_len:
+                # 获取从 state_index + td_steps 开始的 root_value_segment 片段
+                root_values_segment = game_segment.root_value_segment[state_index + td_steps:state_index + td_steps+self._cfg.num_unroll_steps]
+                # 计算需要填充的 0 的数量
+                padding_length = (self._cfg.num_unroll_steps + 1) - len(root_values_segment)
+                # 使用 np.pad 来填充 0，使数组达到所需的长度
+                root_values_tmp = np.pad(root_values_segment, (0, max(0, padding_length)), mode='constant')
+                root_values.append(root_values_tmp)
+            else:
+                # 如果超出了范围，直接填充零
+                root_values.append(np.zeros(self._cfg.num_unroll_steps + 1))
+                print('exceed game segment') # TODO
 
             rewards_list.append(game_segment.reward_segment)
 
@@ -313,6 +330,7 @@ class MuZeroGameBuffer(GameBuffer):
                     end_index = beg_index + self._cfg.model.frame_stack_num
                     # the stacked obs in time t
                     obs = game_obs[beg_index:end_index]
+
                 else:
                     value_mask.append(0)
                     obs = zero_obs
@@ -320,7 +338,7 @@ class MuZeroGameBuffer(GameBuffer):
                 value_obs_list.append(obs)
 
         reward_value_context = [
-            value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list,
+            value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, root_values, game_segment_lens, td_steps_list,
             action_mask_segment, to_play_segment
         ]
         return reward_value_context
@@ -422,7 +440,7 @@ class MuZeroGameBuffer(GameBuffer):
             - batch_value_prefixs (:obj:'np.ndarray): batch of value prefix
             - batch_target_values (:obj:'np.ndarray): batch of value estimation
         """
-        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
+        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, root_values, game_segment_lens, td_steps_list, action_mask_segment, \
         to_play_segment = reward_value_context  # noqa
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
         transition_batch_size = len(value_obs_list)
@@ -474,36 +492,39 @@ class MuZeroGameBuffer(GameBuffer):
             if self._cfg.use_root_value:
                 # use the root values from MCTS, as in EfficientZero
                 # the root values have limited improvement but require much more GPU actors;
-                _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
-                    network_output, data_type='muzero'
-                )
-                reward_pool = reward_pool.squeeze().tolist()
-                policy_logits_pool = policy_logits_pool.tolist()
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                        ).astype(np.float32).tolist() for j in range(transition_batch_size)
-                ]
-                if self._cfg.mcts_ctree:
-                    # cpp mcts_tree
-                    roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                    if self._cfg.reanalyze_noise:
-                        roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                    else:
-                        roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
-                    # do MCTS for a new policy with the recent target model
-                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-                else:
-                    # python mcts_tree
-                    roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                    if self._cfg.reanalyze_noise:
-                        roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                    else:
-                        roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
-                    # do MCTS for a new policy with the recent target model
-                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                # _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
+                #     network_output, data_type='muzero'
+                # )
+                # reward_pool = reward_pool.squeeze().tolist()
+                # policy_logits_pool = policy_logits_pool.tolist()
+                # noises = [
+                #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                #                         ).astype(np.float32).tolist() for j in range(transition_batch_size)
+                # ]
+                # if self._cfg.mcts_ctree:
+                #     # cpp mcts_tree
+                #     roots = MCTSCtree.roots(transition_batch_size, legal_actions)
+                #     if self._cfg.reanalyze_noise:
+                #         roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                #     else:
+                #         roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
+                #     # do MCTS for a new policy with the recent target model
+                #     MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                # else:
+                #     # python mcts_tree
+                #     roots = MCTSPtree.roots(transition_batch_size, legal_actions)
+                #     if self._cfg.reanalyze_noise:
+                #         roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                #     else:
+                #         roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
+                #     # do MCTS for a new policy with the recent target model
+                #     MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
 
-                roots_values = roots.get_values()
-                value_list = np.array(roots_values)
+                # roots_values = roots.get_values()
+                # value_list = np.array(roots_values)
+
+                value_list = root_values # TODO
+
             else:
                 # use the predicted values
                 value_list = concat_output_value(network_output)

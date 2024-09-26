@@ -740,9 +740,9 @@ class WorldModel(nn.Module):
 
                     # TODO: check ==================
                     buffer_action = buffer_action[:ready_env_num]
-                    # # only for debug
-                    if ready_env_num < self.env_num:
-                        print(f'init inference ready_env_num: {ready_env_num} < env_num: {self.env_num}')
+                    # # only for debug, evaluator会一直满足条件
+                    # if ready_env_num < self.env_num:
+                    #     print(f'init inference ready_env_num: {ready_env_num} < env_num: {self.env_num}')
                     if self.continuous_action_space:
                         act_tokens = torch.from_numpy(np.array(buffer_action)).to(latent_state.device).unsqueeze(1)
                     else:

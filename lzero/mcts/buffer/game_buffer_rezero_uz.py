@@ -482,7 +482,7 @@ class UniZeroReGameBuffer(MuZeroGameBuffer):
             - batch_value_prefixs (:obj:'np.ndarray): batch of value prefix
             - batch_target_values (:obj:'np.ndarray): batch of value estimation
         """
-        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
+        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, root_values, game_segment_lens, td_steps_list, action_mask_segment, \
             to_play_segment = reward_value_context  # noqa
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
         transition_batch_size = len(value_obs_list)
@@ -521,8 +521,13 @@ class UniZeroReGameBuffer(MuZeroGameBuffer):
 
             network_output.append(m_output)
 
-            # use the predicted values
-            value_numpy = concat_output_value(network_output)
+            if self._cfg.use_root_value:
+                # use the root values from MCTS, as in EfficientZero
+                # value_numpy = root_values # TODO
+                value_numpy = np.array(root_values)
+            else:
+                # use the predicted values
+                value_numpy = concat_output_value(network_output)
 
             # get last state value
             if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
@@ -560,11 +565,19 @@ class UniZeroReGameBuffer(MuZeroGameBuffer):
                             else:
                                 value_list[value_index] += -reward * self._cfg.discount_factor ** i
                         else:
+                            # if self._cfg.use_root_value:
+                            #     root_value_numpy[value_index] += reward * self._cfg.discount_factor ** i
+                            # else:
                             value_list[value_index] += reward * self._cfg.discount_factor ** i
+                    
                     horizon_id += 1
 
                     if current_index < game_segment_len_non_re:
+                        # if self._cfg.use_root_value:
+                        #     target_values.append(root_value_numpy[value_index])
+                        # else:
                         target_values.append(value_list[value_index])
+
                         target_rewards.append(reward_list[current_index])
                     else:
                         target_values.append(np.array(0.))

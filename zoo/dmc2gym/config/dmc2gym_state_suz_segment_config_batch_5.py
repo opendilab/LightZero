@@ -26,8 +26,8 @@ def main(env_id, seed):
     collector_env_num = 8
     n_episode = 8
     num_segments = 8
-    game_segment_length=20
-    # game_segment_length=100
+    # game_segment_length=20
+    game_segment_length=100
     evaluator_env_num = 3
     num_simulations = 50
     update_per_collect = None
@@ -35,11 +35,10 @@ def main(env_id, seed):
     # replay_ratio = 0.1
     # replay_ratio = 1
 
-    # if env_id ==  'cartpole-swingup':
-    #     max_env_step = int(1e6)
-    # else:
-    #     max_env_step = int(4e6)
-    
+    if env_id ==  'cartpole-swingup':
+        max_env_step = int(1e6)
+    else:
+        max_env_step = int(4e6)
     max_env_step = int(1e6)
 
     reanalyze_ratio = 0
@@ -203,10 +202,10 @@ def main(env_id, seed):
     create_config = dmc2gym_state_cont_sampled_unizero_create_config
     
     # 调整train_unizero里面的collector
-    main_config.exp_name=f'data_efficiency0829_plus_tune-suz_0926/ucb-uniform-prior_fs2_seg-collector-origsctre/dmc2gym_{env_id}_state_cont_suz_norer_nlayer{num_layers}_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_fixsigma'
-    from lzero.entry import train_unizero_segment
-    train_unizero_segment([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
-    
+    main_config.exp_name=f'data_efficiency0829_plus_tune-suz_0926/ucb-uniform-prior_fs2_orig-collector-gsl100-origsctre/dmc2gym_{env_id}_state_cont_suz_norer_nlayer{num_layers}_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    from lzero.entry import train_unizero
+    train_unizero([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
+
     # main_config.exp_name=f'data_efficiency0829_plus_tune-suz_0926/ucb-uniform-prior_fs2_seg-collector-origsctre/dmc2gym_{env_id}_state_cont_suz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_nlayer{num_layers}_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_fixsigma'
     # from lzero.entry import train_rezero_uz # MuZeroSegmentCollector
     # train_rezero_uz([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

@@ -20,7 +20,7 @@ def main(env_id, seed):
     # replay_ratio = 1
 
     batch_size = 256
-    max_env_step = int(2e5)
+    max_env_step = int(1e5)
     reanalyze_ratio = 0.
     buffer_reanalyze_freq = 1/10  # modify according to num_segments
     reanalyze_batch_size = 160   # in total of num_unroll_steps
@@ -68,8 +68,8 @@ def main(env_id, seed):
                 self_supervised_learning_loss=True,  # default is False
                 discrete_action_encoding_type='one_hot',
                 norm_type='BN',
-                # use_sim_norm=True,
-                use_sim_norm=False,
+                use_sim_norm=True,
+                # use_sim_norm=False,
                 use_sim_norm_kl_loss=False,
                 model_type='conv'
             ),
@@ -79,7 +79,8 @@ def main(env_id, seed):
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             random_collect_episode_num=0,
-            use_augmentation=True,
+            # use_augmentation=True,
+            use_augmentation=False,
             use_priority=False,
             replay_ratio=replay_ratio,
             update_per_collect=update_per_collect,
@@ -97,6 +98,7 @@ def main(env_id, seed):
             replay_buffer_size=int(1e6),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
+            threshold_training_steps_for_final_temperature=int(5e4),
             # ============= The key different params for ReZero =============
             num_unroll_steps=num_unroll_steps,
             buffer_reanalyze_freq=buffer_reanalyze_freq, # 1 means reanalyze one times per epoch, 2 means reanalyze one times each two epoch
@@ -125,9 +127,9 @@ def main(env_id, seed):
     atari_muzero_create_config = EasyDict(atari_muzero_create_config)
     create_config = atari_muzero_create_config
 
-    main_config.exp_name = f'data_efficiency0829_plus_tune-mz_0924/{env_id[:-14]}/{env_id[:-14]}_mz_temp0.25_rr{replay_ratio}_nosimnorm_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_eval5_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
-    from lzero.entry import train_muzero_rer
-    train_muzero_rer([main_config, create_config], seed=seed, max_env_step=max_env_step)
+    main_config.exp_name = f'data_efficiency0829_plus_tune-mz_0924/{env_id[:-14]}/{env_id[:-14]}_mz_origcollect_haveseginit_temp0.25_rr{replay_ratio}_simnorm_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-only{reanalyze_partition}_eval5_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
+    from lzero.entry import train_muzero
+    train_muzero([main_config, create_config], seed=seed, max_env_step=max_env_step)
 
 if __name__ == "__main__":
     import argparse

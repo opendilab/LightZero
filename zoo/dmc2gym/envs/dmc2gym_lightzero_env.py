@@ -51,11 +51,11 @@ def dmc2gym_reward_space(minimum=0, maximum=1, dtype=np.float32) -> Callable:
 
 
 dmc2gym_env_info = {
-    "ball_in_cup": {
-        "catch": {
-            "observation_space": dmc2gym_observation_space(8),
-            "state_space": dmc2gym_state_space(8),
-            "action_space": dmc2gym_action_space(2),
+    "acrobot": {
+        "swingup": {
+            "observation_space": dmc2gym_observation_space(6),
+            "state_space": dmc2gym_state_space(6),
+            "action_space": dmc2gym_action_space(1),
             "reward_space": dmc2gym_reward_space()
         }
     },
@@ -71,6 +71,18 @@ dmc2gym_env_info = {
             "state_space": dmc2gym_state_space(4),
             "action_space": dmc2gym_action_space(1),
             "reward_space": dmc2gym_reward_space()
+        },
+        "balance_sparse": {
+            "observation_space": dmc2gym_observation_space(5),
+            "state_space": dmc2gym_state_space(4),
+            "action_space": dmc2gym_action_space(1),
+            "reward_space": dmc2gym_reward_space()
+        },
+        "swingup_sparse": {
+            "observation_space": dmc2gym_observation_space(5),
+            "state_space": dmc2gym_state_space(4),
+            "action_space": dmc2gym_action_space(1),
+            "reward_space": dmc2gym_reward_space()
         }
     },
     "cheetah": {
@@ -81,11 +93,67 @@ dmc2gym_env_info = {
             "reward_space": dmc2gym_reward_space()
         }
     },
+    "ball_in_cup": {
+        "catch": {
+            "observation_space": dmc2gym_observation_space(8),
+            "state_space": dmc2gym_state_space(8),
+            "action_space": dmc2gym_action_space(2),
+            "reward_space": dmc2gym_reward_space()
+        }
+    },
     "finger": {
         "spin": {
             "observation_space": dmc2gym_observation_space(9),
             "state_space": dmc2gym_state_space(9),
+            "action_space": dmc2gym_action_space(2),
+            "reward_space": dmc2gym_reward_space()
+        },
+        "turn_easy": {
+            "observation_space": dmc2gym_observation_space(12),
+            "state_space": dmc2gym_state_space(12),
+            "action_space": dmc2gym_action_space(2),
+            "reward_space": dmc2gym_reward_space()
+        },
+        "turn_hard": {
+            "observation_space": dmc2gym_observation_space(12),
+            "state_space": dmc2gym_state_space(12),
+            "action_space": dmc2gym_action_space(2),
+            "reward_space": dmc2gym_reward_space()
+        }
+    },
+    "hopper": {
+        "hop": {
+            "observation_space": dmc2gym_observation_space(15),
+            "state_space": dmc2gym_state_space(14),
+            "action_space": dmc2gym_action_space(4),
+            "reward_space": dmc2gym_reward_space()
+        },
+        "stand": {
+            "observation_space": dmc2gym_observation_space(15),
+            "state_space": dmc2gym_state_space(14),
+            "action_space": dmc2gym_action_space(4),
+            "reward_space": dmc2gym_reward_space()
+        }
+    },
+    "pendulum": {
+        "swingup": {
+            "observation_space": dmc2gym_observation_space(3),
+            "state_space": dmc2gym_state_space(3),
             "action_space": dmc2gym_action_space(1),
+            "reward_space": dmc2gym_reward_space()
+        }
+    },
+    "quadruped": {
+        "run": {
+            "observation_space": dmc2gym_observation_space(78),
+            "state_space": dmc2gym_state_space(78),
+            "action_space": dmc2gym_action_space(12),
+            "reward_space": dmc2gym_reward_space()
+        },
+        "walk": {
+            "observation_space": dmc2gym_observation_space(78),
+            "state_space": dmc2gym_state_space(78),
+            "action_space": dmc2gym_action_space(12),
             "reward_space": dmc2gym_reward_space()
         }
     },
@@ -95,21 +163,31 @@ dmc2gym_env_info = {
             "state_space": dmc2gym_state_space(6),
             "action_space": dmc2gym_action_space(2),
             "reward_space": dmc2gym_reward_space()
+        },
+        "hard": {
+            "observation_space": dmc2gym_observation_space(6),
+            "state_space": dmc2gym_state_space(6),
+            "action_space": dmc2gym_action_space(2),
+            "reward_space": dmc2gym_reward_space()
         }
     },
     "walker": {
-        "walk": {
+        "run": {
             "observation_space": dmc2gym_observation_space(24),
             "state_space": dmc2gym_state_space(24),
             "action_space": dmc2gym_action_space(6),
             "reward_space": dmc2gym_reward_space()
-        }
-    },
-    "hopper": {
-        "hop": {
-            "observation_space": dmc2gym_observation_space(15),
-            "state_space": dmc2gym_state_space(14),
-            "action_space": dmc2gym_action_space(4),
+        },
+        "stand": {
+            "observation_space": dmc2gym_observation_space(24),
+            "state_space": dmc2gym_state_space(24),
+            "action_space": dmc2gym_action_space(6),
+            "reward_space": dmc2gym_reward_space()
+        },
+        "walk": {
+            "observation_space": dmc2gym_observation_space(24),
+            "state_space": dmc2gym_state_space(24),
+            "action_space": dmc2gym_action_space(6),
             "reward_space": dmc2gym_reward_space()
         }
     },

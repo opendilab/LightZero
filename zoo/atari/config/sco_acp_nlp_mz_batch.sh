@@ -1,4 +1,3 @@
-# 26 envs
 envs=(
     'AlienNoFrameskip-v4'
     'AmidarNoFrameskip-v4'
@@ -7,7 +6,7 @@ envs=(
     'BankHeistNoFrameskip-v4'
     'BattleZoneNoFrameskip-v4'
     'ChopperCommandNoFrameskip-v4'
-    'CrazyClimberNoFrameskip-v4'
+    # 'CrazyClimberNoFrameskip-v4'
     'DemonAttackNoFrameskip-v4'
     'FreewayNoFrameskip-v4'
     'FrostbiteNoFrameskip-v4'
@@ -20,13 +19,26 @@ envs=(
     'PrivateEyeNoFrameskip-v4'
     'RoadRunnerNoFrameskip-v4'
     'UpNDownNoFrameskip-v4'
-    'PongNoFrameskip-v4'
-    'MsPacmanNoFrameskip-v4'
+    # 'PongNoFrameskip-v4'
+    # 'MsPacmanNoFrameskip-v4'
     'QbertNoFrameskip-v4'
     'SeaquestNoFrameskip-v4'
     'BoxingNoFrameskip-v4'
     'BreakoutNoFrameskip-v4'
 )
+# envs=(
+#     'CrazyClimberNoFrameskip-v4'
+#     'PongNoFrameskip-v4'
+#     'MsPacmanNoFrameskip-v4'
+# )
+
+# one env
+# env='AsterixNoFrameskip-v4'
+# seed=0
+# script='source activate base &&  export HTTPS_PROXY=http://172.16.1.135:3128/ && cd /mnt/afs/niuyazhe/code/LightZero && pip install -e . -i  https://pkg.sensetime.com/repository/pypi-proxy/simple/ && pip3 install ale-py autorom && AutoROM --accept-license && python3 -u /mnt/afs/niuyazhe/code/LightZero/zoo/atari/config/atari_unizero_sgement_config_batch.py --env %q --seed %d'
+# script=${script/\%q/$env}
+# script=${script/\%d/$seed}
+# echo "The final script is: " $script
 
 # batch env: uz表现和ez相当的15env
 # envs=(
@@ -47,38 +59,31 @@ envs=(
 #     'BoxingNoFrameskip-v4'
 # )
 
-# one env
-# env='AsterixNoFrameskip-v4'
-# seed=0
-# script='source activate base &&  export HTTPS_PROXY=http://172.16.1.135:3128/ && cd /mnt/afs/niuyazhe/code/LightZero && pip install -e . -i  https://pkg.sensetime.com/repository/pypi-proxy/simple/ && pip3 install ale-py autorom && AutoROM --accept-license && python3 -u /mnt/afs/niuyazhe/code/LightZero/zoo/atari/config/atari_unizero_sgement_config_batch.py --env %q --seed %d'
-# script=${script/\%q/$env}
-# script=${script/\%d/$seed}
-# echo "The final script is: " $script
-
 # batch env: uz表现不如ez的10env+pong
 # envs=(
-    # 'PongNoFrameskip-v4'
-    # 'QbertNoFrameskip-v4'
-    # 'AsterixNoFrameskip-v4'
-    # 'CrazyClimberNoFrameskip-v4'
-    # 'DemonAttackNoFrameskip-v4'
-    # 'GopherNoFrameskip-v4'
-    # 'HeroNoFrameskip-v4'
-    # 'KungFuMasterNoFrameskip-v4'
-    # 'RoadRunnerNoFrameskip-v4'
-    # 'UpNDownNoFrameskip-v4'
-    # 'BreakoutNoFrameskip-v4'
+#     'PongNoFrameskip-v4'
+#     'QbertNoFrameskip-v4'
+#     'AsterixNoFrameskip-v4'
+#     # 'CrazyClimberNoFrameskip-v4'
+#     # 'DemonAttackNoFrameskip-v4'
+#     # 'GopherNoFrameskip-v4'
+#     # 'HeroNoFrameskip-v4'
+#     # 'KungFuMasterNoFrameskip-v4'
+#     # 'RoadRunnerNoFrameskip-v4'
+#     # 'UpNDownNoFrameskip-v4'
+#     # 'BreakoutNoFrameskip-v4'
 # )
 seed=0
 for env in "${envs[@]}"; do
-    script='source activate base &&  export HTTPS_PROXY=http://172.16.1.135:3128/ && cd /mnt/afs/niuyazhe/code/LightZero && pip install -e . -i  https://pkg.sensetime.com/repository/pypi-proxy/simple/ && pip3 install ale-py autorom && AutoROM --accept-license && python3 -u /mnt/afs/niuyazhe/code/LightZero/zoo/atari/config/atari_muzero_segment_config_batch.py --env %q --seed %d'
+    script='source activate base &&  export HTTPS_PROXY=http://172.16.1.135:3128/ && pip cache purge && cd /mnt/afs/niuyazhe/code/LightZero && pip install -e . -i  https://pkg.sensetime.com/repository/pypi-proxy/simple/ && pip3 install ale-py autorom && AutoROM --accept-license && python3 -u /mnt/afs/niuyazhe/code/LightZero/zoo/atari/config/atari_muzero_segment_config_batch_2.py --env %q --seed %d'
 	script=${script/\%q/$env}
     script=${script/\%d/$seed}
 	echo "The final script is: " $script
 
+
 sco acp jobs create --workspace-name=df42ac16-77cf-4cfe-a3ce-e89e317bdf20 \
     --aec2-name=ea2d41fe-274a-43b2-b562-70c0b7d396a2\
-    --job-name="mz-nlayer4-H5-seg8-gsl20-brf1-10-rbs160-rr1-decay50k-$env-s$seed" \
+    --job-name="mz-H5-seg8-gsl20-brf1-10-rbs160-rr025-temp025-simnorm-$env-s$seed" \
     --container-image-url='registry.cn-sh-01.sensecore.cn/basemodel-ccr/aicl-b27637a9-660e-4927:20231222-17h24m12s' \
     --training-framework=pytorch \
     --enable-mpi \

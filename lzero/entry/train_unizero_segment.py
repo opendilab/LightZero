@@ -17,13 +17,13 @@ from torch.utils.tensorboard import SummaryWriter
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
-from lzero.worker import MuZeroCollector as Collector
-# from lzero.worker import MuZeroSegmentCollector as Collector # ============ TODO: ============
+# from lzero.worker import MuZeroCollector as Collector
+from lzero.worker import MuZeroSegmentCollector as Collector # ============ TODO: ============
 from lzero.worker import MuZeroEvaluator as Evaluator
 from .utils import random_collect
 
 
-def train_unizero(
+def train_unizero_segment(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,

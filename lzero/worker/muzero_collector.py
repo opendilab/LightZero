@@ -337,7 +337,7 @@ class MuZeroCollector(ISerialCollector):
         # initializations
         init_obs = self._env.ready_obs
 
-        retry_waiting_time = 0.001
+        retry_waiting_time = 0.05
         while len(init_obs.keys()) != self._env_num:
             # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
             # len(self._env.ready_obs), especially in tictactoe env.
@@ -707,14 +707,14 @@ class MuZeroCollector(ISerialCollector):
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
 
-                    # ===== TODO: if done not return: bug? =======
+                    # ===== TODO: if done not return: 如果上面wait了，下面必须加上? =======
                     # create new GameSegment
-                    # game_segments[env_id] =  GameSegment(
-                    #         self._env.action_space,
-                    #         game_segment_length=self.policy_config.game_segment_length,
-                    #         config=self.policy_config
-                    #     )
-                    # game_segments[env_id].reset(observation_window_stack[env_id])
+                    game_segments[env_id] =  GameSegment(
+                            self._env.action_space,
+                            game_segment_length=self.policy_config.game_segment_length,
+                            config=self.policy_config
+                        )
+                    game_segments[env_id].reset(observation_window_stack[env_id])
 
             if collected_episode >= n_episode:
                 # [data, meta_data]

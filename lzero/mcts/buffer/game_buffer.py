@@ -146,12 +146,12 @@ class GameBuffer(ABC, object):
             game_segment = self.game_segment_buffer[game_segment_idx]
 
             game_segment_list.append(game_segment)
-            pos_in_game_segment_list.append(pos_in_game_segment)
-            
-            # TODO
-            # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
-            #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
+
             # pos_in_game_segment_list.append(pos_in_game_segment)
+            #  ======= TODO: Improve data efficiency, value mask bug =======
+            if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps:
+                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps, 1).item()
+            pos_in_game_segment_list.append(pos_in_game_segment)
             
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
