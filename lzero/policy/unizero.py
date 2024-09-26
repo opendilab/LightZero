@@ -198,8 +198,10 @@ class UniZeroPolicy(MuZeroPolicy):
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
         grad_clip_value=5,
-        # (int) The number of episodes in each collecting stage.
+        # (int) The number of episodes in each collecting stage when use muzero_collector.
         n_episode=8,
+        # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
+        num_segments=8,
         # (int) the number of simulations in MCTS.
         num_simulations=50,
         # (float) Discount factor (gamma) for returns.

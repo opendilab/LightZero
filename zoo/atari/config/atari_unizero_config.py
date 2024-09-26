@@ -10,7 +10,6 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     # ==============================================================
     replay_ratio = 1
     collector_env_num = 8
-    num_segments = 8
     game_segment_length = 20
     evaluator_env_num = 5
     num_simulations = 50
@@ -22,7 +21,6 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
 
     # ====== only for debug =====
     # collector_env_num = 8
-    # num_segments = 8
     # evaluator_env_num = 2
     # num_simulations = 5
     # max_env_step = int(2e5)
@@ -80,7 +78,6 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             optim_type='AdamW',
             learning_rate=0.0001,
             num_simulations=num_simulations,
-            num_segments=num_segments,
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             grad_clip_value=20,
@@ -107,7 +104,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     atari_unizero_create_config = EasyDict(atari_unizero_create_config)
     create_config = atari_unizero_create_config
 
-    main_config.exp_name = f'data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 

@@ -120,6 +120,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     create_config = atari_unizero_create_config
 
     main_config.exp_name = f'data_unizero_reanalyze/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_reanalyze
     train_unizero_reanalyze([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 

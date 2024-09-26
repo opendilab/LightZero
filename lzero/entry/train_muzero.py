@@ -18,7 +18,7 @@ from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
-from .utils import random_collect, initialize_zeros_batch
+from .utils import random_collect
 
 
 def train_muzero(
