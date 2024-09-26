@@ -20,15 +20,20 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     infer_context_length = 4
     num_layers = 4
 
+    # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
+    buffer_reanalyze_freq = 1/10
+    # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+    reanalyze_batch_size = 160
+    # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
+    reanalyze_partition=1
+
     # ====== only for debug =====
-    # collector_env_num = 8
-    # num_segments = 8
+    # collector_env_num = 2
+    # num_segments = 2
     # evaluator_env_num = 2
-    # num_simulations = 5
-    # max_env_step = int(2e5)
-    # reanalyze_ratio = 0.1
-    # batch_size = 64
-    # num_unroll_steps = 10
+    # num_simulations = 2
+    # update_per_collect = 2
+    # batch_size = 2
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
@@ -80,7 +85,6 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             optim_type='AdamW',
             learning_rate=0.0001,
             num_simulations=num_simulations,
-            reanalyze_ratio=0,
             num_segments=num_segments,
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
@@ -89,6 +93,13 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             eval_freq=int(5e3),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
+            # ============= The key different params for reanalyze =============
+            # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
+            buffer_reanalyze_freq=buffer_reanalyze_freq,
+            # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+            reanalyze_batch_size=reanalyze_batch_size,
+            # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
+            reanalyze_partition=reanalyze_partition,
         ),
     )
     atari_unizero_config = EasyDict(atari_unizero_config)
@@ -108,14 +119,14 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     atari_unizero_create_config = EasyDict(atari_unizero_create_config)
     create_config = atari_unizero_create_config
 
-    main_config.exp_name = f'data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
-    from lzero.entry import train_unizero
-    train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    main_config.exp_name = f'data_unizero_reanalyze/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    from lzero.entry import train_unizero_reanalyze
+    train_unizero_reanalyze([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser(description='Process some environment.')
+    parser = argparse.ArgumentParser(description='Process different environments and seeds.')
     parser.add_argument('--env', type=str, help='The environment to use', default='PongNoFrameskip-v4')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()

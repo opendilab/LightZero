@@ -175,7 +175,6 @@ class AtariEnvLightZero(BaseEnv):
 
         action_mask = np.ones(self._action_space.n, 'int8')
         return {'observation': observation, 'action_mask': action_mask, 'to_play': -1, 'timestep': self.timestep}
-        # return {'observation': observation, 'action_mask': action_mask, 'to_play': -1}
 
     @property
     def legal_actions(self):
