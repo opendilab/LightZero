@@ -308,7 +308,7 @@ class MuZeroGameBuffer(GameBuffer):
             else:
                 # 如果超出了范围，直接填充零
                 root_values.append(np.zeros(self._cfg.num_unroll_steps + 1))
-                print('exceed game segment') # TODO
+                print('exceed game segment length!') # TODO
 
             rewards_list.append(game_segment.reward_segment)
 

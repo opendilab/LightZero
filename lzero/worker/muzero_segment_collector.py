@@ -411,20 +411,22 @@ class MuZeroSegmentCollector(ISerialCollector):
                 obs = self._env.ready_obs
                 ready_env_id = set(obs.keys())
                 if len(ready_env_id) < self._env_num:
-                    print(f'len(ready_env_id) < self._env_num, ready_env_id: {ready_env_id}')
+                    print(f'muzero_segment_collector: len(ready_env_id) < self._env_num, ready_env_id: {ready_env_id}')
                 
-                while len(obs.keys()) != self._env_num:
-                    # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
-                    # len(self._env.ready_obs), especially in tictactoe env.
-                    self._logger.info('The current init_obs.keys() is {}'.format(obs.keys()))
-                    self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
-                    time.sleep(retry_waiting_time)
-                    self._logger.info('=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
-                    self._logger.info(
-                        'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time, self._env._env_states)
-                    )
-                    obs = self._env.ready_obs
-                    ready_env_id = set(obs.keys())
+                # NOTE: TODO: 是否wait到所有env都ready，对于muzero性能好像影响不大，
+                # 对于unizero由于init-infer需要检索kv_cache, 但wait后对于性能有负影响，检查原因
+                # while len(obs.keys()) != self._env_num:
+                #     # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
+                #     # len(self._env.ready_obs), especially in tictactoe env.
+                #     self._logger.info('The current init_obs.keys() is {}'.format(obs.keys()))
+                #     self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
+                #     time.sleep(retry_waiting_time)
+                #     self._logger.info('=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
+                #     self._logger.info(
+                #         'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time, self._env._env_states)
+                #     )
+                #     obs = self._env.ready_obs
+                #     ready_env_id = set(obs.keys())
 
                 stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
@@ -677,7 +679,8 @@ class MuZeroSegmentCollector(ISerialCollector):
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
 
-                    # ===== NOTE: if one episode done not return =======
+                    # NOTE: TODO
+                    # ===== NOTE: if one episode done and not return, we should init its game_segments[env_id]  =======
                     # create new GameSegment
                     game_segments[env_id] =  GameSegment(
                             self._env.action_space,

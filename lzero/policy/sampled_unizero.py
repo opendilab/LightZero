@@ -769,7 +769,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             # ========= TODO: for muzero_segment_collector now =========
             if active_collect_env_num < self.collector_env_num:
                 print('='*20)
-                print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
+                print(f'collect_forward: len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
                 self._reset_collect(reset_init_data=True) 
 
         return output

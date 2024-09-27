@@ -145,9 +145,23 @@ class GameBuffer(ABC, object):
             game_segment_list.append(game_segment)
 
             # pos_in_game_segment_list.append(pos_in_game_segment)
+            
             #  ======= TODO: Improve data efficiency, value mask bug =======
-            if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps:
-                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps, 1).item()
+            # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps - self._cfg.td_steps:
+            if pos_in_game_segment > len(game_segment) - self._cfg.num_unroll_steps - self._cfg.td_steps:
+                # pos_in_game_segment = np.random.choice(max(len(game_segment) - self._cfg.num_unroll_steps - self._cfg.td_steps, 1), 1).item()
+            
+                # 计算采样范围
+                sample_range = len(game_segment) - self._cfg.num_unroll_steps - self._cfg.td_steps
+
+                # 确保采样范围是有效的
+                if sample_range > 0:
+                    pos_in_game_segment = np.random.choice(sample_range, 1).item()
+                else:
+                    pos_in_game_segment = pos_in_game_segment
+                    # 如果采样范围无效，采取其他处理方式，比如返回默认值或抛出异常
+                    # raise ValueError(f"采样范围无效: {sample_range}. 请检查 game_segment 的长度及配置参数。")
+            
             pos_in_game_segment_list.append(pos_in_game_segment)
             
 
@@ -238,14 +252,11 @@ class GameBuffer(ABC, object):
 
             game_segment_list.append(game_segment)
             pos_in_game_segment_list.append(pos_in_game_segment)
-<<<<<<< HEAD
             
             # TODO
             # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
             #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
             # pos_in_game_segment_list.append(pos_in_game_segment)
-=======
->>>>>>> eb268ac17672364c5a76091d574852eb0e2c8e41
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
 

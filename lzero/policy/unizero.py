@@ -157,6 +157,7 @@ class UniZeroPolicy(MuZeroPolicy):
         eval_freq=int(2e3),
         # (str) The sample type. Options are ['episode', 'transition'].
         sample_type='transition',
+        reanalyze_ratio=0,
 
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
@@ -662,7 +663,7 @@ class UniZeroPolicy(MuZeroPolicy):
             # ========= TODO: for muzero_segment_collector now =========
             if active_collect_env_num < self.collector_env_num:
                 print('='*20)
-                print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
+                print(f'collect_forward: len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
                 self._reset_collect(reset_init_data=True) 
 
         return output

@@ -102,8 +102,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         """
         # obtain the batch context from replay buffer
         if self.sample_type == 'transition':
-            # orig_data = self._sample_orig_data(batch_size)
-            orig_data = self._sample_orig_reanalyze_data_uz(batch_size)
+            orig_data = self._sample_orig_reanalyze_batch_data(batch_size)
         elif self.sample_type == 'episode':
             orig_data = self._sample_orig_data_episode(batch_size)
         game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
@@ -626,7 +625,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             - batch_value_prefixs (:obj:'np.ndarray): batch of value prefix
             - batch_target_values (:obj:'np.ndarray): batch of value estimation
         """
-        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
+        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, root_values, game_segment_lens, td_steps_list, action_mask_segment, \
             to_play_segment = reward_value_context  # noqa
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
         transition_batch_size = len(value_obs_list)
@@ -671,30 +670,38 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             network_output.append(m_output)
 
             # concat the output slices after model inference
+            # if self._cfg.use_root_value:
+            #     # use the root values from MCTS, as in EfficientZero
+            #     # the root values have limited improvement but require much more GPU actors;
+            #     _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
+            #         network_output, data_type='muzero'
+            #     )
+            #     reward_pool = reward_pool.squeeze().tolist()
+            #     policy_logits_pool = policy_logits_pool.tolist()
+            #     noises = [
+            #         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
+            #                             ).astype(np.float32).tolist() for _ in range(transition_batch_size)
+            #     ]
+            #     if self._cfg.mcts_ctree:
+            #         # cpp mcts_tree
+            #         roots = MCTSCtree.roots(
+            #             transition_batch_size, legal_actions, self._cfg.model.action_space_size,
+            #             self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
+            #         )
+            #         roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+            #         # do MCTS for a new policy with the recent target model
+            #         MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+
+            #     reanalyzed_root_values = roots.get_values()
+            #     value_list = np.array(reanalyzed_root_values)
+            # else:
+            #     # use the predicted values
+            #     value_list = concat_output_value(network_output)
+
             if self._cfg.use_root_value:
                 # use the root values from MCTS, as in EfficientZero
-                # the root values have limited improvement but require much more GPU actors;
-                _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
-                    network_output, data_type='muzero'
-                )
-                reward_pool = reward_pool.squeeze().tolist()
-                policy_logits_pool = policy_logits_pool.tolist()
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
-                                        ).astype(np.float32).tolist() for _ in range(transition_batch_size)
-                ]
-                if self._cfg.mcts_ctree:
-                    # cpp mcts_tree
-                    roots = MCTSCtree.roots(
-                        transition_batch_size, legal_actions, self._cfg.model.action_space_size,
-                        self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
-                    )
-                    roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                    # do MCTS for a new policy with the recent target model
-                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-
-                reanalyzed_root_values = roots.get_values()
-                value_list = np.array(reanalyzed_root_values)
+                # value_numpy = root_values # TODO
+                value_list = np.array(root_values)
             else:
                 # use the predicted values
                 value_list = concat_output_value(network_output)

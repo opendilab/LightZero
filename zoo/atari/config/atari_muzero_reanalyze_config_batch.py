@@ -1,25 +1,22 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
-
 def main(env_id, seed):
     action_space_size = atari_env_action_space_map[env_id]
 
     # ==============================================================
     # begin of the most frequently changed config specified by the user
     # ==============================================================
-    replay_ratio = 1
     collector_env_num = 8
     num_segments = 8
     game_segment_length = 20
-    evaluator_env_num = 5
+    evaluator_env_num = 3
     num_simulations = 50
+    update_per_collect = None
+    replay_ratio = 0.25
+    num_unroll_steps = 5
+    batch_size = 256
     max_env_step = int(2e5)
-    batch_size = 64
-    num_unroll_steps = 10
-    infer_context_length = 4
-    num_layers = 4
-
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     buffer_reanalyze_freq = 1/10
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
@@ -27,7 +24,7 @@ def main(env_id, seed):
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
     reanalyze_partition=1
 
-    # ====== only for debug =====
+    # =========== for debug ===========
     # collector_env_num = 2
     # num_segments = 2
     # evaluator_env_num = 2
@@ -38,59 +35,59 @@ def main(env_id, seed):
     # end of the most frequently changed config specified by the user
     # ==============================================================
 
-    atari_unizero_config = dict(
+    atari_muzero_config = dict(
         env=dict(
             stop_value=int(1e6),
             env_id=env_id,
-            observation_shape=(3, 96, 96),
-            gray_scale=False,
+            observation_shape=(4, 96, 96),
+            frame_stack_num=4,
+            gray_scale=True,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False, ),
-            # TODO: only for debug
-            # collect_max_episode_steps=int(20),
-            # eval_max_episode_steps=int(20),
+            # TODO: debug
+            # collect_max_episode_steps=int(50),
+            # eval_max_episode_steps=int(50),
         ),
         policy=dict(
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
+            analysis_sim_norm=False,
+            cal_dormant_ratio=False,
             model=dict(
-                observation_shape=(3, 96, 96),
+                observation_shape=(4, 96, 96),
+                image_channel=1,
+                frame_stack_num=4,
+                gray_scale=True,
                 action_space_size=action_space_size,
-                world_model_cfg=dict(
-                    policy_entropy_weight=0,
-                    continuous_action_space=False,
-                    max_blocks=num_unroll_steps,
-                    max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
-                    context_length=2 * infer_context_length,
-                    device='cuda',
-                    action_space_size=action_space_size,
-                    num_layers=num_layers,
-                    num_heads=8,
-                    embed_dim=768,
-                    obs_type='image',
-                    env_num=max(collector_env_num, evaluator_env_num),
-                ),
+                downsample=True,
+                self_supervised_learning_loss=True,  # default is False
+                discrete_action_encoding_type='one_hot',
+                norm_type='BN',
+                use_sim_norm=True, # NOTE
+                use_sim_norm_kl_loss=False,
+                model_type='conv'
             ),
-            # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
-            model_path=None,
-            use_augmentation=False,
-            manual_temperature_decay=False,
-            threshold_training_steps_for_final_temperature=int(5e4),
-            use_priority=False,
-            num_unroll_steps=num_unroll_steps,
-            update_per_collect=None,
-            replay_ratio=replay_ratio,
-            batch_size=batch_size,
-            optim_type='AdamW',
-            learning_rate=0.0001,
-            num_simulations=num_simulations,
+            cuda=True,
+            env_type='not_board_games',
             num_segments=num_segments,
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
-            grad_clip_value=20,
-            replay_buffer_size=int(1e6),
+            random_collect_episode_num=0,
+            # use_augmentation=True,
+            use_augmentation=False,
+            use_priority=False,
+            replay_ratio=replay_ratio,
+            update_per_collect=update_per_collect,
+            batch_size=batch_size,
+            optim_type='SGD',
+            lr_piecewise_constant_decay=True,
+            manual_temperature_decay=False,
+            learning_rate=0.2,
+            target_update_freq=100,
+            num_simulations=num_simulations,
+            ssl_loss_weight=2,
             eval_freq=int(5e3),
+            replay_buffer_size=int(1e6),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             # ============= The key different params for reanalyze =============
@@ -102,28 +99,27 @@ def main(env_id, seed):
             reanalyze_partition=reanalyze_partition,
         ),
     )
-    atari_unizero_config = EasyDict(atari_unizero_config)
-    main_config = atari_unizero_config
+    atari_muzero_config = EasyDict(atari_muzero_config)
+    main_config = atari_muzero_config
 
-    atari_unizero_create_config = dict(
+    atari_muzero_create_config = dict(
         env=dict(
             type='atari_lightzero',
             import_names=['zoo.atari.envs.atari_lightzero_env'],
         ),
         env_manager=dict(type='subprocess'),
         policy=dict(
-            type='unizero',
-            import_names=['lzero.policy.unizero'],
+            type='muzero',
+            import_names=['lzero.policy.muzero'],
         ),
     )
-    atari_unizero_create_config = EasyDict(atari_unizero_create_config)
-    create_config = atari_unizero_create_config
+    atari_muzero_create_config = EasyDict(atari_muzero_create_config)
+    create_config = atari_muzero_create_config
 
-    main_config.exp_name = f'data_unizero_reanalyze_0927_debug/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_muzero_reanalyze_0927/{env_id[:-14]}/{env_id[:-14]}_mz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_seed{seed}'
     # ============ use muzero_segment_collector instead of muzero_collector =============
-    from lzero.entry import train_unizero_reanalyze
-    train_unizero_reanalyze([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
-
+    from lzero.entry import train_muzero_reanalyze
+    train_muzero_reanalyze([main_config, create_config], seed=seed, max_env_step=max_env_step)
 
 if __name__ == "__main__":
     import argparse
@@ -131,7 +127,5 @@ if __name__ == "__main__":
     parser.add_argument('--env', type=str, help='The environment to use', default='PongNoFrameskip-v4')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
-
-    main(args.env, args.seed)
 
     main(args.env, args.seed)
