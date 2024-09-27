@@ -333,11 +333,10 @@ class MuZeroCollector(ISerialCollector):
         collected_episode = 0
         collected_step = 0
         env_nums = self._env_num
+        retry_waiting_time = 0.05
 
         # initializations
         init_obs = self._env.ready_obs
-
-        retry_waiting_time = 0.05
         while len(init_obs.keys()) != self._env_num:
             # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
             # len(self._env.ready_obs), especially in tictactoe env.
@@ -369,7 +368,6 @@ class MuZeroCollector(ISerialCollector):
                 [to_ndarray(init_obs[env_id]['observation']) for _ in range(self.policy_config.model.frame_stack_num)],
                 maxlen=self.policy_config.model.frame_stack_num
             )
-
             game_segments[env_id].reset(observation_window_stack[env_id])
 
         dones = np.array([False for _ in range(env_nums)])
@@ -414,10 +412,6 @@ class MuZeroCollector(ISerialCollector):
                     )
                     obs = self._env.ready_obs
                     ready_env_id = set(obs.keys())
-
-                # new_available_env_id = set(obs.keys()).difference(ready_env_id)
-                # ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
-                # remain_episode -= min(len(new_available_env_id), remain_episode)
 
                 stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
@@ -653,7 +647,7 @@ class MuZeroCollector(ISerialCollector):
                         init_obs = self._env.ready_obs
                         retry_waiting_time = 0.001
                         while len(init_obs.keys()) != self._env_num:
-                            # In order to be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
+                            # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
                             # len(self._env.ready_obs), especially in tictactoe env.
                             self._logger.info('The current init_obs.keys() is {}'.format(init_obs.keys()))
                             self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
@@ -707,7 +701,7 @@ class MuZeroCollector(ISerialCollector):
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
 
-                    # ===== TODO: if done not return: 如果上面wait了，下面必须加上? =======
+                    # ===== NOTE: if one episode done not return 如果上面wait了，下面必须加上? =======
                     # create new GameSegment
                     game_segments[env_id] =  GameSegment(
                             self._env.action_space,

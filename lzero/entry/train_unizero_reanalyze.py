@@ -9,6 +9,7 @@ from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.rl_utils import get_epsilon_greedy_fn
+from ding.utils import EasyTimer
 from ding.utils import set_pkg_seed, get_rank
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
@@ -17,13 +18,13 @@ from torch.utils.tensorboard import SummaryWriter
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
-# from lzero.worker import MuZeroCollector as Collector
-from lzero.worker import MuZeroSegmentCollector as Collector # ============ TODO: ============
 from lzero.worker import MuZeroEvaluator as Evaluator
+from lzero.worker import MuZeroSegmentCollector as Collector
 from .utils import random_collect
 
+timer = EasyTimer()
 
-def train_rezero_uz(
+def train_unizero_reanalyze(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -56,8 +57,7 @@ def train_rezero_uz(
     assert create_cfg.policy.type in ['unizero', 'sampled_unizero'], "train_unizero entry now only supports the following algo.: 'unizero', 'sampled_unizero'"
 
     # Import the correct GameBuffer class based on the policy type
-    # game_buffer_classes = {'unizero': 'UniZeroGameBuffer', 'sampled_unizero': 'SampledUniZeroGameBuffer'}
-    game_buffer_classes = {'unizero': 'UniZeroReGameBuffer', 'sampled_unizero': 'SampledUniZeroGameBuffer'}
+    game_buffer_classes = {'unizero': 'UniZeroGameBuffer', 'sampled_unizero': 'SampledUniZeroGameBuffer'}
 
     GameBuffer = getattr(__import__('lzero.mcts', fromlist=[game_buffer_classes[create_cfg.policy.type]]),
                          game_buffer_classes[create_cfg.policy.type])
@@ -116,9 +116,6 @@ def train_rezero_uz(
     train_epoch = 0
     reanalyze_batch_size = cfg.policy.reanalyze_batch_size
 
-    from ding.utils import BUFFER_REGISTRY, EasyTimer
-    timer = EasyTimer()
-
     while True:
         # Log buffer memory usage
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
@@ -170,14 +167,12 @@ def train_rezero_uz(
         else:
             # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
             if train_epoch % (1//cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
-                # When reanalyzing the buffer, the samples in the entire buffer are processed in mini-batches with a batch size of reanalyze_batch_size.
-                # This is an empirically selected value for optimal efficiency.
                 with timer:
+                    # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
                     replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
                 buffer_reanalyze_count += 1
                 logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
                 logging.info(f'Buffer reanalyze time: {timer.value}')
-
 
         # Train the policy if sufficient data is available
         if collector.envstep > cfg.policy.train_start_after_envsteps:
@@ -193,12 +188,10 @@ def train_rezero_uz(
                 continue
 
             for i in range(update_per_collect):
-
                 if cfg.policy.buffer_reanalyze_freq >= 1:
                     # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
                     if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
-                        # When reanalyzing the buffer, the samples in the entire buffer are processed in mini-batches with a batch size of reanalyze_batch_size.
-                        # This is an empirically selected value for optimal efficiency.
+                        # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
                         replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
                         buffer_reanalyze_count += 1
                         logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')

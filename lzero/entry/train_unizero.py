@@ -17,9 +17,8 @@ from torch.utils.tensorboard import SummaryWriter
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
-from lzero.worker import MuZeroCollector as Collector
-# from lzero.worker import MuZeroSegmentCollector as Collector # ============ TODO: ============
 from lzero.worker import MuZeroEvaluator as Evaluator
+from lzero.worker import MuZeroCollector as Collector
 from .utils import random_collect
 
 
@@ -75,8 +74,7 @@ def train_unizero(
     # TODO
     # evaluator_env.enable_save_replay(replay_path='./replay_cartpole')
 
-    collector_env.seed(cfg.seed) # TODO
-    # collector_env.seed(cfg.seed, dynamic_seed=False)
+    collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=torch.cuda.is_available())
 

@@ -40,10 +40,7 @@ def custom_copy_kv_cache_to_dict_speed(src_kv: KeysValues, dst_dict: dict, cache
     shape_time = time.time() - start_time
 
     start_time = time.time()
-    # with torch.no_grad():
     for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
-        # dst_layer._k_cache._cache = src_layer._k_cache._cache.clone()
-        # dst_layer._v_cache._cache = src_layer._v_cache._cache.clone()
         # Copy the key and value caches using torch.copy_()
         dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
         dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
@@ -89,7 +86,6 @@ def custom_copy_kv_cache_to_dict(src_kv: KeysValues, dst_dict: dict, cache_key: 
         src_kv._keys_values[0]._k_cache._cache.device,  # device
     )
 
-    # with torch.no_grad():
     for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
         # Copy the key and value caches using torch.copy_()
         dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
@@ -122,7 +118,6 @@ def custom_copy_kv_cache(src_kv: KeysValues) -> KeysValues:
     return dst_kv
 
 
-
 def to_device_for_kvcache(keys_values: KeysValues, device: str) -> KeysValues:
     """
     Transfer all KVCache objects within the KeysValues object to a certain device.
@@ -141,24 +136,6 @@ def to_device_for_kvcache(keys_values: KeysValues, device: str) -> KeysValues:
         if kv_cache._v_cache._cache.device != target_device:
             kv_cache._v_cache._cache = kv_cache._v_cache._cache.to(target_device)
     return keys_values
-
-
-# def to_device_for_kvcache(keys_values: KeysValues, device: str) -> KeysValues:
-#     """
-#     Transfer all KVCache objects within the KeysValues object to a certain device.
-
-#     Arguments:
-#         - keys_values (KeysValues): The KeysValues object to be transferred.
-#         - device (str): The device to transfer to.
-#     Returns:
-#         - keys_values (KeysValues): The KeysValues object with its caches transferred to the specified device.
-#     """
-#     # device = torch.device(device if torch.cuda.is_available() else 'cpu')
-
-#     for kv_cache in keys_values:
-#         kv_cache._k_cache._cache = kv_cache._k_cache._cache.to(device)
-#         kv_cache._v_cache._cache = kv_cache._v_cache._cache.to(device)
-#     return keys_values
 
 
 def convert_to_depth(search_path, depth_map, last_depth):
@@ -202,25 +179,6 @@ def calculate_cuda_memory_gb(past_keys_values_cache, num_layers: int):
     total_memory_gb = total_memory_bytes / (1024 ** 3)
     return total_memory_gb
 
-
-# def hash_state_origin(state, num_buckets=100):
-#     """
-#     Quantize the state vector.
-
-#     Arguments:
-#         state: The state vector to be quantized.
-#         num_buckets: The number of quantization buckets.
-#     Returns:
-#         The hash value of the quantized state vector.
-#     """
-#     # Use np.digitize to map each dimension value of the state vector into num_buckets
-#     quantized_state = np.digitize(state, bins=np.linspace(0, 1, num=num_buckets))
-#     # Use a more stable hash function
-#     quantized_state_bytes = quantized_state.tobytes()
-#     hash_object = hashlib.sha256(quantized_state_bytes)
-#     return hash_object.hexdigest()
-
-
 def hash_state(state):
     """
     Hash the state vector.
@@ -231,7 +189,6 @@ def hash_state(state):
         The hash value of the state vector.
     """
     # Use xxhash for faster hashing
-    # return xxhash.xxh64(state.view(-1).cpu().numpy()).hexdigest()
     return xxhash.xxh64(state).hexdigest()
 
 @dataclass
@@ -301,8 +258,6 @@ class LossWithIntermediateLosses:
 
         # Define the weights for each loss type
         self.obs_loss_weight = 10
-        # self.obs_loss_weight = 1  # for use_aug
-
         self.reward_loss_weight = 1.
         self.value_loss_weight = 0.25
         self.policy_loss_weight = 1.

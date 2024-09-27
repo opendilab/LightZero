@@ -184,7 +184,7 @@ class UniZeroPolicy(MuZeroPolicy):
         replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
-        # (str) Optimizer for training policy network. ['SGD', 'Adam']
+        # (str) Optimizer for training policy network.
         optim_type='AdamW',
         # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.0001,
@@ -200,8 +200,10 @@ class UniZeroPolicy(MuZeroPolicy):
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
         grad_clip_value=5,
-        # (int) The number of episodes in each collecting stage.
+        # (int) The number of episodes in each collecting stage when use muzero_collector.
         n_episode=8,
+        # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
+        num_segments=8,
         # (int) the number of simulations in MCTS.
         num_simulations=50,
         # (float) Discount factor (gamma) for returns.
@@ -356,38 +358,6 @@ class UniZeroPolicy(MuZeroPolicy):
         else:
             obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)  # TODO: optimize
 
-        # import torch
-        # import matplotlib.pyplot as plt
-        # import torchvision.utils as vutils
-        # # 使用 torchvision.utils.make_grid 来将多个图像组合成网格
-        # grid = vutils.make_grid(obs_batch.cpu(), nrow=2)
-        # # 转换为 numpy 数组以便用 matplotlib 可视化
-        # grid = grid.permute(1, 2, 0).numpy()  # 转换为 (H, W, C) 格式
-        # # 绘制图像并保存为 PNG 文件
-        # plt.imshow(grid)
-        # plt.axis('off')  # 不显示坐标轴
-        # plt.savefig('/mnt/afs/niuyazhe/code/LightZero/render/orig.png', bbox_inches='tight', pad_inches=0)
-        # plt.show()
-
-        # import torch
-        # import matplotlib.pyplot as plt
-        # import torchvision.utils as vutils
-        # # 假设 obs_target_batch 是已经存在的张量，形状为 torch.Size([2, 30, 96, 96])
-        # # 这里我们创建一个示例的 obs_target_batch
-        # # 将 obs_target_batch reshape 为 (2, 10, 3, 96, 96)
-        # obs_target_batch = obs_target_batch.cpu().reshape(2, 10, 3, 96, 96)
-        # # 将两组 10 张图像合并为同一批次，形状变为 (20, 3, 96, 96)
-        # obs_target_batch = obs_target_batch.reshape(-1, 3, 96, 96)
-        # # 使用 torchvision.utils.make_grid 来将 20 张图像组合成 2 行 10 列的网格
-        # grid = vutils.make_grid(obs_target_batch, nrow=10)
-        # # 转换为 numpy 数组以便用 matplotlib 可视化
-        # grid = grid.permute(1, 2, 0).numpy()  # 转换为 (H, W, C) 格式
-        # # 绘制图像并保存为 PNG 文件
-        # plt.imshow(grid)
-        # plt.axis('off')  # 不显示坐标轴
-        # plt.savefig('/mnt/afs/niuyazhe/code/LightZero/render/target_aug.png', bbox_inches='tight', pad_inches=0)
-        # plt.show()
-
         # Apply augmentations if needed
         if self._cfg.use_augmentation:
             obs_batch = self.image_transforms.transform(obs_batch)
@@ -400,11 +370,8 @@ class UniZeroPolicy(MuZeroPolicy):
         data_list = [mask_batch, target_reward, target_value, target_policy, weights]
         mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
                                                                                                 self._cfg.device)
-
         target_reward = target_reward.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
-
-        # assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
         # Transform rewards and values to their scaled forms
         transformed_target_reward = scalar_transform(target_reward)
@@ -836,7 +803,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # Clear various caches in the collect model's world model
             world_model = self._collect_model.world_model
-            # world_model.past_kv_cache_init_infer.clear()
             for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
                 kv_cache_dict_env.clear()
             world_model.past_kv_cache_recurrent_infer.clear()
@@ -881,7 +847,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # Clear various caches in the eval model's world model
             world_model = self._eval_model.world_model
-            # world_model.past_kv_cache_init_infer.clear()
             for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
                 kv_cache_dict_env.clear()
             world_model.past_kv_cache_recurrent_infer.clear()
