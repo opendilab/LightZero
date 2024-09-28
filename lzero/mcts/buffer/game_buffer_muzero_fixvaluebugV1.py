@@ -290,11 +290,6 @@ class MuZeroGameBuffer(GameBuffer):
             game_segment_lens.append(game_segment_len)
 
             td_steps = np.clip(self._cfg.td_steps, 1, max(1, game_segment_len - state_index)).astype(np.int32)
-            # if game_segment_len < self._cfg.num_unroll_steps + self._cfg.td_steps:
-            #     td_steps = 1
-            # if game_segment_len < self._cfg.game_segment_length:
-            #     # unizero要求value_obs_list 是连续的<unroll_step>步target_obs
-            #     td_steps = 1
 
             # prepare the corresponding observations for bootstrapped values o_{t+k}
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
@@ -328,16 +323,16 @@ class MuZeroGameBuffer(GameBuffer):
                     # the stacked target obs in time t
                     obs = game_obs[beg_index:end_index]
                     if obs.shape[0] < self._cfg.model.frame_stack_num:
-                        obs = game_obs[-self._cfg.model.frame_stack_num:]
                         # print('obs.shape[0]<self._cfg.model.frame_stack_num')
+                        # print('======value mask bug2========')
+                        value_mask.pop(1)  # Bug
+                        value_mask.append(0)  # Bug
+                        obs = zero_obs
                 else:
                     # print('======value mask bug1========')
-                    # value_mask.append(0)  # Bug
-                    # obs = zero_obs
+                    value_mask.append(0)  # Bug
+                    obs = zero_obs
 
-                    value_mask.append(1)
-                    obs = game_obs[-self._cfg.model.frame_stack_num:]
-                # unizero要求value_obs_list 是连续的<unroll_step>步target_obs
                 value_obs_list.append(obs)
 
         reward_value_context = [

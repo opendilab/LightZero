@@ -92,8 +92,9 @@ def main(env_id, seed):
             learning_rate=0.0001,
             num_simulations=num_simulations,
             num_segments=num_segments,
-            # train_start_after_envsteps=2000,
-            train_start_after_envsteps=0,  # TODO
+            td_steps=3,
+            train_start_after_envsteps=2000,
+            # train_start_after_envsteps=0,  # TODO
             game_segment_length=game_segment_length,
             grad_clip_value=20,
             replay_buffer_size=int(1e6),
@@ -126,7 +127,7 @@ def main(env_id, seed):
     atari_unizero_create_config = EasyDict(atari_unizero_create_config)
     create_config = atari_unizero_create_config
 
-    main_config.exp_name = f'data_unizero_reanalyze_0928/{env_id[:-14]}/{env_id[:-14]}_uz_fixvaluebug_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_reanalyze_0928/{env_id[:-14]}/{env_id[:-14]}_uz_fixvaluebugV4_td3_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_reanalyze
     train_unizero_reanalyze([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
@@ -139,6 +140,6 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
-    main(args.env, args.seed)
+    # args.env = 'QbertNoFrameskip-v4' # TODO
 
     main(args.env, args.seed)
