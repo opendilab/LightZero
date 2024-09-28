@@ -16,9 +16,10 @@ def main(env_id, seed):
     replay_ratio = 0.25
     num_unroll_steps = 5
     batch_size = 256
-    max_env_step = int(2e5)
+    max_env_step = int(1e5)
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    buffer_reanalyze_freq = 1/10
+    # buffer_reanalyze_freq = 1/10
+    buffer_reanalyze_freq = 1/10000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -51,6 +52,7 @@ def main(env_id, seed):
             # eval_max_episode_steps=int(50),
         ),
         policy=dict(
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
             analysis_sim_norm=False,
             cal_dormant_ratio=False,
             model=dict(
@@ -70,11 +72,10 @@ def main(env_id, seed):
             cuda=True,
             env_type='not_board_games',
             num_segments=num_segments,
-            train_start_after_envsteps=2000,
+            train_start_after_envsteps=2000, # TODO
             game_segment_length=game_segment_length,
             random_collect_episode_num=0,
-            # use_augmentation=True,
-            use_augmentation=False,
+            use_augmentation=True, # TODO
             use_priority=False,
             replay_ratio=replay_ratio,
             update_per_collect=update_per_collect,
@@ -116,7 +117,7 @@ def main(env_id, seed):
     atari_muzero_create_config = EasyDict(atari_muzero_create_config)
     create_config = atari_muzero_create_config
 
-    main_config.exp_name = f'data_muzero_reanalyze_0927_debug/{env_id[:-14]}/{env_id[:-14]}_mz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_muzero_reanalyze_0928/{env_id[:-14]}/{env_id[:-14]}_mz_fixvaluebug_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_seed{seed}'
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_muzero_reanalyze
     train_muzero_reanalyze([main_config, create_config], seed=seed, max_env_step=max_env_step)
@@ -128,4 +129,5 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
+    # args.env = 'QbertNoFrameskip-v4' # TODO
     main(args.env, args.seed)

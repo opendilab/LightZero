@@ -78,6 +78,7 @@ def main(env_id, seed):
             manual_temperature_decay=False,
             threshold_training_steps_for_final_temperature=int(5e4),
             use_priority=False,
+            td_steps=1,
             num_unroll_steps=num_unroll_steps,
             update_per_collect=None,
             replay_ratio=replay_ratio,
@@ -119,7 +120,7 @@ def main(env_id, seed):
     atari_unizero_create_config = EasyDict(atari_unizero_create_config)
     create_config = atari_unizero_create_config
 
-    main_config.exp_name = f'data_unizero_reanalyze_0927/{env_id[:-14]}/{env_id[:-14]}_fixvaluemask_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_reanalyze_0927/{env_id[:-14]}/{env_id[:-14]}_uz_nonfixvaluemask-td1_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_reanalyze
     train_unizero_reanalyze([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

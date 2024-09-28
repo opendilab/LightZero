@@ -302,34 +302,21 @@ class MuZeroGameBuffer(GameBuffer):
             action_mask_segment.append(game_segment.action_mask_segment)
             to_play_segment.append(game_segment.to_play_segment)
 
-            if game_segment_len < self._cfg.game_segment_length:
-                truncation_length = game_segment_len + 1
-            else:
-                truncation_length = game_segment_len + self._cfg.num_unroll_steps + 1
-
-            # truncation_length = game_segment_len + 1 # bug
-
             for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                 # get the <num_unroll_steps+1>  bootstrapped target obs
                 td_steps_list.append(td_steps)
                 # index of bootstrapped obs o_{t+td_steps}
                 bootstrap_index = current_index + td_steps
 
-                if bootstrap_index < truncation_length:
+                if bootstrap_index < game_segment_len:
                     value_mask.append(1)
                     # beg_index = bootstrap_index - (state_index + td_steps), max of beg_index is num_unroll_steps
                     beg_index = current_index - state_index
                     end_index = beg_index + self._cfg.model.frame_stack_num
-                    # the stacked target obs in time t
+                    # the stacked obs in time t
                     obs = game_obs[beg_index:end_index]
-                    if obs.shape[0] < self._cfg.model.frame_stack_num:
-                        # print('obs.shape[0]<self._cfg.model.frame_stack_num')
-                        # print('======value mask bug2========')
-                        value_mask.pop(1)  # Bug
-                        value_mask.append(0)  # Bug
-                        obs = zero_obs
                 else:
-                    # print('======value mask bug1========')
+                    # print('======value mask bug========')
                     value_mask.append(0)  # Bug
                     obs = zero_obs
 

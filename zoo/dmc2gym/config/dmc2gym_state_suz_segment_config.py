@@ -83,7 +83,7 @@ def main(env_id, seed):
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False, ),
-            # TODO: only for debug
+            # TODO: only for debug, 对于dmc目前不起作用
             # collect_max_episode_steps=int(20),
             # eval_max_episode_steps=int(20),
         ),
@@ -103,8 +103,8 @@ def main(env_id, seed):
                     policy_entropy_weight=5e-3,
                     continuous_action_space=continuous_action_space,
                     num_of_sampled_actions=K,
-                    # sigma_type='conditioned',
-                    sigma_type='fixed',
+                    sigma_type='conditioned',
+                    # sigma_type='fixed',
                     # fixed_sigma_value=fixed_sigma_value,
                     fixed_sigma_value=0.5,
                     bound_type=None,

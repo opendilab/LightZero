@@ -144,11 +144,10 @@ class GameBuffer(ABC, object):
 
             game_segment_list.append(game_segment)
 
-            if len(game_segment)<self._cfg.game_segment_length:
-                # 截断的segment, game_segment.obs_segment: 10+4, 10是截断后的长度，4是stack_num, 没有padding的<unroll_steps>步
-                print(f'len(game_segment): {len(game_segment)}') 
-                if pos_in_game_segment > len(game_segment) - self._cfg.num_unroll_steps - self._cfg.td_steps:
-                    pos_in_game_segment = np.random.choice(max(len(game_segment) - self._cfg.num_unroll_steps - self._cfg.td_steps, 1), 1).item()
+            # print(f'len(game_segment):{len(game_segment)}')
+            # #===== TODO: commit-id c19b203 for muzero segment-collector 性能好的版本======
+            # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
+            #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
 
             pos_in_game_segment_list.append(pos_in_game_segment)
             
