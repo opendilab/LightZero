@@ -290,6 +290,11 @@ class MuZeroGameBuffer(GameBuffer):
             game_segment_lens.append(game_segment_len)
 
             td_steps = np.clip(self._cfg.td_steps, 1, max(1, game_segment_len - state_index)).astype(np.int32)
+            # if game_segment_len < self._cfg.num_unroll_steps + self._cfg.td_steps:
+            #     td_steps = 1
+            # if game_segment_len < self._cfg.game_segment_length:
+            #     # unizero要求value_obs_list 是连续的<unroll_step>步target_obs
+            #     td_steps = 1
 
             # prepare the corresponding observations for bootstrapped values o_{t+k}
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
@@ -302,24 +307,38 @@ class MuZeroGameBuffer(GameBuffer):
             action_mask_segment.append(game_segment.action_mask_segment)
             to_play_segment.append(game_segment.to_play_segment)
 
+            if game_segment_len < self._cfg.game_segment_length:
+                truncation_length = game_segment_len + 1
+            else:
+                truncation_length = game_segment_len + self._cfg.num_unroll_steps + 1
+
+            # truncation_length = game_segment_len + 1 # bug
+
             for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                 # get the <num_unroll_steps+1>  bootstrapped target obs
                 td_steps_list.append(td_steps)
                 # index of bootstrapped obs o_{t+td_steps}
                 bootstrap_index = current_index + td_steps
 
-                if bootstrap_index < game_segment_len:
+                if bootstrap_index < truncation_length:
                     value_mask.append(1)
                     # beg_index = bootstrap_index - (state_index + td_steps), max of beg_index is num_unroll_steps
                     beg_index = current_index - state_index
                     end_index = beg_index + self._cfg.model.frame_stack_num
-                    # the stacked obs in time t
+                    # the stacked target obs in time t
                     obs = game_obs[beg_index:end_index]
+                    # if obs.shape[0] < self._cfg.model.frame_stack_num:
+                    #     obs = game_obs[-self._cfg.model.frame_stack_num:]
+                        # print('obs.shape[0]<self._cfg.model.frame_stack_num')
                 else:
-                    # print('======value mask bug========')
+                    # print('======value mask bug1========')
                     value_mask.append(0)  # Bug
                     obs = zero_obs
 
+                    # value_mask.append(1)
+                    # obs = game_obs[-self._cfg.model.frame_stack_num:]
+                
+                # unizero要求value_obs_list 是连续的<unroll_step>步target_obs
                 value_obs_list.append(obs)
 
         reward_value_context = [

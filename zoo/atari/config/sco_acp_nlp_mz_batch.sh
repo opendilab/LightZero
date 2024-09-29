@@ -83,7 +83,7 @@ for env in "${envs[@]}"; do
 
 sco acp jobs create --workspace-name=df42ac16-77cf-4cfe-a3ce-e89e317bdf20 \
     --aec2-name=ea2d41fe-274a-43b2-b562-70c0b7d396a2\
-    --job-name="mz-H5-seg8-gsl20-brf1-10-rbs160-rr025-temp025-simnorm-sampleV3-$env-s$seed" \
+    --job-name="mz-H5-seg8-gsl20-brf1-10000-rbs160-rr025-temp025-simnorm-origbuffer-$env-s$seed" \
     --container-image-url='registry.cn-sh-01.sensecore.cn/basemodel-ccr/aicl-b27637a9-660e-4927:20231222-17h24m12s' \
     --training-framework=pytorch \
     --enable-mpi \
