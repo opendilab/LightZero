@@ -144,7 +144,9 @@ class GameBuffer(ABC, object):
 
             game_segment_list.append(game_segment)
 
-            # print(f'len(game_segment):{len(game_segment)}')
+            # print(f'len(game_segment)=len(game_segment.action_segment): {len(game_segment)}')
+            # print(f'len(game_segment.obs_segment): {game_segment.obs_segment.shape[0]}')
+
             # #===== TODO: commit-id c19b203 for muzero segment-collector 性能好的版本======
             # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
             #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()

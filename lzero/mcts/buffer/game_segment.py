@@ -165,7 +165,9 @@ class GameSegment:
             - next_segment_child_visits (:obj:`list`): root visit count distributions of MCTS from the next game_segment
             - next_segment_improved_policy (:obj:`list`): root children select policy of MCTS from the next game_segment (Only used in Gumbel MuZero)
         """
-        assert len(next_segment_observations) <= self.num_unroll_steps
+        # assert len(next_segment_observations) <= self.num_unroll_steps
+        assert len(next_segment_observations) <= self.num_unroll_steps + self.td_steps  # TODO:check
+
         assert len(next_segment_child_visits) <= self.num_unroll_steps
         assert len(next_segment_root_values) <= self.num_unroll_steps + self.td_steps
         assert len(next_segment_rewards) <= self.num_unroll_steps + self.td_steps - 1

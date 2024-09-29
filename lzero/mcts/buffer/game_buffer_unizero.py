@@ -381,6 +381,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # calculate the target value
             # batch_action.shape (32, 10)
             # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11=352
+            # TODO: policy_obs_list is at timestep t, batch_action is at timestep t
             m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
             # =======================================================================
 
@@ -489,6 +490,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # calculate the target value
             # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11 = 352
+            # TODO: check value_obs_list is t+td_steps, batch_action is t, 只用到了单步的target_obs?
             m_output = model.initial_inference(batch_obs, batch_action)
             # ======================================================================
 
@@ -538,6 +540,21 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 target_values = []
                 target_rewards = []
                 base_index = state_index
+
+                # TODO:===========
+                if game_segment_len_non_re < self._cfg.game_segment_length:
+                    # 游戏结束的最后一段segment，target value应该是0
+                    truncation_length = game_segment_len_non_re
+                else:
+                    # action_segment没有pad, game_segment_len是game_segment.action_segment.shape[0]
+                    # 由于obs_segment pad的可能不够self._cfg.td_steps + 1
+                    # truncation_length = game_segment_len + self._cfg.td_steps + 1 # bug
+                    # truncation_length = game_segment.obs_segment.shape[0]-self._cfg.model.frame_stack_num
+                    truncation_length = reward_list.shape
+                    # value_list[value_index] 都是正确的，如果是倒数第2个segment，其epsidoe done对应的target value已经正确赋值为0 了，
+
+                # truncation_length = game_segment_len_non_re
+
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
                     for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
@@ -551,12 +568,14 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                             value_list[value_index] += reward * self._cfg.discount_factor ** i
                     horizon_id += 1
 
-                    if current_index < game_segment_len_non_re:
+                    # if current_index < game_segment_len_non_re: # original
+                    if bootstrap_index < truncation_length: # TODO: fixvaluebugV8===========
                         target_values.append(value_list[value_index])
                         target_rewards.append(reward_list[current_index])
                     else:
                         target_values.append(np.array(0.))
                         target_rewards.append(np.array(0.))
+                        
                     value_index += 1
 
                 batch_rewards.append(target_rewards)

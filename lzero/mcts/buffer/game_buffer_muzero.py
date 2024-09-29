@@ -302,21 +302,41 @@ class MuZeroGameBuffer(GameBuffer):
             action_mask_segment.append(game_segment.action_mask_segment)
             to_play_segment.append(game_segment.to_play_segment)
 
+            if game_segment_len < self._cfg.game_segment_length:
+                # 游戏结束的最后一段segment，target value应该是0
+                # truncation_length = game_segment_len + 1
+                truncation_length = game_segment_len
+            else:
+                # action_segment没有pad, game_segment_len是game_segment.action_segment.shape[0]
+                # 由于obs_segment pad的可能不够self._cfg.td_steps + 1
+                # truncation_length = game_segment_len + self._cfg.td_steps + 1 # bug
+                truncation_length = game_segment.obs_segment.shape[0]-self._cfg.model.frame_stack_num
+
+            # truncation_length = game_segment_len
+
             for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                 # get the <num_unroll_steps+1>  bootstrapped target obs
                 td_steps_list.append(td_steps)
                 # index of bootstrapped obs o_{t+td_steps}
                 bootstrap_index = current_index + td_steps
 
-                if bootstrap_index < game_segment_len:
+                # if bootstrap_index < game_segment_len: # orignal
+                if bootstrap_index < truncation_length:
                     value_mask.append(1)
                     # beg_index = bootstrap_index - (state_index + td_steps), max of beg_index is num_unroll_steps
                     beg_index = current_index - state_index
                     end_index = beg_index + self._cfg.model.frame_stack_num
                     # the stacked obs in time t
                     obs = game_obs[beg_index:end_index]
-                else:
-                    # print('======value mask bug========')
+                    # if obs.shape[0]<self._cfg.model.frame_stack_num:
+                    #     # print('======最后一个segment========')
+                    #     # print('======倒数第2个segment 最后一个segmnet pad的数据不够，target_value为0========')
+                    #     value_mask.pop(1)
+                    #     value_mask.append(0)
+                    #     obs = zero_obs
+                else: # 相应loss被mask
+                    # if game_segment_len == self._cfg.game_segment_length:
+                    #     print('======倒数第2个segment, 补零不够，最后的target value也应该是0========')
                     value_mask.append(0)  # Bug
                     obs = zero_obs
 
@@ -396,9 +416,10 @@ class MuZeroGameBuffer(GameBuffer):
                 root_values.append(game_segment.root_value_segment)
                 # prepare the corresponding observations
                 game_obs = game_segment.get_unroll_obs(state_index, self._cfg.num_unroll_steps)
+
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
 
-                    if current_index < game_segment_len:
+                    if current_index < game_segment_len: # original
                         policy_mask.append(1)
                         beg_index = current_index - state_index
                         end_index = beg_index + self._cfg.model.frame_stack_num
@@ -531,7 +552,8 @@ class MuZeroGameBuffer(GameBuffer):
                 value_list = value_list.reshape(-1) * (
                     np.array([self._cfg.discount_factor for _ in range(transition_batch_size)]) ** td_steps_list
                 )
-
+            # if len(value_mask)>sum(value_mask):
+            #     print('have value mask')
             value_list = value_list * np.array(value_mask)
             value_list = value_list.tolist()
             horizon_id, value_index = 0, 0
@@ -542,6 +564,21 @@ class MuZeroGameBuffer(GameBuffer):
                 target_values = []
                 target_rewards = []
                 base_index = state_index
+
+                # TODO:===========
+                if game_segment_len_non_re < self._cfg.game_segment_length:
+                    # 游戏结束的最后一段segment，target value应该是0
+                    truncation_length = game_segment_len_non_re
+                else:
+                    # action_segment没有pad, game_segment_len是game_segment.action_segment.shape[0]
+                    # 由于obs_segment pad的可能不够self._cfg.td_steps + 1
+                    # truncation_length = game_segment.obs_segment.shape[0]-self._cfg.model.frame_stack_num
+                    truncation_length = reward_list.shape
+                    # value_list[value_index] 都是正确的，如果是倒数第2个segment，其epsidoe done对应的target value已经正确赋值为0 了，
+                
+                # truncation_length = game_segment_len_non_re
+
+
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
                     # for i, reward in enumerate(game.rewards[current_index:bootstrap_index]):
@@ -556,7 +593,9 @@ class MuZeroGameBuffer(GameBuffer):
                             value_list[value_index] += reward * self._cfg.discount_factor ** i
                     horizon_id += 1
 
-                    if current_index < game_segment_len_non_re:
+                    # TODO:===========
+                    # if current_index < game_segment_len_non_re: # original
+                    if bootstrap_index < truncation_length: # TODO: fixvaluebugV8
                         target_values.append(value_list[value_index])
                         target_rewards.append(reward_list[current_index])
                     else:

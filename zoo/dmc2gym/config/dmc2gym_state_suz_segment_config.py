@@ -55,13 +55,13 @@ def main(env_id, seed):
     reanalyze_partition=1
 
     # for debug
-    collector_env_num = 2
-    num_segments = 2
-    n_episode = 2
-    evaluator_env_num = 2
-    num_simulations = 3
-    batch_size = 3
-    reanalyze_batch_size = 1
+    # collector_env_num = 2
+    # num_segments = 2
+    # n_episode = 2
+    # evaluator_env_num = 2
+    # num_simulations = 3
+    # batch_size = 3
+    # reanalyze_batch_size = 1
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
@@ -83,7 +83,7 @@ def main(env_id, seed):
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False, ),
-            # TODO: only for debug, 对于dmc目前不起作用
+            # TODO: only for debug
             # collect_max_episode_steps=int(20),
             # eval_max_episode_steps=int(20),
         ),
@@ -132,7 +132,8 @@ def main(env_id, seed):
             replay_ratio=replay_ratio,
             batch_size=batch_size,
             discount_factor=1,
-            td_steps=3,
+            # td_steps=1,
+            td_steps=5,
             lr_piecewise_constant_decay=False,
             learning_rate=0.0001,
             grad_clip_value=5, # TODO
@@ -142,8 +143,8 @@ def main(env_id, seed):
             # cos_lr_scheduler=True,
             cos_lr_scheduler=False,
             num_segments=num_segments,
-            # train_start_after_envsteps=2000,
-            train_start_after_envsteps=0, # TODO: for debug
+            train_start_after_envsteps=2000,
+            # train_start_after_envsteps=0, # TODO: for debug
             game_segment_length=game_segment_length, # debug
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
@@ -178,7 +179,7 @@ def main(env_id, seed):
     create_config = dmc2gym_state_cont_sampled_unizero_create_config
     
     # 调整train_unizero里面的collector
-    main_config.exp_name=f'data_sampled_unizero_0927_debug/ucb-uniform-prior_fs2_seg-collector/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    main_config.exp_name=f'data_sampled_unizero_0930/ucb-uniform-prior_fs2_seg-collector_fixvalueV8/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
     from lzero.entry import train_unizero_reanalyze
     train_unizero_reanalyze([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 

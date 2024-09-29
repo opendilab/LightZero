@@ -254,7 +254,9 @@ class MuZeroSegmentCollector(ISerialCollector):
         """
         # pad over last segment trajectory
         beg_index = self.policy_config.model.frame_stack_num
-        end_index = beg_index + self.policy_config.num_unroll_steps
+        # end_index = beg_index + self.policy_config.num_unroll_steps
+        # end_index = beg_index + self.policy_config.td_steps
+        end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps  # TODO: check
 
         # the start <frame_stack_num> obs is init zero obs, so we take the
         # [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
@@ -307,7 +309,7 @@ class MuZeroSegmentCollector(ISerialCollector):
         # put the game segment into the pool
         self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
 
-        # reset last game_segments
+        # reset last game_segments # TODO:origin
         last_game_segments[i] = None
         last_game_priorities[i] = None
 
@@ -688,6 +690,9 @@ class MuZeroSegmentCollector(ISerialCollector):
                             config=self.policy_config
                         )
                     game_segments[env_id].reset(observation_window_stack[env_id])
+                    # NOTE: TODO
+                    # self.last_game_segments[env_id] = None
+                    # self.last_game_priorities[env_id] = None
 
             # NOTE: must after the for loop to make sure all env_id's data are collected
             if len(self.game_segment_pool) >= self._default_num_segments:
