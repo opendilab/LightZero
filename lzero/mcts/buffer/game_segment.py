@@ -149,7 +149,7 @@ class GameSegment:
             self.chance_segment.append(chance)
 
     def pad_over(
-            self, next_segment_observations: List, next_segment_rewards: List, next_segment_root_values: List,
+            self, next_segment_observations: List, next_segment_rewards: List, next_segment_actions: List, next_segment_root_values: List,
             next_segment_child_visits: List, next_segment_improved_policy: List = None, next_chances: List = None,
     ) -> None:
         """
@@ -168,7 +168,7 @@ class GameSegment:
         # assert len(next_segment_observations) <= self.num_unroll_steps
         assert len(next_segment_observations) <= self.num_unroll_steps + self.td_steps  # TODO:check
 
-        assert len(next_segment_child_visits) <= self.num_unroll_steps
+        # assert len(next_segment_child_visits) <= self.num_unroll_steps
         assert len(next_segment_root_values) <= self.num_unroll_steps + self.td_steps
         assert len(next_segment_rewards) <= self.num_unroll_steps + self.td_steps - 1
         # ==============================================================
@@ -183,6 +183,9 @@ class GameSegment:
 
         for reward in next_segment_rewards:
             self.reward_segment.append(reward)
+
+        for action in next_segment_actions:
+            self.action_segment.append(action)
 
         for value in next_segment_root_values:
             self.root_value_segment.append(value)
@@ -333,4 +336,7 @@ class GameSegment:
         return [_ for _ in range(self.action_space.n)]
 
     def __len__(self):
-        return len(self.action_segment)
+        # return len(self.action_segment) if len(self.action_segment)<self.game_segment_length else self.game_segment_length
+        # return min(len(self.action_segment), self.game_segment_length)
+        return len(self.action_segment) 
+

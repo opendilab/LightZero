@@ -72,12 +72,15 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         # current_batch = [obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list]
 
         # target reward, target value
+        # batch_rewards, batch_target_values = self._compute_target_reward_value(
+        #     reward_value_context, policy._target_model, current_batch[1]  # current_batch[1] is batch_action bug
+        # )
         batch_rewards, batch_target_values = self._compute_target_reward_value(
-            reward_value_context, policy._target_model, current_batch[1]  # current_batch[1] is batch_action
+            reward_value_context, policy._target_model, current_batch[2]  # current_batch[2] is batch_tareget_action
         )
         # target policy
         batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model,
-                                                                          current_batch[1])
+                                                                          current_batch[1]) # current_batch[1] is batch_action
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
             policy_non_re_context, self._cfg.model.action_space_size
         )
@@ -119,6 +122,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
         batch_size = len(batch_index_list)
         obs_list, action_list, mask_list = [], [], []
+        bootstrap_action_list = []
+
         # prepare the inputs of a batch
         for i in range(batch_size):
             game = game_segment_list[i]
@@ -126,9 +131,15 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
+
+            
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
             mask_tmp = [1. for i in range(len(actions_tmp))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
+
+            #  TODO
+            # mask_tmp = [1. for i in range(max(len(actions_tmp), self._cfg.game_segment_length-pos_in_game_segment))]
+            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
             actions_tmp += [
@@ -145,13 +156,26 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 )
             )
             action_list.append(actions_tmp)
+
             mask_list.append(mask_tmp)
+
+            # TODO: for unizero
+            bootstrap_action_tmp = game.action_segment[pos_in_game_segment+self._cfg.td_steps:pos_in_game_segment +
+                                                                  self._cfg.num_unroll_steps+self._cfg.td_steps].tolist()
+            # pad random action
+            bootstrap_action_tmp += [
+                np.random.randint(0, game.action_space_size)
+                for _ in range(self._cfg.num_unroll_steps - len(bootstrap_action_tmp))
+            ]
+            bootstrap_action_list.append(bootstrap_action_tmp)
+
 
         # formalize the input observations
         obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
 
         # formalize the inputs of a batch
-        current_batch = [obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list]
+        current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list]
+        
         for i in range(len(current_batch)):
             current_batch[i] = np.asarray(current_batch[i])
 
@@ -234,6 +258,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
         batch_size = len(batch_index_list)
         obs_list, action_list, mask_list = [], [], []
+        bootstrap_action_list = []
         # prepare the inputs of a batch
         for i in range(batch_size):
             game = game_segment_list[i]
@@ -262,11 +287,21 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             action_list.append(actions_tmp)
             mask_list.append(mask_tmp)
 
+            # TODO: for unizero
+            bootstrap_action_tmp = game.action_segment[pos_in_game_segment+self._cfg.td_steps:pos_in_game_segment +
+                                                                  self._cfg.num_unroll_steps+self._cfg.td_steps].tolist()
+            # pad random action
+            bootstrap_action_tmp += [
+                np.random.randint(0, game.action_space_size)
+                for _ in range(self._cfg.num_unroll_steps - len(bootstrap_action_tmp))
+            ]
+            bootstrap_action_list.append(bootstrap_action_tmp)
+
         # formalize the input observations
         obs_list = prepare_observation(obs_list, self._cfg.model.model_type)
 
         # formalize the inputs of a batch
-        current_batch = [obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list]
+        current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list]
         for i in range(len(current_batch)):
             current_batch[i] = np.asarray(current_batch[i])
 

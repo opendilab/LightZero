@@ -285,8 +285,9 @@ class MuZeroGameBuffer(GameBuffer):
 
         td_steps_list = []
         for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
-
             game_segment_len = len(game_segment)
+            # TODO
+            # game_segment_len = len(game_segment) if len(game_segment) < self._cfg.game_segment_length else self._cfg.game_segment_length
             game_segment_lens.append(game_segment_len)
 
             td_steps = np.clip(self._cfg.td_steps, 1, max(1, game_segment_len - state_index)).astype(np.int32)
@@ -367,6 +368,7 @@ class MuZeroGameBuffer(GameBuffer):
         action_mask_segment, to_play_segment = [], []
 
         for game_segment, state_index, idx in zip(game_segment_list, pos_in_game_segment_list, batch_index_list):
+            # TODO
             game_segment_len = len(game_segment)
             game_segment_lens.append(game_segment_len)
             # for board games
@@ -405,6 +407,7 @@ class MuZeroGameBuffer(GameBuffer):
             # for board games
             action_mask_segment, to_play_segment = [], []
             for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
+                # TODO
                 game_segment_len = len(game_segment)
                 game_segment_lens.append(game_segment_len)
                 rewards.append(game_segment.reward_segment)

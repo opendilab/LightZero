@@ -1,31 +1,31 @@
-# envs=(
-#     'AlienNoFrameskip-v4'
-#     'AmidarNoFrameskip-v4'
-#     'AssaultNoFrameskip-v4'
-#     'AsterixNoFrameskip-v4'
-#     'BankHeistNoFrameskip-v4'
-#     'BattleZoneNoFrameskip-v4'
-#     'ChopperCommandNoFrameskip-v4'
-#     'CrazyClimberNoFrameskip-v4'
-#     'DemonAttackNoFrameskip-v4'
-#     'FreewayNoFrameskip-v4'
-#     'FrostbiteNoFrameskip-v4'
-#     'GopherNoFrameskip-v4'
-#     'HeroNoFrameskip-v4'
-#     'JamesbondNoFrameskip-v4'
-#     'KangarooNoFrameskip-v4'
-#     'KrullNoFrameskip-v4'
-#     'KungFuMasterNoFrameskip-v4'
-#     'PrivateEyeNoFrameskip-v4'
-#     'RoadRunnerNoFrameskip-v4'
-#     'UpNDownNoFrameskip-v4'
-#     'PongNoFrameskip-v4'
-#     'MsPacmanNoFrameskip-v4'
-#     'QbertNoFrameskip-v4'
-#     'SeaquestNoFrameskip-v4'
-#     'BoxingNoFrameskip-v4'
-#     'BreakoutNoFrameskip-v4'
-# )
+envs=(
+    'AlienNoFrameskip-v4'
+    'AmidarNoFrameskip-v4'
+    'AssaultNoFrameskip-v4'
+    'AsterixNoFrameskip-v4'
+    'BankHeistNoFrameskip-v4'
+    'BattleZoneNoFrameskip-v4'
+    'ChopperCommandNoFrameskip-v4'
+    'CrazyClimberNoFrameskip-v4'
+    'DemonAttackNoFrameskip-v4'
+    'FreewayNoFrameskip-v4'
+    'FrostbiteNoFrameskip-v4'
+    'GopherNoFrameskip-v4'
+    'HeroNoFrameskip-v4'
+    'JamesbondNoFrameskip-v4'
+    'KangarooNoFrameskip-v4'
+    'KrullNoFrameskip-v4'
+    'KungFuMasterNoFrameskip-v4'
+    'PrivateEyeNoFrameskip-v4'
+    'RoadRunnerNoFrameskip-v4'
+    'UpNDownNoFrameskip-v4'
+    'PongNoFrameskip-v4'
+    'MsPacmanNoFrameskip-v4'
+    'QbertNoFrameskip-v4'
+    'SeaquestNoFrameskip-v4'
+    'BoxingNoFrameskip-v4'
+    'BreakoutNoFrameskip-v4'
+)
 
 # one env
 # env='AsterixNoFrameskip-v4'
@@ -36,23 +36,23 @@
 # echo "The final script is: " $script
 
 # batch env: uz表现和ez相当的15env
-envs=(
-    'AlienNoFrameskip-v4'
-    'AmidarNoFrameskip-v4'
-    'AssaultNoFrameskip-v4'
-    'BankHeistNoFrameskip-v4'
-    'BattleZoneNoFrameskip-v4'
-    'ChopperCommandNoFrameskip-v4'
-    'FreewayNoFrameskip-v4'
-    'FrostbiteNoFrameskip-v4'
-    'JamesbondNoFrameskip-v4'
-    'KangarooNoFrameskip-v4'
-    'KrullNoFrameskip-v4'
-    'PrivateEyeNoFrameskip-v4'
-    'MsPacmanNoFrameskip-v4'
-    'SeaquestNoFrameskip-v4'
-    'BoxingNoFrameskip-v4'
-)
+# envs=(
+#     'AlienNoFrameskip-v4'
+#     'AmidarNoFrameskip-v4'
+#     'AssaultNoFrameskip-v4'
+#     'BankHeistNoFrameskip-v4'
+#     'BattleZoneNoFrameskip-v4'
+#     'ChopperCommandNoFrameskip-v4'
+#     'FreewayNoFrameskip-v4'
+#     'FrostbiteNoFrameskip-v4'
+#     'JamesbondNoFrameskip-v4'
+#     'KangarooNoFrameskip-v4'
+#     'KrullNoFrameskip-v4'
+#     'PrivateEyeNoFrameskip-v4'
+#     'MsPacmanNoFrameskip-v4'
+#     'SeaquestNoFrameskip-v4'
+#     'BoxingNoFrameskip-v4'
+# )
 
 # batch env: uz表现不如ez的10env+pong
 # envs=(
@@ -66,7 +66,7 @@ envs=(
 #     'GopherNoFrameskip-v4'
 #     'HeroNoFrameskip-v4'
 #     'KungFuMasterNoFrameskip-v4'
-#     'RoadRunner' 
+#     'RoadRunnerNoFrameskip-v4' 
 # )
 seed=1
 for env in "${envs[@]}"; do
@@ -77,7 +77,7 @@ for env in "${envs[@]}"; do
 
 sco acp jobs create --workspace-name=df42ac16-77cf-4cfe-a3ce-e89e317bdf20 \
     --aec2-name=ea2d41fe-274a-43b2-b562-70c0b7d396a2\
-    --job-name="uz-nlayer4-H10-seg8-gsl20-brf1-10-rbs160-rr1-temp025-fixvalueV8-td5-$env-s$seed" \
+    --job-name="uz-nlayer4-H10-seg8-gsl20-brf1-10-rbs160-rr1-temp025-fixvalueV8-fixtargetaction-td5-200k-$env-s$seed" \
     --container-image-url='registry.cn-sh-01.sensecore.cn/basemodel-ccr/aicl-b27637a9-660e-4927:20231222-17h24m12s' \
     --training-framework=pytorch \
     --enable-mpi \

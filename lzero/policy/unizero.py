@@ -350,7 +350,7 @@ class UniZeroPolicy(MuZeroPolicy):
         self._target_model.train()
 
         current_batch, target_batch, _ = data
-        obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
+        obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number

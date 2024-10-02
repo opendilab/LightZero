@@ -1604,7 +1604,16 @@ class WorldModel(nn.Module):
         # Assume outputs is an object with logits attributes like 'rewards', 'policy', and 'value'.
         # labels is a target tensor for comparison. batch is a dictionary with a mask indicating valid timesteps.
 
+
         logits = getattr(outputs, f'logits_{element}')
+
+        # 检查 outputs 中是否存在 NaN
+        if torch.isnan(logits).any():
+            raise ValueError(f"NaN detected in outputs for batch {batch} and element '{element}'")
+        
+        # 检查 labels_value 中是否存在 NaN
+        if torch.isnan(labels).any():
+            raise ValueError(f"NaN detected in labels_value for batch {batch} and element '{element}'")
 
         # Reshape your tensors
         logits = rearrange(logits, 'b t e -> (b t) e')
