@@ -380,7 +380,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         # sampled related core code
         # ==============================================================
         # obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
-        obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights, make_time = current_batch
+        obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number

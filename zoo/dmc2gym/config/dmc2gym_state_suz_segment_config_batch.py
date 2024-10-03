@@ -47,7 +47,7 @@ def main(env_id, seed):
     norm_type = 'LN'
 
     # buffer_reanalyze_freq = 1/10  # modify according to num_segments
-    buffer_reanalyze_freq = 1/1000000  # modify according to num_segments
+    buffer_reanalyze_freq = 1/100000000  # modify according to num_segments
 
     # 20*8*10/5=320
     reanalyze_batch_size = 160   # in total of num_unroll_steps
@@ -83,7 +83,7 @@ def main(env_id, seed):
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False, ),
-            # TODO: only for debug: 目前不起作用
+            # TODO: only for debug
             # collect_max_episode_steps=int(20),
             # eval_max_episode_steps=int(20),
         ),
@@ -132,6 +132,7 @@ def main(env_id, seed):
             replay_ratio=replay_ratio,
             batch_size=batch_size,
             discount_factor=1,
+            # td_steps=1,
             td_steps=5,
             lr_piecewise_constant_decay=False,
             learning_rate=0.0001,
@@ -178,7 +179,7 @@ def main(env_id, seed):
     create_config = dmc2gym_state_cont_sampled_unizero_create_config
     
     # 调整train_unizero里面的collector
-    main_config.exp_name=f'data_sampled_unizero_0930/ucb-uniform-prior_fs2_seg-collector_fixvalueV8/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    main_config.exp_name=f'data_sampled_unizero_1003/ucb-uniform-prior_fs2_seg-collector_fixvalueV8_fixtargetaction/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
     from lzero.entry import train_unizero_reanalyze
     train_unizero_reanalyze([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 

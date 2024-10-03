@@ -55,7 +55,7 @@ envs=(
     'walker-stand'
     'walker-walk'
 )
-seed=1
+seed=0
 for env in "${envs[@]}"; do
     script='source activate base && export HTTPS_PROXY=http://172.16.1.135:3128/ && pip cache purge && export_LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/mnt/afs/niuyazhe/code/.mujoco/mujoco210/bin && cd /mnt/afs/niuyazhe/code/dmc2gym && pip install -e .  && pip uninstall mujoco_py -y && cd /mnt/afs/niuyazhe/code/LightZero && pip install -e . -i  https://pkg.sensetime.com/repository/pypi-proxy/simple/ && pip3 install ale-py autorom && AutoROM --accept-license && pip install pyecharts && python3 -u /mnt/afs/niuyazhe/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_segment_config_batch.py --env %q --seed %d'
     script=${script/\%q/$env}
@@ -64,7 +64,7 @@ for env in "${envs[@]}"; do
 
 sco acp jobs create --workspace-name=df42ac16-77cf-4cfe-a3ce-e89e317bdf20 \
     --aec2-name=ea2d41fe-274a-43b2-b562-70c0b7d396a2\
-    --job-name="suz-nlayer2-rr025-segcollect-uniform-H5-2-leansigma-nonfixvaluemask-td1-$env-s$seed" \
+    --job-name="suz-nlayer2-rr025-segcollect-uniform-H5-2-leansigma-fixvalueV8_fixtargetactio-$env-s$seed" \
     --container-image-url='registry.cn-sh-01.sensecore.cn/basemodel-ccr/aicl-b27637a9-660e-4927:20231222-17h24m12s' \
     --training-framework=pytorch \
     --enable-mpi \
