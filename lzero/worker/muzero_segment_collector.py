@@ -254,8 +254,6 @@ class MuZeroSegmentCollector(ISerialCollector):
         """
         # pad over last segment trajectory
         beg_index = self.policy_config.model.frame_stack_num
-        # end_index = beg_index + self.policy_config.num_unroll_steps
-        # end_index = beg_index + self.policy_config.td_steps
         end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps  # TODO: check
 
         # the start <frame_stack_num> obs is init zero obs, so we take the
@@ -269,14 +267,13 @@ class MuZeroSegmentCollector(ISerialCollector):
         pad_action_lst = game_segments[i].action_segment[beg_index:end_index]
         
         # TODO: for unizero
-        pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps+ self.policy_config.td_steps]
+        pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps + self.policy_config.td_steps]
         # pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps]
 
         # EfficientZero original repo bug:
         # pad_child_visits_lst = game_segments[i].child_visit_segment[beg_index:end_index]
 
         beg_index = 0
-        # self.unroll_plus_td_steps = self.policy_config.num_unroll_steps + self.policy_config.td_steps
         end_index = beg_index + self.unroll_plus_td_steps - 1
 
         pad_reward_lst = game_segments[i].reward_segment[beg_index:end_index]

@@ -33,12 +33,12 @@ def main(env_id, seed):
     reanalyze_partition=1
 
     # =========== for debug ===========
-    # collector_env_num = 2
-    # num_segments = 2
-    # evaluator_env_num = 2
-    # num_simulations = 2
-    # update_per_collect = 2
-    # batch_size = 2
+    collector_env_num = 2
+    num_segments = 2
+    evaluator_env_num = 2
+    num_simulations = 2
+    update_per_collect = 2
+    batch_size = 2
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
@@ -55,8 +55,8 @@ def main(env_id, seed):
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False, ),
             # TODO: debug
-            # collect_max_episode_steps=int(50),
-            # eval_max_episode_steps=int(50),
+            collect_max_episode_steps=int(50),
+            eval_max_episode_steps=int(50),
         ),
         policy=dict(
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
@@ -126,7 +126,7 @@ def main(env_id, seed):
     atari_muzero_create_config = EasyDict(atari_muzero_create_config)
     create_config = atari_muzero_create_config
 
-    main_config.exp_name = f'data_muzero_reanalyze_0929/{env_id[:-14]}/{env_id[:-14]}_mz_fixvaluebugV8_td5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_muzero_reanalyze_0929_debug/{env_id[:-14]}/{env_id[:-14]}_mz_fixvaluebugV8_td5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_seed{seed}'
     # main_config.exp_name = f'data_muzero_reanalyze_0929/{env_id[:-14]}/{env_id[:-14]}_mz_origin-buffer_td5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_seed{seed}'
     
     # ============ use muzero_segment_collector instead of muzero_collector =============

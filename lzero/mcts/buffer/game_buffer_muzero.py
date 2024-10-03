@@ -311,7 +311,11 @@ class MuZeroGameBuffer(GameBuffer):
                 # action_segment没有pad, game_segment_len是game_segment.action_segment.shape[0]
                 # 由于obs_segment pad的可能不够self._cfg.td_steps + 1
                 # truncation_length = game_segment_len + self._cfg.td_steps + 1 # bug
-                truncation_length = game_segment.obs_segment.shape[0]-self._cfg.model.frame_stack_num
+                # truncation_length = game_segment.obs_segment.shape[0]-self._cfg.model.frame_stack_num
+
+                # game_segment_len is game_segment.action_segment.shape[0]
+                # action_segment.shape[0] = reward_segment.shape[0] or action_segment.shape[0] = reward_segment.shape[0] + 1
+                truncation_length = game_segment_len
 
             # truncation_length = game_segment_len
 
@@ -368,7 +372,6 @@ class MuZeroGameBuffer(GameBuffer):
         action_mask_segment, to_play_segment = [], []
 
         for game_segment, state_index, idx in zip(game_segment_list, pos_in_game_segment_list, batch_index_list):
-            # TODO
             game_segment_len = len(game_segment)
             game_segment_lens.append(game_segment_len)
             # for board games
@@ -453,40 +456,18 @@ class MuZeroGameBuffer(GameBuffer):
         to_play_segment = reward_value_context  # noqa
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
         transition_batch_size = len(value_obs_list)
-        game_segment_batch_size = len(pos_in_game_segment_list)
-
-        to_play, action_mask = self._preprocess_to_play_and_action_mask(
-            game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
-        )
-        if self._cfg.model.continuous_action_space is True:
-            # when the action space of the environment is continuous, action_mask[:] is None.
-            action_mask = [
-                list(np.ones(self._cfg.model.num_of_sampled_actions, dtype=np.int8)) for _ in range(transition_batch_size)
-            ]
-            # NOTE: in continuous action space env: we set all legal_actions as -1
-            legal_actions = [
-                [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(transition_batch_size)
-            ]
-        else:
-            legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
 
         batch_target_values, batch_rewards = [], []
         with torch.no_grad():
-            try:
-                value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
-            except:
-                print('debug')
+            value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
+
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
             slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
             network_output = []
             for i in range(slices):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
-
-                try:
-                    m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device)
-                except:
-                    print(value_obs_list[beg_index:end_index])
+                m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device)
                 # calculate the target value
                 m_output = model.initial_inference(m_obs)
 
@@ -504,38 +485,6 @@ class MuZeroGameBuffer(GameBuffer):
 
             # concat the output slices after model inference
             if self._cfg.use_root_value:
-                # use the root values from MCTS, as in EfficientZero
-                # the root values have limited improvement but require much more GPU actors;
-                # _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
-                #     network_output, data_type='muzero'
-                # )
-                # reward_pool = reward_pool.squeeze().tolist()
-                # policy_logits_pool = policy_logits_pool.tolist()
-                # noises = [
-                #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                #                         ).astype(np.float32).tolist() for j in range(transition_batch_size)
-                # ]
-                # if self._cfg.mcts_ctree:
-                #     # cpp mcts_tree
-                #     roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                #     if self._cfg.reanalyze_noise:
-                #         roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                #     else:
-                #         roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
-                #     # do MCTS for a new policy with the recent target model
-                #     MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-                # else:
-                #     # python mcts_tree
-                #     roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                #     if self._cfg.reanalyze_noise:
-                #         roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                #     else:
-                #         roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
-                #     # do MCTS for a new policy with the recent target model
-                #     MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-
-                # roots_values = roots.get_values()
-                # value_list = np.array(roots_values)
                 value_list = np.array(root_values) # TODO
             else:
                 # use the predicted values
@@ -568,19 +517,17 @@ class MuZeroGameBuffer(GameBuffer):
                 target_rewards = []
                 base_index = state_index
 
-                # TODO:===========
+                # =========== NOTE ===============
                 if game_segment_len_non_re < self._cfg.game_segment_length:
-                    # 游戏结束的最后一段segment，target value应该是0
+                    # The last segment of one episode, the target value of excess part should be 0
                     truncation_length = game_segment_len_non_re
                 else:
-                    # action_segment没有pad, game_segment_len是game_segment.action_segment.shape[0]
-                    # 由于obs_segment pad的可能不够self._cfg.td_steps + 1
-                    # truncation_length = game_segment.obs_segment.shape[0]-self._cfg.model.frame_stack_num
-                    truncation_length = reward_list.shape
-                    # value_list[value_index] 都是正确的，如果是倒数第2个segment，其epsidoe done对应的target value已经正确赋值为0 了，
-                
-                # truncation_length = game_segment_len_non_re
+                    # game_segment_len is game_segment.action_segment.shape[0]
+                    # action_segment.shape[0] = reward_segment.shape[0] or action_segment.shape[0] = reward_segment.shape[0] + 1
+                    truncation_length = game_segment_len_non_re
+                    assert reward_list.shape[0] + 1 == game_segment_len_non_re or reward_list.shape[0] == game_segment_len_non_re
 
+                # truncation_length = game_segment_len_non_re # original
 
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
@@ -596,9 +543,7 @@ class MuZeroGameBuffer(GameBuffer):
                             value_list[value_index] += reward * self._cfg.discount_factor ** i
                     horizon_id += 1
 
-                    # TODO:===========
-                    # if current_index < game_segment_len_non_re: # original
-                    if bootstrap_index < truncation_length: # TODO: fixvaluebugV8
+                    if bootstrap_index < truncation_length:
                         target_values.append(value_list[value_index])
                         target_rewards.append(reward_list[current_index])
                     else:

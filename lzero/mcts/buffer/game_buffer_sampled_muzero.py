@@ -373,19 +373,17 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
 
                 base_index = state_index
 
-                # TODO:===========
+                # =========== NOTE ===============
                 if game_segment_len_non_re < self._cfg.game_segment_length:
-                    # 游戏结束的最后一段segment，target value应该是0
+                    # The last segment of one episode, the target value of excess part should be 0
                     truncation_length = game_segment_len_non_re
                 else:
-                    # action_segment没有pad, game_segment_len是game_segment.action_segment.shape[0]
-                    # 由于obs_segment pad的可能不够self._cfg.td_steps + 1
-                    # truncation_length = game_segment_len + self._cfg.td_steps + 1 # bug
-                    # truncation_length = game_segment.obs_segment.shape[0]-self._cfg.model.frame_stack_num
-                    truncation_length = reward_list.shape[0] # TODO
-                    # value_list[value_index] 都是正确的，如果是倒数第2个segment，其epsidoe done对应的target value已经正确赋值为0 了，
+                    # game_segment_len is game_segment.action_segment.shape[0]
+                    # action_segment.shape[0] = reward_segment.shape[0] or action_segment.shape[0] = reward_segment.shape[0] + 1
+                    truncation_length = game_segment_len_non_re
+                    assert reward_list.shape[0] + 1 == game_segment_len_non_re or reward_list.shape[0] == game_segment_len_non_re
 
-                # truncation_length = game_segment_len_non_re
+                # truncation_length = game_segment_len_non_re # original
 
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
@@ -402,16 +400,10 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
 
                     horizon_id += 1
 
-
-                    # if current_index < game_segment_len_non_re: # original
-                    if bootstrap_index < truncation_length: # TODO: fixvaluebugV8===========
+                    if bootstrap_index < truncation_length:
                         target_values.append(value_list[value_index])
                         target_rewards.append(reward_list[current_index])
-                        # target_values.append(value_list[value_index].reshape(()))
-                        # target_rewards.append(reward_list[current_index].reshape(()))
                     else:
-                        # target_values.append(np.array(0.))
-                        # target_rewards.append(np.array(0.))
                         target_values.append(np.array([0.]))
                         target_rewards.append(np.array([0.]))
 

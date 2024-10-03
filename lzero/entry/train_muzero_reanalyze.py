@@ -34,7 +34,7 @@ def train_muzero_reanalyze(
 ) -> 'Policy':  # noqa
     """
     Overview:
-        The train entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel Muzero.
+        The train entry for MCTS+RL algorithms with buffer reanalyze trick (proposed in the ReZero paper: https://arxiv.org/pdf/2404.16364.), including MuZero, EfficientZero, Sampled EfficientZero, Gumbel Muzero.
     Arguments:
         - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
             ``Tuple[dict, dict]`` type means [user_config, create_cfg].

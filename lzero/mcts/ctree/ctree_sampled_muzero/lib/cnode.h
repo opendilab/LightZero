@@ -80,7 +80,6 @@ namespace tree
         bool continuous_action_space;
 
         CRoots();
-        // CRoots(int root_num, std::vector<std::vector<float> >& legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space);
         CRoots(int root_num, std::vector<std::vector<float> > legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space);
         ~CRoots();
 

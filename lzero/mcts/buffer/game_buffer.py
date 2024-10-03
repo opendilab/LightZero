@@ -146,11 +146,6 @@ class GameBuffer(ABC, object):
 
             # print(f'len(game_segment)=len(game_segment.action_segment): {len(game_segment)}')
             # print(f'len(game_segment.obs_segment): {game_segment.obs_segment.shape[0]}')
-
-            # #===== TODO: commit-id c19b203 for muzero segment-collector 性能好的版本======
-            # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
-            #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
-
             if pos_in_game_segment >= self._cfg.game_segment_length:
                 pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
 
@@ -196,14 +191,12 @@ class GameBuffer(ABC, object):
         pos_in_game_segment_list = []
 
         for idx in batch_index_list:
-            # 选取每个segment的第一步为开始位置
+            # Select the first step of each sequence of length <self._cfg.num_unroll_steps> as the starting position
             game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx*self._cfg.num_unroll_steps]
             game_segment_idx -= self.base_idx
             game_segment = self.game_segment_buffer[game_segment_idx]
             game_segment_list.append(game_segment)
-
-            # pos_in_game_segment_list.append(pos_in_game_segment)
-
+            # TODO: check the correctness of the following code
             if pos_in_game_segment >= self._cfg.game_segment_length:
                 pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
             pos_in_game_segment_list.append(pos_in_game_segment)

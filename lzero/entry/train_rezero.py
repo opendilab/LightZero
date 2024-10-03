@@ -29,7 +29,7 @@ def train_rezero(
         max_env_step: Optional[int] = int(1e10),
 ) -> 'Policy':
     """
-    Train entry for ReZero algorithms (ReZero-MuZero, ReZero-EfficientZero).
+    Train entry for ReZero algorithms (ReZero-MuZero, ReZero-EfficientZero). More details can be found in the ReZero paper: https://arxiv.org/pdf/2404.16364.
 
     Args:
         - input_cfg (:obj:`Tuple[dict, dict]`): Configuration dictionaries (user_config, create_cfg).

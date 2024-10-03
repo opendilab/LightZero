@@ -455,7 +455,7 @@ namespace tree
             CNode *child = this->get_child(this->legal_actions[i]);
             prior = child->prior;
 
-            // 打印当前的prior和noise
+            // print current prior and noise
             // std::cout << "Action: ";
             // print_vector(this->legal_actions[i].value);
             // std::cout << std::endl;
@@ -465,16 +465,15 @@ namespace tree
 
             if (this->continuous_action_space == true)
             {
-                // 如果prior是log_prob
+                // if prior is log_prob
                 child->prior = log(exp(prior) * (1 - exploration_fraction) + noise * exploration_fraction + 1e-6);
             }
             else
             {
-                // 如果prior是prob
+                // if prior is prob
                 child->prior = prior * (1 - exploration_fraction) + noise * exploration_fraction;
             }
 
-            // 打印更新后的prior
             // std::cout << "Updated Prior: " << child->prior << std::endl;
         }
     }
@@ -606,55 +605,6 @@ namespace tree
     }
 
     //*********************************************************
-
-    // CRoots::CRoots()
-    // {
-    //     this->root_num = 0;
-    //     this->num_of_sampled_actions = 20;
-    // }
-
-    // // polished on 20240903
-    // CRoots::CRoots(int root_num, std::vector<std::vector<float> >& legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space)
-    //         : root_num(root_num), legal_actions_list(legal_actions_list), 
-    //       continuous_action_space(continuous_action_space), 
-    //       num_of_sampled_actions(num_of_sampled_actions), 
-    //       action_space_size(action_space_size) 
-    // {
-    //     /*
-    //     Overview:
-    //         Initialization of CNode with root_num, legal_actions_list, action_space_size, num_of_sampled_actions, continuous_action_space.
-    //     Arguments:
-    //         - root_num: the number of the current root.
-    //         - legal_action_list: the vector of the legal action of this root.
-    //         - action_space_size: the size of action space of the current env.
-    //         - num_of_sampled_actions: the number of sampled actions, i.e. K in the Sampled MuZero papers.
-    //         - continuous_action_space: whether the action space is continous in current env.
-    //     */
-    //     bool is_legal_actions_empty = legal_actions_list.empty() || 
-    //                                   (legal_actions_list[0].size() == 1 && legal_actions_list[0][0] == -1);
-
-    //     std::vector<CAction> legal_actions;
-
-    //     if (continuous_action_space || is_legal_actions_empty) {
-    //         // Continuous action space or no legal actions provided
-    //         legal_actions = {};  // Empty legal actions
-    //     } else {
-    //         // Discrete action space with valid legal actions
-    //         for (const auto& action : legal_actions_list) {
-    //             legal_actions.emplace_back(action, 0);  // Construct CAction using each legal action
-    //         }
-    //     }
-
-    //     roots.reserve(root_num);  // Reserve space to avoid reallocations
-
-    //     for (int i = 0; i < root_num; ++i) {
-    //         roots.emplace_back(0, legal_actions, action_space_size, 
-    //                            num_of_sampled_actions, continuous_action_space);
-    //     }
-    // }
-
-    
-    // CRoots::~CRoots() {}
 
     CRoots::CRoots()
     {
@@ -997,7 +947,6 @@ namespace tree
         // TODO(pu): empirical distribution
         // std::string empirical_distribution_type = "density";
         std::string empirical_distribution_type = "uniform";
-
         if (empirical_distribution_type.compare("density"))
         {
             if (continuous_action_space == true)

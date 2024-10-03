@@ -34,7 +34,7 @@ def train_unizero_reanalyze(
 ) -> 'Policy':
     """
     Overview:
-        The train entry for UniZero, proposed in our paper UniZero: Generalized and Efficient Planning with Scalable Latent World Models.
+        The train entry for UniZero with buffer reanalyze trick, proposed in our paper UniZero: Generalized and Efficient Planning with Scalable Latent World Models.
         UniZero aims to enhance the planning capabilities of reinforcement learning agents by addressing the limitations found in MuZero-style algorithms,
         particularly in environments requiring the capture of long-term dependencies. More details can be found in https://arxiv.org/abs/2406.10667.
     Arguments:
@@ -197,9 +197,6 @@ def train_unizero_reanalyze(
                         logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
 
                 train_data = replay_buffer.sample(batch_size, policy)
-                if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
-                    # Clear caches and precompute positional embedding matrices
-                    policy.recompute_pos_emb_diff_and_clear_cache()  # TODO
 
                 train_data.append({'train_which_component': 'transformer'})
                 log_vars = learner.train(train_data, collector.envstep)
