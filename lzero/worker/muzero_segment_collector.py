@@ -15,8 +15,8 @@ from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
 
 
-@SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
-class MuZeroCollector(ISerialCollector):
+@SERIAL_COLLECTOR_REGISTRY.register('segment_muzero')
+class MuZeroSegmentCollector(ISerialCollector):
     """
     Overview:
         The Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.
@@ -113,9 +113,10 @@ class MuZeroCollector(ISerialCollector):
         assert hasattr(self, '_env'), "please set env first"
         if _policy is not None:
             self._policy = _policy
-            self._default_n_episode = _policy.get_attribute('cfg').get('n_episode', None)
+
+            self._default_num_segments = _policy.get_attribute('cfg').get('num_segments', None)
             self._logger.debug(
-                'Set default n_episode mode(n_episode({}), env_num({}))'.format(self._default_n_episode, self._env_num)
+                'Set default num_segments mode(num_segments({}), env_num({}))'.format(self._default_num_segments, self._env_num)
             )
         self._policy.reset()
 
@@ -139,6 +140,16 @@ class MuZeroCollector(ISerialCollector):
             self.reset_policy(_policy)
 
         self._env_info = {env_id: {'time': 0., 'step': 0} for env_id in range(self._env_num)}
+
+        # 在此处初始化action_mask_dict, to_play_dict和chance_dict,确保它们包含所有env_id的值
+        self.action_mask_dict = {i: None for i in range(self._env_num)}
+        self.to_play_dict = {i: None for i in range(self._env_num)}
+        if self.policy_config.use_ture_chance_label_in_chance_encoder:
+            self.chance_dict = {i: None for i in range(self._env_num)}
+
+        self.dones = np.array([False for _ in range(self._env_num)])
+        self.last_game_segments = [None for _ in range(self._env_num)]
+        self.last_game_priorities = [None for _ in range(self._env_num)]
 
         self._episode_info = []
         self._total_envstep_count = 0
@@ -247,12 +258,20 @@ class MuZeroCollector(ISerialCollector):
         # end_index = beg_index + self.policy_config.td_steps
         end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps  # TODO: check
 
-
         # the start <frame_stack_num> obs is init zero obs, so we take the
         # [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
         # e.g. the start 4 obs is init zero obs, the num_unroll_steps is 5, so we take the [4:9] obs as the pad obs
         pad_obs_lst = game_segments[i].obs_segment[beg_index:end_index]
-        pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps]
+
+        # TODO: for unizero
+        beg_index = 0
+        end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps
+        pad_action_lst = game_segments[i].action_segment[beg_index:end_index]
+        
+        # TODO: for unizero
+        pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps+ self.policy_config.td_steps]
+        # pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps]
+
         # EfficientZero original repo bug:
         # pad_child_visits_lst = game_segments[i].child_visit_segment[beg_index:end_index]
 
@@ -261,6 +280,7 @@ class MuZeroCollector(ISerialCollector):
         end_index = beg_index + self.unroll_plus_td_steps - 1
 
         pad_reward_lst = game_segments[i].reward_segment[beg_index:end_index]
+
         if self.policy_config.use_ture_chance_label_in_chance_encoder:
             chance_lst = game_segments[i].chance_segment[beg_index:end_index]
 
@@ -274,14 +294,14 @@ class MuZeroCollector(ISerialCollector):
 
         # pad over and save
         if self.policy_config.gumbel_algo:
-            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst,
+            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst,
                                            next_segment_improved_policy=pad_improved_policy_prob)
         else:
             if self.policy_config.use_ture_chance_label_in_chance_encoder:
-                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst,
+                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst,
                                                next_chances=chance_lst)
             else:
-                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
+                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst)
         """
         Note:
             game_segment element shape:
@@ -299,35 +319,36 @@ class MuZeroCollector(ISerialCollector):
         # put the game segment into the pool
         self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
 
-        # reset last game_segments
+        # reset last game_segments # TODO:origin
         last_game_segments[i] = None
         last_game_priorities[i] = None
+
 
         return None
 
     def collect(self,
-                n_episode: Optional[int] = None,
+                num_segments: Optional[int] = None,
                 train_iter: int = 0,
                 policy_kwargs: Optional[dict] = None,
                 collect_with_pure_policy: bool = False) -> List[Any]:
         """
         Overview:
-            Collect `n_episode` episodes of data with policy_kwargs, trained for `train_iter` iterations.
+            Collect `num_segments` segments of data with policy_kwargs, trained for `train_iter` iterations.
         Arguments:
-            - n_episode (:obj:`Optional[int]`): Number of episodes to collect.
+            - num_segments (:obj:`Optional[int]`): Number of segments to collect.
             - train_iter (:obj:`int`): Number of training iterations completed so far.
             - policy_kwargs (:obj:`Optional[dict]`): Additional keyword arguments for the policy.
             - collect_with_pure_policy (:obj:`bool`): Whether to collect data using pure policy without MCTS.
         Returns:
             - return_data (:obj:`List[Any]`): Collected data in the form of a list.
         """
-        # TODO: collect_with_pure_policy as a separate collector
-        if n_episode is None:
-            if self._default_n_episode is None:
-                raise RuntimeError("Please specify collect n_episode")
+        if num_segments is None:
+            if self._default_num_segments is None:
+                raise RuntimeError("Please specify collect num_segments")
             else:
-                n_episode = self._default_n_episode
-        assert n_episode >= self._env_num, "Please make sure n_episode >= env_num{}/{}".format(n_episode, self._env_num)
+                num_segments = self._default_num_segments
+        assert num_segments == self._env_num, "Please make sure num_segments == env_num{}/{}".format(num_segments, self._env_num)
+
         if policy_kwargs is None:
             policy_kwargs = {}
         temperature = policy_kwargs['temperature']
@@ -336,10 +357,11 @@ class MuZeroCollector(ISerialCollector):
         collected_episode = 0
         collected_step = 0
         env_nums = self._env_num
-        retry_waiting_time = 0.05
 
         # initializations
         init_obs = self._env.ready_obs
+
+        retry_waiting_time = 0.05
         while len(init_obs.keys()) != self._env_num:
             # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
             # len(self._env.ready_obs), especially in tictactoe env.
@@ -352,10 +374,12 @@ class MuZeroCollector(ISerialCollector):
             )
             init_obs = self._env.ready_obs
 
-        action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
-        to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
-        if self.policy_config.use_ture_chance_label_in_chance_encoder:
-            chance_dict = {i: to_ndarray(init_obs[i]['chance']) for i in range(env_nums)}
+        for env_id in range(env_nums):
+            if env_id in init_obs.keys():
+                self.action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
+                self.to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
+                if self.policy_config.use_ture_chance_label_in_chance_encoder:
+                    self.chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
         game_segments = [
             GameSegment(
@@ -371,11 +395,9 @@ class MuZeroCollector(ISerialCollector):
                 [to_ndarray(init_obs[env_id]['observation']) for _ in range(self.policy_config.model.frame_stack_num)],
                 maxlen=self.policy_config.model.frame_stack_num
             )
+
             game_segments[env_id].reset(observation_window_stack[env_id])
 
-        dones = np.array([False for _ in range(env_nums)])
-        last_game_segments = [None for _ in range(env_nums)]
-        last_game_priorities = [None for _ in range(env_nums)]
         # for priorities in self-play
         search_values_lst = [[] for _ in range(env_nums)]
         pred_values_lst = [[] for _ in range(env_nums)]
@@ -392,8 +414,6 @@ class MuZeroCollector(ISerialCollector):
         self_play_visit_entropy = []
         total_transitions = 0
 
-        ready_env_id = set()
-        remain_episode = n_episode
         if collect_with_pure_policy:
             temp_visit_list = [0.0 for i in range(self._env.action_space.n)]
 
@@ -401,13 +421,12 @@ class MuZeroCollector(ISerialCollector):
             with self._timer:
                 # Get current ready env obs.
                 obs = self._env.ready_obs
-
-                new_available_env_id = set(obs.keys()).difference(ready_env_id)
-                ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
-                remain_episode -= min(len(new_available_env_id), remain_episode)
-
-                # NOTE: TODO: muzero使用wait让N个env都同步会有bug
-                # ready_env_id = set(obs.keys())
+                ready_env_id = set(obs.keys())
+                if len(ready_env_id) < self._env_num:
+                    print(f'muzero_segment_collector: len(ready_env_id) < self._env_num, ready_env_id: {ready_env_id}')
+                
+                # NOTE: TODO: 是否wait到所有env都ready，对于muzero性能好像影响不大，
+                # 对于unizero由于init-infer需要检索kv_cache, 但wait后对于性能有负影响，检查原因
                 # while len(obs.keys()) != self._env_num:
                 #     # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
                 #     # len(self._env.ready_obs), especially in tictactoe env.
@@ -424,12 +443,13 @@ class MuZeroCollector(ISerialCollector):
                 stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
 
-                action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
-                to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
-                action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
-                to_play = [to_play_dict[env_id] for env_id in ready_env_id]
+                self.action_mask_dict_tmp = {env_id: self.action_mask_dict[env_id] for env_id in ready_env_id}
+                self.to_play_dict_tmp = {env_id: self.to_play_dict[env_id] for env_id in ready_env_id}
+                
+                action_mask = [self.action_mask_dict_tmp[env_id] for env_id in ready_env_id]
+                to_play = [self.to_play_dict_tmp[env_id] for env_id in ready_env_id]
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
-                    chance_dict = {env_id: chance_dict[env_id] for env_id in ready_env_id}
+                    self.chance_dict_tmp = {env_id: self.chance_dict[env_id] for env_id in ready_env_id}
 
                 stack_obs = to_ndarray(stack_obs)
                 # return stack_obs shape: [B, S*C, W, H] e.g. [8, 4*1, 96, 96]
@@ -440,6 +460,7 @@ class MuZeroCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
+
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
 
                 # Extract relevant policy outputs
@@ -533,26 +554,26 @@ class MuZeroCollector(ISerialCollector):
                     # in ``game_segments[env_id].init``, we have appended o_{t} in ``self.obs_segment``
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         game_segments[env_id].append(
-                            actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                            to_play_dict[env_id], chance_dict[env_id]
+                            actions[env_id], to_ndarray(obs['observation']), reward, self.action_mask_dict_tmp[env_id],
+                            self.to_play_dict_tmp[env_id], self.chance_dict_tmp[env_id]
                         )
                     else:
                         game_segments[env_id].append(
-                            actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                            to_play_dict[env_id]
+                            actions[env_id], to_ndarray(obs['observation']), reward, self.action_mask_dict_tmp[env_id],
+                            self.to_play_dict_tmp[env_id]
                         )
 
                     # NOTE: the position of code snippet is very important.
                     # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
-                    action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
-                    to_play_dict[env_id] = to_ndarray(obs['to_play'])
+                    self.action_mask_dict_tmp[env_id] = to_ndarray(obs['action_mask'])
+                    self.to_play_dict_tmp[env_id] = to_ndarray(obs['to_play'])
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
-                        chance_dict[env_id] = to_ndarray(obs['chance'])
+                        self.chance_dict_tmp[env_id] = to_ndarray(obs['chance'])
 
                     if self.policy_config.ignore_done:
-                        dones[env_id] = False
+                        self.dones[env_id] = False
                     else:
-                        dones[env_id] = done
+                        self.dones[env_id] = done
 
                     if not collect_with_pure_policy:
                         visit_entropies_lst[env_id] += visit_entropy_dict[env_id]
@@ -561,7 +582,7 @@ class MuZeroCollector(ISerialCollector):
 
                     eps_steps_lst[env_id] += 1
                     if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
-                        # only for UniZero now
+                        # ============ only for UniZero now ============
                         self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
 
                     total_transitions += 1
@@ -582,10 +603,10 @@ class MuZeroCollector(ISerialCollector):
                     # if game segment is full, we will save the last game segment
                     if game_segments[env_id].is_full():
                         # pad over last segment trajectory
-                        if last_game_segments[env_id] is not None:
+                        if self.last_game_segments[env_id] is not None:
                             # TODO(pu): return the one game segment
                             self.pad_and_save_last_trajectory(
-                                env_id, last_game_segments, last_game_priorities, game_segments, dones
+                                env_id, self.last_game_segments, self.last_game_priorities, game_segments, self.dones
                             )
 
                         # calculate priority
@@ -596,8 +617,8 @@ class MuZeroCollector(ISerialCollector):
                             improved_policy_lst[env_id] = []
 
                         # the current game_segments become last_game_segment
-                        last_game_segments[env_id] = game_segments[env_id]
-                        last_game_priorities[env_id] = priorities
+                        self.last_game_segments[env_id] = game_segments[env_id]
+                        self.last_game_priorities[env_id] = priorities
 
                         # create new GameSegment
                         game_segments[env_id] = GameSegment(
@@ -611,7 +632,11 @@ class MuZeroCollector(ISerialCollector):
                     collected_step += 1
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
+                # =========== NOTE: =========== 
                 if timestep.done:
+                    print(f'========env {env_id} done!========')
+                    self._total_episode_count += 1
+
                     reward = timestep.info['eval_episode_return']
                     info = {
                         'reward': reward,
@@ -632,9 +657,9 @@ class MuZeroCollector(ISerialCollector):
 
                     # NOTE: put the penultimate game segment in one episode into the trajectory_pool
                     # pad over 2th last game_segment using the last game_segment
-                    if last_game_segments[env_id] is not None:
+                    if self.last_game_segments[env_id] is not None:
                         self.pad_and_save_last_trajectory(
-                            env_id, last_game_segments, last_game_priorities, game_segments, dones
+                            env_id, self.last_game_segments, self.last_game_priorities, game_segments, self.dones
                         )
 
                     # store current segment trajectory
@@ -646,51 +671,7 @@ class MuZeroCollector(ISerialCollector):
                     # assert len(game_segments[env_id]) == len(priorities)
                     # NOTE: save the last game segment in one episode into the trajectory_pool if it's not null
                     if len(game_segments[env_id].reward_segment) != 0:
-                        self.game_segment_pool.append((game_segments[env_id], priorities, dones[env_id]))
-
-                    # print(game_segments[env_id].reward_segment)
-                    # reset the finished env and init game_segments
-                    if n_episode > self._env_num:
-                        # Get current ready env obs.
-                        init_obs = self._env.ready_obs
-                        retry_waiting_time = 0.001
-                        while len(init_obs.keys()) != self._env_num:
-                            # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
-                            # len(self._env.ready_obs), especially in tictactoe env.
-                            self._logger.info('The current init_obs.keys() is {}'.format(init_obs.keys()))
-                            self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
-                            time.sleep(retry_waiting_time)
-                            self._logger.info(
-                                '=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10
-                            )
-                            self._logger.info(
-                                'After sleeping {}s, the current _env_states is {}'.format(
-                                    retry_waiting_time, self._env._env_states
-                                )
-                            )
-                            init_obs = self._env.ready_obs
-
-                        new_available_env_id = set(init_obs.keys()).difference(ready_env_id)
-                        ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
-                        remain_episode -= min(len(new_available_env_id), remain_episode)
-
-                        action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
-                        to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
-                        if self.policy_config.use_ture_chance_label_in_chance_encoder:
-                            chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
-
-                        game_segments[env_id] = GameSegment(
-                            self._env.action_space,
-                            game_segment_length=self.policy_config.game_segment_length,
-                            config=self.policy_config
-                        )
-                        observation_window_stack[env_id] = deque(
-                            [init_obs[env_id]['observation'] for _ in range(self.policy_config.model.frame_stack_num)],
-                            maxlen=self.policy_config.model.frame_stack_num
-                        )
-                        game_segments[env_id].reset(observation_window_stack[env_id])
-                        last_game_segments[env_id] = None
-                        last_game_priorities[env_id] = None
+                        self.game_segment_pool.append((game_segments[env_id], priorities, self.dones[env_id]))
 
                     # log
                     self_play_moves_max = max(self_play_moves_max, eps_steps_lst[env_id])
@@ -705,24 +686,28 @@ class MuZeroCollector(ISerialCollector):
                     visit_entropies_lst[env_id] = 0
 
                     # Env reset is done by env_manager automatically
-                    self._policy.reset([env_id])  # NOTE: reset the policy for the env_id. Default reset_init_data=True.
+                    # NOTE: ============ reset the policy for the env_id. Default reset_init_data=True. ================
+                    self._policy.reset([env_id])
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
 
                     # NOTE: TODO
                     # ===== NOTE: if one episode done and not return, we should init its game_segments[env_id]  =======
                     # create new GameSegment
-                    # game_segments[env_id] =  GameSegment(
-                    #         self._env.action_space,
-                    #         game_segment_length=self.policy_config.game_segment_length,
-                    #         config=self.policy_config
-                    #     )
-                    # game_segments[env_id].reset(observation_window_stack[env_id])
+                    game_segments[env_id] =  GameSegment(
+                            self._env.action_space,
+                            game_segment_length=self.policy_config.game_segment_length,
+                            config=self.policy_config
+                        )
+                    game_segments[env_id].reset(observation_window_stack[env_id])
+                    # NOTE: TODO
+                    # self.last_game_segments[env_id] = None
+                    # self.last_game_priorities[env_id] = None
 
-                    # 如果 wait N个env都同步，会在return时，导致有的env没有done，
-                    # 但是现在的muzero_collector没有维护好全局的self.last_game_segments，导致有的数据没有收集到
+            # NOTE: must after the for loop to make sure all env_id's data are collected
+            if len(self.game_segment_pool) >= self._default_num_segments:
+                print(f'collect {len(self.game_segment_pool)} segments now!')
 
-            if collected_episode >= n_episode:
                 # [data, meta_data]
                 return_data = [self.game_segment_pool[i][0] for i in range(len(self.game_segment_pool))], [
                     {

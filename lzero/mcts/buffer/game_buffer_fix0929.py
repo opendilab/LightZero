@@ -136,23 +136,49 @@ class GameBuffer(ABC, object):
 
         game_segment_list = []
         pos_in_game_segment_list = []
+        max_retries = 3  # 最多允许的重试次数
 
-        for idx in batch_index_list:
-            game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
-            game_segment_idx -= self.base_idx
-            game_segment = self.game_segment_buffer[game_segment_idx]
+        for cnt, idx in enumerate(batch_index_list):
+            retry_count = 0  # 初始化重试计数器
 
+            while retry_count < max_retries:
+                game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
+                game_segment_idx -= self.base_idx
+                game_segment = self.game_segment_buffer[game_segment_idx]
+
+                # 如果满足长度条件，退出循环
+                if len(game_segment) >= self._cfg.num_unroll_steps + self._cfg.td_steps:
+                    # NOTE: unizero要求value_obs_list 是连续的<unroll_step>步target_obs
+                    break
+
+                # 增加重试次数
+                retry_count += 1
+
+                # 如果不满足条件，重新采样一个新的 idx
+                # self.game_segment_game_pos_look_up.pop(idx) # 去掉这个segment
+                idx = np.random.choice(num_of_transitions, 1, p=probs, replace=False).item()
+                batch_index_list[cnt] = idx
+
+            # 如果超过max_retries仍然不满足条件，跳过这个索引
+            if retry_count == max_retries:
+                print(f"Warning: Could not find a valid game segment for index {cnt} after {max_retries} retries.")
+            
+            # 采样成功，添加game_segment 和 pos_in_game_segment
             game_segment_list.append(game_segment)
 
-            # print(f'len(game_segment)=len(game_segment.action_segment): {len(game_segment)}')
-            # print(f'len(game_segment.obs_segment): {game_segment.obs_segment.shape[0]}')
+            # pos_in_game_segment_list.append(pos_in_game_segment)
 
-            # #===== TODO: commit-id c19b203 for muzero segment-collector 性能好的版本======
-            # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
-            #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
+            if len(game_segment)<self._cfg.game_segment_length:
+                # 截断的segment, game_segment.obs_segment: 10+4, 10是截断后的长度，4是stack_num, 没有padding的<unroll_steps>步
+                print(f'len(game_segment): {len(game_segment)}') 
+                if pos_in_game_segment > len(game_segment) - self._cfg.num_unroll_steps - self._cfg.td_steps:
+                    pos_in_game_segment = np.random.choice(max(len(game_segment) - self._cfg.num_unroll_steps - self._cfg.td_steps, 1), 1).item()
+            else:
+                # 完整的segment, game_segment.obs_segment: 20+5+4, 20是obs_segment长度，4是stack_num, 5是padding的<unroll_steps>步
+                # print(f'len(game_segment): {len(game_segment)}') 
+                if pos_in_game_segment > len(game_segment) - self._cfg.td_steps:
+                    pos_in_game_segment = np.random.choice(max(len(game_segment) - self._cfg.td_steps, 1), 1).item()
 
-            if pos_in_game_segment >= self._cfg.game_segment_length:
-                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
 
             pos_in_game_segment_list.append(pos_in_game_segment)
             
@@ -196,18 +222,13 @@ class GameBuffer(ABC, object):
         pos_in_game_segment_list = []
 
         for idx in batch_index_list:
-            # 选取每个segment的第一步为开始位置
             game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx*self._cfg.num_unroll_steps]
             game_segment_idx -= self.base_idx
             game_segment = self.game_segment_buffer[game_segment_idx]
+
             game_segment_list.append(game_segment)
-
-            # pos_in_game_segment_list.append(pos_in_game_segment)
-
-            if pos_in_game_segment >= self._cfg.game_segment_length:
-                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
             pos_in_game_segment_list.append(pos_in_game_segment)
-
+            
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
 
@@ -249,6 +270,11 @@ class GameBuffer(ABC, object):
 
             game_segment_list.append(game_segment)
             pos_in_game_segment_list.append(pos_in_game_segment)
+            
+            # TODO
+            # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
+            #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
+            # pos_in_game_segment_list.append(pos_in_game_segment)
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
 

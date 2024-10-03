@@ -144,15 +144,10 @@ class GameBuffer(ABC, object):
 
             game_segment_list.append(game_segment)
 
-            # print(f'len(game_segment)=len(game_segment.action_segment): {len(game_segment)}')
-            # print(f'len(game_segment.obs_segment): {game_segment.obs_segment.shape[0]}')
-
+            # print(f'len(game_segment):{len(game_segment)}')
             # #===== TODO: commit-id c19b203 for muzero segment-collector 性能好的版本======
             # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
             #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
-
-            if pos_in_game_segment >= self._cfg.game_segment_length:
-                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
 
             pos_in_game_segment_list.append(pos_in_game_segment)
             
@@ -196,18 +191,13 @@ class GameBuffer(ABC, object):
         pos_in_game_segment_list = []
 
         for idx in batch_index_list:
-            # 选取每个segment的第一步为开始位置
             game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx*self._cfg.num_unroll_steps]
             game_segment_idx -= self.base_idx
             game_segment = self.game_segment_buffer[game_segment_idx]
+
             game_segment_list.append(game_segment)
-
-            # pos_in_game_segment_list.append(pos_in_game_segment)
-
-            if pos_in_game_segment >= self._cfg.game_segment_length:
-                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
             pos_in_game_segment_list.append(pos_in_game_segment)
-
+            
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
 
@@ -249,6 +239,11 @@ class GameBuffer(ABC, object):
 
             game_segment_list.append(game_segment)
             pos_in_game_segment_list.append(pos_in_game_segment)
+            
+            # TODO
+            # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
+            #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
+            # pos_in_game_segment_list.append(pos_in_game_segment)
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
 

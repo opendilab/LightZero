@@ -21,16 +21,16 @@ class LPIPS(nn.Module):
         self.scaling_layer = ScalingLayer()
         self.chns = [64, 128, 256, 512, 512]  # vg16 features
         # Comment out the following line if you don't need perceptual loss
-        self.net = vgg16(pretrained=True, requires_grad=False)
+        # self.net = vgg16(pretrained=True, requires_grad=False)
         self.lin0 = NetLinLayer(self.chns[0], use_dropout=use_dropout)
         self.lin1 = NetLinLayer(self.chns[1], use_dropout=use_dropout)
         self.lin2 = NetLinLayer(self.chns[2], use_dropout=use_dropout)
         self.lin3 = NetLinLayer(self.chns[3], use_dropout=use_dropout)
         self.lin4 = NetLinLayer(self.chns[4], use_dropout=use_dropout)
         # Comment out the following line if you don't need perceptual loss
-        self.load_from_pretrained()
-        for param in self.parameters():
-            param.requires_grad = False
+        # self.load_from_pretrained()
+        # for param in self.parameters():
+        #     param.requires_grad = False
 
     def load_from_pretrained(self) -> None:
         ckpt = get_ckpt_path(name="vgg_lpips", root=Path.home() / ".cache/iris/tokenizer_pretrained_vgg")  # Download VGG if necessary

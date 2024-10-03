@@ -9,6 +9,7 @@ from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.rl_utils import get_epsilon_greedy_fn
+from ding.utils import EasyTimer
 from ding.utils import set_pkg_seed, get_rank
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
@@ -16,12 +17,14 @@ from tensorboardX import SummaryWriter
 from lzero.entry.utils import log_buffer_memory_usage, log_buffer_run_time
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
-from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
+from lzero.worker import MuZeroSegmentCollector as Collector
 from .utils import random_collect
 
+timer = EasyTimer()
 
-def train_muzero(
+
+def train_muzero_reanalyze(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -135,7 +138,11 @@ def train_muzero(
         eval_train_envstep_list = []
 
     # Evaluate the random agent
-    stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+    # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+
+    buffer_reanalyze_count = 0
+    train_epoch = 0
+    reanalyze_batch_size = cfg.policy.reanalyze_batch_size
 
     while True:
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
@@ -177,13 +184,38 @@ def train_muzero(
             # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
             collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
             update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
+        
         # save returned new_data collected by the collector
         replay_buffer.push_game_segments(new_data)
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
+        # Periodically reanalyze buffer
+        if cfg.policy.buffer_reanalyze_freq >= 1:
+            # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+            reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
+        else:
+            # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
+            if train_epoch % (1//cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+                with timer:
+                    # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+                    replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+                buffer_reanalyze_count += 1
+                logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
+                logging.info(f'Buffer reanalyze time: {timer.value}')
+
         # Learn policy from collected data.
         for i in range(update_per_collect):
+
+            if cfg.policy.buffer_reanalyze_freq >= 1:
+                # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+                if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions() // cfg.policy.num_unroll_steps > int(
+                        reanalyze_batch_size / cfg.policy.reanalyze_partition):
+                    # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+                    replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+                    buffer_reanalyze_count += 1
+                    logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
+
             # Learner will train ``update_per_collect`` times in one iteration.
             if replay_buffer.get_num_of_transitions() > batch_size:
                 train_data = replay_buffer.sample(batch_size, policy)
@@ -201,6 +233,8 @@ def train_muzero(
 
             if cfg.policy.use_priority:
                 replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
+
+        train_epoch += 1
 
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
             if cfg.policy.eval_offline:
