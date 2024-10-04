@@ -761,7 +761,8 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                     # truncation_length = game_segment_len + self._cfg.td_steps + 1 # bug
                     # truncation_length = game_segment.obs_segment.shape[0]-self._cfg.model.frame_stack_num
                     
-                    truncation_length = reward_list.shape[0] # TODO
+                    # truncation_length = reward_list.shape[0] # TODO
+                    truncation_length = game_segment_len_non_re
                     # value_list[value_index] 都是正确的，如果是倒数第2个segment，其epsidoe done对应的target value已经正确赋值为0 了，
 
                 # truncation_length = game_segment_len_non_re

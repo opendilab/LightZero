@@ -60,7 +60,7 @@ def main(env_id, seed):
             # eval_max_episode_steps=int(50),
         ),
         policy=dict(
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000000, ), ), ),  # default is 10000
             model=dict(
                 observation_shape=(3, 96, 96),
                 action_space_size=action_space_size,
@@ -128,7 +128,7 @@ def main(env_id, seed):
     atari_unizero_create_config = EasyDict(atari_unizero_create_config)
     create_config = atari_unizero_create_config
 
-    main_config.exp_name = f'data_unizero_reanalyze_1003/{env_id[:-14]}/{env_id[:-14]}_uz_fixvaluebugV8-fixtargetaation-reanalyzeresample_td5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_reanalyze_1004/{env_id[:-14]}/{env_id[:-14]}_uz_fixvaluebugV8-fixtargetaation-reanalyzeresample-fixtruc1_td5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     # main_config.exp_name = f'data_unizero_reanalyze_0929/{env_id[:-14]}/{env_id[:-14]}_uz_origin-buffer_td5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     
     # ============ use muzero_segment_collector instead of muzero_collector =============

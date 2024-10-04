@@ -576,7 +576,8 @@ class MuZeroGameBuffer(GameBuffer):
                     # action_segment没有pad, game_segment_len是game_segment.action_segment.shape[0]
                     # 由于obs_segment pad的可能不够self._cfg.td_steps + 1
                     # truncation_length = game_segment.obs_segment.shape[0]-self._cfg.model.frame_stack_num
-                    truncation_length = reward_list.shape
+                    # truncation_length = reward_list.shape
+                    truncation_length = game_segment_len_non_re
                     # value_list[value_index] 都是正确的，如果是倒数第2个segment，其epsidoe done对应的target value已经正确赋值为0 了，
                 
                 # truncation_length = game_segment_len_non_re
