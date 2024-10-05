@@ -1,4 +1,5 @@
 import copy
+import random
 from datetime import datetime
 from typing import Union, Optional, Dict
 
@@ -23,6 +24,11 @@ class CartPoleEnv(BaseEnv):
     config = dict(
         # env_id (str): The name of the environment.
         env_id="CartPole-v0",
+        # enable_chance (bool): Whether to enable chance in observation.
+        # If enabled, one of the first 3 values of observation will be multiplied by 2.
+        # used for testing chance encoder in stochastic_muzero.
+        # chance space is 3.
+        enable_chance=False,
         # replay_path (str): The path to save the replay video. If None, the replay will not be saved.
         # Only effective when env_manager.type is 'base'.
         replay_path=None,
@@ -39,6 +45,7 @@ class CartPoleEnv(BaseEnv):
         Initialize the environment with a configuration dictionary. Sets up spaces for observations, actions, and rewards.
         """
         self._cfg = cfg
+        self._enable_chance = self._cfg.get('enable_chance', False)
         self._init_flag = False
         self._continuous = False
         self._replay_path = cfg.replay_path
@@ -88,6 +95,13 @@ class CartPoleEnv(BaseEnv):
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
+        # this is to artificially introduce randomness in order to evaluate the performance of
+        # stochastic_muzero on state input
+        if self._enable_chance:
+            chance_value = random.randint(0, 2)
+            obs['observation'][chance_value] *= 2
+            obs['chance'] = chance_value
+
         return obs
 
     def step(self, action: Union[int, np.ndarray]) -> BaseEnvTimestep:
@@ -121,6 +135,13 @@ class CartPoleEnv(BaseEnv):
 
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+
+        # this is to artificially introduce randomness in order to evaluate the performance of
+        # stochastic_muzero on state input
+        if self._enable_chance:
+            chance_value = random.randint(0, 2)
+            obs['observation'][chance_value] *= 2
+            obs['chance'] = chance_value
 
         return BaseEnvTimestep(obs, rew, done, info)
 
