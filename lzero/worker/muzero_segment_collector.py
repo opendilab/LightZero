@@ -19,7 +19,7 @@ from lzero.mcts.utils import prepare_observation
 class MuZeroSegmentCollector(ISerialCollector):
     """
     Overview:
-        The Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.
+        The Segment Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.
         It manages the data collection process for training these algorithms using a serial mechanism.
     Interfaces:
         ``__init__``, ``reset``, ``reset_env``, ``reset_policy``, ``_reset_stat``, ``envstep``, ``__del__``, ``_compute_priorities``,
@@ -456,7 +456,6 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
-
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
 
                 # Extract relevant policy outputs

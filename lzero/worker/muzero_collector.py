@@ -19,7 +19,7 @@ from lzero.mcts.utils import prepare_observation
 class MuZeroCollector(ISerialCollector):
     """
     Overview:
-        The Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.
+        The Episode Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.
         It manages the data collection process for training these algorithms using a serial mechanism.
     Interfaces:
         ``__init__``, ``reset``, ``reset_env``, ``reset_policy``, ``_reset_stat``, ``envstep``, ``__del__``, ``_compute_priorities``,

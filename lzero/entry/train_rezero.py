@@ -152,10 +152,12 @@ def train_rezero(
             collect_with_pure_policy=cfg.policy.collect_with_pure_policy
         )
 
-        # Update collection frequency if not specified
         if update_per_collect is None:
-            collected_transitions = sum(len(segment) for segment in new_data[0])
-            update_per_collect = int(collected_transitions * cfg.policy.replay_ratio)
+            # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
+            # The length of game_segment (i.e., len(game_segment.action_segment)) can be smaller than cfg.policy.game_segment_length if it represents the final segment of the game.
+            # On the other hand, its length will be less than cfg.policy.game_segment_length + padding_length when it is not the last game segment. Typically, padding_length is the sum of unroll_steps and td_steps.
+            collected_transitions_num = sum(min(len(game_segment), cfg.policy.game_segment_length) for game_segment in new_data[0])
+            update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
 
         # Update replay buffer
         replay_buffer.push_game_segments(new_data)
