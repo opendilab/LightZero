@@ -111,11 +111,10 @@ class WorldModel(nn.Module):
         # Initialize keys and values for transformer
         self._initialize_transformer_keys_values()
 
-        # TODO: check
         self.latent_recon_loss = torch.tensor(0., device=self.device)
         self.perceptual_loss = torch.tensor(0., device=self.device)
 
-        # TODO: check
+        # TODO: check the size of the shared pool
         # for self.kv_cache_recurrent_infer
         # If needed, recurrent_infer should store the results of the one MCTS search. 
         self.shared_pool_size = int(50*self.env_num)
@@ -687,7 +686,7 @@ class WorldModel(nn.Module):
                     self.keys_values_wm_size_list = []
                     for i in range(ready_env_num):
                         # Retrieve latent state for a single environment
-                        # NOTE: len(last_obs_embeddings) may smaller than len(current_obs_embeddings), because some environments may have done
+                        # TODO: len(last_obs_embeddings) may smaller than len(current_obs_embeddings), because some environments may have done
 
                         state_single_env = last_obs_embeddings[i]
                         # Compute hash value using latent state for a single environment
@@ -1093,7 +1092,7 @@ class WorldModel(nn.Module):
             cache_key = hash_state(state_single_env)
 
             if self.reanalyze_phase:
-                # TODO: check
+                # TODO: check if this is correct
                 matched_value = None
             else:
                 # Try to retrieve the cached value from past_kv_cache_init_infer_envs
@@ -1300,7 +1299,6 @@ class WorldModel(nn.Module):
                                                                                             element='policy')
         else:
             # NOTE: for continuous action space
-            # TODO
             if self.config.policy_loss_type == 'simple':
                 orig_policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont_simple(outputs, batch)
             else:
@@ -1321,7 +1319,8 @@ class WorldModel(nn.Module):
         discounts = self.gamma ** timesteps
 
         if batch['mask_padding'].sum() == 0:
-            print('debug')
+            assert False, "mask_padding is all zeros"
+
         # Group losses into first step, middle step, and last step
         first_step_losses = {}
         middle_step_losses = {}
@@ -1411,7 +1410,7 @@ class WorldModel(nn.Module):
                 latent_state_l2_norms=latent_state_l2_norms,
             )
 
-    # TODO: 测试正确性
+    # TODO: test correctness
     def _calculate_policy_loss_cont_simple(self, outputs, batch: dict):
         """
         Simplified policy loss calculation for continuous actions.
@@ -1472,7 +1471,6 @@ class WorldModel(nn.Module):
 
         return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
 
-    # TODO: 测试正确性
     def _calculate_policy_loss_cont(self, outputs, batch: dict) -> Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Calculate the policy loss for continuous actions.
@@ -1538,82 +1536,15 @@ class WorldModel(nn.Module):
 
         return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
 
-    # def _calculate_policy_loss_cont_v0(self, outputs, batch: dict) -> Tuple[
-    #     torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
-    #     """
-    #     Calculate the policy loss for continuous actions.
-
-    #     Args:
-    #         - outputs: Model outputs containing policy logits.
-    #         - batch (:obj:`dict`): Batch data containing target policy, mask and sampled actions.
-    #     Returns:
-    #         - policy_loss (:obj:`torch.Tensor`): The calculated policy loss.
-    #         - policy_entropy_loss (:obj:`torch.Tensor`): The entropy loss of the policy.
-    #         - target_policy_entropy (:obj:`float`): The entropy of the target policy distribution.
-    #         - target_sampled_actions (:obj:`torch.Tensor`): The actions sampled from the target policy.
-    #         - mu (:obj:`torch.Tensor`): The mean of the normal distribution.
-    #         - sigma (:obj:`torch.Tensor`): The standard deviation of the normal distribution.
-    #     """
-    #     batch_size, num_unroll_steps, action_space_size = outputs.logits_policy.shape[
-    #         0], self.config.num_unroll_steps, self.config.action_space_size
-
-    #     policy_logits_all = outputs.logits_policy
-    #     mask_batch = batch['mask_padding']
-    #     child_sampled_actions_batch = batch['child_sampled_actions']
-    #     target_policy = batch['target_policy']
-
-    #     # Flatten the unroll step dimension for easier vectorized operations
-    #     policy_logits_all = policy_logits_all.view(batch_size * num_unroll_steps, -1)
-    #     mask_batch = mask_batch.contiguous().view(-1)
-    #     child_sampled_actions_batch = child_sampled_actions_batch.contiguous().view(batch_size * num_unroll_steps, -1,
-    #                                                                                 action_space_size)
-
-    #     mu, sigma = policy_logits_all[:, :action_space_size], policy_logits_all[:, action_space_size:]
-    #     mu = mu.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
-    #     sigma = sigma.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
-    #     dist = Independent(Normal(mu, sigma), 1)
-
-    #     target_normalized_visit_count = target_policy.contiguous().view(batch_size * num_unroll_steps, -1)
-    #     target_sampled_actions = child_sampled_actions_batch
-
-    #     policy_entropy = dist.entropy().mean(dim=1)
-    #     policy_entropy_loss = -policy_entropy * mask_batch
-
-    #     y = 1 - target_sampled_actions.pow(2)
-    #     target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
-    #     target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
-
-    #     log_prob = dist.log_prob(target_sampled_actions_before_tanh)
-    #     log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
-    #     log_prob_sampled_actions = log_prob
-
-    #     target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
-    #     policy_loss = -torch.sum(
-    #         torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
-    #     ) * mask_batch
-
-    #     # Calculate the entropy of the target policy distribution
-    #     non_masked_indices = torch.nonzero(mask_batch).squeeze(-1)
-    #     if len(non_masked_indices) > 0:
-    #         target_dist = Categorical(target_normalized_visit_count[non_masked_indices])
-    #         target_policy_entropy = target_dist.entropy().mean().item()
-    #     else:
-    #         target_policy_entropy = 0.0
-
-    #     return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
-
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):
         # Assume outputs is an object with logits attributes like 'rewards', 'policy', and 'value'.
         # labels is a target tensor for comparison. batch is a dictionary with a mask indicating valid timesteps.
 
-
         logits = getattr(outputs, f'logits_{element}')
 
-        # 检查 outputs 中是否存在 NaN
         if torch.isnan(logits).any():
             raise ValueError(f"NaN detected in outputs for batch {batch} and element '{element}'")
         
-        # 检查 labels_value 中是否存在 NaN
         if torch.isnan(labels).any():
             raise ValueError(f"NaN detected in labels_value for batch {batch} and element '{element}'")
 
