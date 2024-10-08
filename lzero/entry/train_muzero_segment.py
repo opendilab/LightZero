@@ -24,7 +24,7 @@ from .utils import random_collect
 timer = EasyTimer()
 
 
-def train_muzero_reanalyze(
+def train_muzero_segment(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,

@@ -153,9 +153,9 @@ def main(env_id, seed):
     create_config = dmc2gym_state_cont_sampled_unizero_create_config
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
-    from lzero.entry import train_unizero_reanalyze
+    from lzero.entry import train_unizero_segment
     main_config.exp_name=f'data_sampled_unizero/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
-    train_unizero_reanalyze([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
+    train_unizero_segment([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 
 
 if __name__ == "__main__":
