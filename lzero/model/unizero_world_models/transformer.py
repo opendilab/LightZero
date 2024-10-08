@@ -214,8 +214,8 @@ class SelfAttention(nn.Module):
         v = self.value(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, num_heads, T, head_size)
 
         if kv_cache is not None:
-            kv_cache.update(k, v)
-            k, v = kv_cache.get()
+            kv_cache.update(k, v)  # time 21% 
+            k, v = kv_cache.get() # time 5% 
 
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
 

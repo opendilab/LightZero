@@ -72,6 +72,53 @@ class MuZeroGameBuffer(GameBuffer):
         self.sample_times = 0
         self.active_root_num = 0
 
+    def reanalyze_buffer(
+            self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
+    ) -> List[Any]:
+        """
+        Overview:
+            sample data from ``GameBuffer`` and prepare the current and target batch for training.
+        Arguments:
+            - batch_size (:obj:`int`): batch size.
+            - policy (:obj:`Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]`): policy.
+        Returns:
+            - train_data (:obj:`List`): List of train data, including current_batch and target_batch.
+        """
+        policy._target_model.to(self._cfg.device)
+        policy._target_model.eval()
+        self.policy = policy
+        # obtain the current_batch and prepare target context
+        policy_re_context = self._make_batch_for_reanalyze(batch_size, 1)
+        # target policy
+        self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model)
+
+    def _make_batch_for_reanalyze(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
+        """
+        Overview:
+            first sample orig_data through ``_sample_orig_data()``,
+            then prepare the context of a batch:
+                reward_value_context:        the context of reanalyzed value targets
+                policy_re_context:           the context of reanalyzed policy targets
+                policy_non_re_context:       the context of non-reanalyzed policy targets
+                current_batch:                the inputs of batch
+        Arguments:
+            - batch_size (:obj:`int`): the batch size of orig_data from replay buffer.
+            - reanalyze_ratio (:obj:`float`): ratio of reanalyzed policy (value is 100% reanalyzed)
+        Returns:
+            - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch
+        """
+        # obtain the batch context from replay buffer
+        orig_data = self._sample_orig_reanalyze_data_uz(batch_size)
+        game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
+        batch_size = len(batch_index_list)
+        # obtain the context of reanalyzed policy targets
+        policy_re_context = self._prepare_policy_reanalyzed_context(
+            batch_index_list, game_segment_list,
+            pos_in_game_segment_list
+        )
+        self.reanalyze_num = batch_size
+        return policy_re_context
+
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
     ) -> List[Any]:
@@ -235,8 +282,11 @@ class MuZeroGameBuffer(GameBuffer):
         # for board games
         action_mask_segment, to_play_segment = [], []
 
+        root_values = []
+
         td_steps_list = []
-        for game_segment, state_index, idx in zip(game_segment_list, pos_in_game_segment_list, batch_index_list):
+        for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
+
             game_segment_len = len(game_segment)
             game_segment_lens.append(game_segment_len)
 
@@ -246,6 +296,20 @@ class MuZeroGameBuffer(GameBuffer):
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
             # t=2+3 -> o[2+3, 2+3+4+5] -> o[5, 14]
             game_obs = game_segment.get_unroll_obs(state_index + td_steps, self._cfg.num_unroll_steps)
+
+            # TODO
+            if state_index + td_steps < game_segment_len:
+                # 获取从 state_index + td_steps 开始的 root_value_segment 片段
+                root_values_segment = game_segment.root_value_segment[state_index + td_steps:state_index + td_steps+self._cfg.num_unroll_steps]
+                # 计算需要填充的 0 的数量
+                padding_length = (self._cfg.num_unroll_steps + 1) - len(root_values_segment)
+                # 使用 np.pad 来填充 0，使数组达到所需的长度
+                root_values_tmp = np.pad(root_values_segment, (0, max(0, padding_length)), mode='constant')
+                root_values.append(root_values_tmp)
+            else:
+                # 如果超出了范围，直接填充零
+                root_values.append(np.zeros(self._cfg.num_unroll_steps + 1))
+                print('exceed game segment') # TODO
 
             rewards_list.append(game_segment.reward_segment)
 
@@ -266,6 +330,7 @@ class MuZeroGameBuffer(GameBuffer):
                     end_index = beg_index + self._cfg.model.frame_stack_num
                     # the stacked obs in time t
                     obs = game_obs[beg_index:end_index]
+
                 else:
                     value_mask.append(0)
                     obs = zero_obs
@@ -273,7 +338,7 @@ class MuZeroGameBuffer(GameBuffer):
                 value_obs_list.append(obs)
 
         reward_value_context = [
-            value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list,
+            value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, root_values, game_segment_lens, td_steps_list,
             action_mask_segment, to_play_segment
         ]
         return reward_value_context
@@ -375,7 +440,7 @@ class MuZeroGameBuffer(GameBuffer):
             - batch_value_prefixs (:obj:'np.ndarray): batch of value prefix
             - batch_target_values (:obj:'np.ndarray): batch of value estimation
         """
-        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
+        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, root_values, game_segment_lens, td_steps_list, action_mask_segment, \
         to_play_segment = reward_value_context  # noqa
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
         transition_batch_size = len(value_obs_list)
@@ -387,11 +452,11 @@ class MuZeroGameBuffer(GameBuffer):
         if self._cfg.model.continuous_action_space is True:
             # when the action space of the environment is continuous, action_mask[:] is None.
             action_mask = [
-                list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
+                list(np.ones(self._cfg.model.num_of_sampled_actions, dtype=np.int8)) for _ in range(transition_batch_size)
             ]
             # NOTE: in continuous action space env: we set all legal_actions as -1
             legal_actions = [
-                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
+                [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(transition_batch_size)
             ]
         else:
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
@@ -427,36 +492,39 @@ class MuZeroGameBuffer(GameBuffer):
             if self._cfg.use_root_value:
                 # use the root values from MCTS, as in EfficientZero
                 # the root values have limited improvement but require much more GPU actors;
-                _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
-                    network_output, data_type='muzero'
-                )
-                reward_pool = reward_pool.squeeze().tolist()
-                policy_logits_pool = policy_logits_pool.tolist()
-                noises = [
-                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                        ).astype(np.float32).tolist() for j in range(transition_batch_size)
-                ]
-                if self._cfg.mcts_ctree:
-                    # cpp mcts_tree
-                    roots = MCTSCtree.roots(transition_batch_size, legal_actions)
-                    if self._cfg.reanalyze_noise:
-                        roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                    else:
-                        roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
-                    # do MCTS for a new policy with the recent target model
-                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-                else:
-                    # python mcts_tree
-                    roots = MCTSPtree.roots(transition_batch_size, legal_actions)
-                    if self._cfg.reanalyze_noise:
-                        roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                    else:
-                        roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
-                    # do MCTS for a new policy with the recent target model
-                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                # _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
+                #     network_output, data_type='muzero'
+                # )
+                # reward_pool = reward_pool.squeeze().tolist()
+                # policy_logits_pool = policy_logits_pool.tolist()
+                # noises = [
+                #     np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                #                         ).astype(np.float32).tolist() for j in range(transition_batch_size)
+                # ]
+                # if self._cfg.mcts_ctree:
+                #     # cpp mcts_tree
+                #     roots = MCTSCtree.roots(transition_batch_size, legal_actions)
+                #     if self._cfg.reanalyze_noise:
+                #         roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                #     else:
+                #         roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
+                #     # do MCTS for a new policy with the recent target model
+                #     MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                # else:
+                #     # python mcts_tree
+                #     roots = MCTSPtree.roots(transition_batch_size, legal_actions)
+                #     if self._cfg.reanalyze_noise:
+                #         roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                #     else:
+                #         roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
+                #     # do MCTS for a new policy with the recent target model
+                #     MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
 
-                roots_values = roots.get_values()
-                value_list = np.array(roots_values)
+                # roots_values = roots.get_values()
+                # value_list = np.array(roots_values)
+
+                value_list = root_values # TODO
+
             else:
                 # use the predicted values
                 value_list = concat_output_value(network_output)
@@ -544,11 +612,11 @@ class MuZeroGameBuffer(GameBuffer):
         if self._cfg.model.continuous_action_space is True:
             # when the action space of the environment is continuous, action_mask[:] is None.
             action_mask = [
-                list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
+                list(np.ones(self._cfg.model.num_of_sampled_actions, dtype=np.int8)) for _ in range(transition_batch_size)
             ]
             # NOTE: in continuous action space env: we set all legal_actions as -1
             legal_actions = [
-                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
+                [-1 for _ in range(self._cfg.model.num_of_sampled_actions)] for _ in range(transition_batch_size)
             ]
         else:
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
@@ -692,7 +760,7 @@ class MuZeroGameBuffer(GameBuffer):
         if self._cfg.model.continuous_action_space is True:
             # when the action space of the environment is continuous, action_mask[:] is None.
             action_mask = [
-                list(np.ones(self._cfg.model.action_space_size, dtype=np.int8)) for _ in range(transition_batch_size)
+                list(np.ones(self._cfg.model.num_of_sampled_actions, dtype=np.int8)) for _ in range(transition_batch_size)
             ]
             # NOTE: in continuous action space env: we set all legal_actions as -1
             legal_actions = [

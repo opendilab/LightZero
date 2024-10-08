@@ -34,6 +34,7 @@ atari_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        model_path=None,
         model=dict(
             observation_shape=(4, 96, 96),
             frame_stack_num=4,
@@ -99,7 +100,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=2 ./LightZero/zoo/atari/config/atari_muzero_multigpu_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=2 ./zoo/atari/config/atari_muzero_multigpu_ddp_config.py
     """
     from ding.utils import DDPContext
     from lzero.entry import train_muzero
