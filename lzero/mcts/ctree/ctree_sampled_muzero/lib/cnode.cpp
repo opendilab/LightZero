@@ -350,9 +350,9 @@ namespace tree
 
             std::default_random_engine generator(seed);
 
-            // 每个节点的legal_actions应该为一个固定离散集合，所以采用无放回抽样
+            // The legal_actions of each node should be a fixed discrete set, so sampling without replacement is used.
             // std::cout << "position uniform_distribution init" << std::endl;
-            std::uniform_real_distribution<double> uniform_distribution(0.0, 1.0); //均匀分布
+            std::uniform_real_distribution<double> uniform_distribution(0.0, 1.0); // uniform distribution
             // std::cout << "position uniform_distribution done" << std::endl;
             std::vector<double> disturbed_probs;
             std::vector<std::pair<int, double> > disc_action_with_probs;
@@ -455,7 +455,7 @@ namespace tree
             CNode *child = this->get_child(this->legal_actions[i]);
             prior = child->prior;
 
-            // print current prior and noise
+            // TODO: only for debug, print current prior and noise
             // std::cout << "Action: ";
             // print_vector(this->legal_actions[i].value);
             // std::cout << std::endl;

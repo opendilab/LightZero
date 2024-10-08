@@ -73,7 +73,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
         # current_batch = [obs_list, action_list, root_sampled_actions_list, mask_list, batch_index_list, weights_list, make_time_list]
         if self._cfg.model.continuous_action_space:
-            # check current_batch[2]对应的root_sampled_actions_list是否正确的更新
+            # TODO: check whether current_batch[2]/root_sampled_actions_list is update correctly
             current_batch[2] = root_sampled_actions.reshape(
                 batch_size, self._cfg.num_unroll_steps + 1,
                 self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size
@@ -102,7 +102,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         """
         # obtain the batch context from replay buffer
         if self.sample_type == 'transition':
-            orig_data = self._sample_orig_reanalyze_batch_data(batch_size)
+            orig_data = self._sample_orig_reanalyze_batch(batch_size)
         elif self.sample_type == 'episode':
             orig_data = self._sample_orig_data_episode(batch_size)
         game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
@@ -122,9 +122,13 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                                                                  self._cfg.num_unroll_steps + 1]
 
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
-            mask_tmp = [1. for i in range(len(root_sampled_actions_tmp))]
+            # mask_tmp = [1. for i in range(len(actions_tmp))]
+            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
+            # TODO: original buffer mask
+            mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
+
 
             # pad random action
             if self._cfg.model.continuous_action_space:
@@ -186,11 +190,9 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             batch_index_list, game_segment_list,
             pos_in_game_segment_list
         )
-
-        context = policy_re_context, current_batch
         self.reanalyze_num = batch_size
 
-        return context
+        return policy_re_context, current_batch
 
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
@@ -206,23 +208,18 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         """
         policy._target_model.to(self._cfg.device)
         policy._target_model.eval()
-        # TODO
-        # policy._model.to(self._cfg.device)
-        # policy._model.eval()
 
         # obtain the current_batch and prepare target context
         reward_value_context, policy_re_context, policy_non_re_context, current_batch = self._make_batch(
             batch_size, self._cfg.reanalyze_ratio
         )
 
-        # current_batch = [obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list]
-
+        # current_batch = [
+        #     obs_list, action_list, root_sampled_actions_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list
+        # ]
         # target reward, target value
-        # batch_rewards, batch_target_values = self._compute_target_reward_value(
-        #     reward_value_context, policy._target_model, current_batch[1]  # current_batch[1] is action_batch
-        # )
         batch_rewards, batch_target_values = self._compute_target_reward_value(
-            reward_value_context, policy._target_model, current_batch[3]  # current_batch[3] is batch_tareget_action
+            reward_value_context, policy._target_model, current_batch[3]  # current_batch[3] is batch_target_action
         )
 
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
@@ -234,10 +231,6 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             batch_target_policies_re, root_sampled_actions = self._compute_target_policy_reanalyzed(
                 policy_re_context, policy._target_model, current_batch[1]
             )
-            # TODO
-            # batch_target_policies_re, root_sampled_actions = self._compute_target_policy_reanalyzed(
-            #     policy_re_context, policy._model, current_batch[1]
-            # )
             # ==============================================================
             # fix reanalyze in suz:
             # use the latest root_sampled_actions after the reanalyze process,
@@ -246,7 +239,6 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
             assert (self._cfg.reanalyze_ratio > 0 and self._cfg.reanalyze_outdated is True), \
                 "in sampled effiicientzero, if self._cfg.reanalyze_ratio>0, you must set self._cfg.reanalyze_outdated=True"
-            # current_batch = [obs_list, action_list, root_sampled_actions_list, mask_list, batch_index_list, weights_list, make_time_list]
             if self._cfg.model.continuous_action_space:
                 current_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
                     max(int(batch_size * self._cfg.reanalyze_ratio), 1), self._cfg.num_unroll_steps + 1,
@@ -259,10 +251,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                 )
 
         if 0 < self._cfg.reanalyze_ratio < 1:
-            try:
-                batch_target_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
-            except Exception as error:
-                print(error)
+            batch_target_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
         elif self._cfg.reanalyze_ratio == 1:
             batch_target_policies = batch_target_policies_re
         elif self._cfg.reanalyze_ratio == 0:
@@ -312,8 +301,11 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                                                                  self._cfg.num_unroll_steps + 1]
 
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
-            mask_tmp = [1. for i in range(len(root_sampled_actions_tmp))]
+            # mask_tmp = [1. for i in range(len(actions_tmp))]
+            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
+            # TODO: original buffer mask
+            mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
@@ -357,7 +349,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
             mask_list.append(mask_tmp)
 
-            # TODO: for unizero
+            # NOTE: for unizero
             bootstrap_action_tmp = game.action_segment[pos_in_game_segment+self._cfg.td_steps:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps+self._cfg.td_steps].tolist()
             if self._cfg.model.continuous_action_space:
@@ -366,8 +358,6 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                     np.random.randn(self._cfg.model.action_space_size)
                     for _ in range(self._cfg.num_unroll_steps - len(bootstrap_action_tmp))
                 ]
-            # else:
-            #     TODO
             bootstrap_action_list.append(bootstrap_action_tmp)
 
         # formalize the input observations
@@ -516,13 +506,13 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         with torch.no_grad():
             policy_obs_list = prepare_observation(policy_obs_list, self._cfg.model.model_type)
             network_output = []
-            m_obs = torch.from_numpy(policy_obs_list).to(self._cfg.device)
+            batch_obs = torch.from_numpy(policy_obs_list).to(self._cfg.device)
 
             # =============== NOTE: The key difference with MuZero =================
             # calculate the target value
             # action_batch.shape (32, 10)
-            # m_obs.shape torch.Size([352, 3, 64, 64]) 32*11=352
-            m_output = model.initial_inference(m_obs, action_batch[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
+            # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11=352
+            m_output = model.initial_inference(batch_obs, action_batch[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
             # =======================================================================
 
             if not model.training:
@@ -668,12 +658,12 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         with torch.no_grad():
             value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
             network_output = []
-            m_obs = torch.from_numpy(value_obs_list).to(self._cfg.device)
+            batch_obs = torch.from_numpy(value_obs_list).to(self._cfg.device)
 
             # =============== NOTE: The key difference with MuZero =================
             # calculate the target value
-            # m_obs.shape torch.Size([352, 3, 64, 64]) 32*11 = 352
-            m_output = model.initial_inference(m_obs, action_batch)
+            # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11 = 352
+            m_output = model.initial_inference(batch_obs, action_batch)
             # ======================================================================
 
             if not model.training:
@@ -687,38 +677,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                 )
             network_output.append(m_output)
 
-            # concat the output slices after model inference
-            # if self._cfg.use_root_value:
-            #     # use the root values from MCTS, as in EfficientZero
-            #     # the root values have limited improvement but require much more GPU actors;
-            #     _, reward_pool, policy_logits_pool, latent_state_roots = concat_output(
-            #         network_output, data_type='muzero'
-            #     )
-            #     reward_pool = reward_pool.squeeze().tolist()
-            #     policy_logits_pool = policy_logits_pool.tolist()
-            #     noises = [
-            #         np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.num_of_sampled_actions
-            #                             ).astype(np.float32).tolist() for _ in range(transition_batch_size)
-            #     ]
-            #     if self._cfg.mcts_ctree:
-            #         # cpp mcts_tree
-            #         roots = MCTSCtree.roots(
-            #             transition_batch_size, legal_actions, self._cfg.model.action_space_size,
-            #             self._cfg.model.num_of_sampled_actions, self._cfg.model.continuous_action_space
-            #         )
-            #         roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-            #         # do MCTS for a new policy with the recent target model
-            #         MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-
-            #     reanalyzed_root_values = roots.get_values()
-            #     value_list = np.array(reanalyzed_root_values)
-            # else:
-            #     # use the predicted values
-            #     value_list = concat_output_value(network_output)
-
             if self._cfg.use_root_value:
-                # use the root values from MCTS, as in EfficientZero
-                # value_numpy = root_values # TODO
                 value_list = np.array(root_values)
             else:
                 # use the predicted values
@@ -751,17 +710,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                 target_rewards = []
                 base_index = state_index
 
-                # =========== NOTE ===============
-                if game_segment_len_non_re < self._cfg.game_segment_length:
-                    # The last segment of one episode, the target value of excess part should be 0
-                    truncation_length = game_segment_len_non_re
-                else:
-                    # game_segment_len is game_segment.action_segment.shape[0]
-                    # action_segment.shape[0] = reward_segment.shape[0] or action_segment.shape[0] = reward_segment.shape[0] + 1
-                    truncation_length = game_segment_len_non_re
-                    assert reward_list.shape[0] + 1 == game_segment_len_non_re or reward_list.shape[0] == game_segment_len_non_re
-
-                # truncation_length = game_segment_len_non_re # original
+                truncation_length = game_segment_len_non_re
 
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
@@ -776,12 +725,12 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                             value_list[value_index] += reward * self._cfg.discount_factor ** i
                     horizon_id += 1
 
-                    if bootstrap_index < truncation_length:
-                        target_values.append(value_list[value_index])
+                    # TODO: check the boundary condition
+                    target_values.append(value_list[value_index])
+                    if current_index < len(reward_list):
                         target_rewards.append(reward_list[current_index])
                     else:
-                        target_values.append(np.array([0.]))
-                        target_rewards.append(np.array([0.]))
+                        target_rewards.append(np.array(0.))
 
                     value_index += 1
 

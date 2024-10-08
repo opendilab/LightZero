@@ -364,27 +364,14 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
             value_list = value_list * np.array(value_mask)
             value_list = value_list.tolist()
 
-            horizon_id, value_index = 0, 0
+            value_index = 0
             for game_segment_len_non_re, reward_list, state_index, to_play_list in zip(game_segment_lens, rewards_list,
                                                                                        pos_in_game_segment_list,
                                                                                        to_play_segment):
                 target_values = []
                 target_rewards = []
-
                 base_index = state_index
-
-                # =========== NOTE ===============
-                if game_segment_len_non_re < self._cfg.game_segment_length:
-                    # The last segment of one episode, the target value of excess part should be 0
-                    truncation_length = game_segment_len_non_re
-                else:
-                    # game_segment_len is game_segment.action_segment.shape[0]
-                    # action_segment.shape[0] = reward_segment.shape[0] or action_segment.shape[0] = reward_segment.shape[0] + 1
-                    truncation_length = game_segment_len_non_re
-                    assert reward_list.shape[0] + 1 == game_segment_len_non_re or reward_list.shape[0] == game_segment_len_non_re
-
-                # truncation_length = game_segment_len_non_re # original
-
+                truncation_length = game_segment_len_non_re
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
                     for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
@@ -398,14 +385,12 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
                             value_list[value_index] += reward * self._cfg.discount_factor ** i
                             # TODO(pu): why value don't use discount_factor factor
 
-                    horizon_id += 1
-
-                    if bootstrap_index < truncation_length:
-                        target_values.append(value_list[value_index])
+                    # TODO: check the boundary condition
+                    target_values.append(value_list[value_index])
+                    if current_index < len(reward_list):
                         target_rewards.append(reward_list[current_index])
                     else:
-                        target_values.append(np.array([0.]))
-                        target_rewards.append(np.array([0.]))
+                        target_rewards.append(np.array(0.))
 
                     value_index += 1
 

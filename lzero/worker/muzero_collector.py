@@ -406,20 +406,8 @@ class MuZeroCollector(ISerialCollector):
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
 
-                # NOTE: TODO: muzero使用wait让N个env都同步会有bug
-                # ready_env_id = set(obs.keys())
-                # while len(obs.keys()) != self._env_num:
-                #     # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
-                #     # len(self._env.ready_obs), especially in tictactoe env.
-                #     self._logger.info('The current init_obs.keys() is {}'.format(obs.keys()))
-                #     self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
-                #     time.sleep(retry_waiting_time)
-                #     self._logger.info('=' * 10 + 'Wait for all environments (subprocess) to finish resetting.' + '=' * 10)
-                #     self._logger.info(
-                #         'After sleeping {}s, the current _env_states is {}'.format(retry_waiting_time, self._env._env_states)
-                #     )
-                #     obs = self._env.ready_obs
-                #     ready_env_id = set(obs.keys())
+                # NOTE: If waiting for N environments to synchronize, it may result in some environments not being completed (done) by the time of return.
+                # However, the current muzero_collector does not properly maintain the global self.last_game_segments, leading to some data not being collected.
 
                 stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
@@ -708,19 +696,6 @@ class MuZeroCollector(ISerialCollector):
                     self._policy.reset([env_id])  # NOTE: reset the policy for the env_id. Default reset_init_data=True.
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
-
-                    # NOTE: TODO
-                    # ===== NOTE: if one episode done and not return, we should init its game_segments[env_id]  =======
-                    # create new GameSegment
-                    # game_segments[env_id] =  GameSegment(
-                    #         self._env.action_space,
-                    #         game_segment_length=self.policy_config.game_segment_length,
-                    #         config=self.policy_config
-                    #     )
-                    # game_segments[env_id].reset(observation_window_stack[env_id])
-
-                    # 如果 wait N个env都同步，会在return时，导致有的env没有done，
-                    # 但是现在的muzero_collector没有维护好全局的self.last_game_segments，导致有的数据没有收集到
 
             if collected_episode >= n_episode:
                 # [data, meta_data]

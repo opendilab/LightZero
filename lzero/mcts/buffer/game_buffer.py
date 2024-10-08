@@ -144,7 +144,7 @@ class GameBuffer(ABC, object):
 
             game_segment_list.append(game_segment)
 
-            # print(f'len(game_segment)=len(game_segment.action_segment): {len(game_segment)}')
+            # print(f'len(game_segment)=:len(game_segment.action_segment): {len(game_segment)}')
             # print(f'len(game_segment.obs_segment): {game_segment.obs_segment.shape[0]}')
             if pos_in_game_segment >= self._cfg.game_segment_length:
                 pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
@@ -157,7 +157,7 @@ class GameBuffer(ABC, object):
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
         return orig_data
     
-    def _sample_orig_reanalyze_batch_data(self, batch_size: int) -> Tuple:
+    def _sample_orig_reanalyze_batch(self, batch_size: int) -> Tuple:
         """
         Overview:
              sample orig_data that contains:
@@ -483,11 +483,13 @@ class GameBuffer(ABC, object):
         Returns:
             - buffered_data (:obj:`BufferedData`): The pushed data.
         """
+        data_length = len(data.action_segment) if len(data.action_segment)<self._cfg.game_segment_length else self._cfg.game_segment_length
+
         if meta['done']:
             self.num_of_collected_episodes += 1
-            valid_len = len(data)
+            valid_len = data_length
         else:
-            valid_len = len(data) - meta['unroll_plus_td_steps']
+            valid_len = data_length - meta['unroll_plus_td_steps']
             # print(f'valid_len is {valid_len}')
 
         if meta['priorities'] is None:
@@ -496,18 +498,18 @@ class GameBuffer(ABC, object):
             self.game_pos_priorities = np.concatenate(
                 (
                     self.game_pos_priorities, [max_prio
-                                               for _ in range(valid_len)] + [0. for _ in range(valid_len, len(data))]
+                                               for _ in range(valid_len)] + [0. for _ in range(valid_len, data_length)]
                 )
             )
         else:
-            assert len(data) == len(meta['priorities']), " priorities should be of same length as the game steps"
+            assert data_length == len(meta['priorities']), " priorities should be of same length as the game steps"
             priorities = meta['priorities'].copy().reshape(-1)
-            priorities[valid_len:len(data)] = 0.
+            priorities[valid_len:data_length] = 0.
             self.game_pos_priorities = np.concatenate((self.game_pos_priorities, priorities))
 
         self.game_segment_buffer.append(data)
         self.game_segment_game_pos_look_up += [
-            (self.base_idx + len(self.game_segment_buffer) - 1, step_pos) for step_pos in range(len(data))
+            (self.base_idx + len(self.game_segment_buffer) - 1, step_pos) for step_pos in range(data_length)
         ]
         # print(f'potioritys is {self.game_pos_priorities}')
         # print(f'num of transitions is {len(self.game_segment_game_pos_look_up)}')
@@ -523,7 +525,8 @@ class GameBuffer(ABC, object):
         if total_transition > self.replay_buffer_size:
             index = 0
             for i in range(nums_of_game_segments):
-                total_transition -= len(self.game_segment_buffer[i])
+                length_data = len(self.game_segment_buffer[i].action_segment) if len(self.game_segment_buffer[i].action_segment)<self._cfg.game_segment_length else self._cfg.game_segment_length
+                total_transition -= length_data
                 if total_transition <= self.replay_buffer_size * self.keep_ratio:
                     # find the max game_segment index to keep in the buffer
                     index = i

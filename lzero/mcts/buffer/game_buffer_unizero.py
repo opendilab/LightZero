@@ -46,7 +46,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         self.game_segment_buffer = []
         self.game_pos_priorities = []
         self.game_segment_game_pos_look_up = []
-        # self.task_id = self._cfg.task_id
         self.sample_type = self._cfg.sample_type  # 'transition' or 'episode'
 
     def sample(
@@ -69,18 +68,14 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             batch_size, self._cfg.reanalyze_ratio
         )
 
-        # current_batch = [obs_list, action_list, mask_list, batch_index_list, weights_list, make_time_list]
+        # current_batch = [obs_list, action_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list]
 
         # target reward, target value
-        # batch_rewards, batch_target_values = self._compute_target_reward_value(
-        #     reward_value_context, policy._target_model, current_batch[1]  # current_batch[1] is batch_action bug
-        # )
         batch_rewards, batch_target_values = self._compute_target_reward_value(
-            reward_value_context, policy._target_model, current_batch[2]  # current_batch[2] is batch_tareget_action
+            reward_value_context, policy._target_model, current_batch[2]  # current_batch[2] is batch_target_action
         )
         # target policy
-        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model,
-                                                                          current_batch[1]) # current_batch[1] is batch_action
+        batch_target_policies_re = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1]) # current_batch[1] is batch_action
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
             policy_non_re_context, self._cfg.model.action_space_size
         )
@@ -131,14 +126,13 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
-
             
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
             mask_tmp = [1. for i in range(len(actions_tmp))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
-            #  TODO
-            # mask_tmp = [1. for i in range(max(len(actions_tmp), self._cfg.game_segment_length-pos_in_game_segment))]
+            # TODO: original buffer mask
+            # mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
             # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
@@ -147,9 +141,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
             ]
 
-            # obtain the input observations
-            # pad if length of obs in game_segment is less than stack+num_unroll_steps
-            # e.g. stack+num_unroll_steps = 4+5
+            # obtain the current observations sequence
             obs_list.append(
                 game_segment_list[i].get_unroll_obs(
                     pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
@@ -159,7 +151,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             mask_list.append(mask_tmp)
 
-            # TODO: for unizero
+            # NOTE: for unizero
             bootstrap_action_tmp = game.action_segment[pos_in_game_segment+self._cfg.td_steps:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps+self._cfg.td_steps].tolist()
             # pad random action
@@ -252,7 +244,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         """
         # obtain the batch context from replay buffer
         if self.sample_type == 'transition':
-            orig_data = self._sample_orig_reanalyze_batch_data(batch_size)
+            orig_data = self._sample_orig_reanalyze_batch(batch_size)
         # elif self.sample_type == 'episode': # TODO
         #     orig_data = self._sample_orig_data_episode(batch_size)
         game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
@@ -266,9 +258,14 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
+
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
             mask_tmp = [1. for i in range(len(actions_tmp))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
+
+            # TODO: original buffer mask
+            # mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
+            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
             actions_tmp += [
@@ -276,9 +273,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
             ]
 
-            # obtain the input observations
-            # pad if length of obs in game_segment is less than stack+num_unroll_steps
-            # e.g. stack+num_unroll_steps = 4+5
+            # obtain the current observations sequence
             obs_list.append(
                 game_segment_list[i].get_unroll_obs(
                     pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
@@ -287,7 +282,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             action_list.append(actions_tmp)
             mask_list.append(mask_tmp)
 
-            # TODO: for unizero
+            # NOTE: for unizero
             bootstrap_action_tmp = game.action_segment[pos_in_game_segment+self._cfg.td_steps:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps+self._cfg.td_steps].tolist()
             # pad random action
@@ -413,10 +408,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             batch_obs = torch.from_numpy(policy_obs_list).to(self._cfg.device)
 
             # =============== NOTE: The key difference with MuZero =================
-            # calculate the target value
-            # batch_action.shape (32, 10)
-            # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11=352
-            # TODO: policy_obs_list is at timestep t, batch_action is at timestep t
+            # To obtain the target policy from MCTS guided by the recent target model
+            # TODO: batch_obs (policy_obs_list) is at timestep t, batch_action is at timestep t
             m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
             # =======================================================================
 
@@ -523,9 +516,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             batch_obs = torch.from_numpy(value_obs_list).to(self._cfg.device)
 
             # =============== NOTE: The key difference with MuZero =================
-            # calculate the target value
-            # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11 = 352
-            # TODO: check value_obs_list is t+td_steps, batch_action is t, 只用到了单步的target_obs?
+            # calculate the bootstrapped value and target value
+            # NOTE: batch_obs(value_obs_list) is at t+td_steps, batch_action is at timestep t+td_steps
             m_output = model.initial_inference(batch_obs, batch_action)
             # ======================================================================
 
@@ -542,8 +534,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             network_output.append(m_output)
 
             if self._cfg.use_root_value:
-                # use the root values from MCTS, as in EfficientZero
-                # value_numpy = root_values # TODO
                 value_numpy = np.array(root_values)
             else:
                 # use the predicted values
@@ -577,16 +567,16 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 base_index = state_index
 
                 # =========== NOTE ===============
-                if game_segment_len_non_re < self._cfg.game_segment_length:
-                    # The last segment of one episode, the target value of excess part should be 0
-                    truncation_length = game_segment_len_non_re
-                else:
-                    # game_segment_len is game_segment.action_segment.shape[0]
-                    # action_segment.shape[0] = reward_segment.shape[0] or action_segment.shape[0] = reward_segment.shape[0] + 1
-                    truncation_length = game_segment_len_non_re
-                    assert reward_list.shape[0] + 1 == game_segment_len_non_re or reward_list.shape[0] == game_segment_len_non_re
+                # if game_segment_len_non_re < self._cfg.game_segment_length:
+                #     # The last segment of one episode, the target value of excess part should be 0
+                #     truncation_length = game_segment_len_non_re
+                # else:
+                #     # game_segment_len is game_segment.action_segment.shape[0]
+                #     # action_segment.shape[0] = reward_segment.shape[0] or action_segment.shape[0] = reward_segment.shape[0] + 1
+                #     truncation_length = game_segment_len_non_re
+                #     assert reward_list.shape[0] + 1 == game_segment_len_non_re or reward_list.shape[0] == game_segment_len_non_re
 
-                # truncation_length = game_segment_len_non_re # original
+                truncation_length = game_segment_len_non_re
 
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
@@ -601,14 +591,13 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                             value_list[value_index] += reward * self._cfg.discount_factor ** i
                     horizon_id += 1
 
-                    # if bootstrap_index < truncation_length:  # ========== TODO: fixvaluebugV8==========
-                    if current_index < truncation_length:  # ========== TODO: fixvaluebugV9==========
-                        target_values.append(value_list[value_index])
+                    # TODO: check the boundary condition
+                    target_values.append(value_list[value_index])
+                    if current_index < len(reward_list):
                         target_rewards.append(reward_list[current_index])
                     else:
-                        target_values.append(np.array(0.))
                         target_rewards.append(np.array(0.))
-                        
+
                     value_index += 1
 
                 batch_rewards.append(target_rewards)

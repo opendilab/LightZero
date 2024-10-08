@@ -147,7 +147,7 @@ def train_unizero(
         # Determine updates per collection
         update_per_collect = cfg.policy.update_per_collect
         if update_per_collect is None:
-            collected_transitions_num = sum(len(game_segment) for game_segment in new_data[0])
+            collected_transitions_num = sum(min(len(game_segment), cfg.policy.game_segment_length) for game_segment in new_data[0])
             update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
 
         # Update replay buffer

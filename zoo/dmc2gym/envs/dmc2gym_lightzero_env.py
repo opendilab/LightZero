@@ -363,16 +363,11 @@ class DMC2GymEnv(BaseEnv):
         action = action.astype('float32')
         action = affine_transform(action, min_val=self._env.action_space.low, max_val=self._env.action_space.high)
 
-        # 使用NumPy的np.where()函数对action进行修改
-        # action = np.where(action > 0.9000, 0.9999, action)
-        # action = np.where(action < -0.9000, -0.9999, action)
 
         # if self._cfg.is_eval:
-        #     # NOTE
-        #     # action = np.where(action > 0.9500, 0.9999, action)
-        #     # action = np.where(action < -0.9500, -0.9999, action)
-        #     action = np.where(action > 0.9000, 0.9999, action)
-        #     action = np.where(action < -0.9000, -0.9999, action)
+        #     # TODO: test the effect of extreme action
+        #     action = np.where(action > 0.9500, 0.9999, action)
+        #     action = np.where(action < -0.9500, -0.9999, action)
 
         obs, rew, done, info = self._env.step(action)
         self._current_step += 1
@@ -421,7 +416,6 @@ class DMC2GymEnv(BaseEnv):
 
     @staticmethod
     def display_frames_as_gif(frames: list, path: str) -> None:
-        # 调整每一帧的维度
         frames = [np.transpose(frame, (1, 2, 0)) for frame in frames]
 
         patch = plt.imshow(frames[0])

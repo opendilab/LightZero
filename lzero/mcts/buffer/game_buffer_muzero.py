@@ -107,7 +107,7 @@ class MuZeroGameBuffer(GameBuffer):
             - context (:obj:`Tuple`): reward_value_context, policy_re_context, policy_non_re_context, current_batch
         """
         # obtain the batch context from replay buffer
-        orig_data = self._sample_orig_reanalyze_batch_data(batch_size)
+        orig_data = self._sample_orig_reanalyze_batch(batch_size)
         game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time_list = orig_data
         batch_size = len(batch_index_list)
         # obtain the context of reanalyzed policy targets
@@ -286,10 +286,8 @@ class MuZeroGameBuffer(GameBuffer):
         td_steps_list = []
         for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
             game_segment_len = len(game_segment)
-            # TODO
-            # game_segment_len = len(game_segment) if len(game_segment) < self._cfg.game_segment_length else self._cfg.game_segment_length
             game_segment_lens.append(game_segment_len)
-
+            # original buffer td-steps
             td_steps = np.clip(self._cfg.td_steps, 1, max(1, game_segment_len - state_index)).astype(np.int32)
 
             # prepare the corresponding observations for bootstrapped values o_{t+k}
@@ -303,21 +301,7 @@ class MuZeroGameBuffer(GameBuffer):
             action_mask_segment.append(game_segment.action_mask_segment)
             to_play_segment.append(game_segment.to_play_segment)
 
-            if game_segment_len < self._cfg.game_segment_length:
-                # 游戏结束的最后一段segment，target value应该是0
-                # truncation_length = game_segment_len + 1
-                truncation_length = game_segment_len
-            else:
-                # action_segment没有pad, game_segment_len是game_segment.action_segment.shape[0]
-                # 由于obs_segment pad的可能不够self._cfg.td_steps + 1
-                # truncation_length = game_segment_len + self._cfg.td_steps + 1 # bug
-                # truncation_length = game_segment.obs_segment.shape[0]-self._cfg.model.frame_stack_num
-
-                # game_segment_len is game_segment.action_segment.shape[0]
-                # action_segment.shape[0] = reward_segment.shape[0] or action_segment.shape[0] = reward_segment.shape[0] + 1
-                truncation_length = game_segment_len
-
-            # truncation_length = game_segment_len
+            truncation_length = game_segment_len
 
             for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                 # get the <num_unroll_steps+1>  bootstrapped target obs
@@ -325,24 +309,14 @@ class MuZeroGameBuffer(GameBuffer):
                 # index of bootstrapped obs o_{t+td_steps}
                 bootstrap_index = current_index + td_steps
 
-                # if bootstrap_index < game_segment_len: # orignal
                 if bootstrap_index < truncation_length:
                     value_mask.append(1)
-                    # beg_index = bootstrap_index - (state_index + td_steps), max of beg_index is num_unroll_steps
                     beg_index = current_index - state_index
                     end_index = beg_index + self._cfg.model.frame_stack_num
                     # the stacked obs in time t
                     obs = game_obs[beg_index:end_index]
-                    # if obs.shape[0]<self._cfg.model.frame_stack_num:
-                    #     # print('======最后一个segment========')
-                    #     # print('======倒数第2个segment 最后一个segmnet pad的数据不够，target_value为0========')
-                    #     value_mask.pop(1)
-                    #     value_mask.append(0)
-                    #     obs = zero_obs
-                else: # 相应loss被mask
-                    # if game_segment_len == self._cfg.game_segment_length:
-                    #     print('======倒数第2个segment, 补零不够，最后的target value也应该是0========')
-                    value_mask.append(0)  # Bug
+                else:
+                    value_mask.append(0)
                     obs = zero_obs
 
                 value_obs_list.append(obs)
@@ -410,7 +384,6 @@ class MuZeroGameBuffer(GameBuffer):
             # for board games
             action_mask_segment, to_play_segment = [], []
             for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
-                # TODO
                 game_segment_len = len(game_segment)
                 game_segment_lens.append(game_segment_len)
                 rewards.append(game_segment.reward_segment)
@@ -508,7 +481,7 @@ class MuZeroGameBuffer(GameBuffer):
             #     print('have value mask')
             value_list = value_list * np.array(value_mask)
             value_list = value_list.tolist()
-            horizon_id, value_index = 0, 0
+            value_index = 0
 
             for game_segment_len_non_re, reward_list, state_index, to_play_list in zip(game_segment_lens, rewards_list,
                                                                                        pos_in_game_segment_list,
@@ -517,21 +490,10 @@ class MuZeroGameBuffer(GameBuffer):
                 target_rewards = []
                 base_index = state_index
 
-                # =========== NOTE ===============
-                if game_segment_len_non_re < self._cfg.game_segment_length:
-                    # The last segment of one episode, the target value of excess part should be 0
-                    truncation_length = game_segment_len_non_re
-                else:
-                    # game_segment_len is game_segment.action_segment.shape[0]
-                    # action_segment.shape[0] = reward_segment.shape[0] or action_segment.shape[0] = reward_segment.shape[0] + 1
-                    truncation_length = game_segment_len_non_re
-                    assert reward_list.shape[0] + 1 == game_segment_len_non_re or reward_list.shape[0] == game_segment_len_non_re
-
-                # truncation_length = game_segment_len_non_re # original
+                truncation_length = game_segment_len_non_re
 
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
-                    # for i, reward in enumerate(game.rewards[current_index:bootstrap_index]):
                     for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
                         if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
                             # TODO(pu): for board_games, very important, to check
@@ -541,14 +503,14 @@ class MuZeroGameBuffer(GameBuffer):
                                 value_list[value_index] += -reward * self._cfg.discount_factor ** i
                         else:
                             value_list[value_index] += reward * self._cfg.discount_factor ** i
-                    horizon_id += 1
 
-                    if bootstrap_index < truncation_length:
-                        target_values.append(value_list[value_index])
+                    # TODO: check the boundary condition
+                    target_values.append(value_list[value_index])
+                    if current_index < len(reward_list):
                         target_rewards.append(reward_list[current_index])
                     else:
-                        target_values.append(np.array(0.))
                         target_rewards.append(np.array(0.))
+
                     value_index += 1
 
                 batch_rewards.append(target_rewards)
@@ -769,7 +731,7 @@ class MuZeroGameBuffer(GameBuffer):
                                 policy_tmp[legal_action] = distributions[index]
                             target_policies.append(policy_tmp)
                     else:
-                        # NOTE: the invalid padding target policy, O is to make sure the correspoding cross_entropy_loss=0
+                        # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
                         policy_mask.append(0)
                         target_policies.append([0 for _ in range(policy_shape)])
 

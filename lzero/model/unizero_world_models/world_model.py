@@ -1320,6 +1320,8 @@ class WorldModel(nn.Module):
         # Compute discount coefficients for each timestep
         discounts = self.gamma ** timesteps
 
+        if batch['mask_padding'].sum() == 0:
+            print('debug')
         # Group losses into first step, middle step, and last step
         first_step_losses = {}
         middle_step_losses = {}
@@ -1625,6 +1627,9 @@ class WorldModel(nn.Module):
         # Compute cross-entropy loss
         loss = -(torch.log_softmax(logits, dim=1) * labels).sum(1)
         loss = (loss * mask_padding)
+
+        if torch.isnan(loss).any():
+            raise ValueError(f"NaN detected in outputs for batch {batch} and element '{element}'")
 
         if element == 'policy':
             # Compute policy entropy loss

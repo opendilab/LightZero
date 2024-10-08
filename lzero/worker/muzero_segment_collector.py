@@ -141,7 +141,7 @@ class MuZeroSegmentCollector(ISerialCollector):
 
         self._env_info = {env_id: {'time': 0., 'step': 0} for env_id in range(self._env_num)}
 
-        # 在此处初始化action_mask_dict, to_play_dict和chance_dict,确保它们包含所有env_id的值
+        # Initialize action_mask_dict, to_play_dict, and chance_dict here to ensure they contain values for all env_id
         self.action_mask_dict = {i: None for i in range(self._env_num)}
         self.to_play_dict = {i: None for i in range(self._env_num)}
         if self.policy_config.use_ture_chance_label_in_chance_encoder:
@@ -254,19 +254,17 @@ class MuZeroSegmentCollector(ISerialCollector):
         """
         # pad over last segment trajectory
         beg_index = self.policy_config.model.frame_stack_num
-        end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps  # TODO: check
+        end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps
 
         # the start <frame_stack_num> obs is init zero obs, so we take the
         # [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
         # e.g. the start 4 obs is init zero obs, the num_unroll_steps is 5, so we take the [4:9] obs as the pad obs
         pad_obs_lst = game_segments[i].obs_segment[beg_index:end_index]
 
-        # TODO: for unizero
-        beg_index = 0
-        end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps
-        pad_action_lst = game_segments[i].action_segment[beg_index:end_index]
+        # NOTE: for unizero
+        pad_action_lst = game_segments[i].action_segment[:self.policy_config.num_unroll_steps + self.policy_config.td_steps]
         
-        # TODO: for unizero
+        # NOTE: for unizero
         pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps + self.policy_config.td_steps]
         # pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps]
 
@@ -304,7 +302,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             game_segment element shape:
             obs: game_segment_length + stack + num_unroll_steps, 20+4 +5
             rew: game_segment_length + stack + num_unroll_steps + td_steps -1  20 +5+3-1
-            action: game_segment_length -> 20
+            action: game_segment_length + num_unroll_steps + td_steps -> 20 +5+3
             root_values:  game_segment_length + num_unroll_steps + td_steps -> 20 +5+3
             child_visits： game_segment_length + num_unroll_steps -> 20 +5
             to_play: game_segment_length -> 20
@@ -319,7 +317,6 @@ class MuZeroSegmentCollector(ISerialCollector):
         # reset last game_segments # TODO:origin
         last_game_segments[i] = None
         last_game_priorities[i] = None
-
 
         return None
 
@@ -422,8 +419,10 @@ class MuZeroSegmentCollector(ISerialCollector):
                 if len(ready_env_id) < self._env_num:
                     print(f'muzero_segment_collector: len(ready_env_id) < self._env_num, ready_env_id: {ready_env_id}')
                 
-                # NOTE: TODO: 是否wait到所有env都ready，对于muzero性能好像影响不大，
-                # 对于unizero由于init-infer需要检索kv_cache, 但wait后对于性能有负影响，检查原因
+                # TODO: For UniZero, during the init-infer process, it is necessary to retrieve the current kv_cache from the kv_cache_dict corresponding to each env_id.
+                #  In theory, this requires waiting for all environments to be ready. However, in practice,
+                #  waiting for all environments to be ready can have a significant negative impact on UniZero's performance,
+                #  whereas the impact on MuZero is relatively small.
                 # while len(obs.keys()) != self._env_num:
                 #     # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
                 #     # len(self._env.ready_obs), especially in tictactoe env.
@@ -629,7 +628,6 @@ class MuZeroSegmentCollector(ISerialCollector):
                     collected_step += 1
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
-                # =========== NOTE: =========== 
                 if timestep.done:
                     print(f'========env {env_id} done!========')
                     self._total_episode_count += 1
@@ -688,7 +686,6 @@ class MuZeroSegmentCollector(ISerialCollector):
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
 
-                    # NOTE: TODO
                     # ===== NOTE: if one episode done and not return, we should init its game_segments[env_id]  =======
                     # create new GameSegment
                     game_segments[env_id] =  GameSegment(
@@ -697,9 +694,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                             config=self.policy_config
                         )
                     game_segments[env_id].reset(observation_window_stack[env_id])
-                    # NOTE: TODO
-                    # self.last_game_segments[env_id] = None
-                    # self.last_game_priorities[env_id] = None
+
 
             # NOTE: must after the for loop to make sure all env_id's data are collected
             if len(self.game_segment_pool) >= self._default_num_segments:
