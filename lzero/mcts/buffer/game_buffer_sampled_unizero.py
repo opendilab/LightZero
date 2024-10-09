@@ -739,7 +739,5 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
         batch_rewards = np.asarray(batch_rewards)
         batch_target_values = np.asarray(batch_target_values)
-        batch_rewards = np.squeeze(batch_rewards, axis=-1)
-        batch_target_values = np.squeeze(batch_target_values, axis=-1)
 
         return batch_rewards, batch_target_values
