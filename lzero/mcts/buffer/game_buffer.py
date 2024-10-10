@@ -125,9 +125,6 @@ class GameBuffer(ABC, object):
         probs /= probs.sum()
 
         # sample according to transition index
-        # TODO(pu): replace=True
-        # print(f"num transitions is {num_of_transitions}")
-        # print(f"length of probs is {len(probs)}")
         batch_index_list = np.random.choice(num_of_transitions, batch_size, p=probs, replace=False)
 
         if self._cfg.reanalyze_outdated is True:
@@ -146,13 +143,70 @@ class GameBuffer(ABC, object):
             game_segment = self.game_segment_buffer[game_segment_idx]
 
             game_segment_list.append(game_segment)
+
+            # print(f'len(game_segment)=:len(game_segment.action_segment): {len(game_segment)}')
+            # print(f'len(game_segment.obs_segment): {game_segment.obs_segment.shape[0]}')
+            if pos_in_game_segment >= self._cfg.game_segment_length:
+                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
+
             pos_in_game_segment_list.append(pos_in_game_segment)
+            
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
 
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
         return orig_data
     
+    def _sample_orig_reanalyze_batch(self, batch_size: int) -> Tuple:
+        """
+        Overview:
+             sample orig_data that contains:
+                game_segment_list: a list of game segments
+                pos_in_game_segment_list: transition index in game (relative index)
+                batch_index_list: the index of start transition of sampled minibatch in replay buffer
+                weights_list: the weight concerning the priority
+                make_time: the time the batch is made (for correctly updating replay buffer when data is deleted)
+        Arguments:
+            - batch_size (:obj:`int`): batch size
+            - beta: float the parameter in PER for calculating the priority
+        """
+        assert self._beta > 0
+        train_sample_num = (self.get_num_of_transitions()//self._cfg.num_unroll_steps)
+
+        valid_sample_num = int(train_sample_num * self._cfg.reanalyze_partition)
+        base_decay_rate = 5
+        # decay rate becomes smaller as the number of samples increases
+        decay_rate = base_decay_rate / valid_sample_num
+        # Generate exponentially decaying weights (only for the first 3/4 of the samples)
+        weights = np.exp(-decay_rate * np.arange(valid_sample_num))
+        # Normalize the weights to a probability distribution
+        probabilities = weights / np.sum(weights)
+        batch_index_list = np.random.choice(valid_sample_num, batch_size, replace=False, p=probabilities)
+
+        if self._cfg.reanalyze_outdated is True:
+            # NOTE: used in reanalyze part
+            batch_index_list.sort()
+
+        game_segment_list = []
+        pos_in_game_segment_list = []
+
+        for idx in batch_index_list:
+            # Select the first step of each sequence of length <self._cfg.num_unroll_steps> as the starting position
+            game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx*self._cfg.num_unroll_steps]
+            game_segment_idx -= self.base_idx
+            game_segment = self.game_segment_buffer[game_segment_idx]
+            game_segment_list.append(game_segment)
+            # TODO: check the correctness of the following code
+            if pos_in_game_segment >= self._cfg.game_segment_length:
+                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
+            pos_in_game_segment_list.append(pos_in_game_segment)
+
+
+        make_time = [time.time() for _ in range(len(batch_index_list))]
+
+        orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, [], make_time)
+        return orig_data
+
     def _sample_orig_reanalyze_data(self, batch_size: int) -> Tuple:
         """
         Overview:
@@ -429,11 +483,13 @@ class GameBuffer(ABC, object):
         Returns:
             - buffered_data (:obj:`BufferedData`): The pushed data.
         """
+        data_length = len(data.action_segment) if len(data.action_segment)<self._cfg.game_segment_length else self._cfg.game_segment_length
+
         if meta['done']:
             self.num_of_collected_episodes += 1
-            valid_len = len(data)
+            valid_len = data_length
         else:
-            valid_len = len(data) - meta['unroll_plus_td_steps']
+            valid_len = data_length - meta['unroll_plus_td_steps']
             # print(f'valid_len is {valid_len}')
 
         if meta['priorities'] is None:
@@ -442,18 +498,18 @@ class GameBuffer(ABC, object):
             self.game_pos_priorities = np.concatenate(
                 (
                     self.game_pos_priorities, [max_prio
-                                               for _ in range(valid_len)] + [0. for _ in range(valid_len, len(data))]
+                                               for _ in range(valid_len)] + [0. for _ in range(valid_len, data_length)]
                 )
             )
         else:
-            assert len(data) == len(meta['priorities']), " priorities should be of same length as the game steps"
+            assert data_length == len(meta['priorities']), " priorities should be of same length as the game steps"
             priorities = meta['priorities'].copy().reshape(-1)
-            priorities[valid_len:len(data)] = 0.
+            priorities[valid_len:data_length] = 0.
             self.game_pos_priorities = np.concatenate((self.game_pos_priorities, priorities))
 
         self.game_segment_buffer.append(data)
         self.game_segment_game_pos_look_up += [
-            (self.base_idx + len(self.game_segment_buffer) - 1, step_pos) for step_pos in range(len(data))
+            (self.base_idx + len(self.game_segment_buffer) - 1, step_pos) for step_pos in range(data_length)
         ]
         # print(f'potioritys is {self.game_pos_priorities}')
         # print(f'num of transitions is {len(self.game_segment_game_pos_look_up)}')
@@ -469,7 +525,8 @@ class GameBuffer(ABC, object):
         if total_transition > self.replay_buffer_size:
             index = 0
             for i in range(nums_of_game_segments):
-                total_transition -= len(self.game_segment_buffer[i])
+                length_data = len(self.game_segment_buffer[i].action_segment) if len(self.game_segment_buffer[i].action_segment)<self._cfg.game_segment_length else self._cfg.game_segment_length
+                total_transition -= length_data
                 if total_transition <= self.replay_buffer_size * self.keep_ratio:
                     # find the max game_segment index to keep in the buffer
                     index = i
