@@ -11,6 +11,7 @@ update_per_collect = 100
 batch_size = 256
 max_env_step = int(1e5)
 reanalyze_ratio = 0
+enable_chance = False
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -20,6 +21,7 @@ cartpole_stochastic_muzero_config = dict(
     env=dict(
         env_id='CartPole-v0',
         continuous=False,
+        enable_chance=enable_chance,
         manually_discretization=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -30,7 +32,7 @@ cartpole_stochastic_muzero_config = dict(
         model=dict(
             observation_shape=4,
             action_space_size=2,
-            chance_space_size=2,
+            chance_space_size=3,
             model_type='mlp',
             lstm_hidden_size=128,
             latent_state_dim=128,
@@ -51,6 +53,7 @@ cartpole_stochastic_muzero_config = dict(
         ssl_loss_weight=2,  # NOTE: default is 0.
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
+        use_ture_chance_label_in_chance_encoder=enable_chance,
         n_episode=n_episode,
         eval_freq=int(2e2),
         replay_buffer_size=int(1e6),
