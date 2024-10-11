@@ -289,8 +289,15 @@ class MuZeroGameBuffer(GameBuffer):
             # TODO
             # game_segment_len = len(game_segment) if len(game_segment) < self._cfg.game_segment_length else self._cfg.game_segment_length
             game_segment_lens.append(game_segment_len)
-
+            # original buffer td-steps
             td_steps = np.clip(self._cfg.td_steps, 1, max(1, game_segment_len - state_index)).astype(np.int32)
+            # if td_steps < self._cfg.td_steps:
+            #     print('debug, td_steps <= self._cfg.td_steps')
+
+            # td_steps = np.clip(self._cfg.td_steps, 1, max(1, game_segment_len - state_index - self._cfg.num_unroll_steps)).astype(np.int32)
+
+            # td_steps = self._cfg.td_steps
+
 
             # prepare the corresponding observations for bootstrapped values o_{t+k}
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
@@ -311,7 +318,11 @@ class MuZeroGameBuffer(GameBuffer):
                 # action_segment没有pad, game_segment_len是game_segment.action_segment.shape[0]
                 # 由于obs_segment pad的可能不够self._cfg.td_steps + 1
                 # truncation_length = game_segment_len + self._cfg.td_steps + 1 # bug
-                truncation_length = game_segment.obs_segment.shape[0]-self._cfg.model.frame_stack_num
+                # truncation_length = game_segment.obs_segment.shape[0]-self._cfg.model.frame_stack_num
+
+                # game_segment_len is game_segment.action_segment.shape[0]
+                # action_segment.shape[0] = reward_segment.shape[0] or action_segment.shape[0] = reward_segment.shape[0] + 1
+                truncation_length = game_segment_len
 
             # truncation_length = game_segment_len
 
@@ -600,6 +611,7 @@ class MuZeroGameBuffer(GameBuffer):
                     # TODO:===========
                     # if current_index < game_segment_len_non_re: # original
                     if bootstrap_index < truncation_length: # TODO: fixvaluebugV8
+                    # if current_index < truncation_length: #  ========== TODO: fixvaluebugV9==========
                         target_values.append(value_list[value_index])
                         target_rewards.append(reward_list[current_index])
                     else:

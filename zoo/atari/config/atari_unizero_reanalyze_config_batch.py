@@ -13,22 +13,29 @@ def main(env_id, seed):
     game_segment_length = 20
     evaluator_env_num = 5
     num_simulations = 50
-    max_env_step = int(2e5)
-    batch_size = 64
+    max_env_step = int(5e5)
 
-    num_layers = 4
-    replay_ratio = 1
-    num_unroll_steps = 10
-    infer_context_length = 4
+    # batch_size = 64
+    # num_layers = 4
+    # replay_ratio = 1
+    # num_unroll_steps = 10
+    # infer_context_length = 4
 
-    # num_layers = 2
+    # batch_size = 256
+    # num_layers = 4
     # replay_ratio = 0.25
     # num_unroll_steps = 10
     # infer_context_length = 4
 
+    batch_size = 64
+    num_layers = 2
+    replay_ratio = 0.25
+    num_unroll_steps = 10
+    infer_context_length = 4
+
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    buffer_reanalyze_freq = 1/10
-    # buffer_reanalyze_freq = 1/10000
+    # buffer_reanalyze_freq = 1/10
+    buffer_reanalyze_freq = 1/1000000
 
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
@@ -39,7 +46,7 @@ def main(env_id, seed):
     # collector_env_num = 2
     # num_segments = 2
     # evaluator_env_num = 2
-    # num_simulations = 10
+    # num_simulations = 25
     # batch_size = 2
     # ==============================================================
     # end of the most frequently changed config specified by the user
@@ -60,12 +67,12 @@ def main(env_id, seed):
             # eval_max_episode_steps=int(50),
         ),
         policy=dict(
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000000, ), ), ),  # default is 10000
             model=dict(
                 observation_shape=(3, 96, 96),
                 action_space_size=action_space_size,
                 world_model_cfg=dict(
-                    policy_entropy_weight=0,
+                    policy_entropy_weight=1e-4,  # NOTE
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
@@ -82,8 +89,10 @@ def main(env_id, seed):
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
             model_path=None,
             use_augmentation=False,
-            manual_temperature_decay=False,
-            threshold_training_steps_for_final_temperature=int(5e4),
+            # manual_temperature_decay=False,
+            # threshold_training_steps_for_final_temperature=int(5e4),
+            manual_temperature_decay=True,
+            threshold_training_steps_for_final_temperature=int(1e4),
             use_priority=False,
             num_unroll_steps=num_unroll_steps,
             update_per_collect=None,
@@ -128,7 +137,7 @@ def main(env_id, seed):
     atari_unizero_create_config = EasyDict(atari_unizero_create_config)
     create_config = atari_unizero_create_config
 
-    main_config.exp_name = f'data_unizero_reanalyze_1003/{env_id[:-14]}/{env_id[:-14]}_uz_fixvaluebugV8-fixtargetaation-reanalyzeresample_td5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_reanalyze_1009/{env_id[:-14]}/{env_id[:-14]}_uz_fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_pew1e-4_decay10k_td5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     # main_config.exp_name = f'data_unizero_reanalyze_0929/{env_id[:-14]}/{env_id[:-14]}_uz_origin-buffer_td5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     
     # ============ use muzero_segment_collector instead of muzero_collector =============

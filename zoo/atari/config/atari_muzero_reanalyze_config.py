@@ -126,7 +126,7 @@ def main(env_id, seed):
     atari_muzero_create_config = EasyDict(atari_muzero_create_config)
     create_config = atari_muzero_create_config
 
-    main_config.exp_name = f'data_muzero_reanalyze_0929/{env_id[:-14]}/{env_id[:-14]}_mz_fixvaluebugV8_td5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_muzero_reanalyze_1009/{env_id[:-14]}/{env_id[:-14]}_mz_fixvaluebugV10_td5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_seed{seed}'
     # main_config.exp_name = f'data_muzero_reanalyze_0929/{env_id[:-14]}/{env_id[:-14]}_mz_origin-buffer_td5_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_seed{seed}'
     
     # ============ use muzero_segment_collector instead of muzero_collector =============
@@ -140,5 +140,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
-    args.env = 'QbertNoFrameskip-v4' # TODO
+    # args.env = 'QbertNoFrameskip-v4' # TODO
+    args.env = 'CrazyClimberNoFrameskip-v4'
+    args.seed = 2
     main(args.env, args.seed)

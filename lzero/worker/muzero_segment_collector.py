@@ -270,6 +270,7 @@ class MuZeroSegmentCollector(ISerialCollector):
         
         # TODO: for unizero
         pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps+ self.policy_config.td_steps]
+        # orignal
         # pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps]
 
         # EfficientZero original repo bug:

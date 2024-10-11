@@ -118,7 +118,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 # (float) The weight of the perceptual loss.
                 perceptual_loss_weight=0.,
                 # (float) The weight of the policy entropy.
-                policy_entropy_weight=1e-4,
+                policy_entropy_weight=5e-3,
                 # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
                 predict_latent_loss_type='group_kl',
                 # (str) The type of observation. Options are ['image', 'vector'].
@@ -226,8 +226,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         value_loss_weight=0.25,
         # (float) The weight of policy loss.
         policy_loss_weight=1,
-        # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=1e-4,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
         # (bool) Whether to use the cosine learning rate decay.

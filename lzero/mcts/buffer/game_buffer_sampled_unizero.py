@@ -781,16 +781,27 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                     horizon_id += 1
 
                     # if current_index < game_segment_len_non_re: # original
-                    if bootstrap_index < truncation_length: # TODO: fixvaluebugV8===========
-                        target_values.append(value_list[value_index])
+                    # if bootstrap_index < truncation_length: # TODO: fixvaluebugV8===========
+                    # if current_index < truncation_length: #  ========== TODO: fixvaluebugV9==========
+                    
+                    #     target_values.append(value_list[value_index])
+                    #     target_rewards.append(reward_list[current_index])
+                    #     # target_values.append(value_list[value_index].reshape(()))
+                    #     # target_rewards.append(reward_list[current_index].reshape(()))
+                    # else:
+                    #     # target_values.append(np.array(0.))
+                    #     # target_rewards.append(np.array(0.))
+                    #     target_values.append(np.array([0.]))
+                    #     target_rewards.append(np.array([0.]))
+                    
+
+                    # TODO: fixvaluebugV10===========
+                    target_values.append(value_list[value_index])
+                    if current_index < len(reward_list):
                         target_rewards.append(reward_list[current_index])
-                        # target_values.append(value_list[value_index].reshape(()))
-                        # target_rewards.append(reward_list[current_index].reshape(()))
                     else:
-                        # target_values.append(np.array(0.))
-                        # target_rewards.append(np.array(0.))
-                        target_values.append(np.array([0.]))
-                        target_rewards.append(np.array([0.]))
+                        # target_rewards.append(np.array([0.]))
+                        target_rewards.append(np.array(0.))
 
                     value_index += 1
 
@@ -799,7 +810,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
         batch_rewards = np.asarray(batch_rewards)
         batch_target_values = np.asarray(batch_target_values)
-        batch_rewards = np.squeeze(batch_rewards, axis=-1)
-        batch_target_values = np.squeeze(batch_target_values, axis=-1)
+        # batch_rewards = np.squeeze(batch_rewards, axis=-1)
+        # batch_target_values = np.squeeze(batch_target_values, axis=-1)
 
         return batch_rewards, batch_target_values

@@ -47,7 +47,7 @@ def main(env_id, seed):
     norm_type = 'LN'
 
     # buffer_reanalyze_freq = 1/10  # modify according to num_segments
-    buffer_reanalyze_freq = 1/100000000  # modify according to num_segments
+    buffer_reanalyze_freq = 1/1000000  # modify according to num_segments
 
     # 20*8*10/5=320
     reanalyze_batch_size = 160   # in total of num_unroll_steps
@@ -88,7 +88,7 @@ def main(env_id, seed):
             # eval_max_episode_steps=int(20),
         ),
         policy=dict(
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000,),),),  # default is 10000
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000000,),),),  # default is 10000
             model=dict(
                 observation_shape=obs_space_size,
                 action_space_size=action_space_size,
@@ -179,7 +179,7 @@ def main(env_id, seed):
     create_config = dmc2gym_state_cont_sampled_unizero_create_config
     
     # 调整train_unizero里面的collector
-    main_config.exp_name=f'data_sampled_unizero_1003/ucb-uniform-prior_fs2_seg-collector_fixvalueV8_fixtargetaction/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    main_config.exp_name=f'data_sampled_unizero_1009/fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_td5/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
     from lzero.entry import train_unizero_reanalyze
     train_unizero_reanalyze([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 

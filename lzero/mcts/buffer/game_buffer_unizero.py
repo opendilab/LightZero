@@ -137,8 +137,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             mask_tmp = [1. for i in range(len(actions_tmp))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
-            #  TODO
-            # mask_tmp = [1. for i in range(max(len(actions_tmp), self._cfg.game_segment_length-pos_in_game_segment))]
+            #  TODO: original buffer mask
+            # mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length-pos_in_game_segment))]
             # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
@@ -457,7 +457,9 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             policy_index = 0
             for state_index, child_visit, game_index in zip(pos_in_game_segment_list, child_visits, batch_index_list):
                 target_policies = []
-                for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
+                for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1): # original
+                # for current_index in range(state_index, state_index + self._cfg.num_unroll_steps):  # TODO
+                
                     distributions = roots_distributions[policy_index]
                     if policy_mask[policy_index] == 0:
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
@@ -465,7 +467,10 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                     else:
                         # NOTE: It is very important to use the latest MCTS visit count distribution.
                         sum_visits = sum(distributions)
-                        child_visit[current_index] = [visit_count / sum_visits for visit_count in distributions]
+                        try:
+                            child_visit[current_index] = [visit_count / sum_visits for visit_count in distributions]
+                        except Exception as e:
+                            print('e')
 
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
@@ -606,13 +611,22 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                     horizon_id += 1
 
                     # if current_index < game_segment_len_non_re: # original
-                    if bootstrap_index < truncation_length: # TODO: fixvaluebugV8===========
-                        target_values.append(value_list[value_index])
+                    # if current_index < min(game_segment_len_non_re, self._cfg.game_segment_length): # originalv2
+                    # # if bootstrap_index < truncation_length: # TODO: fixvaluebugV8===========
+                    # # if current_index < truncation_length: #  ========== TODO: fixvaluebugV9==========
+                    #     target_values.append(value_list[value_index])
+                    #     target_rewards.append(reward_list[current_index])
+                    # else:
+                    #     target_values.append(np.array(0.))
+                    #     target_rewards.append(np.array(0.))
+                    
+                    # TODO: fixvaluebugV10===========
+                    target_values.append(value_list[value_index])
+                    if current_index < len(reward_list):
                         target_rewards.append(reward_list[current_index])
                     else:
-                        target_values.append(np.array(0.))
                         target_rewards.append(np.array(0.))
-                        
+
                     value_index += 1
 
                 batch_rewards.append(target_rewards)

@@ -144,15 +144,14 @@ class GameBuffer(ABC, object):
 
             game_segment_list.append(game_segment)
 
-            # print(f'len(game_segment)=len(game_segment.action_segment): {len(game_segment)}')
+            # print(f'len(game_segment)=:len(game_segment.action_segment): {len(game_segment)}')
             # print(f'len(game_segment.obs_segment): {game_segment.obs_segment.shape[0]}')
+            # if pos_in_game_segment >= self._cfg.game_segment_length:
+            #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
 
-            # #===== TODO: commit-id c19b203 for muzero segment-collector 性能好的版本======
-            # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
-            #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
-
-            if pos_in_game_segment >= self._cfg.game_segment_length:
-                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
+            # # TODO:0923 测试中 self._cfg.game_segment_length后面的child_visits可能没有更新过, 让self._cfg.game_segment_length略大一些
+            if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
+                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
 
             pos_in_game_segment_list.append(pos_in_game_segment)
             
@@ -161,8 +160,8 @@ class GameBuffer(ABC, object):
 
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
         return orig_data
-    
-    def _sample_orig_reanalyze_batch_data(self, batch_size: int) -> Tuple:
+    # v0
+    def _sample_orig_reanalyze_batch_data_v0(self, batch_size: int) -> Tuple:
         """
         Overview:
              sample orig_data that contains:
@@ -196,20 +195,95 @@ class GameBuffer(ABC, object):
         pos_in_game_segment_list = []
 
         for idx in batch_index_list:
-            # 选取每个segment的第一步为开始位置
+            # Select the first step of each sequence of length <self._cfg.num_unroll_steps> as the starting position
             game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx*self._cfg.num_unroll_steps]
             game_segment_idx -= self.base_idx
             game_segment = self.game_segment_buffer[game_segment_idx]
             game_segment_list.append(game_segment)
-
-            # pos_in_game_segment_list.append(pos_in_game_segment)
-
+            # TODO: check the correctness of the following code
             if pos_in_game_segment >= self._cfg.game_segment_length:
                 pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
             pos_in_game_segment_list.append(pos_in_game_segment)
 
 
         make_time = [time.time() for _ in range(len(batch_index_list))]
+
+        orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, [], make_time)
+        return orig_data
+
+    # v1
+    def _sample_orig_reanalyze_batch_data(self, batch_size: int) -> Tuple:
+        """
+        Overview:
+            sample orig_data that contains:
+                game_segment_list: a list of game segments
+                pos_in_game_segment_list: transition index in game (relative index)
+                batch_index_list: the index of start transition of sampled minibatch in replay buffer
+                weights_list: the weight concerning the priority
+                make_time: the time the batch is made (for correctly updating replay buffer when data is deleted)
+        Arguments:
+            - batch_size (:obj:`int`): batch size
+        """
+        assert self._beta > 0
+        train_sample_num = len(self.game_segment_buffer)
+        assert self._cfg.reanalyze_partition <= 0.75
+        valid_sample_num = int(train_sample_num * self._cfg.reanalyze_partition)
+
+        # 计算每个 game_segment 能采样的次数
+        samples_per_segment = self._cfg.game_segment_length // self._cfg.num_unroll_steps
+
+        # 确保 batch_size 可以分配给多个 game_segment
+        if samples_per_segment == 0:
+            raise ValueError("The game segment length is too small for num_unroll_steps.")
+
+        # 计算每个 game_segment 需要采样的数量
+        batch_size_per_segment = batch_size // samples_per_segment
+        
+        # 如果 batch_size 不能整除，处理余数部分
+        extra_samples = batch_size % samples_per_segment
+
+        # 利用 game_segment_buffer 中的 reanalyze_time 来生成权重
+        reanalyze_times = np.array([segment.reanalyze_time for segment in self.game_segment_buffer[:valid_sample_num]])
+
+        # 计算权重: reanalyze_time 越大，权重越小 (使用exp(-reanalyze_time))
+        base_decay_rate = 100
+        decay_rate = base_decay_rate / valid_sample_num
+        weights = np.exp(-decay_rate * reanalyze_times)
+        
+        # 将权重标准化为概率分布
+        probabilities = weights / np.sum(weights)
+
+        # 根据新生成的概率分布进行采样
+        selected_game_segments = np.random.choice(valid_sample_num, batch_size_per_segment, replace=False, p=probabilities)
+
+        # 如果有多余的样本需要分配，随机选些 game_segment 再多采样一次
+        if extra_samples > 0:
+            extra_game_segments = np.random.choice(valid_sample_num, extra_samples, replace=False, p=probabilities)
+            selected_game_segments = np.concatenate((selected_game_segments, extra_game_segments))
+
+        game_segment_list = []
+        pos_in_game_segment_list = []
+        batch_index_list = []
+
+        for game_segment_idx in selected_game_segments:
+            game_segment_idx -= self.base_idx
+            game_segment = self.game_segment_buffer[game_segment_idx]
+
+            # 更新 reanalyze_time 只增加一次
+            game_segment.reanalyze_time += 1
+
+            # 采样位置应该是 0, 0 + num_unroll_steps, ... (num_unroll_steps 的整数倍)
+            for i in range(samples_per_segment):
+                game_segment_list.append(game_segment)
+                pos_in_game_segment = i * self._cfg.num_unroll_steps
+                if pos_in_game_segment >= len(game_segment):
+                    pos_in_game_segment = np.random.choice(len(game_segment), 1).item()
+                pos_in_game_segment_list.append(pos_in_game_segment)
+                batch_index_list.append(game_segment_idx)
+
+        # 生成批次创建时间
+        # make_time = [time.time() for _ in range(len(batch_index_list))]
+        make_time = [0 for _ in range(len(batch_index_list))]
 
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, [], make_time)
         return orig_data
@@ -490,11 +564,13 @@ class GameBuffer(ABC, object):
         Returns:
             - buffered_data (:obj:`BufferedData`): The pushed data.
         """
+        data_length = len(data.action_segment) if len(data.action_segment)<self._cfg.game_segment_length else self._cfg.game_segment_length
+
         if meta['done']:
             self.num_of_collected_episodes += 1
-            valid_len = len(data)
+            valid_len = data_length
         else:
-            valid_len = len(data) - meta['unroll_plus_td_steps']
+            valid_len = data_length - meta['unroll_plus_td_steps']
             # print(f'valid_len is {valid_len}')
 
         if meta['priorities'] is None:
@@ -503,18 +579,18 @@ class GameBuffer(ABC, object):
             self.game_pos_priorities = np.concatenate(
                 (
                     self.game_pos_priorities, [max_prio
-                                               for _ in range(valid_len)] + [0. for _ in range(valid_len, len(data))]
+                                               for _ in range(valid_len)] + [0. for _ in range(valid_len, data_length)]
                 )
             )
         else:
-            assert len(data) == len(meta['priorities']), " priorities should be of same length as the game steps"
+            assert data_length == len(meta['priorities']), " priorities should be of same length as the game steps"
             priorities = meta['priorities'].copy().reshape(-1)
-            priorities[valid_len:len(data)] = 0.
+            priorities[valid_len:data_length] = 0.
             self.game_pos_priorities = np.concatenate((self.game_pos_priorities, priorities))
 
         self.game_segment_buffer.append(data)
         self.game_segment_game_pos_look_up += [
-            (self.base_idx + len(self.game_segment_buffer) - 1, step_pos) for step_pos in range(len(data))
+            (self.base_idx + len(self.game_segment_buffer) - 1, step_pos) for step_pos in range(data_length)
         ]
         # print(f'potioritys is {self.game_pos_priorities}')
         # print(f'num of transitions is {len(self.game_segment_game_pos_look_up)}')
@@ -530,7 +606,8 @@ class GameBuffer(ABC, object):
         if total_transition > self.replay_buffer_size:
             index = 0
             for i in range(nums_of_game_segments):
-                total_transition -= len(self.game_segment_buffer[i])
+                length_data = len(self.game_segment_buffer[i].action_segment) if len(self.game_segment_buffer[i].action_segment)<self._cfg.game_segment_length else self._cfg.game_segment_length
+                total_transition -= length_data
                 if total_transition <= self.replay_buffer_size * self.keep_ratio:
                     # find the max game_segment index to keep in the buffer
                     index = i

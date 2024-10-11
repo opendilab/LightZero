@@ -124,7 +124,8 @@ class WorldModel(nn.Module):
 
         # for self.kv_cache_init_infer
         # In contrast, init_infer only needs to retain the results of the most recent step.
-        self.shared_pool_size_init = int(2*self.env_num)
+        # self.shared_pool_size_init = int(2*self.env_num) # original
+        self.shared_pool_size_init = int(2) # ========== TODO: 1011 ==========
         self.shared_pool_init_infer = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
         self.shared_pool_index_init_envs = [0 for _ in range(self.env_num)]
 
@@ -1283,7 +1284,7 @@ class WorldModel(nn.Module):
             #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
 
         # Apply mask to loss_obs
-        mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1)
+        mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1) # original
         loss_obs = (loss_obs * mask_padding_expanded)
 
         # Compute labels for policy and value

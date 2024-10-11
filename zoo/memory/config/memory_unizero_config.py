@@ -69,7 +69,8 @@ memory_unizero_config = dict(
                 max_blocks=num_unroll_steps + 5,
                 max_tokens=2 * (num_unroll_steps + 5),
                 context_length=2 * (num_unroll_steps + 5),
-                device='cpu',
+                # device='cpu',
+                device='cuda',
                 action_space_size=4,
                 num_layers=4,
                 num_heads=4,
@@ -117,8 +118,10 @@ memory_unizero_create_config = EasyDict(memory_unizero_create_config)
 create_config = memory_unizero_create_config
 
 if __name__ == "__main__":
-    seeds = [0, 1, 2]  # You can add more seed values here
+    # seeds = [0, 1, 2]  # You can add more seed values here
+    seeds = [0]  # You can add more seed values here
+
     for seed in seeds:
-        main_config.exp_name = f'data_{env_id}/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
+        main_config.exp_name = f'data_{env_id}_1016/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
