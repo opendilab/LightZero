@@ -80,6 +80,8 @@ class GameSegment:
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = []
 
+        self.reanalyze_time = 0
+
     def get_unroll_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
         """
         Overview:

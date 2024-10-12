@@ -25,7 +25,7 @@ def main(env_id, seed):
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
-    reanalyze_partition=1
+    reanalyze_partition = 0.75
 
     # ====== only for debug =====
     # collector_env_num = 2
