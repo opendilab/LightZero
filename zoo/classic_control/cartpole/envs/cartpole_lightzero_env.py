@@ -17,8 +17,10 @@ from matplotlib import animation
 @ENV_REGISTRY.register('cartpole_lightzero')
 class CartPoleEnv(BaseEnv):
     """
-    LightZero version of the classic CartPole environment with enhanced replay saving as GIF.
-    This class includes methods for resetting, closing, stepping, and saving replay as a GIF file.
+    LightZero version of the classic CartPole environment. This class includes methods for resetting, closing, and
+    stepping through the environment, as well as seeding for reproducibility, saving replay videos, and generating random
+    actions. It also includes properties for accessing the observation space, action space, and reward space of the
+    environment.
     """
 
     config = dict(
@@ -87,13 +89,22 @@ class CartPoleEnv(BaseEnv):
 
     def step(self, action: Union[int, np.ndarray]) -> BaseEnvTimestep:
         """
-        Perform a step in the environment and return the next state.
-
-        Args:
-            action (Union[int, np.ndarray]): The action to take in the environment.
-
+        Overview:
+            Perform a step in the environment using the provided action, and return the next state of the environment.
+            The next state is encapsulated in a BaseEnvTimestep object, which includes the new observation, reward,
+            done flag, and info dictionary.
+        Arguments:
+            - action (:obj:`Union[int, np.ndarray]`): The action to be performed in the environment. If the action is
+              a 1-dimensional numpy array, it is squeezed to a 0-dimension array.
         Returns:
-            BaseEnvTimestep: The next timestep, including the observation, reward, done flag, and info.
+            - timestep (:obj:`BaseEnvTimestep`): An object containing the new observation, reward, done flag,
+              and info dictionary.
+        .. note::
+            - The cumulative reward (`_eval_episode_return`) is updated with the reward obtained in this step.
+            - If the episode ends (done is True), the total reward for the episode is stored in the info dictionary
+              under the key 'eval_episode_return'.
+            - An action mask is created with ones, which represents the availability of each action in the action space.
+            - Observations are returned in a dictionary format containing 'observation', 'action_mask', and 'to_play'.
         """
         if isinstance(action, np.ndarray) and action.shape == (1,):
             action = action.squeeze()  # Handle 0-dim array
