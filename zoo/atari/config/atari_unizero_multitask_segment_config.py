@@ -2,7 +2,7 @@ from easydict import EasyDict
 from copy import deepcopy
 # from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
-def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type):
+def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments):
     return EasyDict(dict(
         env=dict(
             stop_value=int(1e6),
@@ -85,16 +85,24 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
+            num_segments=num_segments,
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(1e6),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
+            # ============= The key different params for reanalyze =============
+            # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
+            buffer_reanalyze_freq=buffer_reanalyze_freq,
+            # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+            reanalyze_batch_size=reanalyze_batch_size,
+            # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
+            reanalyze_partition=reanalyze_partition,
         ),
     ))
 
-def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed):
+def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments):
     configs = []
     # TODO
     # exp_name_prefix = f'data_unizero_mt_0711/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head-softmoe4_1-encoder-{norm_type}_lsd768-nlayer4-nh8_seed{seed}/'
@@ -120,7 +128,11 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
             batch_size,
             num_unroll_steps,
             infer_context_length,
-            norm_type
+            norm_type,
+            buffer_reanalyze_freq,
+            reanalyze_batch_size,
+            reanalyze_partition,
+            num_segments
         )
         config.policy.task_id = task_id
         config.exp_name = exp_name_prefix + f"{env_id.split('NoFrameskip')[0]}_unizero-mt_seed{seed}"
@@ -143,7 +155,7 @@ def create_env_manager():
     ))
 
 if __name__ == "__main__":
-    from lzero.entry import train_unizero_multitask
+    from lzero.entry import train_unizero_multitask_segment
     # TODO
     env_id_list = [
         'PongNoFrameskip-v4',
@@ -166,6 +178,7 @@ if __name__ == "__main__":
     action_space_size = 18  # Full action space
     seed = 0
     collector_env_num = 8
+    num_segments = 8
     n_episode = 8
     evaluator_env_num = 3
     num_simulations = 50
@@ -179,23 +192,30 @@ if __name__ == "__main__":
     norm_type = 'LN'
     # # norm_type = 'BN'  # bad performance now
 
+    # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
+    buffer_reanalyze_freq = 1/10
+    # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+    reanalyze_batch_size = 160
+    # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
+    reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    collector_env_num = 3
-    n_episode = 3
+    collector_env_num = 2
+    num_segments = 2
+    n_episode = 2
     evaluator_env_num = 2
     num_simulations = 2
     batch_size = [4, 4, 4, 4]
 
-    configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed)
+    configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments)
 
     # Uncomment the desired training run
-    # train_unizero_multitask(configs[:1], seed=seed, max_env_step=max_env_step)  # Pong
-    # train_unizero_multitask(configs[:2], seed=seed, max_env_step=max_env_step)  # Pong, MsPacman
-    train_unizero_multitask(configs, seed=seed, max_env_step=max_env_step)      # Pong, MsPacman, Seaquest, Boxing
+    # train_unizero_multitask_segment(configs[:1], seed=seed, max_env_step=max_env_step)  # Pong
+    # train_unizero_multitask_segment(configs[:2], seed=seed, max_env_step=max_env_step)  # Pong, MsPacman
+    train_unizero_multitask_segment(configs, seed=seed, max_env_step=max_env_step)      # Pong, MsPacman, Seaquest, Boxing
 
-    # only for cprofile
+    #  ==== only for cprofile =====
     # def run(max_env_step: int):
-    #     train_unizero_multitask(configs, seed=seed, max_env_step=max_env_step)      # Pong, MsPacman, Seaquest, Boxing
+    #     train_unizero_multitask_segment(configs, seed=seed, max_env_step=max_env_step)      # Pong, MsPacman, Seaquest, Boxing
     # import cProfile
     # cProfile.run(f"run({20000})", filename="unizero_mt_4games_cprofile_20k_envstep", sort="cumulative")

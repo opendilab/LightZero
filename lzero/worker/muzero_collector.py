@@ -246,24 +246,30 @@ class MuZeroCollector(ISerialCollector):
         """
         # pad over last segment trajectory
         beg_index = self.policy_config.model.frame_stack_num
-        # end_index = beg_index + self.policy_config.num_unroll_steps
-        # end_index = beg_index + self.policy_config.td_steps
-        end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps  # TODO: check
-
+        end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps
 
         # the start <frame_stack_num> obs is init zero obs, so we take the
         # [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
         # e.g. the start 4 obs is init zero obs, the num_unroll_steps is 5, so we take the [4:9] obs as the pad obs
         pad_obs_lst = game_segments[i].obs_segment[beg_index:end_index]
-        pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps]
+
+        # NOTE: for unizero
+        pad_action_lst = game_segments[i].action_segment[
+                         :self.policy_config.num_unroll_steps + self.policy_config.td_steps]
+
+        # NOTE: for unizero
+        pad_child_visits_lst = game_segments[i].child_visit_segment[
+                               :self.policy_config.num_unroll_steps + self.policy_config.td_steps]
+        # pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps]
+
         # EfficientZero original repo bug:
         # pad_child_visits_lst = game_segments[i].child_visit_segment[beg_index:end_index]
 
         beg_index = 0
-        # self.unroll_plus_td_steps = self.policy_config.num_unroll_steps + self.policy_config.td_steps
         end_index = beg_index + self.unroll_plus_td_steps - 1
 
         pad_reward_lst = game_segments[i].reward_segment[beg_index:end_index]
+
         if self.policy_config.use_ture_chance_label_in_chance_encoder:
             chance_lst = game_segments[i].chance_segment[beg_index:end_index]
 
@@ -277,20 +283,23 @@ class MuZeroCollector(ISerialCollector):
 
         # pad over and save
         if self.policy_config.gumbel_algo:
-            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst,
+            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst,
+                                           pad_child_visits_lst,
                                            next_segment_improved_policy=pad_improved_policy_prob)
         else:
             if self.policy_config.use_ture_chance_label_in_chance_encoder:
-                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst,
+                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst,
+                                               pad_child_visits_lst,
                                                next_chances=chance_lst)
             else:
-                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
+                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst,
+                                               pad_child_visits_lst)
         """
         Note:
             game_segment element shape:
             obs: game_segment_length + stack + num_unroll_steps, 20+4 +5
             rew: game_segment_length + stack + num_unroll_steps + td_steps -1  20 +5+3-1
-            action: game_segment_length -> 20
+            action: game_segment_length + num_unroll_steps + td_steps -> 20 +5+3
             root_values:  game_segment_length + num_unroll_steps + td_steps -> 20 +5+3
             child_visits： game_segment_length + num_unroll_steps -> 20 +5
             to_play: game_segment_length -> 20

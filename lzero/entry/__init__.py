@@ -10,3 +10,4 @@ from .train_rezero import train_rezero
 from .train_unizero import train_unizero
 from .train_unizero_segment import train_unizero_segment
 from .train_unizero_multitask import train_unizero_multitask
+from .train_unizero_multitask_segment import train_unizero_multitask_segment

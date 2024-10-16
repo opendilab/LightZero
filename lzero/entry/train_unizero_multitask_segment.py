@@ -15,13 +15,16 @@ from tensorboardX import SummaryWriter
 
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
-from lzero.worker import MuZeroCollector as Collector, MuZeroEvaluator as Evaluator
+from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.mcts import UniZeroGameBuffer as GameBuffer
+from lzero.worker import MuZeroSegmentCollector as Collector
+from ding.utils import EasyTimer
+timer = EasyTimer()
 
 from line_profiler import line_profiler
 
 #@profile
-def train_unizero_multitask(
+def train_unizero_multitask_segment(
         input_cfg_list: List[Tuple[int, Tuple[dict, dict]]],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -130,6 +133,10 @@ def train_unizero_multitask(
 
     learner.call_hook('before_run')
     value_priority_tasks = {}
+
+    buffer_reanalyze_count = 0
+    train_epoch = 0
+    reanalyze_batch_size = cfg.policy.reanalyze_batch_size
     update_per_collect = cfg.policy.update_per_collect
 
     while True:
@@ -177,12 +184,31 @@ def train_unizero_multitask(
 
             # Determine updates per collection
             if update_per_collect is None:
-                collected_transitions_num = sum(len(game_segment) for game_segment in new_data[0])
+                # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
+                # The length of game_segment (i.e., len(game_segment.action_segment)) can be smaller than cfg.policy.game_segment_length if it represents the final segment of the game.
+                # On the other hand, its length will be less than cfg.policy.game_segment_length + padding_length when it is not the last game segment. Typically, padding_length is the sum of unroll_steps and td_steps.
+                collected_transitions_num = sum(
+                    min(len(game_segment), cfg.policy.game_segment_length) for game_segment in new_data[0])
                 update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
 
             # Update replay buffer
             replay_buffer.push_game_segments(new_data)
             replay_buffer.remove_oldest_data_to_fit()
+
+            # Periodically reanalyze buffer
+            if cfg.policy.buffer_reanalyze_freq >= 1:
+                # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+                reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
+            else:
+                # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
+                if train_epoch % int(1/cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+                    with timer:
+                        # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+                        replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+                    buffer_reanalyze_count += 1
+                    logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
+                    logging.info(f'Buffer reanalyze time: {timer.value}')
+
 
         not_enough_data = any(replay_buffer.get_num_of_transitions() < batch_size for replay_buffer in game_buffers)
 
@@ -196,9 +222,21 @@ def train_unizero_multitask(
                     envstep_multi_task += collector.envstep
                     if replay_buffer.get_num_of_transitions() > batch_size:
                         batch_size = cfg.policy.batch_size[task_id]
+
+                        if cfg.policy.buffer_reanalyze_freq >= 1:
+                            # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+                            if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions() // cfg.policy.num_unroll_steps > int(
+                                    reanalyze_batch_size / cfg.policy.reanalyze_partition):
+                                with timer:
+                                    # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+                                    replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+                                buffer_reanalyze_count += 1
+                                logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
+                                logging.info(f'Buffer reanalyze time: {timer.value}')
+
                         train_data = replay_buffer.sample(batch_size, policy)
-                        if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
-                            policy.recompute_pos_emb_diff_and_clear_cache()
+                        # if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
+                        #     policy.recompute_pos_emb_diff_and_clear_cache()
                         # Append task_id to train_data
                         train_data.append(task_id)
                         train_data_multi_task.append(train_data)
@@ -248,6 +286,8 @@ def train_unizero_multitask(
                                 f"Running Mean Priority: {running_mean_priority:.8f}, "
                                 f"Standard Deviation: {std_priority:.8f}")
 
+        train_epoch += 1
+        policy.recompute_pos_emb_diff_and_clear_cache()
 
         if all(collector.envstep >= max_env_step for collector in collectors) or learner.train_iter >= max_train_iter:
             break

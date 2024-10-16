@@ -45,7 +45,7 @@ class WorldModel(nn.Module):
         self.tokenizer = tokenizer
         self.config = config
         self.transformer = Transformer(self.config)
-
+        self.task_num = 1
         if self.config.device == 'cpu':
             self.device = torch.device('cpu')
         else:
@@ -181,7 +181,10 @@ class WorldModel(nn.Module):
         Returns:
             - index (:obj:`int`): The index of the copied KeysValues object in the shared pool.
         """
-        src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
+        try:
+            src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
+        except Exception as e:
+            print(f"src_kv_shape: {src_kv_shape}")
         
         if self.shared_pool_wm[self.shared_pool_index_wm] is None:
             self.shared_pool_wm[self.shared_pool_index_wm] = KeysValues(
@@ -638,18 +641,18 @@ class WorldModel(nn.Module):
             current_obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch_current_obs)
             # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
             self.latent_state = current_obs_embeddings
-            outputs_wm = self.wm_forward_for_initial_infererence(obs_embeddings, batch_action,
+            outputs_wm = self.wm_forward_for_initial_inference(obs_embeddings, batch_action,
                                                                                    current_obs_embeddings)
         else:
             # ================ calculate the target value in Train phase ================
             self.latent_state = obs_embeddings
-            outputs_wm = self.wm_forward_for_initial_infererence(obs_embeddings, batch_action, None)
+            outputs_wm = self.wm_forward_for_initial_inference(obs_embeddings, batch_action, None)
 
         return outputs_wm, self.latent_state
 
     #@profile
     @torch.no_grad()
-    def wm_forward_for_initial_infererence(self, last_obs_embeddings: torch.LongTensor,
+    def wm_forward_for_initial_inference(self, last_obs_embeddings: torch.LongTensor,
                                                              batch_action=None,
                                                              current_obs_embeddings=None) -> torch.FloatTensor:
         """

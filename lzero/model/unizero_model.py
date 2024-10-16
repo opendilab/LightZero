@@ -88,21 +88,16 @@ class UniZeroModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
             print('==' * 20)
         elif world_model_cfg.obs_type == 'image':
-            self.representation_network = nn.ModuleList()
-            # for task_id in range(self.task_num):  # N independent encoder
-            for task_id in range(1):  # TODO: one share encoder
-                self.representation_network.append(RepresentationNetworkUniZero(
-                    observation_shape,
-                    num_res_blocks,
-                    num_channels,
-                    self.downsample,
-                    activation=self.activation,
-                    norm_type=norm_type,
-                    embedding_dim=world_model_cfg.embed_dim,
-                    group_size=world_model_cfg.group_size,
-                ))
-            # TODO: we should change the output_shape to the real observation shape
-            self.decoder_network = LatentDecoder(embedding_dim=world_model_cfg.embed_dim, output_shape=(3, 64, 64))
+            self.representation_network = RepresentationNetworkUniZero(
+                observation_shape,
+                num_res_blocks,
+                num_channels,
+                self.downsample,
+                activation=self.activation,
+                norm_type=norm_type,
+                embedding_dim=world_model_cfg.embed_dim,
+                group_size=world_model_cfg.group_size,
+            )
 
             # ====== for analysis ======
             if world_model_cfg.analysis_sim_norm:
@@ -151,7 +146,7 @@ class UniZeroModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
             print('==' * 20)
 
-    def initial_inference(self, obs_batch: torch.Tensor, action_batch=None, current_obs_batch=None, task_id=None) -> MZNetworkOutput:
+    def initial_inference(self, obs_batch: torch.Tensor, action_batch=None, current_obs_batch=None) -> MZNetworkOutput:
         """
         Overview:
             Initial inference of UniZero model, which is the first step of the UniZero model.
@@ -188,7 +183,7 @@ class UniZeroModel(nn.Module):
         )
 
     def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index=0,
-                            latent_state_index_in_search_path=[], task_id=None) -> MZNetworkOutput:
+                            latent_state_index_in_search_path=[]) -> MZNetworkOutput:
         """
         Overview:
             Recurrent inference of UniZero model.To perform the recurrent inference, we concurrently predict the latent dynamics (reward/next_latent_state)

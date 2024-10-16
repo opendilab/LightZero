@@ -21,9 +21,6 @@ from line_profiler import line_profiler
 sys.path.append('/Users/puyuan/code/LibMTL/')
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
-# from LibMTL.weighting.FAMO_unizero import FAMO as GradCorrect  # NOTE: FAMO have bugs now
-
-
 # from LibMTL.weighting.abstract_weighting import AbsWeighting
 
 def generate_task_loss_dict(multi_task_losses, task_name_template):
@@ -163,7 +160,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'BN'.
-            norm_type='LN',
+            norm_type='LN',  # NOTE: TODO
             # (bool) Whether to analyze simulation normalization.
             analysis_sim_norm=False,
             # (int) The save interval of the model.
@@ -192,7 +189,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 # (str) The type of attention mechanism used. Options could be ['causal'].
                 attention='causal',
                 # (int) The number of layers in the model.
-                num_layers=4,
+                num_layers=2,
                 # (int) The number of attention heads.
                 num_heads=8,
                 # (int) The dimension of the embedding.
@@ -288,7 +285,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
-        # (str) Optimizer for training policy network. ['SGD', 'Adam']
+        # (str) Optimizer for training policy network.
         optim_type='AdamW',
         # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.0001,
@@ -304,8 +301,10 @@ class UniZeroMTPolicy(UniZeroPolicy):
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
         grad_clip_value=5,
-        # (int) The number of episodes in each collecting stage.
+        # (int) The number of episodes in each collecting stage when use muzero_collector.
         n_episode=8,
+        # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
+        num_segments=8,
         # (int) the number of simulations in MCTS.
         num_simulations=50,
         # (float) Discount factor (gamma) for returns.
@@ -320,8 +319,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
         value_loss_weight=0.25,
         # (float) The weight of policy loss.
         policy_loss_weight=1,
-        # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=0,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
@@ -389,7 +386,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             by import_names path. For MuZero, ``lzero.model.unizero_model.MuZeroModel``
         """
         # return 'UniZeroModel', ['lzero.model.unizero_model']
-
         return 'UniZeroMTModel', ['lzero.model.unizero_model_multitask']
 
     def _init_learn(self) -> None:
@@ -443,6 +439,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         #     self._learn_model.world_model.tokenizer,
         #     self._learn_model.world_model.transformer
         # )
+
         # head 没有矫正梯度
         wrapped_model = WrappedModelV2(
             # self._learn_model.world_model.tokenizer, # TODO
@@ -456,6 +453,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # wrapped_model = WrappedModelV3( 
         #     self._learn_model.world_model,
         # )
+
         # head 和 tokenizer.encoder 没有矫正梯度
         # wrapped_model = WrappedModelV4(
         #     self._learn_model.world_model.transformer,
@@ -470,11 +468,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
         self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
         self.grad_correct.init_param()  
         self.grad_correct.rep_grad = False
-
-        #  =========only for FAMO =========
-        # self.grad_correct.set_min_losses(torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)) 
-        # self.curr_min_loss = torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)
-        # self.grad_correct.prev_loss = self.curr_min_loss
 
     #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -517,7 +510,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         for task_id, data_one_task in enumerate(data):
             current_batch, target_batch, task_id = data_one_task
             # current_batch, target_batch, _ = data
-            obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
+            obs_batch_ori, action_batch, target_action_batch, mask_batch, indices, weights, make_time = current_batch
             target_reward, target_value, target_policy = target_batch
 
             # Prepare observations based on frame stack number
@@ -637,16 +630,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
         #  ============= for CAGrad and MoCo =============
         # lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
 
-        #  ============= for FAMO  =============  TODO: self.grad_correct.min_loss
-        # lambd = torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)
-        # curr_loss, _ = self.grad_correct.backward(losses=torch.tensor(losses_list, device=self._cfg.device))
-        # for i in range(self.task_num):
-        #     if losses_list[i] < self.grad_correct.min_losses[i]:
-        #         self.curr_min_loss[i] = losses_list[i]
-        # self.grad_correct.min_loss = self.curr_min_loss  # only for FAMO
-        # self.grad_correct.update(curr_loss.detach())
-        # self.grad_correct.prev_loss = curr_loss.detach()
-
         #  ============= TODO: 不使用梯度矫正的情况  =============
         lambd = torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)
         weighted_total_loss.backward()
@@ -763,7 +746,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             to_play: List = [-1],
             epsilon: float = 0.25,
             ready_env_id: np.array = None,
-            task_id=None
+            task_id: int = None,
     ) -> Dict:
         """
         Overview:
@@ -867,6 +850,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
             self.last_batch_obs = data
             self.last_batch_action = batch_action
 
+            # ========= TODO: for muzero_segment_collector now =========
+            if active_collect_env_num < self.collector_env_num:
+                print('==========collect_forward============')
+                print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
+                self._reset_collect(reset_init_data=True)
+
         return output
 
     def _init_eval(self) -> None:
@@ -890,7 +879,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
     #@profile
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
-                      ready_env_id: np.array = None, task_id=None) -> Dict:
+                      ready_env_id: np.array = None, task_id: int = None) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -996,15 +985,15 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # print('collector: last_batch_obs, last_batch_action reset()', self.last_batch_obs.shape)
 
         # Return immediately if env_id is None or a list
-        # if env_id is None or isinstance(env_id, list):
-        #     return
+        if env_id is None or isinstance(env_id, list):
+            return
 
         # Determine the clear interval based on the environment's sample type
         clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
 
         # Clear caches if the current steps are a multiple of the clear interval
         if current_steps % clear_interval == 0:
-            # print(f'clear_interval: {clear_interval}')
+            print(f'clear_interval: {clear_interval}')
 
             # Clear various caches in the collect model's world model
             world_model = self._collect_model.world_model
@@ -1020,7 +1009,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             print('collector: collect_model clear()')
             print(f'eps_steps_lst[{env_id}]: {current_steps}')
 
-            # TODO: check its correctness
+            # TODO: check its correctness =========
             self._reset_target_model()
 
     #@profile
@@ -1067,8 +1056,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             print('evaluator: last_batch_obs, last_batch_action reset()', self.last_batch_obs.shape)
 
         # Return immediately if env_id is None or a list
-        # if env_id is None or isinstance(env_id, list):
-        #     return
+        if env_id is None or isinstance(env_id, list):
+            return
 
         # Determine the clear interval based on the environment's sample type
         clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
@@ -1079,7 +1068,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             # Clear various caches in the eval model's world model
             world_model = self._eval_model.world_model
-            world_model.past_kv_cache_init_infer.clear()
+            # world_model.past_kv_cache_init_infer.clear()
             for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
                 kv_cache_dict_env.clear()
             world_model.past_kv_cache_recurrent_infer.clear()

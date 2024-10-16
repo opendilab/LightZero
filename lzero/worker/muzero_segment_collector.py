@@ -40,6 +40,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             exp_name: Optional[str] = 'default_experiment',
             instance_name: Optional[str] = 'collector',
             policy_config: 'policy_config' = None,  # noqa
+            task_id: int = None,
     ) -> None:
         """
         Overview:
@@ -53,6 +54,8 @@ class MuZeroSegmentCollector(ISerialCollector):
             - instance_name (:obj:`str`): Unique identifier for this collector instance.
             - policy_config (:obj:`Optional[policy_config]`): Configuration object for the policy.
         """
+        self.task_id = task_id
+
         self._exp_name = exp_name
         self._instance_name = instance_name
         self._collect_print_freq = collect_print_freq
@@ -456,7 +459,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, task_id=self.task_id)
 
                 # Extract relevant policy outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
@@ -769,7 +772,15 @@ class MuZeroSegmentCollector(ISerialCollector):
             for k, v in info.items():
                 if k in ['each_reward']:
                     continue
-                self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
+                if self.task_id is None:
+                    self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
+                else:
+                    self._tb_logger.add_scalar('{}_iter_task{}/'.format(self._instance_name, self.task_id) + k, v,
+                                               train_iter)
                 if k in ['total_envstep_count']:
                     continue
-                self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
+                if self.task_id is None:
+                    self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
+                else:
+                    self._tb_logger.add_scalar('{}_step_task{}/'.format(self._instance_name, self.task_id) + k, v,
+                                           self._total_envstep_count)
