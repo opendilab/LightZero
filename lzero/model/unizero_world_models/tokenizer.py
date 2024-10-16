@@ -79,7 +79,10 @@ class Tokenizer(nn.Module):
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 4:
             # Case when input is 4D (B, C, H, W)
-            obs_embeddings = self.encoder[task_id](x)
+            try:
+                obs_embeddings = self.encoder[task_id](x)
+            except Exception as e:
+                obs_embeddings = self.encoder(x) # TODO: for memory env
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 5:
             # Case when input is 5D (B, T, C, H, W)
