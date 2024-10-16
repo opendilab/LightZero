@@ -447,13 +447,13 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 roots = MCTSCtree.roots(transition_batch_size, legal_actions)
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
 
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()

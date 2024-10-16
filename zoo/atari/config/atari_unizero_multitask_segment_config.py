@@ -45,8 +45,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,
                     context_length=2 * infer_context_length,
-                    device='cpu',  # 'cuda',
-                    # device='cuda',  # 'cuda',
+                    # device='cpu',  # 'cuda',
+                    device='cuda',  # 'cuda',
                     action_space_size=action_space_size,
                     # num_layers=4,  # NOTE
                     num_layers=2,  # NOTE
@@ -72,9 +72,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # num_experts_of_moe_in_transformer=2,
                 ),
             ),
-            # use_priority=False,
+            use_priority=False,
             # print_task_priority_logs=False,
-            use_priority=True,  # TODO
+            # use_priority=True,  # TODO
             print_task_priority_logs=False,
             cuda=True,
             model_path=None,
@@ -111,7 +111,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_1-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0722_debug/{len(env_id_list)}games_1-encoder-{norm_type}_trans-ffw-moeV2-expert4_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_0722_profile/lineprofile_{len(env_id_list)}games_1-encoder-{norm_type}_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_0722/{len(env_id_list)}games_1-encoder-{norm_type}_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_segcollect_1016/{len(env_id_list)}games_1-encoder-{norm_type}_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -200,12 +200,12 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    collector_env_num = 2
-    num_segments = 2
-    n_episode = 2
-    evaluator_env_num = 2
-    num_simulations = 2
-    batch_size = [4, 4, 4, 4]
+    # collector_env_num = 2
+    # num_segments = 2
+    # n_episode = 2
+    # evaluator_env_num = 2
+    # num_simulations = 2
+    # batch_size = [4, 4, 4, 4]
 
     configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments)
 
