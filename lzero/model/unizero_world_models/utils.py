@@ -215,8 +215,14 @@ def init_weights(module, norm_type='BN'):
             module.bias.data.zero_()
     elif isinstance(module, (nn.LayerNorm, nn.GroupNorm)):
         print(f"Init {module} using zero bias, 1 weight")
-        module.bias.data.zero_()
-        module.weight.data.fill_(1.0)
+        try:
+            module.bias.data.zero_()
+        except Exception as e:
+            print(e)
+        try:
+             module.weight.data.fill_(1.0)
+        except Exception as e:
+            print(e)
     elif isinstance(module, nn.BatchNorm2d):
         print(f"Init nn.BatchNorm2d using zero bias, 1 weight")
         module.weight.data.fill_(1.0)
@@ -285,7 +291,7 @@ class LossWithIntermediateLosses:
                 self.loss_total += self.perceptual_loss_weight * v
 
         self.intermediate_losses = {
-            k: v if isinstance(v, dict) or isinstance(v, torch.Tensor) else (v if isinstance(v, float) else v.item())
+            k: v if isinstance(v, dict) or isinstance(v, np.ndarray) or isinstance(v, torch.Tensor) else (v if isinstance(v, float) else v.item())
             for k, v in kwargs.items()
         }
 

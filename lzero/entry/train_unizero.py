@@ -176,7 +176,6 @@ def train_unizero(
                     # Clear caches and precompute positional embedding matrices
                     policy.recompute_pos_emb_diff_and_clear_cache()  # TODO
 
-                train_data.append({'train_which_component': 'transformer'})
                 log_vars = learner.train(train_data, collector.envstep)
 
                 if cfg.policy.use_priority:

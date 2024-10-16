@@ -11,6 +11,7 @@ from .game_buffer_muzero import MuZeroGameBuffer
 
 if TYPE_CHECKING:
     from lzero.policy import MuZeroPolicy, EfficientZeroPolicy, SampledEfficientZeroPolicy
+from line_profiler import line_profiler
 
 
 @BUFFER_REGISTRY.register('game_buffer_unizero')
@@ -48,6 +49,14 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         self.game_segment_game_pos_look_up = []
         self.sample_type = self._cfg.sample_type  # 'transition' or 'episode'
 
+        if hasattr(self._cfg, 'task_id'):
+            self.task_id = self._cfg.task_id
+            print(f"Task ID is set to {self.task_id}.")
+        else:
+            self.task_id = None
+            print("No task_id found in configuration. Task ID is set to None.")
+
+    #@profile
     def sample(
             self, batch_size: int, policy: Union["MuZeroPolicy", "EfficientZeroPolicy", "SampledEfficientZeroPolicy"]
     ) -> List[Any]:
@@ -94,6 +103,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         train_data = [current_batch, target_batch]
         return train_data
 
+    #@profile
     def _make_batch(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
         """
         Overview:
@@ -410,7 +420,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # To obtain the target policy from MCTS guided by the recent target model
             # TODO: batch_obs (policy_obs_list) is at timestep t, batch_action is at timestep t
-            m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
+            m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], task_id=self.task_id)  # NOTE: :self.reanalyze_num
             # =======================================================================
 
             if not model.training:
@@ -518,7 +528,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # calculate the bootstrapped value and target value
             # NOTE: batch_obs(value_obs_list) is at t+td_steps, batch_action is at timestep t+td_steps
-            m_output = model.initial_inference(batch_obs, batch_action)
+            m_output = model.initial_inference(batch_obs, batch_action, task_id=self.task_id)
             # ======================================================================
 
             if not model.training:
