@@ -18,10 +18,10 @@ def main(env_id, seed):
     collector_env_num = 8
     n_episode = 8
     num_segments = 8
-    game_segment_length=20
+    game_segment_length = 100
     evaluator_env_num = 3
     num_simulations = 50
-    replay_ratio = 0.25
+    replay_ratio = 0.1
     max_env_step = int(5e5)
     reanalyze_ratio = 0
     batch_size = 64
@@ -31,7 +31,6 @@ def main(env_id, seed):
     norm_type = 'LN'
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    # buffer_reanalyze_freq = 1/10
     buffer_reanalyze_freq = 1/10000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
@@ -143,7 +142,6 @@ def main(env_id, seed):
             import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
         ),
         env_manager=dict(type='subprocess'),
-        # env_manager=dict(type='base'),
         policy=dict(
             type='sampled_unizero',
             import_names=['lzero.policy.sampled_unizero'],

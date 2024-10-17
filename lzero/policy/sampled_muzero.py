@@ -158,7 +158,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
         # (float) The weight of policy loss.
         policy_loss_weight=1,
         # (float) The weight of policy entropy loss.
-        policy_entropy_weight=0,
+        policy_entropy_weight=5e-3,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=2,
         # (bool) Whether to use the cosine learning rate decay.

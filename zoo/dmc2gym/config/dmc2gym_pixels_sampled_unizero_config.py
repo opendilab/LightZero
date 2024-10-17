@@ -40,7 +40,7 @@ seed = 0
 # ==============================================================
 
 dmc2gym_pixels_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero_0901/dmc2gym_{env_id}_image_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}',
+    exp_name=f'data_suz/dmc2gym_{env_id}_image_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}',
     env=dict(
         env_id='dmc2gym-v0',
         continuous=True,
@@ -128,5 +128,4 @@ create_config = dmc2gym_pixels_cont_sampled_unizero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_unizero
-
     train_unizero([main_config, create_config], seed=seed, max_env_step=max_env_step)
