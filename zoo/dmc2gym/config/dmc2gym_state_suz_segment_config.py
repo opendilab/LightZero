@@ -21,13 +21,13 @@ def main(env_id, seed):
     game_segment_length = 100
     evaluator_env_num = 3
     num_simulations = 50
-    replay_ratio = 0.1
     max_env_step = int(5e5)
     reanalyze_ratio = 0
     batch_size = 64
     num_layers = 2
-    num_unroll_steps = 5
-    infer_context_length = 2
+    replay_ratio = 0.25
+    num_unroll_steps = 10
+    infer_context_length = 4
     norm_type = 'LN'
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
@@ -76,7 +76,6 @@ def main(env_id, seed):
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
                 model_type='mlp',
-                norm_type = norm_type,
                 world_model_cfg=dict(
                     policy_loss_type='kl', # 'simple'
                     obs_type='vector',
@@ -84,10 +83,12 @@ def main(env_id, seed):
                     policy_entropy_weight=5e-3,
                     continuous_action_space=continuous_action_space,
                     num_of_sampled_actions=K,
-                    sigma_type='conditioned',
+                    # sigma_type='conditioned',
+                    sigma_type='fixed',
                     fixed_sigma_value=0.5,
                     bound_type=None,
                     model_type='mlp',
+                    norm_type=norm_type,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                     context_length=2 * infer_context_length,
@@ -109,10 +110,10 @@ def main(env_id, seed):
             env_type='not_board_games',
             replay_ratio=replay_ratio,
             batch_size=batch_size,
-            discount_factor=1,
+            discount_factor=0.99,
             td_steps=5,
             lr_piecewise_constant_decay=False,
-            learning_rate=0.0001,
+            learning_rate=1e-4,
             grad_clip_value=5,
             manual_temperature_decay=False,
             cos_lr_scheduler=False,

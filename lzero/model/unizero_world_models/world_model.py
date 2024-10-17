@@ -88,7 +88,7 @@ class WorldModel(nn.Module):
             if self.sigma_type == 'fixed':
                 self.fixed_sigma_value = self.config.fixed_sigma_value
             else:
-                self.fixed_sigma_value = 0.3
+                self.fixed_sigma_value = 0.5
             self.bound_type = self.config.bound_type
             self.head_policy = self._create_head_cont(self.value_policy_tokens_pattern, self.action_space_size)
         else:
