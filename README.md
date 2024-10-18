@@ -219,8 +219,7 @@ cd LightZero
 python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 ```
 
-Train a UniZero agent to play [Pong](http
-g/):
+Train a UniZero agent to play [Pong](https://gymnasium.farama.org/environments/atari/pong/):
 
 ```bash
 cd LightZero
