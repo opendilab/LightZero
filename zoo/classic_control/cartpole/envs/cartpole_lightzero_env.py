@@ -1,5 +1,5 @@
 import copy
-import os
+import random
 from datetime import datetime
 from typing import Union, Optional, Dict
 
@@ -26,6 +26,11 @@ class CartPoleEnv(BaseEnv):
     config = dict(
         # env_id (str): The name of the CartPole environment.
         env_id="CartPole-v0",
+        # enable_chance (bool): Whether to enable chance in observation.
+        # If enabled, one of the first 3 values of observation will be multiplied by 2.
+        # used for testing chance encoder in stochastic_muzero.
+        # chance space is 3.
+        enable_chance=False,
         # save_replay_gif (bool): If True, saves the replay as a gif.
         save_replay_gif=False,
         # replay_path_gif (str or None): The path to save the gif replay. If None, gif will not be saved.
@@ -46,6 +51,7 @@ class CartPoleEnv(BaseEnv):
             cfg (dict): Configuration dict that includes `env_id`, `save_replay_gif`, and `replay_path_gif`.
         """
         self._cfg = cfg
+        self._enable_chance = self._cfg.get('enable_chance', False)
         self._init_flag = False
         self._replay_path_gif = cfg.get('replay_path_gif', None)
         self._save_replay_gif = cfg.get('save_replay_gif', False)
@@ -84,6 +90,13 @@ class CartPoleEnv(BaseEnv):
         # Initialize the action mask and return the observation.
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+
+        # this is to artificially introduce randomness in order to evaluate the performance of
+        # stochastic_muzero on state input
+        if self._enable_chance:
+            chance_value = random.randint(0, 2)
+            obs['observation'][chance_value] *= 2
+            obs['chance'] = chance_value
 
         return obs
 
@@ -125,6 +138,13 @@ class CartPoleEnv(BaseEnv):
 
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+
+        # this is to artificially introduce randomness in order to evaluate the performance of
+        # stochastic_muzero on state input
+        if self._enable_chance:
+            chance_value = random.randint(0, 2)
+            obs['observation'][chance_value] *= 2
+            obs['chance'] = chance_value
 
         return BaseEnvTimestep(obs, rew, done, info)
 
