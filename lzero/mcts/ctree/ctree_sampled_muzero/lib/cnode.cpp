@@ -18,11 +18,25 @@
 #include <time.h>
 #include <cassert>
 
+
 #ifdef _WIN32
 #include "..\..\common_lib\utils.cpp"
 #else
 #include "../../common_lib/utils.cpp"
 #endif
+
+
+void print_vector(const std::vector<float>& vec) {
+    std::cout << "[";
+    for (size_t i = 0; i < vec.size(); ++i) {
+        std::cout << vec[i];
+        if (i != vec.size() - 1) {
+            std::cout << ", ";
+        }
+    }
+    std::cout << "]";
+}
+
 
 
 
@@ -156,7 +170,6 @@ namespace tree
         this->best_action = best_action;
 
         this->to_play = 0;
-//        this->parent_value_prefix = 0.0;
         this->reward = 0.0;
     }
 
@@ -182,8 +195,6 @@ namespace tree
         this->visit_count = 0;
         this->value_sum = 0;
         this->to_play = 0;
-//        this->value_prefix = 0.0;
-//        this->parent_value_prefix = 0.0;
         this->current_latent_state_index = -1;
         this->batch_index = -1;
     }
@@ -210,7 +221,7 @@ namespace tree
         int action_num = policy_logits.size();
 
         #ifdef _WIN32
-        // 创建动态数组
+        // Create a dynamic array
         float* policy = new float[action_num];
         #else
         float policy[action_num];
@@ -255,6 +266,8 @@ namespace tree
 
             float sampled_action_one_dim_before_tanh;
             std::vector<float> sampled_actions_log_probs_before_tanh;
+
+            // cout << "sampled_action[0]:" << sampled_action[0] <<endl;
 
             std::default_random_engine generator(seed);
             for (int i = 0; i < this->num_of_sampled_actions; ++i)
@@ -335,36 +348,11 @@ namespace tree
 
             unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
 
-            // cout << "sampled_action[0]:" << sampled_action[0] <<endl;
-
-            // std::vector<int> sampled_actions;
-            // std::vector<float> sampled_actions_log_probs;
-            // std::vector<float> sampled_actions_probs;
             std::default_random_engine generator(seed);
 
-            //  有放回抽样
-            // for (int i = 0; i < num_of_sampled_actions; ++i)
-            // {
-            //     float sampled_action_prob = 1;
-            //     int sampled_action;
-
-            //     std::discrete_distribution<float> distribution(probs.begin(), probs.end());
-
-            //     // for (float x:distribution.probabilities()) std::cout << x << " ";
-            //     sampled_action = distribution(generator);
-            //     // std::cout << "sampled_action： " << sampled_action << std::endl;
-
-            //     sampled_actions.push_back(sampled_action);
-            //     sampled_actions_probs.push_back(probs[sampled_action]);
-            //     std::cout << "sampled_actions_probs" << '[' << i << ']' << sampled_actions_probs[i] << std::endl;
-
-            //     sampled_actions_log_probs.push_back(log(probs[sampled_action]));
-            //     std::cout << "sampled_actions_log_probs" << '[' << i << ']' << sampled_actions_log_probs[i] << std::endl;
-            // }
-
-            // 每个节点的legal_actions应该为一个固定离散集合，所以采用无放回抽样
+            // The legal_actions of each node should be a fixed discrete set, so sampling without replacement is used.
             // std::cout << "position uniform_distribution init" << std::endl;
-            std::uniform_real_distribution<double> uniform_distribution(0.0, 1.0); //均匀分布
+            std::uniform_real_distribution<double> uniform_distribution(0.0, 1.0); // uniform distribution
             // std::cout << "position uniform_distribution done" << std::endl;
             std::vector<double> disturbed_probs;
             std::vector<std::pair<int, double> > disc_action_with_probs;
@@ -445,7 +433,7 @@ namespace tree
         }
         
         #ifdef _WIN32
-        // 释放数组内存
+        // Release memory of array
         delete[] policy;
         #else
         #endif
@@ -463,10 +451,18 @@ namespace tree
         float noise, prior;
         for (int i = 0; i < this->num_of_sampled_actions; ++i)
         {
-
             noise = noises[i];
             CNode *child = this->get_child(this->legal_actions[i]);
             prior = child->prior;
+
+            // TODO: only for debug, print current prior and noise
+            // std::cout << "Action: ";
+            // print_vector(this->legal_actions[i].value);
+            // std::cout << std::endl;
+            // std::cout << ", Prior: " << prior 
+            //         << ", Noise: " << noise 
+            //         << std::endl;
+
             if (this->continuous_action_space == true)
             {
                 // if prior is log_prob
@@ -477,6 +473,8 @@ namespace tree
                 // if prior is prob
                 child->prior = prior * (1 - exploration_fraction) + noise * exploration_fraction;
             }
+
+            // std::cout << "Updated Prior: " << child->prior << std::endl;
         }
     }
 
@@ -492,17 +490,11 @@ namespace tree
         */
         float total_unsigned_q = 0.0;
         int total_visits = 0;
-//        float parent_value_prefix = this->value_prefix;
         for (auto a : this->legal_actions)
         {
             CNode *child = this->get_child(a);
             if (child->visit_count > 0)
             {
-//                float true_reward = child->value_prefix - parent_value_prefix;
-//                if (this->is_reset == 1)
-//                {
-//                    true_reward = child->value_prefix;
-//                }
                 float true_reward = child->reward;
                 float qsa = true_reward + discount_factor * child->value();
                 total_unsigned_q += qsa;
@@ -610,9 +602,6 @@ namespace tree
             - action: the action to get child.
         */
         return &(this->children[action.get_combined_hash()]);
-        // TODO(pu): no hash
-        // return &(this->children[action]);
-        // return &(this->children[action.value[0]]);
     }
 
     //*********************************************************
@@ -655,7 +644,7 @@ namespace tree
             {
                 // sampled
                 // discrete action space without action mask
-                std::vector<CAction> legal_actions;
+                                std::vector<CAction> legal_actions;
                 this->roots.push_back(CNode(0, legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space));
             }
 
@@ -769,8 +758,6 @@ namespace tree
         std::vector<std::vector<CAction> > sampled_actions;
         std::vector<std::vector<std::vector<float> > > python_sampled_actions;
 
-        //  sampled_actions.reserve(this->root_num);
-
         for (int i = 0; i < this->root_num; ++i)
         {
             std::vector<CAction> sampled_action;
@@ -825,24 +812,9 @@ namespace tree
                 node->value_sum += bootstrap_value;
                 node->visit_count += 1;
                 float true_reward = node->reward;
-//                float parent_value_prefix = 0.0;
-//                int is_reset = 0;
-//                if (i >= 1)
-//                {
-//                    CNode *parent = search_path[i - 1];
-//                    parent_value_prefix = parent->value_prefix;
-//                    is_reset = parent->is_reset;
-//                }
-//
-//                float true_reward = node->value_prefix - parent_value_prefix;
-               min_max_stats.update(true_reward + discount_factor * node->value());
 
-//                if (is_reset == 1)
-//                {
-//                    // parent is reset.
-//                    true_reward = node->value_prefix;
-//                }
-
+                min_max_stats.update(true_reward + discount_factor * node->value());
+                
                 bootstrap_value = true_reward + discount_factor * bootstrap_value;
             }
         }
@@ -862,26 +834,8 @@ namespace tree
 
                 float true_reward = node->reward;
 
-//                float parent_value_prefix = 0.0;
-//                int is_reset = 0;
-//                if (i >= 1)
-//                {
-//                    CNode *parent = search_path[i - 1];
-//                    parent_value_prefix = parent->value_prefix;
-//                    is_reset = parent->is_reset;
-//                }
-//
-//                // NOTE: in self-play-mode, value_prefix is not calculated according to the perspective of current player of node,
-//                // but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
-//                float true_reward = node->value_prefix - parent_value_prefix;
-
                 min_max_stats.update(true_reward + discount_factor * node->value());
 
-//                if (is_reset == 1)
-//                {
-//                    // parent is reset.
-//                    true_reward = node->value_prefix;
-//                }
                 if (node->to_play == to_play)
                     bootstrap_value = -true_reward + discount_factor * bootstrap_value;
                 else
@@ -908,9 +862,6 @@ namespace tree
         for (int i = 0; i < results.num; ++i)
         {
             results.nodes[i]->expand(to_play_batch[i], current_latent_state_index, i, rewards[i], policies[i]);
-//            // reset
-//            results.nodes[i]->is_reset = is_reset_list[i];
-
             cbackpropagate(results.search_paths[i], min_max_stats_lst->stats_lst[i], to_play_batch[i], values[i], discount_factor);
         }
     }
@@ -994,7 +945,8 @@ namespace tree
 
         // sampled related core code
         // TODO(pu): empirical distribution
-        std::string empirical_distribution_type = "density";
+        // std::string empirical_distribution_type = "density";
+        std::string empirical_distribution_type = "uniform";
         if (empirical_distribution_type.compare("density"))
         {
             if (continuous_action_space == true)
@@ -1027,11 +979,6 @@ namespace tree
         }
         else
         {
-//            float true_reward = child->value_prefix - parent_value_prefix;
-//            if (is_reset == 1)
-//            {
-//                true_reward = child->value_prefix;
-//            }
             float true_reward = child->reward;
             if (players == 1)
                 value_score = true_reward + discount_factor * child->value();
@@ -1068,14 +1015,11 @@ namespace tree
         // set seed
         get_time_and_set_rand_seed();
 
-//        int last_action = -1;
-
         std::vector<float> null_value;
         for (int i = 0; i < 1; ++i)
         {
             null_value.push_back(i + 0.1);
         }
-        // CAction last_action = CAction(null_value, 1);
         std::vector<float> last_action;
         float parent_q = 0.0;
         results.search_lens = std::vector<int>();

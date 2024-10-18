@@ -9,6 +9,7 @@ from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.rl_utils import get_epsilon_greedy_fn
+from ding.utils import EasyTimer
 from ding.utils import set_pkg_seed, get_rank
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
@@ -18,11 +19,12 @@ from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroEvaluator as Evaluator
-from lzero.worker import MuZeroCollector as Collector
+from lzero.worker import MuZeroSegmentCollector as Collector
 from .utils import random_collect
 
+timer = EasyTimer()
 
-def train_unizero(
+def train_unizero_segment(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -32,7 +34,7 @@ def train_unizero(
 ) -> 'Policy':
     """
     Overview:
-        The train entry for UniZero, proposed in our paper UniZero: Generalized and Efficient Planning with Scalable Latent World Models.
+        The train entry for UniZero (with muzero_segment_collector and buffer reanalyze trick), proposed in our paper UniZero: Generalized and Efficient Planning with Scalable Latent World Models.
         UniZero aims to enhance the planning capabilities of reinforcement learning agents by addressing the limitations found in MuZero-style algorithms,
         particularly in environments requiring the capture of long-term dependencies. More details can be found in https://arxiv.org/abs/2406.10667.
     Arguments:
@@ -73,6 +75,7 @@ def train_unizero(
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
     collector_env.seed(cfg.seed)
+    # collector_env.seed(cfg.seed, dynamic_seed=False)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=torch.cuda.is_available())
 
@@ -108,7 +111,10 @@ def train_unizero(
 
     # TODO: for visualize
     # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-    # import sys; sys.exit(0)
+    
+    buffer_reanalyze_count = 0
+    train_epoch = 0
+    reanalyze_batch_size = cfg.policy.reanalyze_batch_size
 
     while True:
         # Log buffer memory usage
@@ -157,6 +163,20 @@ def train_unizero(
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
 
+        # Periodically reanalyze buffer
+        if cfg.policy.buffer_reanalyze_freq >= 1:
+            # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+            reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
+        else:
+            # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
+            if train_epoch % int(1/cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+                with timer:
+                    # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+                    replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+                buffer_reanalyze_count += 1
+                logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
+                logging.info(f'Buffer reanalyze time: {timer.value}')
+
         # Train the policy if sufficient data is available
         if collector.envstep > cfg.policy.train_start_after_envsteps:
             if cfg.policy.sample_type == 'episode':
@@ -171,10 +191,17 @@ def train_unizero(
                 continue
 
             for i in range(update_per_collect):
+                if cfg.policy.buffer_reanalyze_freq >= 1:
+                    # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+                    if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+                        with timer:
+                            # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+                            replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+                        buffer_reanalyze_count += 1
+                        logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
+                        logging.info(f'Buffer reanalyze time: {timer.value}')
+
                 train_data = replay_buffer.sample(batch_size, policy)
-                if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
-                    # Clear caches and precompute positional embedding matrices
-                    policy.recompute_pos_emb_diff_and_clear_cache()  # TODO
 
                 train_data.append({'train_which_component': 'transformer'})
                 log_vars = learner.train(train_data, collector.envstep)
@@ -182,6 +209,7 @@ def train_unizero(
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
+        train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()
 
         # Check stopping criteria

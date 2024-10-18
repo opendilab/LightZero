@@ -14,13 +14,13 @@ num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
 batch_size = 256
-max_env_step = int(5e5)
+max_env_step = int(2e5)
 reanalyze_ratio = 0.
 
 # =========== for debug ===========
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
 # num_simulations = 2
 # update_per_collect = 2
 # batch_size = 2

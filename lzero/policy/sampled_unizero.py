@@ -15,6 +15,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
     prepare_obs_stack4_for_unizero
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
+from lzero.entry.utils import initialize_zeros_batch
 
 
 def get_action(roots_sampled_actions, i, action):
@@ -38,7 +39,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
 
     # The default_config for UniZero policy.
     config = dict(
-        type='unizero',
+        type='sampled_unizero',
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.
             model_type='conv',  # options={'mlp', 'conv'}
@@ -229,6 +230,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         policy_entropy_loss_weight=1e-4,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
+        # (bool) Whether to use the cosine learning rate decay.
+        cos_lr_scheduler=False,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
         lr_piecewise_constant_decay=False,
@@ -309,6 +312,10 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             betas=(0.9, 0.95),
         )
 
+        if self._cfg.cos_lr_scheduler is True:
+            from torch.optim.lr_scheduler import CosineAnnealingLR
+            self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e6, eta_min=0, last_epoch=-1)
+
         if self._cfg.model.continuous_action_space:
             # Weight Init for the last output layer of gaussian policy head in prediction network.
             init_w = self._cfg.init_w
@@ -373,7 +380,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         # sampled related core code
         # ==============================================================
         # obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
-        obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights, make_time = current_batch
+        obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number
@@ -508,7 +515,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                                                                         self._cfg.grad_clip_value)
 
         self._optimizer_world_model.step()
-        if self._cfg.lr_piecewise_constant_decay:
+        
+        if self._cfg.cos_lr_scheduler or self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()
 
         # Core target model update step
@@ -708,8 +716,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             # ==============================================================
             # sampled related core code
             # ==============================================================
-            roots_sampled_actions = roots.get_sampled_actions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_sampled_actions = roots.get_sampled_actions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
 
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
@@ -757,6 +764,12 @@ class SampledUniZeroPolicy(UniZeroPolicy):
 
             self.last_batch_obs = data
             self.last_batch_action = batch_action
+
+            # ========= TODO: for muzero_segment_collector now =========
+            if active_collect_env_num < self.collector_env_num:
+                print('==========collect_forward============')
+                print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
+                self._reset_collect(reset_init_data=True) 
 
         return output
 
@@ -887,6 +900,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             self.last_batch_action = batch_action
 
         return output
+
 
     def _monitor_vars_learn(self) -> List[str]:
         """

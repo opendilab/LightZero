@@ -90,7 +90,6 @@ cdef class Node:
     def __cinit__(self):
         pass
 
-    #def __cinit__(self, float prior, vector[int] &legal_actions, int action_space_size, int num_of_sampled_actions):
     def __cinit__(self, float prior, vector[int] & legal_actions, int action_space_size, int num_of_sampled_actions,
                   bool continuous_action_space):
         pass
