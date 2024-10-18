@@ -19,42 +19,29 @@ task_name = env_id.split('-')[1]
 
 continuous_action_space = True
 K = 20  # num_of_sampled_actions
-# K = 5  # num_of_sampled_actions
 
 collector_env_num = 8
 n_episode = 8
 num_segments = 8
-# game_segment_length=20
-game_segment_length=100
+game_segment_length = 100
 evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = None
-# replay_ratio = 0.25
-replay_ratio = 0.1
-# replay_ratio = 1
-
-# max_env_step = int(1e6)
-max_env_step = int(4e6)
-# max_env_step = int(10e6)
-
+replay_ratio = 0.25
+max_env_step = int(5e5)
 reanalyze_ratio = 0
-# reanalyze_ratio = 0.1
-
 batch_size = 64
-# num_unroll_steps = 10
-# infer_context_length = 4
-
 # num_layers = 4
-# num_unroll_steps = 10
-
 num_layers = 2
-num_unroll_steps = 5
-infer_context_length = 2
+# num_unroll_steps = 5
+# infer_context_length = 2
+num_unroll_steps = 10
+infer_context_length = 4
 
 norm_type = 'LN'
 seed = 0
 
-buffer_reanalyze_freq = 1/10  # modify according to num_segments
+buffer_reanalyze_freq = 1/100000  # modify according to num_segments
 # buffer_reanalyze_freq = 1/5  # modify according to num_segments
 # buffer_reanalyze_freq = 1/2  # modify according to num_segments
 
@@ -104,19 +91,19 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             model_type='mlp',
-            norm_type = norm_type,
             world_model_cfg=dict(
                 obs_type='vector',
                 num_unroll_steps=num_unroll_steps,
                 policy_entropy_weight=5e-3,
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
-                sigma_type='conditioned',
-                # sigma_type='fixed',
+                # sigma_type='conditioned',
+                sigma_type='fixed',
                 # fixed_sigma_value=fixed_sigma_value,
                 fixed_sigma_value=0.5,
                 bound_type=None,
                 model_type='mlp',
+                norm_type = norm_type,
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,
@@ -140,8 +127,8 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
         env_type='not_board_games',
         replay_ratio=replay_ratio,
         batch_size=batch_size,
-        # discount_factor=0.99,
-        discount_factor=1,
+        discount_factor=0.99,
+        # discount_factor=1,
         lr_piecewise_constant_decay=False,
         learning_rate=0.0001,
         grad_clip_value=5, # TODO
@@ -195,6 +182,6 @@ create_config = dmc2gym_state_cont_sampled_unizero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_unizero
-    main_config.exp_name=f'data_efficiency0829_plus_tune-suz_debug/ucb-uniform-prior_fs2_orig-collector-true-gsl100/dmc2gym_{env_id}_state_cont_suz_norer_nlayer{num_layers}_eval3_collect{collector_env_num}-numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    main_config.exp_name=f'data_sampled_unizero_1016/fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_fixreanalyze-sample-action_td5_sigma05_df099_episodecollect/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
     train_unizero([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 

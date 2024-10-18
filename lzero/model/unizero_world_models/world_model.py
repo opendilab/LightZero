@@ -1512,14 +1512,37 @@ class WorldModel(nn.Module):
         policy_entropy = dist.entropy().mean(dim=1)
         policy_entropy_loss = -policy_entropy * mask_batch
 
-        y = 1 - target_sampled_actions.pow(2)
+        # original
+        # y = 1 - target_sampled_actions.pow(2)
+        # target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
+        # target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
+        # log_prob = dist.log_prob(target_sampled_actions_before_tanh)
+        # log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
+
+        # original v2
+        # target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
+        # y = 1 - target_sampled_actions_clamped.pow(2)
+        # target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
+        # log_prob = dist.log_prob(target_sampled_actions_before_tanh)
+        # log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
+
+        # original v3
+        # target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-3, 1 - 1e-3)
+        # y = 1 - target_sampled_actions_clamped.pow(2)
+        # target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
+        # log_prob = dist.log_prob(target_sampled_actions_before_tanh)
+        # log_prob = log_prob - torch.log(y + 1e-3).sum(-1)
+
+        # o1给出的修改建议
         target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
-        target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
-
+        # Use the inverse tanh (atanh) for action transformation
+        target_sampled_actions_before_tanh = 0.5 * torch.log((1 + target_sampled_actions_clamped) / (1 - target_sampled_actions_clamped))
         log_prob = dist.log_prob(target_sampled_actions_before_tanh)
-        log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
-        log_prob_sampled_actions = log_prob
+        # Adjust log_prob for tanh squashing
+        log_prob -= torch.sum(torch.log(1 - target_sampled_actions_clamped.pow(2) + 1e-6), dim=-1)
 
+
+        log_prob_sampled_actions = log_prob
         target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
 
         # KL as projector

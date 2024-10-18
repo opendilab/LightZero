@@ -26,13 +26,13 @@ def main(env_id, seed):
     n_episode = 8
     num_segments = 8
     # game_segment_length = 20
-    game_segment_length=100
+    game_segment_length = 100
+    # game_segment_length = 200
     
     evaluator_env_num = 3
     num_simulations = 50
-    # replay_ratio = 0.25
-    replay_ratio = 0.1
-
+    replay_ratio = 0.25
+    # replay_ratio = 0.1
 
     # if env_id ==  'cartpole-swingup':
     #     max_env_step = int(1e6)
@@ -46,8 +46,10 @@ def main(env_id, seed):
 
 
     num_layers = 2
-    num_unroll_steps = 5
-    infer_context_length = 2
+    # num_unroll_steps = 5
+    # infer_context_length = 2
+    num_unroll_steps = 10
+    infer_context_length = 4
     norm_type = 'LN'
 
     # buffer_reanalyze_freq = 1/10  # modify according to num_segments
@@ -55,8 +57,7 @@ def main(env_id, seed):
 
     # 20*8*10/5=320
     reanalyze_batch_size = 160   # in total of num_unroll_steps
-    # reanalyze_partition=3/4
-    reanalyze_partition=1
+    reanalyze_partition=0.75
 
     # for debug
     # collector_env_num = 2
@@ -99,7 +100,6 @@ def main(env_id, seed):
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
                 model_type='mlp',
-                norm_type = norm_type,
                 world_model_cfg=dict(
                     policy_loss_type='kl', # 'simple'
                     obs_type='vector',
@@ -107,12 +107,13 @@ def main(env_id, seed):
                     policy_entropy_weight=5e-3,
                     continuous_action_space=continuous_action_space,
                     num_of_sampled_actions=K,
-                    sigma_type='conditioned',
-                    # sigma_type='fixed',
+                    # sigma_type='conditioned',
+                    sigma_type='fixed',
                     # fixed_sigma_value=fixed_sigma_value,
                     fixed_sigma_value=0.5,
                     bound_type=None,
                     model_type='mlp',
+                    norm_type = norm_type,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                     context_length=2 * infer_context_length,
@@ -135,11 +136,13 @@ def main(env_id, seed):
             env_type='not_board_games',
             replay_ratio=replay_ratio,
             batch_size=batch_size,
-            discount_factor=1,
+            # discount_factor=1,
+            discount_factor=0.99,
+            # discount_factor=0.997,
             # td_steps=1,
             td_steps=5,
             lr_piecewise_constant_decay=False,
-            learning_rate=0.0001,
+            learning_rate=1e-4,
             grad_clip_value=5, # TODO
             # grad_clip_value=20,
             # manual_temperature_decay=True,  # TODO
@@ -183,7 +186,7 @@ def main(env_id, seed):
     create_config = dmc2gym_state_cont_sampled_unizero_create_config
     
     # 调整train_unizero里面的collector
-    main_config.exp_name=f'data_sampled_unizero_1016/fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_td5/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
+    main_config.exp_name=f'data_sampled_unizero_1016/fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_fixreanalyze-sample-action_td5_sigma05_df099_arctanhV3/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
     from lzero.entry import train_unizero_reanalyze
     train_unizero_reanalyze([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 
@@ -200,4 +203,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     
     args = parser.parse_args()
+    # args.env = 'cheetah-run'
+    # args.env = 'walker-walk'
+
     main(args.env, args.seed)

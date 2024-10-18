@@ -66,8 +66,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             bias=True,
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
-            # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'BN'.
-            norm_type='LN',
             # (bool) Whether to analyze simulation normalization.
             analysis_sim_norm=False,
             # (int) The save interval of the model.
@@ -127,6 +125,10 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 gamma=1,
                 # (float) The threshold for a dormant neuron.
                 dormant_threshold=0.025,
+                # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'BN'.
+                norm_type='LN',
+                # (str) The type of policy loss. Options could be ['kl', 'simple'].
+                policy_loss_type='kl',  # 'simple'
             ),
         ),
         # ****** common ******

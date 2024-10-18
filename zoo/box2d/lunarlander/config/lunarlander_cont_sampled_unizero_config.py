@@ -9,9 +9,7 @@ n_episode = 8
 evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = None
-# replay_ratio = 0.25
-replay_ratio = 0.1
-
+replay_ratio = 0.25
 max_env_step = int(5e5)
 reanalyze_ratio = 0
 batch_size = 64
@@ -51,16 +49,12 @@ lunarlander_cont_sampled_unizero_config = dict(
                 policy_loss_type='kl', # 'simple'
                 obs_type='vector',
                 num_unroll_steps=num_unroll_steps,
-                # policy_entropy_weight=1e-4,
                 policy_entropy_weight=5e-3,
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
-                sigma_type='conditioned',
-                fixed_sigma_value=0.3,
-
-                # sigma_type='fixed',
-                # fixed_sigma_value=0.5,
-
+                # sigma_type='conditioned',
+                sigma_type='fixed',
+                fixed_sigma_value=0.5,
                 bound_type=None,
                 model_type='mlp',
                 norm_type=norm_type,
