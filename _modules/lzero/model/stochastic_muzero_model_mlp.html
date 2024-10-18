@@ -204,8 +204,8 @@
         <span class="c1"># here, the input is two concatenated frames</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">chance_encoder</span> <span class="o">=</span> <span class="n">ChanceEncoder</span><span class="p">(</span><span class="n">observation_shape</span> <span class="o">*</span> <span class="mi">2</span><span class="p">,</span> <span class="n">chance_space_size</span><span class="p">,</span> <span class="n">encoder_backbone_type</span><span class="o">=</span><span class="s1">&#39;mlp&#39;</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">dynamics_network</span> <span class="o">=</span> <span class="n">DynamicsNetwork</span><span class="p">(</span>
-            <span class="n">action_encoding_dim</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">action_encoding_dim</span><span class="p">,</span>
-            <span class="n">num_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">latent_state_dim</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_encoding_dim</span><span class="p">,</span>
+            <span class="n">action_encoding_dim</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">chance_space_size</span><span class="p">,</span>
+            <span class="n">num_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">latent_state_dim</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">chance_space_size</span><span class="p">,</span>
             <span class="n">common_layer_num</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
             <span class="n">fc_reward_layers</span><span class="o">=</span><span class="n">fc_reward_layers</span><span class="p">,</span>
             <span class="n">output_support_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">reward_support_size</span><span class="p">,</span>
@@ -281,27 +281,19 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="c1"># NOTE: the discrete action encoding type is important for some environments</span>
 
-        <span class="c1"># discrete action space</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">discrete_action_encoding_type</span> <span class="o">==</span> <span class="s1">&#39;one_hot&#39;</span><span class="p">:</span>
-            <span class="c1"># Stack latent_state with the one hot encoded action</span>
-            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">action</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
-                <span class="c1"># (batch_size, ) -&gt; (batch_size, 1)</span>
-                <span class="c1"># e.g.,  torch.Size([8]) -&gt;  torch.Size([8, 1])</span>
-                <span class="n">action</span> <span class="o">=</span> <span class="n">action</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="c1"># Stack latent_state with the one hot encoded action</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">action</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="c1"># (batch_size, ) -&gt; (batch_size, 1)</span>
+            <span class="c1"># e.g.,  torch.Size([8]) -&gt;  torch.Size([8, 1])</span>
+            <span class="n">action</span> <span class="o">=</span> <span class="n">action</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 
-            <span class="c1"># transform action to one-hot encoding.</span>
-            <span class="c1"># action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)</span>
-            <span class="n">action_one_hot</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">action</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_space_size</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">action</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-            <span class="c1"># transform action to torch.int64</span>
-            <span class="n">action</span> <span class="o">=</span> <span class="n">action</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>
-            <span class="n">action_one_hot</span><span class="o">.</span><span class="n">scatter_</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">action</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
-            <span class="n">action_encoding</span> <span class="o">=</span> <span class="n">action_one_hot</span>
-        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">discrete_action_encoding_type</span> <span class="o">==</span> <span class="s1">&#39;not_one_hot&#39;</span><span class="p">:</span>
-            <span class="n">action_encoding</span> <span class="o">=</span> <span class="n">action</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_space_size</span>
-            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">action_encoding</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
-                <span class="c1"># (batch_size, ) -&gt; (batch_size, 1)</span>
-                <span class="c1"># e.g.,  torch.Size([8]) -&gt;  torch.Size([8, 1])</span>
-                <span class="n">action_encoding</span> <span class="o">=</span> <span class="n">action_encoding</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="c1"># transform action to one-hot encoding.</span>
+        <span class="c1"># action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)</span>
+        <span class="n">action_one_hot</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">action</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">chance_space_size</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">action</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="c1"># transform action to torch.int64</span>
+        <span class="n">action</span> <span class="o">=</span> <span class="n">action</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>
+        <span class="n">action_one_hot</span><span class="o">.</span><span class="n">scatter_</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">action</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="n">action_encoding</span> <span class="o">=</span> <span class="n">action_one_hot</span>
 
         <span class="n">action_encoding</span> <span class="o">=</span> <span class="n">action_encoding</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">latent_state</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">()</span>
         <span class="c1"># state_action_encoding shape: (batch_size, latent_state[1] + action_dim]) or</span>
@@ -365,7 +357,7 @@
         <span class="c1"># (batch_size, latent_state[1] + action_space_size]) depending on the discrete_action_encoding_type.</span>
         <span class="n">state_action_encoding</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">((</span><span class="n">latent_state</span><span class="p">,</span> <span class="n">action_encoding</span><span class="p">),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
 
-        <span class="n">next_latent_state</span><span class="p">,</span> <span class="n">reward</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">dynamics_network</span><span class="p">(</span><span class="n">state_action_encoding</span><span class="p">)</span>
+        <span class="n">next_latent_state</span><span class="p">,</span> <span class="n">reward</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">afterstate_dynamics_network</span><span class="p">(</span><span class="n">state_action_encoding</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">state_norm</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">next_latent_state</span><span class="p">,</span> <span class="n">reward</span>

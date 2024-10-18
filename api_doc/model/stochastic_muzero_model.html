@@ -137,6 +137,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.ipu"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.ipu()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.load_state_dict"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.load_state_dict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.modules"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.modules()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.mtia"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.mtia()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.named_buffers"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.named_buffers()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.named_children"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.named_children()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.named_modules"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.named_modules()</span></code></a></li>
@@ -151,11 +152,14 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_full_backward_hook"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.register_full_backward_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_full_backward_pre_hook"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.register_full_backward_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_load_state_dict_post_hook"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.register_load_state_dict_post_hook()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_load_state_dict_pre_hook"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.register_load_state_dict_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_module"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.register_module()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_parameter"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.register_parameter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_state_dict_post_hook"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.register_state_dict_post_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_state_dict_pre_hook"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.register_state_dict_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.requires_grad_"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.requires_grad_()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.set_extra_state"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.set_extra_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.set_submodule"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.set_submodule()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.share_memory"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.share_memory()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.state_dict"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.state_dict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.to"><code class="docutils literal notranslate"><span class="pre">StochasticMuZeroModel.to()</span></code></a></li>
@@ -227,6 +231,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.ipu"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.ipu()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.load_state_dict"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.load_state_dict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.modules"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.modules()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.mtia"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.mtia()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.named_buffers"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.named_buffers()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.named_children"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.named_children()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.named_modules"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.named_modules()</span></code></a></li>
@@ -239,11 +244,14 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.register_full_backward_hook"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.register_full_backward_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.register_full_backward_pre_hook"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.register_full_backward_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.register_load_state_dict_post_hook"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.register_load_state_dict_post_hook()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.register_load_state_dict_pre_hook"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.register_load_state_dict_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.register_module"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.register_module()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.register_parameter"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.register_parameter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.register_state_dict_post_hook"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.register_state_dict_post_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.register_state_dict_pre_hook"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.register_state_dict_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.requires_grad_"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.requires_grad_()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.set_extra_state"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.set_extra_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.set_submodule"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.set_submodule()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.share_memory"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.share_memory()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.state_dict"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.state_dict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.to"><code class="docutils literal notranslate"><span class="pre">DynamicsNetwork.to()</span></code></a></li>
@@ -313,6 +321,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.ipu"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.ipu()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.load_state_dict"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.load_state_dict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.modules"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.modules()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.mtia"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.mtia()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.named_buffers"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.named_buffers()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.named_children"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.named_children()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.named_modules"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.named_modules()</span></code></a></li>
@@ -325,11 +334,14 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_full_backward_hook"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.register_full_backward_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_full_backward_pre_hook"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.register_full_backward_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_load_state_dict_post_hook"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.register_load_state_dict_post_hook()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_load_state_dict_pre_hook"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.register_load_state_dict_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_module"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.register_module()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_parameter"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.register_parameter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_state_dict_post_hook"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.register_state_dict_post_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_state_dict_pre_hook"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.register_state_dict_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.requires_grad_"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.requires_grad_()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.set_extra_state"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.set_extra_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.set_submodule"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.set_submodule()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.share_memory"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.share_memory()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.state_dict"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.state_dict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.to"><code class="docutils literal notranslate"><span class="pre">AfterstatePredictionNetwork.to()</span></code></a></li>
@@ -399,6 +411,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.ipu"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.ipu()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.load_state_dict"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.load_state_dict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.modules"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.modules()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.mtia"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.mtia()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.named_buffers"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.named_buffers()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.named_children"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.named_children()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.named_modules"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.named_modules()</span></code></a></li>
@@ -411,11 +424,14 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_full_backward_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.register_full_backward_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_full_backward_pre_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.register_full_backward_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_load_state_dict_post_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.register_load_state_dict_post_hook()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_load_state_dict_pre_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.register_load_state_dict_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_module"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.register_module()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_parameter"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.register_parameter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_state_dict_post_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.register_state_dict_post_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_state_dict_pre_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.register_state_dict_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.requires_grad_"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.requires_grad_()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.set_extra_state"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.set_extra_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.set_submodule"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.set_submodule()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.share_memory"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.share_memory()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.state_dict"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.state_dict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.to"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackbone.to()</span></code></a></li>
@@ -485,6 +501,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.ipu"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.ipu()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.load_state_dict"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.load_state_dict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.modules"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.modules()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.mtia"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.mtia()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.named_buffers"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.named_buffers()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.named_children"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.named_children()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.named_modules"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.named_modules()</span></code></a></li>
@@ -497,11 +514,14 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_full_backward_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.register_full_backward_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_full_backward_pre_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.register_full_backward_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_load_state_dict_post_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.register_load_state_dict_post_hook()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_load_state_dict_pre_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.register_load_state_dict_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_module"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.register_module()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_parameter"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.register_parameter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_state_dict_post_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.register_state_dict_post_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_state_dict_pre_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.register_state_dict_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.requires_grad_"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.requires_grad_()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.set_extra_state"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.set_extra_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.set_submodule"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.set_submodule()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.share_memory"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.share_memory()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.state_dict"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.state_dict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.to"><code class="docutils literal notranslate"><span class="pre">ChanceEncoderBackboneMLP.to()</span></code></a></li>
@@ -571,6 +591,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.ipu"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.ipu()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.load_state_dict"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.load_state_dict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.modules"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.modules()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.mtia"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.mtia()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.named_buffers"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.named_buffers()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.named_children"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.named_children()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.named_modules"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.named_modules()</span></code></a></li>
@@ -583,11 +604,14 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.register_full_backward_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.register_full_backward_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.register_full_backward_pre_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.register_full_backward_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.register_load_state_dict_post_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.register_load_state_dict_post_hook()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.register_load_state_dict_pre_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.register_load_state_dict_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.register_module"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.register_module()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.register_parameter"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.register_parameter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.register_state_dict_post_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.register_state_dict_post_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.register_state_dict_pre_hook"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.register_state_dict_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.requires_grad_"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.requires_grad_()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.set_extra_state"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.set_extra_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.set_submodule"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.set_submodule()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.share_memory"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.share_memory()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.state_dict"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.state_dict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.to"><code class="docutils literal notranslate"><span class="pre">ChanceEncoder.to()</span></code></a></li>
@@ -657,6 +681,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.ipu"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.ipu()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.load_state_dict"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.load_state_dict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.modules"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.modules()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.mtia"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.mtia()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.named_buffers"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.named_buffers()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.named_children"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.named_children()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.named_modules"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.named_modules()</span></code></a></li>
@@ -669,11 +694,14 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_full_backward_hook"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.register_full_backward_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_full_backward_pre_hook"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.register_full_backward_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_load_state_dict_post_hook"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.register_load_state_dict_post_hook()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_load_state_dict_pre_hook"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.register_load_state_dict_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_module"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.register_module()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_parameter"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.register_parameter()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_state_dict_post_hook"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.register_state_dict_post_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_state_dict_pre_hook"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.register_state_dict_pre_hook()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.requires_grad_"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.requires_grad_()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.set_extra_state"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.set_extra_state()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.set_submodule"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.set_submodule()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.share_memory"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.share_memory()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.state_dict"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.state_dict()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.to"><code class="docutils literal notranslate"><span class="pre">StraightThroughEstimator.to()</span></code></a></li>
@@ -691,6 +719,7 @@
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax._compiled_autograd_backward_state"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax._compiled_autograd_backward_state</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax._compiled_autograd_key"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax._compiled_autograd_key()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax._get_compiled_autograd_symints"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax._get_compiled_autograd_symints()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax._input_metadata"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax._input_metadata</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax._is_compiled_autograd_tracing"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax._is_compiled_autograd_tracing()</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax._materialize_non_diff_grads"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax._materialize_non_diff_grads</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="#lzero.model.stochastic_muzero_model.OnehotArgmax._raw_saved_tensors"><code class="docutils literal notranslate"><span class="pre">OnehotArgmax._raw_saved_tensors</span></code></a></li>
@@ -1117,13 +1146,11 @@ list, and will be reported together in
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StochasticMuZeroModel._register_load_state_dict_pre_hook">
 <span class="sig-name descname"><span class="pre">_register_load_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">with_module</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel._register_load_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a pre-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> method.</p>
-<p>These hooks will be called with arguments: <cite>state_dict</cite>, <cite>prefix</cite>,
-<cite>local_metadata</cite>, <cite>strict</cite>, <cite>missing_keys</cite>, <cite>unexpected_keys</cite>,
-<cite>error_msgs</cite>, before loading <cite>state_dict</cite> into <cite>self</cite>. These arguments
-are exactly the same as those of <cite>_load_from_state_dict</cite>.</p>
-<p>If <code class="docutils literal notranslate"><span class="pre">with_module</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, then the first argument to the hook is
-an instance of the module.</p>
+<dd><p>See <code class="xref py py-meth docutils literal notranslate"><span class="pre">register_load_state_dict_pre_hook()</span></code> for details.</p>
+<p>A subtle difference is that if <code class="docutils literal notranslate"><span class="pre">with_module</span></code> is set to <code class="docutils literal notranslate"><span class="pre">False</span></code>, then the
+hook will not take the <code class="docutils literal notranslate"><span class="pre">module</span></code> as the first argument whereas
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">register_load_state_dict_pre_hook()</span></code> always takes the
+<code class="docutils literal notranslate"><span class="pre">module</span></code> as the first argument.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1139,12 +1166,14 @@ instance to the hook as the first parameter.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StochasticMuZeroModel._register_state_dict_hook">
 <span class="sig-name descname"><span class="pre">_register_state_dict_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel._register_state_dict_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a state-dict hook.</p>
-<p>These hooks will be called with arguments: <cite>self</cite>, <cite>state_dict</cite>,
-<cite>prefix</cite>, <cite>local_metadata</cite>, after the <cite>state_dict</cite> of <cite>self</cite> is set.
-Note that only parameters and buffers of <cite>self</cite> or its children are
-guaranteed to exist in <cite>state_dict</cite>. The hooks may modify <cite>state_dict</cite>
-inplace or return a new one.</p>
+<dd><p>Register a post-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata) -&gt; None or state_dict</p>
+</dd>
+</dl>
+<p>The registered hooks can modify the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> inplace or return a new one.
+If a new <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> is returned, it will only be respected if it is the root
+module that <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> is called from.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -1784,6 +1813,31 @@ example, <code class="docutils literal notranslate"><span class="pre">l</span></
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StochasticMuZeroModel.mtia">
+<span class="sig-name descname"><span class="pre">mtia</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">device</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">T</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.mtia" title="Permalink to this definition"></a></dt>
+<dd><p>Move all model parameters and buffers to the MTIA.</p>
+<p>This also makes associated parameters and buffers different objects. So
+it should be called before constructing optimizer if the module will
+live on MTIA while being optimized.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method modifies the module in-place.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>device</strong> (<em>int</em><em>, </em><em>optional</em>) – if specified, all parameters will be
+copied to that device</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Module</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StochasticMuZeroModel.named_buffers">
 <span class="sig-name descname"><span class="pre">named_buffers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prefix</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">recurse</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove_duplicate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Iterator</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.named_buffers" title="Permalink to this definition"></a></dt>
 <dd><p>Return an iterator over module buffers, yielding both the name of the buffer as well as the buffer itself.</p>
@@ -2262,7 +2316,7 @@ all hooks registered by this method.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_load_state_dict_post_hook">
 <span class="sig-name descname"><span class="pre">register_load_state_dict_post_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_load_state_dict_post_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a post hook to be run after module’s <code class="docutils literal notranslate"><span class="pre">load_state_dict</span></code> is called.</p>
+<dd><p>Register a post-hook to be run after module’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> is called.</p>
 <dl class="simple">
 <dt>It should have the following signature::</dt><dd><p>hook(module, incompatible_keys) -&gt; None</p>
 </dd>
@@ -2285,6 +2339,22 @@ clearing out both missing and unexpected keys will avoid an error.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">torch.utils.hooks.RemovableHandle</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_load_state_dict_pre_hook">
+<span class="sig-name descname"><span class="pre">register_load_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_load_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
+<dd><p>Register a pre-hook to be run before module’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> is called.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs) -&gt; None  # noqa: B950</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>hook</strong> (<em>Callable</em>) – Callable hook that will be invoked before
+loading the state dict.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2315,12 +2385,25 @@ module’s <a class="reference internal" href="#lzero.model.stochastic_muzero_mo
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_state_dict_post_hook">
+<span class="sig-name descname"><span class="pre">register_state_dict_post_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_state_dict_post_hook" title="Permalink to this definition"></a></dt>
+<dd><p>Register a post-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata) -&gt; None</p>
+</dd>
+</dl>
+<p>The registered hooks can modify the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> inplace.</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_state_dict_pre_hook">
 <span class="sig-name descname"><span class="pre">register_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.register_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
 <dd><p>Register a pre-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
-<p>These hooks will be called with arguments: <code class="docutils literal notranslate"><span class="pre">self</span></code>, <code class="docutils literal notranslate"><span class="pre">prefix</span></code>,
-and <code class="docutils literal notranslate"><span class="pre">keep_vars</span></code> before calling <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> on <code class="docutils literal notranslate"><span class="pre">self</span></code>. The registered
-hooks can be used to perform pre-processing before the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, prefix, keep_vars) -&gt; None</p>
+</dd>
+</dl>
+<p>The registered hooks can be used to perform pre-processing before the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>
 call is made.</p>
 </dd></dl>
 
@@ -2359,6 +2442,48 @@ found within the <cite>state_dict</cite>. Implement this function and a correspo
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>state</strong> (<em>dict</em>) – Extra state from the <cite>state_dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StochasticMuZeroModel.set_submodule">
+<span class="sig-name descname"><span class="pre">set_submodule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StochasticMuZeroModel.set_submodule" title="Permalink to this definition"></a></dt>
+<dd><p>Set the submodule given by <code class="docutils literal notranslate"><span class="pre">target</span></code> if it exists, otherwise throw an error.</p>
+<p>For example, let’s say you have an <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> <code class="docutils literal notranslate"><span class="pre">A</span></code> that
+looks like this:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>A(
+    (net_b): Module(
+        (net_c): Module(
+            (conv): Conv2d(16, 33, kernel_size=(3, 3), stride=(2, 2))
+        )
+        (linear): Linear(in_features=100, out_features=200, bias=True)
+    )
+)
+</pre></div>
+</div>
+<p>(The diagram shows an <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> <code class="docutils literal notranslate"><span class="pre">A</span></code>. <code class="docutils literal notranslate"><span class="pre">A</span></code> has a nested
+submodule <code class="docutils literal notranslate"><span class="pre">net_b</span></code>, which itself has two submodules <code class="docutils literal notranslate"><span class="pre">net_c</span></code>
+and <code class="docutils literal notranslate"><span class="pre">linear</span></code>. <code class="docutils literal notranslate"><span class="pre">net_c</span></code> then has a submodule <code class="docutils literal notranslate"><span class="pre">conv</span></code>.)</p>
+<p>To overide the <code class="docutils literal notranslate"><span class="pre">Conv2d</span></code> with a new submodule <code class="docutils literal notranslate"><span class="pre">Linear</span></code>, you
+would call
+<code class="docutils literal notranslate"><span class="pre">set_submodule(&quot;net_b.net_c.conv&quot;,</span> <span class="pre">nn.Linear(33,</span> <span class="pre">16))</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>target</strong> – The fully-qualified string name of the submodule
+to look for. (See above example for how to specify a
+fully-qualified string.)</p></li>
+<li><p><strong>module</strong> – The module to set the submodule to.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>ValueError</strong> – If the target string is empty</p></li>
+<li><p><strong>AttributeError</strong> – If the target string references an invalid
+    path or resolves to something that is not an
+    <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code></p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -2827,13 +2952,11 @@ list, and will be reported together in
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.DynamicsNetwork._register_load_state_dict_pre_hook">
 <span class="sig-name descname"><span class="pre">_register_load_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">with_module</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork._register_load_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a pre-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> method.</p>
-<p>These hooks will be called with arguments: <cite>state_dict</cite>, <cite>prefix</cite>,
-<cite>local_metadata</cite>, <cite>strict</cite>, <cite>missing_keys</cite>, <cite>unexpected_keys</cite>,
-<cite>error_msgs</cite>, before loading <cite>state_dict</cite> into <cite>self</cite>. These arguments
-are exactly the same as those of <cite>_load_from_state_dict</cite>.</p>
-<p>If <code class="docutils literal notranslate"><span class="pre">with_module</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, then the first argument to the hook is
-an instance of the module.</p>
+<dd><p>See <code class="xref py py-meth docutils literal notranslate"><span class="pre">register_load_state_dict_pre_hook()</span></code> for details.</p>
+<p>A subtle difference is that if <code class="docutils literal notranslate"><span class="pre">with_module</span></code> is set to <code class="docutils literal notranslate"><span class="pre">False</span></code>, then the
+hook will not take the <code class="docutils literal notranslate"><span class="pre">module</span></code> as the first argument whereas
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">register_load_state_dict_pre_hook()</span></code> always takes the
+<code class="docutils literal notranslate"><span class="pre">module</span></code> as the first argument.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -2849,12 +2972,14 @@ instance to the hook as the first parameter.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.DynamicsNetwork._register_state_dict_hook">
 <span class="sig-name descname"><span class="pre">_register_state_dict_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork._register_state_dict_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a state-dict hook.</p>
-<p>These hooks will be called with arguments: <cite>self</cite>, <cite>state_dict</cite>,
-<cite>prefix</cite>, <cite>local_metadata</cite>, after the <cite>state_dict</cite> of <cite>self</cite> is set.
-Note that only parameters and buffers of <cite>self</cite> or its children are
-guaranteed to exist in <cite>state_dict</cite>. The hooks may modify <cite>state_dict</cite>
-inplace or return a new one.</p>
+<dd><p>Register a post-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata) -&gt; None or state_dict</p>
+</dd>
+</dl>
+<p>The registered hooks can modify the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> inplace or return a new one.
+If a new <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> is returned, it will only be respected if it is the root
+module that <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> is called from.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -3441,6 +3566,31 @@ example, <code class="docutils literal notranslate"><span class="pre">l</span></
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.DynamicsNetwork.mtia">
+<span class="sig-name descname"><span class="pre">mtia</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">device</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">T</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.mtia" title="Permalink to this definition"></a></dt>
+<dd><p>Move all model parameters and buffers to the MTIA.</p>
+<p>This also makes associated parameters and buffers different objects. So
+it should be called before constructing optimizer if the module will
+live on MTIA while being optimized.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method modifies the module in-place.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>device</strong> (<em>int</em><em>, </em><em>optional</em>) – if specified, all parameters will be
+copied to that device</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Module</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.DynamicsNetwork.named_buffers">
 <span class="sig-name descname"><span class="pre">named_buffers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prefix</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">recurse</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove_duplicate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Iterator</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.named_buffers" title="Permalink to this definition"></a></dt>
 <dd><p>Return an iterator over module buffers, yielding both the name of the buffer as well as the buffer itself.</p>
@@ -3826,7 +3976,7 @@ all hooks registered by this method.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.DynamicsNetwork.register_load_state_dict_post_hook">
 <span class="sig-name descname"><span class="pre">register_load_state_dict_post_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.register_load_state_dict_post_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a post hook to be run after module’s <code class="docutils literal notranslate"><span class="pre">load_state_dict</span></code> is called.</p>
+<dd><p>Register a post-hook to be run after module’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> is called.</p>
 <dl class="simple">
 <dt>It should have the following signature::</dt><dd><p>hook(module, incompatible_keys) -&gt; None</p>
 </dd>
@@ -3849,6 +3999,22 @@ clearing out both missing and unexpected keys will avoid an error.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">torch.utils.hooks.RemovableHandle</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.DynamicsNetwork.register_load_state_dict_pre_hook">
+<span class="sig-name descname"><span class="pre">register_load_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.register_load_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
+<dd><p>Register a pre-hook to be run before module’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> is called.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs) -&gt; None  # noqa: B950</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>hook</strong> (<em>Callable</em>) – Callable hook that will be invoked before
+loading the state dict.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -3879,12 +4045,25 @@ module’s <a class="reference internal" href="#lzero.model.stochastic_muzero_mo
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.DynamicsNetwork.register_state_dict_post_hook">
+<span class="sig-name descname"><span class="pre">register_state_dict_post_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.register_state_dict_post_hook" title="Permalink to this definition"></a></dt>
+<dd><p>Register a post-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata) -&gt; None</p>
+</dd>
+</dl>
+<p>The registered hooks can modify the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> inplace.</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.DynamicsNetwork.register_state_dict_pre_hook">
 <span class="sig-name descname"><span class="pre">register_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.register_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
 <dd><p>Register a pre-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
-<p>These hooks will be called with arguments: <code class="docutils literal notranslate"><span class="pre">self</span></code>, <code class="docutils literal notranslate"><span class="pre">prefix</span></code>,
-and <code class="docutils literal notranslate"><span class="pre">keep_vars</span></code> before calling <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> on <code class="docutils literal notranslate"><span class="pre">self</span></code>. The registered
-hooks can be used to perform pre-processing before the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, prefix, keep_vars) -&gt; None</p>
+</dd>
+</dl>
+<p>The registered hooks can be used to perform pre-processing before the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>
 call is made.</p>
 </dd></dl>
 
@@ -3923,6 +4102,48 @@ found within the <cite>state_dict</cite>. Implement this function and a correspo
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>state</strong> (<em>dict</em>) – Extra state from the <cite>state_dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.DynamicsNetwork.set_submodule">
+<span class="sig-name descname"><span class="pre">set_submodule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.DynamicsNetwork.set_submodule" title="Permalink to this definition"></a></dt>
+<dd><p>Set the submodule given by <code class="docutils literal notranslate"><span class="pre">target</span></code> if it exists, otherwise throw an error.</p>
+<p>For example, let’s say you have an <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> <code class="docutils literal notranslate"><span class="pre">A</span></code> that
+looks like this:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>A(
+    (net_b): Module(
+        (net_c): Module(
+            (conv): Conv2d(16, 33, kernel_size=(3, 3), stride=(2, 2))
+        )
+        (linear): Linear(in_features=100, out_features=200, bias=True)
+    )
+)
+</pre></div>
+</div>
+<p>(The diagram shows an <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> <code class="docutils literal notranslate"><span class="pre">A</span></code>. <code class="docutils literal notranslate"><span class="pre">A</span></code> has a nested
+submodule <code class="docutils literal notranslate"><span class="pre">net_b</span></code>, which itself has two submodules <code class="docutils literal notranslate"><span class="pre">net_c</span></code>
+and <code class="docutils literal notranslate"><span class="pre">linear</span></code>. <code class="docutils literal notranslate"><span class="pre">net_c</span></code> then has a submodule <code class="docutils literal notranslate"><span class="pre">conv</span></code>.)</p>
+<p>To overide the <code class="docutils literal notranslate"><span class="pre">Conv2d</span></code> with a new submodule <code class="docutils literal notranslate"><span class="pre">Linear</span></code>, you
+would call
+<code class="docutils literal notranslate"><span class="pre">set_submodule(&quot;net_b.net_c.conv&quot;,</span> <span class="pre">nn.Linear(33,</span> <span class="pre">16))</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>target</strong> – The fully-qualified string name of the submodule
+to look for. (See above example for how to specify a
+fully-qualified string.)</p></li>
+<li><p><strong>module</strong> – The module to set the submodule to.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>ValueError</strong> – If the target string is empty</p></li>
+<li><p><strong>AttributeError</strong> – If the target string references an invalid
+    path or resolves to something that is not an
+    <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code></p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -4395,13 +4616,11 @@ list, and will be reported together in
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork._register_load_state_dict_pre_hook">
 <span class="sig-name descname"><span class="pre">_register_load_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">with_module</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork._register_load_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a pre-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> method.</p>
-<p>These hooks will be called with arguments: <cite>state_dict</cite>, <cite>prefix</cite>,
-<cite>local_metadata</cite>, <cite>strict</cite>, <cite>missing_keys</cite>, <cite>unexpected_keys</cite>,
-<cite>error_msgs</cite>, before loading <cite>state_dict</cite> into <cite>self</cite>. These arguments
-are exactly the same as those of <cite>_load_from_state_dict</cite>.</p>
-<p>If <code class="docutils literal notranslate"><span class="pre">with_module</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, then the first argument to the hook is
-an instance of the module.</p>
+<dd><p>See <code class="xref py py-meth docutils literal notranslate"><span class="pre">register_load_state_dict_pre_hook()</span></code> for details.</p>
+<p>A subtle difference is that if <code class="docutils literal notranslate"><span class="pre">with_module</span></code> is set to <code class="docutils literal notranslate"><span class="pre">False</span></code>, then the
+hook will not take the <code class="docutils literal notranslate"><span class="pre">module</span></code> as the first argument whereas
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">register_load_state_dict_pre_hook()</span></code> always takes the
+<code class="docutils literal notranslate"><span class="pre">module</span></code> as the first argument.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -4417,12 +4636,14 @@ instance to the hook as the first parameter.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork._register_state_dict_hook">
 <span class="sig-name descname"><span class="pre">_register_state_dict_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork._register_state_dict_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a state-dict hook.</p>
-<p>These hooks will be called with arguments: <cite>self</cite>, <cite>state_dict</cite>,
-<cite>prefix</cite>, <cite>local_metadata</cite>, after the <cite>state_dict</cite> of <cite>self</cite> is set.
-Note that only parameters and buffers of <cite>self</cite> or its children are
-guaranteed to exist in <cite>state_dict</cite>. The hooks may modify <cite>state_dict</cite>
-inplace or return a new one.</p>
+<dd><p>Register a post-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata) -&gt; None or state_dict</p>
+</dd>
+</dl>
+<p>The registered hooks can modify the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> inplace or return a new one.
+If a new <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> is returned, it will only be respected if it is the root
+module that <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> is called from.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -4999,6 +5220,31 @@ example, <code class="docutils literal notranslate"><span class="pre">l</span></
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.mtia">
+<span class="sig-name descname"><span class="pre">mtia</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">device</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">T</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.mtia" title="Permalink to this definition"></a></dt>
+<dd><p>Move all model parameters and buffers to the MTIA.</p>
+<p>This also makes associated parameters and buffers different objects. So
+it should be called before constructing optimizer if the module will
+live on MTIA while being optimized.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method modifies the module in-place.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>device</strong> (<em>int</em><em>, </em><em>optional</em>) – if specified, all parameters will be
+copied to that device</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Module</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.named_buffers">
 <span class="sig-name descname"><span class="pre">named_buffers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prefix</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">recurse</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove_duplicate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Iterator</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.named_buffers" title="Permalink to this definition"></a></dt>
 <dd><p>Return an iterator over module buffers, yielding both the name of the buffer as well as the buffer itself.</p>
@@ -5384,7 +5630,7 @@ all hooks registered by this method.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_load_state_dict_post_hook">
 <span class="sig-name descname"><span class="pre">register_load_state_dict_post_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_load_state_dict_post_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a post hook to be run after module’s <code class="docutils literal notranslate"><span class="pre">load_state_dict</span></code> is called.</p>
+<dd><p>Register a post-hook to be run after module’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> is called.</p>
 <dl class="simple">
 <dt>It should have the following signature::</dt><dd><p>hook(module, incompatible_keys) -&gt; None</p>
 </dd>
@@ -5407,6 +5653,22 @@ clearing out both missing and unexpected keys will avoid an error.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">torch.utils.hooks.RemovableHandle</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_load_state_dict_pre_hook">
+<span class="sig-name descname"><span class="pre">register_load_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_load_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
+<dd><p>Register a pre-hook to be run before module’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> is called.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs) -&gt; None  # noqa: B950</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>hook</strong> (<em>Callable</em>) – Callable hook that will be invoked before
+loading the state dict.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -5437,12 +5699,25 @@ module’s <a class="reference internal" href="#lzero.model.stochastic_muzero_mo
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_state_dict_post_hook">
+<span class="sig-name descname"><span class="pre">register_state_dict_post_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_state_dict_post_hook" title="Permalink to this definition"></a></dt>
+<dd><p>Register a post-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata) -&gt; None</p>
+</dd>
+</dl>
+<p>The registered hooks can modify the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> inplace.</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_state_dict_pre_hook">
 <span class="sig-name descname"><span class="pre">register_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.register_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
 <dd><p>Register a pre-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
-<p>These hooks will be called with arguments: <code class="docutils literal notranslate"><span class="pre">self</span></code>, <code class="docutils literal notranslate"><span class="pre">prefix</span></code>,
-and <code class="docutils literal notranslate"><span class="pre">keep_vars</span></code> before calling <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> on <code class="docutils literal notranslate"><span class="pre">self</span></code>. The registered
-hooks can be used to perform pre-processing before the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, prefix, keep_vars) -&gt; None</p>
+</dd>
+</dl>
+<p>The registered hooks can be used to perform pre-processing before the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>
 call is made.</p>
 </dd></dl>
 
@@ -5481,6 +5756,48 @@ found within the <cite>state_dict</cite>. Implement this function and a correspo
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>state</strong> (<em>dict</em>) – Extra state from the <cite>state_dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.set_submodule">
+<span class="sig-name descname"><span class="pre">set_submodule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.AfterstatePredictionNetwork.set_submodule" title="Permalink to this definition"></a></dt>
+<dd><p>Set the submodule given by <code class="docutils literal notranslate"><span class="pre">target</span></code> if it exists, otherwise throw an error.</p>
+<p>For example, let’s say you have an <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> <code class="docutils literal notranslate"><span class="pre">A</span></code> that
+looks like this:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>A(
+    (net_b): Module(
+        (net_c): Module(
+            (conv): Conv2d(16, 33, kernel_size=(3, 3), stride=(2, 2))
+        )
+        (linear): Linear(in_features=100, out_features=200, bias=True)
+    )
+)
+</pre></div>
+</div>
+<p>(The diagram shows an <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> <code class="docutils literal notranslate"><span class="pre">A</span></code>. <code class="docutils literal notranslate"><span class="pre">A</span></code> has a nested
+submodule <code class="docutils literal notranslate"><span class="pre">net_b</span></code>, which itself has two submodules <code class="docutils literal notranslate"><span class="pre">net_c</span></code>
+and <code class="docutils literal notranslate"><span class="pre">linear</span></code>. <code class="docutils literal notranslate"><span class="pre">net_c</span></code> then has a submodule <code class="docutils literal notranslate"><span class="pre">conv</span></code>.)</p>
+<p>To overide the <code class="docutils literal notranslate"><span class="pre">Conv2d</span></code> with a new submodule <code class="docutils literal notranslate"><span class="pre">Linear</span></code>, you
+would call
+<code class="docutils literal notranslate"><span class="pre">set_submodule(&quot;net_b.net_c.conv&quot;,</span> <span class="pre">nn.Linear(33,</span> <span class="pre">16))</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>target</strong> – The fully-qualified string name of the submodule
+to look for. (See above example for how to specify a
+fully-qualified string.)</p></li>
+<li><p><strong>module</strong> – The module to set the submodule to.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>ValueError</strong> – If the target string is empty</p></li>
+<li><p><strong>AttributeError</strong> – If the target string references an invalid
+    path or resolves to something that is not an
+    <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code></p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -5943,13 +6260,11 @@ list, and will be reported together in
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackbone._register_load_state_dict_pre_hook">
 <span class="sig-name descname"><span class="pre">_register_load_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">with_module</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone._register_load_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a pre-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> method.</p>
-<p>These hooks will be called with arguments: <cite>state_dict</cite>, <cite>prefix</cite>,
-<cite>local_metadata</cite>, <cite>strict</cite>, <cite>missing_keys</cite>, <cite>unexpected_keys</cite>,
-<cite>error_msgs</cite>, before loading <cite>state_dict</cite> into <cite>self</cite>. These arguments
-are exactly the same as those of <cite>_load_from_state_dict</cite>.</p>
-<p>If <code class="docutils literal notranslate"><span class="pre">with_module</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, then the first argument to the hook is
-an instance of the module.</p>
+<dd><p>See <code class="xref py py-meth docutils literal notranslate"><span class="pre">register_load_state_dict_pre_hook()</span></code> for details.</p>
+<p>A subtle difference is that if <code class="docutils literal notranslate"><span class="pre">with_module</span></code> is set to <code class="docutils literal notranslate"><span class="pre">False</span></code>, then the
+hook will not take the <code class="docutils literal notranslate"><span class="pre">module</span></code> as the first argument whereas
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">register_load_state_dict_pre_hook()</span></code> always takes the
+<code class="docutils literal notranslate"><span class="pre">module</span></code> as the first argument.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -5965,12 +6280,14 @@ instance to the hook as the first parameter.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackbone._register_state_dict_hook">
 <span class="sig-name descname"><span class="pre">_register_state_dict_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone._register_state_dict_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a state-dict hook.</p>
-<p>These hooks will be called with arguments: <cite>self</cite>, <cite>state_dict</cite>,
-<cite>prefix</cite>, <cite>local_metadata</cite>, after the <cite>state_dict</cite> of <cite>self</cite> is set.
-Note that only parameters and buffers of <cite>self</cite> or its children are
-guaranteed to exist in <cite>state_dict</cite>. The hooks may modify <cite>state_dict</cite>
-inplace or return a new one.</p>
+<dd><p>Register a post-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata) -&gt; None or state_dict</p>
+</dd>
+</dl>
+<p>The registered hooks can modify the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> inplace or return a new one.
+If a new <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> is returned, it will only be respected if it is the root
+module that <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> is called from.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -6537,6 +6854,31 @@ example, <code class="docutils literal notranslate"><span class="pre">l</span></
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.mtia">
+<span class="sig-name descname"><span class="pre">mtia</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">device</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">T</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.mtia" title="Permalink to this definition"></a></dt>
+<dd><p>Move all model parameters and buffers to the MTIA.</p>
+<p>This also makes associated parameters and buffers different objects. So
+it should be called before constructing optimizer if the module will
+live on MTIA while being optimized.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method modifies the module in-place.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>device</strong> (<em>int</em><em>, </em><em>optional</em>) – if specified, all parameters will be
+copied to that device</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Module</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.named_buffers">
 <span class="sig-name descname"><span class="pre">named_buffers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prefix</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">recurse</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove_duplicate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Iterator</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.named_buffers" title="Permalink to this definition"></a></dt>
 <dd><p>Return an iterator over module buffers, yielding both the name of the buffer as well as the buffer itself.</p>
@@ -6922,7 +7264,7 @@ all hooks registered by this method.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_load_state_dict_post_hook">
 <span class="sig-name descname"><span class="pre">register_load_state_dict_post_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_load_state_dict_post_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a post hook to be run after module’s <code class="docutils literal notranslate"><span class="pre">load_state_dict</span></code> is called.</p>
+<dd><p>Register a post-hook to be run after module’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> is called.</p>
 <dl class="simple">
 <dt>It should have the following signature::</dt><dd><p>hook(module, incompatible_keys) -&gt; None</p>
 </dd>
@@ -6945,6 +7287,22 @@ clearing out both missing and unexpected keys will avoid an error.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">torch.utils.hooks.RemovableHandle</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_load_state_dict_pre_hook">
+<span class="sig-name descname"><span class="pre">register_load_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_load_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
+<dd><p>Register a pre-hook to be run before module’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> is called.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs) -&gt; None  # noqa: B950</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>hook</strong> (<em>Callable</em>) – Callable hook that will be invoked before
+loading the state dict.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -6975,12 +7333,25 @@ module’s <a class="reference internal" href="#lzero.model.stochastic_muzero_mo
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_state_dict_post_hook">
+<span class="sig-name descname"><span class="pre">register_state_dict_post_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_state_dict_post_hook" title="Permalink to this definition"></a></dt>
+<dd><p>Register a post-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata) -&gt; None</p>
+</dd>
+</dl>
+<p>The registered hooks can modify the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> inplace.</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_state_dict_pre_hook">
 <span class="sig-name descname"><span class="pre">register_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.register_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
 <dd><p>Register a pre-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
-<p>These hooks will be called with arguments: <code class="docutils literal notranslate"><span class="pre">self</span></code>, <code class="docutils literal notranslate"><span class="pre">prefix</span></code>,
-and <code class="docutils literal notranslate"><span class="pre">keep_vars</span></code> before calling <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> on <code class="docutils literal notranslate"><span class="pre">self</span></code>. The registered
-hooks can be used to perform pre-processing before the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, prefix, keep_vars) -&gt; None</p>
+</dd>
+</dl>
+<p>The registered hooks can be used to perform pre-processing before the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>
 call is made.</p>
 </dd></dl>
 
@@ -7019,6 +7390,48 @@ found within the <cite>state_dict</cite>. Implement this function and a correspo
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>state</strong> (<em>dict</em>) – Extra state from the <cite>state_dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.set_submodule">
+<span class="sig-name descname"><span class="pre">set_submodule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackbone.set_submodule" title="Permalink to this definition"></a></dt>
+<dd><p>Set the submodule given by <code class="docutils literal notranslate"><span class="pre">target</span></code> if it exists, otherwise throw an error.</p>
+<p>For example, let’s say you have an <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> <code class="docutils literal notranslate"><span class="pre">A</span></code> that
+looks like this:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>A(
+    (net_b): Module(
+        (net_c): Module(
+            (conv): Conv2d(16, 33, kernel_size=(3, 3), stride=(2, 2))
+        )
+        (linear): Linear(in_features=100, out_features=200, bias=True)
+    )
+)
+</pre></div>
+</div>
+<p>(The diagram shows an <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> <code class="docutils literal notranslate"><span class="pre">A</span></code>. <code class="docutils literal notranslate"><span class="pre">A</span></code> has a nested
+submodule <code class="docutils literal notranslate"><span class="pre">net_b</span></code>, which itself has two submodules <code class="docutils literal notranslate"><span class="pre">net_c</span></code>
+and <code class="docutils literal notranslate"><span class="pre">linear</span></code>. <code class="docutils literal notranslate"><span class="pre">net_c</span></code> then has a submodule <code class="docutils literal notranslate"><span class="pre">conv</span></code>.)</p>
+<p>To overide the <code class="docutils literal notranslate"><span class="pre">Conv2d</span></code> with a new submodule <code class="docutils literal notranslate"><span class="pre">Linear</span></code>, you
+would call
+<code class="docutils literal notranslate"><span class="pre">set_submodule(&quot;net_b.net_c.conv&quot;,</span> <span class="pre">nn.Linear(33,</span> <span class="pre">16))</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>target</strong> – The fully-qualified string name of the submodule
+to look for. (See above example for how to specify a
+fully-qualified string.)</p></li>
+<li><p><strong>module</strong> – The module to set the submodule to.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>ValueError</strong> – If the target string is empty</p></li>
+<li><p><strong>AttributeError</strong> – If the target string references an invalid
+    path or resolves to something that is not an
+    <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code></p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -7481,13 +7894,11 @@ list, and will be reported together in
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP._register_load_state_dict_pre_hook">
 <span class="sig-name descname"><span class="pre">_register_load_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">with_module</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP._register_load_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a pre-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> method.</p>
-<p>These hooks will be called with arguments: <cite>state_dict</cite>, <cite>prefix</cite>,
-<cite>local_metadata</cite>, <cite>strict</cite>, <cite>missing_keys</cite>, <cite>unexpected_keys</cite>,
-<cite>error_msgs</cite>, before loading <cite>state_dict</cite> into <cite>self</cite>. These arguments
-are exactly the same as those of <cite>_load_from_state_dict</cite>.</p>
-<p>If <code class="docutils literal notranslate"><span class="pre">with_module</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, then the first argument to the hook is
-an instance of the module.</p>
+<dd><p>See <code class="xref py py-meth docutils literal notranslate"><span class="pre">register_load_state_dict_pre_hook()</span></code> for details.</p>
+<p>A subtle difference is that if <code class="docutils literal notranslate"><span class="pre">with_module</span></code> is set to <code class="docutils literal notranslate"><span class="pre">False</span></code>, then the
+hook will not take the <code class="docutils literal notranslate"><span class="pre">module</span></code> as the first argument whereas
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">register_load_state_dict_pre_hook()</span></code> always takes the
+<code class="docutils literal notranslate"><span class="pre">module</span></code> as the first argument.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -7503,12 +7914,14 @@ instance to the hook as the first parameter.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP._register_state_dict_hook">
 <span class="sig-name descname"><span class="pre">_register_state_dict_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP._register_state_dict_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a state-dict hook.</p>
-<p>These hooks will be called with arguments: <cite>self</cite>, <cite>state_dict</cite>,
-<cite>prefix</cite>, <cite>local_metadata</cite>, after the <cite>state_dict</cite> of <cite>self</cite> is set.
-Note that only parameters and buffers of <cite>self</cite> or its children are
-guaranteed to exist in <cite>state_dict</cite>. The hooks may modify <cite>state_dict</cite>
-inplace or return a new one.</p>
+<dd><p>Register a post-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata) -&gt; None or state_dict</p>
+</dd>
+</dl>
+<p>The registered hooks can modify the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> inplace or return a new one.
+If a new <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> is returned, it will only be respected if it is the root
+module that <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> is called from.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -8075,6 +8488,31 @@ example, <code class="docutils literal notranslate"><span class="pre">l</span></
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.mtia">
+<span class="sig-name descname"><span class="pre">mtia</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">device</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">T</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.mtia" title="Permalink to this definition"></a></dt>
+<dd><p>Move all model parameters and buffers to the MTIA.</p>
+<p>This also makes associated parameters and buffers different objects. So
+it should be called before constructing optimizer if the module will
+live on MTIA while being optimized.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method modifies the module in-place.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>device</strong> (<em>int</em><em>, </em><em>optional</em>) – if specified, all parameters will be
+copied to that device</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Module</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.named_buffers">
 <span class="sig-name descname"><span class="pre">named_buffers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prefix</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">recurse</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove_duplicate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Iterator</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.named_buffers" title="Permalink to this definition"></a></dt>
 <dd><p>Return an iterator over module buffers, yielding both the name of the buffer as well as the buffer itself.</p>
@@ -8460,7 +8898,7 @@ all hooks registered by this method.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_load_state_dict_post_hook">
 <span class="sig-name descname"><span class="pre">register_load_state_dict_post_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_load_state_dict_post_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a post hook to be run after module’s <code class="docutils literal notranslate"><span class="pre">load_state_dict</span></code> is called.</p>
+<dd><p>Register a post-hook to be run after module’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> is called.</p>
 <dl class="simple">
 <dt>It should have the following signature::</dt><dd><p>hook(module, incompatible_keys) -&gt; None</p>
 </dd>
@@ -8483,6 +8921,22 @@ clearing out both missing and unexpected keys will avoid an error.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">torch.utils.hooks.RemovableHandle</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_load_state_dict_pre_hook">
+<span class="sig-name descname"><span class="pre">register_load_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_load_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
+<dd><p>Register a pre-hook to be run before module’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> is called.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs) -&gt; None  # noqa: B950</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>hook</strong> (<em>Callable</em>) – Callable hook that will be invoked before
+loading the state dict.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -8513,12 +8967,25 @@ module’s <a class="reference internal" href="#lzero.model.stochastic_muzero_mo
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_state_dict_post_hook">
+<span class="sig-name descname"><span class="pre">register_state_dict_post_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_state_dict_post_hook" title="Permalink to this definition"></a></dt>
+<dd><p>Register a post-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata) -&gt; None</p>
+</dd>
+</dl>
+<p>The registered hooks can modify the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> inplace.</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_state_dict_pre_hook">
 <span class="sig-name descname"><span class="pre">register_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.register_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
 <dd><p>Register a pre-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
-<p>These hooks will be called with arguments: <code class="docutils literal notranslate"><span class="pre">self</span></code>, <code class="docutils literal notranslate"><span class="pre">prefix</span></code>,
-and <code class="docutils literal notranslate"><span class="pre">keep_vars</span></code> before calling <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> on <code class="docutils literal notranslate"><span class="pre">self</span></code>. The registered
-hooks can be used to perform pre-processing before the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, prefix, keep_vars) -&gt; None</p>
+</dd>
+</dl>
+<p>The registered hooks can be used to perform pre-processing before the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>
 call is made.</p>
 </dd></dl>
 
@@ -8557,6 +9024,48 @@ found within the <cite>state_dict</cite>. Implement this function and a correspo
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>state</strong> (<em>dict</em>) – Extra state from the <cite>state_dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.set_submodule">
+<span class="sig-name descname"><span class="pre">set_submodule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoderBackboneMLP.set_submodule" title="Permalink to this definition"></a></dt>
+<dd><p>Set the submodule given by <code class="docutils literal notranslate"><span class="pre">target</span></code> if it exists, otherwise throw an error.</p>
+<p>For example, let’s say you have an <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> <code class="docutils literal notranslate"><span class="pre">A</span></code> that
+looks like this:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>A(
+    (net_b): Module(
+        (net_c): Module(
+            (conv): Conv2d(16, 33, kernel_size=(3, 3), stride=(2, 2))
+        )
+        (linear): Linear(in_features=100, out_features=200, bias=True)
+    )
+)
+</pre></div>
+</div>
+<p>(The diagram shows an <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> <code class="docutils literal notranslate"><span class="pre">A</span></code>. <code class="docutils literal notranslate"><span class="pre">A</span></code> has a nested
+submodule <code class="docutils literal notranslate"><span class="pre">net_b</span></code>, which itself has two submodules <code class="docutils literal notranslate"><span class="pre">net_c</span></code>
+and <code class="docutils literal notranslate"><span class="pre">linear</span></code>. <code class="docutils literal notranslate"><span class="pre">net_c</span></code> then has a submodule <code class="docutils literal notranslate"><span class="pre">conv</span></code>.)</p>
+<p>To overide the <code class="docutils literal notranslate"><span class="pre">Conv2d</span></code> with a new submodule <code class="docutils literal notranslate"><span class="pre">Linear</span></code>, you
+would call
+<code class="docutils literal notranslate"><span class="pre">set_submodule(&quot;net_b.net_c.conv&quot;,</span> <span class="pre">nn.Linear(33,</span> <span class="pre">16))</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>target</strong> – The fully-qualified string name of the submodule
+to look for. (See above example for how to specify a
+fully-qualified string.)</p></li>
+<li><p><strong>module</strong> – The module to set the submodule to.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>ValueError</strong> – If the target string is empty</p></li>
+<li><p><strong>AttributeError</strong> – If the target string references an invalid
+    path or resolves to something that is not an
+    <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code></p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -9007,13 +9516,11 @@ list, and will be reported together in
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoder._register_load_state_dict_pre_hook">
 <span class="sig-name descname"><span class="pre">_register_load_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">with_module</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoder._register_load_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a pre-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> method.</p>
-<p>These hooks will be called with arguments: <cite>state_dict</cite>, <cite>prefix</cite>,
-<cite>local_metadata</cite>, <cite>strict</cite>, <cite>missing_keys</cite>, <cite>unexpected_keys</cite>,
-<cite>error_msgs</cite>, before loading <cite>state_dict</cite> into <cite>self</cite>. These arguments
-are exactly the same as those of <cite>_load_from_state_dict</cite>.</p>
-<p>If <code class="docutils literal notranslate"><span class="pre">with_module</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, then the first argument to the hook is
-an instance of the module.</p>
+<dd><p>See <code class="xref py py-meth docutils literal notranslate"><span class="pre">register_load_state_dict_pre_hook()</span></code> for details.</p>
+<p>A subtle difference is that if <code class="docutils literal notranslate"><span class="pre">with_module</span></code> is set to <code class="docutils literal notranslate"><span class="pre">False</span></code>, then the
+hook will not take the <code class="docutils literal notranslate"><span class="pre">module</span></code> as the first argument whereas
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">register_load_state_dict_pre_hook()</span></code> always takes the
+<code class="docutils literal notranslate"><span class="pre">module</span></code> as the first argument.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -9029,12 +9536,14 @@ instance to the hook as the first parameter.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoder._register_state_dict_hook">
 <span class="sig-name descname"><span class="pre">_register_state_dict_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoder._register_state_dict_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a state-dict hook.</p>
-<p>These hooks will be called with arguments: <cite>self</cite>, <cite>state_dict</cite>,
-<cite>prefix</cite>, <cite>local_metadata</cite>, after the <cite>state_dict</cite> of <cite>self</cite> is set.
-Note that only parameters and buffers of <cite>self</cite> or its children are
-guaranteed to exist in <cite>state_dict</cite>. The hooks may modify <cite>state_dict</cite>
-inplace or return a new one.</p>
+<dd><p>Register a post-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata) -&gt; None or state_dict</p>
+</dd>
+</dl>
+<p>The registered hooks can modify the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> inplace or return a new one.
+If a new <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> is returned, it will only be respected if it is the root
+module that <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> is called from.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -9613,6 +10122,31 @@ example, <code class="docutils literal notranslate"><span class="pre">l</span></
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoder.mtia">
+<span class="sig-name descname"><span class="pre">mtia</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">device</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">T</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.mtia" title="Permalink to this definition"></a></dt>
+<dd><p>Move all model parameters and buffers to the MTIA.</p>
+<p>This also makes associated parameters and buffers different objects. So
+it should be called before constructing optimizer if the module will
+live on MTIA while being optimized.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method modifies the module in-place.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>device</strong> (<em>int</em><em>, </em><em>optional</em>) – if specified, all parameters will be
+copied to that device</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Module</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoder.named_buffers">
 <span class="sig-name descname"><span class="pre">named_buffers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prefix</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">recurse</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove_duplicate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Iterator</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.named_buffers" title="Permalink to this definition"></a></dt>
 <dd><p>Return an iterator over module buffers, yielding both the name of the buffer as well as the buffer itself.</p>
@@ -9998,7 +10532,7 @@ all hooks registered by this method.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoder.register_load_state_dict_post_hook">
 <span class="sig-name descname"><span class="pre">register_load_state_dict_post_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.register_load_state_dict_post_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a post hook to be run after module’s <code class="docutils literal notranslate"><span class="pre">load_state_dict</span></code> is called.</p>
+<dd><p>Register a post-hook to be run after module’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> is called.</p>
 <dl class="simple">
 <dt>It should have the following signature::</dt><dd><p>hook(module, incompatible_keys) -&gt; None</p>
 </dd>
@@ -10021,6 +10555,22 @@ clearing out both missing and unexpected keys will avoid an error.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">torch.utils.hooks.RemovableHandle</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoder.register_load_state_dict_pre_hook">
+<span class="sig-name descname"><span class="pre">register_load_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.register_load_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
+<dd><p>Register a pre-hook to be run before module’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> is called.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs) -&gt; None  # noqa: B950</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>hook</strong> (<em>Callable</em>) – Callable hook that will be invoked before
+loading the state dict.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -10051,12 +10601,25 @@ module’s <a class="reference internal" href="#lzero.model.stochastic_muzero_mo
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoder.register_state_dict_post_hook">
+<span class="sig-name descname"><span class="pre">register_state_dict_post_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.register_state_dict_post_hook" title="Permalink to this definition"></a></dt>
+<dd><p>Register a post-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata) -&gt; None</p>
+</dd>
+</dl>
+<p>The registered hooks can modify the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> inplace.</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoder.register_state_dict_pre_hook">
 <span class="sig-name descname"><span class="pre">register_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.register_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
 <dd><p>Register a pre-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
-<p>These hooks will be called with arguments: <code class="docutils literal notranslate"><span class="pre">self</span></code>, <code class="docutils literal notranslate"><span class="pre">prefix</span></code>,
-and <code class="docutils literal notranslate"><span class="pre">keep_vars</span></code> before calling <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> on <code class="docutils literal notranslate"><span class="pre">self</span></code>. The registered
-hooks can be used to perform pre-processing before the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, prefix, keep_vars) -&gt; None</p>
+</dd>
+</dl>
+<p>The registered hooks can be used to perform pre-processing before the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>
 call is made.</p>
 </dd></dl>
 
@@ -10095,6 +10658,48 @@ found within the <cite>state_dict</cite>. Implement this function and a correspo
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>state</strong> (<em>dict</em>) – Extra state from the <cite>state_dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.ChanceEncoder.set_submodule">
+<span class="sig-name descname"><span class="pre">set_submodule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.ChanceEncoder.set_submodule" title="Permalink to this definition"></a></dt>
+<dd><p>Set the submodule given by <code class="docutils literal notranslate"><span class="pre">target</span></code> if it exists, otherwise throw an error.</p>
+<p>For example, let’s say you have an <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> <code class="docutils literal notranslate"><span class="pre">A</span></code> that
+looks like this:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>A(
+    (net_b): Module(
+        (net_c): Module(
+            (conv): Conv2d(16, 33, kernel_size=(3, 3), stride=(2, 2))
+        )
+        (linear): Linear(in_features=100, out_features=200, bias=True)
+    )
+)
+</pre></div>
+</div>
+<p>(The diagram shows an <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> <code class="docutils literal notranslate"><span class="pre">A</span></code>. <code class="docutils literal notranslate"><span class="pre">A</span></code> has a nested
+submodule <code class="docutils literal notranslate"><span class="pre">net_b</span></code>, which itself has two submodules <code class="docutils literal notranslate"><span class="pre">net_c</span></code>
+and <code class="docutils literal notranslate"><span class="pre">linear</span></code>. <code class="docutils literal notranslate"><span class="pre">net_c</span></code> then has a submodule <code class="docutils literal notranslate"><span class="pre">conv</span></code>.)</p>
+<p>To overide the <code class="docutils literal notranslate"><span class="pre">Conv2d</span></code> with a new submodule <code class="docutils literal notranslate"><span class="pre">Linear</span></code>, you
+would call
+<code class="docutils literal notranslate"><span class="pre">set_submodule(&quot;net_b.net_c.conv&quot;,</span> <span class="pre">nn.Linear(33,</span> <span class="pre">16))</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>target</strong> – The fully-qualified string name of the submodule
+to look for. (See above example for how to specify a
+fully-qualified string.)</p></li>
+<li><p><strong>module</strong> – The module to set the submodule to.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>ValueError</strong> – If the target string is empty</p></li>
+<li><p><strong>AttributeError</strong> – If the target string references an invalid
+    path or resolves to something that is not an
+    <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code></p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -10545,13 +11150,11 @@ list, and will be reported together in
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StraightThroughEstimator._register_load_state_dict_pre_hook">
 <span class="sig-name descname"><span class="pre">_register_load_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">with_module</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator._register_load_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a pre-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> method.</p>
-<p>These hooks will be called with arguments: <cite>state_dict</cite>, <cite>prefix</cite>,
-<cite>local_metadata</cite>, <cite>strict</cite>, <cite>missing_keys</cite>, <cite>unexpected_keys</cite>,
-<cite>error_msgs</cite>, before loading <cite>state_dict</cite> into <cite>self</cite>. These arguments
-are exactly the same as those of <cite>_load_from_state_dict</cite>.</p>
-<p>If <code class="docutils literal notranslate"><span class="pre">with_module</span></code> is <code class="docutils literal notranslate"><span class="pre">True</span></code>, then the first argument to the hook is
-an instance of the module.</p>
+<dd><p>See <code class="xref py py-meth docutils literal notranslate"><span class="pre">register_load_state_dict_pre_hook()</span></code> for details.</p>
+<p>A subtle difference is that if <code class="docutils literal notranslate"><span class="pre">with_module</span></code> is set to <code class="docutils literal notranslate"><span class="pre">False</span></code>, then the
+hook will not take the <code class="docutils literal notranslate"><span class="pre">module</span></code> as the first argument whereas
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">register_load_state_dict_pre_hook()</span></code> always takes the
+<code class="docutils literal notranslate"><span class="pre">module</span></code> as the first argument.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -10567,12 +11170,14 @@ instance to the hook as the first parameter.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StraightThroughEstimator._register_state_dict_hook">
 <span class="sig-name descname"><span class="pre">_register_state_dict_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator._register_state_dict_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a state-dict hook.</p>
-<p>These hooks will be called with arguments: <cite>self</cite>, <cite>state_dict</cite>,
-<cite>prefix</cite>, <cite>local_metadata</cite>, after the <cite>state_dict</cite> of <cite>self</cite> is set.
-Note that only parameters and buffers of <cite>self</cite> or its children are
-guaranteed to exist in <cite>state_dict</cite>. The hooks may modify <cite>state_dict</cite>
-inplace or return a new one.</p>
+<dd><p>Register a post-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata) -&gt; None or state_dict</p>
+</dd>
+</dl>
+<p>The registered hooks can modify the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> inplace or return a new one.
+If a new <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> is returned, it will only be respected if it is the root
+module that <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> is called from.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -11148,6 +11753,31 @@ example, <code class="docutils literal notranslate"><span class="pre">l</span></
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StraightThroughEstimator.mtia">
+<span class="sig-name descname"><span class="pre">mtia</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">device</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">T</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.mtia" title="Permalink to this definition"></a></dt>
+<dd><p>Move all model parameters and buffers to the MTIA.</p>
+<p>This also makes associated parameters and buffers different objects. So
+it should be called before constructing optimizer if the module will
+live on MTIA while being optimized.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This method modifies the module in-place.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>device</strong> (<em>int</em><em>, </em><em>optional</em>) – if specified, all parameters will be
+copied to that device</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>self</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>Module</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StraightThroughEstimator.named_buffers">
 <span class="sig-name descname"><span class="pre">named_buffers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">prefix</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">recurse</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remove_duplicate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Iterator</span><span class="p"><span class="pre">[</span></span><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.named_buffers" title="Permalink to this definition"></a></dt>
 <dd><p>Return an iterator over module buffers, yielding both the name of the buffer as well as the buffer itself.</p>
@@ -11533,7 +12163,7 @@ all hooks registered by this method.</p></li>
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_load_state_dict_post_hook">
 <span class="sig-name descname"><span class="pre">register_load_state_dict_post_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_load_state_dict_post_hook" title="Permalink to this definition"></a></dt>
-<dd><p>Register a post hook to be run after module’s <code class="docutils literal notranslate"><span class="pre">load_state_dict</span></code> is called.</p>
+<dd><p>Register a post-hook to be run after module’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> is called.</p>
 <dl class="simple">
 <dt>It should have the following signature::</dt><dd><p>hook(module, incompatible_keys) -&gt; None</p>
 </dd>
@@ -11556,6 +12186,22 @@ clearing out both missing and unexpected keys will avoid an error.</p>
 </dd>
 <dt class="field-even">Return type<span class="colon">:</span></dt>
 <dd class="field-even"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">torch.utils.hooks.RemovableHandle</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_load_state_dict_pre_hook">
+<span class="sig-name descname"><span class="pre">register_load_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_load_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
+<dd><p>Register a pre-hook to be run before module’s <code class="xref py py-meth docutils literal notranslate"><span class="pre">load_state_dict()</span></code> is called.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata, strict, missing_keys, unexpected_keys, error_msgs) -&gt; None  # noqa: B950</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>hook</strong> (<em>Callable</em>) – Callable hook that will be invoked before
+loading the state dict.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -11586,12 +12232,25 @@ module’s <a class="reference internal" href="#lzero.model.stochastic_muzero_mo
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_state_dict_post_hook">
+<span class="sig-name descname"><span class="pre">register_state_dict_post_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_state_dict_post_hook" title="Permalink to this definition"></a></dt>
+<dd><p>Register a post-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, state_dict, prefix, local_metadata) -&gt; None</p>
+</dd>
+</dl>
+<p>The registered hooks can modify the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> inplace.</p>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_state_dict_pre_hook">
 <span class="sig-name descname"><span class="pre">register_state_dict_pre_hook</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hook</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.register_state_dict_pre_hook" title="Permalink to this definition"></a></dt>
 <dd><p>Register a pre-hook for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">state_dict()</span></code> method.</p>
-<p>These hooks will be called with arguments: <code class="docutils literal notranslate"><span class="pre">self</span></code>, <code class="docutils literal notranslate"><span class="pre">prefix</span></code>,
-and <code class="docutils literal notranslate"><span class="pre">keep_vars</span></code> before calling <code class="docutils literal notranslate"><span class="pre">state_dict</span></code> on <code class="docutils literal notranslate"><span class="pre">self</span></code>. The registered
-hooks can be used to perform pre-processing before the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>
+<dl class="simple">
+<dt>It should have the following signature::</dt><dd><p>hook(module, prefix, keep_vars) -&gt; None</p>
+</dd>
+</dl>
+<p>The registered hooks can be used to perform pre-processing before the <code class="docutils literal notranslate"><span class="pre">state_dict</span></code>
 call is made.</p>
 </dd></dl>
 
@@ -11630,6 +12289,48 @@ found within the <cite>state_dict</cite>. Implement this function and a correspo
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>state</strong> (<em>dict</em>) – Extra state from the <cite>state_dict</cite></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.StraightThroughEstimator.set_submodule">
+<span class="sig-name descname"><span class="pre">set_submodule</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">module</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Module</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.StraightThroughEstimator.set_submodule" title="Permalink to this definition"></a></dt>
+<dd><p>Set the submodule given by <code class="docutils literal notranslate"><span class="pre">target</span></code> if it exists, otherwise throw an error.</p>
+<p>For example, let’s say you have an <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> <code class="docutils literal notranslate"><span class="pre">A</span></code> that
+looks like this:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>A(
+    (net_b): Module(
+        (net_c): Module(
+            (conv): Conv2d(16, 33, kernel_size=(3, 3), stride=(2, 2))
+        )
+        (linear): Linear(in_features=100, out_features=200, bias=True)
+    )
+)
+</pre></div>
+</div>
+<p>(The diagram shows an <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> <code class="docutils literal notranslate"><span class="pre">A</span></code>. <code class="docutils literal notranslate"><span class="pre">A</span></code> has a nested
+submodule <code class="docutils literal notranslate"><span class="pre">net_b</span></code>, which itself has two submodules <code class="docutils literal notranslate"><span class="pre">net_c</span></code>
+and <code class="docutils literal notranslate"><span class="pre">linear</span></code>. <code class="docutils literal notranslate"><span class="pre">net_c</span></code> then has a submodule <code class="docutils literal notranslate"><span class="pre">conv</span></code>.)</p>
+<p>To overide the <code class="docutils literal notranslate"><span class="pre">Conv2d</span></code> with a new submodule <code class="docutils literal notranslate"><span class="pre">Linear</span></code>, you
+would call
+<code class="docutils literal notranslate"><span class="pre">set_submodule(&quot;net_b.net_c.conv&quot;,</span> <span class="pre">nn.Linear(33,</span> <span class="pre">16))</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>target</strong> – The fully-qualified string name of the submodule
+to look for. (See above example for how to specify a
+fully-qualified string.)</p></li>
+<li><p><strong>module</strong> – The module to set the submodule to.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>ValueError</strong> – If the target string is empty</p></li>
+<li><p><strong>AttributeError</strong> – If the target string references an invalid
+    path or resolves to something that is not an
+    <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code></p></li>
+</ul>
 </dd>
 </dl>
 </dd></dl>
@@ -11938,6 +12639,11 @@ See <code class="xref py py-meth docutils literal notranslate"><span class="pre"
 <dl class="py method">
 <dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.OnehotArgmax._get_compiled_autograd_symints">
 <span class="sig-name descname"><span class="pre">_get_compiled_autograd_symints</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.OnehotArgmax._get_compiled_autograd_symints" title="Permalink to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="lzero.model.stochastic_muzero_model.OnehotArgmax._input_metadata">
+<span class="sig-name descname"><span class="pre">_input_metadata</span></span><a class="headerlink" href="#lzero.model.stochastic_muzero_model.OnehotArgmax._input_metadata" title="Permalink to this definition"></a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
