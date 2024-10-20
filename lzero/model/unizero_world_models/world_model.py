@@ -1445,7 +1445,8 @@ class WorldModel(nn.Module):
         target_best_action = target_sampled_actions[torch.arange(target_best_action_idx.size(0)), target_best_action_idx]
 
         # Clip the target actions to prevent numerical issues during arctanh
-        target_best_action_clamped = torch.clamp(target_best_action, -1 + 1e-6, 1 - 1e-6)
+        # target_best_action_clamped = torch.clamp(target_best_action, -1 + 1e-6, 1 - 1e-6)
+        target_best_action_clamped = torch.clamp(target_best_action, -1 + 1e-2, 1 - 1e-2)
         target_best_action_before_tanh = torch.arctanh(target_best_action_clamped)
 
         # Calculate the log probability of the best action
@@ -1519,31 +1520,70 @@ class WorldModel(nn.Module):
         # log_prob = dist.log_prob(target_sampled_actions_before_tanh)
         # log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
 
-        # original v2
+        # original v2: y使用target_sampled_actions_clamped
         # target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
         # y = 1 - target_sampled_actions_clamped.pow(2)
         # target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
         # log_prob = dist.log_prob(target_sampled_actions_before_tanh)
         # log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
 
-        # original v3
+        # original v3: y使用target_sampled_actions_clamped, eps=1e-3
         # target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-3, 1 - 1e-3)
         # y = 1 - target_sampled_actions_clamped.pow(2)
         # target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
         # log_prob = dist.log_prob(target_sampled_actions_before_tanh)
         # log_prob = log_prob - torch.log(y + 1e-3).sum(-1)
 
-        # o1给出的修改建议
-        target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
-        # Use the inverse tanh (atanh) for action transformation
-        target_sampled_actions_before_tanh = 0.5 * torch.log((1 + target_sampled_actions_clamped) / (1 - target_sampled_actions_clamped))
+        # original v4: y使用target_sampled_actions_clamped, eps=1e-2
+        target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-2, 1 - 1e-2)
+        y = 1 - target_sampled_actions_clamped.pow(2)
+        target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
         log_prob = dist.log_prob(target_sampled_actions_before_tanh)
-        # Adjust log_prob for tanh squashing
-        log_prob -= torch.sum(torch.log(1 - target_sampled_actions_clamped.pow(2) + 1e-6), dim=-1)
+        log_prob = log_prob - torch.log(y + 1e-2).sum(-1)
 
+        # o1给出的修改建议
+        # target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
+        # # Use the inverse tanh (atanh) for action transformation
+        # target_sampled_actions_before_tanh = 0.5 * torch.log((1 + target_sampled_actions_clamped) / (1 - target_sampled_actions_clamped))
+        # log_prob = dist.log_prob(target_sampled_actions_before_tanh)
+        # # Adjust log_prob for tanh squashing
+        # log_prob -= torch.sum(torch.log(1 - target_sampled_actions_clamped.pow(2) + 1e-6), dim=-1)
 
+        # original v5: v4+ log_prob_sampled_actions clamp
+        # 设置截断范围，例如[-20, 20]
         log_prob_sampled_actions = log_prob
-        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
+        lower_bound, upper_bound = -20, 20
+        log_prob_sampled_actions_clamped = torch.clamp(log_prob_sampled_actions, lower_bound, upper_bound)
+        # 对超出范围的值停止梯度
+        exceeding_mask = (log_prob_sampled_actions < lower_bound) | (log_prob_sampled_actions > upper_bound)
+        # log_prob_sampled_actions_safe = log_prob_sampled_actions_clamped.masked_fill(exceeding_mask, log_prob_sampled_actions_clamped.detach())
+        log_prob_sampled_actions_safe = torch.where(
+            exceeding_mask,
+            log_prob_sampled_actions_clamped.detach(),
+            log_prob_sampled_actions_clamped
+        )
+        log_prob_sampled_actions = log_prob_sampled_actions_safe
+
+        # 检查何时log_prob_sampled_actions出现大于0的数======
+
+        # 假设log_prob_sampled_actions的形状为(batch_size, num_samples)
+        # max_log_prob = log_prob.max(dim=1, keepdim=True)[0]
+        # log_prob = log_prob - max_log_prob
+
+        # log_prob_sampled_actions = log_prob
+        # target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
+        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-2)
+
+        # debug: 获取 target_normalized_visit_count 的最小值和最大值
+        # min_value = torch.min(target_normalized_visit_count)
+        # max_value = torch.max(target_normalized_visit_count)
+        # # 打印最小值和最大值
+        # print(f"Min value: {min_value.item()}, Max value: {max_value.item()}")
+        # # 检查是否在 [0, 1] 范围内
+        # if min_value >= 0 and max_value <= 1:
+        #     print("target_normalized_visit_count 已经归一化到 [0, 1] 范围内。")
+        # else:
+        #     print("target_normalized_visit_count 没有归一化到 [0, 1] 范围内。")
 
         # KL as projector
         policy_loss = -torch.sum(
@@ -1560,7 +1600,7 @@ class WorldModel(nn.Module):
 
         return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
 
-    # def _calculate_policy_loss_cont_v0(self, outputs, batch: dict) -> Tuple[
+    # def _calculate_policy_loss_cont(self, outputs, batch: dict) -> Tuple[
     #     torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
     #     """
     #     Calculate the policy loss for continuous actions.
