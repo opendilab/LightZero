@@ -1535,42 +1535,57 @@ class WorldModel(nn.Module):
         # log_prob = log_prob - torch.log(y + 1e-3).sum(-1)
 
         # original v4: y使用target_sampled_actions_clamped, eps=1e-2
-        # target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-2, 1 - 1e-2)
-        # assert torch.all(target_sampled_actions_clamped < 1) and torch.all(target_sampled_actions_clamped > -1), "Actions are not properly clamped."
-        # y = 1 - target_sampled_actions_clamped.pow(2)
-        # target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
-        # log_prob = dist.log_prob(target_sampled_actions_before_tanh)
-        # log_prob = log_prob - torch.log(y + 1e-2).sum(-1)
+        target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-2, 1 - 1e-2)
+        y = 1 - target_sampled_actions_clamped.pow(2)
+        target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
+        log_prob = dist.log_prob(target_sampled_actions_before_tanh)
+        log_prob = log_prob - torch.log(y + 1e-2).sum(-1)
 
-        # original v5:
-        from torch.distributions import TransformedDistribution, TanhTransform
-        # sigma = torch.full_like(mu, 0.5)  # 固定sigma
-        base_dist = Normal(mu, sigma)
-        tanh_transform = TanhTransform()
-        dist = TransformedDistribution(base_dist, [tanh_transform])
-        dist = Independent(dist, 1)  # 如果是独立的多维分布
-        target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
-        assert torch.all(target_sampled_actions_clamped < 1) and torch.all(target_sampled_actions_clamped > -1), "Actions are not properly clamped."
-        log_prob = dist.log_prob(target_sampled_actions_clamped)  # sum over action dimensions
+        # o1给出的修改建议
+        # target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
+        # # Use the inverse tanh (atanh) for action transformation
+        # target_sampled_actions_before_tanh = 0.5 * torch.log((1 + target_sampled_actions_clamped) / (1 - target_sampled_actions_clamped))
+        # log_prob = dist.log_prob(target_sampled_actions_before_tanh)
+        # # Adjust log_prob for tanh squashing
+        # log_prob -= torch.sum(torch.log(1 - target_sampled_actions_clamped.pow(2) + 1e-6), dim=-1)
+
+        # original v5: v4+ log_prob_sampled_actions clamp
+        # 设置截断范围，例如[-20, 20]
+        # log_prob_sampled_actions = log_prob
+        # lower_bound, upper_bound = -20, 20
+        # log_prob_sampled_actions_clamped = torch.clamp(log_prob_sampled_actions, lower_bound, upper_bound)
+        # # 对超出范围的值停止梯度
+        # exceeding_mask = (log_prob_sampled_actions < lower_bound) | (log_prob_sampled_actions > upper_bound)
+        # # log_prob_sampled_actions_safe = log_prob_sampled_actions_clamped.masked_fill(exceeding_mask, log_prob_sampled_actions_clamped.detach())
+        # log_prob_sampled_actions_safe = torch.where(
+        #     exceeding_mask,
+        #     log_prob_sampled_actions_clamped.detach(),
+        #     log_prob_sampled_actions_clamped
+        # )
+        # log_prob_sampled_actions = log_prob_sampled_actions_safe
+
+
+        # 假设log_prob_sampled_actions的形状为(batch_size, num_samples)
+        # max_log_prob = log_prob.max(dim=1, keepdim=True)[0]
+        # log_prob = log_prob - max_log_prob
 
         log_prob_sampled_actions = log_prob
-
-        # 检查 log_prob_sampled_actions 是否出现大于0的情况
-        if (log_prob_sampled_actions > 0).any():
-            # 打印 log_prob_sampled_actions 的统计信息
-            print(f"mu: {mu.mean().item()}, sigma: {sigma.mean().item()}")
-            print("log_prob_sampled_actions 出现大于 0 的值！")
-            print(f"最大值: {torch.max(log_prob_sampled_actions).item()}")
-            print(f"最小值: {torch.min(log_prob_sampled_actions).item()}")
-            print(f"均值: {torch.mean(log_prob_sampled_actions).item()}")
-            print(f"大于 0 的值: {log_prob_sampled_actions[log_prob_sampled_actions > 0]}")
-            print(f"大于 0 的索引: {torch.nonzero(log_prob_sampled_actions > 0)}")
-
-        # 截断 log_prob
-        log_prob_sampled_actions = torch.clamp(log_prob_sampled_actions, max=0.0, min=-10.0)
-
-        # KL as projector
         target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
+        # target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-2)
+
+        # debug: 获取 target_normalized_visit_count 的最小值和最大值
+        # min_value = torch.min(target_normalized_visit_count)
+        # max_value = torch.max(target_normalized_visit_count)
+        # # 打印最小值和最大值
+        # print(f"Min value: {min_value.item()}, Max value: {max_value.item()}")
+        # # 检查是否在 [0, 1] 范围内
+        # if min_value >= 0 and max_value <= 1:
+        #     print("target_normalized_visit_count 已经归一化到 [0, 1] 范围内。")
+        # else:
+        #     print("target_normalized_visit_count 没有归一化到 [0, 1] 范围内。")
+
+        # 检查何时log_prob_sampled_actions出现大于0的数======
+        # KL as projector
         policy_loss = -torch.sum(
             torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
         ) * mask_batch

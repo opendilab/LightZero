@@ -31,8 +31,8 @@ def main(env_id, seed):
     
     evaluator_env_num = 3
     num_simulations = 50
-    # replay_ratio = 0.25
-    replay_ratio = 0.1
+    replay_ratio = 0.25
+    # replay_ratio = 0.1
 
     # if env_id ==  'cartpole-swingup':
     #     max_env_step = int(1e6)
@@ -108,8 +108,8 @@ def main(env_id, seed):
                     policy_entropy_weight=5e-3,
                     continuous_action_space=continuous_action_space,
                     num_of_sampled_actions=K,
-                    sigma_type='conditioned',
-                    # sigma_type='fixed',
+                    # sigma_type='conditioned',
+                    sigma_type='fixed',
                     # fixed_sigma_value=fixed_sigma_value,
                     fixed_sigma_value=0.5,
                     # fixed_sigma_value=0.3,
@@ -190,8 +190,8 @@ def main(env_id, seed):
     
     # 调整train_unizero里面的collector
     # main_config.exp_name=f'data_sampled_unizero_1016/fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_fixreanalyze-sample-action_td5_sigma05_df099_simplepl-eps1e-2_gcv1/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
-    main_config.exp_name=f'data_sampled_unizero_1016/fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_fixreanalyze-sample-action_td5_learnsigma_df099_arctanhV5-targeteps1e-2_gcv1/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
-    # main_config.exp_name=f'data_sampled_unizero_1016/fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_fixreanalyze-sample-action_td5_sigma05_df099_origpolicyloss_gcv1/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
+    # main_config.exp_name=f'data_sampled_unizero_1021/fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_fixreanalyze-sample-action_td5_learnsigma_df099_arctanhV5-targeteps1e-2_gcv1/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
+    main_config.exp_name=f'data_sampled_unizero_1021/fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_fixreanalyze-sample-action_td5_sigma05_df099_arctanhV5-logprob-neg10-0_gcv1/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
     
     from lzero.entry import train_unizero_reanalyze
     train_unizero_reanalyze([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
