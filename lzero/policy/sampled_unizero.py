@@ -15,6 +15,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
     prepare_obs_stack4_for_unizero
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
+from lzero.entry.utils import initialize_zeros_batch
 
 
 def get_action(roots_sampled_actions, i, action):
@@ -38,7 +39,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
 
     # The default_config for UniZero policy.
     config = dict(
-        type='unizero',
+        type='sampled_unizero',
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.
             model_type='conv',  # options={'mlp', 'conv'}
@@ -65,8 +66,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             bias=True,
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
-            # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'BN'.
-            norm_type='LN',
             # (bool) Whether to analyze simulation normalization.
             analysis_sim_norm=False,
             # (int) The save interval of the model.
@@ -117,7 +116,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 # (float) The weight of the perceptual loss.
                 perceptual_loss_weight=0.,
                 # (float) The weight of the policy entropy.
-                policy_entropy_weight=1e-4,
+                policy_entropy_weight=5e-3,
                 # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
                 predict_latent_loss_type='group_kl',
                 # (str) The type of observation. Options are ['image', 'vector'].
@@ -126,6 +125,10 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 gamma=1,
                 # (float) The threshold for a dormant neuron.
                 dormant_threshold=0.025,
+                # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'BN'.
+                norm_type='LN',
+                # (str) The type of policy loss. Options could be ['kl', 'simple'].
+                policy_loss_type='kl',  # 'simple'
             ),
         ),
         # ****** common ******
@@ -225,10 +228,10 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         value_loss_weight=0.25,
         # (float) The weight of policy loss.
         policy_loss_weight=1,
-        # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=1e-4,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
+        # (bool) Whether to use the cosine learning rate decay.
+        cos_lr_scheduler=False,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
         lr_piecewise_constant_decay=False,
@@ -309,6 +312,10 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             betas=(0.9, 0.95),
         )
 
+        if self._cfg.cos_lr_scheduler is True:
+            from torch.optim.lr_scheduler import CosineAnnealingLR
+            self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e6, eta_min=0, last_epoch=-1)
+
         if self._cfg.model.continuous_action_space:
             # Weight Init for the last output layer of gaussian policy head in prediction network.
             init_w = self._cfg.init_w
@@ -373,7 +380,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         # sampled related core code
         # ==============================================================
         # obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
-        obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights, make_time = current_batch
+        obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number
@@ -508,7 +515,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                                                                         self._cfg.grad_clip_value)
 
         self._optimizer_world_model.step()
-        if self._cfg.lr_piecewise_constant_decay:
+        
+        if self._cfg.cos_lr_scheduler or self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()
 
         # Core target model update step
@@ -708,8 +716,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             # ==============================================================
             # sampled related core code
             # ==============================================================
-            roots_sampled_actions = roots.get_sampled_actions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_sampled_actions = roots.get_sampled_actions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
 
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
@@ -755,8 +762,15 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 }
                 batch_action.append(action)
 
+
             self.last_batch_obs = data
             self.last_batch_action = batch_action
+
+            # ========= TODO: for muzero_segment_collector now =========
+            if active_collect_env_num < self.collector_env_num:
+                print('='*20)
+                print(f'collect_forward: len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
+                self._reset_collect(reset_init_data=True) 
 
         return output
 
@@ -887,6 +901,96 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             self.last_batch_action = batch_action
 
         return output
+
+    # def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+    #     """
+    #     Overview:
+    #         This method resets the collection process for a specific environment. It clears caches and memory
+    #         when certain conditions are met, ensuring optimal performance. If reset_init_data is True, the initial data
+    #         will be reset.
+    #     Arguments:
+    #         - env_id (:obj:`int`, optional): The ID of the environment to reset. If None or list, the function returns immediately.
+    #         - current_steps (:obj:`int`, optional): The current step count in the environment. Used to determine
+    #           whether to clear caches.
+    #         - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
+    #     """
+    #     if reset_init_data:
+    #         self.last_batch_obs = initialize_zeros_batch(
+    #             self._cfg.model.observation_shape,
+    #             self._cfg.collector_env_num,
+    #             self._cfg.device
+    #         )
+    #         self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
+
+    #     # Return immediately if env_id is None or a list
+    #     if env_id is None or isinstance(env_id, list):
+    #         return
+
+    #     # Determine the clear interval based on the environment's sample type
+    #     clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 20  # TODO: for dmc episode_length=500
+
+    #     # Clear caches if the current steps are a multiple of the clear interval
+    #     if current_steps % clear_interval == 0:
+    #         print(f'clear_interval: {clear_interval}')
+
+    #         # Clear various caches in the collect model's world model
+    #         world_model = self._collect_model.world_model
+    #         # world_model.past_kv_cache_init_infer.clear()
+    #         for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+    #             kv_cache_dict_env.clear()
+    #         world_model.past_kv_cache_recurrent_infer.clear()
+    #         world_model.keys_values_wm_list.clear()
+
+    #         # Free up GPU memory
+    #         torch.cuda.empty_cache()
+
+    #         print('collector: collect_model clear()')
+    #         print(f'eps_steps_lst[{env_id}]: {current_steps}')
+
+    # def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+    #     """
+    #     Overview:
+    #         This method resets the evaluation process for a specific environment. It clears caches and memory
+    #         when certain conditions are met, ensuring optimal performance. If reset_init_data is True,
+    #         the initial data will be reset.
+    #     Arguments:
+    #         - env_id (:obj:`int`, optional): The ID of the environment to reset. If None or list, the function returns immediately.
+    #         - current_steps (:obj:`int`, optional): The current step count in the environment. Used to determine
+    #           whether to clear caches.
+    #         - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
+    #     """
+    #     if reset_init_data:
+    #         self.last_batch_obs = initialize_zeros_batch(
+    #             self._cfg.model.observation_shape,
+    #             self._cfg.evaluator_env_num,
+    #             self._cfg.device
+    #         )
+    #         self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
+
+    #     # Return immediately if env_id is None or a list
+    #     if env_id is None or isinstance(env_id, list):
+    #         return
+
+    #     # Determine the clear interval based on the environment's sample type
+    #     clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 20  # TODO: for dmc episode_length=500
+
+    #     # Clear caches if the current steps are a multiple of the clear interval
+    #     if current_steps % clear_interval == 0:
+    #         print(f'clear_interval: {clear_interval}')
+
+    #         # Clear various caches in the eval model's world model
+    #         world_model = self._eval_model.world_model
+    #         # world_model.past_kv_cache_init_infer.clear()
+    #         for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+    #             kv_cache_dict_env.clear()
+    #         world_model.past_kv_cache_recurrent_infer.clear()
+    #         world_model.keys_values_wm_list.clear()
+
+    #         # Free up GPU memory
+    #         torch.cuda.empty_cache()
+
+    #         print('evaluator: eval_model clear()')
+    #         print(f'eps_steps_lst[{env_id}]: {current_steps}')
 
     def _monitor_vars_learn(self) -> List[str]:
         """

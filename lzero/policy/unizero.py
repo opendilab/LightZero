@@ -157,6 +157,7 @@ class UniZeroPolicy(MuZeroPolicy):
         eval_freq=int(2e3),
         # (str) The sample type. Options are ['episode', 'transition'].
         sample_type='transition',
+        reanalyze_ratio=0,
 
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
@@ -184,7 +185,7 @@ class UniZeroPolicy(MuZeroPolicy):
         replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
-        # (str) Optimizer for training policy network. ['SGD', 'Adam']
+        # (str) Optimizer for training policy network.
         optim_type='AdamW',
         # (float) Learning rate for training policy network. Initial lr for manually decay schedule.
         learning_rate=0.0001,
@@ -200,8 +201,10 @@ class UniZeroPolicy(MuZeroPolicy):
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
         grad_clip_value=5,
-        # (int) The number of episodes in each collecting stage.
+        # (int) The number of episodes in each collecting stage when use muzero_collector.
         n_episode=8,
+        # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
+        num_segments=8,
         # (int) the number of simulations in MCTS.
         num_simulations=50,
         # (float) Discount factor (gamma) for returns.
@@ -216,8 +219,6 @@ class UniZeroPolicy(MuZeroPolicy):
         value_loss_weight=0.25,
         # (float) The weight of policy loss.
         policy_loss_weight=1,
-        # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=0,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
@@ -349,14 +350,14 @@ class UniZeroPolicy(MuZeroPolicy):
         self._target_model.train()
 
         current_batch, target_batch, _ = data
-        obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
+        obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number
         if self._cfg.model.frame_stack_num == 4:
             obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
         else:
-            obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
+            obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)  # TODO: optimize
 
         # Apply augmentations if needed
         if self._cfg.use_augmentation:
@@ -370,11 +371,8 @@ class UniZeroPolicy(MuZeroPolicy):
         data_list = [mask_batch, target_reward, target_value, target_policy, weights]
         mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
                                                                                                 self._cfg.device)
-
         target_reward = target_reward.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
-
-        assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
         # Transform rewards and values to their scaled forms
         transformed_target_reward = scalar_transform(target_reward)
@@ -406,7 +404,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # Extract valid target policy data and compute entropy
         valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
         target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
-        average_target_policy_entropy = target_policy_entropy.mean().item()
+        average_target_policy_entropy = target_policy_entropy.mean()
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
@@ -450,10 +448,10 @@ class UniZeroPolicy(MuZeroPolicy):
             self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
             self._target_model.encoder_hook.clear_data()
 
-        if self._cfg.multi_gpu:
-            self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
                                                                         self._cfg.grad_clip_value)
+        if self._cfg.multi_gpu:
+            self.sync_gradients(self._learn_model)
 
         self._optimizer_world_model.step()
         if self._cfg.lr_piecewise_constant_decay:
@@ -494,24 +492,24 @@ class UniZeroPolicy(MuZeroPolicy):
             'collect_epsilon': self._collect_epsilon,
             'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
-            'obs_loss': obs_loss,
-            'latent_recon_loss': latent_recon_loss,
-            'perceptual_loss': perceptual_loss,
-            'policy_loss': policy_loss,
-            'orig_policy_loss': orig_policy_loss,
-            'policy_entropy': policy_entropy,
-            'target_policy_entropy': average_target_policy_entropy,
-            'reward_loss': reward_loss,
-            'value_loss': value_loss,
-            'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
+            'obs_loss': obs_loss.item(),
+            'latent_recon_loss': latent_recon_loss.item(),
+            'perceptual_loss': perceptual_loss.item(),
+            'policy_loss': policy_loss.item(),
+            'orig_policy_loss': orig_policy_loss.item(),
+            'policy_entropy': policy_entropy.item(),
+            'target_policy_entropy': average_target_policy_entropy.item(),
+            'reward_loss': reward_loss.item(),
+            'value_loss': value_loss.item(),
+            # 'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
             'target_reward': target_reward.mean().item(),
             'target_value': target_value.mean().item(),
             'transformed_target_reward': transformed_target_reward.mean().item(),
             'transformed_target_value': transformed_target_value.mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
-            'analysis/dormant_ratio_encoder': dormant_ratio_encoder,
-            'analysis/dormant_ratio_world_model': dormant_ratio_world_model,
-            'analysis/latent_state_l2_norms': latent_state_l2_norms,
+            'analysis/dormant_ratio_encoder': dormant_ratio_encoder.item(),
+            'analysis/dormant_ratio_world_model': dormant_ratio_world_model.item(),
+            'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
             'analysis/l2_norm_before': self.l2_norm_before,
             'analysis/l2_norm_after': self.l2_norm_after,
             'analysis/grad_norm_before': self.grad_norm_before,
@@ -662,6 +660,12 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_obs = data
             self.last_batch_action = batch_action
 
+            # ========= TODO: for muzero_segment_collector now =========
+            if active_collect_env_num < self.collector_env_num:
+                print('='*20)
+                print(f'collect_forward: len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
+                self._reset_collect(reset_init_data=True) 
+
         return output
 
     def _init_eval(self) -> None:
@@ -800,7 +804,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # Clear various caches in the collect model's world model
             world_model = self._collect_model.world_model
-            world_model.past_kv_cache_init_infer.clear()
             for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
                 kv_cache_dict_env.clear()
             world_model.past_kv_cache_recurrent_infer.clear()
@@ -845,7 +848,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # Clear various caches in the eval model's world model
             world_model = self._eval_model.world_model
-            world_model.past_kv_cache_init_infer.clear()
             for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
                 kv_cache_dict_env.clear()
             world_model.past_kv_cache_recurrent_infer.clear()

@@ -21,7 +21,7 @@ evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
-max_env_step = int(5e6)
+max_env_step = int(1e6)
 reanalyze_ratio = 0
 batch_size = 64
 num_unroll_steps = 10
@@ -32,7 +32,7 @@ seed = 0
 # for debug
 # collector_env_num = 2
 # n_episode = 2
-# evaluator_env_num = 2
+# evaluator_env_num = 1
 # num_simulations = 2
 # batch_size = 2
 # ==============================================================
@@ -40,7 +40,7 @@ seed = 0
 # ==============================================================
 
 dmc2gym_pixels_cont_sampled_unizero_config = dict(
-    exp_name=f'data_sampled_unizero/dmc2gym_{env_id}_state_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}',
+    exp_name=f'data_sampled_unizero_0901/dmc2gym_{env_id}_image_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_{norm_type}_seed{seed}',
     env=dict(
         env_id='dmc2gym-v0',
         continuous=True,
@@ -65,7 +65,7 @@ dmc2gym_pixels_cont_sampled_unizero_config = dict(
             world_model_cfg=dict(
                 obs_type='image',
                 num_unroll_steps=num_unroll_steps,
-                policy_entropy_loss_weight=1e-4,
+                policy_entropy_loss_weight=5e-3,
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
                 sigma_type='conditioned',
@@ -116,7 +116,8 @@ dmc2gym_pixels_cont_sampled_unizero_create_config = dict(
         type='dmc2gym_lightzero',
         import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
     ),
-    env_manager=dict(type='subprocess'),
+    # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
     policy=dict(
         type='sampled_unizero',
         import_names=['lzero.policy.sampled_unizero'],
