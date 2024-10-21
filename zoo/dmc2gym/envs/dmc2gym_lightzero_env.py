@@ -231,7 +231,7 @@ class DMC2GymEnv(BaseEnv):
 
         self._eval_episode_return = 0
         obs = self._env.reset()  # This line will cause errors when subprocess_env_manager is used
-
+        obs = obs['state'] 
         obs = to_ndarray(obs).astype(np.float32)
         action_mask = None
 
