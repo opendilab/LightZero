@@ -249,7 +249,9 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
             - batch_rewards (:obj:'np.ndarray): batch of value prefix
             - batch_target_values (:obj:'np.ndarray): batch of value estimation
         """
-        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
+        # value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
+        # to_play_segment = reward_value_context  # noqa
+        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, root_values, game_segment_lens, td_steps_list, action_mask_segment, \
         to_play_segment = reward_value_context  # noqa
 
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
@@ -402,18 +404,24 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
 
                     horizon_id += 1
 
+                    # # if current_index < game_segment_len_non_re: # original
+                    # if bootstrap_index < truncation_length: # TODO: fixvaluebugV8===========
+                    #     target_values.append(value_list[value_index])
+                    #     target_rewards.append(reward_list[current_index])
+                    #     # target_values.append(value_list[value_index].reshape(()))
+                    #     # target_rewards.append(reward_list[current_index].reshape(()))
+                    # else:
+                    #     # target_values.append(np.array(0.))
+                    #     # target_rewards.append(np.array(0.))
+                    #     target_values.append(np.array([0.]))
+                    #     target_rewards.append(np.array([0.]))
 
-                    # if current_index < game_segment_len_non_re: # original
-                    if bootstrap_index < truncation_length: # TODO: fixvaluebugV8===========
-                        target_values.append(value_list[value_index])
+                    # TODO: check the boundary condition
+                    target_values.append(value_list[value_index])
+                    if current_index < len(reward_list):
                         target_rewards.append(reward_list[current_index])
-                        # target_values.append(value_list[value_index].reshape(()))
-                        # target_rewards.append(reward_list[current_index].reshape(()))
                     else:
-                        # target_values.append(np.array(0.))
-                        # target_rewards.append(np.array(0.))
-                        target_values.append(np.array([0.]))
-                        target_rewards.append(np.array([0.]))
+                        target_rewards.append(np.array(0.))
 
                     value_index += 1
 

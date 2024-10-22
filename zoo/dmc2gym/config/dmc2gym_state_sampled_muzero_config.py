@@ -20,7 +20,8 @@ num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
 batch_size = 1024
-max_env_step = int(1e6)
+# max_env_step = int(1e6)
+max_env_step = int(5e5)
 reanalyze_ratio = 0.
 norm_type = 'LN'
 seed = 0
@@ -30,7 +31,7 @@ seed = 0
 # ==============================================================
 
 dmc2gym_state_cont_sampled_muzero_config = dict(
-    exp_name=f'data_smz/dmc2gym_{env_id}_state_cont_sampled_muzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_{norm_type}_seed{seed}',
+    exp_name=f'data_sampled_muzero_1021/dmc2gym_{env_id}_state_cont_sampled_muzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_{norm_type}_seed{seed}',
     env=dict(
         env_id='dmc2gym-v0',
         domain_name=domain_name,
