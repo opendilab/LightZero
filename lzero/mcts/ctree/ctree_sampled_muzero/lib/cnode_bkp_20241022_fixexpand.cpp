@@ -248,51 +248,90 @@ namespace tree
         */
         if (this->continuous_action_space == true)
         {
-            // continuous action space for sampled algo..
-            this->action_space_size = policy_logits.size() / 2;
-            std::vector<float> mu;
-            std::vector<float> sigma;
-            for (int i = 0; i < this->action_space_size; ++i)
-            {
-                mu.push_back(policy_logits[i]);
-                sigma.push_back(policy_logits[this->action_space_size + i]);
-            }
-
-            // The number of nanoseconds that have elapsed since epoch(1970: 00: 00 UTC on January 1, 1970). unsigned type will truncate this value.
-            unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-
+            bool continuous_action_space;
+            int action_space_size;
+            int num_of_sampled_actions;
+            std::vector<float> sampled_actions_log_probs_before_tanh;
             // SAC-like tanh, pleasee refer to paper https://arxiv.org/abs/1801.01290.
             std::vector<std::vector<float> > sampled_actions_before_tanh;
+           // 设定动作空间大小
+            this->action_space_size = policy_logits.size() / 2;
 
-            float sampled_action_one_dim_before_tanh;
-            std::vector<float> sampled_actions_log_probs_before_tanh;
+            std::vector<float> mu;
+            std::vector<float> sigma;
+            for (int i = 0; i < this->action_space_size; ++i) {
+                mu.push_back(policy_logits[i]);
+                // 为确保 sigma 为正，使用exp或clamp，避免过小 TODO
+                // float sigma_val = std::exp(policy_logits[this->action_space_size + i]);
+                float sigma_val = policy_logits[this->action_space_size + i];
+                float min_sigma = 1e-3;
+                sigma_val = std::max(sigma_val, min_sigma);
+                sigma.push_back(sigma_val);
+            }
 
-            // cout << "sampled_action[0]:" << sampled_action[0] <<endl;
-
+            // 随机数生成器
+            unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
             std::default_random_engine generator(seed);
+
+            // 清空之前的采样结果
+            sampled_actions_before_tanh.clear();
+            sampled_actions_after_tanh.clear();
+            sampled_actions_log_probs_before_tanh.clear();
+            sampled_actions_log_probs_after_tanh.clear();
             for (int i = 0; i < this->num_of_sampled_actions; ++i)
             {
-                float sampled_action_prob_before_tanh = 1;
-                // TODO(pu): why here
+                float sampled_action_prob_before_tanh = 1.0f;
                 std::vector<float> sampled_action_before_tanh;
                 std::vector<float> sampled_action_after_tanh;
-                std::vector<float> y;
+                std::vector<float> log_jacobian_terms;
+                bool invalid = false;
 
                 for (int j = 0; j < this->action_space_size; ++j)
                 {
                     std::normal_distribution<float> distribution(mu[j], sigma[j]);
-                    sampled_action_one_dim_before_tanh = distribution(generator);
-                    // refer to python normal log_prob method
-                    sampled_action_prob_before_tanh *= exp(-pow((sampled_action_one_dim_before_tanh - mu[j]), 2) / (2 * pow(sigma[j], 2)) - log(sigma[j]) - log(sqrt(2 * M_PI)));
-                    sampled_action_before_tanh.push_back(sampled_action_one_dim_before_tanh);
-                    sampled_action_after_tanh.push_back(tanh(sampled_action_one_dim_before_tanh));
-                    y.push_back(1 - pow(tanh(sampled_action_one_dim_before_tanh), 2) + 1e-6);
+                    float x = distribution(generator);
+
+                    // 计算单个维度的概率密度函数 p(x)
+                    float exponent = -std::pow((x - mu[j]), 2) / (2.0f * std::pow(sigma[j], 2));
+                    float log_p_x = exponent - std::log(sigma[j]) - 0.5f * std::log(2.0f * M_PI);
+                    float p_x = std::exp(log_p_x);
+
+                    // 检查 p_x 是否合理
+                    if (p_x > 1.0f) {
+                        std::cerr << "警告: p_x (" << p_x << ") > 1 在维度 " << j << std::endl;
+                        // 可以选择将 p_x 限制为最大值
+                        p_x = 1.0f;
+                    }
+                    sampled_action_prob_before_tanh *= p_x;
+                    sampled_action_before_tanh.push_back(x);
+                    float y = std::tanh(x);
+                    sampled_action_after_tanh.push_back(y);
+
+                    // 计算雅可比行列式的对数值 log(1 - tanh(x)^2)
+                    float jacobian = 1.0f - y * y;
+                    // 为防止 log(0) 引发问题，加入 epsilon
+                    float epsilon = 1e-6f;
+                    jacobian = std::max(jacobian, epsilon);
+                    float log_jacobian = std::log(jacobian);
+                    log_jacobian_terms.push_back(log_jacobian);
                 }
+                // 计算总的对数概率
+                float log_prob_before = std::log(sampled_action_prob_before_tanh + 1e-12f); // 避免 log(0)
+                // 按照正确的雅可比行列式计算方式求和
+                float log_jacobian_sum = std::accumulate(log_jacobian_terms.begin(), log_jacobian_terms.end(), 0.0f);
+                float log_prob_after = log_prob_before - log_jacobian_sum;
+
+                // 检查 log_prob_after 是否合理
+                if (log_prob_after > 0.0f) {
+                    std::cerr << "警告: log_prob_after (" << log_prob_after << ") > 0" << std::endl;
+                    // 您可以选择进一步调试或调整 log_prob_after
+                }
+
+                // 存储采样结果
                 sampled_actions_before_tanh.push_back(sampled_action_before_tanh);
                 sampled_actions_after_tanh.push_back(sampled_action_after_tanh);
-                sampled_actions_log_probs_before_tanh.push_back(log(sampled_action_prob_before_tanh));
-                float y_sum = std::accumulate(y.begin(), y.end(), 0.);
-                sampled_actions_log_probs_after_tanh.push_back(log(sampled_action_prob_before_tanh) - log(y_sum));
+                sampled_actions_log_probs_before_tanh.push_back(log_prob_before);
+                sampled_actions_log_probs_after_tanh.push_back(log_prob_after);
             }
         }
         else

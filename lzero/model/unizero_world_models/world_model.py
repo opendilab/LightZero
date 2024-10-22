@@ -1505,6 +1505,7 @@ class WorldModel(nn.Module):
         mu, sigma = policy_logits_all[:, :action_space_size], policy_logits_all[:, action_space_size:]
         mu = mu.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
         sigma = sigma.unsqueeze(1).expand(-1, child_sampled_actions_batch.shape[1], -1)
+        sigma = torch.clamp(sigma, min=1e-3)  # 确保 sigma >= 1e-3
         dist = Independent(Normal(mu, sigma), 1)
 
         target_normalized_visit_count = target_policy.contiguous().view(batch_size * num_unroll_steps, -1)
@@ -1565,9 +1566,11 @@ class WorldModel(nn.Module):
             print(f"均值: {torch.mean(log_prob_sampled_actions).item()}")
             print(f"大于 0 的值: {log_prob_sampled_actions[log_prob_sampled_actions > 0]}")
             print(f"大于 0 的索引: {torch.nonzero(log_prob_sampled_actions > 0)}")
+            print(f"batch_size:{log_prob_sampled_actions.shape[0]}, 大于 0 的个数: {log_prob_sampled_actions[log_prob_sampled_actions > 0].shape[0]}")
 
         # 截断 log_prob
         log_prob_sampled_actions = torch.clamp(log_prob_sampled_actions, max=0.0, min=-10.0)
+        # log_prob_sampled_actions = torch.clamp(log_prob_sampled_actions, max=1.0, min=-10.0)
 
         # KL as projector
         target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
