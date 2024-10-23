@@ -37,7 +37,10 @@ void print_vector(const std::vector<float>& vec) {
     std::cout << "]";
 }
 
-
+template <typename T>
+T clamp(T value, T min_val, T max_val) {
+    return std::max(min_val, std::min(value, max_val));
+}
 
 
 template <class T>
@@ -242,9 +245,8 @@ namespace tree
 
         /*
         Overview:
-            When the currennt env has continuous action space, sampled K actions from continuous gaussia distribution policy.
-            When the currennt env has discrete action space, sampled K actions from discrete categirical distribution policy.
-
+            When the current env has continuous action space, sample K actions from continuous Gaussian distribution policy.
+            When the current env has discrete action space, sample K actions from discrete categorical distribution policy.
         */
         if (this->continuous_action_space == true)
         {
@@ -261,38 +263,55 @@ namespace tree
             // The number of nanoseconds that have elapsed since epoch(1970: 00: 00 UTC on January 1, 1970). unsigned type will truncate this value.
             unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
 
-            // SAC-like tanh, pleasee refer to paper https://arxiv.org/abs/1801.01290.
+            // SAC-like tanh, please refer to paper https://arxiv.org/abs/1801.01290.
             std::vector<std::vector<float> > sampled_actions_before_tanh;
 
-            float sampled_action_one_dim_before_tanh;
-            std::vector<float> sampled_actions_log_probs_before_tanh;
+            // 定义一个合理的夹紧范围，例如 [-10, 10]
+            const float clamp_limit = 3.0f; // TODO: 3
 
-            // cout << "sampled_action[0]:" << sampled_action[0] <<endl;
+            std::vector<float> sampled_actions_log_probs_before_tanh;
 
             std::default_random_engine generator(seed);
             for (int i = 0; i < this->num_of_sampled_actions; ++i)
             {
-                float sampled_action_prob_before_tanh = 1;
-                // TODO(pu): why here
+                // 初始化对数概率
+                float log_p_before_tanh = 0.0f;
                 std::vector<float> sampled_action_before_tanh;
                 std::vector<float> sampled_action_after_tanh;
-                std::vector<float> y;
+                std::vector<float> log_det_jacobian_terms;
 
                 for (int j = 0; j < this->action_space_size; ++j)
                 {
                     std::normal_distribution<float> distribution(mu[j], sigma[j]);
-                    sampled_action_one_dim_before_tanh = distribution(generator);
-                    // refer to python normal log_prob method
-                    sampled_action_prob_before_tanh *= exp(-pow((sampled_action_one_dim_before_tanh - mu[j]), 2) / (2 * pow(sigma[j], 2)) - log(sigma[j]) - log(sqrt(2 * M_PI)));
-                    sampled_action_before_tanh.push_back(sampled_action_one_dim_before_tanh);
-                    sampled_action_after_tanh.push_back(tanh(sampled_action_one_dim_before_tanh));
-                    y.push_back(1 - pow(tanh(sampled_action_one_dim_before_tanh), 2) + 1e-6);
+                    float sampled_action_one_dim_before_tanh = distribution(generator);
+                    
+                    // 对采样动作进行夹紧
+                    // sampled_action_one_dim_before_tanh = std::clamp(sampled_action_one_dim_before_tanh, -clamp_limit, clamp_limit);
+                    sampled_action_one_dim_before_tanh = clamp(sampled_action_one_dim_before_tanh, -clamp_limit, clamp_limit);
+
+                    // 计算每个维度的对数概率
+                    float a = sampled_action_one_dim_before_tanh;
+                    float log_prob_j = -pow(a - mu[j], 2) / (2 * pow(sigma[j], 2))
+                                        - log(sigma[j])
+                                        - 0.5f * log(2 * M_PI);
+                    log_p_before_tanh += log_prob_j;
+
+                    sampled_action_before_tanh.push_back(a);
+                    float a_after_tanh = tanh(a);
+                    sampled_action_after_tanh.push_back(a_after_tanh);
+
+                    // 计算雅可比行列式的对数部分
+                    float dy_dx = 1 - a_after_tanh * a_after_tanh + 1e-6f; // 防止 log(0)
+                    log_det_jacobian_terms.push_back(log(dy_dx));
                 }
+
                 sampled_actions_before_tanh.push_back(sampled_action_before_tanh);
                 sampled_actions_after_tanh.push_back(sampled_action_after_tanh);
-                sampled_actions_log_probs_before_tanh.push_back(log(sampled_action_prob_before_tanh));
-                float y_sum = std::accumulate(y.begin(), y.end(), 0.);
-                sampled_actions_log_probs_after_tanh.push_back(log(sampled_action_prob_before_tanh) - log(y_sum));
+
+                // 计算变换后概率的对数
+                float log_det_jacobian = std::accumulate(log_det_jacobian_terms.begin(), log_det_jacobian_terms.end(), 0.0f);
+                float log_p_after_tanh = log_p_before_tanh - log_det_jacobian;
+                sampled_actions_log_probs_after_tanh.push_back(log_p_after_tanh);
             }
         }
         else
@@ -995,8 +1014,8 @@ namespace tree
 
         // sampled related core code
         // TODO(pu): empirical distribution
-        // std::string empirical_distribution_type = "density";
-        std::string empirical_distribution_type = "uniform";
+        std::string empirical_distribution_type = "density";
+        // std::string empirical_distribution_type = "uniform";
 
         if (empirical_distribution_type.compare("density"))
         {

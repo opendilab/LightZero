@@ -141,8 +141,8 @@ def main(env_id, seed):
             # discount_factor=1,
             discount_factor=0.99,
             # discount_factor=0.997,
-            # td_steps=1,
             td_steps=5,
+            # td_steps=10,
             lr_piecewise_constant_decay=False,
             learning_rate=1e-4,
             # grad_clip_value=1, # TODO
@@ -150,8 +150,8 @@ def main(env_id, seed):
             # grad_clip_value=20,
             # manual_temperature_decay=True,  # TODO
             manual_temperature_decay=False,  # TODO
-            # cos_lr_scheduler=True,
-            cos_lr_scheduler=False,
+            cos_lr_scheduler=True,
+            # cos_lr_scheduler=False,
             num_segments=num_segments,
             train_start_after_envsteps=2000,
             # train_start_after_envsteps=0, # TODO: for debug
@@ -191,9 +191,9 @@ def main(env_id, seed):
     # 调整train_unizero里面的collector
     # main_config.exp_name=f'data_sampled_unizero_1016/fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_fixreanalyze-sample-action_td5_sigma05_df099_simplepl-eps1e-2_gcv1/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
     # main_config.exp_name=f'data_sampled_unizero_1021/fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_fixreanalyze-sample-action_td5_learnsigma_df099_arctanhV5-targeteps1e-2_gcv1/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
-    main_config.exp_name=f'data_sampled_unizero_1021/fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_fixreanalyze-sample-action_td5_sigma05_df099_arctanhV5-noclamp_sampleall_gcv5_learnsigma/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
     # main_config.exp_name=f'data_sampled_unizero_1021/fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_fixreanalyze-sample-action_td5_sigma05_df099_arctanhV5-logprob-neg10-0_gcv5_learnsigma_expand1022/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
     # main_config.exp_name=f'data_sampled_unizero_1021/fixvaluebugV10-fixtargetaation-masktrue-tdorigin_fixupc_fixreanalyze-sample-action_td5_sigma05_df099_arctanhV2-logprob-neg10-0_gcv5/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
+    main_config.exp_name=f'data_sampled_unizero_1021/fixvaluebugV10-fixtargetaation-tdorigin_fixupc_fixreanalyze-sample-action_td5_df099_arctanhV5-noclamp_sampleall_gcv5_learnsigma_clamp-sample-action-3_fixlogp_ucb-density_lrdecay1e5/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}'
     
     from lzero.entry import train_unizero_reanalyze
     train_unizero_reanalyze([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
