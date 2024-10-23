@@ -1557,19 +1557,19 @@ class WorldModel(nn.Module):
         log_prob_sampled_actions = log_prob
 
         # 检查 log_prob_sampled_actions 是否出现大于0的情况
-        if (log_prob_sampled_actions > 0).any():
-            # 打印 log_prob_sampled_actions 的统计信息
-            print(f"mu: {mu.mean().item()}, sigma: {sigma.mean().item()}")
-            print("log_prob_sampled_actions 出现大于 0 的值！")
-            print(f"最大值: {torch.max(log_prob_sampled_actions).item()}")
-            print(f"最小值: {torch.min(log_prob_sampled_actions).item()}")
-            print(f"均值: {torch.mean(log_prob_sampled_actions).item()}")
-            print(f"大于 0 的值: {log_prob_sampled_actions[log_prob_sampled_actions > 0]}")
-            print(f"大于 0 的索引: {torch.nonzero(log_prob_sampled_actions > 0)}")
-            print(f"batch_size:{log_prob_sampled_actions.shape[0]}, 大于 0 的个数: {log_prob_sampled_actions[log_prob_sampled_actions > 0].shape[0]}")
+        # if (log_prob_sampled_actions > 0).any():
+        #     # 打印 log_prob_sampled_actions 的统计信息
+        #     print(f"mu: {mu.mean().item()}, sigma: {sigma.mean().item()}")
+        #     print("log_prob_sampled_actions 出现大于 0 的值！")
+        #     print(f"最大值: {torch.max(log_prob_sampled_actions).item()}")
+        #     print(f"最小值: {torch.min(log_prob_sampled_actions).item()}")
+        #     print(f"均值: {torch.mean(log_prob_sampled_actions).item()}")
+        #     print(f"大于 0 的值: {log_prob_sampled_actions[log_prob_sampled_actions > 0]}")
+        #     print(f"大于 0 的索引: {torch.nonzero(log_prob_sampled_actions > 0)}")
+        #     print(f"batch_size:{log_prob_sampled_actions.shape[0]}, 大于 0 的个数: {log_prob_sampled_actions[log_prob_sampled_actions > 0].shape[0]}")
 
         # 截断 log_prob
-        log_prob_sampled_actions = torch.clamp(log_prob_sampled_actions, max=0.0, min=-10.0)
+        # log_prob_sampled_actions = torch.clamp(log_prob_sampled_actions, max=0.0, min=-10.0)
         # log_prob_sampled_actions = torch.clamp(log_prob_sampled_actions, max=1.0, min=-10.0)
 
         # KL as projector
