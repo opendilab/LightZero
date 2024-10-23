@@ -150,8 +150,8 @@ class GameBuffer(ABC, object):
             #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
 
             # # TODO:0923 测试中 self._cfg.game_segment_length后面的child_visits可能没有更新过, 让self._cfg.game_segment_length略大一些
-            if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
-                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
+            # if pos_in_game_segment > self._cfg.game_segment_length - self._cfg.num_unroll_steps:
+            #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps + 1, 1).item()
 
             pos_in_game_segment_list.append(pos_in_game_segment)
             
@@ -160,7 +160,8 @@ class GameBuffer(ABC, object):
 
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
         return orig_data
-    # v0
+   
+   # v0
     def _sample_orig_reanalyze_batch_data_v0(self, batch_size: int) -> Tuple:
         """
         Overview:

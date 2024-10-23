@@ -312,9 +312,9 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_segment:pos_in_game_segment +
                                                                  self._cfg.num_unroll_steps + 1]
 
+            # game.root_sampled_actions 没有pad，长度最长为segment_length
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
             mask_tmp = [1. for i in range(len(root_sampled_actions_tmp))]
-
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
