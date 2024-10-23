@@ -1569,8 +1569,8 @@ class WorldModel(nn.Module):
             print(f"batch_size:{log_prob_sampled_actions.shape[0]}, 大于 0 的个数: {log_prob_sampled_actions[log_prob_sampled_actions > 0].shape[0]}")
 
         # 截断 log_prob
-        log_prob_sampled_actions = torch.clamp(log_prob_sampled_actions, max=0.0, min=-10.0)
-        # log_prob_sampled_actions = torch.clamp(log_prob_sampled_actions, max=1.0, min=-10.0)
+        # log_prob_sampled_actions = torch.clamp(log_prob_sampled_actions, max=0.0, min=-10.0)
+        # TODO:log_prob_sampled_actions = torch.clamp(log_prob_sampled_actions, max=1.0, min=-10.0)
 
         # KL as projector
         target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)

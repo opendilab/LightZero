@@ -338,7 +338,7 @@ class GameSegment:
         return [_ for _ in range(self.action_space.n)]
 
     def __len__(self):
-        # return len(self.action_segment) if len(self.action_segment)<self.game_segment_length else self.game_segment_length
+        return len(self.action_segment) if len(self.action_segment)<self.game_segment_length else self.game_segment_length
         # return min(len(self.action_segment), self.game_segment_length)
-        return len(self.action_segment) 
+        # return len(self.action_segment) 
 
