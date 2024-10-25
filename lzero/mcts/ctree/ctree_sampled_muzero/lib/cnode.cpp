@@ -37,8 +37,10 @@ void print_vector(const std::vector<float>& vec) {
     std::cout << "]";
 }
 
-
-
+template <typename T>
+T clamp(T value, T min_val, T max_val) {
+    return std::max(min_val, std::min(value, max_val));
+}
 
 template <class T>
 size_t hash_combine(std::size_t &seed, const T &val)
@@ -240,59 +242,88 @@ namespace tree
         std::vector<float> sampled_actions_probs;
         std::vector<float> probs;
 
-        /*
+         /*
         Overview:
-            When the currennt env has continuous action space, sampled K actions from continuous gaussia distribution policy.
-            When the currennt env has discrete action space, sampled K actions from discrete categirical distribution policy.
-
+            When the current env has continuous action space, sample K actions from continuous Gaussian distribution policy.
+            When the current env has discrete action space, sample K actions from discrete categorical distribution policy.
         */
         if (this->continuous_action_space == true)
         {
-            // continuous action space for sampled algo..
+            // Continuous action space for algorithms that use sampled actions.
+            // The action space size is half the size of the policy_logits vector
+            // because policy_logits contains both means and standard deviations.
             this->action_space_size = policy_logits.size() / 2;
+
+            // Vectors to store the mean (mu) and standard deviation (sigma) for each action dimension.
             std::vector<float> mu;
             std::vector<float> sigma;
+            // Populate mu and sigma from policy logits.
             for (int i = 0; i < this->action_space_size; ++i)
             {
-                mu.push_back(policy_logits[i]);
-                sigma.push_back(policy_logits[this->action_space_size + i]);
+                mu.push_back(policy_logits[i]); // First half of policy_logits is mu.
+                sigma.push_back(policy_logits[this->action_space_size + i]); // Second half is sigma.
             }
 
-            // The number of nanoseconds that have elapsed since epoch(1970: 00: 00 UTC on January 1, 1970). unsigned type will truncate this value.
+            // Get the current time in nanoseconds since the epoch (1970-01-01 00:00:00 UTC).
+            // The unsigned type will truncate the value, but this is sufficient for seeding the random engine.
             unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
 
-            // SAC-like tanh, pleasee refer to paper https://arxiv.org/abs/1801.01290.
-            std::vector<std::vector<float> > sampled_actions_before_tanh;
+            // SAC-like tanh transformation; refer to the paper: https://arxiv.org/abs/1801.01290.
+            std::vector<std::vector<float> > sampled_actions_before_tanh; // Store sampled actions before applying tanh.
 
-            float sampled_action_one_dim_before_tanh;
-            std::vector<float> sampled_actions_log_probs_before_tanh;
+            // Define a reasonable clamping range, e.g., [-3, 3].
+            const float clamp_limit = 3.0f; // TODO: Adjust if necessary.
 
-            // cout << "sampled_action[0]:" << sampled_action[0] <<endl;
+            std::vector<float> sampled_actions_log_probs_before_tanh; // Log probabilities before tanh.
 
-            std::default_random_engine generator(seed);
+            std::default_random_engine generator(seed); // Random number generator initialized with seed.
             for (int i = 0; i < this->num_of_sampled_actions; ++i)
             {
-                float sampled_action_prob_before_tanh = 1;
-                // TODO(pu): why here
+                // Initialize log probability before applying tanh.
+                float log_p_before_tanh = 0.0f;
+
+                // Vectors to store sampled actions before and after the tanh transformation.
                 std::vector<float> sampled_action_before_tanh;
                 std::vector<float> sampled_action_after_tanh;
-                std::vector<float> y;
+                std::vector<float> log_det_jacobian_terms; // To accumulate the log-Jacobian determinant terms.
 
                 for (int j = 0; j < this->action_space_size; ++j)
                 {
+                    // Sample an action for dimension j using a normal distribution with mean mu[j] and stddev sigma[j].
                     std::normal_distribution<float> distribution(mu[j], sigma[j]);
-                    sampled_action_one_dim_before_tanh = distribution(generator);
-                    // refer to python normal log_prob method
-                    sampled_action_prob_before_tanh *= exp(-pow((sampled_action_one_dim_before_tanh - mu[j]), 2) / (2 * pow(sigma[j], 2)) - log(sigma[j]) - log(sqrt(2 * M_PI)));
-                    sampled_action_before_tanh.push_back(sampled_action_one_dim_before_tanh);
-                    sampled_action_after_tanh.push_back(tanh(sampled_action_one_dim_before_tanh));
-                    y.push_back(1 - pow(tanh(sampled_action_one_dim_before_tanh), 2) + 1e-6);
+                    float sampled_action_one_dim_before_tanh = distribution(generator);
+
+                    // Clamp the sampled action to avoid extreme values, ensuring stability.
+                    sampled_action_one_dim_before_tanh = clamp(sampled_action_one_dim_before_tanh, -clamp_limit, clamp_limit);
+
+                    // Calculate the log probability of the sampled action before applying tanh.
+                    float a = sampled_action_one_dim_before_tanh;
+                    float log_prob_j = -pow(a - mu[j], 2) / (2 * pow(sigma[j], 2))
+                                        - log(sigma[j])
+                                        - 0.5f * log(2 * M_PI); // Standard Gaussian log-likelihood.
+                    log_p_before_tanh += log_prob_j;
+
+                    // Store the sampled action before tanh.
+                    sampled_action_before_tanh.push_back(a);
+
+                    // Apply tanh transformation to the action.
+                    float a_after_tanh = tanh(a);
+                    sampled_action_after_tanh.push_back(a_after_tanh);
+
+                    // Compute the log of the absolute value of the Jacobian determinant for the tanh transformation.
+                    float dy_dx = 1 - a_after_tanh * a_after_tanh + 1e-6f; // Add a small value to prevent log(0).
+                    log_det_jacobian_terms.push_back(log(dy_dx));
                 }
+
+                // Store the sampled actions before and after the tanh transformation.
                 sampled_actions_before_tanh.push_back(sampled_action_before_tanh);
                 sampled_actions_after_tanh.push_back(sampled_action_after_tanh);
-                sampled_actions_log_probs_before_tanh.push_back(log(sampled_action_prob_before_tanh));
-                float y_sum = std::accumulate(y.begin(), y.end(), 0.);
-                sampled_actions_log_probs_after_tanh.push_back(log(sampled_action_prob_before_tanh) - log(y_sum));
+
+                // Compute the total log probability after applying the tanh transformation.
+                float log_det_jacobian = std::accumulate(log_det_jacobian_terms.begin(), log_det_jacobian_terms.end(), 0.0f);
+                float log_p_after_tanh = log_p_before_tanh - log_det_jacobian; // Adjust log probability by Jacobian determinant.
+                sampled_actions_log_probs_after_tanh.push_back(log_p_after_tanh); // Store the final log probability.
+
             }
         }
         else
@@ -945,8 +976,8 @@ namespace tree
 
         // sampled related core code
         // TODO(pu): empirical distribution
-        // std::string empirical_distribution_type = "density";
-        std::string empirical_distribution_type = "uniform";
+         std::string empirical_distribution_type = "density"; // density is very important to sampled algo.
+//        std::string empirical_distribution_type = "uniform";
         if (empirical_distribution_type.compare("density"))
         {
             if (continuous_action_space == true)

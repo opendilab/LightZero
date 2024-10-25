@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from torch.distributions import Categorical, Independent, Normal
+from torch.distributions import TransformedDistribution, TanhTransform
 
 from lzero.model.common import SimNorm
 from lzero.model.utils import cal_dormant_ratio
@@ -1512,17 +1513,25 @@ class WorldModel(nn.Module):
         policy_entropy = dist.entropy().mean(dim=1)
         policy_entropy_loss = -policy_entropy * mask_batch
 
-        y = 1 - target_sampled_actions.pow(2)
-        target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
-        target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
+        # y = 1 - target_sampled_actions.pow(2)
+        # target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
+        # target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
+        # log_prob = dist.log_prob(target_sampled_actions_before_tanh)
+        # log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
+        # log_prob_sampled_actions = log_prob
 
-        log_prob = dist.log_prob(target_sampled_actions_before_tanh)
-        log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
+        base_dist = Normal(mu, sigma)
+        tanh_transform = TanhTransform()
+        dist = TransformedDistribution(base_dist, [tanh_transform])
+        dist = Independent(dist, 1)
+        target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
+        # assert torch.all(target_sampled_actions_clamped < 1) and torch.all(target_sampled_actions_clamped > -1), "Actions are not properly clamped."
+        log_prob = dist.log_prob(target_sampled_actions_clamped)
         log_prob_sampled_actions = log_prob
 
-        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
-
         # KL as projector
+        # log_prob_sampled_actions = torch.clamp(log_prob_sampled_actions, max=0.0, min=-10.0) # TODO: clip the log_prob_sampled_actions to prevent numerical issues
+        target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
         policy_loss = -torch.sum(
             torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
         ) * mask_batch
