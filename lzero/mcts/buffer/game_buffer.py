@@ -152,8 +152,12 @@ class GameBuffer(ABC, object):
             # in the current implementation. Therefore, we need to sample `pos_in_game_segment` within
             # [0, game_segment_length - num_unroll_steps] to avoid padded data.
             # TODO: Consider increasing `self._cfg.game_segment_length` to ensure sampling efficiency.
-            if pos_in_game_segment >= self._cfg.game_segment_length - self._cfg.num_unroll_steps:
-                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps, 1).item()
+            # if pos_in_game_segment >= self._cfg.game_segment_length - self._cfg.num_unroll_steps:
+            #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps, 1).item()
+
+            # NOTE: Sample the init position from the whole segment, but not from the padded part
+            if pos_in_game_segment >= self._cfg.game_segment_length:
+                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
 
             pos_in_game_segment_list.append(pos_in_game_segment)
             

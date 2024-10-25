@@ -107,14 +107,10 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_segment:pos_in_game_segment +
                                                                  self._cfg.num_unroll_steps + 1]
 
+            # the game.root_sampled_actions is not padded, the length is at most segment_length
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
-            # mask_tmp = [1. for i in range(len(actions_tmp))]
-            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
-
-            # TODO: original buffer mask
-            mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
+            mask_tmp = [1. for i in range(len(root_sampled_actions_tmp))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
-
 
             # pad random action
             if self._cfg.model.continuous_action_space:
@@ -268,12 +264,9 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_segment:pos_in_game_segment +
                                                                  self._cfg.num_unroll_steps + 1]
 
+            # the game.root_sampled_actions is not padded, the length is at most segment_length
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
-            # mask_tmp = [1. for i in range(len(actions_tmp))]
-            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
-
-            # TODO: original buffer mask
-            mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
+            mask_tmp = [1. for i in range(len(root_sampled_actions_tmp))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
