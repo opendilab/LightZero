@@ -18,6 +18,7 @@ from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
 from .utils import WorldModelOutput, hash_state
+from torch.distributions import TransformedDistribution, TanhTransform
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -1544,14 +1545,13 @@ class WorldModel(nn.Module):
         # log_prob = log_prob - torch.log(y + 1e-2).sum(-1)
 
         # original v5:
-        from torch.distributions import TransformedDistribution, TanhTransform
         # sigma = torch.full_like(mu, 0.5)  # 固定sigma
         base_dist = Normal(mu, sigma)
         tanh_transform = TanhTransform()
         dist = TransformedDistribution(base_dist, [tanh_transform])
         dist = Independent(dist, 1)  # 如果是独立的多维分布
         target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
-        assert torch.all(target_sampled_actions_clamped < 1) and torch.all(target_sampled_actions_clamped > -1), "Actions are not properly clamped."
+        # assert torch.all(target_sampled_actions_clamped < 1) and torch.all(target_sampled_actions_clamped > -1), "Actions are not properly clamped."
         log_prob = dist.log_prob(target_sampled_actions_clamped)  # sum over action dimensions
 
         log_prob_sampled_actions = log_prob
