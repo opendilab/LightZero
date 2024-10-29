@@ -21,21 +21,31 @@ def main(env_id, seed):
     game_segment_length = 100
     evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(5e5)
+    # max_env_step = int(5e5)
+    max_env_step = int(1e6)
+
     reanalyze_ratio = 0
     batch_size = 64
     num_layers = 2
-    replay_ratio = 0.25
-    num_unroll_steps = 10
-    infer_context_length = 4
+    # num_layers = 4
+
+    replay_ratio = 0.1
+    num_unroll_steps = 5
+    infer_context_length = 2
+
+    # replay_ratio = 0.25
+    # num_unroll_steps = 10
+    # infer_context_length = 4
+
     norm_type = 'LN'
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     buffer_reanalyze_freq = 1/10000
+    # buffer_reanalyze_freq = 1/10
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
-    reanalyze_partition=1
+    reanalyze_partition=0.75
 
     # for debug
     # collector_env_num = 2
@@ -81,10 +91,10 @@ def main(env_id, seed):
                     obs_type='vector',
                     num_unroll_steps=num_unroll_steps,
                     policy_entropy_weight=5e-3,
+                    # policy_entropy_weight=5e-2,
                     continuous_action_space=continuous_action_space,
                     num_of_sampled_actions=K,
-                    # sigma_type='conditioned',
-                    sigma_type='fixed',
+                    sigma_type='conditioned',
                     fixed_sigma_value=0.5,
                     bound_type=None,
                     model_type='mlp',
@@ -115,8 +125,12 @@ def main(env_id, seed):
             lr_piecewise_constant_decay=False,
             learning_rate=1e-4,
             grad_clip_value=5,
-            manual_temperature_decay=False,
-            cos_lr_scheduler=False,
+            # manual_temperature_decay=False,
+
+            manual_temperature_decay=True,
+            threshold_training_steps_for_final_temperature=int(5e4),
+
+            cos_lr_scheduler=True,
             num_segments=num_segments,
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
@@ -153,7 +167,8 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name=f'data_sampled_unizero/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    # main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td5_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td5_temp5e4_pew5e-3_10prior10flatten_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
     train_unizero_segment([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 
 
@@ -165,4 +180,8 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     
     args = parser.parse_args()
+    
+    args.env = 'cheetah-run'
+    # args.env = 'walker-walk'
+
     main(args.env, args.seed)

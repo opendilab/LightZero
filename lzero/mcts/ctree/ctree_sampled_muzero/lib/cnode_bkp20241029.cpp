@@ -17,14 +17,7 @@
 #include <sys/timeb.h>
 #include <time.h>
 #include <cassert>
-#include <iostream>
-#include <vector>
-#include <cmath>
-#include <algorithm>
-#include <chrono>
-#include <numeric>
-#include <unordered_map>
-#include <functional>
+
 
 #ifdef _WIN32
 #include "..\..\common_lib\utils.cpp"
@@ -211,67 +204,6 @@ namespace tree
     CNode::~CNode() {}
 
 
-    // 辅助采样函数定义
-    std::pair<std::vector<std::vector<float>>, std::vector<float>> CNode::sample_actions(
-        const std::vector<float>& mu,
-        const std::vector<float>& sigma,
-        int num_samples,
-        float std_magnification,
-        float clamp_limit,
-        std::default_random_engine& generator
-    ) {
-        std::vector<std::vector<float>> sampled_actions_after_tanh;
-        std::vector<float> sampled_actions_log_probs_after_tanh;
-
-        for (int i = 0; i < num_samples; ++i) {
-            // Initialize log probability before applying tanh.
-            float log_p_before_tanh = 0.0f;
-
-            // Vectors to store sampled actions before and after the tanh transformation.
-            std::vector<float> sampled_action_before_tanh;
-            std::vector<float> sampled_action_after_tanh;
-            std::vector<float> log_det_jacobian_terms; // To accumulate the log-Jacobian determinant terms.
-
-            for (int j = 0; j < this->action_space_size; ++j) {
-                // 使用放大后的标准差进行采样
-                std::normal_distribution<float> distribution(mu[j], sigma[j] * std_magnification);
-                float sampled_action_one_dim_before_tanh = distribution(generator);
-
-                // Clamp the sampled action to avoid extreme values, ensuring stability.
-                sampled_action_one_dim_before_tanh = clamp(sampled_action_one_dim_before_tanh, -clamp_limit, clamp_limit);
-
-                // Calculate the log probability of the sampled action before applying tanh.
-                float a = sampled_action_one_dim_before_tanh;
-                float log_prob_j = -std::pow(a - mu[j], 2) / (2.0f * std::pow(sigma[j] * std_magnification, 2))
-                                    - std::log(sigma[j] * std_magnification)
-                                    - 0.5f * std::log(2.0f * M_PI); // Standard Gaussian log-likelihood.
-                log_p_before_tanh += log_prob_j;
-
-                // Store the sampled action before tanh.
-                sampled_action_before_tanh.push_back(a);
-
-                // Apply tanh transformation to the action.
-                float a_after_tanh = std::tanh(a);
-                sampled_action_after_tanh.push_back(a_after_tanh);
-
-                // Compute the log of the absolute value of the Jacobian determinant for the tanh transformation.
-                float dy_dx = 1.0f - a_after_tanh * a_after_tanh + 1e-6f; // Add a small value to prevent log(0).
-                log_det_jacobian_terms.push_back(std::log(dy_dx));
-            }
-
-            // Compute the total log probability after applying the tanh transformation.
-            float log_det_jacobian = std::accumulate(log_det_jacobian_terms.begin(), log_det_jacobian_terms.end(), 0.0f);
-            float log_p_after_tanh = log_p_before_tanh - log_det_jacobian; // Adjust log probability by Jacobian determinant.
-
-            // Store the sampled actions after tanh transformation and their log probabilities.
-            sampled_actions_after_tanh.push_back(sampled_action_after_tanh);
-            sampled_actions_log_probs_after_tanh.push_back(log_p_after_tanh);
-        }
-
-        return {sampled_actions_after_tanh, sampled_actions_log_probs_after_tanh};
-    }
-
-
     void CNode::expand(int to_play, int current_latent_state_index, int batch_index, float reward, const std::vector<float> &policy_logits)
     {
         /*
@@ -302,23 +234,13 @@ namespace tree
         {
             all_actions.push_back(i);
         }
+        std::vector<std::vector<float> > sampled_actions_after_tanh;
+        std::vector<float> sampled_actions_log_probs_after_tanh;
+
         std::vector<int> sampled_actions;
         std::vector<float> sampled_actions_log_probs;
         std::vector<float> sampled_actions_probs;
         std::vector<float> probs;
-
-        // 初始化采样相关容器
-        std::vector<std::vector<float>> sampled_actions_after_tanh;
-        std::vector<float> sampled_actions_log_probs_after_tanh;
-
-        // 定义采样参数
-        const float clamp_limit = 3.0f; // 动作夹紧范围
-        const float std_magnification_flat = 3.0f; // 平坦分布的标准差放大倍数
-        float std_magnification_normal = 1.0f; // 标准分布的标准差
-
-        // 获取当前时间作为随机数生成器种子
-        unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-        std::default_random_engine generator(seed);
 
          /*
         Overview:
@@ -327,38 +249,82 @@ namespace tree
         */
         if (this->continuous_action_space == true)
         {
-            // 连续动作空间处理
-            // 动作空间大小为 policy_logits 的一半（前半部分为均值，后半部分为标准差）
+            // Continuous action space for algorithms that use sampled actions.
+            // The action space size is half the size of the policy_logits vector
+            // because policy_logits contains both means and standard deviations.
             this->action_space_size = policy_logits.size() / 2;
 
-            // 提取均值 (mu) 和标准差 (sigma)
-            std::vector<float> mu(this->action_space_size, 0.0f);
-            std::vector<float> sigma(this->action_space_size, 0.0f);
-            for (int i = 0; i < this->action_space_size; ++i) {
-                mu[i] = policy_logits[i];
-                sigma[i] = policy_logits[this->action_space_size + i];
+            // Vectors to store the mean (mu) and standard deviation (sigma) for each action dimension.
+            std::vector<float> mu;
+            std::vector<float> sigma;
+            // Populate mu and sigma from policy logits.
+            for (int i = 0; i < this->action_space_size; ++i)
+            {
+                mu.push_back(policy_logits[i]); // First half of policy_logits is mu.
+                sigma.push_back(policy_logits[this->action_space_size + i]); // Second half is sigma.
             }
 
-            // NOTE: 计算采样数量
-            int half_sample = this->num_of_sampled_actions / 2;
-            int remaining = this->num_of_sampled_actions - half_sample;
+            // Get the current time in nanoseconds since the epoch (1970-01-01 00:00:00 UTC).
+            // The unsigned type will truncate the value, but this is sufficient for seeding the random engine.
+            unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
 
-            // 采样第一部分：标准高斯分布
-            auto sampled_standard = CNode::sample_actions(mu, sigma, half_sample, std_magnification_normal, clamp_limit, generator);
+            // SAC-like tanh transformation; refer to the paper: https://arxiv.org/abs/1801.01290.
+            std::vector<std::vector<float> > sampled_actions_before_tanh; // Store sampled actions before applying tanh.
 
-            // 采样第二部分：平坦高斯分布
-            auto sampled_flat = CNode::sample_actions(mu, sigma, remaining, std_magnification_flat, clamp_limit, generator);
+            // Define a reasonable clamping range, e.g., [-3, 3].
+            const float clamp_limit = 3.0f; // TODO: Adjust if necessary.
 
-            // 合并采样结果
-            sampled_actions_after_tanh = sampled_standard.first;
-            sampled_actions_log_probs_after_tanh = sampled_standard.second;
-            sampled_actions_after_tanh.insert(sampled_actions_after_tanh.end(),
-                                            sampled_flat.first.begin(),
-                                            sampled_flat.first.end());
-            sampled_actions_log_probs_after_tanh.insert(sampled_actions_log_probs_after_tanh.end(),
-                                                        sampled_flat.second.begin(),
-                                                        sampled_flat.second.end());
+            std::vector<float> sampled_actions_log_probs_before_tanh; // Log probabilities before tanh.
 
+            std::default_random_engine generator(seed); // Random number generator initialized with seed.
+            for (int i = 0; i < this->num_of_sampled_actions; ++i)
+            {
+                // Initialize log probability before applying tanh.
+                float log_p_before_tanh = 0.0f;
+
+                // Vectors to store sampled actions before and after the tanh transformation.
+                std::vector<float> sampled_action_before_tanh;
+                std::vector<float> sampled_action_after_tanh;
+                std::vector<float> log_det_jacobian_terms; // To accumulate the log-Jacobian determinant terms.
+
+                for (int j = 0; j < this->action_space_size; ++j)
+                {
+                    // Sample an action for dimension j using a normal distribution with mean mu[j] and stddev sigma[j].
+                    std::normal_distribution<float> distribution(mu[j], sigma[j]);
+                    float sampled_action_one_dim_before_tanh = distribution(generator);
+
+                    // Clamp the sampled action to avoid extreme values, ensuring stability.
+                    sampled_action_one_dim_before_tanh = clamp(sampled_action_one_dim_before_tanh, -clamp_limit, clamp_limit);
+
+                    // Calculate the log probability of the sampled action before applying tanh.
+                    float a = sampled_action_one_dim_before_tanh;
+                    float log_prob_j = -pow(a - mu[j], 2) / (2 * pow(sigma[j], 2))
+                                        - log(sigma[j])
+                                        - 0.5f * log(2 * M_PI); // Standard Gaussian log-likelihood.
+                    log_p_before_tanh += log_prob_j;
+
+                    // Store the sampled action before tanh.
+                    sampled_action_before_tanh.push_back(a);
+
+                    // Apply tanh transformation to the action.
+                    float a_after_tanh = tanh(a);
+                    sampled_action_after_tanh.push_back(a_after_tanh);
+
+                    // Compute the log of the absolute value of the Jacobian determinant for the tanh transformation.
+                    float dy_dx = 1 - a_after_tanh * a_after_tanh + 1e-6f; // Add a small value to prevent log(0).
+                    log_det_jacobian_terms.push_back(log(dy_dx));
+                }
+
+                // Store the sampled actions before and after the tanh transformation.
+                sampled_actions_before_tanh.push_back(sampled_action_before_tanh);
+                sampled_actions_after_tanh.push_back(sampled_action_after_tanh);
+
+                // Compute the total log probability after applying the tanh transformation.
+                float log_det_jacobian = std::accumulate(log_det_jacobian_terms.begin(), log_det_jacobian_terms.end(), 0.0f);
+                float log_p_after_tanh = log_p_before_tanh - log_det_jacobian; // Adjust log probability by Jacobian determinant.
+                sampled_actions_log_probs_after_tanh.push_back(log_p_after_tanh); // Store the final log probability.
+
+            }
         }
         else
         {
@@ -983,7 +949,6 @@ namespace tree
         return action;
     }
 
-
     // sampled related core code
     float cucb_score(CNode *parent, CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, float total_children_visit_counts, float pb_c_base, float pb_c_init, float discount_factor, int players, bool continuous_action_space)
     {
@@ -1027,8 +992,8 @@ namespace tree
                     empirical_prob_sum += exp(parent->get_child(parent->legal_actions[i])->prior);
                 }
                 prior_score = pb_c * exp(child->prior) / (empirical_prob_sum + 1e-6);
-                // 打印相关中间值
-                // std::cout << "[DEBUG] Continuous Action Space" << std::endl;
+                            // 打印相关中间值
+                std::cout << "[DEBUG] Continuous Action Space" << std::endl;
                 std::cout << "[DEBUG] Child Prior: " << child->prior << std::endl;
                 std::cout << "[DEBUG] Empirical Prob Sum: " << empirical_prob_sum << std::endl;
                 std::cout << "[DEBUG] Prior Score: " << prior_score << std::endl;
@@ -1042,16 +1007,16 @@ namespace tree
                 }
                 prior_score = pb_c * child->prior / (empirical_prob_sum + 1e-6);
                 // 打印相关中间值
-                // std::cout << "[DEBUG] Discrete Action Space" << std::endl;
-                // std::cout << "[DEBUG] Child Prior: " << child->prior << std::endl;
-                // std::cout << "[DEBUG] Empirical Prob Sum: " << empirical_prob_sum << std::endl;
-                // std::cout << "[DEBUG] Prior Score: " << prior_score << std::endl;
+                std::cout << "[DEBUG] Discrete Action Space" << std::endl;
+                std::cout << "[DEBUG] Child Prior: " << child->prior << std::endl;
+                std::cout << "[DEBUG] Empirical Prob Sum: " << empirical_prob_sum << std::endl;
+                std::cout << "[DEBUG] Prior Score: " << prior_score << std::endl;
             }
 
         }
         else if (empirical_distribution_type == "uniform")
         {
-            // std::cout << "[DEBUG] Empirical Distribution Type: uniform" << std::endl;
+            std::cout << "[DEBUG] Empirical Distribution Type: uniform" << std::endl;
             prior_score = pb_c * 1 / parent->children.size();
             // 打印相关中间值
             std::cout << "[DEBUG] Prior Score (Uniform): " << prior_score << std::endl;
@@ -1080,34 +1045,34 @@ namespace tree
             else if (players == 2)
             {
                 value_score = true_reward + discount_factor * (-child->value());
-                // std::cout << "[DEBUG] Players: 2, True Reward: " << true_reward << ", Child Value: " << child->value() << ", Value Score: " << value_score << std::endl;
+                std::cout << "[DEBUG] Players: 2, True Reward: " << true_reward << ", Child Value: " << child->value() << ", Value Score: " << value_score << std::endl;
             }
         }
 
         // 打印 value_score 之前的值
-        // std::cout << "value_score (before normalization): " << value_score << std::endl;
+        std::cout << "value_score (before normalization): " << value_score << std::endl;
         value_score = min_max_stats.normalize(value_score);
 
         // 打印归一化后的 value_score
-        // std::cout << "value_score (after normalization): " << value_score << std::endl;
+        std::cout << "value_score (after normalization): " << value_score << std::endl;
 
 
         if (value_score < 0)
         {
             value_score = 0;
-            // std::cout << "[DEBUG] Value Score < 0, set to 0" << std::endl;
+            std::cout << "[DEBUG] Value Score < 0, set to 0" << std::endl;
         }
         if (value_score > 1)
         {
             value_score = 1;
-            // std::cout << "[DEBUG] Value Score > 1, set to 1" << std::endl;
+            std::cout << "[DEBUG] Value Score > 1, set to 1" << std::endl;
         }
 
         float ucb_value = prior_score + value_score;
 
         // 打印最终的 ucb_value
         // 打印最终的 ucb_value
-        // std::cout << "[DEBUG] UCB Value: " << ucb_value << std::endl;
+        std::cout << "[DEBUG] UCB Value: " << ucb_value << std::endl;
         return ucb_value;
     }
 

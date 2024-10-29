@@ -1524,7 +1524,8 @@ class WorldModel(nn.Module):
         tanh_transform = TanhTransform()
         dist = TransformedDistribution(base_dist, [tanh_transform])
         dist = Independent(dist, 1)
-        target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
+        # target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
+        target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -0.999, 0.999) # TODO:
         # assert torch.all(target_sampled_actions_clamped < 1) and torch.all(target_sampled_actions_clamped > -1), "Actions are not properly clamped."
         log_prob = dist.log_prob(target_sampled_actions_clamped)
         log_prob_sampled_actions = log_prob
