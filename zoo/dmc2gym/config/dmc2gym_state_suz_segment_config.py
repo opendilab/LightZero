@@ -29,8 +29,8 @@ def main(env_id, seed):
     num_layers = 2
     # num_layers = 4
 
-    replay_ratio = 0.1
     num_unroll_steps = 5
+    # num_unroll_steps = 10
     infer_context_length = 2
 
     # replay_ratio = 0.25
@@ -41,7 +41,11 @@ def main(env_id, seed):
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     buffer_reanalyze_freq = 1/10000
+    replay_ratio = 0.1
+
     # buffer_reanalyze_freq = 1/10
+    # replay_ratio = 0.25
+
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -88,10 +92,12 @@ def main(env_id, seed):
                 model_type='mlp',
                 world_model_cfg=dict(
                     policy_loss_type='kl', # 'simple'
+                    # policy_loss_type='simple', # 'simple'
                     obs_type='vector',
                     num_unroll_steps=num_unroll_steps,
-                    policy_entropy_weight=5e-3,
-                    # policy_entropy_weight=5e-2,
+                    # policy_entropy_weight=0,
+                    # policy_entropy_weight=5e-3,
+                    policy_entropy_weight=5e-2,
                     continuous_action_space=continuous_action_space,
                     num_of_sampled_actions=K,
                     sigma_type='conditioned',
@@ -106,7 +112,8 @@ def main(env_id, seed):
                     action_space_size=action_space_size,
                     num_layers=num_layers,
                     num_heads=8,
-                    embed_dim=768,
+                    embed_dim=768,  # original
+                    # embed_dim=512,
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),
             ),
@@ -121,14 +128,14 @@ def main(env_id, seed):
             replay_ratio=replay_ratio,
             batch_size=batch_size,
             discount_factor=0.99,
-            td_steps=5,
+            # td_steps=5,
+            td_steps=10,
             lr_piecewise_constant_decay=False,
             learning_rate=1e-4,
             grad_clip_value=5,
             # manual_temperature_decay=False,
-
             manual_temperature_decay=True,
-            threshold_training_steps_for_final_temperature=int(5e4),
+            threshold_training_steps_for_final_temperature=int(2.5e4),
 
             cos_lr_scheduler=True,
             num_segments=num_segments,
@@ -168,7 +175,11 @@ def main(env_id, seed):
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
     # main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td5_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
-    main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td5_temp5e4_pew5e-3_10prior10flatten_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    # main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td10_temp5e4_pew5e-3_10prior10flatten_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    # main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td10_temp5e4_pew5e-2_15prior5flatten_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    # main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td10_temp5e4_pew5e-2_19prior1flatten_simplepi_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_cont_suz_td10_temp2.5e4_pew5e-2_18prior2flatten_obs-5-value-05_state_brf{buffer_reanalyze_freq}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    
     train_unizero_segment([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 
 
@@ -183,5 +194,7 @@ if __name__ == "__main__":
     
     args.env = 'cheetah-run'
     # args.env = 'walker-walk'
+    # args.env = 'finger-spin'
+    # args.env = 'pendulum-swingup'
 
     main(args.env, args.seed)

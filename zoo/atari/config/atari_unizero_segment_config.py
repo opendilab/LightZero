@@ -11,18 +11,26 @@ def main(env_id, seed):
     collector_env_num = 8
     num_segments = 8
     game_segment_length = 20
-    evaluator_env_num = 5
+    evaluator_env_num = 10 # TODO
     num_simulations = 50
-    max_env_step = int(5e5)
+    max_env_step = int(5e5) # TODO
+    # max_env_step = int(1e6) # TODO
+
     batch_size = 64
     num_layers = 2
-    replay_ratio = 0.25
+    # replay_ratio = 0.25
+    replay_ratio = 0.5
+
+    # num_layers = 4
+    # replay_ratio = 1
+
     num_unroll_steps = 10
     infer_context_length = 4
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/100000
     buffer_reanalyze_freq = 1/10
+
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -57,8 +65,10 @@ def main(env_id, seed):
             model=dict(
                 observation_shape=(3, 96, 96),
                 action_space_size=action_space_size,
+                support_scale=300, # TODO
                 world_model_cfg=dict(
-                    policy_entropy_weight=0,
+                    support_size=601,  # TODO
+                    policy_entropy_weight=5e-3, # TODO
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
@@ -75,8 +85,9 @@ def main(env_id, seed):
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
             model_path=None,
             use_augmentation=False,
-            manual_temperature_decay=False,
-            threshold_training_steps_for_final_temperature=int(5e4),
+            # manual_temperature_decay=False,
+            manual_temperature_decay=True,
+            threshold_training_steps_for_final_temperature=int(2.5e4),
             use_priority=False,
             num_unroll_steps=num_unroll_steps,
             update_per_collect=None,
@@ -86,10 +97,10 @@ def main(env_id, seed):
             learning_rate=0.0001,
             num_simulations=num_simulations,
             num_segments=num_segments,
-            td_steps=5,
+            td_steps=5, # TODO
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
-            grad_clip_value=20,
+            grad_clip_value=5,
             replay_buffer_size=int(1e6),
             eval_freq=int(5e3),
             collector_env_num=collector_env_num,
@@ -122,7 +133,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_clean_1025/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_clean_1025/{env_id[:-14]}/{env_id[:-14]}_uz_scale300_pew5e-3_obs-5-value-05_temp-decay-2.5e4_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
@@ -133,6 +144,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
-    args.env = 'QbertNoFrameskip-v4'
+    # args.env = 'QbertNoFrameskip-v4'
+    # args.env = 'MsPacmanNoFrameskip-v4'
 
     main(args.env, args.seed)

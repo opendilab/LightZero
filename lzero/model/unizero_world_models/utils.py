@@ -257,9 +257,11 @@ class LossWithIntermediateLosses:
         device = next(iter(kwargs.values())).device
 
         # Define the weights for each loss type
-        self.obs_loss_weight = 10
+        # self.obs_loss_weight = 10 # original
+        self.obs_loss_weight = 5 # TODO
         self.reward_loss_weight = 1.
-        self.value_loss_weight = 0.25
+        # self.value_loss_weight = 0.25 # original
+        self.value_loss_weight = 0.5 # TODO
         self.policy_loss_weight = 1.
         self.ends_loss_weight = 0.
 

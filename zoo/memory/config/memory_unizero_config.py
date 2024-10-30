@@ -1,8 +1,13 @@
 from easydict import EasyDict
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 
-memory_length = 60
-max_env_step = int(5e5)  # for visual_match [2, 60]
+# memory_length = 60
+# max_env_step = int(5e5)  # for visual_match [2, 60]
+
+memory_length = 500
+max_env_step = int(3e6)  # for visual_match [100,250,500]
+# embed_dim=64 for visual_match [2,60]
+embed_dim=256 # for visual_match [100,250,500]
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user,
@@ -32,7 +37,7 @@ eps_greedy_exploration_in_collect = True
 # collector_env_num = 2
 # n_episode = 2
 # evaluator_env_num = 2
-# num_simulations = 5
+# num_simulations = 3
 # update_per_collect = None
 # replay_ratio = 0.25
 # batch_size = 4
@@ -40,7 +45,7 @@ eps_greedy_exploration_in_collect = True
 # end of the most frequently changed config specified by the user
 # ==============================================================
 memory_unizero_config = dict(
-    exp_name=f'data_{env_id}/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_seed{seed}',
+    # exp_name=f'data_{env_id}_1025_clean/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -69,11 +74,12 @@ memory_unizero_config = dict(
                 max_blocks=num_unroll_steps + 5,
                 max_tokens=2 * (num_unroll_steps + 5),
                 context_length=2 * (num_unroll_steps + 5),
-                device='cpu',
+                # device='cpu',
+                device='cuda',
                 action_space_size=4,
                 num_layers=4,
                 num_heads=4,
-                embed_dim=64,
+                embed_dim=embed_dim,
                 env_num=max(collector_env_num, evaluator_env_num),
                 obs_type='image_memory',
             ),
@@ -117,8 +123,9 @@ memory_unizero_create_config = EasyDict(memory_unizero_create_config)
 create_config = memory_unizero_create_config
 
 if __name__ == "__main__":
-    seeds = [0, 1, 2]  # You can add more seed values here
+    # seeds = [0, 1, 2]  # You can add more seed values here
+    seeds = [0]  # You can add more seed values here
     for seed in seeds:
-        main_config.exp_name = f'data_{env_id}/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
+        main_config.exp_name = f'data_{env_id}_1025_clean/{env_id}_memlen-{memory_length}_unizero_edim{embed_dim}_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

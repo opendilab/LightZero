@@ -340,8 +340,18 @@ namespace tree
             }
 
             // NOTE: 计算采样数量
-            int half_sample = this->num_of_sampled_actions / 2;
-            int remaining = this->num_of_sampled_actions - half_sample;
+            // int half_sample = this->num_of_sampled_actions / 2;
+            // int remaining = this->num_of_sampled_actions - half_sample;
+            
+            // int half_sample = this->num_of_sampled_actions - 1;
+            // int remaining = 1;
+
+            int half_sample = this->num_of_sampled_actions * 9/10;
+            int remaining = this->num_of_sampled_actions * 1/10;
+         
+            // TODO: debug
+            // int half_sample = this->num_of_sampled_actions * 3/4;
+            // int remaining = this->num_of_sampled_actions * 1/4;
 
             // 采样第一部分：标准高斯分布
             auto sampled_standard = CNode::sample_actions(mu, sigma, half_sample, std_magnification_normal, clamp_limit, generator);
@@ -358,6 +368,13 @@ namespace tree
             sampled_actions_log_probs_after_tanh.insert(sampled_actions_log_probs_after_tanh.end(),
                                                         sampled_flat.second.begin(),
                                                         sampled_flat.second.end());
+
+            // TODO: debug original case: 从学习的高斯分布中采样
+            // int half_sample = this->num_of_sampled_actions;
+            // // 采样第一部分：标准高斯分布
+            // auto sampled_standard = CNode::sample_actions(mu, sigma, half_sample, std_magnification_normal, clamp_limit, generator);
+            // sampled_actions_after_tanh = sampled_standard.first;
+            // sampled_actions_log_probs_after_tanh = sampled_standard.second;
 
         }
         else
@@ -1008,7 +1025,7 @@ namespace tree
         pb_c *= (sqrt(total_children_visit_counts) / (child->visit_count + 1));
 
         // 打印 pb_c
-        std::cout << "[DEBUG] pb_c: " << pb_c << std::endl;
+        // std::cout << "[DEBUG] pb_c: " << pb_c << std::endl;
 
         // prior_score = pb_c * child->prior;
 
@@ -1018,7 +1035,7 @@ namespace tree
        std::string empirical_distribution_type = "uniform"; // uniform is very important to sampled algo.
         if (empirical_distribution_type == "density")
         {
-            std::cout << "[DEBUG] Empirical Distribution Type: density" << std::endl;
+            // std::cout << "[DEBUG] Empirical Distribution Type: density" << std::endl;
             if (continuous_action_space == true)
             {
                 float empirical_prob_sum = 0;
@@ -1029,9 +1046,9 @@ namespace tree
                 prior_score = pb_c * exp(child->prior) / (empirical_prob_sum + 1e-6);
                 // 打印相关中间值
                 // std::cout << "[DEBUG] Continuous Action Space" << std::endl;
-                std::cout << "[DEBUG] Child Prior: " << child->prior << std::endl;
-                std::cout << "[DEBUG] Empirical Prob Sum: " << empirical_prob_sum << std::endl;
-                std::cout << "[DEBUG] Prior Score: " << prior_score << std::endl;
+                // std::cout << "[DEBUG] Child Prior: " << child->prior << std::endl;
+                // std::cout << "[DEBUG] Empirical Prob Sum: " << empirical_prob_sum << std::endl;
+                // std::cout << "[DEBUG] Prior Score: " << prior_score << std::endl;
             }
             else
             {
@@ -1054,7 +1071,7 @@ namespace tree
             // std::cout << "[DEBUG] Empirical Distribution Type: uniform" << std::endl;
             prior_score = pb_c * 1 / parent->children.size();
             // 打印相关中间值
-            std::cout << "[DEBUG] Prior Score (Uniform): " << prior_score << std::endl;
+            // std::cout << "[DEBUG] Prior Score (Uniform): " << prior_score << std::endl;
         }
         else
         {
@@ -1067,7 +1084,7 @@ namespace tree
             value_score = parent_mean_q;
             
             // 打印相关中间值
-            std::cout << "[DEBUG] Child Visit Count: 0, Value Score set to Parent Mean Q: " << value_score << std::endl;
+            // std::cout << "[DEBUG] Child Visit Count: 0, Value Score set to Parent Mean Q: " << value_score << std::endl;
         }
         else
         {
@@ -1075,7 +1092,7 @@ namespace tree
             if (players == 1)
             {
                 value_score = true_reward + discount_factor * child->value();
-                std::cout << "[DEBUG] Players: 1, True Reward: " << true_reward << ", Child Value: " << child->value() << ", Value Score: " << value_score << std::endl;
+                // std::cout << "[DEBUG] Players: 1, True Reward: " << true_reward << ", Child Value: " << child->value() << ", Value Score: " << value_score << std::endl;
             }
             else if (players == 2)
             {

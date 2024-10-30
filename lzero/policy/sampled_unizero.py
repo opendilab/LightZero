@@ -315,7 +315,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         if self._cfg.cos_lr_scheduler is True:
             from torch.optim.lr_scheduler import CosineAnnealingLR
             # TODO: check the total training steps
-            self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 5e5, eta_min=0, last_epoch=-1)
+            # self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 5e5, eta_min=0, last_epoch=-1)
+            self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
 
         if self._cfg.model.continuous_action_space:
             # Weight Init for the last output layer of gaussian policy head in prediction network.

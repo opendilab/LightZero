@@ -1447,7 +1447,8 @@ class WorldModel(nn.Module):
         target_best_action = target_sampled_actions[torch.arange(target_best_action_idx.size(0)), target_best_action_idx]
 
         # Clip the target actions to prevent numerical issues during arctanh
-        target_best_action_clamped = torch.clamp(target_best_action, -1 + 1e-6, 1 - 1e-6)
+        # target_best_action_clamped = torch.clamp(target_best_action, -1 + 1e-6, 1 - 1e-6)
+        target_best_action_clamped = torch.clamp(target_best_action, -0.999, 0.999)
         target_best_action_before_tanh = torch.arctanh(target_best_action_clamped)
 
         # Calculate the log probability of the best action
