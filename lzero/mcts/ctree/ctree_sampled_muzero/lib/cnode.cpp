@@ -343,11 +343,11 @@ namespace tree
             // int half_sample = this->num_of_sampled_actions / 2;
             // int remaining = this->num_of_sampled_actions - half_sample;
             
-            // int half_sample = this->num_of_sampled_actions - 1;
-            // int remaining = 1;
+            int half_sample = this->num_of_sampled_actions - 1;
+            int remaining = 1;
 
-            int half_sample = this->num_of_sampled_actions * 9/10;
-            int remaining = this->num_of_sampled_actions * 1/10;
+            // int half_sample = this->num_of_sampled_actions * 9/10;
+            // int remaining = this->num_of_sampled_actions * 1/10;
          
             // TODO: debug
             // int half_sample = this->num_of_sampled_actions * 3/4;

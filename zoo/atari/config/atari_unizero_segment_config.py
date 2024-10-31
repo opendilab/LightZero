@@ -18,8 +18,8 @@ def main(env_id, seed):
 
     batch_size = 64
     num_layers = 2
-    # replay_ratio = 0.25
-    replay_ratio = 0.5
+    replay_ratio = 0.25
+    # replay_ratio = 0.5
 
     # num_layers = 4
     # replay_ratio = 1
@@ -85,8 +85,8 @@ def main(env_id, seed):
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
             model_path=None,
             use_augmentation=False,
-            # manual_temperature_decay=False,
-            manual_temperature_decay=True,
+            manual_temperature_decay=False,
+            # manual_temperature_decay=True,
             threshold_training_steps_for_final_temperature=int(2.5e4),
             use_priority=False,
             num_unroll_steps=num_unroll_steps,
@@ -133,7 +133,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_clean_1025/{env_id[:-14]}/{env_id[:-14]}_uz_scale300_pew5e-3_obs-5-value-05_temp-decay-2.5e4_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_clean_1025/{env_id[:-14]}/{env_id[:-14]}_uz_scale300_pew5e-3_obs10value01_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
@@ -146,5 +146,6 @@ if __name__ == "__main__":
 
     # args.env = 'QbertNoFrameskip-v4'
     # args.env = 'MsPacmanNoFrameskip-v4'
+    # args.env = 'RoadRunnerNoFrameskip-v4'
 
     main(args.env, args.seed)

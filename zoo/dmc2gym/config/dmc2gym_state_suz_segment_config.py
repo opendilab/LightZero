@@ -112,8 +112,8 @@ def main(env_id, seed):
                     action_space_size=action_space_size,
                     num_layers=num_layers,
                     num_heads=8,
-                    embed_dim=768,  # original
-                    # embed_dim=512,
+                    # embed_dim=768,  # original
+                    embed_dim=512,
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),
             ),
@@ -175,10 +175,9 @@ def main(env_id, seed):
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
     # main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td5_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
-    # main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td10_temp5e4_pew5e-3_10prior10flatten_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
-    # main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td10_temp5e4_pew5e-2_15prior5flatten_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
-    # main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td10_temp5e4_pew5e-2_19prior1flatten_simplepi_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
-    main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_cont_suz_td10_temp2.5e4_pew5e-2_18prior2flatten_obs-5-value-05_state_brf{buffer_reanalyze_freq}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td10_temp2.5e4_pew5e-2_19prior1flatten_embed512_obs10value01_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    # main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td10_temp2.5e4_pew5e-2_19prior1flatten_embed512_obs10value05_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    # main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_cont_suz_td10_temp2.5e4_pew5e-2_18prior2flatten_obs-5-value-05_state_brf{buffer_reanalyze_freq}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
     
     train_unizero_segment([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 
