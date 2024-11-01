@@ -312,7 +312,8 @@ namespace tree
         std::vector<float> sampled_actions_log_probs_after_tanh;
 
         // 定义采样参数
-        const float clamp_limit = 3.0f; // 动作夹紧范围
+        // const float clamp_limit = 3.0f; // 动作夹紧范围
+        const float clamp_limit = 4.0f; // 动作夹紧范围 TODO:
         const float std_magnification_flat = 3.0f; // 平坦分布的标准差放大倍数
         float std_magnification_normal = 1.0f; // 标准分布的标准差
 
@@ -340,41 +341,33 @@ namespace tree
             }
 
             // NOTE: 计算采样数量
-            // int half_sample = this->num_of_sampled_actions / 2;
-            // int remaining = this->num_of_sampled_actions - half_sample;
-            
-            int half_sample = this->num_of_sampled_actions - 1;
-            int remaining = 1;
-
-            // int half_sample = this->num_of_sampled_actions * 9/10;
-            // int remaining = this->num_of_sampled_actions * 1/10;
-         
-            // TODO: debug
-            // int half_sample = this->num_of_sampled_actions * 3/4;
-            // int remaining = this->num_of_sampled_actions * 1/4;
-
-            // 采样第一部分：标准高斯分布
-            auto sampled_standard = CNode::sample_actions(mu, sigma, half_sample, std_magnification_normal, clamp_limit, generator);
-
-            // 采样第二部分：平坦高斯分布
-            auto sampled_flat = CNode::sample_actions(mu, sigma, remaining, std_magnification_flat, clamp_limit, generator);
-
-            // 合并采样结果
-            sampled_actions_after_tanh = sampled_standard.first;
-            sampled_actions_log_probs_after_tanh = sampled_standard.second;
-            sampled_actions_after_tanh.insert(sampled_actions_after_tanh.end(),
-                                            sampled_flat.first.begin(),
-                                            sampled_flat.first.end());
-            sampled_actions_log_probs_after_tanh.insert(sampled_actions_log_probs_after_tanh.end(),
-                                                        sampled_flat.second.begin(),
-                                                        sampled_flat.second.end());
-
-            // TODO: debug original case: 从学习的高斯分布中采样
-            // int half_sample = this->num_of_sampled_actions;
+            // // TODO: debug
+            // int half_sample = this->num_of_sampled_actions - 1;
+            // int remaining = 1;
+            // // int half_sample = this->num_of_sampled_actions * 9/10;
+            // // int remaining = this->num_of_sampled_actions * 1/10;
+            // // int half_sample = this->num_of_sampled_actions * 3/4;
+            // // int remaining = this->num_of_sampled_actions * 1/4;
             // // 采样第一部分：标准高斯分布
             // auto sampled_standard = CNode::sample_actions(mu, sigma, half_sample, std_magnification_normal, clamp_limit, generator);
+            // // 采样第二部分：平坦高斯分布
+            // auto sampled_flat = CNode::sample_actions(mu, sigma, remaining, std_magnification_flat, clamp_limit, generator);
+            // // 合并采样结果
             // sampled_actions_after_tanh = sampled_standard.first;
             // sampled_actions_log_probs_after_tanh = sampled_standard.second;
+            // sampled_actions_after_tanh.insert(sampled_actions_after_tanh.end(),
+            //                                 sampled_flat.first.begin(),
+            //                                 sampled_flat.first.end());
+            // sampled_actions_log_probs_after_tanh.insert(sampled_actions_log_probs_after_tanh.end(),
+            //                                             sampled_flat.second.begin(),
+            //                                             sampled_flat.second.end());
+
+            // TODO: debug original case: 从学习的高斯分布中采样
+            int half_sample = this->num_of_sampled_actions;
+            // 采样第一部分：标准高斯分布
+            auto sampled_standard = CNode::sample_actions(mu, sigma, half_sample, std_magnification_normal, clamp_limit, generator);
+            sampled_actions_after_tanh = sampled_standard.first;
+            sampled_actions_log_probs_after_tanh = sampled_standard.second;
 
         }
         else

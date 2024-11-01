@@ -110,7 +110,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 # (float) The weight of the perceptual loss.
                 perceptual_loss_weight=0.,
                 # (float) The weight of the policy entropy.
-                policy_entropy_weight=1e-4,
+                policy_entropy_weight=0,
                 # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
                 predict_latent_loss_type='group_kl',
                 # (str) The type of observation. Options are ['image', 'vector'].

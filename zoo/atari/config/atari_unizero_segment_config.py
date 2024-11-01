@@ -145,7 +145,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # args.env = 'QbertNoFrameskip-v4'
-    # args.env = 'MsPacmanNoFrameskip-v4'
+    args.env = 'MsPacmanNoFrameskip-v4'
     # args.env = 'RoadRunnerNoFrameskip-v4'
 
     main(args.env, args.seed)
