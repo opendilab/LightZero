@@ -564,7 +564,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                             try:
                                 root_sampled_action[current_index] = reanalyzed_root_sampled_action
                             except Exception as e:
-                                # print('length of root_sampled_action is <self._cfg.num_unroll_steps>*<batch_size>')
+                                print(e, 'length of root_sampled_action is <self._cfg.num_unroll_steps>*<batch_size>')
                                 pass
                             root_value[current_index] = searched_value
                             

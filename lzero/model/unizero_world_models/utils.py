@@ -248,7 +248,7 @@ class LossWithIntermediateLosses:
     Returns:
         - None
     """
-    def __init__(self, latent_recon_loss_weight=0, perceptual_loss_weight=0, **kwargs):
+    def __init__(self, latent_recon_loss_weight=0, perceptual_loss_weight=0, continuous_action_space=False, **kwargs):
         # Ensure that kwargs is not empty
         if not kwargs:
             raise ValueError("At least one loss must be provided")
@@ -256,29 +256,29 @@ class LossWithIntermediateLosses:
         # Get a reference device from one of the provided losses
         device = next(iter(kwargs.values())).device
 
-        # Define the weights for each loss type
-        # EZV2
-        # self.obs_loss_weight = 10 # original
-        # # self.obs_loss_weight = 5 # TODO
-        # # self.obs_loss_weight = 2 # TODO
-        # # self.value_loss_weight = 0.25 # original
-        # self.value_loss_weight = 0.5 # TODO
-        # self.reward_loss_weight = 1.
-        # self.policy_loss_weight = 1.
-        # self.ends_loss_weight = 0.
-
-        # TODO: TDMPC
-        # self.obs_loss_weight = 100 
-        # self.value_loss_weight = 1
-        # self.reward_loss_weight = 1.
-        # self.policy_loss_weight = 1.
-        # self.ends_loss_weight = 0.
-
-        self.obs_loss_weight = 10
-        self.value_loss_weight = 0.1
-        self.reward_loss_weight = 0.1
-        self.policy_loss_weight = 0.1
-        self.ends_loss_weight = 0.
+        # TODO: Define the weights for each loss type
+        if not continuous_action_space:
+            # EZV2
+            # for memory
+            self.obs_loss_weight = 10 # original
+            # self.value_loss_weight = 0.25 # original
+            self.value_loss_weight = 0.5 # TODO
+            self.reward_loss_weight = 1.
+            self.policy_loss_weight = 1.
+            self.ends_loss_weight = 0.
+        else:
+            # TODO: TDMPC
+            # self.obs_loss_weight = 100 
+            # self.value_loss_weight = 1
+            # self.reward_loss_weight = 1.
+            # self.policy_loss_weight = 1.
+            # self.ends_loss_weight = 0.
+            # TODO: TDMPC for DMC
+            self.obs_loss_weight = 10
+            self.value_loss_weight = 0.1
+            self.reward_loss_weight = 0.1
+            self.policy_loss_weight = 0.1
+            self.ends_loss_weight = 0.
 
         self.latent_recon_loss_weight = latent_recon_loss_weight
         self.perceptual_loss_weight = perceptual_loss_weight
