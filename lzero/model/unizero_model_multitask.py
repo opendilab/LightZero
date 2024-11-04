@@ -66,6 +66,9 @@ class UniZeroMTModel(nn.Module):
                 - analysis_sim_norm (:obj:`bool`): Whether to analyze the similarity of the norm.
         """
         super(UniZeroMTModel, self).__init__()
+
+        print(f'==========UniZeroMTModel, num_res_blocks:{num_res_blocks}, num_channels:{num_channels}===========')
+
         self.action_space_size = action_space_size
 
         # for multi-task

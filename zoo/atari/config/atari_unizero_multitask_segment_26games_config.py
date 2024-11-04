@@ -45,11 +45,11 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 norm_type=norm_type,
                 # num_res_blocks=1, # NOTE: encoder for 1 game
                 # num_channels=64,
-                num_res_blocks=2,  # NOTE: encoder for 4 game
-                num_channels=128,
+                # num_res_blocks=2,  # NOTE: encoder for 4 game
+                # num_channels=128,
                 # num_res_blocks=4,  # NOTE: encoder for 8 game
-                # num_res_blocks=2,  # NOTE: encoder for 8 game
-                # num_channels=256,
+                num_res_blocks=2,  # NOTE: encoder for 8 game
+                num_channels=256,
                 world_model_cfg=dict(
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,
@@ -127,7 +127,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # exp_name_prefix = f'data_unizero_mt_0722_profile/lineprofile_{len(env_id_list)}games_1-encoder-{norm_type}_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}-res2-channel128_gsl20_4-head_lsd768-nlayer4-nh8_max-bs64*4_upc40_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}-res2-channel256_gsl20_8-head_lsd768-nlayer4-nh8_max-bs32*8_upc40_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel128_gsl20_4-head_lsd768-nlayer4-nh8_bs-64*{len(env_id_list)}_upc160_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_8-head_lsd768-nlayer4-nh8_maxbs-320_upc160_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}_gsl20_8-head_lsd768-nlayer4-nh8_max-bs64*8_upc40_seed{seed}/'
 
 
@@ -182,47 +182,47 @@ if __name__ == "__main__":
         'BoxingNoFrameskip-v4'
     ]
 
-    # env_id_list = [
-    #     'PongNoFrameskip-v4',
-    #     'MsPacmanNoFrameskip-v4',
-    #     'SeaquestNoFrameskip-v4',
-    #     'BoxingNoFrameskip-v4',
-    #     'AlienNoFrameskip-v4',
-    #     'ChopperCommandNoFrameskip-v4',
-    #     'HeroNoFrameskip-v4',
-    #     'RoadRunnerNoFrameskip-v4',
-    # ]
+    env_id_list = [
+        'PongNoFrameskip-v4',
+        'MsPacmanNoFrameskip-v4',
+        'SeaquestNoFrameskip-v4',
+        'BoxingNoFrameskip-v4',
+        'AlienNoFrameskip-v4',
+        'ChopperCommandNoFrameskip-v4',
+        'HeroNoFrameskip-v4',
+        'RoadRunnerNoFrameskip-v4',
+    ]
 
     # 26games
-    # env_id_list = [
-    #     'PongNoFrameskip-v4',
-    #     'MsPacmanNoFrameskip-v4',
-    #     'SeaquestNoFrameskip-v4',
-    #     'BoxingNoFrameskip-v4',
-    #     'AlienNoFrameskip-v4',
-    #     'ChopperCommandNoFrameskip-v4',
-    #     'HeroNoFrameskip-v4',
-    #     'RoadRunnerNoFrameskip-v4',
+    env_id_list = [
+        'PongNoFrameskip-v4',
+        'MsPacmanNoFrameskip-v4',
+        'SeaquestNoFrameskip-v4',
+        'BoxingNoFrameskip-v4',
+        'AlienNoFrameskip-v4',
+        'ChopperCommandNoFrameskip-v4',
+        'HeroNoFrameskip-v4',
+        'RoadRunnerNoFrameskip-v4',
 
-    #     'AmidarNoFrameskip-v4',
-    #     'AssaultNoFrameskip-v4',
-    #     'AsterixNoFrameskip-v4',
-    #     'BankHeistNoFrameskip-v4',
-    #     'BattleZoneNoFrameskip-v4',
-    #     'CrazyClimberNoFrameskip-v4',
-    #     'DemonAttackNoFrameskip-v4',
-    #     'FreewayNoFrameskip-v4',
-    #     'FrostbiteNoFrameskip-v4',
-    #     'GopherNoFrameskip-v4',
-    #     'JamesbondNoFrameskip-v4',
-    #     'KangarooNoFrameskip-v4',
-    #     'KrullNoFrameskip-v4',
-    #     'KungFuMasterNoFrameskip-v4',
-    #     'PrivateEyeNoFrameskip-v4',
-    #     'UpNDownNoFrameskip-v4',
-    #     'QbertNoFrameskip-v4',
-    #     'BreakoutNoFrameskip-v4',
-    # ]
+        'AmidarNoFrameskip-v4',
+        'AssaultNoFrameskip-v4',
+        'AsterixNoFrameskip-v4',
+        'BankHeistNoFrameskip-v4',
+        'BattleZoneNoFrameskip-v4',
+        'CrazyClimberNoFrameskip-v4',
+        'DemonAttackNoFrameskip-v4',
+        'FreewayNoFrameskip-v4',
+        'FrostbiteNoFrameskip-v4',
+        'GopherNoFrameskip-v4',
+        'JamesbondNoFrameskip-v4',
+        'KangarooNoFrameskip-v4',
+        'KrullNoFrameskip-v4',
+        'KungFuMasterNoFrameskip-v4',
+        'PrivateEyeNoFrameskip-v4',
+        'UpNDownNoFrameskip-v4',
+        'QbertNoFrameskip-v4',
+        'BreakoutNoFrameskip-v4',
+    ]
 
 
     action_space_size = 18  # Full action space
@@ -237,9 +237,11 @@ if __name__ == "__main__":
     # batch_size = [32, 32, 32, 32]
     # max_batch_size = 2048
 
-    max_batch_size = 400
-    batch_size = [int(min(64, max_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
-    # batch_size = [int(min(32, max_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
+    max_batch_size = 320
+    # max_batch_size = int(64*4)
+    # batch_size = [int(max_batch_size/len(env_id_list)) for i in range(len(env_id_list))]
+    # batch_size = [int(min(64, max_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
+    batch_size = [int(min(32, max_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
     print(f'=========== batch_size: {batch_size} ===========')
     # batch_size = [int(64) for i in range(len(env_id_list))]
 

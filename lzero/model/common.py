@@ -185,6 +185,8 @@ class DownSample(nn.Module):
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
 
+        assert num_resblocks == 1, "num_resblocks must be 1 in DownSample"
+        
         self.observation_shape = observation_shape
         self.conv1 = nn.Conv2d(
             observation_shape[0],
@@ -231,7 +233,7 @@ class DownSample(nn.Module):
             [
                 ResBlock(
                     in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
-                ) for _ in range(1)
+                ) for _ in range(num_resblocks)
             ]
         )
         self.pooling2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
@@ -317,6 +319,7 @@ class RepresentationNetworkUniZero(nn.Module):
                 num_channels,
                 activation=activation,
                 norm_type=norm_type,
+                num_resblocks=1,
             )
         else:
             self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
@@ -342,10 +345,10 @@ class RepresentationNetworkUniZero(nn.Module):
         self.embedding_dim = embedding_dim
 
         if self.observation_shape[1] == 64:
-            self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
+            self.last_linear = nn.Linear(num_channels * 8 * 8, self.embedding_dim, bias=False)
 
         elif self.observation_shape[1] in [84, 96]:
-            self.last_linear = nn.Linear(64 * 6 * 6, self.embedding_dim, bias=False)
+            self.last_linear = nn.Linear(num_channels * 6 * 6, self.embedding_dim, bias=False)
 
         self.sim_norm = SimNorm(simnorm_dim=group_size)
 
