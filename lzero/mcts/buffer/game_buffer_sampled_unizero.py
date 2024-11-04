@@ -564,8 +564,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                             try:
                                 root_sampled_action[current_index] = reanalyzed_root_sampled_action
                             except Exception as e:
-                                print(e, 'length of root_sampled_action is <self._cfg.num_unroll_steps>*<batch_size>')
-                                pass
+                                print(e, 'length of root_sampled_action is <batch_size>*<self._cfg.num_unroll_steps>')
                             root_value[current_index] = searched_value
                             
                             if self._cfg.action_type == 'fixed_action_space':

@@ -8,7 +8,6 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     # ==============================================================
     # begin of the most frequently changed config specified by the user
     # ==============================================================
-    replay_ratio = 1
     collector_env_num = 8
     game_segment_length = 20
     evaluator_env_num = 5
@@ -17,7 +16,8 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     batch_size = 64
     num_unroll_steps = 10
     infer_context_length = 4
-    num_layers = 4
+    num_layers = 2
+    replay_ratio = 0.25
 
     # ====== only for debug =====
     # collector_env_num = 8
@@ -30,21 +30,11 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
-
     atari_unizero_config = dict(
         env=dict(
             stop_value=int(1e6),
             env_id=env_id,
             observation_shape=(3, 96, 96),
-<<<<<<< HEAD
-            action_space_size=action_space_size,
-            world_model_cfg=dict(
-                continuous_action_space=False,
-                max_blocks=num_unroll_steps,
-                max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
-                context_length=2 * infer_context_length,
-                device='cuda',
-=======
             gray_scale=False,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -58,10 +48,9 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
             model=dict(
                 observation_shape=(3, 96, 96),
->>>>>>> eb268ac17672364c5a76091d574852eb0e2c8e41
                 action_space_size=action_space_size,
                 world_model_cfg=dict(
-                    policy_entropy_weight=0,
+                    policy_entropy_weight=5e-3,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action

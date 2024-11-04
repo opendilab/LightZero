@@ -10,17 +10,13 @@
 #include <vector>
 #include <stack>
 #include <math.h>
-
 #include <stdlib.h>
 #include <time.h>
 #include <cmath>
 #include <sys/timeb.h>
 #include <time.h>
 #include <cassert>
-#include <iostream>
-#include <vector>
 #include <cmath>
-#include <algorithm>
 #include <chrono>
 #include <numeric>
 #include <unordered_map>
@@ -192,7 +188,7 @@ namespace tree
             - legal_actions: a vector of legal actions of this node.
             - action_space_size: the size of action space of the current env.
             - num_of_sampled_actions: the number of sampled actions, i.e. K in the Sampled MuZero papers.
-            - continuous_action_space: whether the action space is continous in current env.
+            - continuous_action_space: whether the action space is continuous in current env.
         */
         this->prior = prior;
         this->legal_actions = legal_actions;
@@ -210,8 +206,7 @@ namespace tree
 
     CNode::~CNode() {}
 
-
-    // 辅助采样函数定义
+    // The definition of the auxiliary sampling function
     std::pair<std::vector<std::vector<float>>, std::vector<float>> CNode::sample_actions(
         const std::vector<float>& mu,
         const std::vector<float>& sigma,
@@ -233,7 +228,7 @@ namespace tree
             std::vector<float> log_det_jacobian_terms; // To accumulate the log-Jacobian determinant terms.
 
             for (int j = 0; j < this->action_space_size; ++j) {
-                // 使用放大后的标准差进行采样
+                // Sample from the Gaussian distribution with amplified standard deviation.
                 std::normal_distribution<float> distribution(mu[j], sigma[j] * std_magnification);
                 float sampled_action_one_dim_before_tanh = distribution(generator);
 
@@ -307,17 +302,16 @@ namespace tree
         std::vector<float> sampled_actions_probs;
         std::vector<float> probs;
 
-        // 初始化采样相关容器
+        // Initialize the containers for sampling
         std::vector<std::vector<float>> sampled_actions_after_tanh;
         std::vector<float> sampled_actions_log_probs_after_tanh;
 
-        // 定义采样参数
-        // const float clamp_limit = 3.0f; // 动作夹紧范围
-        const float clamp_limit = 4.0f; // 动作夹紧范围 TODO:
-        const float std_magnification_flat = 3.0f; // 平坦分布的标准差放大倍数
-        float std_magnification_normal = 1.0f; // 标准分布的标准差
+        // Define the sampling parameters
+        const float clamp_limit = 4.0f; // TODO: The clamp limit of the action space
+        const float std_magnification_flat = 3.0f; // The magnification factor of the standard deviation of the Gaussian distribution
+        float std_magnification_normal = 1.0f;
 
-        // 获取当前时间作为随机数生成器种子
+        // Obtain the current time as the seed of the random number generator
         unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
         std::default_random_engine generator(seed);
 
@@ -328,11 +322,9 @@ namespace tree
         */
         if (this->continuous_action_space == true)
         {
-            // 连续动作空间处理
-            // 动作空间大小为 policy_logits 的一半（前半部分为均值，后半部分为标准差）
+            // The action space size is half of the policy_logits (the first half is the mean, and the second half is the standard deviation).
             this->action_space_size = policy_logits.size() / 2;
 
-            // 提取均值 (mu) 和标准差 (sigma)
             std::vector<float> mu(this->action_space_size, 0.0f);
             std::vector<float> sigma(this->action_space_size, 0.0f);
             for (int i = 0; i < this->action_space_size; ++i) {
@@ -340,31 +332,28 @@ namespace tree
                 sigma[i] = policy_logits[this->action_space_size + i];
             }
 
-            // NOTE: 计算采样数量
-            // // TODO: debug
-            // int half_sample = this->num_of_sampled_actions - 1;
-            // int remaining = 1;
-            // // int half_sample = this->num_of_sampled_actions * 9/10;
-            // // int remaining = this->num_of_sampled_actions * 1/10;
-            // // int half_sample = this->num_of_sampled_actions * 3/4;
-            // // int remaining = this->num_of_sampled_actions * 1/4;
-            // // 采样第一部分：标准高斯分布
-            // auto sampled_standard = CNode::sample_actions(mu, sigma, half_sample, std_magnification_normal, clamp_limit, generator);
-            // // 采样第二部分：平坦高斯分布
-            // auto sampled_flat = CNode::sample_actions(mu, sigma, remaining, std_magnification_flat, clamp_limit, generator);
-            // // 合并采样结果
-            // sampled_actions_after_tanh = sampled_standard.first;
-            // sampled_actions_log_probs_after_tanh = sampled_standard.second;
-            // sampled_actions_after_tanh.insert(sampled_actions_after_tanh.end(),
-            //                                 sampled_flat.first.begin(),
-            //                                 sampled_flat.first.end());
-            // sampled_actions_log_probs_after_tanh.insert(sampled_actions_log_probs_after_tanh.end(),
-            //                                             sampled_flat.second.begin(),
-            //                                             sampled_flat.second.end());
+             // TODO: Test the performance of the two sets of samples.
+////             int half_sample = this->num_of_sampled_actions - 1;
+////             int remaining = 1;
+//             // int half_sample = this->num_of_sampled_actions * 9/10;
+//             // int remaining = this->num_of_sampled_actions * 1/10;
+//             // The first half of the samples are drawn from the standard Gaussian distribution.
+//             auto sampled_standard = CNode::sample_actions(mu, sigma, half_sample, std_magnification_normal, clamp_limit, generator);
+//             // The second half of the samples are drawn from the flat Gaussian distribution.
+//             auto sampled_flat = CNode::sample_actions(mu, sigma, remaining, std_magnification_flat, clamp_limit, generator);
+//             // Merge the two sets of samples.
+//             sampled_actions_after_tanh = sampled_standard.first;
+//             sampled_actions_log_probs_after_tanh = sampled_standard.second;
+//             sampled_actions_after_tanh.insert(sampled_actions_after_tanh.end(),
+//                                             sampled_flat.first.begin(),
+//                                             sampled_flat.first.end());
+//             sampled_actions_log_probs_after_tanh.insert(sampled_actions_log_probs_after_tanh.end(),
+//                                                         sampled_flat.second.begin(),
+//                                                         sampled_flat.second.end());
 
-            // TODO: debug original case: 从学习的高斯分布中采样
+            // TODO: original case
             int half_sample = this->num_of_sampled_actions;
-            // 采样第一部分：标准高斯分布
+            // The samples are drawn from the standard Gaussian distribution.
             auto sampled_standard = CNode::sample_actions(mu, sigma, half_sample, std_magnification_normal, clamp_limit, generator);
             sampled_actions_after_tanh = sampled_standard.first;
             sampled_actions_log_probs_after_tanh = sampled_standard.second;
@@ -1017,7 +1006,6 @@ namespace tree
         pb_c = log((total_children_visit_counts + pb_c_base + 1) / pb_c_base) + pb_c_init;
         pb_c *= (sqrt(total_children_visit_counts) / (child->visit_count + 1));
 
-        // 打印 pb_c
         // std::cout << "[DEBUG] pb_c: " << pb_c << std::endl;
 
         // prior_score = pb_c * child->prior;
@@ -1025,7 +1013,7 @@ namespace tree
         // sampled related core code
         // TODO(pu): empirical distribution
         //  std::string empirical_distribution_type = "density"; 
-       std::string empirical_distribution_type = "uniform"; // uniform is very important to sampled algo.
+        std::string empirical_distribution_type = "uniform"; // uniform is very important to the performance of sampled algo.
         if (empirical_distribution_type == "density")
         {
             // std::cout << "[DEBUG] Empirical Distribution Type: density" << std::endl;
@@ -1037,7 +1025,6 @@ namespace tree
                     empirical_prob_sum += exp(parent->get_child(parent->legal_actions[i])->prior);
                 }
                 prior_score = pb_c * exp(child->prior) / (empirical_prob_sum + 1e-6);
-                // 打印相关中间值
                 // std::cout << "[DEBUG] Continuous Action Space" << std::endl;
                 // std::cout << "[DEBUG] Child Prior: " << child->prior << std::endl;
                 // std::cout << "[DEBUG] Empirical Prob Sum: " << empirical_prob_sum << std::endl;
@@ -1051,7 +1038,6 @@ namespace tree
                     empirical_prob_sum += parent->get_child(parent->legal_actions[i])->prior;
                 }
                 prior_score = pb_c * child->prior / (empirical_prob_sum + 1e-6);
-                // 打印相关中间值
                 // std::cout << "[DEBUG] Discrete Action Space" << std::endl;
                 // std::cout << "[DEBUG] Child Prior: " << child->prior << std::endl;
                 // std::cout << "[DEBUG] Empirical Prob Sum: " << empirical_prob_sum << std::endl;
@@ -1063,7 +1049,6 @@ namespace tree
         {
             // std::cout << "[DEBUG] Empirical Distribution Type: uniform" << std::endl;
             prior_score = pb_c * 1 / parent->children.size();
-            // 打印相关中间值
             // std::cout << "[DEBUG] Prior Score (Uniform): " << prior_score << std::endl;
         }
         else
@@ -1075,8 +1060,6 @@ namespace tree
         if (child->visit_count == 0)
         {
             value_score = parent_mean_q;
-            
-            // 打印相关中间值
             // std::cout << "[DEBUG] Child Visit Count: 0, Value Score set to Parent Mean Q: " << value_score << std::endl;
         }
         else
@@ -1094,11 +1077,8 @@ namespace tree
             }
         }
 
-        // 打印 value_score 之前的值
         // std::cout << "value_score (before normalization): " << value_score << std::endl;
         value_score = min_max_stats.normalize(value_score);
-
-        // 打印归一化后的 value_score
         // std::cout << "value_score (after normalization): " << value_score << std::endl;
 
 
@@ -1115,8 +1095,6 @@ namespace tree
 
         float ucb_value = prior_score + value_score;
 
-        // 打印最终的 ucb_value
-        // 打印最终的 ucb_value
         // std::cout << "[DEBUG] UCB Value: " << ucb_value << std::endl;
         return ucb_value;
     }
@@ -1130,11 +1108,11 @@ namespace tree
             - roots: the roots that search from.
             - pb_c_base: constants c2 in muzero.
             - pb_c_init: constants c1 in muzero.
-            - disount_factor: the discount factor of reward.
+            - discount_factor: the discount factor of reward.
             - min_max_stats: a tool used to min-max normalize the score.
             - results: the search results.
             - virtual_to_play_batch: the batch of which player is playing on this node.
-            - continuous_action_space: whether the action space is continous in current env.
+            - continuous_action_space: whether the action space is continuous in current env.
         */
         // set seed
         get_time_and_set_rand_seed();

@@ -243,7 +243,7 @@ class MuZeroCollector(ISerialCollector):
         """
         # pad over last segment trajectory
         beg_index = self.policy_config.model.frame_stack_num
-        end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps  # TODO: check
+        end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps
 
         # the start <frame_stack_num> obs is init zero obs, so we take the
         # [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs

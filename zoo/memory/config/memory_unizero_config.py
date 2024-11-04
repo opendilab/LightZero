@@ -1,19 +1,11 @@
 from easydict import EasyDict
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 
-memory_length = 500
-# memory_length = 2 # DEBUG
-# max_env_step = int(1e6)  # for visual_match [2, 60]
-max_env_step = int(3e6)  # for visual_match [100,250,500]
-embed_dim=256 
-num_layers=4
-num_heads=4
-
-# memory_length = 500
-# max_env_step = int(3e6)  # for visual_match [100,250,500]
-# embed_dim=256 # for visual_match [100,250,500]
-# num_layers=8
-# num_heads=8
+memory_length = 60
+max_env_step = int(1e6)
+embed_dim = 256
+num_layers = 4
+num_heads = 4
 # ==============================================================
 # begin of the most frequently changed config specified by the user,
 # you should change the following configs to adapt to your own task
@@ -31,19 +23,12 @@ n_episode = 8
 evaluator_env_num = 10
 
 num_simulations = 50
-# update_per_collect = None
-# update_per_collect = 10
 update_per_collect = 50
 
 replay_ratio = 0.1
-# batch_size = 160 # 32*5 = 160
-batch_size = 64 # 32*5 = 160
+batch_size = 64
 reanalyze_ratio = 0
-# td_steps = 10
-# td_steps = 5
 td_steps = game_segment_length
-
-# eps_greedy_exploration_in_collect = True
 
 # ========= only for debug ===========
 # collector_env_num = 2
@@ -57,7 +42,6 @@ td_steps = game_segment_length
 # end of the most frequently changed config specified by the user
 # ==============================================================
 memory_unizero_config = dict(
-    # exp_name=f'data_{env_id}_1025_clean/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -87,7 +71,6 @@ memory_unizero_config = dict(
                 max_blocks=num_unroll_steps + 5,
                 max_tokens=2 * (num_unroll_steps + 5),
                 context_length=2 * (num_unroll_steps + 5),
-                # device='cpu',
                 device='cuda',
                 action_space_size=4,
                 num_layers=num_layers,
@@ -102,9 +85,7 @@ memory_unizero_config = dict(
         model_path=None,
         num_unroll_steps=num_unroll_steps,
         td_steps=td_steps,
-        # discount_factor=1,
         discount_factor=0.99,
-        # cuda=True,
         game_segment_length=game_segment_length,
         replay_ratio=replay_ratio,
         update_per_collect=update_per_collect,
@@ -140,8 +121,7 @@ create_config = memory_unizero_create_config
 
 if __name__ == "__main__":
     seeds = [0, 1]  # You can add more seed values here
-    # seeds = [0]  # You can add more seed values here
     for seed in seeds:
-        main_config.exp_name = f'data_{env_id}_1025_clean/{env_id}_memlen-{memory_length}_fixedcolormap_obs10value05_td{td_steps}_layer{num_layers}-head{num_heads}_unizero_edim{embed_dim}_H{num_unroll_steps}_bs{batch_size}_upc{update_per_collect}_seed{seed}'
+        main_config.exp_name = f'data_{env_id}/{env_id}_memlen-{memory_length}/unizero_td{td_steps}_layer{num_layers}-head{num_heads}_edim{embed_dim}_H{num_unroll_steps}_bs{batch_size}_upc{update_per_collect}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

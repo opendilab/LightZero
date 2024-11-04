@@ -256,24 +256,16 @@ class LossWithIntermediateLosses:
         # Get a reference device from one of the provided losses
         device = next(iter(kwargs.values())).device
 
-        # TODO: Define the weights for each loss type
+        # NOTE: Define the weights for each loss type
         if not continuous_action_space:
-            # EZV2
-            # for memory
-            self.obs_loss_weight = 10 # original
-            # self.value_loss_weight = 0.25 # original
-            self.value_loss_weight = 0.5 # TODO
+            # like EZV2, for atari and memory
+            self.obs_loss_weight = 10
+            self.value_loss_weight = 0.5
             self.reward_loss_weight = 1.
             self.policy_loss_weight = 1.
             self.ends_loss_weight = 0.
         else:
-            # TODO: TDMPC
-            # self.obs_loss_weight = 100 
-            # self.value_loss_weight = 1
-            # self.reward_loss_weight = 1.
-            # self.policy_loss_weight = 1.
-            # self.ends_loss_weight = 0.
-            # TODO: TDMPC for DMC
+            # like TD-MPC2 for DMC
             self.obs_loss_weight = 10
             self.value_loss_weight = 0.1
             self.reward_loss_weight = 0.1

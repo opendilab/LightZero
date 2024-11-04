@@ -363,7 +363,6 @@ class DMC2GymEnv(BaseEnv):
         action = action.astype('float32')
         action = affine_transform(action, min_val=self._env.action_space.low, max_val=self._env.action_space.high)
 
-
         # if self._cfg.is_eval:
         #     # TODO: test the effect of extreme action
         #     action = np.where(action > 0.9500, 0.9999, action)

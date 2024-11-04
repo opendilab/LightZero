@@ -665,6 +665,8 @@ class UniZeroPolicy(MuZeroPolicy):
                 print('==========collect_forward============')
                 print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
                 self._reset_collect(reset_init_data=True)
+                if getattr(self._cfg, 'sample_type', '') == 'episode':
+                    print('BUG: sample_type is episode, but len(self.last_batch_obs) < self.collector_env_num')
 
         return output
 
