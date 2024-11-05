@@ -57,7 +57,7 @@ cfg = dict(
             reanalyze_ratio=reanalyze_ratio,
             random_collect_episode_num=0,
             # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
-            policy_entropy_loss_weight=5e-3,
+            policy_entropy_weight=5e-3,
             n_episode=n_episode,
             eval_freq=int(1e3),
             replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.

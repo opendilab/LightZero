@@ -25,12 +25,11 @@ evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = None
 max_env_step = int(5e5)
-reanalyze_ratio = 0
 batch_size = 64
 num_layers = 2
-num_unroll_steps = 10
-infer_context_length = 4
-replay_ratio = 0.25
+num_unroll_steps = 5
+infer_context_length = 2
+replay_ratio = 0.1
 norm_type = 'LN'
 seed = 0
 
@@ -51,7 +50,6 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
         domain_name=domain_name,
         task_name=task_name,
         from_pixels=False,  # vector/state obs
-        # from_pixels=True,  # vector/state obs
         frame_skip=2,
         continuous=True,
         save_replay_gif=False,
@@ -113,7 +111,7 @@ dmc2gym_state_cont_sampled_unizero_config = dict(
         train_start_after_envsteps=2000,
         game_segment_length=game_segment_length,
         num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
+        reanalyze_ratio=0,
         n_episode=n_episode,
         eval_freq=int(5e3),
         replay_buffer_size=int(1e6),
@@ -142,6 +140,6 @@ create_config = dmc2gym_state_cont_sampled_unizero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_unizero
-    main_config.exp_name=f'data_suz/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}'
+    main_config.exp_name=f'data_suz/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_gsl{game_segment_length}_K{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}-eval{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}'
     train_unizero([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 

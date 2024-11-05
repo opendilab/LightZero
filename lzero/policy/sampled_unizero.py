@@ -117,7 +117,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 latent_recon_loss_weight=0.,
                 # (float) The weight of the perceptual loss.
                 perceptual_loss_weight=0.,
-                # (float) The weight of the policy entropy.
+                # (float) The weight of the policy entropy loss.
                 policy_entropy_weight=5e-3,
                 # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
                 predict_latent_loss_type='group_kl',
@@ -128,7 +128,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 # (float) The threshold for a dormant neuron.
                 dormant_threshold=0.025,
                 # (str) The type of policy loss. Options could be ['kl', 'simple'].
-                policy_loss_type='kl',  # 'simple'
+                policy_loss_type='kl',
             ),
         ),
         # ****** common ******

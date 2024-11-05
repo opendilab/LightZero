@@ -17,7 +17,7 @@ update_per_collect = 200
 batch_size = 256
 reanalyze_ratio = 0
 td_steps = 5
-policy_entropy_loss_weight = 0.  # 0.005
+policy_entropy_weight = 0.  # 0.005
 threshold_training_steps_for_final_temperature = int(5e5)
 eps_greedy_exploration_in_collect = False
 # ==============================================================
@@ -26,7 +26,7 @@ eps_greedy_exploration_in_collect = False
 
 minigrid_muzero_config = dict(
     exp_name=f'data_muzero/{env_id}_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_'
-             f'collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}_pelw{policy_entropy_loss_weight}_seed{seed}',
+             f'collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}_pelw{policy_entropy_weight}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -52,7 +52,7 @@ minigrid_muzero_config = dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
             decay=int(2e5),
         ),
-        policy_entropy_loss_weight=policy_entropy_loss_weight,
+        policy_entropy_weight=policy_entropy_weight,
         td_steps=td_steps,
         manual_temperature_decay=True,
         threshold_training_steps_for_final_temperature=threshold_training_steps_for_final_temperature,

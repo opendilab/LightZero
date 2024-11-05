@@ -48,12 +48,12 @@ def main(env_id, seed):
     # end of the most frequently changed config specified by the user
     # ==============================================================
 
-    dmc2gym_state_cont_sampled_unizero_config = dict(
+    dmc2gym_pixels_cont_sampled_unizero_config = dict(
         env=dict(
             env_id='dmc2gym-v0',
             domain_name=domain_name,
             task_name=task_name,
-            from_pixels=False,  # vector/state obs
+            from_pixels=True,  # pixel/image obs
             frame_skip=2,
             continuous=True,
             save_replay_gif=False,
@@ -69,14 +69,14 @@ def main(env_id, seed):
         policy=dict(
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000,),),),  # default is 10000
             model=dict(
-                observation_shape=obs_space_size,
+                observation_shape=(3, 84, 84),
                 action_space_size=action_space_size,
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
-                model_type='mlp',
+                model_type='conv',
                 world_model_cfg=dict(
                     policy_loss_type='kl',
-                    obs_type='vector',
+                    obs_type='image',
                     num_unroll_steps=num_unroll_steps,
                     policy_entropy_weight=5e-2,
                     continuous_action_space=continuous_action_space,
@@ -84,7 +84,7 @@ def main(env_id, seed):
                     sigma_type='conditioned',
                     fixed_sigma_value=0.5,
                     bound_type=None,
-                    model_type='mlp',
+                    model_type='conv',
                     norm_type=norm_type,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
@@ -132,26 +132,27 @@ def main(env_id, seed):
         ),
     )
 
-    dmc2gym_state_cont_sampled_unizero_config = EasyDict(dmc2gym_state_cont_sampled_unizero_config)
-    main_config = dmc2gym_state_cont_sampled_unizero_config
+    dmc2gym_pixels_cont_sampled_unizero_config = EasyDict(dmc2gym_pixels_cont_sampled_unizero_config)
+    main_config = dmc2gym_pixels_cont_sampled_unizero_config
 
-    dmc2gym_state_cont_sampled_unizero_create_config = dict(
+    dmc2gym_pixels_cont_sampled_unizero_create_config = dict(
         env=dict(
             type='dmc2gym_lightzero',
             import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
         ),
-        env_manager=dict(type='subprocess'),
+        # env_manager=dict(type='subprocess'),
+        env_manager=dict(type='base'),
         policy=dict(
             type='sampled_unizero',
             import_names=['lzero.policy.sampled_unizero'],
         ),
     )
-    dmc2gym_state_cont_sampled_unizero_create_config = EasyDict(dmc2gym_state_cont_sampled_unizero_create_config)
-    create_config = dmc2gym_state_cont_sampled_unizero_create_config
+    dmc2gym_pixels_cont_sampled_unizero_create_config = EasyDict(dmc2gym_pixels_cont_sampled_unizero_create_config)
+    create_config = dmc2gym_pixels_cont_sampled_unizero_create_config
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name=f'data_sampled_unizero/dmc2gym_{env_id}_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    main_config.exp_name=f'data_sampled_unizero/dmc2gym_{env_id}_brf{buffer_reanalyze_freq}_image_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
     train_unizero_segment([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 
 

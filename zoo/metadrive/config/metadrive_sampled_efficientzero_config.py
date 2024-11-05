@@ -66,7 +66,7 @@ metadrive_sampled_efficientzero_config = dict(
         lr_piecewise_constant_decay=False,
         learning_rate=0.003,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
-        policy_entropy_loss_weight=5e-3,
+        policy_entropy_weight=5e-3,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

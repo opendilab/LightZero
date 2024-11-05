@@ -159,7 +159,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # (float) The weight of policy loss.
         policy_loss_weight=1,
         # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=5e-3,
+        policy_entropy_weight=5e-3,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=2,
         # (bool) Whether to use the cosine learning rate decay.
@@ -502,7 +502,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         loss = (
                 self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
                 self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss +
-                self._cfg.policy_entropy_loss_weight * policy_entropy_loss
+                self._cfg.policy_entropy_weight * policy_entropy_loss
         )
         weighted_total_loss = (weights * loss).mean()
 

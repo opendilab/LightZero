@@ -1,4 +1,5 @@
 from easydict import EasyDict
+
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
 
@@ -18,15 +19,6 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     infer_context_length = 4
     num_layers = 2
     replay_ratio = 0.25
-
-    # ====== only for debug =====
-    # collector_env_num = 8
-    # evaluator_env_num = 2
-    # num_simulations = 5
-    # max_env_step = int(2e5)
-    # reanalyze_ratio = 0.1
-    # batch_size = 64
-    # num_unroll_steps = 10
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
@@ -64,22 +56,14 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),
             ),
-            # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
             model_path=None,
-            use_augmentation=False,
-            manual_temperature_decay=False,
-            threshold_training_steps_for_final_temperature=int(5e4),
-            use_priority=False,
             num_unroll_steps=num_unroll_steps,
-            update_per_collect=None,
             replay_ratio=replay_ratio,
             batch_size=batch_size,
-            optim_type='AdamW',
             learning_rate=0.0001,
             num_simulations=num_simulations,
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
-            grad_clip_value=20,
             replay_buffer_size=int(1e6),
             eval_freq=int(5e3),
             collector_env_num=collector_env_num,

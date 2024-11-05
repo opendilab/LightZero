@@ -21,7 +21,7 @@ batch_size = 256
 reanalyze_ratio = 0
 random_collect_episode_num = 0
 td_steps = 5
-policy_entropy_loss_weight = 0.
+policy_entropy_weight = 0.
 threshold_training_steps_for_final_temperature = int(5e5)
 eps_greedy_exploration_in_collect = False
 # ==============================================================
@@ -51,7 +51,7 @@ minigrid_sampled_efficientzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN', 
         ),
-        policy_entropy_loss_weight=policy_entropy_loss_weight,
+        policy_entropy_weight=policy_entropy_weight,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
             decay=int(2e5),

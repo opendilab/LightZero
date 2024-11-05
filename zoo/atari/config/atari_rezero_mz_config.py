@@ -14,22 +14,10 @@ update_per_collect = None
 batch_size = 256
 replay_ratio = 0.25
 max_env_step = int(5e5)
-
 # ============= The key different params for ReZero =============
 reuse_search = True
 collect_with_pure_policy = True
 buffer_reanalyze_freq = 1
-
-# ====== only for debug =====
-# collector_env_num = 8
-# num_segments = 8
-# evaluator_env_num = 2
-# num_simulations = 5
-# max_env_step = int(2e5)
-# reanalyze_ratio = 0.1
-# batch_size = 64
-# num_unroll_steps = 10
-# replay_ratio = 0.01
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================

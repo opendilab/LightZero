@@ -19,7 +19,7 @@ reanalyze_ratio = 0
 td_steps = 5
 game_segment_length = 30+memory_length
 num_unroll_steps = 16+memory_length
-policy_entropy_loss_weight = 1e-4
+policy_entropy_weight = 1e-4
 threshold_training_steps_for_final_temperature = int(1e5)
 eps_greedy_exploration_in_collect = True
 # ==============================================================
@@ -29,7 +29,7 @@ eps_greedy_exploration_in_collect = True
 memory_muzero_config = dict(
     exp_name=f'data_muzero/{env_id}_memlen-{memory_length}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_'
              f'collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}'
-             f'_pelw{policy_entropy_loss_weight}_seed{seed}_evalnum{evaluator_env_num}',
+             f'_pelw{policy_entropy_weight}_seed{seed}_evalnum{evaluator_env_num}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -63,7 +63,7 @@ memory_muzero_config = dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
             decay=int(5e4),  # NOTE: 50k env steps  for key_to_door
         ),
-        policy_entropy_loss_weight=policy_entropy_loss_weight,
+        policy_entropy_weight=policy_entropy_weight,
         td_steps=td_steps,
         cuda=True,
         env_type='not_board_games',

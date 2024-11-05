@@ -109,7 +109,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 latent_recon_loss_weight=0.,
                 # (float) The weight of the perceptual loss.
                 perceptual_loss_weight=0.,
-                # (float) The weight of the policy entropy.
+                # (float) The weight of the policy entropy loss.
                 policy_entropy_weight=0,
                 # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
                 predict_latent_loss_type='group_kl',
@@ -200,7 +200,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # (float) One-order Momentum in optimizer, which stabilizes the training process (gradient direction).
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
-        grad_clip_value=5,
+        grad_clip_value=20,
         # (int) The number of episodes in each collecting stage when use muzero_collector.
         n_episode=8,
         # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
@@ -229,7 +229,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # (bool) Whether to use manually decayed temperature.
         manual_temperature_decay=False,
         # (int) The number of final training iterations to control temperature, which is only used for manually decay.
-        threshold_training_steps_for_final_temperature=int(1e5),
+        threshold_training_steps_for_final_temperature=int(5e4),
         # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
         # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
         fixed_temperature_value=0.25,
