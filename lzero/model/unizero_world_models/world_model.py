@@ -1516,6 +1516,7 @@ class WorldModel(nn.Module):
         policy_entropy = dist.entropy().mean(dim=1)
         policy_entropy_loss = -policy_entropy * mask_batch
 
+        # Alternative way to calculate the log probability of the target actions
         # y = 1 - target_sampled_actions.pow(2)
         # target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
         # target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
