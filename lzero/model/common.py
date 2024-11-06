@@ -591,7 +591,8 @@ class LatentEncoderForMemoryEnv(nn.Module):
     def __init__(
             self,
             image_shape=(3, 5, 5),
-            embedding_size=100,
+            # embedding_size=100,  # original
+            embedding_size=256, # TODO
             channels=[16, 32, 64],
             kernel_sizes=[3, 3, 3],
             strides=[1, 1, 1],
