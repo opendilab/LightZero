@@ -1,18 +1,19 @@
 from easydict import EasyDict
 
 # Environment ID and task-specific parameters
-env_id = 'memory_maze:MemoryMaze-9x9-v0'  # The name of the environment
-memory_length = 1000  # Length of memory for the agent to store
+# env_id = 'memory_maze:MemoryMaze-9x9-v0'  # The name of the environment
+# memory_length = 1000  # Length of memory for the agent to store
 
 # memory_length = 10  # TODO: DEBUG
 
-
 # env_id = 'memory_maze:MemoryMaze-11x11-v0'  # The name of the environment
 # memory_length = 2000  # Length of memory for the agent to store
+
 # env_id = 'memory_maze:MemoryMaze-13x13-v0'  # The name of the environment
 # memory_length = 3000  # Length of memory for the agent to store
-# env_id = 'memory_maze:MemoryMaze-15x15-v0'  # The name of the environment
-# memory_length = 4000  # Length of memory for the agent to store
+
+env_id = 'memory_maze:MemoryMaze-15x15-v0'  # The name of the environment
+memory_length = 4000  # Length of memory for the agent to store
 
 max_env_step = int(10e6)  # Maximum number of environment steps
 # embed_dim = 256  # Embedding dimension for the model
@@ -25,8 +26,9 @@ num_heads = 4  # Number of heads in the attention mechanism
 
 
 # Unroll steps and game segment length for the training process
-num_unroll_steps = memory_length
-game_segment_length = memory_length
+num_unroll_steps = 1000 # TODO: 1000
+infer_context_length = 1000  # TODO
+game_segment_length = memory_length+1
 collector_env_num = 8  # Number of collector environments
 n_episode = 8  # Number of episodes per collection
 evaluator_env_num = 10  # Number of evaluator environments
@@ -70,14 +72,15 @@ memory_maze_unizero_config = dict(
                 hook=dict(save_ckpt_after_iter=1000000, ),  # Save checkpoint after 1M iterations
             ),
         ),
-        sample_type='episode',  # Sampling type for memory environments
+        # sample_type='episode',  # Sampling type for memory environments
+        sample_type='transition',  # TODO
         model=dict(
             observation_shape=(3, 64, 64),  # Observation shape for the environment
             action_space_size=6,  # Number of possible actions
             world_model_cfg=dict(
                 max_blocks=num_unroll_steps + 5,  # Maximum number of blocks
                 max_tokens=2 * (num_unroll_steps + 5),  # Maximum number of tokens
-                context_length=2 * (num_unroll_steps + 5),  # Context length for memory
+                context_length=2 * (infer_context_length + 5),  # Context length for memory
                 device='cuda',  # Use GPU for training
                 action_space_size=6,  # Action space size
                 num_layers=num_layers,  # Number of layers in the model
@@ -132,7 +135,7 @@ create_config = memory_maze_unizero_create_config
 
 # Main function for training
 if __name__ == "__main__":
-    seeds = [1]  # List of seeds for multiple experiments
+    seeds = [0]  # List of seeds for multiple experiments
     for seed in seeds:
         # Define the experiment name based on the configuration parameters
         main_config.exp_name = f'data_{env_id}/{env_id}_td{td_steps}_layer{num_layers}-head{num_heads}_unizero_edim{embed_dim}_H{num_unroll_steps}_bs{batch_size}_upc{update_per_collect}_seed{seed}'

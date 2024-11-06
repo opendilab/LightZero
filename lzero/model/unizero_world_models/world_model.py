@@ -1195,8 +1195,8 @@ class WorldModel(nn.Module):
 
         elif self.obs_type == 'image_memory':
             # Reconstruct observations from latent state representations
-            reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
-            original_images, reconstructed_images = batch['observations'], reconstructed_images
+            # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+            # original_images, reconstructed_images = batch['observations'], reconstructed_images
 
             #  ========== for visualization ==========
             # Uncomment the lines below for visual analysis
@@ -1208,10 +1208,30 @@ class WorldModel(nn.Module):
             #  ========== for visualization ==========
 
             # Calculate reconstruction loss and perceptual loss
-            latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 5, 5),
-                                                                   reconstructed_images)
+            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 5, 5),
+            #                                                        reconstructed_images)
+            latent_recon_loss = self.latent_recon_loss
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=batch['observations'].dtype)
+        elif self.obs_type == 'image_memory_maze':
+            # Reconstruct observations from latent state representations
+            # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+            # original_images, reconstructed_images = batch['observations'], reconstructed_images
+
+            #  ========== for visualization ==========
+            # Uncomment the lines below for visual analysis
+            # target_policy = batch['target_policy']
+            # target_predict_value = inverse_scalar_transform_handle(batch['target_value'].reshape(-1, 101)).reshape(
+            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
+            # true_rewards = inverse_scalar_transform_handle(batch['rewards'].reshape(-1, 101)).reshape(
+            #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
+            #  ========== for visualization ==========
+
+            # Calculate reconstruction loss and perceptual loss
+            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 5, 5),
+            #                                                        reconstructed_images)
+            latent_recon_loss = self.latent_recon_loss
+            perceptual_loss = self.perceptual_loss
 
         # Action tokens
         if self.continuous_action_space:

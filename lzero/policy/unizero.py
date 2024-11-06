@@ -796,7 +796,11 @@ class UniZeroPolicy(MuZeroPolicy):
             return
 
         # Determine the clear interval based on the environment's sample type
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        if self._cfg.model.world_model_cfg.obs_type in ['image_memory_maze', 'image_memory']:
+            clear_interval = 9999999 
+        else:
+            clear_interval = 200
 
         # Clear caches if the current steps are a multiple of the clear interval
         if current_steps % clear_interval == 0:
@@ -840,7 +844,11 @@ class UniZeroPolicy(MuZeroPolicy):
             return
 
         # Determine the clear interval based on the environment's sample type
-        clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
+        if self._cfg.model.world_model_cfg.obs_type in ['image_memory_maze', 'image_memory']:
+            clear_interval = 9999999 
+        else:
+            clear_interval = 200
 
         # Clear caches if the current steps are a multiple of the clear interval
         if current_steps % clear_interval == 0:

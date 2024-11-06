@@ -120,30 +120,70 @@ class UniZeroModel(nn.Module):
                 activation=self.activation,
                 group_size=world_model_cfg.group_size,
             )
-            self.decoder_network = LatentDecoderForMemoryEnv(
-                image_shape=(3, 5, 5),
-                embedding_size=world_model_cfg.embed_dim,
-                channels=[64, 32, 16],
-                kernel_sizes=[3, 3, 3],
-                strides=[1, 1, 1],
-                activation=self.activation,
-            )
+            # self.decoder_network = LatentDecoderForMemoryEnv(
+            #     image_shape=(3, 5, 5),
+            #     embedding_size=world_model_cfg.embed_dim,
+            #     channels=[64, 32, 16],
+            #     kernel_sizes=[3, 3, 3],
+            #     strides=[1, 1, 1],
+            #     activation=self.activation,
+            # )
+            self.decoder_network = None
 
             if world_model_cfg.analysis_sim_norm:
                 # ====== for analysis ======
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
 
-            self.tokenizer = Tokenizer(with_lpips=True, encoder=self.representation_network,
+            # self.tokenizer = Tokenizer(with_lpips=True, encoder=self.representation_network,
+            #                            decoder_network=self.decoder_network)
+            self.tokenizer = Tokenizer(with_lpips=False, encoder=self.representation_network,
                                        decoder_network=self.decoder_network)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
-            print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
+            # print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
 
             print('==' * 20)
             print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
             print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
-            print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
+            # print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
+            print('==' * 20)
+        elif world_model_cfg.obs_type == 'image_memory_maze':
+            self.representation_network = LatentEncoderForMemoryEnv(
+                image_shape=(3, 64, 64),
+                embedding_size=world_model_cfg.embed_dim,
+                channels=[16, 32, 64],
+                kernel_sizes=[3, 3, 3],
+                strides=[1, 1, 1],
+                activation=self.activation,
+                group_size=world_model_cfg.group_size,
+            )
+            # self.decoder_network = LatentDecoderForMemoryEnv(
+            #     image_shape=(3, 64, 64),
+            #     embedding_size=world_model_cfg.embed_dim,
+            #     channels=[64, 32, 16],
+            #     kernel_sizes=[3, 3, 3],
+            #     strides=[1, 1, 1],
+            #     activation=self.activation,
+            # )
+            self.decoder_network = None
+
+            if world_model_cfg.analysis_sim_norm:
+                # ====== for analysis ======
+                self.encoder_hook = FeatureAndGradientHook()
+                self.encoder_hook.setup_hooks(self.representation_network)
+
+            # self.tokenizer = Tokenizer(with_lpips=True, encoder=self.representation_network,
+            #                            decoder_network=self.decoder_network)
+            self.tokenizer = Tokenizer(with_lpips=False, encoder=self.representation_network,
+                                       decoder_network=self.decoder_network)
+            self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
+            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
+            # print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')
+
+            print('==' * 20)
+            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
+            print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
             print('==' * 20)
 
     def initial_inference(self, obs_batch: torch.Tensor, action_batch=None, current_obs_batch=None) -> MZNetworkOutput:

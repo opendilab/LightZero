@@ -41,7 +41,7 @@ class MemoryMazeEnvLightZero(BaseEnv):
         render=False,  # Enables real-time rendering using matplotlib
         scale_observation=True,  # Whether to scale observations to [0, 1]
         rgb_img_observation=True,  # Return RGB image observations
-        flatten_observation=True,  # Flatten the observation tensor
+        flatten_observation=False,  # Flatten the observation tensor
         # max_steps=1000,  # The default maximum number of steps per episode
         max_steps=1e9,  # The default maximum number of steps per episode
     )
@@ -88,12 +88,12 @@ class MemoryMazeEnvLightZero(BaseEnv):
         self._episode_reward = 0
 
         # Set this if you are getting "Unable to load EGL library" error:
-        # import os
-        # os.environ['MUJOCO_GL'] = 'glfw'
+        os.environ['MUJOCO_GL'] = 'glfw'
+        # os.environ['MUJOCO_GL'] = 'osmesa'
 
         # Initialize the Memory Maze environment
         self._env = gym.make(self._cfg.env_id)
-        print('==============env reset==============')
+        # print('==============env reset==============')
         observation = self._env.reset()
 
         # Define action and observation spaces
@@ -111,6 +111,10 @@ class MemoryMazeEnvLightZero(BaseEnv):
 
         # Process observation (scaling and flattening)
         observation = self._process_observation(observation)
+        action_mask = np.ones(self.action_space.n, 'int8')
+        
+        observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1}
+
         return observation
 
     def step(self, action: np.ndarray) -> BaseEnvTimestep:
@@ -138,14 +142,18 @@ class MemoryMazeEnvLightZero(BaseEnv):
 
         # Process the observation (scaling and flattening)
         observation = self._process_observation(observation)
+        action_mask = np.ones(self.action_space.n, 'int8')
 
         # Check if episode is done or maximum steps reached
         if done or self._current_step >= self._max_steps:
             done = True
-            info['episode_return'] = self._episode_reward
+            info['eval_episode_return'] = self._episode_reward
+            print(f'one episode done! eval_episode_return is {self._episode_reward}')
 
             if self._save_replay:
                 self._save_gif()
+
+        observation = {'observation': observation, 'action_mask': action_mask, 'to_play': -1}
 
         return BaseEnvTimestep(observation, reward, done, info)
 
@@ -190,6 +198,7 @@ class MemoryMazeEnvLightZero(BaseEnv):
         """
         if self.rgb_img_observation and self.scale_observation:
             observation = observation / 255.0  # Scale RGB values to [0, 1]
+            observation = np.transpose(observation, (-1, 0, 1))  # (H,W,C) -> (C,H,W)
 
         if self.flatten_observation:
             observation = observation.flatten()

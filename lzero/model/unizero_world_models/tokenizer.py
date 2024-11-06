@@ -74,6 +74,7 @@ class Tokenizer(nn.Module):
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 4:
             # Case when input is 4D (B, C, H, W)
+            # import ipdb;ipdb.set_trace()
             obs_embeddings = self.encoder(x)
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 5:
