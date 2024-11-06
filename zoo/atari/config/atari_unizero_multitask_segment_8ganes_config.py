@@ -45,10 +45,10 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 norm_type=norm_type,
                 # num_res_blocks=1, # NOTE: encoder for 1 game
                 # num_channels=64,
-                # num_res_blocks=2,  # NOTE: encoder for 4 game
+                num_res_blocks=2,  # NOTE: encoder for 4 game
                 # num_channels=128,
                 # num_res_blocks=4,  # NOTE: encoder for 8 game
-                num_res_blocks=2,  # NOTE: encoder for 8 game
+                # num_res_blocks=2,  # NOTE: encoder for 8 game
                 num_channels=256,
                 world_model_cfg=dict(
                     max_blocks=num_unroll_steps,
@@ -103,7 +103,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
-            replay_buffer_size=int(1e6),
+            # replay_buffer_size=int(1e6),
+            replay_buffer_size=int(5e5), # TODO
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             # ============= The key different params for reanalyze =============
@@ -127,7 +128,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # exp_name_prefix = f'data_unizero_mt_0722_profile/lineprofile_{len(env_id_list)}games_1-encoder-{norm_type}_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}-res2-channel128_gsl20_4-head_lsd768-nlayer4-nh8_max-bs64*4_upc40_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}-res2-channel256_gsl20_8-head_lsd768-nlayer4-nh8_max-bs32*8_upc40_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_segcollect_1107/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_maxbs-320_upc160_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_segcollect_1107/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-320_upc160_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}_gsl20_8-head_lsd768-nlayer4-nh8_max-bs64*8_upc40_seed{seed}/'
 
 
@@ -175,12 +176,12 @@ def create_env_manager():
 if __name__ == "__main__":
     from lzero.entry import train_unizero_multitask_segment
     # TODO
-    env_id_list = [
-        'PongNoFrameskip-v4',
-        'MsPacmanNoFrameskip-v4',
-        'SeaquestNoFrameskip-v4',
-        'BoxingNoFrameskip-v4'
-    ]
+    # env_id_list = [
+    #     'PongNoFrameskip-v4',
+    #     'MsPacmanNoFrameskip-v4',
+    #     'SeaquestNoFrameskip-v4',
+    #     'BoxingNoFrameskip-v4'
+    # ]
 
     env_id_list = [
         'PongNoFrameskip-v4',
@@ -194,35 +195,35 @@ if __name__ == "__main__":
     ]
 
     # 26games
-    env_id_list = [
-        'PongNoFrameskip-v4',
-        'MsPacmanNoFrameskip-v4',
-        'SeaquestNoFrameskip-v4',
-        'BoxingNoFrameskip-v4',
-        'AlienNoFrameskip-v4',
-        'ChopperCommandNoFrameskip-v4',
-        'HeroNoFrameskip-v4',
-        'RoadRunnerNoFrameskip-v4',
+    # env_id_list = [
+    #     'PongNoFrameskip-v4',
+    #     'MsPacmanNoFrameskip-v4',
+    #     'SeaquestNoFrameskip-v4',
+    #     'BoxingNoFrameskip-v4',
+    #     'AlienNoFrameskip-v4',
+    #     'ChopperCommandNoFrameskip-v4',
+    #     'HeroNoFrameskip-v4',
+    #     'RoadRunnerNoFrameskip-v4',
 
-        'AmidarNoFrameskip-v4',
-        'AssaultNoFrameskip-v4',
-        'AsterixNoFrameskip-v4',
-        'BankHeistNoFrameskip-v4',
-        'BattleZoneNoFrameskip-v4',
-        'CrazyClimberNoFrameskip-v4',
-        'DemonAttackNoFrameskip-v4',
-        'FreewayNoFrameskip-v4',
-        'FrostbiteNoFrameskip-v4',
-        'GopherNoFrameskip-v4',
-        'JamesbondNoFrameskip-v4',
-        'KangarooNoFrameskip-v4',
-        'KrullNoFrameskip-v4',
-        'KungFuMasterNoFrameskip-v4',
-        'PrivateEyeNoFrameskip-v4',
-        'UpNDownNoFrameskip-v4',
-        'QbertNoFrameskip-v4',
-        'BreakoutNoFrameskip-v4',
-    ]
+    #     'AmidarNoFrameskip-v4',
+    #     'AssaultNoFrameskip-v4',
+    #     'AsterixNoFrameskip-v4',
+    #     'BankHeistNoFrameskip-v4',
+    #     'BattleZoneNoFrameskip-v4',
+    #     'CrazyClimberNoFrameskip-v4',
+    #     'DemonAttackNoFrameskip-v4',
+    #     'FreewayNoFrameskip-v4',
+    #     'FrostbiteNoFrameskip-v4',
+    #     'GopherNoFrameskip-v4',
+    #     'JamesbondNoFrameskip-v4',
+    #     'KangarooNoFrameskip-v4',
+    #     'KrullNoFrameskip-v4',
+    #     'KungFuMasterNoFrameskip-v4',
+    #     'PrivateEyeNoFrameskip-v4',
+    #     'UpNDownNoFrameskip-v4',
+    #     'QbertNoFrameskip-v4',
+    #     'BreakoutNoFrameskip-v4',
+    # ]
 
 
     action_space_size = 18  # Full action space
@@ -232,14 +233,14 @@ if __name__ == "__main__":
     n_episode = 8
     evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(1e6) # TODO
+    # max_env_step = int(1e6)
+    max_env_step = int(5e5) # TODO
+
     reanalyze_ratio = 0.
     # batch_size = [32, 32, 32, 32]
     # max_batch_size = 2048
 
     max_batch_size = 320
-    # max_batch_size = int(64*4)
-    # batch_size = [int(max_batch_size/len(env_id_list)) for i in range(len(env_id_list))]
     batch_size = [int(min(64, max_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
     # batch_size = [int(min(32, max_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
     print(f'=========== batch_size: {batch_size} ===========')
@@ -250,10 +251,10 @@ if __name__ == "__main__":
     norm_type = 'LN'
     # # norm_type = 'BN'  # bad performance now
 
-    # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
+    # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 1/10 means reanalyze once every ten epochs.
+    buffer_reanalyze_freq = 1/50 # TODO
     # buffer_reanalyze_freq = 1/10
-    # buffer_reanalyze_freq = 1/50
-    buffer_reanalyze_freq = 1/100000
+    # buffer_reanalyze_freq = 1/100000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
