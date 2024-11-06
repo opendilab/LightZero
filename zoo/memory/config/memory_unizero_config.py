@@ -89,7 +89,6 @@ memory_unizero_config = dict(
         model=dict(
             observation_shape=(3, 5, 5),
             action_space_size=4,
-            embedding_size=100,
             world_model_cfg=dict(
                 # In order to preserve the observation data of the first frame in a memory environment,
                 # we must ensure that we do not exceed the episode_length during the MCTS of the last frame.

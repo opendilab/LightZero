@@ -1,8 +1,8 @@
 from easydict import EasyDict
 
 # Environment ID and task-specific parameters
-# env_id = 'memory_maze:MemoryMaze-9x9-v0'  # The name of the environment
-# memory_length = 1000  # Length of memory for the agent to store
+env_id = 'memory_maze:MemoryMaze-9x9-v0'  # The name of the environment
+memory_length = 1000  # Length of memory for the agent to store
 
 # memory_length = 10  # TODO: DEBUG
 
@@ -12,22 +12,24 @@ from easydict import EasyDict
 # env_id = 'memory_maze:MemoryMaze-13x13-v0'  # The name of the environment
 # memory_length = 3000  # Length of memory for the agent to store
 
-env_id = 'memory_maze:MemoryMaze-15x15-v0'  # The name of the environment
-memory_length = 4000  # Length of memory for the agent to store
+# env_id = 'memory_maze:MemoryMaze-15x15-v0'  # The name of the environment
+# memory_length = 4000  # Length of memory for the agent to store
 
 max_env_step = int(10e6)  # Maximum number of environment steps
 # embed_dim = 256  # Embedding dimension for the model
 # num_layers = 8  # Number of layers in the model
 # num_heads = 8  # Number of heads in the attention mechanism
 
-embed_dim = 512  # Embedding dimension for the model
+# embed_dim = 512  # Embedding dimension for the model
+# embed_dim = 256  # Embedding dimension for the model OOM
+embed_dim = 128  # Embedding dimension for the model
 num_layers = 4  # Number of layers in the model
 num_heads = 4  # Number of heads in the attention mechanism
 
 
 # Unroll steps and game segment length for the training process
-num_unroll_steps = 1000 # TODO: 1000
-infer_context_length = 1000  # TODO
+num_unroll_steps = 500 # TODO: 1000
+infer_context_length = num_unroll_steps  # TODO
 game_segment_length = memory_length+1
 collector_env_num = 8  # Number of collector environments
 n_episode = 8  # Number of episodes per collection
@@ -37,7 +39,11 @@ evaluator_env_num = 10  # Number of evaluator environments
 num_simulations = 50  # Number of simulations for MCTS
 update_per_collect = 50  # Number of updates per data collection
 replay_ratio = 0.1  # Ratio of replay buffer usage
-batch_size = 64  # Batch size for training
+# batch_size = 64  # Batch size for training
+
+batch_size = 4  # Batch size for training # TODO
+
+
 reanalyze_ratio = 0  # Ratio for reanalyzing the replay buffer
 td_steps = game_segment_length  # Temporal difference steps for value estimation
 
@@ -138,7 +144,7 @@ if __name__ == "__main__":
     seeds = [0]  # List of seeds for multiple experiments
     for seed in seeds:
         # Define the experiment name based on the configuration parameters
-        main_config.exp_name = f'data_{env_id}/{env_id}_td{td_steps}_layer{num_layers}-head{num_heads}_unizero_edim{embed_dim}_H{num_unroll_steps}_bs{batch_size}_upc{update_per_collect}_seed{seed}'
+        main_config.exp_name = f'data_memory_maze_1108/{env_id}_H{num_unroll_steps}_notclear/td{td_steps}_layer{num_layers}-head{num_heads}_unizero_edim{embed_dim}_bs{batch_size}_upc{update_per_collect}_seed{seed}'
         # Import the training function and start training
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path,

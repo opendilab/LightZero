@@ -148,7 +148,7 @@ class MemoryMazeEnvLightZero(BaseEnv):
         if done or self._current_step >= self._max_steps:
             done = True
             info['eval_episode_return'] = self._episode_reward
-            print(f'one episode done! eval_episode_return is {self._episode_reward}')
+            print(f'========one episode done! eval_episode_return is {self._episode_reward}========')
 
             if self._save_replay:
                 self._save_gif()

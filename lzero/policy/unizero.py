@@ -799,6 +799,9 @@ class UniZeroPolicy(MuZeroPolicy):
         # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
         if self._cfg.model.world_model_cfg.obs_type in ['image_memory_maze', 'image_memory']:
             clear_interval = 9999999 
+            torch.cuda.empty_cache() # TODO
+            # clear_interval = 1000
+            # clear_interval = 500 
         else:
             clear_interval = 200
 
@@ -847,6 +850,11 @@ class UniZeroPolicy(MuZeroPolicy):
         # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
         if self._cfg.model.world_model_cfg.obs_type in ['image_memory_maze', 'image_memory']:
             clear_interval = 9999999 
+            torch.cuda.empty_cache() # TODO
+            # clear_interval = 1000
+            # clear_interval = 500
+            # Free up GPU memory
+            
         else:
             clear_interval = 200
 
