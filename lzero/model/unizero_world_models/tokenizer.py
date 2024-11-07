@@ -87,7 +87,10 @@ class Tokenizer(nn.Module):
         elif len(shape) == 5:
             # Case when input is 5D (B, T, C, H, W)
             x = x.contiguous().view(-1, *shape[-3:])  # Flatten the first two dimensions (B * T, C, H, W)
-            obs_embeddings = self.encoder[task_id](x)
+            try:
+                obs_embeddings = self.encoder[task_id](x)
+            except Exception as e:
+                obs_embeddings = self.encoder(x) # TODO: for memory env
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         else:
             raise ValueError(f"Invalid input shape: {shape}")

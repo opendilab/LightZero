@@ -36,15 +36,6 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             stop_value=int(1e6),
             env_id=env_id,
             observation_shape=(3, 96, 96),
-<<<<<<< HEAD
-            action_space_size=action_space_size,
-            world_model_cfg=dict(
-                continuous_action_space=False,
-                max_blocks=num_unroll_steps,
-                max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
-                context_length=2 * infer_context_length,
-                device='cuda',
-=======
             gray_scale=False,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -58,7 +49,6 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
             model=dict(
                 observation_shape=(3, 96, 96),
->>>>>>> eb268ac17672364c5a76091d574852eb0e2c8e41
                 action_space_size=action_space_size,
                 world_model_cfg=dict(
                     policy_entropy_weight=0,
@@ -114,7 +104,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     atari_unizero_create_config = EasyDict(atari_unizero_create_config)
     create_config = atari_unizero_create_config
 
-    main_config.exp_name = f'data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_4090/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
