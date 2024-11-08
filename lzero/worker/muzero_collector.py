@@ -4,6 +4,7 @@ from typing import Optional, Any, List
 
 import numpy as np
 import torch
+import wandb
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, get_rank, get_world_size, \
@@ -13,7 +14,6 @@ from torch.nn import L1Loss
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
-import wandb
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')

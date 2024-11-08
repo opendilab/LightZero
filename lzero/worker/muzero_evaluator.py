@@ -5,6 +5,7 @@ from typing import Optional, Callable, Tuple, Dict, Any
 
 import numpy as np
 import torch
+import wandb
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray, to_item, to_tensor
 from ding.utils import build_logger, EasyTimer
@@ -14,7 +15,7 @@ from easydict import EasyDict
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
-import wandb
+
 
 class MuZeroEvaluator(ISerialEvaluator):
     """

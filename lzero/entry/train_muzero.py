@@ -4,6 +4,7 @@ from functools import partial
 from typing import Optional, Tuple
 
 import torch
+import wandb
 from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
@@ -18,8 +19,8 @@ from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
-from .utils import random_collect, initialize_zeros_batch
-import wandb
+from .utils import random_collect
+
 
 def train_muzero(
         input_cfg: Tuple[dict, dict],
@@ -235,8 +236,5 @@ def train_muzero(
 
     # Learner's after_run hook.
     learner.call_hook('after_run')
-    # 结束 wandb
-    # wandb.finish()
-    train_run.finish()
-    step_run.finish()
+    wandb.finish()
     return policy

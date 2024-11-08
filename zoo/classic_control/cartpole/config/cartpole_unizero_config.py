@@ -52,6 +52,7 @@ cartpole_unizero_config = dict(
                 norm_type='BN',
             ),
         ),
+        use_wandb=True,
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
         num_unroll_steps=num_unroll_steps,
