@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch
+import wandb
 import torch.optim as optim
 from ding.model import model_wrap
 from ding.torch_utils import to_tensor
@@ -520,7 +521,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
             predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
             predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
 
-        return_data = {
+        return_log_dict = {
             'cur_lr': self._optimizer.param_groups[0]['lr'],
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'weighted_total_loss': weighted_total_loss.item(),
@@ -546,7 +547,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
         }
 
         if self._cfg.model.continuous_action_space:
-            return_data.update({
+            return_log_dict.update({
                 # ==============================================================
                 # sampled related core code
                 # ==============================================================
@@ -563,7 +564,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
                 'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
             })
         else:
-            return_data.update({
+            return_log_dict.update({
                 # ==============================================================
                 # sampled related core code
                 # ==============================================================
@@ -574,7 +575,11 @@ class SampledMuZeroPolicy(MuZeroPolicy):
                 'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
             })
 
-        return return_data
+        if self._cfg.use_wandb:
+            wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
+            wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
+            
+        return return_log_dict
 
     def _calculate_policy_loss_cont(
             self, policy_loss: torch.Tensor, policy_logits: torch.Tensor, target_policy: torch.Tensor,

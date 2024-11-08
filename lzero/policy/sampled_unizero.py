@@ -5,6 +5,7 @@ from typing import List, Dict, Tuple, Union
 
 import numpy as np
 import torch
+import wandb
 from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
 
@@ -524,7 +525,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             current_memory_allocated_gb = 0.
             max_memory_allocated_gb = 0.
 
-        return_loss_dict = {
+        return_log_dict = {
             'analysis/first_step_loss_value': first_step_losses['loss_value'].item(),
             'analysis/first_step_loss_policy': first_step_losses['loss_policy'].item(),
             'analysis/first_step_loss_rewards': first_step_losses['loss_rewards'].item(),
@@ -571,7 +572,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         }
 
         if self._cfg.model.continuous_action_space:
-            return_loss_dict.update({
+            return_log_dict.update({
                 # ==============================================================
                 # sampled related core code
                 # ==============================================================
@@ -587,7 +588,11 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 'target_sampled_actions_mean': target_sampled_actions_mean
             })
 
-        return return_loss_dict
+        if self._cfg.use_wandb:
+            wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
+            wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
+
+        return return_log_dict
 
     def monitor_weights_and_grads(self, model):
         for name, param in model.named_parameters():

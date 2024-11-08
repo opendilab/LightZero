@@ -19,6 +19,7 @@ cartpole_muzero_config = dict(
     exp_name=f'data_muzero/cartpole_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id='CartPole-v0',
+        stop_value=200,
         continuous=False,
         manually_discretization=False,
         collector_env_num=collector_env_num,
@@ -27,6 +28,7 @@ cartpole_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        use_wandb=True,
         model=dict(
             observation_shape=4,
             action_space_size=2,
@@ -52,7 +54,7 @@ cartpole_muzero_config = dict(
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
-        eval_freq=int(2e2),
+        eval_freq=int(100),
         replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

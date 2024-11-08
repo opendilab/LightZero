@@ -13,6 +13,7 @@ from torch.nn import L1Loss
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
+import wandb
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
@@ -767,3 +768,6 @@ class MuZeroCollector(ISerialCollector):
                 if k in ['total_envstep_count']:
                     continue
                 self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
+
+            if self.policy_config.use_wandb:
+                wandb.log({'{}_step/'.format(self._instance_name) + k: v for k, v in info.items()}, step=self._total_envstep_count)

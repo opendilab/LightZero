@@ -14,7 +14,7 @@ from easydict import EasyDict
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
-
+import wandb
 
 class MuZeroEvaluator(ISerialEvaluator):
     """
@@ -433,6 +433,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                     continue
                 self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
                 self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, envstep)
+                if self.policy_config.use_wandb:
+                    wandb.log({'{}_step/'.format(self._instance_name) + k: v}, step=envstep)
+
             episode_return = np.mean(episode_return)
             if episode_return > self._max_episode_return:
                 if save_ckpt_fn:
