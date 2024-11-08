@@ -91,6 +91,7 @@ def plot_normalized_scores(algorithms, means, medians, filename="normalized_scor
 
     # Save the plot as a high-resolution image suitable for publications
     plt.savefig(filename, dpi=300)
+    print(f"Plot saved as {filename}")
     plt.close()
 
 
