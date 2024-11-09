@@ -46,10 +46,10 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 norm_type=norm_type,
                 # num_res_blocks=1, # NOTE: encoder for 1 game
                 # num_channels=64,
-                # num_res_blocks=2,  # NOTE: encoder for 4 game
+                num_res_blocks=2,  # NOTE: encoder for 4 game
                 # num_channels=128,
                 # num_res_blocks=4,  # NOTE: encoder for 8 game
-                num_res_blocks=2,  # NOTE: encoder for 8 game
+                # num_res_blocks=2,  # NOTE: encoder for 8 game
                 num_channels=256,
                 world_model_cfg=dict(
                     max_blocks=num_unroll_steps,
@@ -96,8 +96,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             game_segment_length=20,
             # update_per_collect=None,
             # update_per_collect=40, # TODO: 4/8games max-bs=64*4 8*20*0.25
-            # update_per_collect=160, # TODO: 26games max-bs=400, 8*20*1=160
-            update_per_collect=80, # TODO: 26games max-bs=400, 8*20*1=160
+            update_per_collect=160, # TODO: 26games max-bs=400, 8*20*1=160
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -105,8 +104,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
+            # replay_buffer_size=int(1e6),
             replay_buffer_size=int(5e5), # TODO
-            eval_freq=int(1e4),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             # ============= The key different params for reanalyze =============
@@ -122,8 +121,17 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments):
     configs = []
     # TODO
-    # exp_name_prefix = f'data_unizero_mt_segcollect_1107/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_maxbs-320_upc160_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_segcollect_1107_ddp8/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_maxbs-640_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0711/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head-softmoe4_1-encoder-{norm_type}_lsd768-nlayer4-nh8_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_MoCo_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0719/{len(env_id_list)}games_pong-boxing-envnum2_4-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer2-nh8_max-bs1500_upc1000_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_1-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0722_debug/{len(env_id_list)}games_1-encoder-{norm_type}_trans-ffw-moeV2-expert4_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_0722_profile/lineprofile_{len(env_id_list)}games_1-encoder-{norm_type}_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}-res2-channel128_gsl20_4-head_lsd768-nlayer4-nh8_max-bs64*4_upc40_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}-res2-channel256_gsl20_8-head_lsd768-nlayer4-nh8_max-bs32*8_upc40_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_segcollect_1107_ddp8/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-320_upc160_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}_gsl20_8-head_lsd768-nlayer4-nh8_max-bs64*8_upc40_seed{seed}/'
+
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -176,18 +184,6 @@ if __name__ == "__main__":
     #     'BoxingNoFrameskip-v4'
     # ]
 
-    # env_id_list = [
-    #     'PongNoFrameskip-v4',
-    #     'MsPacmanNoFrameskip-v4',
-    #     'SeaquestNoFrameskip-v4',
-    #     'BoxingNoFrameskip-v4',
-    #     'AlienNoFrameskip-v4',
-    #     'ChopperCommandNoFrameskip-v4',
-    #     'HeroNoFrameskip-v4',
-    #     'RoadRunnerNoFrameskip-v4',
-    # ]
-
-    # 26games
     env_id_list = [
         'PongNoFrameskip-v4',
         'MsPacmanNoFrameskip-v4',
@@ -197,36 +193,50 @@ if __name__ == "__main__":
         'ChopperCommandNoFrameskip-v4',
         'HeroNoFrameskip-v4',
         'RoadRunnerNoFrameskip-v4',
-
-        'AmidarNoFrameskip-v4',
-        'AssaultNoFrameskip-v4',
-        'AsterixNoFrameskip-v4',
-        'BankHeistNoFrameskip-v4',
-        'BattleZoneNoFrameskip-v4',
-        'CrazyClimberNoFrameskip-v4',
-        'DemonAttackNoFrameskip-v4',
-        'FreewayNoFrameskip-v4',
-        'FrostbiteNoFrameskip-v4',
-        'GopherNoFrameskip-v4',
-        'JamesbondNoFrameskip-v4',
-        'KangarooNoFrameskip-v4',
-        'KrullNoFrameskip-v4',
-        'KungFuMasterNoFrameskip-v4',
-        'PrivateEyeNoFrameskip-v4',
-        'UpNDownNoFrameskip-v4',
-        'QbertNoFrameskip-v4',
-        'BreakoutNoFrameskip-v4',
     ]
+
+    # 26games
+    # env_id_list = [
+    #     'PongNoFrameskip-v4',
+    #     'MsPacmanNoFrameskip-v4',
+    #     'SeaquestNoFrameskip-v4',
+    #     'BoxingNoFrameskip-v4',
+    #     'AlienNoFrameskip-v4',
+    #     'ChopperCommandNoFrameskip-v4',
+    #     'HeroNoFrameskip-v4',
+    #     'RoadRunnerNoFrameskip-v4',
+
+    #     'AmidarNoFrameskip-v4',
+    #     'AssaultNoFrameskip-v4',
+    #     'AsterixNoFrameskip-v4',
+    #     'BankHeistNoFrameskip-v4',
+    #     'BattleZoneNoFrameskip-v4',
+    #     'CrazyClimberNoFrameskip-v4',
+    #     'DemonAttackNoFrameskip-v4',
+    #     'FreewayNoFrameskip-v4',
+    #     'FrostbiteNoFrameskip-v4',
+    #     'GopherNoFrameskip-v4',
+    #     'JamesbondNoFrameskip-v4',
+    #     'KangarooNoFrameskip-v4',
+    #     'KrullNoFrameskip-v4',
+    #     'KungFuMasterNoFrameskip-v4',
+    #     'PrivateEyeNoFrameskip-v4',
+    #     'UpNDownNoFrameskip-v4',
+    #     'QbertNoFrameskip-v4',
+    #     'BreakoutNoFrameskip-v4',
+    # ]
 
 
     action_space_size = 18  # Full action space
-    seed = 0 # TODO
+    seed = 0
     collector_env_num = 8
     num_segments = 8
     n_episode = 8
     evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(1e6) # TODO
+    # max_env_step = int(1e6)
+    max_env_step = int(5e5) # TODO
+
     reanalyze_ratio = 0.
     # batch_size = [32, 32, 32, 32]
     # max_batch_size = 2048
@@ -234,8 +244,6 @@ if __name__ == "__main__":
     # max_batch_size = 320
     max_batch_size = 640
 
-    # max_batch_size = int(64*4)
-    # batch_size = [int(max_batch_size/len(env_id_list)) for i in range(len(env_id_list))]
     batch_size = [int(min(64, max_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
     # batch_size = [int(min(32, max_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
     print(f'=========== batch_size: {batch_size} ===========')
@@ -246,9 +254,9 @@ if __name__ == "__main__":
     norm_type = 'LN'
     # # norm_type = 'BN'  # bad performance now
 
-    # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
+    # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 1/10 means reanalyze once every ten epochs.
+    buffer_reanalyze_freq = 1/50 # TODO
     # buffer_reanalyze_freq = 1/10
-    buffer_reanalyze_freq = 1/50
     # buffer_reanalyze_freq = 1/100000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
@@ -269,8 +277,8 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_26games_ddp_config.py
-        torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_4games_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
+        torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
     from ding.utils import DDPContext
     import numpy as np

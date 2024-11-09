@@ -734,8 +734,8 @@ class MuZeroSegmentCollector(ISerialCollector):
         Arguments:
             - train_iter (:obj:`int`): Current training iteration number for logging context.
         """
-        # if self._rank != 0:
-        #     return
+        if self._rank != 0:
+            return
         if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
             self._last_train_iter = train_iter
             episode_count = len(self._episode_info)

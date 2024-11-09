@@ -16,6 +16,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             full_action_space=True,
         ),
         policy=dict(
+            multi_gpu=True, # ======== Very important for ddp =============
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000,),),),  # 默认值是 10000
             grad_correct_params=dict(
                 # MoCo 参数
@@ -83,7 +84,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments):
     configs = []
-    exp_name_prefix = f'data_unizero_mt_segcollect_1107_ddp4/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel128_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-320_upc160_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_segcollect_1111_ddp4/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel128_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-320_upc160_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -154,7 +155,8 @@ if __name__ == "__main__":
     norm_type = 'LN'
 
     # 定义重新分析的频率。例如，1 表示每个 epoch 重新分析一次，1/10 表示每十个 epoch 重新分析一次
-    buffer_reanalyze_freq = 1 / 50
+    # buffer_reanalyze_freq = 1 / 50
+    buffer_reanalyze_freq = 1 / 100000
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
 

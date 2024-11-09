@@ -17,6 +17,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 from line_profiler import line_profiler
+from ding.utils import set_pkg_seed, get_rank, get_world_size
 
 sys.path.append('/Users/puyuan/code/LibMTL/')
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
@@ -645,10 +646,15 @@ class UniZeroMTPolicy(UniZeroPolicy):
             self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
             self._target_model.encoder_hook.clear_data()
 
-        if self._cfg.multi_gpu:
-            self.sync_gradients(self._learn_model)
+
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
                                                                         self._cfg.grad_clip_value)
+        
+        if self._cfg.multi_gpu:
+            # rank = get_rank()
+            # print(f'Rank {rank} train task_id: {self._cfg.task_id} sync grad begin...')
+            self.sync_gradients(self._learn_model)
+            # print(f'Rank {rank} train task_id: {self._cfg.task_id} sync grad end...')
 
         self._optimizer_world_model.step()
         if self._cfg.lr_piecewise_constant_decay:
