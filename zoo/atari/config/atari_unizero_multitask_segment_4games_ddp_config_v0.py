@@ -24,6 +24,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             # eval_max_episode_steps=int(500),
         ),
         policy=dict(
+            multi_gpu=True, # ======== Very important for ddp =============
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000,),),),  # default is 10000
             grad_correct_params=dict(
                 # for MoCo
@@ -282,9 +283,7 @@ if __name__ == "__main__":
 
     """
     from ding.utils import DDPContext
-    from lzero.entry import train_unizero
     from lzero.config.utils import lz_to_ddp_config
-    import numpy as np
     from ding.utils import get_world_size
     from easydict import EasyDict
     with DDPContext():
