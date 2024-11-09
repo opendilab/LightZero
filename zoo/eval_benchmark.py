@@ -1,10 +1,13 @@
 import os
 import re
 import subprocess
+import multiprocessing
+from multiprocessing import Pool
 
 # Define the root path of the zoo directory.
 ZOO_PATH = './'
 
+#  ===== NOTE: for environments with specific configurations, you may need to add custom cases in process_algorithm() =====
 # Define the threshold list for the eval_episode_return_mean values.
 THRESHOLD_LIST = {
     'cartpole_muzero': 200.0,  # Example threshold for cartpole_muzero
@@ -41,13 +44,12 @@ def find_config(env: str, algo: str) -> str:
 
     Args:
         env (str): The environment name (e.g., 'cartpole').
-        algo (str): The algorithm name (e.g., 'muzero').
+        algo (str): The algorithm name (e.g., 'cartpole_muzero').
 
     Returns:
         str: The path to the config file if found, otherwise None.
     """
     for root, dirs, files in os.walk(ZOO_PATH):
-        # Check if the current directory matches the environment and contains a 'config' directory.
         if env in root and 'config' in dirs:
             config_dir = os.path.join(root, 'config')
             for file in os.listdir(config_dir):
@@ -90,7 +92,8 @@ def find_evaluator_log_path(algo: str, env: str) -> str:
     """
     Recursively search for the path of the 'evaluator_logger.txt' file generated during the algorithm's run,
     and select the most recent directory.
-    If the directory is in the format '_seed<x>_<y>', extract <y> and choose the largest value; if it's in the format '_seed<x>',
+
+    NOTE: If the directory is in the format '_seed<x>_<y>', extract <y> and choose the largest value; if it's in the format '_seed<x>',
     extract <x>.
 
     Args:
@@ -133,6 +136,7 @@ def find_evaluator_log_path(algo: str, env: str) -> str:
         print('[INFO] No evaluator log file found.')
         return None
 
+
 def parse_eval_return_mean(log_file_path: str) -> float:
     """
     Parse the eval_episode_return_mean from the evaluator log file.
@@ -159,82 +163,83 @@ def parse_eval_return_mean(log_file_path: str) -> float:
                             return None
     return None
 
+
+def process_algorithm(item: dict) -> tuple:
+    """
+    Process a single environment-algorithm pair: find the config, run the algorithm, parse the log, and compare to threshold.
+
+    Args:
+        item (dict): A dictionary containing 'env' and 'algo'.
+
+    Returns:
+        tuple: A tuple with the environment, algorithm, eval return mean, threshold, and result.
+    """
+    env = item['env']
+    algo = item['algo']
+    print(f"[INFO] Testing {algo} in {env}...")
+
+    # Step 1: Find the config file
+    # NOTE: for environments with specific configurations, add custom cases here
+    if env == 'dmc2gym_state' and algo == 'sampled_muzero':
+        config_file = './dmc2gym/config/dmc2gym_state_sampled_muzero_config.py'
+    elif env == 'dmc2gym_state' and algo == 'sampled_unizero':
+        config_file = './dmc2gym/config/dmc2gym_state_sampled_unizero_config.py'
+    else:
+        config_file = find_config(env, algo)
+
+    if config_file is None:
+        print(f"[WARNING] Config file for {algo} in {env} not found. Skipping...")
+        return (env, algo, 'N/A', 'N/A', 'Skipped')
+
+    # Step 2: Run the algorithm with the found config file
+    run_algorithm_with_config(config_file)
+
+    # Step 3: Find the evaluator log file
+    # NOTE: for environments with specific configurations, add custom cases here
+    if env == 'dmc2gym_state' and algo == 'sampled_muzero':
+        log_file_path = find_evaluator_log_path('sampled_muzero', 'cartpole-swingup')
+    elif env == 'dmc2gym_state' and algo == 'sampled_unizero':
+        log_file_path = find_evaluator_log_path('sampled_unizero', 'cartpole-swingup')
+    else:
+        log_file_path = find_evaluator_log_path(algo, env)
+
+    if log_file_path is None:
+        print(f"[WARNING] Evaluator log file for {algo} in {env} not found. Skipping...")
+        return (env, algo, 'N/A', 'N/A', 'Skipped')
+
+    # Step 4: Parse the evaluator log file to get eval_episode_return_mean
+    eval_return_mean = parse_eval_return_mean(log_file_path)
+    if eval_return_mean is None:
+        print(f"[ERROR] Failed to parse eval_episode_return_mean for {algo} in {env}.")
+        return (env, algo, 'N/A', 'N/A', 'Failed to parse')
+
+    # Step 5: Compare the eval_episode_return_mean with the threshold
+    threshold = THRESHOLD_LIST.get(env + '_' + algo, float('inf'))
+    result = 'Passed' if eval_return_mean > threshold else 'Failed'
+
+    print(f"[INFO] {result} for {algo} in {env}. Eval mean return: {eval_return_mean}, Threshold: {threshold}")
+    return (env, algo, eval_return_mean, threshold, result)
+
+
 def eval_benchmark() -> None:
     """
-    Run the benchmark test, log each result, and output a summary table.
-
-    This function will:
-    - Search for the configuration file for each environment and algorithm pair,
-    - Execute the algorithm,
-    - Locate and parse the evaluator log file to extract the `eval_episode_return_mean`,
-    - Compare it with the predefined threshold and determine if the test passed or failed,
-    - Log the results to a summary file.
+    Run the benchmark test in parallel using multiprocessing, log each result, and output a summary table.
 
     Returns:
         None
     """
-    summary_data = []
-    passed_count = 0
-    failed_count = 0
+    # Use multiprocessing to process each environment-algorithm pair in parallel
+    with Pool(multiprocessing.cpu_count()) as pool:
+        results = pool.map(process_algorithm, ENV_ALGO_LIST)
 
-    for item in ENV_ALGO_LIST:
-        env = item['env']
-        algo = item['algo']
-        print(f"[INFO] Testing {algo} in {env}...")
-
-        # Step 1: Find the config file
-        # NOTE: for environments with specific configurations, add custom cases here
-        if env == 'dmc2gym_state' and algo == 'sampled_muzero':
-            config_file = './dmc2gym/config/dmc2gym_state_sampled_muzero_config.py'
-        elif env == 'dmc2gym_state' and algo == 'sampled_unizero':
-            config_file = './dmc2gym/config/dmc2gym_state_sampled_unizero_config.py'
-        else:
-            config_file = find_config(env, algo)
-        if config_file is None:
-            print(f"[WARNING] Config file for {algo} in {env} not found. Skipping...")
-            summary_data.append((env, algo, 'N/A', 'N/A', 'Skipped'))
-            continue
-
-        # Step 2: Run the algorithm with the found config file
-        # run_algorithm_with_config(config_file)
-
-        # Step 3: Find the evaluator log file
-        # NOTE: for environments with specific configurations, add custom cases here
-        if env == 'dmc2gym_state' and algo == 'sampled_muzero':
-            log_file_path = find_evaluator_log_path('sampled_muzero', 'cartpole-swingup')
-        elif env == 'dmc2gym_state' and algo == 'sampled_unizero':
-            log_file_path = find_evaluator_log_path('sampled_unizero', 'cartpole-swingup')
-        else:
-            log_file_path = find_evaluator_log_path(algo, env)
-
-        if log_file_path is None:
-            print(f"[WARNING] Evaluator log file for {algo} in {env} not found. Skipping...")
-            summary_data.append((env, algo, 'N/A', 'N/A', 'Skipped'))
-            continue
-
-        # Step 4: Parse the evaluator log file to get eval_episode_return_mean
-        eval_return_mean = parse_eval_return_mean(log_file_path)
-        if eval_return_mean is None:
-            print(f"[ERROR] Failed to parse eval_episode_return_mean for {algo} in {env}.")
-            summary_data.append((env, algo, 'N/A', 'N/A', 'Failed to parse'))
-            continue
-
-        # Step 5: Compare the eval_episode_return_mean with the threshold
-        threshold = THRESHOLD_LIST.get(env+'_'+algo, float('inf'))
-        if eval_return_mean > threshold:
-            result = 'Passed'
-            passed_count += 1
-        else:
-            result = 'Failed'
-            failed_count += 1
-
-        print(f"[INFO] {result} for {algo} in {env}. Eval mean return: {eval_return_mean}, Threshold: {threshold}")
-        summary_data.append((env, algo, eval_return_mean, threshold, result))
+    # Split the results into passed and failed counts
+    passed_count = sum(1 for result in results if result[4] == 'Passed')
+    failed_count = sum(1 for result in results if result[4] == 'Failed')
 
     # Print summary table
     print("\n[RESULTS] Benchmark Summary Table")
     print(f"{'Environment':<20}{'Algorithm':<20}{'Eval Return Mean':<20}{'Threshold':<20}{'Result'}")
-    for row in summary_data:
+    for row in results:
         print(f"{row[0]:<20}{row[1]:<20}{row[2]:<20}{row[3]:<20}{row[4]}")
 
     print(f"\n[SUMMARY] Total Passed: {passed_count}, Total Failed: {failed_count}")
@@ -243,7 +248,7 @@ def eval_benchmark() -> None:
     with open(SUMMARY_LOG_FILE, 'w') as summary_file:
         summary_file.write("[RESULTS] Benchmark Summary Table\n")
         summary_file.write(f"{'Environment':<20}{'Algorithm':<20}{'Eval Return Mean':<20}{'Threshold':<20}{'Result'}\n")
-        for row in summary_data:
+        for row in results:
             summary_file.write(f"{row[0]:<20}{row[1]:<20}{row[2]:<20}{row[3]:<20}{row[4]}\n")
         summary_file.write(f"\n[SUMMARY] Total Passed: {passed_count}, Total Failed: {failed_count}\n")
 
@@ -255,7 +260,7 @@ if __name__ == "__main__":
         - Running the algorithms,
         - Parsing log files for key performance metrics, and
         - Comparing results to predefined thresholds.
-    It only supports [sequential] execution and generates a detailed log of the benchmarking results, 
+    It supports [parallel] execution and generates a detailed log of the benchmarking results, 
     making it a useful tool for testing and evaluating different algorithms in a standardized manner.
     """
     eval_benchmark()
