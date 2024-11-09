@@ -1,10 +1,14 @@
 import os
 
-def parse_eval_return_mean(log_file_path):
+def parse_eval_return_mean(log_file_path: str) -> float | None:
     """
     Parse the eval_episode_return_mean from the evaluator log file, reading from the end of the file.
-    :param log_file_path: The path to the evaluator log file.
-    :return: The eval_episode_return_mean as a float, or None if not found.
+
+    Args:
+        log_file_path (str): The path to the evaluator log file.
+
+    Returns:
+        float | None: The eval_episode_return_mean as a float, or None if not found.
     """
     try:
         with open(log_file_path, 'r') as file:
@@ -29,11 +33,15 @@ def parse_eval_return_mean(log_file_path):
     return None
 
 
-def find_evaluator_log_files(base_path):
+def find_evaluator_log_files(base_path: str) -> list[str]:
     """
     Find all evaluator_logger.txt files within the specified base directory.
-    :param base_path: The base directory to start searching from.
-    :return: A list of paths to evaluator_logger.txt files.
+
+    Args:
+        base_path (str): The base directory to start searching from.
+
+    Returns:
+        list[str]: A list of paths to evaluator_logger.txt files.
     """
     evaluator_log_paths = []
 
@@ -48,14 +56,17 @@ def find_evaluator_log_files(base_path):
     return evaluator_log_paths
 
 
-def extract_game_name_from_path(log_file_path):
+def extract_game_name_from_path(log_file_path: str) -> str | None:
     """
     Extract the game name from the log file path.
     The game name is assumed to be the part of the path just before '_atari'.
-    :param log_file_path: The path to the evaluator log file.
-    :return: The extracted game name.
+
+    Args:
+        log_file_path (str): The path to the evaluator log file.
+
+    Returns:
+        str | None: The extracted game name, or None if extraction fails.
     """
-    # Split the path and extract the game name from the folder structure
     try:
         parts = log_file_path.split('/')
         for part in parts:
@@ -67,11 +78,18 @@ def extract_game_name_from_path(log_file_path):
     return None
 
 
-def get_eval_means_for_games(base_path):
+def get_eval_means_for_games(base_path: str) -> tuple[list[str], list[float | None], dict[str, float | None]]:
     """
     Get the eval_episode_return_mean for all games under the base directory, along with the game names.
-    :param base_path: The path to the base directory containing game logs.
-    :return: A tuple of lists: (game_names_list, eval_means_list) and the combined dictionary {game_name: eval_mean}.
+
+    Args:
+        base_path (str): The path to the base directory containing game logs.
+
+    Returns:
+        tuple[list[str], list[float | None], dict[str, float | None]]:
+            - List of game names.
+            - List of eval_episode_return_mean values (None if not found).
+            - Dictionary mapping game names to eval_episode_return_mean values.
     """
     game_names = []
     eval_means = []
@@ -93,11 +111,16 @@ def get_eval_means_for_games(base_path):
     return game_names, eval_means, game_eval_dict
 
 
-def save_results_to_file(game_eval_dict, file_path):
+def save_results_to_file(game_eval_dict: dict[str, float | None], file_path: str) -> None:
     """
     Save the game names and eval means to a text file.
-    :param game_eval_dict: Dictionary of game names and corresponding eval means.
-    :param file_path: The path to the output text file.
+
+    Args:
+        game_eval_dict (dict[str, float | None]): Dictionary of game names and corresponding eval means.
+        file_path (str): The path to the output text file.
+
+    Returns:
+        None
     """
     try:
         with open(file_path, 'w') as file:
@@ -111,7 +134,9 @@ def save_results_to_file(game_eval_dict, file_path):
 
 
 if __name__ == "__main__":
-    base_path = "config/data_muzero"
+    # You should change this to the path where your data is stored,
+    # and run the script in the directory like </Users/<username>/code/LightZero/zoo/atari>.
+    base_path = "./config/data_muzero"
     game_names, eval_means, game_eval_dict = get_eval_means_for_games(base_path)
 
     # Display the lists and dictionary in a more readable way

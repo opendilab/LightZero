@@ -2,18 +2,32 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def compute_normalized_mean_and_median(random_scores, human_scores, algo_scores):
+def compute_normalized_mean_and_median(
+    random_scores: list[float],
+    human_scores: list[float],
+    algo_scores: list[float]
+) -> tuple[float, float]:
     """
     Computes the normalized mean and median based on random, human, and algorithm scores.
 
-    Arguments:
-        - random_scores: List of random scores (List[float])
-        - human_scores: List of human scores (List[float])
-        - algo_scores: List of algorithm scores (List[float])
+    Args:
+        random_scores (list[float]): List of random scores for each game.
+        human_scores (list[float]): List of human scores for each game.
+        algo_scores (list[float]): List of algorithm scores for each game.
+
     Returns:
-        - normalized_mean: The mean of the normalized scores.
-        - normalized_median: The median of the normalized scores.
+        tuple[float, float]:
+            - The mean of the normalized scores.
+            - The median of the normalized scores.
+
+    Raises:
+        ValueError: If any list is empty or if the lengths of the input lists do not match.
     """
+    if not random_scores or not human_scores or not algo_scores:
+        raise ValueError("Input score lists must not be empty.")
+    if len(random_scores) != len(human_scores) or len(human_scores) != len(algo_scores):
+        raise ValueError("Input score lists must have the same length.")
+
     # Calculate normalized scores
     normalized_scores = [
         (algo_score - random_score) / (human_score - random_score)
@@ -28,23 +42,36 @@ def compute_normalized_mean_and_median(random_scores, human_scores, algo_scores)
     return normalized_mean, normalized_median
 
 
-
-def plot_normalized_scores(algorithms, means, medians, filename="normalized_scores.png"):
+def plot_normalized_scores(
+    algorithms: list[str],
+    means: list[float],
+    medians: list[float],
+    filename: str = "normalized_scores.png"
+) -> None:
     """
     Plots a bar chart for normalized mean and median values for different algorithms.
 
-    Arguments:
-        - algorithms: List of algorithm names (List[str])
-        - means: List of normalized mean values (List[float])
-        - medians: List of normalized median values (List[float])
-        - filename: Filename to save the plot (str, optional)
+    Args:
+        algorithms (list[str]): List of algorithm names.
+        means (list[float]): List of normalized mean values.
+        medians (list[float]): List of normalized median values.
+        filename (str, optional): Filename to save the plot (default is 'normalized_scores.png').
+
+    Returns:
+        None
+
+    Raises:
+        ValueError: If lists of algorithms, means, or medians have different lengths.
 
     Example usage:
-        # algorithms = ["Algorithm A", "Algorithm B", "Algorithm C"]
-        # means = [0.75, 0.85, 0.60]
-        # medians = [0.70, 0.80, 0.65]
-        # plot_normalized_scores(algorithms, means, medians)
+        algorithms = ["Algorithm A", "Algorithm B", "Algorithm C"]
+        means = [0.75, 0.85, 0.60]
+        medians = [0.70, 0.80, 0.65]
+        plot_normalized_scores(algorithms, means, medians)
     """
+    if not (len(algorithms) == len(means) == len(medians)):
+        raise ValueError("Algorithms, means, and medians lists must have the same length.")
+
     # Set a style suited for academic papers (muted, professional colors)
     sns.set(style="whitegrid")
 
@@ -283,10 +310,6 @@ print(f"MZ with SSL - Normalized Mean: {mz_ssl_mean}, Normalized Median: {mz_ssl
 print(f"UniZero - Normalized Mean: {unizero_mean}, Normalized Median: {unizero_median}")
 
 # Plot the normalized means and medians for each algorithm
-# algorithms = ['EZ', 'MZ', 'MZ with SSL', 'UniZero']
-# means = [ez_mean, mz_mean, mz_ssl_mean, unizero_mean]
-# medians = [ez_median, mz_median, mz_ssl_median, unizero_median]
-
 algorithms = ['MZ', 'MZ with SSL', 'UniZero']
 means = [mz_mean, mz_ssl_mean, unizero_mean]
 medians = [mz_median, mz_ssl_median, unizero_median]
