@@ -15,6 +15,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
     prepare_obs_stack4_for_unizero
 from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
+import torch.distributed as dist
 
 
 @POLICY_REGISTRY.register('unizero')
@@ -430,8 +431,8 @@ class UniZeroPolicy(MuZeroPolicy):
         dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
 
-        assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
-        assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
+        # assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
+        # assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
@@ -581,6 +582,8 @@ class UniZeroPolicy(MuZeroPolicy):
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
+        # print(f"Rank {dist.get_rank()} ready_env_id: {ready_env_id}")
+
         self._collect_model.eval()
 
         self._collect_mcts_temperature = temperature

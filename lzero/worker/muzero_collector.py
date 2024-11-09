@@ -13,6 +13,7 @@ from torch.nn import L1Loss
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
+import torch.distributed as dist
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('episode_muzero')
@@ -53,6 +54,8 @@ class MuZeroCollector(ISerialCollector):
             - instance_name (:obj:`str`): Unique identifier for this collector instance.
             - policy_config (:obj:`Optional[policy_config]`): Configuration object for the policy.
         """
+        # print(f"Rank {get_rank()} initializing MuZeroCollector with {self.collector_env_num} environments")
+
         self._exp_name = exp_name
         self._instance_name = instance_name
         self._collect_print_freq = collect_print_freq
@@ -433,6 +436,8 @@ class MuZeroCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
+                print(f"Rank {dist.get_rank()} ready_env_id: {ready_env_id}")
+
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
 
                 # Extract relevant policy outputs
@@ -605,6 +610,8 @@ class MuZeroCollector(ISerialCollector):
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
+                    print(f"=========Rank {get_rank()}: env_id {env_id} one episode done=========")
+
                     reward = timestep.info['eval_episode_return']
                     info = {
                         'reward': reward,

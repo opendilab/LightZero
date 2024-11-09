@@ -20,7 +20,7 @@ from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroCollector as Collector
 from .utils import random_collect
-
+import torch.distributed as dist
 
 def train_unizero(
         input_cfg: Tuple[dict, dict],
@@ -141,8 +141,13 @@ def train_unizero(
             if stop:
                 break
 
+        # 收集数据前同步
+        dist.barrier()
         # Collect new data
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+        print(f"Rank {dist.get_rank()} Collector collect done!")
+        # 收集数据后同步
+        dist.barrier()
 
         # Determine updates per collection
         update_per_collect = cfg.policy.update_per_collect
@@ -157,6 +162,8 @@ def train_unizero(
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
 
+        # 同步所有 Rank，确保所有 Rank 都完成了训练
+        dist.barrier()
         # Train the policy if sufficient data is available
         if collector.envstep > cfg.policy.train_start_after_envsteps:
             if cfg.policy.sample_type == 'episode':
@@ -178,11 +185,15 @@ def train_unizero(
 
                 train_data.append({'train_which_component': 'transformer'})
                 log_vars = learner.train(train_data, collector.envstep)
+                print(f"Rank {dist.get_rank()} learner.train_iter {learner.train_iter}")
 
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
         policy.recompute_pos_emb_diff_and_clear_cache()
+
+        # 同步所有 Rank，确保所有 Rank 都完成了训练
+        dist.barrier()
 
         # Check stopping criteria
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:

@@ -10,7 +10,7 @@ from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
 
 from zoo.atari.envs.atari_wrappers import wrap_lightzero
-
+from ding.utils import  get_rank
 
 @ENV_REGISTRY.register('atari_lightzero')
 class AtariEnvLightZero(BaseEnv):
@@ -154,8 +154,13 @@ class AtariEnvLightZero(BaseEnv):
         self.timestep += 1
         # print(f'self.timestep: {self.timestep}')
         observation = self.observe()
+
+        print(f"Rank {get_rank()}: self.timestep {self.timestep}")
+
+
         if done:
             info['eval_episode_return'] = self._eval_episode_return
+            print(f"=========Rank {get_rank()}: one episode done=========")
 
         return BaseEnvTimestep(observation, self.reward, done, info)
 

@@ -1,5 +1,7 @@
 from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
+import torch.distributed as dist
+
 
 env_id = 'PongNoFrameskip-v4'  # You can specify any Atari game here
 action_space_size = atari_env_action_space_map[env_id]
@@ -8,7 +10,7 @@ action_space_size = atari_env_action_space_map[env_id]
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 gpu_num = 2
-update_per_collect = None
+update_per_collect = 1000 # Very import for ddp seting
 replay_ratio = 0.25
 collector_env_num = 8
 num_segments = int(8*gpu_num)
@@ -22,16 +24,22 @@ infer_context_length = 4
 seed = 0
 
 # ====== only for debug =====
-# num_simulations = 2
+# collector_env_num = 2
+# num_segments = int(2*gpu_num)
+# n_episode = int(2*gpu_num)
+# num_simulations = 3
 # max_env_step = int(2e5)
 # batch_size = 2
 # num_unroll_steps = 10
+# replay_ratio = 0.005
+# update_per_collect = 8
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_unizero_config = dict(
-    exp_name = f'data_unizero/{env_id[:-14]}/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}',
+    exp_name = f'data_unizero_ddp_1110/{env_id[:-14]}/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -42,8 +50,8 @@ atari_unizero_config = dict(
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
         # TODO: only for debug
-        # collect_max_episode_steps=int(50),
-        # eval_max_episode_steps=int(50),
+        # collect_max_episode_steps=int(200),
+        # eval_max_episode_steps=int(200),
     ),
     policy=dict(
         model=dict(
@@ -90,6 +98,7 @@ atari_unizero_create_config = dict(
         import_names=['zoo.atari.envs.atari_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
+    # env_manager=dict(type='base'),
     policy=dict(
         type='unizero',
         import_names=['lzero.policy.unizero'],
@@ -112,5 +121,7 @@ if __name__ == "__main__":
     from lzero.config.utils import lz_to_ddp_config
     with DDPContext():
         main_config = lz_to_ddp_config(main_config)
+        # 确保每个 Rank 分配到正确的 collector_env_num
+        print(f"Rank {dist.get_rank()} Collector Env Num: {main_config.policy.collector_env_num}")
         # TODO: first test muzero_collector
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
