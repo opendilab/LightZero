@@ -14,5 +14,9 @@ def lz_to_ddp_config(cfg: EasyDict) -> EasyDict:
     """
     w = get_world_size()
     cfg.policy.batch_size = int(np.ceil(cfg.policy.batch_size / w))
-    cfg.policy.n_episode = int(np.ceil(cfg.policy.n_episode) / w)
+    try:
+        cfg.policy.n_episode = int(np.ceil(cfg.policy.n_episode) / w)
+    except Exception as e:
+        cfg.policy.num_segments = int(np.ceil(cfg.policy.num_segments) / w)
+
     return cfg

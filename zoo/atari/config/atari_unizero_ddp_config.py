@@ -9,7 +9,7 @@ action_space_size = atari_env_action_space_map[env_id]
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-gpu_num = 2
+gpu_num = 8
 update_per_collect = 1000 # Very import for ddp seting
 replay_ratio = 0.25
 collector_env_num = 8
@@ -98,7 +98,6 @@ atari_unizero_create_config = dict(
         import_names=['zoo.atari.envs.atari_lightzero_env'],
     ),
     env_manager=dict(type='subprocess'),
-    # env_manager=dict(type='base'),
     policy=dict(
         type='unizero',
         import_names=['lzero.policy.unizero'],
@@ -112,8 +111,8 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=2 ./zoo/atari/config/atari_unizero_multigpu_ddp_config.py
-        torchrun --nproc_per_node=2 ./zoo/atari/config/atari_unizero_multigpu_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=2 ./zoo/atari/config/atari_unizero_ddp_config.py
+        torchrun --nproc_per_node=2 ./zoo/atari/config/atari_unizero_ddp_config.py
 
     """
     from ding.utils import DDPContext

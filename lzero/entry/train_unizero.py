@@ -158,14 +158,18 @@ def train_unizero(
             collected_transitions_num = sum(min(len(game_segment), cfg.policy.game_segment_length) for game_segment in new_data[0])
             update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
 
+        # 更新Replay Buffer前同步
+        dist.barrier()
         # Update replay buffer
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
-
-        # 同步所有 Rank，确保所有 Rank 都完成了训练
+        # 更新Replay Buffer后同步
         dist.barrier()
+
         # Train the policy if sufficient data is available
         if collector.envstep > cfg.policy.train_start_after_envsteps:
+            # 同步训练前所有rank的准备状态
+            dist.barrier()
             if cfg.policy.sample_type == 'episode':
                 data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
             else:

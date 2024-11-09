@@ -21,6 +21,7 @@ from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroSegmentCollector as Collector
 from .utils import random_collect
+import torch.distributed as dist
 
 timer = EasyTimer()
 
@@ -147,8 +148,12 @@ def train_unizero_segment(
             if stop:
                 break
 
+        # 收集数据前同步
+        dist.barrier()
         # Collect new data
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+        # 收集数据后同步
+        dist.barrier()
 
         # Determine updates per collection
         update_per_collect = cfg.policy.update_per_collect
@@ -156,12 +161,40 @@ def train_unizero_segment(
             # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
             # The length of game_segment (i.e., len(game_segment.action_segment)) can be smaller than cfg.policy.game_segment_length if it represents the final segment of the game.
             # On the other hand, its length will be less than cfg.policy.game_segment_length + padding_length when it is not the last game segment. Typically, padding_length is the sum of unroll_steps and td_steps.
-            collected_transitions_num = sum(min(len(game_segment), cfg.policy.game_segment_length) for game_segment in new_data[0])
-            update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
+            # collected_transitions_num = sum(min(len(game_segment), cfg.policy.game_segment_length) for game_segment in new_data[0])
+            # update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
+            
+            # 计算 collected_transitions_num
+            collected_transitions_num = sum(
+                min(len(game_segment), cfg.policy.game_segment_length) 
+                for game_segment in new_data[0]
+            )
+            # print(f"Rank {dist.get_rank()}: collected_transitions_num = {collected_transitions_num}")
 
+            # 将其转换为 GPU 上的张量并进行全局求和
+            collected_transitions = torch.tensor(
+                collected_transitions_num, dtype=torch.int64, device='cuda'
+            )
+            dist.all_reduce(collected_transitions, op=dist.ReduceOp.SUM)
+            total_collected_transitions = collected_transitions.item()
+            # print(f"Rank {dist.get_rank()}: total_collected_transitions = {total_collected_transitions}")
+
+            # 计算 update_per_collect, 是否需要 / dist.get_world_size()
+            update_per_collect = int(
+                (total_collected_transitions * cfg.policy.replay_ratio)
+            )
+            # print(f"Rank {dist.get_rank()}: update_per_collect = {update_per_collect}")
+
+            assert update_per_collect > 0, "update_per_collect must be positive"
+
+
+        # 更新Replay Buffer前同步
+        dist.barrier()
         # Update replay buffer
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
+        # 更新Replay Buffer后同步
+        dist.barrier()
 
         # Periodically reanalyze buffer
         if cfg.policy.buffer_reanalyze_freq >= 1:
@@ -179,6 +212,8 @@ def train_unizero_segment(
 
         # Train the policy if sufficient data is available
         if collector.envstep > cfg.policy.train_start_after_envsteps:
+            # 同步训练前所有rank的准备状态
+            dist.barrier()
             if cfg.policy.sample_type == 'episode':
                 data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
             else:
@@ -211,6 +246,9 @@ def train_unizero_segment(
 
         train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()
+
+        # 同步所有 Rank，确保所有 Rank 都完成了训练
+        dist.barrier()
 
         # Check stopping criteria
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:

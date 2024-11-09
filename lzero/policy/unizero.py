@@ -402,6 +402,8 @@ class UniZeroPolicy(MuZeroPolicy):
         batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
         batch_for_gpt['target_policy'] = target_policy[:, :-1]
 
+        # assert torch.all((batch_for_gpt['mask_padding'] >= 0) & (batch_for_gpt['mask_padding'] < 999)), "存在无效的索引值"
+
         # Extract valid target policy data and compute entropy
         valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
         target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
