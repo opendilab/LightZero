@@ -606,7 +606,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
                     batch_for_gpt['observations'].shape[0], batch_for_gpt['observations'].shape[1], 1)
             # calculate the new priorities for each transition.
             value_priority = torch.nn.L1Loss(reduction='none')(original_value.squeeze(-1)[:,0], target_value[:, 0])   # TODO: mix of mean and sum
-            value_priority = value_priority.data.cpu().numpy() + 1e-6
+            # value_priority = value_priority.data.cpu().numpy() + 1e-6 # TODO: log-reduce not support array now
             # ============ for value priority  ============ 
 
             obs_loss_multi_task.append(obs_loss)
@@ -703,6 +703,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
         # 合并两个字典
         return_loss_dict.update(multi_task_loss_dicts)
+
+        # print(f'return_loss_dict:{return_loss_dict}')
 
         # 返回最终的损失字典
         return return_loss_dict
