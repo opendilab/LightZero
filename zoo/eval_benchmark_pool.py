@@ -7,12 +7,16 @@ from multiprocessing import Pool
 # Define the root path of the zoo directory.
 ZOO_PATH = './'
 
+#  ===== NOTE: for environments with specific configurations, you may need to add custom cases in process_algorithm() =====
 # Define the threshold list for the eval_episode_return_mean values.
 THRESHOLD_LIST = {
     'cartpole_muzero': 200.0,  # Example threshold for cartpole_muzero
     'cartpole_unizero': 200.0,  # Example threshold for cartpole_unizero
     'atari_muzero': 18.0,  # Example threshold for atari_muzero (env is Pong by default)
     'atari_unizero': 18.0,  # Example threshold for atari_unizero (env is Pong by default)
+    'dmc2gym_state_sampled_muzero': 700.0,  # Example threshold for atari_unizero (env is cartpole-swingup by default)
+    'dmc2gym_state_sampled_unizero': 700.0,  # Example threshold for atari_unizero (env is cartpole-swingup by default)
+
     # Add more algorithms and their thresholds as needed
 }
 
@@ -22,6 +26,8 @@ ENV_ALGO_LIST = [
     {'env': 'cartpole', 'algo': 'unizero'},
     {'env': 'atari', 'algo': 'muzero'},
     {'env': 'atari', 'algo': 'unizero'},
+    {'env': 'dmc2gym_state', 'algo': 'sampled_muzero'},
+    {'env': 'dmc2gym_state', 'algo': 'sampled_unizero'},
     # Add more environment and algorithm pairs as needed
 ]
 
@@ -32,13 +38,16 @@ EVALUATOR_LOG_FILE = 'evaluator_logger.txt'
 SUMMARY_LOG_FILE = 'benchmark_summary.txt'
 
 
-def find_config(env, algo):
+def find_config(env: str, algo: str) -> str:
     """
     Recursively search for the config file in the zoo directory for the given environment and algorithm.
 
-    :param env: The environment name (e.g., 'cartpole').
-    :param algo: The algorithm name (e.g., 'cartpole_muzero').
-    :return: The path to the config file if found, otherwise None.
+    Args:
+        env (str): The environment name (e.g., 'cartpole').
+        algo (str): The algorithm name (e.g., 'cartpole_muzero').
+
+    Returns:
+        str: The path to the config file if found, otherwise None.
     """
     for root, dirs, files in os.walk(ZOO_PATH):
         if env in root and 'config' in dirs:
@@ -49,12 +58,15 @@ def find_config(env, algo):
                     return os.path.join(config_dir, file)
     return None
 
-def run_algorithm_with_config(config_file):
+def run_algorithm_with_config(config_file: str) -> None:
     """
     Run the algorithm using the specified config file.
 
-    :param config_file: The path to the config file.
-    :return: None
+    Args:
+        config_file (str): The path to the config file.
+
+    Returns:
+        None
     """
     # Obtain the directory and file name of the config file
     config_dir = os.path.dirname(config_file)
@@ -76,16 +88,20 @@ def run_algorithm_with_config(config_file):
         # Change back to the original working directory
         os.chdir(original_dir)
 
-def find_evaluator_log_path(algo, env):
+def find_evaluator_log_path(algo: str, env: str) -> str:
     """
     Recursively search for the path of the 'evaluator_logger.txt' file generated during the algorithm's run,
     and select the most recent directory.
-    If the directory is in the format '_seed<x>_<y>', extract <y> and choose the largest value; if it's in the format '_seed<x>',
+
+    NOTE: If the directory is in the format '_seed<x>_<y>', extract <y> and choose the largest value; if it's in the format '_seed<x>',
     extract <x>.
 
-    :param algo: The algorithm name (e.g., 'cartpole_muzero').
-    :param env: The environment name (e.g., 'cartpole').
-    :return: The path to the 'evaluator_logger.txt' file, or None if not found.
+    Args:
+        algo (str): The algorithm name (e.g., 'cartpole_muzero').
+        env (str): The environment name (e.g., 'cartpole').
+
+    Returns:
+        str: The path to the 'evaluator_logger.txt' file, or None if not found.
     """
     latest_number = -1
     selected_log_path = None
@@ -121,12 +137,15 @@ def find_evaluator_log_path(algo, env):
         return None
 
 
-def parse_eval_return_mean(log_file_path):
+def parse_eval_return_mean(log_file_path: str) -> float:
     """
     Parse the eval_episode_return_mean from the evaluator log file.
 
-    :param log_file_path: The path to the evaluator log file.
-    :return: The eval_episode_return_mean as a float, or None if not found.
+    Args:
+        log_file_path (str): The path to the evaluator log file.
+
+    Returns:
+        float: The eval_episode_return_mean as a float, or None if not found.
     """
     with open(log_file_path, 'r') as file:
         lines = file.readlines()
@@ -145,28 +164,45 @@ def parse_eval_return_mean(log_file_path):
     return None
 
 
-def process_algorithm(item):
+def process_algorithm(item: dict) -> tuple:
     """
     Process a single environment-algorithm pair: find the config, run the algorithm, parse the log, and compare to threshold.
 
-    :param item: A dictionary containing 'env' and 'algo'.
-    :return: A tuple with the environment, algorithm, eval return mean, threshold, and result.
+    Args:
+        item (dict): A dictionary containing 'env' and 'algo'.
+
+    Returns:
+        tuple: A tuple with the environment, algorithm, eval return mean, threshold, and result.
     """
     env = item['env']
     algo = item['algo']
     print(f"[INFO] Testing {algo} in {env}...")
 
     # Step 1: Find the config file
-    config_file = find_config(env, algo)
+    # NOTE: for environments with specific configurations, add custom cases here
+    if env == 'dmc2gym_state' and algo == 'sampled_muzero':
+        config_file = './dmc2gym/config/dmc2gym_state_sampled_muzero_config.py'
+    elif env == 'dmc2gym_state' and algo == 'sampled_unizero':
+        config_file = './dmc2gym/config/dmc2gym_state_sampled_unizero_config.py'
+    else:
+        config_file = find_config(env, algo)
+
     if config_file is None:
         print(f"[WARNING] Config file for {algo} in {env} not found. Skipping...")
         return (env, algo, 'N/A', 'N/A', 'Skipped')
 
     # Step 2: Run the algorithm with the found config file
-    run_algorithm_with_config(config_file)
+    # run_algorithm_with_config(config_file)
 
     # Step 3: Find the evaluator log file
-    log_file_path = find_evaluator_log_path(algo, env)
+    # NOTE: for environments with specific configurations, add custom cases here
+    if env == 'dmc2gym_state' and algo == 'sampled_muzero':
+        log_file_path = find_evaluator_log_path('sampled_muzero', 'cartpole-swingup')
+    elif env == 'dmc2gym_state' and algo == 'sampled_unizero':
+        log_file_path = find_evaluator_log_path('sampled_unizero', 'cartpole-swingup')
+    else:
+        log_file_path = find_evaluator_log_path(algo, env)
+
     if log_file_path is None:
         print(f"[WARNING] Evaluator log file for {algo} in {env} not found. Skipping...")
         return (env, algo, 'N/A', 'N/A', 'Skipped')
@@ -185,11 +221,12 @@ def process_algorithm(item):
     return (env, algo, eval_return_mean, threshold, result)
 
 
-def eval_benchmark():
+def eval_benchmark() -> None:
     """
     Run the benchmark test in parallel using multiprocessing, log each result, and output a summary table.
 
-    :return: None
+    Returns:
+        None
     """
     # Use multiprocessing to process each environment-algorithm pair in parallel
     with Pool(multiprocessing.cpu_count()) as pool:
