@@ -85,7 +85,7 @@ def train_unizero(
         logging.info(f'Loading model from {model_path} end!')
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander
-    tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if (not dist.is_initialized() or get_rank() == 0) else None
+    tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
     # MCTS+RL algorithms related core code
@@ -105,6 +105,10 @@ def train_unizero(
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
 
     batch_size = policy._cfg.batch_size
+
+    # TODO: for visualize
+    # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+    # import sys; sys.exit(0)
 
     while True:
         # Log buffer memory usage
@@ -137,47 +141,39 @@ def train_unizero(
             if stop:
                 break
 
-        # Synchronize before collecting data (only in DDP mode)
-        if dist.is_initialized():
-            dist.barrier()
-
+        # 收集数据前同步
+        dist.barrier()
         # Collect new data
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
-        if dist.is_initialized():
-            print(f"Rank {dist.get_rank()} Collector collect done!")
-
-        # Synchronize after collecting data (only in DDP mode)
-        if dist.is_initialized():
-            dist.barrier()
+        print(f"Rank {dist.get_rank()} Collector collect done!")
+        # 收集数据后同步
+        dist.barrier()
 
         # Determine updates per collection
         update_per_collect = cfg.policy.update_per_collect
         if update_per_collect is None:
+            # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
+            # The length of game_segment (i.e., len(game_segment.action_segment)) can be smaller than cfg.policy.game_segment_length if it represents the final segment of the game.
+            # On the other hand, its length will be less than cfg.policy.game_segment_length + padding_length when it is not the last game segment. Typically, padding_length is the sum of unroll_steps and td_steps.
             collected_transitions_num = sum(min(len(game_segment), cfg.policy.game_segment_length) for game_segment in new_data[0])
             update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
 
-        # Synchronize before updating replay buffer (only in DDP mode)
-        if dist.is_initialized():
-            dist.barrier()
-
+        # 更新Replay Buffer前同步
+        dist.barrier()
         # Update replay buffer
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
-
-        # Synchronize after updating replay buffer (only in DDP mode)
-        if dist.is_initialized():
-            dist.barrier()
+        # 更新Replay Buffer后同步
+        dist.barrier()
 
         # Train the policy if sufficient data is available
         if collector.envstep > cfg.policy.train_start_after_envsteps:
-            if dist.is_initialized():
-                dist.barrier()
-
+            # 同步训练前所有rank的准备状态
+            dist.barrier()
             if cfg.policy.sample_type == 'episode':
                 data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
             else:
                 data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
-
             if not data_sufficient:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
@@ -188,21 +184,20 @@ def train_unizero(
             for i in range(update_per_collect):
                 train_data = replay_buffer.sample(batch_size, policy)
                 if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
+                    # Clear caches and precompute positional embedding matrices
                     policy.recompute_pos_emb_diff_and_clear_cache()  # TODO
 
                 train_data.append({'train_which_component': 'transformer'})
                 log_vars = learner.train(train_data, collector.envstep)
-                if dist.is_initialized():
-                    print(f"Rank {dist.get_rank()} learner.train_iter {learner.train_iter}")
+                print(f"Rank {dist.get_rank()} learner.train_iter {learner.train_iter}")
 
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
         policy.recompute_pos_emb_diff_and_clear_cache()
 
-        # Synchronize after training (only in DDP mode)
-        if dist.is_initialized():
-            dist.barrier()
+        # 同步所有 Rank，确保所有 Rank 都完成了训练
+        dist.barrier()
 
         # Check stopping criteria
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:

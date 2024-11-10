@@ -25,6 +25,21 @@ import torch.distributed as dist
 
 timer = EasyTimer()
 
+def is_ddp():
+    """Check if Distributed Data Parallel (DDP) is initialized."""
+    return dist.is_available() and dist.is_initialized()
+
+def ddp_barrier():
+    """Barrier synchronization for DDP."""
+    if is_ddp():
+        dist.barrier()
+
+def ddp_all_reduce(tensor):
+    """All-reduce operation for DDP, returns the reduced tensor."""
+    if is_ddp():
+        dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+    return tensor
+
 def train_unizero_segment(
         input_cfg: Tuple[dict, dict],
         seed: int = 0,
@@ -76,7 +91,6 @@ def train_unizero_segment(
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
     collector_env.seed(cfg.seed)
-    # collector_env.seed(cfg.seed, dynamic_seed=False)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=torch.cuda.is_available())
 
@@ -110,9 +124,6 @@ def train_unizero_segment(
 
     batch_size = policy._cfg.batch_size
 
-    # TODO: for visualize
-    # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-    
     buffer_reanalyze_count = 0
     train_epoch = 0
     reanalyze_batch_size = cfg.policy.reanalyze_batch_size
@@ -148,63 +159,44 @@ def train_unizero_segment(
             if stop:
                 break
 
-        # 收集数据前同步
-        dist.barrier()
+        # Synchronize before data collection (only if in DDP mode)
+        ddp_barrier()
+
         # Collect new data
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
-        # 收集数据后同步
-        dist.barrier()
+
+        # Synchronize after data collection (only if in DDP mode)
+        ddp_barrier()
 
         # Determine updates per collection
         update_per_collect = cfg.policy.update_per_collect
         if update_per_collect is None:
-            # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
-            # The length of game_segment (i.e., len(game_segment.action_segment)) can be smaller than cfg.policy.game_segment_length if it represents the final segment of the game.
-            # On the other hand, its length will be less than cfg.policy.game_segment_length + padding_length when it is not the last game segment. Typically, padding_length is the sum of unroll_steps and td_steps.
-            # collected_transitions_num = sum(min(len(game_segment), cfg.policy.game_segment_length) for game_segment in new_data[0])
-            # update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
-            
-            # 计算 collected_transitions_num
             collected_transitions_num = sum(
                 min(len(game_segment), cfg.policy.game_segment_length) 
                 for game_segment in new_data[0]
             )
-            # print(f"Rank {dist.get_rank()}: collected_transitions_num = {collected_transitions_num}")
 
-            # 将其转换为 GPU 上的张量并进行全局求和
+            # Convert to GPU tensor and perform all-reduce if DDP is enabled
             collected_transitions = torch.tensor(
                 collected_transitions_num, dtype=torch.int64, device='cuda'
             )
-            dist.all_reduce(collected_transitions, op=dist.ReduceOp.SUM)
-            total_collected_transitions = collected_transitions.item()
-            # print(f"Rank {dist.get_rank()}: total_collected_transitions = {total_collected_transitions}")
 
-            # 计算 update_per_collect, 是否需要 / dist.get_world_size()
-            update_per_collect = int(
-                (total_collected_transitions * cfg.policy.replay_ratio)
-            )
-            # print(f"Rank {dist.get_rank()}: update_per_collect = {update_per_collect}")
+            # Perform DDP all-reduce if required
+            total_collected_transitions = ddp_all_reduce(collected_transitions).item()
 
+            update_per_collect = int(total_collected_transitions * cfg.policy.replay_ratio)
             assert update_per_collect > 0, "update_per_collect must be positive"
 
-
-        # 更新Replay Buffer前同步
-        dist.barrier()
-        # Update replay buffer
+        # Update the replay buffer
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
-        # 更新Replay Buffer后同步
-        dist.barrier()
 
         # Periodically reanalyze buffer
         if cfg.policy.buffer_reanalyze_freq >= 1:
-            # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
             reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
         else:
-            # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
-            if train_epoch % int(1/cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+            if train_epoch % int(1/cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions() // cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
                 with timer:
-                    # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
                     replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
                 buffer_reanalyze_count += 1
                 logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
@@ -212,12 +204,14 @@ def train_unizero_segment(
 
         # Train the policy if sufficient data is available
         if collector.envstep > cfg.policy.train_start_after_envsteps:
-            # 同步训练前所有rank的准备状态
-            dist.barrier()
+            # Synchronize before training (only if in DDP mode)
+            ddp_barrier()
+
             if cfg.policy.sample_type == 'episode':
                 data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
             else:
                 data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
+
             if not data_sufficient:
                 logging.warning(
                     f'The data in replay_buffer is not sufficient to sample a mini-batch: '
@@ -227,17 +221,14 @@ def train_unizero_segment(
 
             for i in range(update_per_collect):
                 if cfg.policy.buffer_reanalyze_freq >= 1:
-                    # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
-                    if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+                    if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions() // cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
                         with timer:
-                            # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
                             replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
                         buffer_reanalyze_count += 1
                         logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
                         logging.info(f'Buffer reanalyze time: {timer.value}')
 
                 train_data = replay_buffer.sample(batch_size, policy)
-
                 train_data.append({'train_which_component': 'transformer'})
                 log_vars = learner.train(train_data, collector.envstep)
 
@@ -247,8 +238,8 @@ def train_unizero_segment(
         train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()
 
-        # 同步所有 Rank，确保所有 Rank 都完成了训练
-        dist.barrier()
+        # Synchronize after training (only if in DDP mode)
+        ddp_barrier()
 
         # Check stopping criteria
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:

@@ -436,7 +436,8 @@ class MuZeroCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
-                print(f"Rank {dist.get_rank()} ready_env_id: {ready_env_id}")
+                if dist.is_initialized():
+                    print(f"Rank {dist.get_rank()} ready_env_id: {ready_env_id}")
 
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
 
