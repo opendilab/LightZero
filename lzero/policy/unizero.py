@@ -454,6 +454,7 @@ class UniZeroPolicy(MuZeroPolicy):
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
                                                                         self._cfg.grad_clip_value)
         if self._cfg.multi_gpu:
+            # print('=========multi_gpu======')
             self.sync_gradients(self._learn_model)
 
         self._optimizer_world_model.step()

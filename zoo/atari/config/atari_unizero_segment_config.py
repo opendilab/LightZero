@@ -28,8 +28,8 @@ def main(env_id, seed):
     infer_context_length = 4
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    # buffer_reanalyze_freq = 1/100000
-    buffer_reanalyze_freq = 1/10
+    buffer_reanalyze_freq = 1/100000
+    # buffer_reanalyze_freq = 1/10
 
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
@@ -98,6 +98,7 @@ def main(env_id, seed):
             num_simulations=num_simulations,
             num_segments=num_segments,
             td_steps=5, # TODO
+            # train_start_after_envsteps=0,# TODO
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             grad_clip_value=5,
@@ -133,7 +134,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_clean_1025/{env_id[:-14]}/{env_id[:-14]}_uz_scale300_pew5e-3_obs10value01_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_4090/{env_id[:-14]}/{env_id[:-14]}_uz_scale300_pew5e-3_obs10value01_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
@@ -145,7 +146,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # args.env = 'QbertNoFrameskip-v4'
-    args.env = 'MsPacmanNoFrameskip-v4'
+    # args.env = 'MsPacmanNoFrameskip-v4'
     # args.env = 'RoadRunnerNoFrameskip-v4'
 
     main(args.env, args.seed)

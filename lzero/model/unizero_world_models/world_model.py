@@ -72,12 +72,13 @@ class WorldModel(nn.Module):
         # Initialize action embedding table
         if self.continuous_action_space:
             # TODO: check the effect of SimNorm
-            # self.act_embedding_table = nn.Sequential(
-            #     nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
-            #     SimNorm(simnorm_dim=self.group_size))
             self.act_embedding_table = nn.Sequential(
-                nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False)
-                )
+                nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
+                # SimNorm(simnorm_dim=self.group_size)
+                nn.LayerNorm(config.embed_dim)) # TODO
+            # self.act_embedding_table = nn.Sequential(
+            #     nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False)
+            #     )
         else:
             # for discrete action space
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)

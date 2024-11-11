@@ -25,8 +25,8 @@ def main(env_id, seed):
     num_simulations = 50 # TODO
     # num_simulations = 100
 
-    # max_env_step = int(5e5)
-    max_env_step = int(1e6)
+    max_env_step = int(5e5)
+    # max_env_step = int(1e6)
     # max_env_step = int(3e6) # TODO
 
     reanalyze_ratio = 0
@@ -182,8 +182,11 @@ def main(env_id, seed):
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
     # main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td10_temp2.5e4_pew5e-2_19prior1flatten_embed512_obs10value01_clamp4_rbs5e5_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
-    main_config.exp_name=f'data_sampled_unizero_1110/dmc2gym_{env_id}_act-nosimnorm_td5_temp2.5e4_pew5e-2_20prior0flatten_embed768_obs10value01_clamp4_rbs5e5_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    # main_config.exp_name=f'data_sampled_unizero_1110/dmc2gym_{env_id}_act-nosimnorm_td5_temp2.5e4_pew5e-2_20prior0flatten_embed768_obs10value01_clamp4_rbs5e5_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
     # main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td5_temp2.5e4_pew5e-2_20prior0flatten_embed768_obs10value01_clamp4_rbs5e5_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_sigma-05'
+    # main_config.exp_name=f'data_sampled_unizero_1110/dmc2gym_{env_id}_act-nosimnorm_td5_temp2.5e4_pew5e-2_19prior1flatten_embed768_obs10value01_clamp4_rbs5e5_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    # main_config.exp_name=f'data_sampled_unizero_1110/dmc2gym_{env_id}_act-simnorm_td5_temp2.5e4_pew5e-2_19prior1flatten_embed768_obs10value01_clamp4_rbs5e5_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    main_config.exp_name=f'data_sampled_unizero_1110/dmc2gym_{env_id}_act-layernorm_td5_temp2.5e4_pew5e-2_19prior1flatten_embed768_obs10value01_clamp4_rbs5e5_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
     
     train_unizero_segment([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 
@@ -197,7 +200,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     
-    args.env = 'cheetah-run'
+    # args.env = 'cheetah-run'
     # args.env = 'walker-walk'
     # args.env = 'finger-spin'
     # args.env = 'pendulum-swingup'

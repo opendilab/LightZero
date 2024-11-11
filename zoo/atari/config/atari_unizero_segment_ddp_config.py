@@ -18,6 +18,7 @@ def main(env_id, seed):
     max_env_step = int(5e5) # TODO
 
     batch_size = 64
+    batch_size = int(batch_size*gpu_num)
     num_layers = 2
     replay_ratio = 0.25
     # replay_ratio = 0.5
@@ -43,7 +44,7 @@ def main(env_id, seed):
     # batch_size = 5
     # gpu_num = 4
     # collector_env_num = 2
-    # num_segments = int(collector_env_num*gpu_num)
+    # num_segments = int(collector_env_num)
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
@@ -84,6 +85,7 @@ def main(env_id, seed):
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),
             ),
+            multi_gpu=True, # ======== Very important for ddp =============
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
             model_path=None,
             use_augmentation=False,
@@ -101,6 +103,7 @@ def main(env_id, seed):
             num_segments=num_segments,
             td_steps=5, # TODO
             train_start_after_envsteps=2000,
+            # train_start_after_envsteps=0, # TODO
             game_segment_length=game_segment_length,
             grad_clip_value=5,
             replay_buffer_size=int(1e6),
@@ -141,7 +144,7 @@ def main(env_id, seed):
         # 确保每个 Rank 分配到正确的 collector_env_num
         print(f"Rank {dist.get_rank()} Collector Env Num: {main_config.policy.collector_env_num}")
         from lzero.entry import train_unizero_segment
-        main_config.exp_name = f'data_unizero_ddp/{env_id[:-14]}/{env_id[:-14]}_uz_ddp_{gpu_num}gpu_scale300_pew5e-3_obs10value01_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+        main_config.exp_name = f'data_unizero_ddp_fixsyncgrad/{env_id[:-14]}/{env_id[:-14]}_uz_ddp_{gpu_num}gpu_scale300_pew5e-3_obs10value05_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
         train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 

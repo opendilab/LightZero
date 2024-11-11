@@ -13,6 +13,7 @@ from torch.nn import L1Loss
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
+import torch.distributed as dist
 
 
 @SERIAL_COLLECTOR_REGISTRY.register('segment_muzero')
@@ -454,6 +455,9 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # ==============================================================
                 # Key policy forward step
                 # ==============================================================
+                # if dist.is_initialized():
+                #     print(f"Rank {dist.get_rank()} ready_env_id: {ready_env_id}")
+
                 # print(f'ready_env_id:{ready_env_id}')
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
 
