@@ -65,6 +65,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             num_unroll_steps=num_unroll_steps,
             game_segment_length=20,
             update_per_collect=160,  # 调整
+            # update_per_collect=2,  # TODO: debug
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -160,6 +161,14 @@ if __name__ == "__main__":
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
 
+    # ======== TODO: only for debug ========
+    # collector_env_num = 2
+    # num_segments = 2
+    # n_episode = 2
+    # evaluator_env_num = 2
+    # num_simulations = 2
+    # batch_size = [4, 4, 4, 4]
+
     configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments)
 
     """
@@ -171,7 +180,6 @@ if __name__ == "__main__":
         torchrun --nproc_per_node=4 ./zoo/atari/config/atari_unizero_multitask_segment_4games_ddp_config.py
     """
     from ding.utils import DDPContext
-    import numpy as np
     from easydict import EasyDict
     with DDPContext():
         train_unizero_multitask_segment(configs, seed=seed, max_env_step=max_env_step)

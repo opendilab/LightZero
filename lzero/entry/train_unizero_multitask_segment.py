@@ -99,7 +99,14 @@ def train_unizero_multitask_segment(
         logging.info(f'Loading model from {model_path} end!')
 
     # 创建 TensorBoard 的日志记录器
-    tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
+    # tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
+
+    # =========== TODO: for unizero_multitask ddp_v2 ========
+    # tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))
+
+    log_dir = os.path.join('./{}/log'.format(cfg.exp_name), f'serial_rank_{rank}')
+    tb_logger = SummaryWriter(log_dir)
+
     # 创建共享的 learner
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 

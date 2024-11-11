@@ -63,6 +63,10 @@ class MuZeroSegmentCollector(ISerialCollector):
         self._end_flag = False
 
         self._rank = get_rank()
+
+        print(f'rank {self._rank}, self.task_id: {self.task_id}')
+
+
         self._world_size = get_world_size()
         if self._rank == 0:
             if tb_logger is not None:
@@ -80,7 +84,11 @@ class MuZeroSegmentCollector(ISerialCollector):
             self._logger, _ = build_logger(
                 path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name, need_tb=False
             )
-            self._tb_logger = None
+            # self._tb_logger = None
+
+            # =========== TODO: for unizero_multitask ddp_v2 ========
+            self._tb_logger = tb_logger
+
 
         self.policy_config = policy_config
         self.collect_with_pure_policy = self.policy_config.collect_with_pure_policy
@@ -714,11 +722,13 @@ class MuZeroSegmentCollector(ISerialCollector):
                 break
 
         collected_duration = sum([d['time'] for d in self._episode_info])
+        # ========== TODO: unizero_multitask ddp_v2 ========
         # reduce data when enables DDP
-        if self._world_size > 1:
-            collected_step = allreduce_data(collected_step, 'sum')
-            collected_episode = allreduce_data(collected_episode, 'sum')
-            collected_duration = allreduce_data(collected_duration, 'sum')
+        # if self._world_size > 1:
+        #     collected_step = allreduce_data(collected_step, 'sum')
+        #     collected_episode = allreduce_data(collected_episode, 'sum')
+        #     collected_duration = allreduce_data(collected_duration, 'sum')
+
         self._total_envstep_count += collected_step
         self._total_episode_count += collected_episode
         self._total_duration += collected_duration
@@ -768,6 +778,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             if self.policy_config.gumbel_algo:
                 info['completed_value'] = np.mean(completed_value)
             self._episode_info.clear()
+            print(f'rank {self._rank}, self.task_id: {self.task_id}')
             self._logger.info("collect end:\n{}".format('\n'.join(['{}: {}'.format(k, v) for k, v in info.items()])))
             for k, v in info.items():
                 if k in ['each_reward']:

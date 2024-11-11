@@ -90,7 +90,17 @@ class MuZeroEvaluator(ISerialEvaluator):
                     './{}/log/{}'.format(self._exp_name, self._instance_name), self._instance_name
                 )
         else:
-            self._logger, self._tb_logger = None, None  # for close elegantly
+            # self._logger, self._tb_logger = None, None  # for close elegantly
+            # ========== TODO: unizero_multitask ddp_v2 ========
+            if tb_logger is not None:
+                self._logger, _ = build_logger(
+                    './{}/log/{}'.format(self._exp_name, self._instance_name), self._instance_name, need_tb=False
+                )
+                self._tb_logger = tb_logger
+
+
+        print(f'rank {get_rank()}, self.task_id: {self.task_id}')
+
 
         self.reset(policy, env)
 
@@ -215,7 +225,10 @@ class MuZeroEvaluator(ISerialEvaluator):
         # the evaluator only works on rank0
         episode_info = None
         stop_flag = False
-        if get_rank() == 0:
+        # ======== TODO: unizero_multitask ddp_v2 ========
+        # if get_rank() == 0:
+        if get_rank() >= 0:
+
             if n_episode is None:
                 n_episode = self._default_n_episode
             assert n_episode is not None, "please indicate eval n_episode"
@@ -429,6 +442,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             episode_info = eval_monitor.get_episode_info()
             if episode_info is not None:
                 info.update(episode_info)
+            print(f'rank {self._rank}, self.task_id: {self.task_id}')
             self._logger.info(self._logger.get_tabulate_vars_hor(info))
             for k, v in info.items():
                 if k in ['train_iter', 'ckpt_name', 'each_reward']:

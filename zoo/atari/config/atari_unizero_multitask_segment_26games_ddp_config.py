@@ -123,7 +123,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     configs = []
     # TODO
     # exp_name_prefix = f'data_unizero_mt_segcollect_1107/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_maxbs-320_upc160_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_segcollect_1107_ddp8/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_maxbs-640_upc80_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_segcollect_1111_ddp8/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_maxbs-640_upc80_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -232,7 +232,7 @@ if __name__ == "__main__":
     # max_batch_size = 2048
 
     # max_batch_size = 320
-    max_batch_size = 640
+    max_batch_size = 2000
 
     # max_batch_size = int(64*4)
     # batch_size = [int(max_batch_size/len(env_id_list)) for i in range(len(env_id_list))]
