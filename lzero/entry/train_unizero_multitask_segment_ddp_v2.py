@@ -9,20 +9,20 @@ from ding.config import compile_config
 from ding.envs import create_env_manager, get_vec_env_setting
 from ding.policy import create_policy
 from ding.rl_utils import get_epsilon_greedy_fn
-from ding.utils import set_pkg_seed, get_rank
+from ding.utils import set_pkg_seed, get_rank, get_world_size
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
-from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.mcts import UniZeroGameBuffer as GameBuffer
+from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroSegmentCollector as Collector
 from ding.utils import EasyTimer
 timer = EasyTimer()
-from line_profiler import line_profiler
+import torch.distributed as dist
 
-#@profile
+
 def train_unizero_multitask_segment(
         input_cfg_list: List[Tuple[int, Tuple[dict, dict]]],
         seed: int = 0,
@@ -46,6 +46,31 @@ def train_unizero_multitask_segment(
     Returns:
         - policy (Policy): Converged policy.
     """
+    # 获取当前进程的 rank 和总的进程数
+    rank = get_rank()
+    world_size = get_world_size()
+
+    # 任务划分
+    total_tasks = len(input_cfg_list)
+    tasks_per_rank = total_tasks // world_size
+    remainder = total_tasks % world_size
+
+    if rank < remainder:
+        start_idx = rank * (tasks_per_rank + 1)
+        end_idx = start_idx + tasks_per_rank + 1
+    else:
+        start_idx = rank * tasks_per_rank + remainder
+        end_idx = start_idx + tasks_per_rank
+
+    tasks_for_this_rank = input_cfg_list[start_idx:end_idx]
+
+    # 确保至少有一个任务
+    if len(tasks_for_this_rank) == 0:
+        print(f"Rank {rank}: No tasks assigned, exiting.")
+        return
+
+    print(f"Rank {rank}/{world_size}, handling tasks {start_idx} to {end_idx - 1}")
+
     cfgs = []
     game_buffers = []
     collector_envs = []
@@ -53,44 +78,44 @@ def train_unizero_multitask_segment(
     collectors = []
     evaluators = []
 
+    # 使用第一个任务的配置来创建共享的 policy
     task_id, [cfg, create_cfg] = input_cfg_list[0]
 
-    # Ensure the specified policy type is supported
-    assert create_cfg.policy.type in ['unizero_multitask'], "train_unizero entry now only supports 'unizero'"
+    # 确保指定的 policy 类型是支持的
+    assert create_cfg.policy.type in ['unizero_multitask'], "train_unizero entry now only supports 'unizero_multitask'"
 
-    # Set device based on CUDA availability
+    # 根据 CUDA 可用性设置设备
     cfg.policy.device = cfg.policy.model.world_model_cfg.device if torch.cuda.is_available() else 'cpu'
     logging.info(f'cfg.policy.device: {cfg.policy.device}')
 
-    # Compile the configuration
+    # 编译配置
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
-    # Create shared policy for all tasks
+    # 创建共享的 policy
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
-    # Load pretrained model if specified
+    # 如果指定了预训练模型，则加载
     if model_path is not None:
         logging.info(f'Loading model from {model_path} begin...')
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
         logging.info(f'Loading model from {model_path} end!')
 
-    # Create SummaryWriter for TensorBoard logging
+    # 创建 TensorBoard 的日志记录器
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
-    # Create shared learner for all tasks
+
+    # 创建共享的 learner
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
 
-    # TODO task_id = 0:
     policy_config = cfg.policy
     batch_size = policy_config.batch_size[0]
 
-    for task_id, input_cfg in input_cfg_list:
-        if task_id > 0:
-            # Get the configuration for each task
-            cfg, create_cfg = input_cfg
-            cfg.policy.device = 'cuda' if cfg.policy.cuda and torch.cuda.is_available() else 'cpu'
-            cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
-            policy_config = cfg.policy
-            policy.collect_mode.get_attribute('cfg').n_episode = policy_config.n_episode
-            policy.eval_mode.get_attribute('cfg').n_episode = policy_config.n_episode
+    # 只处理当前进程分配到的任务
+    for local_task_id, (task_id, [cfg, create_cfg]) in enumerate(tasks_for_this_rank):
+        # 设置每个任务自己的随机种子
+        cfg.policy.device = 'cuda' if cfg.policy.cuda and torch.cuda.is_available() else 'cpu'
+        cfg = compile_config(cfg, seed=seed + task_id, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
+        policy_config = cfg.policy
+        policy.collect_mode.get_attribute('cfg').n_episode = policy_config.n_episode
+        policy.eval_mode.get_attribute('cfg').n_episode = policy_config.n_episode
 
         env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
         collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
@@ -99,8 +124,7 @@ def train_unizero_multitask_segment(
         evaluator_env.seed(cfg.seed + task_id, dynamic_seed=False)
         set_pkg_seed(cfg.seed + task_id, use_cuda=cfg.policy.cuda)
 
-        # ===== NOTE: Create different game buffer, collector, evaluator for each task ====
-        # TODO: share replay buffer for all tasks
+        # 为每个任务创建不同的 game buffer、collector、evaluator
         replay_buffer = GameBuffer(policy_config)
         collector = Collector(
             env=collector_env,
@@ -139,12 +163,12 @@ def train_unizero_multitask_segment(
     update_per_collect = cfg.policy.update_per_collect
 
     while True:
-        # Precompute positional embedding matrices for collect/eval (not training)
+        # 预先计算位置嵌入矩阵（如果需要）
         policy._collect_model.world_model.precompute_pos_emb_diff_kv()
         policy._target_model.world_model.precompute_pos_emb_diff_kv()
 
-        # Collect data for each task
-        for task_id, (cfg, collector, evaluator, replay_buffer) in enumerate(
+        # 对于当前进程的每个任务，进行数据收集和评估
+        for idx, (cfg, collector, evaluator, replay_buffer) in enumerate(
                 zip(cfgs, collectors, evaluators, game_buffers)):
             log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
 
@@ -155,7 +179,7 @@ def train_unizero_multitask_segment(
                     policy_config.threshold_training_steps_for_final_temperature,
                     trained_steps=learner.train_iter
                 ),
-                'epsilon': 0.0  # Default epsilon value
+                'epsilon': 0.0  # 默认的 epsilon 值
             }
 
             if policy_config.eps.eps_greedy_exploration_in_collect:
@@ -169,77 +193,68 @@ def train_unizero_multitask_segment(
 
             if evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
-                print(f'evaluate task_id: {task_id}...')
+                print(f'Rank {rank} evaluates task_id: {cfg.policy.task_id}...')
                 stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
                 if stop:
                     break
 
             print('=' * 20)
-            print(f'collect task_id: {task_id}...')
+            print(f'Rank {rank} collects task_id: {cfg.policy.task_id}...')
 
-            # Reset initial data before each collection, very important for multi-task setting
+            # 在每次收集之前重置初始数据，这对于多任务设置非常重要
             collector._policy.reset(reset_init_data=True)
+            # 收集数据
             new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
-            # Determine updates per collection
-            if update_per_collect is None:
-                # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
-                # The length of game_segment (i.e., len(game_segment.action_segment)) can be smaller than cfg.policy.game_segment_length if it represents the final segment of the game.
-                # On the other hand, its length will be less than cfg.policy.game_segment_length + padding_length when it is not the last game segment. Typically, padding_length is the sum of unroll_steps and td_steps.
-                collected_transitions_num = sum(
-                    min(len(game_segment), cfg.policy.game_segment_length) for game_segment in new_data[0])
-                update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
-
-
-            # Update replay buffer
+            # 更新 replay buffer
             replay_buffer.push_game_segments(new_data)
             replay_buffer.remove_oldest_data_to_fit()
 
-            # Periodically reanalyze buffer
+            # 周期性地重新分析缓冲区
             if cfg.policy.buffer_reanalyze_freq >= 1:
-                # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+                # 在一个训练 epoch 中重新分析缓冲区 <buffer_reanalyze_freq> 次
                 reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
             else:
-                # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
+                # 每 <1/buffer_reanalyze_freq> 个训练 epoch 重新分析一次缓冲区
                 if train_epoch % int(1/cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
                     with timer:
-                        # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+                        # 每个重新分析过程将重新分析 <reanalyze_batch_size> 个序列
                         replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
                     buffer_reanalyze_count += 1
                     logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
                     logging.info(f'Buffer reanalyze time: {timer.value}')
 
-
+        # 检查是否有足够的数据进行训练
         not_enough_data = any(replay_buffer.get_num_of_transitions() < batch_size for replay_buffer in game_buffers)
 
-        # Learn policy from collected data.
+        # 学习策略
         if not not_enough_data:
+            # 同步训练前所有 rank 的准备状态
+            dist.barrier()
 
-            # Learner will train ``update_per_collect`` times in one iteration.
+            # Learner 将在一次迭代中训练 update_per_collect 次
             for i in range(update_per_collect):
                 train_data_multi_task = []
                 envstep_multi_task = 0
-                for task_id, (cfg, collector, replay_buffer) in enumerate(zip(cfgs, collectors, game_buffers)):
+                for idx, (cfg, collector, replay_buffer) in enumerate(zip(cfgs, collectors, game_buffers)):
                     envstep_multi_task += collector.envstep
                     if replay_buffer.get_num_of_transitions() > batch_size:
-                        batch_size = cfg.policy.batch_size[task_id]
+                        batch_size = cfg.policy.batch_size[cfg.policy.task_id]
 
                         if cfg.policy.buffer_reanalyze_freq >= 1:
-                            # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
+                            # 在一个训练 epoch 中重新分析缓冲区 <buffer_reanalyze_freq> 次
                             if i % reanalyze_interval == 0 and replay_buffer.get_num_of_transitions() // cfg.policy.num_unroll_steps > int(
                                     reanalyze_batch_size / cfg.policy.reanalyze_partition):
                                 with timer:
-                                    # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+                                    # 每个重新分析过程将重新分析 <reanalyze_batch_size> 个序列
                                     replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
                                 buffer_reanalyze_count += 1
                                 logging.info(f'Buffer reanalyze count: {buffer_reanalyze_count}')
                                 logging.info(f'Buffer reanalyze time: {timer.value}')
 
                         train_data = replay_buffer.sample(batch_size, policy)
-                        # if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
-                        #     policy.recompute_pos_emb_diff_and_clear_cache()
-                        # Append task_id to train_data
-                        train_data.append(task_id)
+                        # 追加 task_id，以便在训练时区分任务
+                        train_data.append(cfg.policy.task_id)
                         train_data_multi_task.append(train_data)
                     else:
                         logging.warning(
@@ -249,48 +264,65 @@ def train_unizero_multitask_segment(
                         break
 
                 if train_data_multi_task:
+                    # 在训练时，DDP 会自动同步梯度和参数
                     log_vars = learner.train(train_data_multi_task, envstep_multi_task)
-                
+
                 if cfg.policy.use_priority:
-                    for task_id, replay_buffer in enumerate(game_buffers):
-                        #  Update the priority for the task-specific replay buffer.
-                        replay_buffer.update_priority(train_data_multi_task[task_id], log_vars[0][f'value_priority_task{task_id}'])
-                        
-                        # Retrieve the updated priorities for the current task.
+                    for idx, (cfg, replay_buffer) in enumerate(zip(cfgs, game_buffers)):
+                        # 更新任务特定的 replay buffer 的优先级
+                        task_id = cfg.policy.task_id
+                        replay_buffer.update_priority(train_data_multi_task[idx], log_vars[0][f'value_priority_task{task_id}'])
+
                         current_priorities = log_vars[0][f'value_priority_task{task_id}']
-                        
-                        # Calculate statistics: mean, running mean, standard deviation for the priorities.
+
                         mean_priority = np.mean(current_priorities)
                         std_priority = np.std(current_priorities)
-                        
-                        # Using exponential moving average for running mean (alpha is the smoothing factor).
-                        alpha = 0.1  # You can adjust this smoothing factor as needed.
+
+                        alpha = 0.1  # 运行均值的平滑因子
                         if f'running_mean_priority_task{task_id}' not in value_priority_tasks:
-                            # Initialize running mean if it does not exist.
+                            # 如果不存在，则初始化运行均值
                             value_priority_tasks[f'running_mean_priority_task{task_id}'] = mean_priority
                         else:
-                            # Update running mean.
+                            # 更新运行均值
                             value_priority_tasks[f'running_mean_priority_task{task_id}'] = (
                                 alpha * mean_priority + (1 - alpha) * value_priority_tasks[f'running_mean_priority_task{task_id}']
                             )
-                        
-                        # Calculate the normalized priority using the running mean.
+
+                        # 使用运行均值计算归一化的优先级
                         running_mean_priority = value_priority_tasks[f'running_mean_priority_task{task_id}']
                         normalized_priorities = (current_priorities - running_mean_priority) / (std_priority + 1e-6)
-                        
-                        # Store the normalized priorities back to the replay buffer (if needed).
-                        # replay_buffer.update_priority(train_data_multi_task[task_id], normalized_priorities)
-                        
-                        # Log the statistics if the print_task_priority_logs flag is set.
+
+                        # 如果需要，可以将归一化的优先级存储回 replay buffer
+                        # replay_buffer.update_priority(train_data_multi_task[idx], normalized_priorities)
+
+                        # 如果设置了 print_task_priority_logs 标志，则记录统计信息
                         if cfg.policy.print_task_priority_logs:
                             print(f"Task {task_id} - Mean Priority: {mean_priority:.8f}, "
-                                f"Running Mean Priority: {running_mean_priority:.8f}, "
-                                f"Standard Deviation: {std_priority:.8f}")
+                                  f"Running Mean Priority: {running_mean_priority:.8f}, "
+                                  f"Standard Deviation: {std_priority:.8f}")
 
         train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()
 
-        if all(collector.envstep >= max_env_step for collector in collectors) or learner.train_iter >= max_train_iter:
+        # 同步所有 Rank，确保所有 Rank 都完成了训练
+        dist.barrier()
+
+        # 检查是否需要终止训练
+
+        # 收集所有进程的 envstep
+        local_envsteps = torch.tensor([collector.envstep for collector in collectors], device=cfg.policy.device)
+        total_envsteps = [torch.zeros_like(local_envsteps) for _ in range(world_size)]
+        dist.all_gather(total_envsteps, local_envsteps)
+        all_envsteps = torch.cat(total_envsteps)
+        max_envstep_reached = torch.all(all_envsteps >= max_env_step)
+
+        # 收集所有进程的 train_iter
+        global_train_iter = torch.tensor([learner.train_iter], device=cfg.policy.device)
+        all_train_iters = [torch.zeros_like(global_train_iter) for _ in range(world_size)]
+        dist.all_gather(all_train_iters, global_train_iter)
+        max_train_iter_reached = torch.any(torch.stack(all_train_iters) >= max_train_iter)
+
+        if max_envstep_reached.item() or max_train_iter_reached.item():
             break
 
     learner.call_hook('after_run')

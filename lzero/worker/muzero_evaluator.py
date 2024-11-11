@@ -215,7 +215,8 @@ class MuZeroEvaluator(ISerialEvaluator):
         # the evaluator only works on rank0
         episode_info = None
         stop_flag = False
-        if get_rank() == 0:
+        # if get_rank() == 0:
+        if True: # TODO: multitask_ddp_v2 ======
             if n_episode is None:
                 n_episode = self._default_n_episode
             assert n_episode is not None, "please indicate eval n_episode"
