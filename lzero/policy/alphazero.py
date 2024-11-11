@@ -364,6 +364,26 @@ class AlphaZeroPolicy(Policy):
             else:
                 raise NotImplementedError
             self.simulate_env = Connect4Env(connect4_alphazero_config.env)
+        elif self._cfg.simulation_env_id == 'chess':
+            from zoo.board_games.chess.envs.chess_lightzero_env import ChessLightZeroEnv
+            if self._cfg.simulation_env_config_type == 'play_with_bot':
+                from zoo.board_games.chess.config.chess_alphazero_bot_mode_config import chess_alphazero_config
+            elif self._cfg.simulation_env_config_type == 'self_play':
+                from zoo.board_games.chess.config.chess_alphazero_sp_mode_config import chess_alphazero_config
+            else:
+                raise NotImplementedError
+            self.simulate_env = ChessLightZeroEnv(chess_alphazero_config.env)
+        elif self._cfg.simulation_env_id == 'dummy_any_game':
+            from zoo.board_games.tictactoe.envs.dummy_any_game_env import AnyGameEnv
+            if self._cfg.simulation_env_config_type == 'single_player_mode':
+                from zoo.board_games.tictactoe.config.dummy_any_game_alphazero_single_player_mode_config import \
+                    dummy_any_game_alphazero_config
+            elif self._cfg.simulation_env_config_type == 'self_play':
+                from zoo.board_games.tictactoe.config.dummy_any_game_alphazero_self_play_mode_config import \
+                    dummy_any_game_alphazero_config
+            else:
+                raise NotImplementedError
+            self.simulate_env = AnyGameEnv(dummy_any_game_alphazero_config.env)
         else:
             raise NotImplementedError
 

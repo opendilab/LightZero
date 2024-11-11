@@ -385,9 +385,11 @@ class DMC2GymEnv(BaseEnv):
 
         self._eval_episode_return += rew
         obs = to_ndarray(obs).astype(np.float32)
-        rew = to_ndarray(rew).astype(np.float32)  # wrapped to be transferred to an array with shape (1,)
+        rew = to_ndarray(rew).astype(np.float32)
+
         if self._save_replay_gif:
             self._frames.append(image_obs)
+
         if done:
             info['eval_episode_return'] = self._eval_episode_return
             if self._save_replay_gif:

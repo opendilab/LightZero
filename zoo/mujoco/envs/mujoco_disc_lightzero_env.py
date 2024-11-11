@@ -129,7 +129,7 @@ class MujocoDiscEnvLZ(MujocoDiscEnv):
             info['eval_episode_return'] = self._eval_episode_return
 
         obs = to_ndarray(obs).astype(np.float32)
-        rew = to_ndarray([rew]).astype(np.float32)
+        rew = to_ndarray(rew).astype(np.float32)
 
         action_mask = np.ones(self._action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
