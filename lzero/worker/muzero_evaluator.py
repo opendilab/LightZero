@@ -99,7 +99,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                 self._tb_logger = tb_logger
 
 
-        print(f'rank {get_rank()}, self.task_id: {self.task_id}')
+        self._rank = get_rank()
+
+        print(f'rank {self._rank}, self.task_id: {self.task_id}')
 
 
         self.reset(policy, env)
@@ -442,7 +444,9 @@ class MuZeroEvaluator(ISerialEvaluator):
             episode_info = eval_monitor.get_episode_info()
             if episode_info is not None:
                 info.update(episode_info)
+            
             print(f'rank {self._rank}, self.task_id: {self.task_id}')
+
             self._logger.info(self._logger.get_tabulate_vars_hor(info))
             for k, v in info.items():
                 if k in ['train_iter', 'ckpt_name', 'each_reward']:
@@ -471,10 +475,14 @@ class MuZeroEvaluator(ISerialEvaluator):
                     ", so your MCTS/RL agent is converged, you can refer to 'log/evaluator/evaluator_logger.txt' for details."
                 )
 
-        if get_world_size() > 1:
-            objects = [stop_flag, episode_info]
-            broadcast_object_list(objects, src=0)
-            stop_flag, episode_info = objects
+        # ========== TODO: unizero_multitask ddp_v2 ========
+        # if get_world_size() > 1:
+        #     objects = [stop_flag, episode_info]
+        #     print(f'rank {self._rank}, self.task_id: {self.task_id}')
+        #     print('before broadcast_object_list')
+        #     broadcast_object_list(objects, src=0)
+        #     print('evaluator after broadcast_object_list')
+        #     stop_flag, episode_info = objects
 
         episode_info = to_item(episode_info)
         if return_trajectory:

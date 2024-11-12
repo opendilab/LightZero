@@ -78,7 +78,13 @@ def train_unizero_multitask_segment(
     evaluators = []
 
     # 使用第一个任务的配置来创建共享的 policy
-    task_id, [cfg, create_cfg] = input_cfg_list[0]
+    # task_id, [cfg, create_cfg] = input_cfg_list[0]
+    # TODO: 使用该rank的第一个任务的配置来创建共享的 policy
+    task_id, [cfg, create_cfg] = tasks_for_this_rank[0]
+
+    # TODO: task_num for base_index for learner_log
+    for config in tasks_for_this_rank:
+        config[1][0].policy.task_num = tasks_per_rank
 
     # 确保指定的 policy 类型是支持的
     assert create_cfg.policy.type in ['unizero_multitask'], "train_unizero entry now only supports 'unizero_multitask'"
@@ -109,6 +115,9 @@ def train_unizero_multitask_segment(
 
     # 创建共享的 learner
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
+
+    # tb_logge_train = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial_train')) if get_rank() == 0 else None
+    # learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger_train, exp_name=cfg.exp_name)
 
     policy_config = cfg.policy
     batch_size = policy_config.batch_size[0]
@@ -153,6 +162,9 @@ def train_unizero_multitask_segment(
 
         cfgs.append(cfg)
         replay_buffer.batch_size = cfg.policy.batch_size[task_id]
+
+        # print(f"Rank {rank}/{world_size}, cfg.policy.batch_size:{cfg.policy.batch_size}, task_id: {task_id}")
+
         game_buffers.append(replay_buffer)
         collector_envs.append(collector_env)
         evaluator_envs.append(evaluator_env)
@@ -175,6 +187,10 @@ def train_unizero_multitask_segment(
         # 对于当前进程的每个任务，进行数据收集和评估
         for idx, (cfg, collector, evaluator, replay_buffer) in enumerate(
                 zip(cfgs, collectors, evaluators, game_buffers)):
+            
+            # TODO: DEBUG =========
+            # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+
             log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
 
             collect_kwargs = {

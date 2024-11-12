@@ -19,12 +19,29 @@ from .utils import configure_optimizers_nanogpt
 from line_profiler import line_profiler
 from ding.utils import set_pkg_seed, get_rank, get_world_size
 
-sys.path.append('/Users/puyuan/code/LibMTL/')
-from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+# sys.path.append('/Users/puyuan/code/LibMTL/')
+# from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 # from LibMTL.weighting.abstract_weighting import AbsWeighting
 
-def generate_task_loss_dict(multi_task_losses, task_name_template):
+# def generate_task_loss_dict(multi_task_losses, task_name_template):
+#     """
+#     生成每个任务的损失字典
+#     :param multi_task_losses: 包含每个任务损失的列表
+#     :param task_name_template: 任务名称模板，例如 'obs_loss_task{}'
+#     :return: 一个字典，包含每个任务的损失
+#     """
+#     task_loss_dict = {}
+#     for task_idx, task_loss in enumerate(multi_task_losses):
+#         task_name = task_name_template.format(task_idx)
+#         try:
+#             task_loss_dict[task_name] = task_loss.item() if hasattr(task_loss, 'item') else task_loss
+#         except Exception as e:
+#             task_loss_dict[task_name] = task_loss
+#     return task_loss_dict
+
+def generate_task_loss_dict(multi_task_losses, task_name_template, task_id):
     """
     生成每个任务的损失字典
     :param multi_task_losses: 包含每个任务损失的列表
@@ -33,14 +50,12 @@ def generate_task_loss_dict(multi_task_losses, task_name_template):
     """
     task_loss_dict = {}
     for task_idx, task_loss in enumerate(multi_task_losses):
-        task_name = task_name_template.format(task_idx)
+        task_name = task_name_template.format(task_idx + task_id)
         try:
             task_loss_dict[task_name] = task_loss.item() if hasattr(task_loss, 'item') else task_loss
         except Exception as e:
             task_loss_dict[task_name] = task_loss
     return task_loss_dict
-
-
 
 class WrappedModel:
     def __init__(self, tokenizer, transformer):
@@ -466,9 +481,11 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # 将 wrapped_model 作为 share_model 传递给 GradCorrect
         # ========= 初始化 MoCo CAGrad 参数 =========
         self.task_num = self._cfg.task_num
-        self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
-        self.grad_correct.init_param()  
-        self.grad_correct.rep_grad = False
+        self.task_id = self._cfg.task_id
+
+        # self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
+        # self.grad_correct.init_param()  
+        # self.grad_correct.rep_grad = False
 
     #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -686,27 +703,44 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
         }
 
-        # 用于存储多任务损失的字典
-        multi_task_loss_dicts = {
-            **generate_task_loss_dict(obs_loss_multi_task, 'obs_loss_task{}'),
-            **generate_task_loss_dict(latent_recon_loss_multi_task, 'latent_recon_loss_task{}'),
-            **generate_task_loss_dict(perceptual_loss_multi_task, 'perceptual_loss_task{}'),
-            **generate_task_loss_dict(latent_state_l2_norms_multi_task, 'latent_state_l2_norms_task{}'),
-            
-            **generate_task_loss_dict(policy_loss_multi_task, 'policy_loss_task{}'),
-            **generate_task_loss_dict(orig_policy_loss_multi_task, 'orig_policy_loss_task{}'),
-            **generate_task_loss_dict(policy_entropy_multi_task, 'policy_entropy_task{}'),
-            **generate_task_loss_dict(reward_loss_multi_task, 'reward_loss_task{}'),
-            **generate_task_loss_dict(value_loss_multi_task, 'value_loss_task{}'),
-            **generate_task_loss_dict(average_target_policy_entropy_multi_task, 'target_policy_entropy_task{}'),
-            **generate_task_loss_dict(lambd, 'lambd_task{}'), 
-            # ==============================================================
-            # priority related
-            # ==============================================================
-            **generate_task_loss_dict(value_priority_multi_task, 'value_priority_task{}'),
-            **generate_task_loss_dict(value_priority_mean_multi_task, 'value_priority_mean_task{}'),
-        }
+        # # 用于存储多任务损失的字典
+        # multi_task_loss_dicts = {
+        #     **generate_task_loss_dict(obs_loss_multi_task, 'obs_loss_task{}'),
+        #     **generate_task_loss_dict(latent_recon_loss_multi_task, 'latent_recon_loss_task{}'),
+        #     **generate_task_loss_dict(perceptual_loss_multi_task, 'perceptual_loss_task{}'),
+        #     **generate_task_loss_dict(latent_state_l2_norms_multi_task, 'latent_state_l2_norms_task{}'),
+        #     **generate_task_loss_dict(policy_loss_multi_task, 'policy_loss_task{}'),
+        #     **generate_task_loss_dict(orig_policy_loss_multi_task, 'orig_policy_loss_task{}'),
+        #     **generate_task_loss_dict(policy_entropy_multi_task, 'policy_entropy_task{}'),
+        #     **generate_task_loss_dict(reward_loss_multi_task, 'reward_loss_task{}'),
+        #     **generate_task_loss_dict(value_loss_multi_task, 'value_loss_task{}'),
+        #     **generate_task_loss_dict(average_target_policy_entropy_multi_task, 'target_policy_entropy_task{}'),
+        #     **generate_task_loss_dict(lambd, 'lambd_task{}'), 
+        #     # ==============================================================
+        #     # priority related
+        #     # ==============================================================
+        #     **generate_task_loss_dict(value_priority_multi_task, 'value_priority_task{}'),
+        #     **generate_task_loss_dict(value_priority_mean_multi_task, 'value_priority_mean_task{}'),
+        # }
+        # # 合并两个字典
+        # return_loss_dict.update(multi_task_loss_dicts)
 
+        # 生成任务相关的损失字典，并为每个任务相关的 loss 添加前缀 "noreduce_"
+        multi_task_loss_dicts = {
+            **generate_task_loss_dict(obs_loss_multi_task, 'noreduce_obs_loss_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(latent_recon_loss_multi_task, 'noreduce_latent_recon_loss_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(perceptual_loss_multi_task, 'noreduce_perceptual_loss_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(latent_state_l2_norms_multi_task, 'noreduce_latent_state_l2_norms_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(policy_loss_multi_task, 'noreduce_policy_loss_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(orig_policy_loss_multi_task, 'noreduce_orig_policy_loss_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(policy_entropy_multi_task, 'noreduce_policy_entropy_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(reward_loss_multi_task, 'noreduce_reward_loss_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(value_loss_multi_task, 'noreduce_value_loss_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(average_target_policy_entropy_multi_task, 'noreduce_target_policy_entropy_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(lambd, 'noreduce_lambd_task{}', task_id=self.task_id), 
+            **generate_task_loss_dict(value_priority_multi_task, 'noreduce_value_priority_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(value_priority_mean_multi_task, 'noreduce_value_priority_mean_task{}', task_id=self.task_id),
+        }
         # 合并两个字典
         return_loss_dict.update(multi_task_loss_dicts)
 
@@ -1108,31 +1142,63 @@ class UniZeroMTPolicy(UniZeroPolicy):
         ]
 
         # Variable names that will have task-specific counterparts
+        # task_specific_vars = [
+        #     'obs_loss',
+        #     'orig_policy_loss',
+        #     'policy_loss',
+        #     'latent_recon_loss',
+        #     'policy_entropy',
+        #     'target_policy_entropy',
+        #     'reward_loss',
+        #     'value_loss',
+        #     'perceptual_loss',
+        #     'latent_state_l2_norms',
+        #     'lambd',
+        #     'value_priority_mean',
+        # ]
+
+        # num_tasks = self.task_num
+        # # If the number of tasks is provided, extend the monitored variables list with task-specific variables
+        # if num_tasks is not None:
+        #     for var in task_specific_vars:
+        #         for task_idx in range(num_tasks):
+        #             monitored_vars.append(f'{var}_task{task_idx}')
+        # else:
+        #     # If num_tasks is not provided, we assume there's only one task and keep the original variable names
+        #     monitored_vars.extend(task_specific_vars)
+
+        # return monitored_vars
+
+
+        # rank = get_rank()
         task_specific_vars = [
-            'obs_loss',
-            'orig_policy_loss',
-            'policy_loss',
-            'latent_recon_loss',
-            'policy_entropy',
-            'target_policy_entropy',
-            'reward_loss',
-            'value_loss',
-            'perceptual_loss',
-            'latent_state_l2_norms',
-            'lambd',
-            'value_priority_mean',
+            'noreduce_obs_loss',
+            'noreduce_orig_policy_loss',
+            'noreduce_policy_loss',
+            'noreduce_latent_recon_loss',
+            'noreduce_policy_entropy',
+            'noreduce_target_policy_entropy',
+            'noreduce_reward_loss',
+            'noreduce_value_loss',
+            'noreduce_perceptual_loss',
+            'noreduce_latent_state_l2_norms',
+            'noreduce_lambd',
+            'noreduce_value_priority_mean',
         ]
+        # self.task_num 作为当前rank的base_index
         num_tasks = self.task_num
         # If the number of tasks is provided, extend the monitored variables list with task-specific variables
         if num_tasks is not None:
             for var in task_specific_vars:
                 for task_idx in range(num_tasks):
-                    monitored_vars.append(f'{var}_task{task_idx}')
+                    # print(f"learner policy Rank {rank}, self.task_id: {self.task_id}")
+                    monitored_vars.append(f'{var}_task{self.task_id+task_idx}')
         else:
             # If num_tasks is not provided, we assume there's only one task and keep the original variable names
             monitored_vars.extend(task_specific_vars)
 
         return monitored_vars
+
 
     def recompute_pos_emb_diff_and_clear_cache(self) -> None:
         """

@@ -18,7 +18,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             # ===== only for debug =====
             # collect_max_episode_steps=int(30),
             # eval_max_episode_steps=int(30),
-            # collect_max_episode_steps=int(50),
+            # collect_max_episode_steps=int(50), # TODO: DEBUG
             # eval_max_episode_steps=int(50),
             # collect_max_episode_steps=int(500),
             # eval_max_episode_steps=int(500),
@@ -129,7 +129,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # exp_name_prefix = f'data_unizero_mt_0722_profile/lineprofile_{len(env_id_list)}games_1-encoder-{norm_type}_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}-res2-channel128_gsl20_4-head_lsd768-nlayer4-nh8_max-bs64*4_upc40_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}-res2-channel256_gsl20_8-head_lsd768-nlayer4-nh8_max-bs32*8_upc40_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_segcollect_1111_ddp8/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-320_upc160_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_segcollect_1111_ddp8gpu_fixlearnlog/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-3600-bs256_upc160_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}_gsl20_8-head_lsd768-nlayer4-nh8_max-bs64*8_upc40_seed{seed}/'
 
 
@@ -241,11 +241,9 @@ if __name__ == "__main__":
     # batch_size = [32, 32, 32, 32]
     # max_batch_size = 2048
 
-    # max_batch_size = 320
-    max_batch_size = 2000
-
-    batch_size = [int(min(64, max_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
-    # batch_size = [int(min(32, max_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
+    #应该根据一个样本sequence的占用显存量，和最大显存来设置
+    max_batch_size = 3600
+    batch_size = [int(min(256, max_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
     print(f'=========== batch_size: {batch_size} ===========')
     # batch_size = [int(64) for i in range(len(env_id_list))]
 
@@ -255,9 +253,9 @@ if __name__ == "__main__":
     # # norm_type = 'BN'  # bad performance now
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 1/10 means reanalyze once every ten epochs.
-    # buffer_reanalyze_freq = 1/50 # TODO
+    buffer_reanalyze_freq = 1/50 # TODO
+    # buffer_reanalyze_freq = 1/100000
     # buffer_reanalyze_freq = 1/10
-    buffer_reanalyze_freq = 1/100000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -269,7 +267,7 @@ if __name__ == "__main__":
     # n_episode = 2
     # evaluator_env_num = 2
     # num_simulations = 2
-    # batch_size = [4, 4, 4, 4]
+    # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
 
     configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments)
 
