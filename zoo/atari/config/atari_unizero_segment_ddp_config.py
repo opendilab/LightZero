@@ -144,7 +144,7 @@ def main(env_id, seed):
         # 确保每个 Rank 分配到正确的 collector_env_num
         print(f"Rank {dist.get_rank()} Collector Env Num: {main_config.policy.collector_env_num}")
         from lzero.entry import train_unizero_segment
-        main_config.exp_name = f'data_unizero_ddp_fixsyncgrad/{env_id[:-14]}/{env_id[:-14]}_uz_ddp_{gpu_num}gpu_scale300_pew5e-3_obs10value05_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+        main_config.exp_name = f'data_unizero_ddp_fixsyncgrad/{env_id[:-14]}_collector_env_num{collector_env_num}_{gpu_num}gpu/{env_id[:-14]}_uz_ddp_{gpu_num}gpu_scale300_pew5e-3_obs10value05_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
         train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
