@@ -74,8 +74,8 @@ class WorldModel(nn.Module):
             # TODO: check the effect of SimNorm
             self.act_embedding_table = nn.Sequential(
                 nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
-                # SimNorm(simnorm_dim=self.group_size)
-                nn.LayerNorm(config.embed_dim)) # TODO
+                SimNorm(simnorm_dim=self.group_size))
+                # nn.LayerNorm(config.embed_dim)) # TODO
             # self.act_embedding_table = nn.Sequential(
             #     nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False)
             #     )

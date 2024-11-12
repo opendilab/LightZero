@@ -804,7 +804,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # Determine the clear interval based on the environment's sample type
         # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
         if self._cfg.model.world_model_cfg.obs_type in ['image_memory_maze', 'image_memory']:
-            clear_interval = 9999999 
+            clear_interval = 9999999  # ========== NOTE not clear ========
             torch.cuda.empty_cache() # TODO
             # clear_interval = 1000
             # clear_interval = 500 
@@ -855,7 +855,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # Determine the clear interval based on the environment's sample type
         # clear_interval = 2000 if getattr(self._cfg, 'sample_type', '') == 'episode' else 200
         if self._cfg.model.world_model_cfg.obs_type in ['image_memory_maze', 'image_memory']:
-            clear_interval = 9999999 
+            clear_interval = 9999999  #  ========== NOTE not clear ========
             torch.cuda.empty_cache() # TODO
             # clear_interval = 1000
             # clear_interval = 500

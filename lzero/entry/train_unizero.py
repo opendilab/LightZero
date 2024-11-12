@@ -143,6 +143,7 @@ def train_unizero(
 
         # Collect new data
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+
         if dist.is_initialized():
             print(f"Rank {dist.get_rank()} Collector collect done!")
 
@@ -192,8 +193,9 @@ def train_unizero(
 
                 train_data.append({'train_which_component': 'transformer'})
                 log_vars = learner.train(train_data, collector.envstep)
-                if dist.is_initialized():
-                    print(f"Rank {dist.get_rank()} learner.train_iter {learner.train_iter}")
+
+                # if dist.is_initialized():
+                #     print(f"Rank {dist.get_rank()} learner.train_iter {learner.train_iter}")
 
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])

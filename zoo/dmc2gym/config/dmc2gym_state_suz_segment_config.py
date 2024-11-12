@@ -118,8 +118,8 @@ def main(env_id, seed):
                     action_space_size=action_space_size,
                     num_layers=num_layers,
                     num_heads=8,
-                    embed_dim=768,  # original
-                    # embed_dim=512,
+                    # embed_dim=768,  # original
+                    embed_dim=512,
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),
             ),
@@ -134,8 +134,8 @@ def main(env_id, seed):
             replay_ratio=replay_ratio,
             batch_size=batch_size,
             discount_factor=0.99,
-            td_steps=5,
-            # td_steps=10,
+            # td_steps=5,
+            td_steps=10,
             lr_piecewise_constant_decay=False,
             learning_rate=1e-4,
             grad_clip_value=5,
@@ -186,7 +186,8 @@ def main(env_id, seed):
     # main_config.exp_name=f'data_sampled_unizero_clean_1025/dmc2gym_{env_id}_td5_temp2.5e4_pew5e-2_20prior0flatten_embed768_obs10value01_clamp4_rbs5e5_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_sigma-05'
     # main_config.exp_name=f'data_sampled_unizero_1110/dmc2gym_{env_id}_act-nosimnorm_td5_temp2.5e4_pew5e-2_19prior1flatten_embed768_obs10value01_clamp4_rbs5e5_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
     # main_config.exp_name=f'data_sampled_unizero_1110/dmc2gym_{env_id}_act-simnorm_td5_temp2.5e4_pew5e-2_19prior1flatten_embed768_obs10value01_clamp4_rbs5e5_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
-    main_config.exp_name=f'data_sampled_unizero_1110/dmc2gym_{env_id}_act-layernorm_td5_temp2.5e4_pew5e-2_19prior1flatten_embed768_obs10value01_clamp4_rbs5e5_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    # main_config.exp_name=f'data_sampled_unizero_1110/dmc2gym_{env_id}_act-layernorm_td10_temp2.5e4_pew5e-2_19prior1flatten_embed512_obs10value01_clamp4_rbs5e5_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    main_config.exp_name=f'data_sampled_unizero_1110/dmc2gym_{env_id}_act-simnorm_td10_temp2.5e4_pew5e-2_19prior1flatten_embed512_obs10value01_clamp4_rbs5e5_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
     
     train_unizero_segment([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 

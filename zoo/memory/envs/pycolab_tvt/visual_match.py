@@ -90,10 +90,10 @@ class Game(game.AbstractGame):
         self._num_actions = common.NUM_ACTIONS
         self._colours = common.FIXED_COLOURS.copy()
         # NOTE: randomize the colours of the symbols
-        shuffled_symbol_colour_map = common.get_shuffled_symbol_colour_map(rng, SYMBOLS_TO_SHUFFLE)
-        print(f'shuffled_symbol_colour_map: {shuffled_symbol_colour_map}')
-        # shuffled_symbol_colour_map = {'b': (0, 0, 1000), 'c': (0, 1000, 0), 'e': (1000, 0, 0)}
-        # print(f'fixed_symbol_colour_map: {shuffled_symbol_colour_map}')
+        # shuffled_symbol_colour_map = common.get_shuffled_symbol_colour_map(rng, SYMBOLS_TO_SHUFFLE)
+        # print(f'shuffled_symbol_colour_map: {shuffled_symbol_colour_map}')
+        shuffled_symbol_colour_map = {'b': (0, 0, 1000), 'c': (0, 1000, 0), 'e': (1000, 0, 0)}
+        print(f'fixed_symbol_colour_map: {shuffled_symbol_colour_map}')
         self._colours.update(shuffled_symbol_colour_map)
         self._extra_observation_fields = ["chapter_reward_as_string"]
 
