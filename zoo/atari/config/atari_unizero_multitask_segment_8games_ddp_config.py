@@ -2,7 +2,7 @@ from easydict import EasyDict
 from copy import deepcopy
 # from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
-def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments):
+def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size):
     return EasyDict(dict(
         env=dict(
             stop_value=int(1e6),
@@ -18,8 +18,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             # ===== only for debug =====
             # collect_max_episode_steps=int(30),
             # eval_max_episode_steps=int(30),
-            # collect_max_episode_steps=int(50), # TODO: DEBUG
-            # eval_max_episode_steps=int(50),
+            # collect_max_episode_steps=int(150), # TODO: DEBUG
+            # eval_max_episode_steps=int(150),
             # collect_max_episode_steps=int(500),
             # eval_max_episode_steps=int(500),
         ),
@@ -86,6 +86,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # num_experts_of_moe_in_transformer=2,
                 ),
             ),
+            total_batch_size=total_batch_size, #TODO=======
+            allocated_batch_sizes=True,
             train_start_after_envsteps=int(0), # TODO
             use_priority=False,
             # print_task_priority_logs=False,
@@ -97,7 +99,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             game_segment_length=20,
             # update_per_collect=None,
             # update_per_collect=40, # TODO: 4/8games max-bs=64*4 8*20*0.25
-            update_per_collect=160, # TODO: 26games max-bs=400, 8*20*1=160
+            update_per_collect=80, # TODO: 26games max-bs=400, 8*20*1=160
+            # update_per_collect=2, # TODO: 26games max-bs=400, 8*20*1=160
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -119,7 +122,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
         ),
     ))
 
-def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments):
+def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size):
     configs = []
     # TODO
     # exp_name_prefix = f'data_unizero_mt_0711/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head-softmoe4_1-encoder-{norm_type}_lsd768-nlayer4-nh8_seed{seed}/'
@@ -130,7 +133,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # exp_name_prefix = f'data_unizero_mt_0722_profile/lineprofile_{len(env_id_list)}games_1-encoder-{norm_type}_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}-res2-channel128_gsl20_4-head_lsd768-nlayer4-nh8_max-bs64*4_upc40_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}-res2-channel256_gsl20_8-head_lsd768-nlayer4-nh8_max-bs32*8_upc40_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_segcollect_ddp8gpu_fixlearnlog_1113/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-3600-bs64_upc160_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_segcollect_ddp8gpu_fixlearnlog_1113_adaptivebs_100epoch-clip1-4/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}_gsl20_8-head_lsd768-nlayer4-nh8_max-bs64*8_upc40_seed{seed}/'
 
 
@@ -153,7 +156,8 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
             buffer_reanalyze_freq,
             reanalyze_batch_size,
             reanalyze_partition,
-            num_segments
+            num_segments,
+            total_batch_size
         )
         config.policy.task_id = task_id
         config.exp_name = exp_name_prefix + f"{env_id.split('NoFrameskip')[0]}_unizero-mt_seed{seed}"
@@ -240,11 +244,12 @@ if __name__ == "__main__":
 
     reanalyze_ratio = 0.
     # batch_size = [32, 32, 32, 32]
-    # max_batch_size = 2048
+    # total_batch_size = 2048
 
     #应该根据一个样本sequence的占用显存量，和最大显存来设置
-    max_batch_size = 3600
-    batch_size = [int(min(64, max_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+    total_batch_size = 512
+    # total_batch_size = 3600
+    batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
     print(f'=========== batch_size: {batch_size} ===========')
     # batch_size = [int(64) for i in range(len(env_id_list))]
 
@@ -270,13 +275,13 @@ if __name__ == "__main__":
     # num_simulations = 2
     # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
 
-    configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments)
+    configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size)
 
     """
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
     from ding.utils import DDPContext

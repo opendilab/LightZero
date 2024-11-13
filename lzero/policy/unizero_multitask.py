@@ -551,6 +551,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
             mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
                                                                                                     self._cfg.device)
 
+            
+            # rank = get_rank()
+            # print(f'Rank {rank}: cfg.policy.task_id : {self._cfg.task_id}, self._cfg.batch_size {self._cfg.batch_size}')
+
+            target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
+            target_value = target_value.view(self._cfg.batch_size[task_id], -1)
+
             target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
             target_value = target_value.view(self._cfg.batch_size[task_id], -1)
 

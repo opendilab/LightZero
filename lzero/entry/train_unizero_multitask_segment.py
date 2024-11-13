@@ -25,7 +25,7 @@ import torch.distributed as dist
 import concurrent.futures
 
 
-def eval_async(evaluator, learner_save_checkpoint, learner_train_iter, collector_envstep, device):
+def eval_async(evaluator, learner_save_checkpoint, learner_train_iter, collector_envstep):
     # 确保 evaluator 的模型在正确的设备上
     # print(f"======in eval_async Rank {get_rank()}======")
     # device = torch.cuda.current_device()
@@ -37,6 +37,65 @@ def eval_async(evaluator, learner_save_checkpoint, learner_train_iter, collector
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future = executor.submit(evaluator.eval, learner_save_checkpoint, learner_train_iter, collector_envstep)
         return future
+
+
+def allocate_batch_size(cfgs, game_buffers, alpha=1.0, clip_scale=1):
+    """
+    根据不同任务的 num_of_collected_episodes 反比分配 batch_size，
+    并动态调整 batch_size 限制范围以提高训练的稳定性和效率。
+    
+    参数:
+    - cfgs: 每个任务的配置列表
+    - game_buffers: 每个任务的 replay_buffer 实例列表
+    - alpha: 控制反比程度的超参数 (默认为1.0)
+    
+    返回:
+    - 分配后的 batch_size 列表
+    """
+    
+    # 提取每个任务的 num_of_collected_episodes
+    buffer_num_of_collected_episodes = [buffer.num_of_collected_episodes for buffer in game_buffers]
+    
+    # 获取当前的 world_size 和 rank
+    world_size = torch.distributed.get_world_size()
+    rank = torch.distributed.get_rank()
+
+    # 收集所有 rank 的 num_of_collected_episodes 列表
+    all_task_num_of_collected_episodes = [None for _ in range(world_size)]
+    torch.distributed.all_gather_object(all_task_num_of_collected_episodes, buffer_num_of_collected_episodes)
+
+    # 将所有 rank 的 num_of_collected_episodes 拼接成一个大列表
+    all_task_num_of_collected_episodes = [item for sublist in all_task_num_of_collected_episodes for item in sublist]
+    if rank == 0:
+        print(f'all_task_num_of_collected_episodes:{all_task_num_of_collected_episodes}')
+
+    # 计算每个任务的反比权重
+    inv_episodes = np.array([1.0 / (episodes + 1) for episodes in all_task_num_of_collected_episodes])
+    inv_sum = np.sum(inv_episodes)
+
+    # 计算总的 batch_size (所有任务 cfg.policy.batch_size 的和)
+    # total_batch_size = sum([cfg.policy.batch_size for cfg in cfgs])
+    total_batch_size = cfgs[0].policy.total_batch_size
+
+
+    # 动态调整的部分：最小和最大的 batch_size 范围
+    avg_batch_size = total_batch_size / world_size
+    min_batch_size = avg_batch_size / clip_scale
+    max_batch_size = avg_batch_size * clip_scale
+
+    # 动态调整 alpha，让 batch_size 的变化更加平滑
+    task_weights = (inv_episodes / inv_sum) ** alpha
+    batch_sizes = total_batch_size * task_weights
+    
+    # 控制 batch_size 在 [min_batch_size, max_batch_size] 之间
+    batch_sizes = np.clip(batch_sizes, min_batch_size, max_batch_size)
+    
+    # 确保 batch_size 是整数
+    batch_sizes = [int(size) for size in batch_sizes]
+    
+    # 返回最终分配的 batch_size 列表
+    return batch_sizes
+
 
 
 """
@@ -211,6 +270,19 @@ def train_unizero_multitask_segment(
         # policy._collect_model.world_model.precompute_pos_emb_diff_kv()
         # policy._target_model.world_model.precompute_pos_emb_diff_kv()
 
+        if  cfg.policy.allocated_batch_sizes:
+            # TODO==========
+            # 线性变化的 随着 train_epoch 从 0 增加到 1000, clip_scale 从 1 线性增加到 4
+            clip_scale = np.clip(1 + (3 * train_epoch / 1000), 1, 4)
+            allocated_batch_sizes = allocate_batch_size(cfgs, game_buffers, alpha=1.0, clip_scale=clip_scale)
+            if rank == 0:
+                print("分配后的 batch_sizes: ", allocated_batch_sizes)
+            for idx, (cfg, collector, evaluator, replay_buffer) in enumerate(
+                    zip(cfgs, collectors, evaluators, game_buffers)):
+                cfg.policy.batch_size = allocated_batch_sizes
+                policy._cfg.batch_size = allocated_batch_sizes
+            # replay_buffer.batch_size 
+
         # 对于当前进程的每个任务，进行数据收集和评估
         for idx, (cfg, collector, evaluator, replay_buffer) in enumerate(
                 zip(cfgs, collectors, evaluators, game_buffers)):
@@ -265,7 +337,7 @@ def train_unizero_multitask_segment(
                 print(f'Rank {rank} evaluates task_id: {cfg.policy.task_id}...')
                 # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
                 
-                eval_future = eval_async(evaluator, learner.save_checkpoint, learner.train_iter, collector.envstep, f'cuda:{rank}')
+                eval_future = eval_async(evaluator, learner.save_checkpoint, learner.train_iter, collector.envstep)
                 # 训练继续进行，不等待评估完成
                 # 你可以在某个时刻检查评估是否完成
                 if eval_future.done():
@@ -305,28 +377,30 @@ def train_unizero_multitask_segment(
             # 数据收集结束后添加日志
             logging.info(f'Rank {rank}: Completed data collection for task {cfg.policy.task_id}')
 
+        # batch_size = policy_config.batch_size[0]
         # 检查是否有足够的数据进行训练
-        not_enough_data = any(replay_buffer.get_num_of_transitions() < batch_size for replay_buffer in game_buffers)
+        not_enough_data = any(replay_buffer.get_num_of_transitions() < cfgs[0].policy.total_batch_size/world_size for replay_buffer in game_buffers)
+
+        # 同步训练前所有 rank 的准备状态
+        try:
+            # logging.info(f'Rank {rank}: Reached barrier before training')
+            dist.barrier()
+            logging.info(f'Rank {rank}: Passed barrier before training')
+        except Exception as e:
+            logging.error(f'Rank {rank}: Barrier failed with error {e}')
+            break  # 或者进行其他错误处理
 
         # 学习策略
         if not not_enough_data:
-            # 同步训练前所有 rank 的准备状态
-            try:
-                # logging.info(f'Rank {rank}: Reached barrier before training')
-                dist.barrier()
-                logging.info(f'Rank {rank}: Passed barrier before training')
-            except Exception as e:
-                logging.error(f'Rank {rank}: Barrier failed with error {e}')
-                break  # 或者进行其他错误处理
-
             # Learner 将在一次迭代中训练 update_per_collect 次
             for i in range(update_per_collect):
                 train_data_multi_task = []
                 envstep_multi_task = 0
                 for idx, (cfg, collector, replay_buffer) in enumerate(zip(cfgs, collectors, game_buffers)):
                     envstep_multi_task += collector.envstep
+                    batch_size = cfg.policy.batch_size[cfg.policy.task_id]
                     if replay_buffer.get_num_of_transitions() > batch_size:
-                        batch_size = cfg.policy.batch_size[cfg.policy.task_id]
+                        # batch_size = cfg.policy.batch_size[cfg.policy.task_id]
 
                         if cfg.policy.buffer_reanalyze_freq >= 1:
                             # 在一个训练 epoch 中重新分析缓冲区 <buffer_reanalyze_freq> 次
@@ -342,6 +416,8 @@ def train_unizero_multitask_segment(
                         train_data = replay_buffer.sample(batch_size, policy)
                         # 追加 task_id，以便在训练时区分任务
                         train_data.append(cfg.policy.task_id)
+                        logging.info(f'Rank {rank}: cfg.policy.task_id : {cfg.policy.task_id}')
+
                         train_data_multi_task.append(train_data)
                     else:
                         logging.warning(
@@ -353,6 +429,7 @@ def train_unizero_multitask_segment(
                 if train_data_multi_task:
                     # 在训练时，DDP 会自动同步梯度和参数
                     # log_vars = learner.train(train_data_multi_task, envstep_multi_task)
+                    # logging.info(f'Rank {rank}: cfg.policy.batch_size : {cfg.policy.batch_size}, batch_size: {batch_size}')
                     try:
                         log_vars = learner.train(train_data_multi_task, envstep_multi_task)
                     except Exception as e:
@@ -434,7 +511,8 @@ def train_unizero_multitask_segment(
                 dist.barrier()  # 确保所有进程同步
                 break
             else:
-                logging.info(f'Rank {rank}: Termination condition not met')
+                # logging.info(f'Rank {rank}: Termination condition not met')
+                pass
 
         except Exception as e:
             logging.error(f'Rank {rank}: Termination check failed with error {e}')

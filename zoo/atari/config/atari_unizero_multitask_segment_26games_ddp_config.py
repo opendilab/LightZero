@@ -86,6 +86,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # num_experts_of_moe_in_transformer=2,
                 ),
             ),
+            allocated_batch_sizes=True,
             use_priority=False,
             # print_task_priority_logs=False,
             # use_priority=True,  # TODO
