@@ -46,8 +46,6 @@ def eval_async(evaluator, learner_save_checkpoint, learner_train_iter, collector
 
 collector和learner是串行的
 evaluator是异步的进程，以避免一个环境评估时的一局步数过长会导致超时
-
-修复了当games>gpu数量时的bug
 """
 def train_unizero_multitask_segment(
         input_cfg_list: List[Tuple[int, Tuple[dict, dict]]],
@@ -208,8 +206,8 @@ def train_unizero_multitask_segment(
 
     while True:
         # 预先计算位置嵌入矩阵（如果需要）
-        # policy._collect_model.world_model.precompute_pos_emb_diff_kv()
-        # policy._target_model.world_model.precompute_pos_emb_diff_kv()
+        policy._collect_model.world_model.precompute_pos_emb_diff_kv()
+        policy._target_model.world_model.precompute_pos_emb_diff_kv()
 
         # 对于当前进程的每个任务，进行数据收集和评估
         for idx, (cfg, collector, evaluator, replay_buffer) in enumerate(
@@ -279,7 +277,7 @@ def train_unizero_multitask_segment(
             print('=' * 20)
             print(f'entry: Rank {rank} collects task_id: {cfg.policy.task_id}...')
 
-            # NOTE: 在每次收集之前重置初始数据，这对于多任务设置非常重要
+            # 在每次收集之前重置初始数据，这对于多任务设置非常重要
             collector._policy.reset(reset_init_data=True)
             # 收集数据
             new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
@@ -312,7 +310,7 @@ def train_unizero_multitask_segment(
         if not not_enough_data:
             # 同步训练前所有 rank 的准备状态
             try:
-                # logging.info(f'Rank {rank}: Reached barrier before training')
+                logging.info(f'Rank {rank}: Reached barrier before training')
                 dist.barrier()
                 logging.info(f'Rank {rank}: Passed barrier before training')
             except Exception as e:
@@ -397,50 +395,29 @@ def train_unizero_multitask_segment(
         policy.recompute_pos_emb_diff_and_clear_cache()
 
         # 同步所有 Rank，确保所有 Rank 都完成了训练
-        try:
-            # logging.info(f'Rank {rank}: Reached barrier after training')
-            dist.barrier()
-            logging.info(f'Rank {rank}: Passed barrier after training')
-        except Exception as e:
-            logging.error(f'Rank {rank}: Barrier failed with error {e}')
-            break  # 或者进行其他错误处理
-
+        dist.barrier()
 
         # 检查是否需要终止训练
         try:
-            # local_envsteps 不再需要填充
-            local_envsteps = [collector.envstep for collector in collectors]
-
-            total_envsteps = [None for _ in range(world_size)]
-            # logging.info(f'Rank {rank}: Gathering envsteps...')
-            dist.all_gather_object(total_envsteps, local_envsteps)
-            # logging.info(f'Rank {rank}: Gathering envsteps completed.')
-
-            # 将所有 envsteps 拼接在一起
-            all_envsteps = torch.cat([torch.tensor(envsteps, device=cfg.policy.device) for envsteps in total_envsteps])
+            # 收集所有进程的 envstep
+            local_envsteps = torch.tensor([collector.envstep for collector in collectors], device=cfg.policy.device)
+            total_envsteps = [torch.zeros_like(local_envsteps) for _ in range(world_size)]
+            dist.all_gather(total_envsteps, local_envsteps)
+            all_envsteps = torch.cat(total_envsteps)
             max_envstep_reached = torch.all(all_envsteps >= max_env_step)
 
             # 收集所有进程的 train_iter
             global_train_iter = torch.tensor([learner.train_iter], device=cfg.policy.device)
             all_train_iters = [torch.zeros_like(global_train_iter) for _ in range(world_size)]
-            # logging.info(f'Rank {rank}: Gathering train_iters...')
             dist.all_gather(all_train_iters, global_train_iter)
-            # logging.info(f'Rank {rank}: Gathering train_iters completed.')
-
             max_train_iter_reached = torch.any(torch.stack(all_train_iters) >= max_train_iter)
 
             if max_envstep_reached.item() or max_train_iter_reached.item():
                 logging.info(f'Rank {rank}: Termination condition met')
-                dist.barrier()  # 确保所有进程同步
                 break
-            else:
-                logging.info(f'Rank {rank}: Termination condition not met')
-
         except Exception as e:
             logging.error(f'Rank {rank}: Termination check failed with error {e}')
             break  # 或者进行其他错误处理
-        
-
 
     learner.call_hook('after_run')
     return policy

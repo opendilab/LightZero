@@ -22,7 +22,7 @@ from .utils import WorldModelOutput, hash_state
 from .moe import MoeLayer, MultiplicationFeedForward
 from lzero.model.unizero_world_models.world_model import WorldModel
 logging.getLogger().setLevel(logging.DEBUG)
-
+from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, get_rank, get_world_size
 
 from line_profiler import line_profiler
 
@@ -183,6 +183,7 @@ class WorldModelMT(WorldModel):
         self.shared_pool_index_wm = 0
 
         self.reanalyze_phase = False
+        self._rank = get_rank()
 
     def _initialize_config_parameters(self) -> None:
         """Initialize configuration parameters."""
@@ -1466,7 +1467,8 @@ class WorldModelMT(WorldModel):
             kv_cache_dict_env.clear()
         self.past_kv_cache_recurrent_infer.clear()
         self.keys_values_wm_list.clear()
-        print(f'Cleared {self.__class__.__name__} past_kv_cache.')
+
+        print(f'rank {self._rank} Cleared {self.__class__.__name__} past_kv_cache.')
 
     def __repr__(self) -> str:
         return "transformer-based latent world_model of UniZero"

@@ -480,7 +480,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
         # 将 wrapped_model 作为 share_model 传递给 GradCorrect
         # ========= 初始化 MoCo CAGrad 参数 =========
-        self.task_num = self._cfg.task_num
+        self.task_num_for_current_rank = self._cfg.task_num
         self.task_id = self._cfg.task_id
 
         # self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
@@ -649,7 +649,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
 
         #  ============= TODO: 不使用梯度矫正的情况  =============
-        lambd = torch.tensor([0. for i in range(self.task_num)], device=self._cfg.device)
+        lambd = torch.tensor([0. for i in range(self.task_num_for_current_rank)], device=self._cfg.device)
         weighted_total_loss.backward()
 
         #  ========== for debugging ==========
@@ -1186,8 +1186,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'noreduce_lambd',
             'noreduce_value_priority_mean',
         ]
-        # self.task_num 作为当前rank的base_index
-        num_tasks = self.task_num
+        # self.task_num_for_current_rank 作为当前rank的base_index
+        num_tasks = self.task_num_for_current_rank
         # If the number of tasks is provided, extend the monitored variables list with task-specific variables
         if num_tasks is not None:
             for var in task_specific_vars:

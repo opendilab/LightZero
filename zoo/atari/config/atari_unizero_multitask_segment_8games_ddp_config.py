@@ -37,7 +37,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 calpha=0.5,
                 rescale=1,
             ),
-            task_num=len(env_id_list),
+            task_num=len(env_id_list), # ======  在ddp中需要替换为每个rank对应的task数量  ======
             task_id=0,
             model=dict(
                 observation_shape=(3, 64, 64),
@@ -71,7 +71,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     env_num=8,  # TODO: the max of all tasks
                     # collector_env_num=collector_env_num,
                     # evaluator_env_num=evaluator_env_num,
-                    task_num=len(env_id_list),
+                    task_num=len(env_id_list), # ====== total_task_num ======
                     use_normal_head=True,
                     # use_normal_head=False,
                     use_softmoe_head=False,
