@@ -239,7 +239,7 @@ def train_unizero_multitask_segment(
             # torch.cuda.set_device(device)
             # print(f"set device后的 GPU 设备编号: {device}")
 
-            log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
+            log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger, cfg.policy.task_id)
 
             collect_kwargs = {
                 'temperature': visit_count_temperature(
