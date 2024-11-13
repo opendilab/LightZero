@@ -22,30 +22,12 @@ from ding.utils import EasyTimer
 timer = EasyTimer()
 import torch.distributed as dist
 
-import concurrent.futures
-
-
-def eval_async(evaluator, learner_save_checkpoint, learner_train_iter, collector_envstep, device):
-    # 确保 evaluator 的模型在正确的设备上
-    # print(f"======in eval_async Rank {get_rank()}======")
-    # device = torch.cuda.current_device()
-    # print(f"当前默认的 GPU 设备编号: {device}")
-    # torch.cuda.set_device(device)
-    # print(f"set device后的 GPU 设备编号: {device}")
-
-    # 使用 ThreadPool 来异步执行评估任务
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future = executor.submit(evaluator.eval, learner_save_checkpoint, learner_train_iter, collector_envstep)
-        return future
-
-
 """
 对所有game的任务继续均匀划分：
 每个game 对应 1个gpu进程
 或者多个game对应 1个gpu进程
 
-collector和learner是串行的
-evaluator是异步的进程，以避免一个环境评估时的一局步数过长会导致超时
+collector, evaluator和learner是串行的，而且有时一个环境评估时的一局步数过长会导致超时
 """
 def train_unizero_multitask_segment(
         input_cfg_list: List[Tuple[int, Tuple[dict, dict]]],
@@ -215,27 +197,6 @@ def train_unizero_multitask_segment(
             
             # TODO: DEBUG =========
             # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-            
-            # 调用异步评估
-            # print(f"=========before eval_async Rank {rank}/{world_size}===========")
-            # device = torch.cuda.current_device()
-            # print(f"当前默认的 GPU 设备编号: {device}")
-            # torch.cuda.set_device(device)
-            # print(f"set device后的 GPU 设备编号: {device}")
-
-            # eval_future = eval_async(evaluator, learner.save_checkpoint, learner.train_iter, collector.envstep, f'cuda:{rank}')
-            # # 训练继续进行，不等待评估完成
-            # # 你可以在某个时刻检查评估是否完成
-            # if eval_future.done():
-            #     stop, reward = eval_future.result()
-            # else:
-            #     logging.info(f"Rank {rank} Evaluation is still running...")
-            
-            # print(f"======after eval_async Rank {rank}/{world_size}======")
-            # device = torch.cuda.current_device()
-            # print(f"当前默认的 GPU 设备编号: {device}")
-            # torch.cuda.set_device(device)
-            # print(f"set device后的 GPU 设备编号: {device}")
 
             log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
 
@@ -261,16 +222,7 @@ def train_unizero_multitask_segment(
             if evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
                 print(f'Rank {rank} evaluates task_id: {cfg.policy.task_id}...')
-                # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-                
-                eval_future = eval_async(evaluator, learner.save_checkpoint, learner.train_iter, collector.envstep, f'cuda:{rank}')
-                # 训练继续进行，不等待评估完成
-                # 你可以在某个时刻检查评估是否完成
-                if eval_future.done():
-                    stop, reward = eval_future.result()
-                else:
-                    logging.info(f"Rank {rank} Evaluation is still running...")
-                
+                stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
                 if stop:
                     break
 

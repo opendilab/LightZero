@@ -224,6 +224,12 @@ class MuZeroEvaluator(ISerialEvaluator):
             - stop_flag (:obj:`bool`): Indicates whether the training can be stopped based on the stop value.
             - episode_info (:obj:`Dict[str, Any]`): A dictionary containing information about the evaluation episodes.
         """
+        # print(f"=========in eval() Rank {get_rank()} ===========")
+        # device = torch.cuda.current_device()
+        # print(f"当前默认的 GPU 设备编号: {device}")
+        torch.cuda.set_device(get_rank())
+        # print(f"set device后的 GPU 设备编号: {get_rank()}")
+
         # the evaluator only works on rank0
         episode_info = None
         stop_flag = False

@@ -778,7 +778,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             if self.policy_config.gumbel_algo:
                 info['completed_value'] = np.mean(completed_value)
             self._episode_info.clear()
-            print(f'rank {self._rank}, self.task_id: {self.task_id}')
+            print(f'collector _output_log: rank {self._rank}, self.task_id: {self.task_id}')
             self._logger.info("collect end:\n{}".format('\n'.join(['{}: {}'.format(k, v) for k, v in info.items()])))
             for k, v in info.items():
                 if k in ['each_reward']:

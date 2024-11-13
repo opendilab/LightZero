@@ -703,6 +703,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
         }
 
+        # ===== TODO: multitask_ddp learn_log Bug但是能正常运行 =========
         # # 用于存储多任务损失的字典
         # multi_task_loss_dicts = {
         #     **generate_task_loss_dict(obs_loss_multi_task, 'obs_loss_task{}'),
@@ -1095,7 +1096,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 self._cfg.device
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
-            print('evaluator: last_batch_obs, last_batch_action reset()', self.last_batch_obs.shape)
+            # print('evaluator: last_batch_obs, last_batch_action reset()', self.last_batch_obs.shape)
 
         # Return immediately if env_id is None or a list
         if env_id is None or isinstance(env_id, list):
@@ -1141,6 +1142,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'total_grad_norm_before_clip_wm',
         ]
 
+        # ===== TODO: multitask_ddp learn_log Bug但是能正常运行 =========
         # Variable names that will have task-specific counterparts
         # task_specific_vars = [
         #     'obs_loss',
@@ -1156,7 +1158,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
         #     'lambd',
         #     'value_priority_mean',
         # ]
-
         # num_tasks = self.task_num
         # # If the number of tasks is provided, extend the monitored variables list with task-specific variables
         # if num_tasks is not None:

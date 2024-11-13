@@ -23,6 +23,11 @@ timer = EasyTimer()
 import torch.distributed as dist
 from line_profiler import line_profiler
 
+"""
+对所有game的任务是串行的，不是一个game对应一个gpu进程。
+
+collector, evaluator和learner是串行的，而且有时一个环境评估时的一局步数过长会导致超时
+"""
 #@profile
 def train_unizero_multitask_segment(
         input_cfg_list: List[Tuple[int, Tuple[dict, dict]]],
