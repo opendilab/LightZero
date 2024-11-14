@@ -109,7 +109,7 @@
 <span class="kn">from</span> <span class="nn">lzero.policy.random_policy</span> <span class="kn">import</span> <span class="n">LightZeroRandomPolicy</span>
 <span class="kn">from</span> <span class="nn">lzero.worker</span> <span class="kn">import</span> <span class="n">MuZeroCollector</span> <span class="k">as</span> <span class="n">Collector</span>
 <span class="kn">from</span> <span class="nn">lzero.worker</span> <span class="kn">import</span> <span class="n">MuZeroEvaluator</span> <span class="k">as</span> <span class="n">Evaluator</span>
-<span class="kn">from</span> <span class="nn">.utils</span> <span class="kn">import</span> <span class="n">random_collect</span><span class="p">,</span> <span class="n">initialize_zeros_batch</span>
+<span class="kn">from</span> <span class="nn">.utils</span> <span class="kn">import</span> <span class="n">random_collect</span>
 
 
 <div class="viewcode-block" id="train_muzero"><a class="viewcode-back" href="../../../api_doc/entry/index.html#lzero.entry.train_muzero.train_muzero">[docs]</a><span class="k">def</span> <span class="nf">train_muzero</span><span class="p">(</span>
@@ -266,8 +266,11 @@
         <span class="n">new_data</span> <span class="o">=</span> <span class="n">collector</span><span class="o">.</span><span class="n">collect</span><span class="p">(</span><span class="n">train_iter</span><span class="o">=</span><span class="n">learner</span><span class="o">.</span><span class="n">train_iter</span><span class="p">,</span> <span class="n">policy_kwargs</span><span class="o">=</span><span class="n">collect_kwargs</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">update_per_collect</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="c1"># update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.</span>
-            <span class="n">collected_transitions_num</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">([</span><span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="p">)</span> <span class="k">for</span> <span class="n">game_segment</span> <span class="ow">in</span> <span class="n">new_data</span><span class="p">[</span><span class="mi">0</span><span class="p">]])</span>
+            <span class="c1"># The length of game_segment (i.e., len(game_segment.action_segment)) can be smaller than cfg.policy.game_segment_length if it represents the final segment of the game.</span>
+            <span class="c1"># On the other hand, its length will be less than cfg.policy.game_segment_length + padding_length when it is not the last game segment. Typically, padding_length is the sum of unroll_steps and td_steps.</span>
+            <span class="n">collected_transitions_num</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">game_segment</span><span class="p">),</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">game_segment_length</span><span class="p">)</span> <span class="k">for</span> <span class="n">game_segment</span> <span class="ow">in</span> <span class="n">new_data</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
             <span class="n">update_per_collect</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">collected_transitions_num</span> <span class="o">*</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">replay_ratio</span><span class="p">)</span>
+
         <span class="c1"># save returned new_data collected by the collector</span>
         <span class="n">replay_buffer</span><span class="o">.</span><span class="n">push_game_segments</span><span class="p">(</span><span class="n">new_data</span><span class="p">)</span>
         <span class="c1"># remove the oldest data if the replay buffer is full.</span>

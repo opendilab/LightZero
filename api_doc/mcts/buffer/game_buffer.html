@@ -428,6 +428,68 @@ make_time: the time the batch is made (for correctly updating replay buffer when
 </dd></dl>
 
 <dl class="py method">
+<dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_reanalyze_batch">
+<span class="sig-name descname"><span class="pre">_sample_orig_reanalyze_batch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._sample_orig_reanalyze_batch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_reanalyze_batch" title="Permalink to this definition"></a></dt>
+<dd><dl>
+<dt>Overview:</dt><dd><p>This function samples a batch of game segments for reanalysis from the replay buffer.
+It uses priority sampling based on the <cite>reanalyze_time</cite> of each game segment, with segments
+that have been reanalyzed more frequently receiving lower priority.</p>
+<p>The function returns a tuple containing information about the sampled game segments,
+including their positions within each segment and the time the batch was created.</p>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>batch_size</strong> (<em>-</em>) – The number of samples to draw in this batch.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><p>A tuple containing the following elements:
+- game_segment_list: A list of the sampled game segments.
+- pos_in_game_segment_list: A list of indices representing the position of each transition</p>
+<blockquote>
+<div><p>within its corresponding game segment.</p>
+</div></blockquote>
+<ul class="simple">
+<li><p>batch_index_list: The indices of the sampled game segments in the replay buffer.</p></li>
+<li><p>make_time: A list of timestamps (set to <cite>0</cite> in this implementation) indicating when
+the batch was created.</p></li>
+</ul>
+</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><ul class="simple">
+<li><p>Tuple</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<dl class="simple">
+<dt>Key Details:</dt><dd><ol class="arabic simple">
+<li><p><strong>Priority Sampling</strong>:
+Game segments are sampled based on a probability distribution calculated using
+the <cite>reanalyze_time</cite> of each segment. Segments that have been reanalyzed more frequently
+are less likely to be selected.</p></li>
+<li><p><strong>Segment Slicing</strong>:
+Each selected game segment is sampled at regular intervals determined by the
+<cite>num_unroll_steps</cite> parameter. Up to <cite>samples_per_segment</cite> transitions are sampled
+from each selected segment.</p></li>
+<li><p><strong>Handling Extra Samples</strong>:
+If the <cite>batch_size</cite> is not perfectly divisible by the number of samples per segment,
+additional segments are sampled to make up the difference.</p></li>
+<li><p><strong>Reanalyze Time Update</strong>:
+The <cite>reanalyze_time</cite> attribute of each sampled game segment is incremented to reflect
+that it has been selected for reanalysis again.</p></li>
+</ol>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>- ValueError</strong> – If the <cite>game_segment_length</cite> is too small to accommodate the <cite>num_unroll_steps</cite>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
 <dt class="sig sig-object py" id="lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_reanalyze_data">
 <span class="sig-name descname"><span class="pre">_sample_orig_reanalyze_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span></span></span><a class="reference internal" href="../../../_modules/lzero/mcts/buffer/game_buffer.html#GameBuffer._sample_orig_reanalyze_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#lzero.mcts.buffer.game_buffer.GameBuffer._sample_orig_reanalyze_data" title="Permalink to this definition"></a></dt>
 <dd><dl class="simple">

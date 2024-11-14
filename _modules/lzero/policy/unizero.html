@@ -200,8 +200,8 @@
                 <span class="n">latent_recon_loss_weight</span><span class="o">=</span><span class="mf">0.</span><span class="p">,</span>
                 <span class="c1"># (float) The weight of the perceptual loss.</span>
                 <span class="n">perceptual_loss_weight</span><span class="o">=</span><span class="mf">0.</span><span class="p">,</span>
-                <span class="c1"># (float) The weight of the policy entropy.</span>
-                <span class="n">policy_entropy_weight</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
+                <span class="c1"># (float) The weight of the policy entropy loss.</span>
+                <span class="n">policy_entropy_weight</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
                 <span class="c1"># (str) The type of loss for predicting latent variables. Options could be [&#39;group_kl&#39;, &#39;mse&#39;].</span>
                 <span class="n">predict_latent_loss_type</span><span class="o">=</span><span class="s1">&#39;group_kl&#39;</span><span class="p">,</span>
                 <span class="c1"># (str) The type of observation. Options are [&#39;image&#39;, &#39;vector&#39;].</span>
@@ -248,7 +248,6 @@
         <span class="n">eval_freq</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="mf">2e3</span><span class="p">),</span>
         <span class="c1"># (str) The sample type. Options are [&#39;episode&#39;, &#39;transition&#39;].</span>
         <span class="n">sample_type</span><span class="o">=</span><span class="s1">&#39;transition&#39;</span><span class="p">,</span>
-
         <span class="c1"># ****** observation ******</span>
         <span class="c1"># (bool) Whether to transform image to string to save memory.</span>
         <span class="n">transform2string</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
@@ -275,7 +274,7 @@
         <span class="n">replay_ratio</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
         <span class="c1"># (int) Minibatch size for one gradient descent.</span>
         <span class="n">batch_size</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
-        <span class="c1"># (str) Optimizer for training policy network. [&#39;SGD&#39;, &#39;Adam&#39;]</span>
+        <span class="c1"># (str) Optimizer for training policy network.</span>
         <span class="n">optim_type</span><span class="o">=</span><span class="s1">&#39;AdamW&#39;</span><span class="p">,</span>
         <span class="c1"># (float) Learning rate for training policy network. Initial lr for manually decay schedule.</span>
         <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.0001</span><span class="p">,</span>
@@ -290,9 +289,11 @@
         <span class="c1"># (float) One-order Momentum in optimizer, which stabilizes the training process (gradient direction).</span>
         <span class="n">momentum</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>
         <span class="c1"># (float) The maximum constraint value of gradient norm clipping.</span>
-        <span class="n">grad_clip_value</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
-        <span class="c1"># (int) The number of episodes in each collecting stage.</span>
+        <span class="n">grad_clip_value</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+        <span class="c1"># (int) The number of episodes in each collecting stage when use muzero_collector.</span>
         <span class="n">n_episode</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+        <span class="c1"># (int) The number of num_segments in each collecting stage when use muzero_segment_collector.</span>
+        <span class="n">num_segments</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
         <span class="c1"># (int) the number of simulations in MCTS.</span>
         <span class="n">num_simulations</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
         <span class="c1"># (float) Discount factor (gamma) for returns.</span>
@@ -307,19 +308,17 @@
         <span class="n">value_loss_weight</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
         <span class="c1"># (float) The weight of policy loss.</span>
         <span class="n">policy_loss_weight</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
-        <span class="c1"># (float) The weight of policy entropy loss.</span>
-        <span class="n">policy_entropy_loss_weight</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
         <span class="c1"># (float) The weight of ssl (self-supervised learning) loss.</span>
         <span class="n">ssl_loss_weight</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
         <span class="c1"># (bool) Whether to use piecewise constant learning rate decay.</span>
         <span class="c1"># i.e. lr: 0.2 -&gt; 0.02 -&gt; 0.002</span>
-        <span class="n">lr_piecewise_constant_decay</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">piecewise_decay_lr_scheduler</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="c1"># (int) The number of final training iterations to control lr decay, which is only used for manually decay.</span>
         <span class="n">threshold_training_steps_for_final_lr</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="mf">5e4</span><span class="p">),</span>
         <span class="c1"># (bool) Whether to use manually decayed temperature.</span>
         <span class="n">manual_temperature_decay</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="c1"># (int) The number of final training iterations to control temperature, which is only used for manually decay.</span>
-        <span class="n">threshold_training_steps_for_final_temperature</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="mf">1e5</span><span class="p">),</span>
+        <span class="n">threshold_training_steps_for_final_temperature</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="mf">5e4</span><span class="p">),</span>
         <span class="c1"># (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.</span>
         <span class="c1"># The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.</span>
         <span class="n">fixed_temperature_value</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
@@ -440,14 +439,14 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
 
         <span class="n">current_batch</span><span class="p">,</span> <span class="n">target_batch</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">data</span>
-        <span class="n">obs_batch_ori</span><span class="p">,</span> <span class="n">action_batch</span><span class="p">,</span> <span class="n">mask_batch</span><span class="p">,</span> <span class="n">indices</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">make_time</span> <span class="o">=</span> <span class="n">current_batch</span>
+        <span class="n">obs_batch_ori</span><span class="p">,</span> <span class="n">action_batch</span><span class="p">,</span>  <span class="n">target_action_batch</span><span class="p">,</span> <span class="n">mask_batch</span><span class="p">,</span> <span class="n">indices</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">make_time</span> <span class="o">=</span> <span class="n">current_batch</span>
         <span class="n">target_reward</span><span class="p">,</span> <span class="n">target_value</span><span class="p">,</span> <span class="n">target_policy</span> <span class="o">=</span> <span class="n">target_batch</span>
 
         <span class="c1"># Prepare observations based on frame stack number</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
             <span class="n">obs_batch</span><span class="p">,</span> <span class="n">obs_target_batch</span> <span class="o">=</span> <span class="n">prepare_obs_stack4_for_unizero</span><span class="p">(</span><span class="n">obs_batch_ori</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
-            <span class="n">obs_batch</span><span class="p">,</span> <span class="n">obs_target_batch</span> <span class="o">=</span> <span class="n">prepare_obs</span><span class="p">(</span><span class="n">obs_batch_ori</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span>
+            <span class="n">obs_batch</span><span class="p">,</span> <span class="n">obs_target_batch</span> <span class="o">=</span> <span class="n">prepare_obs</span><span class="p">(</span><span class="n">obs_batch_ori</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span>  <span class="c1"># TODO: optimize</span>
 
         <span class="c1"># Apply augmentations if needed</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">use_augmentation</span><span class="p">:</span>
@@ -461,11 +460,8 @@
         <span class="n">data_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">mask_batch</span><span class="p">,</span> <span class="n">target_reward</span><span class="p">,</span> <span class="n">target_value</span><span class="p">,</span> <span class="n">target_policy</span><span class="p">,</span> <span class="n">weights</span><span class="p">]</span>
         <span class="n">mask_batch</span><span class="p">,</span> <span class="n">target_reward</span><span class="p">,</span> <span class="n">target_value</span><span class="p">,</span> <span class="n">target_policy</span><span class="p">,</span> <span class="n">weights</span> <span class="o">=</span> <span class="n">to_torch_float_tensor</span><span class="p">(</span><span class="n">data_list</span><span class="p">,</span>
                                                                                                 <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
-
         <span class="n">target_reward</span> <span class="o">=</span> <span class="n">target_reward</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
         <span class="n">target_value</span> <span class="o">=</span> <span class="n">target_value</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
-
-        <span class="k">assert</span> <span class="n">obs_batch</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="o">==</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">batch_size</span> <span class="o">==</span> <span class="n">target_reward</span><span class="o">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
 
         <span class="c1"># Transform rewards and values to their scaled forms</span>
         <span class="n">transformed_target_reward</span> <span class="o">=</span> <span class="n">scalar_transform</span><span class="p">(</span><span class="n">target_reward</span><span class="p">)</span>
@@ -497,7 +493,7 @@
         <span class="c1"># Extract valid target policy data and compute entropy</span>
         <span class="n">valid_target_policy</span> <span class="o">=</span> <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;target_policy&#39;</span><span class="p">][</span><span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;mask_padding&#39;</span><span class="p">]]</span>
         <span class="n">target_policy_entropy</span> <span class="o">=</span> <span class="o">-</span><span class="n">torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">valid_target_policy</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">valid_target_policy</span> <span class="o">+</span> <span class="mf">1e-9</span><span class="p">),</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-        <span class="n">average_target_policy_entropy</span> <span class="o">=</span> <span class="n">target_policy_entropy</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">average_target_policy_entropy</span> <span class="o">=</span> <span class="n">target_policy_entropy</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
 
         <span class="c1"># Update world model</span>
         <span class="n">losses</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">compute_loss</span><span class="p">(</span>
@@ -541,13 +537,13 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_after</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_after</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">encoder_hook</span><span class="o">.</span><span class="n">analyze</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">encoder_hook</span><span class="o">.</span><span class="n">clear_data</span><span class="p">()</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">multi_gpu</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">sync_gradients</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="p">)</span>
         <span class="n">total_grad_norm_before_clip_wm</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">clip_grad_norm_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span>
                                                                         <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">grad_clip_value</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">multi_gpu</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">sync_gradients</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">lr_piecewise_constant_decay</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">piecewise_decay_lr_scheduler</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">lr_scheduler</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
 
         <span class="c1"># Core target model update step</span>
@@ -585,24 +581,24 @@
             <span class="s1">&#39;collect_epsilon&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_epsilon</span><span class="p">,</span>
             <span class="s1">&#39;cur_lr_world_model&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="o">.</span><span class="n">param_groups</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;lr&#39;</span><span class="p">],</span>
             <span class="s1">&#39;weighted_total_loss&#39;</span><span class="p">:</span> <span class="n">weighted_total_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
-            <span class="s1">&#39;obs_loss&#39;</span><span class="p">:</span> <span class="n">obs_loss</span><span class="p">,</span>
-            <span class="s1">&#39;latent_recon_loss&#39;</span><span class="p">:</span> <span class="n">latent_recon_loss</span><span class="p">,</span>
-            <span class="s1">&#39;perceptual_loss&#39;</span><span class="p">:</span> <span class="n">perceptual_loss</span><span class="p">,</span>
-            <span class="s1">&#39;policy_loss&#39;</span><span class="p">:</span> <span class="n">policy_loss</span><span class="p">,</span>
-            <span class="s1">&#39;orig_policy_loss&#39;</span><span class="p">:</span> <span class="n">orig_policy_loss</span><span class="p">,</span>
-            <span class="s1">&#39;policy_entropy&#39;</span><span class="p">:</span> <span class="n">policy_entropy</span><span class="p">,</span>
-            <span class="s1">&#39;target_policy_entropy&#39;</span><span class="p">:</span> <span class="n">average_target_policy_entropy</span><span class="p">,</span>
-            <span class="s1">&#39;reward_loss&#39;</span><span class="p">:</span> <span class="n">reward_loss</span><span class="p">,</span>
-            <span class="s1">&#39;value_loss&#39;</span><span class="p">:</span> <span class="n">value_loss</span><span class="p">,</span>
-            <span class="s1">&#39;value_priority_orig&#39;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">batch_size</span><span class="p">),</span>  <span class="c1"># TODO</span>
+            <span class="s1">&#39;obs_loss&#39;</span><span class="p">:</span> <span class="n">obs_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;latent_recon_loss&#39;</span><span class="p">:</span> <span class="n">latent_recon_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;perceptual_loss&#39;</span><span class="p">:</span> <span class="n">perceptual_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;policy_loss&#39;</span><span class="p">:</span> <span class="n">policy_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;orig_policy_loss&#39;</span><span class="p">:</span> <span class="n">orig_policy_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;policy_entropy&#39;</span><span class="p">:</span> <span class="n">policy_entropy</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;target_policy_entropy&#39;</span><span class="p">:</span> <span class="n">average_target_policy_entropy</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;reward_loss&#39;</span><span class="p">:</span> <span class="n">reward_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;value_loss&#39;</span><span class="p">:</span> <span class="n">value_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="c1"># &#39;value_priority_orig&#39;: np.zeros(self._cfg.batch_size),  # TODO</span>
             <span class="s1">&#39;target_reward&#39;</span><span class="p">:</span> <span class="n">target_reward</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
             <span class="s1">&#39;target_value&#39;</span><span class="p">:</span> <span class="n">target_value</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
             <span class="s1">&#39;transformed_target_reward&#39;</span><span class="p">:</span> <span class="n">transformed_target_reward</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
             <span class="s1">&#39;transformed_target_value&#39;</span><span class="p">:</span> <span class="n">transformed_target_value</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
             <span class="s1">&#39;total_grad_norm_before_clip_wm&#39;</span><span class="p">:</span> <span class="n">total_grad_norm_before_clip_wm</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
-            <span class="s1">&#39;analysis/dormant_ratio_encoder&#39;</span><span class="p">:</span> <span class="n">dormant_ratio_encoder</span><span class="p">,</span>
-            <span class="s1">&#39;analysis/dormant_ratio_world_model&#39;</span><span class="p">:</span> <span class="n">dormant_ratio_world_model</span><span class="p">,</span>
-            <span class="s1">&#39;analysis/latent_state_l2_norms&#39;</span><span class="p">:</span> <span class="n">latent_state_l2_norms</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/dormant_ratio_encoder&#39;</span><span class="p">:</span> <span class="n">dormant_ratio_encoder</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/dormant_ratio_world_model&#39;</span><span class="p">:</span> <span class="n">dormant_ratio_world_model</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/latent_state_l2_norms&#39;</span><span class="p">:</span> <span class="n">latent_state_l2_norms</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
             <span class="s1">&#39;analysis/l2_norm_before&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_before</span><span class="p">,</span>
             <span class="s1">&#39;analysis/l2_norm_after&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_after</span><span class="p">,</span>
             <span class="s1">&#39;analysis/grad_norm_before&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_before</span><span class="p">,</span>
@@ -753,6 +749,14 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs</span> <span class="o">=</span> <span class="n">data</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span> <span class="o">=</span> <span class="n">batch_action</span>
 
+            <span class="c1"># ========= TODO: for muzero_segment_collector now =========</span>
+            <span class="k">if</span> <span class="n">active_collect_env_num</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;==========collect_forward============&#39;</span><span class="p">)</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;len(self.last_batch_obs) &lt; self.collector_env_num, </span><span class="si">{</span><span class="n">active_collect_env_num</span><span class="si">}</span><span class="s1">&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_reset_collect</span><span class="p">(</span><span class="n">reset_init_data</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">,</span> <span class="s1">&#39;sample_type&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;episode&#39;</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;BUG: sample_type is episode, but len(self.last_batch_obs) &lt; self.collector_env_num&#39;</span><span class="p">)</span>
+
         <span class="k">return</span> <span class="n">output</span></div>
 
 <div class="viewcode-block" id="UniZeroPolicy._init_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._init_eval">[docs]</a>    <span class="k">def</span> <span class="nf">_init_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -891,7 +895,6 @@
 
             <span class="c1"># Clear various caches in the collect model&#39;s world model</span>
             <span class="n">world_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="o">.</span><span class="n">world_model</span>
-            <span class="n">world_model</span><span class="o">.</span><span class="n">past_kv_cache_init_infer</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
             <span class="k">for</span> <span class="n">kv_cache_dict_env</span> <span class="ow">in</span> <span class="n">world_model</span><span class="o">.</span><span class="n">past_kv_cache_init_infer_envs</span><span class="p">:</span>
                 <span class="n">kv_cache_dict_env</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
             <span class="n">world_model</span><span class="o">.</span><span class="n">past_kv_cache_recurrent_infer</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
@@ -936,7 +939,6 @@
 
             <span class="c1"># Clear various caches in the eval model&#39;s world model</span>
             <span class="n">world_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="o">.</span><span class="n">world_model</span>
-            <span class="n">world_model</span><span class="o">.</span><span class="n">past_kv_cache_init_infer</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
             <span class="k">for</span> <span class="n">kv_cache_dict_env</span> <span class="ow">in</span> <span class="n">world_model</span><span class="o">.</span><span class="n">past_kv_cache_init_infer_envs</span><span class="p">:</span>
                 <span class="n">kv_cache_dict_env</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
             <span class="n">world_model</span><span class="o">.</span><span class="n">past_kv_cache_recurrent_infer</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>

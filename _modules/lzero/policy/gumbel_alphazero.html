@@ -166,7 +166,7 @@
         <span class="n">evaluator_env_num</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
         <span class="c1"># (bool) Whether to use piecewise constant learning rate decay.</span>
         <span class="c1"># i.e. lr: 0.2 -&gt; 0.02 -&gt; 0.002</span>
-        <span class="n">lr_piecewise_constant_decay</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">piecewise_decay_lr_scheduler</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="c1"># (int) The number of final training iterations to control lr decay, which is only used for manually decay.</span>
         <span class="n">threshold_training_steps_for_final_lr</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="mf">5e5</span><span class="p">),</span>
         <span class="c1"># (bool) Whether to use manually temperature decay.</span>
@@ -246,7 +246,7 @@
                 <span class="n">device_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span>
             <span class="p">)</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">lr_piecewise_constant_decay</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">piecewise_decay_lr_scheduler</span><span class="p">:</span>
             <span class="kn">from</span> <span class="nn">torch.optim.lr_scheduler</span> <span class="kn">import</span> <span class="n">LambdaLR</span>
             <span class="n">max_step</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">threshold_training_steps_for_final_lr</span>
             <span class="c1"># NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.</span>
@@ -314,7 +314,7 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">lr_piecewise_constant_decay</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">piecewise_decay_lr_scheduler</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">lr_scheduler</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
 
         <span class="c1"># =============</span>

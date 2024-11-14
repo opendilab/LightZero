@@ -110,7 +110,7 @@
 <span class="k">class</span> <span class="nc">MuZeroCollector</span><span class="p">(</span><span class="n">ISerialCollector</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
-<span class="sd">        The Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.</span>
+<span class="sd">        The Episode Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.</span>
 <span class="sd">        It manages the data collection process for training these algorithms using a serial mechanism.</span>
 <span class="sd">    Interfaces:</span>
 <span class="sd">        ``__init__``, ``reset``, ``reset_env``, ``reset_policy``, ``_reset_stat``, ``envstep``, ``__del__``, ``_compute_priorities``,</span>
@@ -334,18 +334,26 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="c1"># pad over last segment trajectory</span>
         <span class="n">beg_index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span>
-        <span class="n">end_index</span> <span class="o">=</span> <span class="n">beg_index</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">num_unroll_steps</span>
+        <span class="n">end_index</span> <span class="o">=</span> <span class="n">beg_index</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">td_steps</span>
 
         <span class="c1"># the start &lt;frame_stack_num&gt; obs is init zero obs, so we take the</span>
         <span class="c1"># [&lt;frame_stack_num&gt; : &lt;frame_stack_num&gt;+&lt;num_unroll_steps&gt;] obs as the pad obs</span>
         <span class="c1"># e.g. the start 4 obs is init zero obs, the num_unroll_steps is 5, so we take the [4:9] obs as the pad obs</span>
         <span class="n">pad_obs_lst</span> <span class="o">=</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">obs_segment</span><span class="p">[</span><span class="n">beg_index</span><span class="p">:</span><span class="n">end_index</span><span class="p">]</span>
-        <span class="n">pad_child_visits_lst</span> <span class="o">=</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">child_visit_segment</span><span class="p">[:</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">num_unroll_steps</span><span class="p">]</span>
+
+        <span class="c1"># NOTE: for unizero</span>
+        <span class="n">beg_index</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">end_index</span> <span class="o">=</span> <span class="n">beg_index</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">td_steps</span>
+        <span class="n">pad_action_lst</span> <span class="o">=</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">action_segment</span><span class="p">[</span><span class="n">beg_index</span><span class="p">:</span><span class="n">end_index</span><span class="p">]</span>
+
+        <span class="c1"># NOTE: for unizero</span>
+        <span class="n">pad_child_visits_lst</span> <span class="o">=</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">child_visit_segment</span><span class="p">[</span>
+                               <span class="p">:</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">num_unroll_steps</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">td_steps</span><span class="p">]</span>
+
         <span class="c1"># EfficientZero original repo bug:</span>
         <span class="c1"># pad_child_visits_lst = game_segments[i].child_visit_segment[beg_index:end_index]</span>
 
         <span class="n">beg_index</span> <span class="o">=</span> <span class="mi">0</span>
-        <span class="c1"># self.unroll_plus_td_steps = self.policy_config.num_unroll_steps + self.policy_config.td_steps</span>
         <span class="n">end_index</span> <span class="o">=</span> <span class="n">beg_index</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">unroll_plus_td_steps</span> <span class="o">-</span> <span class="mi">1</span>
 
         <span class="n">pad_reward_lst</span> <span class="o">=</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">reward_segment</span><span class="p">[</span><span class="n">beg_index</span><span class="p">:</span><span class="n">end_index</span><span class="p">]</span>
@@ -362,14 +370,14 @@
 
         <span class="c1"># pad over and save</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">gumbel_algo</span><span class="p">:</span>
-            <span class="n">last_game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">pad_over</span><span class="p">(</span><span class="n">pad_obs_lst</span><span class="p">,</span> <span class="n">pad_reward_lst</span><span class="p">,</span> <span class="n">pad_root_values_lst</span><span class="p">,</span> <span class="n">pad_child_visits_lst</span><span class="p">,</span>
+            <span class="n">last_game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">pad_over</span><span class="p">(</span><span class="n">pad_obs_lst</span><span class="p">,</span> <span class="n">pad_reward_lst</span><span class="p">,</span> <span class="n">pad_action_lst</span><span class="p">,</span> <span class="n">pad_root_values_lst</span><span class="p">,</span> <span class="n">pad_child_visits_lst</span><span class="p">,</span>
                                            <span class="n">next_segment_improved_policy</span><span class="o">=</span><span class="n">pad_improved_policy_prob</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">use_ture_chance_label_in_chance_encoder</span><span class="p">:</span>
-                <span class="n">last_game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">pad_over</span><span class="p">(</span><span class="n">pad_obs_lst</span><span class="p">,</span> <span class="n">pad_reward_lst</span><span class="p">,</span> <span class="n">pad_root_values_lst</span><span class="p">,</span> <span class="n">pad_child_visits_lst</span><span class="p">,</span>
+                <span class="n">last_game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">pad_over</span><span class="p">(</span><span class="n">pad_obs_lst</span><span class="p">,</span> <span class="n">pad_reward_lst</span><span class="p">,</span> <span class="n">pad_action_lst</span><span class="p">,</span> <span class="n">pad_root_values_lst</span><span class="p">,</span> <span class="n">pad_child_visits_lst</span><span class="p">,</span>
                                                <span class="n">next_chances</span><span class="o">=</span><span class="n">chance_lst</span><span class="p">)</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="n">last_game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">pad_over</span><span class="p">(</span><span class="n">pad_obs_lst</span><span class="p">,</span> <span class="n">pad_reward_lst</span><span class="p">,</span> <span class="n">pad_root_values_lst</span><span class="p">,</span> <span class="n">pad_child_visits_lst</span><span class="p">)</span>
+                <span class="n">last_game_segments</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">pad_over</span><span class="p">(</span><span class="n">pad_obs_lst</span><span class="p">,</span> <span class="n">pad_reward_lst</span><span class="p">,</span> <span class="n">pad_action_lst</span><span class="p">,</span> <span class="n">pad_root_values_lst</span><span class="p">,</span> <span class="n">pad_child_visits_lst</span><span class="p">)</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Note:</span>
 <span class="sd">            game_segment element shape:</span>
@@ -424,11 +432,10 @@
         <span class="n">collected_episode</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="n">collected_step</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="n">env_nums</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_num</span>
+        <span class="n">retry_waiting_time</span> <span class="o">=</span> <span class="mf">0.05</span>
 
         <span class="c1"># initializations</span>
         <span class="n">init_obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">ready_obs</span>
-
-        <span class="n">retry_waiting_time</span> <span class="o">=</span> <span class="mf">0.001</span>
         <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">init_obs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_num</span><span class="p">:</span>
             <span class="c1"># To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to</span>
             <span class="c1"># len(self._env.ready_obs), especially in tictactoe env.</span>
@@ -460,7 +467,6 @@
                 <span class="p">[</span><span class="n">to_ndarray</span><span class="p">(</span><span class="n">init_obs</span><span class="p">[</span><span class="n">env_id</span><span class="p">][</span><span class="s1">&#39;observation&#39;</span><span class="p">])</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span><span class="p">)],</span>
                 <span class="n">maxlen</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span>
             <span class="p">)</span>
-
             <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">observation_window_stack</span><span class="p">[</span><span class="n">env_id</span><span class="p">])</span>
 
         <span class="n">dones</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="kc">False</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">env_nums</span><span class="p">)])</span>
@@ -491,9 +497,13 @@
             <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">_timer</span><span class="p">:</span>
                 <span class="c1"># Get current ready env obs.</span>
                 <span class="n">obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">ready_obs</span>
+
                 <span class="n">new_available_env_id</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">obs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span><span class="o">.</span><span class="n">difference</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">)</span>
                 <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">ready_env_id</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">new_available_env_id</span><span class="p">)[:</span><span class="n">remain_episode</span><span class="p">]))</span>
                 <span class="n">remain_episode</span> <span class="o">-=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">new_available_env_id</span><span class="p">),</span> <span class="n">remain_episode</span><span class="p">)</span>
+
+                <span class="c1"># NOTE: If waiting for N environments to synchronize, it may result in some environments not being completed (done) by the time of return.</span>
+                <span class="c1"># However, the current muzero_collector does not properly maintain the global self.last_game_segments, leading to some data not being collected.</span>
 
                 <span class="n">stack_obs</span> <span class="o">=</span> <span class="p">{</span><span class="n">env_id</span><span class="p">:</span> <span class="n">game_segments</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span><span class="o">.</span><span class="n">get_obs</span><span class="p">()</span> <span class="k">for</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
                 <span class="n">stack_obs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">stack_obs</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
@@ -634,7 +644,7 @@
                             <span class="n">completed_value_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">+=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">completed_value_dict</span><span class="p">[</span><span class="n">env_id</span><span class="p">]))</span>
 
                     <span class="n">eps_steps_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
-                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_policy</span><span class="o">.</span><span class="n">get_attribute</span><span class="p">(</span><span class="s1">&#39;cfg&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">type</span> <span class="o">==</span> <span class="s1">&#39;unizero&#39;</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_policy</span><span class="o">.</span><span class="n">get_attribute</span><span class="p">(</span><span class="s1">&#39;cfg&#39;</span><span class="p">)</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;unizero&#39;</span><span class="p">,</span> <span class="s1">&#39;sampled_unizero&#39;</span><span class="p">]:</span>
                         <span class="c1"># only for UniZero now</span>
                         <span class="bp">self</span><span class="o">.</span><span class="n">_policy</span><span class="o">.</span><span class="n">reset</span><span class="p">(</span><span class="n">env_id</span><span class="o">=</span><span class="n">env_id</span><span class="p">,</span> <span class="n">current_steps</span><span class="o">=</span><span class="n">eps_steps_lst</span><span class="p">[</span><span class="n">env_id</span><span class="p">],</span> <span class="n">reset_init_data</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
 
@@ -729,7 +739,7 @@
                         <span class="n">init_obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">ready_obs</span>
                         <span class="n">retry_waiting_time</span> <span class="o">=</span> <span class="mf">0.001</span>
                         <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">init_obs</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env_num</span><span class="p">:</span>
-                            <span class="c1"># In order to be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to</span>
+                            <span class="c1"># To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to</span>
                             <span class="c1"># len(self._env.ready_obs), especially in tictactoe env.</span>
                             <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;The current init_obs.keys() is </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">init_obs</span><span class="o">.</span><span class="n">keys</span><span class="p">()))</span>
                             <span class="bp">self</span><span class="o">.</span><span class="n">_logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s1">&#39;Before sleeping, the _env_states is </span><span class="si">{}</span><span class="s1">&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">_env_states</span><span class="p">))</span>
