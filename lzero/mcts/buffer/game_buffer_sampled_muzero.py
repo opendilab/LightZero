@@ -249,7 +249,7 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
             - batch_rewards (:obj:'np.ndarray): batch of value prefix
             - batch_target_values (:obj:'np.ndarray): batch of value estimation
         """
-        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
+        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, root_values, game_segment_lens, td_steps_list, action_mask_segment, \
         to_play_segment = reward_value_context  # noqa
 
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
@@ -364,14 +364,14 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
             value_list = value_list * np.array(value_mask)
             value_list = value_list.tolist()
 
-            horizon_id, value_index = 0, 0
+            value_index = 0
             for game_segment_len_non_re, reward_list, state_index, to_play_list in zip(game_segment_lens, rewards_list,
                                                                                        pos_in_game_segment_list,
                                                                                        to_play_segment):
                 target_values = []
                 target_rewards = []
-
                 base_index = state_index
+                truncation_length = game_segment_len_non_re
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
                     for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
@@ -385,13 +385,11 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
                             value_list[value_index] += reward * self._cfg.discount_factor ** i
                             # TODO(pu): why value don't use discount_factor factor
 
-                    horizon_id += 1
-
-                    if current_index < game_segment_len_non_re:
-                        target_values.append(value_list[value_index].item())
-                        target_rewards.append(reward_list[current_index].item())
+                    # TODO: check the boundary condition
+                    target_values.append(value_list[value_index])
+                    if current_index < len(reward_list):
+                        target_rewards.append(reward_list[current_index])
                     else:
-                        target_values.append(np.array(0.))
                         target_rewards.append(np.array(0.))
 
                     value_index += 1

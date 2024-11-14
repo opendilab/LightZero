@@ -62,17 +62,18 @@ class Cache:
         """
         return self._cache[:, :, :self._size, :]
 
-    def update(self, x: torch.Tensor) -> None:
+    def update(self, x: torch.Tensor, tokens: int) -> None:
         """
         Overview:
             Update the cache with new values.
         Arguments:
             - x (:obj:`torch.Tensor`): The new values to update the cache with.
+            - tokens (:obj:`int`): The number of tokens to update.
         """
-        assert (x.ndim == self._cache.ndim) and all([x.size(i) == self._cache.size(i) for i in (0, 1, 3)])
-        assert self._size + x.size(2) <= self._cache.shape[2]  # TODO
-        self._cache = AssignWithoutInplaceCheck.apply(self._cache, x, 2, self._size, self._size + x.size(2))
-        self._size += x.size(2)
+        # assert (x.ndim == self._cache.ndim) and all([x.size(i) == self._cache.size(i) for i in (0, 1, 3)])
+        # assert self._size + tokens <= self._cache.shape[2]  # TODO
+        self._cache = AssignWithoutInplaceCheck.apply(self._cache, x, 2, self._size, self._size + tokens)
+        self._size += tokens
 
 
 class KVCache:
@@ -136,8 +137,8 @@ class KVCache:
             - k (:obj:`torch.Tensor`): The new values to update the key cache with.
             - v (:obj:`torch.Tensor`): The new values to update the value cache with.
         """
-        self._k_cache.update(k)
-        self._v_cache.update(v)
+        self._k_cache.update(k, k.size(2))
+        self._v_cache.update(v, v.size(2))
 
 
 class KeysValues:
@@ -202,23 +203,6 @@ class KeysValues:
         """
         for kv_cache in self._keys_values:
             kv_cache.prune(mask)
-
-    def to_device(self, device: str):
-        """
-        Transfer all KVCache objects within the KeysValues object to a certain device.
-        Not used in the current implementation.
-
-        Arguments:
-            - self._keys_values (KeysValues): The KeysValues object to be transferred.
-            - device (str): The device to transfer to.
-        Returns:
-            - keys_values (KeysValues): The KeysValues object with its caches transferred to the specified device.
-        """
-        device = torch.device(device if torch.cuda.is_available() else 'cpu')
-        for kv_cache in self._keys_values:
-            kv_cache._k_cache._cache = kv_cache._k_cache._cache.to(device)
-            kv_cache._v_cache._cache = kv_cache._v_cache._cache.to(device)
-        return self._keys_values
 
 
 class AssignWithoutInplaceCheck(torch.autograd.Function):

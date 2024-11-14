@@ -15,6 +15,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
     prepare_obs_stack4_for_unizero
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
+from lzero.entry.utils import initialize_zeros_batch
 
 
 def get_action(roots_sampled_actions, i, action):
@@ -38,7 +39,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
 
     # The default_config for UniZero policy.
     config = dict(
-        type='unizero',
+        type='sampled_unizero',
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.
             model_type='conv',  # options={'mlp', 'conv'}
@@ -116,8 +117,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 latent_recon_loss_weight=0.,
                 # (float) The weight of the perceptual loss.
                 perceptual_loss_weight=0.,
-                # (float) The weight of the policy entropy.
-                policy_entropy_weight=1e-4,
+                # (float) The weight of the policy entropy loss.
+                policy_entropy_weight=5e-3,
                 # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
                 predict_latent_loss_type='group_kl',
                 # (str) The type of observation. Options are ['image', 'vector'].
@@ -126,6 +127,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 gamma=1,
                 # (float) The threshold for a dormant neuron.
                 dormant_threshold=0.025,
+                # (str) The type of policy loss. Options could be ['kl', 'simple'].
+                policy_loss_type='kl',
             ),
         ),
         # ****** common ******
@@ -225,13 +228,13 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         value_loss_weight=0.25,
         # (float) The weight of policy loss.
         policy_loss_weight=1,
-        # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=1e-4,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
+        # (bool) Whether to use the cosine learning rate decay.
+        cos_lr_scheduler=False,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e4),
         # (bool) Whether to use manually decayed temperature.
@@ -309,6 +312,11 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             betas=(0.9, 0.95),
         )
 
+        if self._cfg.cos_lr_scheduler:
+            from torch.optim.lr_scheduler import CosineAnnealingLR
+            # TODO: check the total training steps
+            self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
+
         if self._cfg.model.continuous_action_space:
             # Weight Init for the last output layer of gaussian policy head in prediction network.
             init_w = self._cfg.init_w
@@ -372,8 +380,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         # ==============================================================
         # sampled related core code
         # ==============================================================
-        # obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
-        obs_batch_ori, action_batch, child_sampled_actions_batch, mask_batch, indices, weights, make_time = current_batch
+        obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number
@@ -508,7 +515,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                                                                         self._cfg.grad_clip_value)
 
         self._optimizer_world_model.step()
-        if self._cfg.lr_piecewise_constant_decay:
+        
+        if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
         # Core target model update step
@@ -708,8 +716,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             # ==============================================================
             # sampled related core code
             # ==============================================================
-            roots_sampled_actions = roots.get_sampled_actions(
-            )  # shape: ``{list: batch_size} ->{list: action_space_size}``
+            roots_sampled_actions = roots.get_sampled_actions()  # shape: ``{list: batch_size} ->{list: action_space_size}``
 
             batch_action = []
             for i, env_id in enumerate(ready_env_id):
@@ -757,6 +764,12 @@ class SampledUniZeroPolicy(UniZeroPolicy):
 
             self.last_batch_obs = data
             self.last_batch_action = batch_action
+
+            # ========= TODO: for muzero_segment_collector now =========
+            if active_collect_env_num < self.collector_env_num:
+                print('==========collect_forward============')
+                print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
+                self._reset_collect(reset_init_data=True) 
 
         return output
 
@@ -887,6 +900,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             self.last_batch_action = batch_action
 
         return output
+
 
     def _monitor_vars_learn(self) -> List[str]:
         """

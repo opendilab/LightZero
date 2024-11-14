@@ -14,13 +14,13 @@ num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
 batch_size = 256
-max_env_step = int(5e5)
+max_env_step = int(2e5)
 reanalyze_ratio = 0.
 
 # =========== for debug ===========
-# collector_env_num = 1
-# n_episode = 1
-# evaluator_env_num = 1
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
 # num_simulations = 2
 # update_per_collect = 2
 # batch_size = 2
@@ -71,7 +71,7 @@ atari_muzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='SGD',
-        lr_piecewise_constant_decay=True,
+        piecewise_decay_lr_scheduler=True,
         learning_rate=0.2,
         target_update_freq=100,
         num_simulations=num_simulations,

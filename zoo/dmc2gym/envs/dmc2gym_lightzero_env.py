@@ -1,9 +1,13 @@
 import copy
+import os
 from datetime import datetime
-from typing import Optional, Callable, Union, Dict
+from typing import Callable, Union, Dict, List
+from typing import Optional
 
 import dmc2gym
 import gym
+import gymnasium as gym
+import matplotlib.pyplot as plt
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.envs import WarpFrameWrapper, ScaledFloatFrameWrapper, ClipRewardWrapper, ActionRepeatWrapper, \
@@ -13,7 +17,8 @@ from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
 from gym.spaces import Box
-
+from matplotlib import animation
+import imageio
 
 def dmc2gym_observation_space(dim, minimum=-np.inf, maximum=np.inf, dtype=np.float32) -> Callable:
     def observation_space(from_pixels=True, height=84, width=84, channels_first=True) -> Box:
@@ -46,11 +51,11 @@ def dmc2gym_reward_space(minimum=0, maximum=1, dtype=np.float32) -> Callable:
 
 
 dmc2gym_env_info = {
-    "ball_in_cup": {
-        "catch": {
-            "observation_space": dmc2gym_observation_space(8),
-            "state_space": dmc2gym_state_space(8),
-            "action_space": dmc2gym_action_space(2),
+    "acrobot": {
+        "swingup": {
+            "observation_space": dmc2gym_observation_space(6),
+            "state_space": dmc2gym_state_space(6),
+            "action_space": dmc2gym_action_space(1),
             "reward_space": dmc2gym_reward_space()
         }
     },
@@ -66,6 +71,18 @@ dmc2gym_env_info = {
             "state_space": dmc2gym_state_space(4),
             "action_space": dmc2gym_action_space(1),
             "reward_space": dmc2gym_reward_space()
+        },
+        "balance_sparse": {
+            "observation_space": dmc2gym_observation_space(5),
+            "state_space": dmc2gym_state_space(4),
+            "action_space": dmc2gym_action_space(1),
+            "reward_space": dmc2gym_reward_space()
+        },
+        "swingup_sparse": {
+            "observation_space": dmc2gym_observation_space(5),
+            "state_space": dmc2gym_state_space(4),
+            "action_space": dmc2gym_action_space(1),
+            "reward_space": dmc2gym_reward_space()
         }
     },
     "cheetah": {
@@ -76,11 +93,67 @@ dmc2gym_env_info = {
             "reward_space": dmc2gym_reward_space()
         }
     },
+    "ball_in_cup": {
+        "catch": {
+            "observation_space": dmc2gym_observation_space(8),
+            "state_space": dmc2gym_state_space(8),
+            "action_space": dmc2gym_action_space(2),
+            "reward_space": dmc2gym_reward_space()
+        }
+    },
     "finger": {
         "spin": {
             "observation_space": dmc2gym_observation_space(9),
             "state_space": dmc2gym_state_space(9),
+            "action_space": dmc2gym_action_space(2),
+            "reward_space": dmc2gym_reward_space()
+        },
+        "turn_easy": {
+            "observation_space": dmc2gym_observation_space(12),
+            "state_space": dmc2gym_state_space(12),
+            "action_space": dmc2gym_action_space(2),
+            "reward_space": dmc2gym_reward_space()
+        },
+        "turn_hard": {
+            "observation_space": dmc2gym_observation_space(12),
+            "state_space": dmc2gym_state_space(12),
+            "action_space": dmc2gym_action_space(2),
+            "reward_space": dmc2gym_reward_space()
+        }
+    },
+    "hopper": {
+        "hop": {
+            "observation_space": dmc2gym_observation_space(15),
+            "state_space": dmc2gym_state_space(14),
+            "action_space": dmc2gym_action_space(4),
+            "reward_space": dmc2gym_reward_space()
+        },
+        "stand": {
+            "observation_space": dmc2gym_observation_space(15),
+            "state_space": dmc2gym_state_space(14),
+            "action_space": dmc2gym_action_space(4),
+            "reward_space": dmc2gym_reward_space()
+        }
+    },
+    "pendulum": {
+        "swingup": {
+            "observation_space": dmc2gym_observation_space(3),
+            "state_space": dmc2gym_state_space(3),
             "action_space": dmc2gym_action_space(1),
+            "reward_space": dmc2gym_reward_space()
+        }
+    },
+    "quadruped": {
+        "run": {
+            "observation_space": dmc2gym_observation_space(78),
+            "state_space": dmc2gym_state_space(78),
+            "action_space": dmc2gym_action_space(12),
+            "reward_space": dmc2gym_reward_space()
+        },
+        "walk": {
+            "observation_space": dmc2gym_observation_space(78),
+            "state_space": dmc2gym_state_space(78),
+            "action_space": dmc2gym_action_space(12),
             "reward_space": dmc2gym_reward_space()
         }
     },
@@ -90,21 +163,31 @@ dmc2gym_env_info = {
             "state_space": dmc2gym_state_space(6),
             "action_space": dmc2gym_action_space(2),
             "reward_space": dmc2gym_reward_space()
+        },
+        "hard": {
+            "observation_space": dmc2gym_observation_space(6),
+            "state_space": dmc2gym_state_space(6),
+            "action_space": dmc2gym_action_space(2),
+            "reward_space": dmc2gym_reward_space()
         }
     },
     "walker": {
-        "walk": {
+        "run": {
             "observation_space": dmc2gym_observation_space(24),
             "state_space": dmc2gym_state_space(24),
             "action_space": dmc2gym_action_space(6),
             "reward_space": dmc2gym_reward_space()
-        }
-    },
-    "hopper": {
-        "hop": {
-            "observation_space": dmc2gym_observation_space(15),
-            "state_space": dmc2gym_state_space(14),
-            "action_space": dmc2gym_action_space(4),
+        },
+        "stand": {
+            "observation_space": dmc2gym_observation_space(24),
+            "state_space": dmc2gym_state_space(24),
+            "action_space": dmc2gym_action_space(6),
+            "reward_space": dmc2gym_reward_space()
+        },
+        "walk": {
+            "observation_space": dmc2gym_observation_space(24),
+            "state_space": dmc2gym_state_space(24),
+            "action_space": dmc2gym_action_space(6),
             "reward_space": dmc2gym_reward_space()
         }
     },
@@ -122,9 +205,9 @@ dmc2gym_env_info = {
 @ENV_REGISTRY.register('dmc2gym_lightzero')
 class DMC2GymEnv(BaseEnv):
     """
-    LightZero version of the DeepMind Control Suite to gym environment. This class includes methods for resetting, 
-    closing, and stepping through the environment, as well as seeding for reproducibility, saving replay videos, 
-    and generating random actions. It also includes properties for accessing the observation space, action space, 
+    LightZero version of the DeepMind Control Suite to gym environment. This class includes methods for resetting,
+    closing, and stepping through the environment, as well as seeding for reproducibility, saving replay videos,
+    and generating random actions. It also includes properties for accessing the observation space, action space,
     and reward space of the environment.
     """
 
@@ -150,6 +233,13 @@ class DMC2GymEnv(BaseEnv):
         channels_first=True,
         resize=84,
         replay_path=None,
+        # (bool) If True, save the replay as a gif file.
+        save_replay_gif=False,
+        # (str or None) The path to save the replay gif. If None, the replay gif will not be saved.
+        replay_path_gif=None,
+        render_image=False,
+        collect_max_episode_steps=1000,
+        eval_max_episode_steps=1000,
     )
 
     def __init__(self, cfg: dict = {}) -> None:
@@ -176,6 +266,9 @@ class DMC2GymEnv(BaseEnv):
         self._action_space = dmc2gym_env_info[self._cfg.domain_name][self._cfg.task_name]["action_space"]
         self._reward_space = dmc2gym_env_info[self._cfg.domain_name][self._cfg.task_name]["reward_space"](
             self._cfg["frame_skip"])
+        self._save_replay_gif = cfg.save_replay_gif
+        self._replay_path_gif = cfg.replay_path_gif
+        self._save_replay_count = 0
 
     def reset(self) -> Dict[str, np.ndarray]:
         """
@@ -193,6 +286,7 @@ class DMC2GymEnv(BaseEnv):
                 width=self._cfg["width"],
                 frame_skip=self._cfg["frame_skip"],
                 channels_first=self._cfg["channels_first"],
+                render_image=self._cfg["render_image"]
             )
 
             # optional env wrapper
@@ -232,8 +326,17 @@ class DMC2GymEnv(BaseEnv):
         self._eval_episode_return = 0
         obs = self._env.reset()  # This line will cause errors when subprocess_env_manager is used
 
+        if self._cfg["from_pixels"]:
+            obs = obs
+        else:
+            obs = obs['state']
+
         obs = to_ndarray(obs).astype(np.float32)
         action_mask = None
+
+        self._current_step = 0
+        if self._save_replay_gif:
+            self._frames = []
 
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
 
@@ -262,13 +365,45 @@ class DMC2GymEnv(BaseEnv):
         """
         action = action.astype('float32')
         action = affine_transform(action, min_val=self._env.action_space.low, max_val=self._env.action_space.high)
+
+        # if self._cfg.is_eval:
+        #     # TODO: test the effect of extreme action
+        #     action = np.where(action > 0.9500, 0.9999, action)
+        #     action = np.where(action < -0.9500, -0.9999, action)
+
         obs, rew, done, info = self._env.step(action)
+        self._current_step += 1
+
+        # print(f'action: {action}, obs: {obs}, rew: {rew}, done: {done}, info: {info}')
+        # print(f'step {self._current_step}: action: {action}, rew: {rew}, done: {done}')
+
+        if self._cfg["from_pixels"]:
+            obs = obs
+        else:
+            info['image_obs'] = info['image_obs'].copy()
+            image_obs = info['image_obs']
+
         self._eval_episode_return += rew
         obs = to_ndarray(obs).astype(np.float32)
-        rew = to_ndarray(rew).astype(np.float32)  # wrapped to be transferred to an array with shape (1,)
+        rew = to_ndarray(rew).astype(np.float32)
+
+        if self._save_replay_gif:
+            self._frames.append(image_obs)
 
         if done:
             info['eval_episode_return'] = self._eval_episode_return
+            if self._save_replay_gif:
+
+                if not os.path.exists(self._replay_path_gif):
+                    os.makedirs(self._replay_path_gif)
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                path = os.path.join(
+                    self._replay_path_gif,
+                    '{}_episode_{}_seed{}_{}.gif'.format(f'{self._cfg["domain_name"]}_{self._cfg["task_name"]}', self._save_replay_count, self._seed, timestamp)
+                )
+                self.display_frames_as_gif(self._frames, path)
+                print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
+                self._save_replay_count += 1
 
         action_mask = None
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
@@ -282,6 +417,19 @@ class DMC2GymEnv(BaseEnv):
         if replay_path is None:
             replay_path = './video'
         self._replay_path = replay_path
+
+    @staticmethod
+    def display_frames_as_gif(frames: list, path: str) -> None:
+        frames = [np.transpose(frame, (1, 2, 0)) for frame in frames]
+
+        patch = plt.imshow(frames[0])
+        plt.axis('off')
+
+        def animate(i):
+            patch.set_data(frames[i])
+
+        anim = animation.FuncAnimation(plt.gcf(), animate, frames=len(frames), interval=5)
+        anim.save(path, writer='pillow', fps=20)
 
     def random_action(self) -> np.ndarray:
         """
@@ -316,3 +464,19 @@ class DMC2GymEnv(BaseEnv):
         String representation of the environment.
         """
         return "LightZero DMC2Gym Env({}:{})".format(self._cfg["domain_name"], self._cfg["task_name"])
+    
+    @staticmethod
+    def create_collector_env_cfg(cfg: dict) -> List[dict]:
+        collector_env_num = cfg.pop('collector_env_num')
+        cfg = copy.deepcopy(cfg)
+        cfg.max_episode_steps = cfg.collect_max_episode_steps
+        cfg.is_eval = False
+        return [cfg for _ in range(collector_env_num)]
+
+    @staticmethod
+    def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
+        evaluator_env_num = cfg.pop('evaluator_env_num')
+        cfg = copy.deepcopy(cfg)
+        cfg.max_episode_steps = cfg.eval_max_episode_steps
+        cfg.is_eval = True
+        return [cfg for _ in range(evaluator_env_num)]

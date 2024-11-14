@@ -56,7 +56,7 @@ atari_muzero_config = dict(
         manual_temperature_decay=True,
         threshold_training_steps_for_final_temperature=int(1e5),
         optim_type='Adam',
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         learning_rate=3e-3,
         # (float) Weight decay for training policy network.
         weight_decay=1e-4,

@@ -2,8 +2,10 @@ from easydict import EasyDict
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 
 memory_length = 60
-max_env_step = int(5e5)  # for visual_match [2, 60]
-
+max_env_step = int(1e6)
+embed_dim = 256
+num_layers = 4
+num_heads = 4
 # ==============================================================
 # begin of the most frequently changed config specified by the user,
 # you should change the following configs to adapt to your own task
@@ -18,21 +20,21 @@ game_segment_length = 16 + memory_length  # TODO: for "explore": 1
 seed = 0
 collector_env_num = 8
 n_episode = 8
-evaluator_env_num = 8
+evaluator_env_num = 10
 
 num_simulations = 50
-update_per_collect = None
-replay_ratio = 0.25
-batch_size = 32
+update_per_collect = 50
+
+replay_ratio = 0.1
+batch_size = 64
 reanalyze_ratio = 0
-td_steps = 5
-eps_greedy_exploration_in_collect = True
+td_steps = game_segment_length
 
 # ========= only for debug ===========
 # collector_env_num = 2
 # n_episode = 2
 # evaluator_env_num = 2
-# num_simulations = 5
+# num_simulations = 3
 # update_per_collect = None
 # replay_ratio = 0.25
 # batch_size = 4
@@ -40,7 +42,6 @@ eps_greedy_exploration_in_collect = True
 # end of the most frequently changed config specified by the user
 # ==============================================================
 memory_unizero_config = dict(
-    exp_name=f'data_{env_id}/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -58,6 +59,7 @@ memory_unizero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000,),),),  # default is 10000
         sample_type='episode',  # NOTE: very important for memory env
         model=dict(
             observation_shape=(3, 5, 5),
@@ -69,26 +71,27 @@ memory_unizero_config = dict(
                 max_blocks=num_unroll_steps + 5,
                 max_tokens=2 * (num_unroll_steps + 5),
                 context_length=2 * (num_unroll_steps + 5),
-                device='cpu',
+                device='cuda',
                 action_space_size=4,
-                num_layers=4,
-                num_heads=4,
-                embed_dim=64,
+                num_layers=num_layers,
+                num_heads=num_heads,
+                embed_dim=embed_dim,
                 env_num=max(collector_env_num, evaluator_env_num),
                 obs_type='image_memory',
+                policy_entropy_weight=5e-3,
             ),
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
         num_unroll_steps=num_unroll_steps,
         td_steps=td_steps,
-        discount_factor=1,
-        # cuda=True,
+        discount_factor=0.99,
         game_segment_length=game_segment_length,
         replay_ratio=replay_ratio,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='AdamW',
+        learning_rate=1e-4,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
@@ -117,8 +120,8 @@ memory_unizero_create_config = EasyDict(memory_unizero_create_config)
 create_config = memory_unizero_create_config
 
 if __name__ == "__main__":
-    seeds = [0, 1, 2]  # You can add more seed values here
+    seeds = [0, 1]  # You can add more seed values here
     for seed in seeds:
-        main_config.exp_name = f'data_{env_id}/{env_id}_memlen-{memory_length}_unizero_H{num_unroll_steps}_bs{batch_size}_seed{seed}'
+        main_config.exp_name = f'data_{env_id}/{env_id}_memlen-{memory_length}/unizero_td{td_steps}_layer{num_layers}-head{num_heads}_edim{embed_dim}_H{num_unroll_steps}_bs{batch_size}_upc{update_per_collect}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)

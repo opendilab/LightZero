@@ -32,7 +32,7 @@ The `main_config` dictionary contains the main parameter settings for running th
 - `update_per_collect`: The number of updates after each data collection.
 - `batch_size`: The batch size sampled during the update.
 - `optim_type`: Optimizer type.
-- `lr_piecewise_constant_decay`: Whether to use piecewise constant learning rate decay.
+- `piecewise_decay_lr_scheduler`: Whether to use piecewise constant learning rate decay.
 - `learning_rate`: Initial learning rate.
 - `num_simulations`: The number of simulations used in the MCTS algorithm.
 - `reanalyze_ratio`: Reanalysis coefficient, controlling the probability of reanalysis.

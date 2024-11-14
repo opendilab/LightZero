@@ -10,13 +10,17 @@
 #include <vector>
 #include <stack>
 #include <math.h>
-
 #include <stdlib.h>
 #include <time.h>
 #include <cmath>
 #include <sys/timeb.h>
 #include <time.h>
 #include <cassert>
+#include <cmath>
+#include <chrono>
+#include <numeric>
+#include <unordered_map>
+#include <functional>
 
 #ifdef _WIN32
 #include "..\..\common_lib\utils.cpp"
@@ -25,6 +29,21 @@
 #endif
 
 
+void print_vector(const std::vector<float>& vec) {
+    std::cout << "[";
+    for (size_t i = 0; i < vec.size(); ++i) {
+        std::cout << vec[i];
+        if (i != vec.size() - 1) {
+            std::cout << ", ";
+        }
+    }
+    std::cout << "]";
+}
+
+template <typename T>
+T clamp(T value, T min_val, T max_val) {
+    return std::max(min_val, std::min(value, max_val));
+}
 
 template <class T>
 size_t hash_combine(std::size_t &seed, const T &val)
@@ -156,7 +175,6 @@ namespace tree
         this->best_action = best_action;
 
         this->to_play = 0;
-//        this->parent_value_prefix = 0.0;
         this->reward = 0.0;
     }
 
@@ -170,7 +188,7 @@ namespace tree
             - legal_actions: a vector of legal actions of this node.
             - action_space_size: the size of action space of the current env.
             - num_of_sampled_actions: the number of sampled actions, i.e. K in the Sampled MuZero papers.
-            - continuous_action_space: whether the action space is continous in current env.
+            - continuous_action_space: whether the action space is continuous in current env.
         */
         this->prior = prior;
         this->legal_actions = legal_actions;
@@ -182,13 +200,71 @@ namespace tree
         this->visit_count = 0;
         this->value_sum = 0;
         this->to_play = 0;
-//        this->value_prefix = 0.0;
-//        this->parent_value_prefix = 0.0;
         this->current_latent_state_index = -1;
         this->batch_index = -1;
     }
 
     CNode::~CNode() {}
+
+    // The definition of the auxiliary sampling function
+    std::pair<std::vector<std::vector<float>>, std::vector<float>> CNode::sample_actions(
+        const std::vector<float>& mu,
+        const std::vector<float>& sigma,
+        int num_samples,
+        float std_magnification,
+        float clamp_limit,
+        std::default_random_engine& generator
+    ) {
+        std::vector<std::vector<float>> sampled_actions_after_tanh;
+        std::vector<float> sampled_actions_log_probs_after_tanh;
+
+        for (int i = 0; i < num_samples; ++i) {
+            // Initialize log probability before applying tanh.
+            float log_p_before_tanh = 0.0f;
+
+            // Vectors to store sampled actions before and after the tanh transformation.
+            std::vector<float> sampled_action_before_tanh;
+            std::vector<float> sampled_action_after_tanh;
+            std::vector<float> log_det_jacobian_terms; // To accumulate the log-Jacobian determinant terms.
+
+            for (int j = 0; j < this->action_space_size; ++j) {
+                // Sample from the Gaussian distribution with amplified standard deviation.
+                std::normal_distribution<float> distribution(mu[j], sigma[j] * std_magnification);
+                float sampled_action_one_dim_before_tanh = distribution(generator);
+
+                // Clamp the sampled action to avoid extreme values, ensuring stability.
+                sampled_action_one_dim_before_tanh = clamp(sampled_action_one_dim_before_tanh, -clamp_limit, clamp_limit);
+
+                // Calculate the log probability of the sampled action before applying tanh.
+                float a = sampled_action_one_dim_before_tanh;
+                float log_prob_j = -std::pow(a - mu[j], 2) / (2.0f * std::pow(sigma[j] * std_magnification, 2))
+                                    - std::log(sigma[j] * std_magnification)
+                                    - 0.5f * std::log(2.0f * M_PI); // Standard Gaussian log-likelihood.
+                log_p_before_tanh += log_prob_j;
+
+                // Store the sampled action before tanh.
+                sampled_action_before_tanh.push_back(a);
+
+                // Apply tanh transformation to the action.
+                float a_after_tanh = std::tanh(a);
+                sampled_action_after_tanh.push_back(a_after_tanh);
+
+                // Compute the log of the absolute value of the Jacobian determinant for the tanh transformation.
+                float dy_dx = 1.0f - a_after_tanh * a_after_tanh + 1e-6f; // Add a small value to prevent log(0).
+                log_det_jacobian_terms.push_back(std::log(dy_dx));
+            }
+
+            // Compute the total log probability after applying the tanh transformation.
+            float log_det_jacobian = std::accumulate(log_det_jacobian_terms.begin(), log_det_jacobian_terms.end(), 0.0f);
+            float log_p_after_tanh = log_p_before_tanh - log_det_jacobian; // Adjust log probability by Jacobian determinant.
+
+            // Store the sampled actions after tanh transformation and their log probabilities.
+            sampled_actions_after_tanh.push_back(sampled_action_after_tanh);
+            sampled_actions_log_probs_after_tanh.push_back(log_p_after_tanh);
+        }
+
+        return {sampled_actions_after_tanh, sampled_actions_log_probs_after_tanh};
+    }
 
 
     void CNode::expand(int to_play, int current_latent_state_index, int batch_index, float reward, const std::vector<float> &policy_logits)
@@ -210,7 +286,7 @@ namespace tree
         int action_num = policy_logits.size();
 
         #ifdef _WIN32
-        // 创建动态数组
+        // Create a dynamic array
         float* policy = new float[action_num];
         #else
         float policy[action_num];
@@ -221,66 +297,67 @@ namespace tree
         {
             all_actions.push_back(i);
         }
-        std::vector<std::vector<float> > sampled_actions_after_tanh;
-        std::vector<float> sampled_actions_log_probs_after_tanh;
-
         std::vector<int> sampled_actions;
         std::vector<float> sampled_actions_log_probs;
         std::vector<float> sampled_actions_probs;
         std::vector<float> probs;
 
-        /*
-        Overview:
-            When the currennt env has continuous action space, sampled K actions from continuous gaussia distribution policy.
-            When the currennt env has discrete action space, sampled K actions from discrete categirical distribution policy.
+        // Initialize the containers for sampling
+        std::vector<std::vector<float>> sampled_actions_after_tanh;
+        std::vector<float> sampled_actions_log_probs_after_tanh;
 
+        // Define the sampling parameters
+        const float clamp_limit = 4.0f; // TODO: The clamp limit of the action space
+        const float std_magnification_flat = 3.0f; // The magnification factor of the standard deviation of the Gaussian distribution
+        float std_magnification_normal = 1.0f;
+
+        // Obtain the current time as the seed of the random number generator
+        unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+        std::default_random_engine generator(seed);
+
+         /*
+        Overview:
+            When the current env has continuous action space, sample K actions from continuous Gaussian distribution policy.
+            When the current env has discrete action space, sample K actions from discrete categorical distribution policy.
         */
         if (this->continuous_action_space == true)
         {
-            // continuous action space for sampled algo..
+            // The action space size is half of the policy_logits (the first half is the mean, and the second half is the standard deviation).
             this->action_space_size = policy_logits.size() / 2;
-            std::vector<float> mu;
-            std::vector<float> sigma;
-            for (int i = 0; i < this->action_space_size; ++i)
-            {
-                mu.push_back(policy_logits[i]);
-                sigma.push_back(policy_logits[this->action_space_size + i]);
+
+            std::vector<float> mu(this->action_space_size, 0.0f);
+            std::vector<float> sigma(this->action_space_size, 0.0f);
+            for (int i = 0; i < this->action_space_size; ++i) {
+                mu[i] = policy_logits[i];
+                sigma[i] = policy_logits[this->action_space_size + i];
             }
 
-            // The number of nanoseconds that have elapsed since epoch(1970: 00: 00 UTC on January 1, 1970). unsigned type will truncate this value.
-            unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+             // TODO: Test the performance of the two sets of samples.
+////             int half_sample = this->num_of_sampled_actions - 1;
+////             int remaining = 1;
+//             // int half_sample = this->num_of_sampled_actions * 9/10;
+//             // int remaining = this->num_of_sampled_actions * 1/10;
+//             // The first half of the samples are drawn from the standard Gaussian distribution.
+//             auto sampled_standard = CNode::sample_actions(mu, sigma, half_sample, std_magnification_normal, clamp_limit, generator);
+//             // The second half of the samples are drawn from the flat Gaussian distribution.
+//             auto sampled_flat = CNode::sample_actions(mu, sigma, remaining, std_magnification_flat, clamp_limit, generator);
+//             // Merge the two sets of samples.
+//             sampled_actions_after_tanh = sampled_standard.first;
+//             sampled_actions_log_probs_after_tanh = sampled_standard.second;
+//             sampled_actions_after_tanh.insert(sampled_actions_after_tanh.end(),
+//                                             sampled_flat.first.begin(),
+//                                             sampled_flat.first.end());
+//             sampled_actions_log_probs_after_tanh.insert(sampled_actions_log_probs_after_tanh.end(),
+//                                                         sampled_flat.second.begin(),
+//                                                         sampled_flat.second.end());
 
-            // SAC-like tanh, pleasee refer to paper https://arxiv.org/abs/1801.01290.
-            std::vector<std::vector<float> > sampled_actions_before_tanh;
+            // TODO: original case
+            int half_sample = this->num_of_sampled_actions;
+            // The samples are drawn from the standard Gaussian distribution.
+            auto sampled_standard = CNode::sample_actions(mu, sigma, half_sample, std_magnification_normal, clamp_limit, generator);
+            sampled_actions_after_tanh = sampled_standard.first;
+            sampled_actions_log_probs_after_tanh = sampled_standard.second;
 
-            float sampled_action_one_dim_before_tanh;
-            std::vector<float> sampled_actions_log_probs_before_tanh;
-
-            std::default_random_engine generator(seed);
-            for (int i = 0; i < this->num_of_sampled_actions; ++i)
-            {
-                float sampled_action_prob_before_tanh = 1;
-                // TODO(pu): why here
-                std::vector<float> sampled_action_before_tanh;
-                std::vector<float> sampled_action_after_tanh;
-                std::vector<float> y;
-
-                for (int j = 0; j < this->action_space_size; ++j)
-                {
-                    std::normal_distribution<float> distribution(mu[j], sigma[j]);
-                    sampled_action_one_dim_before_tanh = distribution(generator);
-                    // refer to python normal log_prob method
-                    sampled_action_prob_before_tanh *= exp(-pow((sampled_action_one_dim_before_tanh - mu[j]), 2) / (2 * pow(sigma[j], 2)) - log(sigma[j]) - log(sqrt(2 * M_PI)));
-                    sampled_action_before_tanh.push_back(sampled_action_one_dim_before_tanh);
-                    sampled_action_after_tanh.push_back(tanh(sampled_action_one_dim_before_tanh));
-                    y.push_back(1 - pow(tanh(sampled_action_one_dim_before_tanh), 2) + 1e-6);
-                }
-                sampled_actions_before_tanh.push_back(sampled_action_before_tanh);
-                sampled_actions_after_tanh.push_back(sampled_action_after_tanh);
-                sampled_actions_log_probs_before_tanh.push_back(log(sampled_action_prob_before_tanh));
-                float y_sum = std::accumulate(y.begin(), y.end(), 0.);
-                sampled_actions_log_probs_after_tanh.push_back(log(sampled_action_prob_before_tanh) - log(y_sum));
-            }
         }
         else
         {
@@ -335,36 +412,11 @@ namespace tree
 
             unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
 
-            // cout << "sampled_action[0]:" << sampled_action[0] <<endl;
-
-            // std::vector<int> sampled_actions;
-            // std::vector<float> sampled_actions_log_probs;
-            // std::vector<float> sampled_actions_probs;
             std::default_random_engine generator(seed);
 
-            //  有放回抽样
-            // for (int i = 0; i < num_of_sampled_actions; ++i)
-            // {
-            //     float sampled_action_prob = 1;
-            //     int sampled_action;
-
-            //     std::discrete_distribution<float> distribution(probs.begin(), probs.end());
-
-            //     // for (float x:distribution.probabilities()) std::cout << x << " ";
-            //     sampled_action = distribution(generator);
-            //     // std::cout << "sampled_action： " << sampled_action << std::endl;
-
-            //     sampled_actions.push_back(sampled_action);
-            //     sampled_actions_probs.push_back(probs[sampled_action]);
-            //     std::cout << "sampled_actions_probs" << '[' << i << ']' << sampled_actions_probs[i] << std::endl;
-
-            //     sampled_actions_log_probs.push_back(log(probs[sampled_action]));
-            //     std::cout << "sampled_actions_log_probs" << '[' << i << ']' << sampled_actions_log_probs[i] << std::endl;
-            // }
-
-            // 每个节点的legal_actions应该为一个固定离散集合，所以采用无放回抽样
+            // The legal_actions of each node should be a fixed discrete set, so sampling without replacement is used.
             // std::cout << "position uniform_distribution init" << std::endl;
-            std::uniform_real_distribution<double> uniform_distribution(0.0, 1.0); //均匀分布
+            std::uniform_real_distribution<double> uniform_distribution(0.0, 1.0); // uniform distribution
             // std::cout << "position uniform_distribution done" << std::endl;
             std::vector<double> disturbed_probs;
             std::vector<std::pair<int, double> > disc_action_with_probs;
@@ -445,7 +497,7 @@ namespace tree
         }
         
         #ifdef _WIN32
-        // 释放数组内存
+        // Release memory of array
         delete[] policy;
         #else
         #endif
@@ -463,10 +515,18 @@ namespace tree
         float noise, prior;
         for (int i = 0; i < this->num_of_sampled_actions; ++i)
         {
-
             noise = noises[i];
             CNode *child = this->get_child(this->legal_actions[i]);
             prior = child->prior;
+
+            // TODO: only for debug, print current prior and noise
+            // std::cout << "Action: ";
+            // print_vector(this->legal_actions[i].value);
+            // std::cout << std::endl;
+            // std::cout << ", Prior: " << prior 
+            //         << ", Noise: " << noise 
+            //         << std::endl;
+
             if (this->continuous_action_space == true)
             {
                 // if prior is log_prob
@@ -477,6 +537,8 @@ namespace tree
                 // if prior is prob
                 child->prior = prior * (1 - exploration_fraction) + noise * exploration_fraction;
             }
+
+            // std::cout << "Updated Prior: " << child->prior << std::endl;
         }
     }
 
@@ -492,17 +554,11 @@ namespace tree
         */
         float total_unsigned_q = 0.0;
         int total_visits = 0;
-//        float parent_value_prefix = this->value_prefix;
         for (auto a : this->legal_actions)
         {
             CNode *child = this->get_child(a);
             if (child->visit_count > 0)
             {
-//                float true_reward = child->value_prefix - parent_value_prefix;
-//                if (this->is_reset == 1)
-//                {
-//                    true_reward = child->value_prefix;
-//                }
                 float true_reward = child->reward;
                 float qsa = true_reward + discount_factor * child->value();
                 total_unsigned_q += qsa;
@@ -610,9 +666,6 @@ namespace tree
             - action: the action to get child.
         */
         return &(this->children[action.get_combined_hash()]);
-        // TODO(pu): no hash
-        // return &(this->children[action]);
-        // return &(this->children[action.value[0]]);
     }
 
     //*********************************************************
@@ -655,7 +708,7 @@ namespace tree
             {
                 // sampled
                 // discrete action space without action mask
-                std::vector<CAction> legal_actions;
+                                std::vector<CAction> legal_actions;
                 this->roots.push_back(CNode(0, legal_actions, this->action_space_size, this->num_of_sampled_actions, this->continuous_action_space));
             }
 
@@ -769,8 +822,6 @@ namespace tree
         std::vector<std::vector<CAction> > sampled_actions;
         std::vector<std::vector<std::vector<float> > > python_sampled_actions;
 
-        //  sampled_actions.reserve(this->root_num);
-
         for (int i = 0; i < this->root_num; ++i)
         {
             std::vector<CAction> sampled_action;
@@ -825,24 +876,9 @@ namespace tree
                 node->value_sum += bootstrap_value;
                 node->visit_count += 1;
                 float true_reward = node->reward;
-//                float parent_value_prefix = 0.0;
-//                int is_reset = 0;
-//                if (i >= 1)
-//                {
-//                    CNode *parent = search_path[i - 1];
-//                    parent_value_prefix = parent->value_prefix;
-//                    is_reset = parent->is_reset;
-//                }
-//
-//                float true_reward = node->value_prefix - parent_value_prefix;
-               min_max_stats.update(true_reward + discount_factor * node->value());
 
-//                if (is_reset == 1)
-//                {
-//                    // parent is reset.
-//                    true_reward = node->value_prefix;
-//                }
-
+                min_max_stats.update(true_reward + discount_factor * node->value());
+                
                 bootstrap_value = true_reward + discount_factor * bootstrap_value;
             }
         }
@@ -862,26 +898,8 @@ namespace tree
 
                 float true_reward = node->reward;
 
-//                float parent_value_prefix = 0.0;
-//                int is_reset = 0;
-//                if (i >= 1)
-//                {
-//                    CNode *parent = search_path[i - 1];
-//                    parent_value_prefix = parent->value_prefix;
-//                    is_reset = parent->is_reset;
-//                }
-//
-//                // NOTE: in self-play-mode, value_prefix is not calculated according to the perspective of current player of node,
-//                // but treated as 1 player, just for obtaining the true reward in the perspective of current player of node.
-//                float true_reward = node->value_prefix - parent_value_prefix;
-
                 min_max_stats.update(true_reward + discount_factor * node->value());
 
-//                if (is_reset == 1)
-//                {
-//                    // parent is reset.
-//                    true_reward = node->value_prefix;
-//                }
                 if (node->to_play == to_play)
                     bootstrap_value = -true_reward + discount_factor * bootstrap_value;
                 else
@@ -908,9 +926,6 @@ namespace tree
         for (int i = 0; i < results.num; ++i)
         {
             results.nodes[i]->expand(to_play_batch[i], current_latent_state_index, i, rewards[i], policies[i]);
-//            // reset
-//            results.nodes[i]->is_reset = is_reset_list[i];
-
             cbackpropagate(results.search_paths[i], min_max_stats_lst->stats_lst[i], to_play_batch[i], values[i], discount_factor);
         }
     }
@@ -967,6 +982,7 @@ namespace tree
         return action;
     }
 
+
     // sampled related core code
     float cucb_score(CNode *parent, CNode *child, tools::CMinMaxStats &min_max_stats, float parent_mean_q, float total_children_visit_counts, float pb_c_base, float pb_c_init, float discount_factor, int players, bool continuous_action_space)
     {
@@ -990,13 +1006,17 @@ namespace tree
         pb_c = log((total_children_visit_counts + pb_c_base + 1) / pb_c_base) + pb_c_init;
         pb_c *= (sqrt(total_children_visit_counts) / (child->visit_count + 1));
 
+        // std::cout << "[DEBUG] pb_c: " << pb_c << std::endl;
+
         // prior_score = pb_c * child->prior;
 
         // sampled related core code
         // TODO(pu): empirical distribution
-        std::string empirical_distribution_type = "density";
-        if (empirical_distribution_type.compare("density"))
+        //  std::string empirical_distribution_type = "density"; 
+        std::string empirical_distribution_type = "uniform"; // uniform is very important to the performance of sampled algo.
+        if (empirical_distribution_type == "density")
         {
+            // std::cout << "[DEBUG] Empirical Distribution Type: density" << std::endl;
             if (continuous_action_space == true)
             {
                 float empirical_prob_sum = 0;
@@ -1005,6 +1025,10 @@ namespace tree
                     empirical_prob_sum += exp(parent->get_child(parent->legal_actions[i])->prior);
                 }
                 prior_score = pb_c * exp(child->prior) / (empirical_prob_sum + 1e-6);
+                // std::cout << "[DEBUG] Continuous Action Space" << std::endl;
+                // std::cout << "[DEBUG] Child Prior: " << child->prior << std::endl;
+                // std::cout << "[DEBUG] Empirical Prob Sum: " << empirical_prob_sum << std::endl;
+                // std::cout << "[DEBUG] Prior Score: " << prior_score << std::endl;
             }
             else
             {
@@ -1014,39 +1038,64 @@ namespace tree
                     empirical_prob_sum += parent->get_child(parent->legal_actions[i])->prior;
                 }
                 prior_score = pb_c * child->prior / (empirical_prob_sum + 1e-6);
+                // std::cout << "[DEBUG] Discrete Action Space" << std::endl;
+                // std::cout << "[DEBUG] Child Prior: " << child->prior << std::endl;
+                // std::cout << "[DEBUG] Empirical Prob Sum: " << empirical_prob_sum << std::endl;
+                // std::cout << "[DEBUG] Prior Score: " << prior_score << std::endl;
             }
+
         }
-        else if (empirical_distribution_type.compare("uniform"))
+        else if (empirical_distribution_type == "uniform")
         {
+            // std::cout << "[DEBUG] Empirical Distribution Type: uniform" << std::endl;
             prior_score = pb_c * 1 / parent->children.size();
+            // std::cout << "[DEBUG] Prior Score (Uniform): " << prior_score << std::endl;
         }
+        else
+        {
+            std::cout << "[WARN] Unknown Empirical Distribution Type: " << empirical_distribution_type << std::endl;
+        }
+
         // sampled related core code
         if (child->visit_count == 0)
         {
             value_score = parent_mean_q;
+            // std::cout << "[DEBUG] Child Visit Count: 0, Value Score set to Parent Mean Q: " << value_score << std::endl;
         }
         else
         {
-//            float true_reward = child->value_prefix - parent_value_prefix;
-//            if (is_reset == 1)
-//            {
-//                true_reward = child->value_prefix;
-//            }
             float true_reward = child->reward;
             if (players == 1)
+            {
                 value_score = true_reward + discount_factor * child->value();
+                // std::cout << "[DEBUG] Players: 1, True Reward: " << true_reward << ", Child Value: " << child->value() << ", Value Score: " << value_score << std::endl;
+            }
             else if (players == 2)
+            {
                 value_score = true_reward + discount_factor * (-child->value());
+                // std::cout << "[DEBUG] Players: 2, True Reward: " << true_reward << ", Child Value: " << child->value() << ", Value Score: " << value_score << std::endl;
+            }
         }
 
+        // std::cout << "value_score (before normalization): " << value_score << std::endl;
         value_score = min_max_stats.normalize(value_score);
+        // std::cout << "value_score (after normalization): " << value_score << std::endl;
+
 
         if (value_score < 0)
+        {
             value_score = 0;
+            // std::cout << "[DEBUG] Value Score < 0, set to 0" << std::endl;
+        }
         if (value_score > 1)
+        {
             value_score = 1;
+            // std::cout << "[DEBUG] Value Score > 1, set to 1" << std::endl;
+        }
 
         float ucb_value = prior_score + value_score;
+
+        // std::cout << "[DEBUG] UCB Value: " << ucb_value << std::endl;
         return ucb_value;
     }
 
@@ -1059,23 +1108,20 @@ namespace tree
             - roots: the roots that search from.
             - pb_c_base: constants c2 in muzero.
             - pb_c_init: constants c1 in muzero.
-            - disount_factor: the discount factor of reward.
+            - discount_factor: the discount factor of reward.
             - min_max_stats: a tool used to min-max normalize the score.
             - results: the search results.
             - virtual_to_play_batch: the batch of which player is playing on this node.
-            - continuous_action_space: whether the action space is continous in current env.
+            - continuous_action_space: whether the action space is continuous in current env.
         */
         // set seed
         get_time_and_set_rand_seed();
-
-//        int last_action = -1;
 
         std::vector<float> null_value;
         for (int i = 0; i < 1; ++i)
         {
             null_value.push_back(i + 0.1);
         }
-        // CAction last_action = CAction(null_value, 1);
         std::vector<float> last_action;
         float parent_q = 0.0;
         results.search_lens = std::vector<int>();

@@ -19,7 +19,7 @@ from lzero.mcts.utils import prepare_observation
 class MuZeroCollector(ISerialCollector):
     """
     Overview:
-        The Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.
+        The Episode Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.
         It manages the data collection process for training these algorithms using a serial mechanism.
     Interfaces:
         ``__init__``, ``reset``, ``reset_env``, ``reset_policy``, ``_reset_stat``, ``envstep``, ``__del__``, ``_compute_priorities``,
@@ -243,18 +243,26 @@ class MuZeroCollector(ISerialCollector):
         """
         # pad over last segment trajectory
         beg_index = self.policy_config.model.frame_stack_num
-        end_index = beg_index + self.policy_config.num_unroll_steps
+        end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps
 
         # the start <frame_stack_num> obs is init zero obs, so we take the
         # [<frame_stack_num> : <frame_stack_num>+<num_unroll_steps>] obs as the pad obs
         # e.g. the start 4 obs is init zero obs, the num_unroll_steps is 5, so we take the [4:9] obs as the pad obs
         pad_obs_lst = game_segments[i].obs_segment[beg_index:end_index]
-        pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps]
+
+        # NOTE: for unizero
+        beg_index = 0
+        end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps
+        pad_action_lst = game_segments[i].action_segment[beg_index:end_index]
+
+        # NOTE: for unizero
+        pad_child_visits_lst = game_segments[i].child_visit_segment[
+                               :self.policy_config.num_unroll_steps + self.policy_config.td_steps]
+
         # EfficientZero original repo bug:
         # pad_child_visits_lst = game_segments[i].child_visit_segment[beg_index:end_index]
 
         beg_index = 0
-        # self.unroll_plus_td_steps = self.policy_config.num_unroll_steps + self.policy_config.td_steps
         end_index = beg_index + self.unroll_plus_td_steps - 1
 
         pad_reward_lst = game_segments[i].reward_segment[beg_index:end_index]
@@ -271,14 +279,14 @@ class MuZeroCollector(ISerialCollector):
 
         # pad over and save
         if self.policy_config.gumbel_algo:
-            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst,
+            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst,
                                            next_segment_improved_policy=pad_improved_policy_prob)
         else:
             if self.policy_config.use_ture_chance_label_in_chance_encoder:
-                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst,
+                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst,
                                                next_chances=chance_lst)
             else:
-                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_root_values_lst, pad_child_visits_lst)
+                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst)
         """
         Note:
             game_segment element shape:
@@ -333,11 +341,10 @@ class MuZeroCollector(ISerialCollector):
         collected_episode = 0
         collected_step = 0
         env_nums = self._env_num
+        retry_waiting_time = 0.05
 
         # initializations
         init_obs = self._env.ready_obs
-
-        retry_waiting_time = 0.001
         while len(init_obs.keys()) != self._env_num:
             # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
             # len(self._env.ready_obs), especially in tictactoe env.
@@ -369,7 +376,6 @@ class MuZeroCollector(ISerialCollector):
                 [to_ndarray(init_obs[env_id]['observation']) for _ in range(self.policy_config.model.frame_stack_num)],
                 maxlen=self.policy_config.model.frame_stack_num
             )
-
             game_segments[env_id].reset(observation_window_stack[env_id])
 
         dones = np.array([False for _ in range(env_nums)])
@@ -400,9 +406,13 @@ class MuZeroCollector(ISerialCollector):
             with self._timer:
                 # Get current ready env obs.
                 obs = self._env.ready_obs
+
                 new_available_env_id = set(obs.keys()).difference(ready_env_id)
                 ready_env_id = ready_env_id.union(set(list(new_available_env_id)[:remain_episode]))
                 remain_episode -= min(len(new_available_env_id), remain_episode)
+
+                # NOTE: If waiting for N environments to synchronize, it may result in some environments not being completed (done) by the time of return.
+                # However, the current muzero_collector does not properly maintain the global self.last_game_segments, leading to some data not being collected.
 
                 stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
                 stack_obs = list(stack_obs.values())
@@ -543,7 +553,7 @@ class MuZeroCollector(ISerialCollector):
                             completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
 
                     eps_steps_lst[env_id] += 1
-                    if self._policy.get_attribute('cfg').type == 'unizero':
+                    if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
                         # only for UniZero now
                         self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
 
@@ -638,7 +648,7 @@ class MuZeroCollector(ISerialCollector):
                         init_obs = self._env.ready_obs
                         retry_waiting_time = 0.001
                         while len(init_obs.keys()) != self._env_num:
-                            # In order to be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
+                            # To be compatible with subprocess env_manager, in which sometimes self._env_num is not equal to
                             # len(self._env.ready_obs), especially in tictactoe env.
                             self._logger.info('The current init_obs.keys() is {}'.format(init_obs.keys()))
                             self._logger.info('Before sleeping, the _env_states is {}'.format(self._env._env_states))
