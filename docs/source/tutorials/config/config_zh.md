@@ -32,7 +32,7 @@
 - `update_per_collect`: 每次数据收集后更新的次数。
 - `batch_size`: 更新时采样的批量大小。
 - `optim_type`: 优化器类型。
-- `lr_piecewise_constant_decay`: 是否使用分段常数学习率衰减。
+- `piecewise_decay_lr_scheduler`: 是否使用分段常数学习率衰减。
 - `learning_rate`: 初始学习率。
 - `num_simulations`: MCTS算法中使用的模拟次数。
 - `reanalyze_ratio`: 重分析系数，控制进行重分析的概率。

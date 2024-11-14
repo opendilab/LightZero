@@ -234,7 +234,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         cos_lr_scheduler=False,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e4),
         # (bool) Whether to use manually decayed temperature.
@@ -312,7 +312,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             betas=(0.9, 0.95),
         )
 
-        if self._cfg.cos_lr_scheduler is True:
+        if self._cfg.cos_lr_scheduler:
             from torch.optim.lr_scheduler import CosineAnnealingLR
             # TODO: check the total training steps
             self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
@@ -380,7 +380,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         # ==============================================================
         # sampled related core code
         # ==============================================================
-        # obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
         obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
@@ -517,7 +516,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
 
         self._optimizer_world_model.step()
         
-        if self._cfg.cos_lr_scheduler or self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
         # Core target model update step

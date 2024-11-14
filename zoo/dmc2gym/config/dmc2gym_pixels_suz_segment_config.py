@@ -109,7 +109,7 @@ def main(env_id, seed):
             batch_size=batch_size,
             discount_factor=0.99,
             td_steps=5,
-            lr_piecewise_constant_decay=False,
+            piecewise_decay_lr_scheduler=False,
             learning_rate=1e-4,
             grad_clip_value=5,
             manual_temperature_decay=True,

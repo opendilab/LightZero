@@ -32,9 +32,6 @@ atari_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        # # TODO: only for debug
-        # collect_max_episode_steps=int(20),
-        # eval_max_episode_steps=int(20),
     ),
     policy=dict(
         model=dict(
@@ -53,7 +50,7 @@ atari_muzero_config = dict(
         replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type='SGD',
-        lr_piecewise_constant_decay=True,
+        piecewise_decay_lr_scheduler=True,
         learning_rate=0.2,
         num_simulations=num_simulations,
         ssl_loss_weight=2,

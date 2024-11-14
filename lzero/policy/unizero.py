@@ -157,8 +157,6 @@ class UniZeroPolicy(MuZeroPolicy):
         eval_freq=int(2e3),
         # (str) The sample type. Options are ['episode', 'transition'].
         sample_type='transition',
-        reanalyze_ratio=0,
-
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
         transform2string=False,
@@ -223,7 +221,7 @@ class UniZeroPolicy(MuZeroPolicy):
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e4),
         # (bool) Whether to use manually decayed temperature.
@@ -454,7 +452,7 @@ class UniZeroPolicy(MuZeroPolicy):
             self.sync_gradients(self._learn_model)
 
         self._optimizer_world_model.step()
-        if self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
         # Core target model update step

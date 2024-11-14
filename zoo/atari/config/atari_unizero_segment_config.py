@@ -71,6 +71,7 @@ def main(env_id, seed):
                     embed_dim=768,
                     obs_type='image',
                     env_num=max(collector_env_num, evaluator_env_num),
+                    num_simulations=num_simulations,
                 ),
             ),
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.

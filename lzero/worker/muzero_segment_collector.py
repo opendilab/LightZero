@@ -1,3 +1,4 @@
+import logging
 import time
 from collections import deque, namedtuple
 from typing import Optional, Any, List
@@ -19,16 +20,21 @@ from lzero.mcts.utils import prepare_observation
 class MuZeroSegmentCollector(ISerialCollector):
     """
     Overview:
-        The Segment Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.
+        MuZeroSegmentCollector is a data collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, and Gumbel MuZero.
         It manages the data collection process for training these algorithms using a serial mechanism.
+
+        The main difference from MuZeroCollector is that MuZeroSegmentCollector returns after collecting a specified number of segments,
+        whereas MuZeroCollector returns after collecting a complete game. This provides more extensibility and flexibility in data collection.
+
     Interfaces:
         ``__init__``, ``reset``, ``reset_env``, ``reset_policy``, ``_reset_stat``, ``envstep``, ``__del__``, ``_compute_priorities``,
         ``pad_and_save_last_trajectory``, ``collect``, ``_output_log``, ``close``
+
     Properties:
-        ``envstep``
+        ``envstep``: Counter for the current number of environment steps.
     """
 
-    # TO be compatible with ISerialCollector
+    # To be compatible with ISerialCollector
     config = dict()
 
     def __init__(
@@ -43,11 +49,11 @@ class MuZeroSegmentCollector(ISerialCollector):
     ) -> None:
         """
         Overview:
-            Initialize the MuZeroCollector with the given parameters.
+            Initialize the MuZeroSegmentCollector with the given parameters.
         Arguments:
             - collect_print_freq (:obj:`int`): Frequency (in training steps) at which to print collection information.
             - env (:obj:`Optional[BaseEnvManager]`): Instance of the subclass of vectorized environment manager.
-            - policy (:obj:`Optional[namedtuple]`): namedtuple of the collection mode policy API.
+            - policy (:obj:`Optional[namedtuple]`): Namedtuple of the collection mode policy API.
             - tb_logger (:obj:`Optional[SummaryWriter]`): TensorBoard logger instance.
             - exp_name (:obj:`str`): Name of the experiment, used for logging and saving purposes.
             - instance_name (:obj:`str`): Unique identifier for this collector instance.
@@ -313,7 +319,7 @@ class MuZeroSegmentCollector(ISerialCollector):
         # put the game segment into the pool
         self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
 
-        # reset last game_segments # TODO:origin
+        # reset last game_segments and last game_priorities for the next collection
         last_game_segments[i] = None
         last_game_priorities[i] = None
 
@@ -416,7 +422,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                 obs = self._env.ready_obs
                 ready_env_id = set(obs.keys())
                 if len(ready_env_id) < self._env_num:
-                    print(f'muzero_segment_collector: len(ready_env_id) < self._env_num, ready_env_id: {ready_env_id}')
+                    logging.info(f'muzero_segment_collector: len(ready_env_id) < self._env_num, ready_env_id: {ready_env_id}, self._env_num: {self._env_num}')
                 
                 # TODO: For UniZero, during the init-infer process, it is necessary to retrieve the current kv_cache from the kv_cache_dict corresponding to each env_id.
                 #  In theory, this requires waiting for all environments to be ready. However, in practice,
@@ -454,7 +460,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # ==============================================================
                 # Key policy forward step
                 # ==============================================================
-                # print(f'ready_env_id:{ready_env_id}')
+                # logging.info(f'ready_env_id:{ready_env_id}')
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
 
                 # Extract relevant policy outputs
@@ -627,7 +633,7 @@ class MuZeroSegmentCollector(ISerialCollector):
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
-                    print(f'========env {env_id} done!========')
+                    logging.info(f'========env {env_id} done!========')
                     self._total_episode_count += 1
 
                     reward = timestep.info['eval_episode_return']
@@ -696,7 +702,7 @@ class MuZeroSegmentCollector(ISerialCollector):
 
             # NOTE: must after the for loop to make sure all env_id's data are collected
             if len(self.game_segment_pool) >= self._default_num_segments:
-                print(f'collect {len(self.game_segment_pool)} segments now!')
+                logging.info(f'env {env_id} collected {len(self.game_segment_pool)} segments now!')
 
                 # [data, meta_data]
                 return_data = [self.game_segment_pool[i][0] for i in range(len(self.game_segment_pool))], [

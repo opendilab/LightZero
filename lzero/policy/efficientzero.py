@@ -151,7 +151,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
         ssl_loss_weight=2,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=True,
+        piecewise_decay_lr_scheduler=True,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e4),
         # (int) The number of final training iterations to control temperature, which is only used for manually decay.
@@ -253,7 +253,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
                 device_type=self._cfg.device
             )
 
-        if self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.piecewise_decay_lr_scheduler:
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
             # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
@@ -484,7 +484,7 @@ class EfficientZeroPolicy(MuZeroPolicy):
             self._learn_model.parameters(), self._cfg.grad_clip_value
         )
         self._optimizer.step()
-        if self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
         # ==============================================================
