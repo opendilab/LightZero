@@ -143,7 +143,7 @@ class BSuiteEnv(BaseEnv):
         if obs.shape[0] == 1:
             obs = obs[0]
         obs = to_ndarray(obs)
-        rew = to_ndarray([rew])  # wrapped to be transfered to an array with shape (1,)
+        rew = to_ndarray(rew)  # wrapped to be transfered to an array with shape (1,)
 
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
