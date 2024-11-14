@@ -86,7 +86,10 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # num_experts_of_moe_in_transformer=2,
                 ),
             ),
-            allocated_batch_sizes=True,
+            total_batch_size=total_batch_size, #TODO=======
+            allocated_batch_sizes=True,#TODO=======
+            # allocated_batch_sizes=False,#TODO=======
+            train_start_after_envsteps=int(0), # TODO
             use_priority=False,
             # print_task_priority_logs=False,
             # use_priority=True,  # TODO
@@ -125,7 +128,8 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     configs = []
     # TODO
     # exp_name_prefix = f'data_unizero_mt_segcollect_1107/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_maxbs-320_upc160_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_segcollect_ddp8gpu_{len(env_id_list)}games_fixlearnlog_1113/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_maxbs-3200-bs64_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_segcollect_ddp8gpu_{len(env_id_list)}games_fixlearnlog_1113/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_maxbs-3200-bs64_upc80_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_segcollect_ddp8gpu_fixlearnlog_1114/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_adaptivebs_100epoch-clip-scale1-4/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -231,13 +235,14 @@ if __name__ == "__main__":
     max_env_step = int(5e5) # TODO
     reanalyze_ratio = 0.
     # batch_size = [32, 32, 32, 32]
-    # max_batch_size = 2048
+    # total_batch_size = 2048
 
-    max_batch_size = 3200
-    # max_batch_size = int(64*4)
-    # batch_size = [int(max_batch_size/len(env_id_list)) for i in range(len(env_id_list))]
-    batch_size = [int(min(64, max_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
-    # batch_size = [int(min(32, max_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
+    total_batch_size = 3200
+    total_batch_size = 512
+    # total_batch_size = int(64*4)
+    # batch_size = [int(total_batch_size/len(env_id_list)) for i in range(len(env_id_list))]
+    batch_size = [int(min(64, total_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
+    # batch_size = [int(min(32, total_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
     print(f'=========== batch_size: {batch_size} ===========')
     # batch_size = [int(64) for i in range(len(env_id_list))]
 
@@ -248,8 +253,8 @@ if __name__ == "__main__":
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/10
-    # buffer_reanalyze_freq = 1/50
-    buffer_reanalyze_freq = 1/100000
+    buffer_reanalyze_freq = 1/50
+    # buffer_reanalyze_freq = 1/100000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
