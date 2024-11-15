@@ -95,6 +95,7 @@
 
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">wandb</span>
 <span class="kn">from</span> <span class="nn">ding.model</span> <span class="kn">import</span> <span class="n">model_wrap</span>
 <span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">POLICY_REGISTRY</span>
 
@@ -419,7 +420,11 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_before</span> <span class="o">=</span> <span class="mf">0.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_after</span> <span class="o">=</span> <span class="mf">0.</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_before</span> <span class="o">=</span> <span class="mf">0.</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_after</span> <span class="o">=</span> <span class="mf">0.</span></div>
+        <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_after</span> <span class="o">=</span> <span class="mf">0.</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">use_wandb</span><span class="p">:</span>
+            <span class="c1"># TODO: add the model to wandb</span>
+            <span class="n">wandb</span><span class="o">.</span><span class="n">watch</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">representation_network</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">)</span></div>
 
     <span class="c1"># @profile</span>
 <div class="viewcode-block" id="UniZeroPolicy._forward_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._forward_learn">[docs]</a>    <span class="k">def</span> <span class="nf">_forward_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
@@ -559,7 +564,7 @@
             <span class="n">current_memory_allocated_gb</span> <span class="o">=</span> <span class="mf">0.</span>
             <span class="n">max_memory_allocated_gb</span> <span class="o">=</span> <span class="mf">0.</span>
 
-        <span class="n">return_loss_dict</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="n">return_log_dict</span> <span class="o">=</span> <span class="p">{</span>
             <span class="s1">&#39;analysis/first_step_loss_value&#39;</span><span class="p">:</span> <span class="n">first_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
             <span class="s1">&#39;analysis/first_step_loss_policy&#39;</span><span class="p">:</span> <span class="n">first_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_policy&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
             <span class="s1">&#39;analysis/first_step_loss_rewards&#39;</span><span class="p">:</span> <span class="n">first_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_rewards&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
@@ -604,8 +609,12 @@
             <span class="s1">&#39;analysis/grad_norm_before&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_before</span><span class="p">,</span>
             <span class="s1">&#39;analysis/grad_norm_after&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_after</span><span class="p">,</span>
         <span class="p">}</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">use_wandb</span><span class="p">:</span>
+            <span class="n">wandb</span><span class="o">.</span><span class="n">log</span><span class="p">({</span><span class="s1">&#39;learner_step/&#39;</span> <span class="o">+</span> <span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">return_log_dict</span><span class="o">.</span><span class="n">items</span><span class="p">()},</span> <span class="n">step</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">env_step</span><span class="p">)</span>
+            <span class="n">wandb</span><span class="o">.</span><span class="n">log</span><span class="p">({</span><span class="s2">&quot;learner_iter_vs_env_step&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">train_iter</span><span class="p">},</span> <span class="n">step</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">env_step</span><span class="p">)</span>
 
-        <span class="k">return</span> <span class="n">return_loss_dict</span></div>
+        <span class="k">return</span> <span class="n">return_log_dict</span></div>
 
 <div class="viewcode-block" id="UniZeroPolicy.monitor_weights_and_grads"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy.monitor_weights_and_grads">[docs]</a>    <span class="k">def</span> <span class="nf">monitor_weights_and_grads</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">):</span>
         <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">named_parameters</span><span class="p">():</span>

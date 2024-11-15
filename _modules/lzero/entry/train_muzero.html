@@ -95,6 +95,7 @@
 <span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
 
 <span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">wandb</span>
 <span class="kn">from</span> <span class="nn">ding.config</span> <span class="kn">import</span> <span class="n">compile_config</span>
 <span class="kn">from</span> <span class="nn">ding.envs</span> <span class="kn">import</span> <span class="n">create_env_manager</span>
 <span class="kn">from</span> <span class="nn">ding.envs</span> <span class="kn">import</span> <span class="n">get_vec_env_setting</span>
@@ -172,6 +173,16 @@
     <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">eval_offline</span><span class="p">:</span>
         <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">learn</span><span class="o">.</span><span class="n">learner</span><span class="o">.</span><span class="n">hook</span><span class="o">.</span><span class="n">save_ckpt_after_iter</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">eval_freq</span>
 
+    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">use_wandb</span><span class="p">:</span>
+        <span class="c1"># Initialize wandb</span>
+        <span class="n">wandb</span><span class="o">.</span><span class="n">init</span><span class="p">(</span>
+            <span class="n">project</span><span class="o">=</span><span class="s2">&quot;LightZero&quot;</span><span class="p">,</span>
+            <span class="n">config</span><span class="o">=</span><span class="n">cfg</span><span class="p">,</span>
+            <span class="n">sync_tensorboard</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">monitor_gym</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="n">save_code</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="p">)</span>
+
     <span class="n">policy</span> <span class="o">=</span> <span class="n">create_policy</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span> <span class="n">enable_field</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;learn&#39;</span><span class="p">,</span> <span class="s1">&#39;collect&#39;</span><span class="p">,</span> <span class="s1">&#39;eval&#39;</span><span class="p">])</span>
 
     <span class="c1"># load pretrained model</span>
@@ -194,7 +205,7 @@
         <span class="n">policy</span><span class="o">=</span><span class="n">policy</span><span class="o">.</span><span class="n">collect_mode</span><span class="p">,</span>
         <span class="n">tb_logger</span><span class="o">=</span><span class="n">tb_logger</span><span class="p">,</span>
         <span class="n">exp_name</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">exp_name</span><span class="p">,</span>
-        <span class="n">policy_config</span><span class="o">=</span><span class="n">policy_config</span>
+        <span class="n">policy_config</span><span class="o">=</span><span class="n">policy_config</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="n">evaluator</span> <span class="o">=</span> <span class="n">Evaluator</span><span class="p">(</span>
         <span class="n">eval_freq</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">eval_freq</span><span class="p">,</span>
@@ -212,6 +223,8 @@
     <span class="c1"># ==============================================================</span>
     <span class="c1"># Learner&#39;s before_run hook.</span>
     <span class="n">learner</span><span class="o">.</span><span class="n">call_hook</span><span class="p">(</span><span class="s1">&#39;before_run&#39;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">policy_config</span><span class="o">.</span><span class="n">use_wandb</span><span class="p">:</span>
+        <span class="n">policy</span><span class="o">.</span><span class="n">set_train_iter_env_step</span><span class="p">(</span><span class="n">learner</span><span class="o">.</span><span class="n">train_iter</span><span class="p">,</span> <span class="n">collector</span><span class="o">.</span><span class="n">envstep</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">update_per_collect</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="n">update_per_collect</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">update_per_collect</span>
@@ -290,6 +303,9 @@
                 <span class="p">)</span>
                 <span class="k">break</span>
 
+            <span class="k">if</span> <span class="n">policy_config</span><span class="o">.</span><span class="n">use_wandb</span><span class="p">:</span>
+                <span class="n">policy</span><span class="o">.</span><span class="n">set_train_iter_env_step</span><span class="p">(</span><span class="n">learner</span><span class="o">.</span><span class="n">train_iter</span><span class="p">,</span> <span class="n">collector</span><span class="o">.</span><span class="n">envstep</span><span class="p">)</span>
+
             <span class="c1"># The core train steps for MCTS+RL algorithms.</span>
             <span class="n">log_vars</span> <span class="o">=</span> <span class="n">learner</span><span class="o">.</span><span class="n">train</span><span class="p">(</span><span class="n">train_data</span><span class="p">,</span> <span class="n">collector</span><span class="o">.</span><span class="n">envstep</span><span class="p">)</span>
 
@@ -314,6 +330,7 @@
 
     <span class="c1"># Learner&#39;s after_run hook.</span>
     <span class="n">learner</span><span class="o">.</span><span class="n">call_hook</span><span class="p">(</span><span class="s1">&#39;after_run&#39;</span><span class="p">)</span>
+    <span class="n">wandb</span><span class="o">.</span><span class="n">finish</span><span class="p">()</span>
     <span class="k">return</span> <span class="n">policy</span></div>
 </pre></div>
 
