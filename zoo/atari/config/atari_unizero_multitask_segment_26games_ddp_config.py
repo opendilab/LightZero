@@ -112,6 +112,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             n_episode=n_episode,
             replay_buffer_size=int(5e5), # TODO
             eval_freq=int(1e4),
+            # eval_freq=int(1),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             # ============= The key different params for reanalyze =============
@@ -129,7 +130,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # TODO
     # exp_name_prefix = f'data_unizero_mt_segcollect_1107/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_maxbs-320_upc160_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_segcollect_ddp8gpu_{len(env_id_list)}games_fixlearnlog_1113/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_maxbs-3200-bs64_upc80_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_segcollect_ddp8gpu_fixlearnlog_1114/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_adaptivebs_100epoch-clip-scale1-4/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_segcollect_ddp8gpu_fixlearnlog_1115/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_adaptivebs_100epoch-clip-scale1-4/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -237,7 +238,7 @@ if __name__ == "__main__":
     # batch_size = [32, 32, 32, 32]
     # total_batch_size = 2048
 
-    total_batch_size = 3200
+    # total_batch_size = 3200
     total_batch_size = 512
     # total_batch_size = int(64*4)
     # batch_size = [int(total_batch_size/len(env_id_list)) for i in range(len(env_id_list))]
@@ -253,8 +254,8 @@ if __name__ == "__main__":
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/10
-    buffer_reanalyze_freq = 1/50
-    # buffer_reanalyze_freq = 1/100000
+    # buffer_reanalyze_freq = 1/50
+    buffer_reanalyze_freq = 1/100000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -274,7 +275,8 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_26games_ddp_config.py
+        export NCCL_TIMEOUT=3600  # NOTE
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 ./zoo/atari/config/atari_unizero_multitask_segment_26games_ddp_config.py
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_4games_ddp_config.py
     """
     from ding.utils import DDPContext
