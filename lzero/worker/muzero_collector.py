@@ -4,6 +4,7 @@ from typing import Optional, Any, List
 
 import numpy as np
 import torch
+import wandb
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, get_rank, get_world_size, \
@@ -777,3 +778,6 @@ class MuZeroCollector(ISerialCollector):
                 if k in ['total_envstep_count']:
                     continue
                 self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
+
+            if self.policy_config.use_wandb:
+                wandb.log({'{}_step/'.format(self._instance_name) + k: v for k, v in info.items()}, step=self._total_envstep_count)

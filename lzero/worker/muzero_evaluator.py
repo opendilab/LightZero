@@ -5,6 +5,7 @@ from typing import Optional, Callable, Tuple, Dict, Any
 
 import numpy as np
 import torch
+import wandb
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray, to_item, to_tensor
 from ding.utils import build_logger, EasyTimer
@@ -433,6 +434,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                     continue
                 self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
                 self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, envstep)
+                if self.policy_config.use_wandb:
+                    wandb.log({'{}_step/'.format(self._instance_name) + k: v}, step=envstep)
+
             episode_return = np.mean(episode_return)
             if episode_return > self._max_episode_return:
                 if save_ckpt_fn:

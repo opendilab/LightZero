@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch
+import wandb
 from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
 
@@ -329,6 +330,10 @@ class UniZeroPolicy(MuZeroPolicy):
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
+        
+        if self._cfg.use_wandb:
+            # TODO: add the model to wandb
+            wandb.watch(self._learn_model.representation_network, log="all")
 
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -468,7 +473,7 @@ class UniZeroPolicy(MuZeroPolicy):
             current_memory_allocated_gb = 0.
             max_memory_allocated_gb = 0.
 
-        return_loss_dict = {
+        return_log_dict = {
             'analysis/first_step_loss_value': first_step_losses['loss_value'].item(),
             'analysis/first_step_loss_policy': first_step_losses['loss_policy'].item(),
             'analysis/first_step_loss_rewards': first_step_losses['loss_rewards'].item(),
@@ -513,8 +518,12 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/grad_norm_before': self.grad_norm_before,
             'analysis/grad_norm_after': self.grad_norm_after,
         }
+        
+        if self._cfg.use_wandb:
+            wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
+            wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
 
-        return return_loss_dict
+        return return_log_dict
 
     def monitor_weights_and_grads(self, model):
         for name, param in model.named_parameters():

@@ -4,10 +4,13 @@ from typing import List, Dict, Any, Tuple, Union, Optional
 import numpy as np
 import torch
 import torch.optim as optim
+import wandb
 from ding.model import model_wrap
 from ding.policy.base_policy import Policy
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
+from torch.nn import L1Loss
+
 from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
@@ -16,7 +19,6 @@ from lzero.model.utils import cal_dormant_ratio
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
     prepare_obs, configure_optimizers
-from torch.nn import L1Loss
 
 
 @POLICY_REGISTRY.register('muzero')
@@ -75,6 +77,8 @@ class MuZeroPolicy(Policy):
             harmony_balance=False
         ),
         # ****** common ******
+        # (bool) Whether to use wandb to log the training process.
+        use_wandb=False,
         # (bool) whether to use rnd model.
         use_rnd_model=False,
         # (bool) Whether to use multi-gpu training.
@@ -253,6 +257,17 @@ class MuZeroPolicy(Policy):
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
+    def set_train_iter_env_step(self, train_iter, env_step) -> None:
+        """
+        Overview:
+            Set the train_iter and env_step for the policy.
+        Arguments:
+            - train_iter (:obj:`int`): The train_iter for the policy.
+            - env_step (:obj:`int`): The env_step for the policy.
+        """
+        self.train_iter = train_iter
+        self.env_step = env_step
+
     def _init_learn(self) -> None:
         """
         Overview:
@@ -337,6 +352,10 @@ class MuZeroPolicy(Policy):
         self.grad_norm_after = 0.
         self.dormant_ratio_encoder = 0.
         self.dormant_ratio_dynamics = 0.
+
+        if self._cfg.use_wandb:
+            # TODO: add the model to wandb
+            wandb.watch(self._learn_model.representation_network, log="all")
 
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -596,7 +615,7 @@ class MuZeroPolicy(Policy):
             predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
             predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
 
-        return_dict = {
+        return_log_dict = {
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
@@ -644,8 +663,13 @@ class MuZeroPolicy(Policy):
                 "harmony_entropy": self.harmony_entropy.item(),
                 "harmony_entropy_exp_recip": (1 / torch.exp(self.harmony_entropy)).item(),
             }
-            return_dict.update(harmony_dict)
-        return return_dict
+            return_log_dict.update(harmony_dict)
+
+        if self._cfg.use_wandb:
+            wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
+            wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
+
+        return return_log_dict
     
     def _init_collect(self) -> None:
         """

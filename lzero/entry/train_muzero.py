@@ -4,6 +4,7 @@ from functools import partial
 from typing import Optional, Tuple
 
 import torch
+import wandb
 from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
@@ -81,6 +82,16 @@ def train_muzero(
     if cfg.policy.eval_offline:
         cfg.policy.learn.learner.hook.save_ckpt_after_iter = cfg.policy.eval_freq
 
+    if cfg.policy.use_wandb:
+        # Initialize wandb
+        wandb.init(
+            project="LightZero",
+            config=cfg,
+            sync_tensorboard=False,
+            monitor_gym=False,
+            save_code=True,
+        )
+
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
@@ -103,7 +114,7 @@ def train_muzero(
         policy=policy.collect_mode,
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
-        policy_config=policy_config
+        policy_config=policy_config,
     )
     evaluator = Evaluator(
         eval_freq=cfg.policy.eval_freq,
@@ -121,6 +132,8 @@ def train_muzero(
     # ==============================================================
     # Learner's before_run hook.
     learner.call_hook('before_run')
+    if policy_config.use_wandb:
+        policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
@@ -199,6 +212,9 @@ def train_muzero(
                 )
                 break
 
+            if policy_config.use_wandb:
+                policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
+
             # The core train steps for MCTS+RL algorithms.
             log_vars = learner.train(train_data, collector.envstep)
 
@@ -223,4 +239,5 @@ def train_muzero(
 
     # Learner's after_run hook.
     learner.call_hook('after_run')
+    wandb.finish()
     return policy
