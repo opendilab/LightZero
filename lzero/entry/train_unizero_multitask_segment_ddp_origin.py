@@ -26,39 +26,6 @@ import concurrent.futures
 
 
 
-# 设置超时时间 (秒)
-# TIMEOUT = 300  # 例如5min
-TIMEOUT = 600  # 例如10min
-# TIMEOUT = 10  # 例如6秒
-
-def safe_eval(evaluator, learner, collector, rank, world_size):
-    try:
-        print(f"=========before eval Rank {rank}/{world_size}===========")
-        # 重置 stop_event，确保每次评估前都处于未设置状态
-        evaluator.stop_event.clear()
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            # 提交 evaluator.eval 任务
-            future = executor.submit(evaluator.eval, learner.save_checkpoint, learner.train_iter, collector.envstep)
-            
-            try:
-                stop, reward = future.result(timeout=TIMEOUT)
-            except concurrent.futures.TimeoutError:
-                # 超时，设置 evaluator 的 stop_event
-                evaluator.stop_event.set()
-                print(f"Eval operation timed out after {TIMEOUT} seconds on Rank {rank}/{world_size}.")
-
-                # future.cancel()  # 对于进程池，这个 cancel 实际上不会有用
-                # executor.shutdown(wait=False)  # 非阻塞关闭池，但好像不起作用
-                # print(f"after executor.shutdown(wait=False)  on Rank {rank}/{world_size}.")
-
-                return None, None
-        
-        print(f"======after eval Rank {rank}/{world_size}======")
-        return stop, reward
-    except Exception as e:
-        print(f"An error occurred during evaluation on Rank {rank}/{world_size}: {e}")
-        return None, None
-
 
 
 
@@ -314,17 +281,10 @@ def train_unizero_multitask_segment(
                 zip(cfgs, collectors, evaluators, game_buffers)):
             
             # TODO: original =========
-            # print(f"=========before eval Rank {rank}/{world_size}===========")
-            # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-            # print(f"======after eval Rank {rank}/{world_size}======")
+            print(f"=========before eval Rank {rank}/{world_size}===========")
+            stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+            print(f"======after eval Rank {rank}/{world_size}======")
 
-            # 在训练进程中调用 safe_eval
-            # stop, reward = safe_eval(evaluator, learner, collector, rank, world_size)
-            # # 判断评估是否成功
-            # if stop is None or reward is None:
-            #     print(f"Rank {rank} encountered an issue during evaluation. Continuing training...")
-            # else:
-            #     print(f"Evaluation successful: stop={stop}, reward={reward}")
 
             log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger, cfg.policy.task_id)
 
@@ -350,19 +310,9 @@ def train_unizero_multitask_segment(
             if evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
                 print(f'Rank {rank} evaluates task_id: {cfg.policy.task_id}...')
-                
-                # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-                # if stop:
-                #     break
-        
-                # 在训练进程中调用 safe_eval
-                stop, reward = safe_eval(evaluator, learner, collector, rank, world_size)
-                # 判断评估是否成功
-                if stop is None or reward is None:
-                    print(f"Rank {rank} encountered an issue during evaluation. Continuing training...")
-                else:
-                    print(f"Evaluation successful: stop={stop}, reward={reward}")
-
+                stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+                if stop:
+                    break
 
             print('=' * 20)
             print(f'entry: Rank {rank} collects task_id: {cfg.policy.task_id}...')

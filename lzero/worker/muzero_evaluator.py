@@ -14,6 +14,7 @@ from easydict import EasyDict
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
+import threading
 
 
 class MuZeroEvaluator(ISerialEvaluator):
@@ -72,6 +73,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             - policy_config (:obj:`Optional[dict]`): Optional configuration for the game policy.
             - task_id (:obj:`int`): Unique identifier for the task. If None, that means we are in the single task mode.
         """
+        self.stop_event = threading.Event()  # Add stop event to handle timeouts
         self.task_id = task_id
         self._eval_freq = eval_freq
         self._exp_name = exp_name
@@ -114,6 +116,9 @@ class MuZeroEvaluator(ISerialEvaluator):
         # MCTS+RL related core code
         # ==============================================================
         self.policy_config = policy_config
+
+    # def stop(self):
+    #     self.stop_event.set()
 
     def reset_env(self, _env: Optional[BaseEnvManager] = None) -> None:
         """
@@ -286,6 +291,12 @@ class MuZeroEvaluator(ISerialEvaluator):
             eps_steps_lst = np.zeros(env_nums)
             with self._timer:
                 while not eval_monitor.is_finished():
+                    
+                    # Check if stop_event is set (timeout occurred)
+                    if self.stop_event.is_set():
+                        self._logger.info("[EVALUATOR]: Evaluation aborted due to timeout.")
+                        break
+
                     # Get current ready env obs.
                     obs = self._env.ready_obs
                     new_available_env_id = set(obs.keys()).difference(ready_env_id)

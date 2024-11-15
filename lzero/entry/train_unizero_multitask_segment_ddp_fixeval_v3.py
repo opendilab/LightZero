@@ -26,39 +26,61 @@ import concurrent.futures
 
 
 
-# 设置超时时间 (秒)
-# TIMEOUT = 300  # 例如5min
-TIMEOUT = 600  # 例如10min
-# TIMEOUT = 10  # 例如6秒
+# def eval_async(evaluator, learner_save_checkpoint, learner_train_iter, collector_envstep, timeout=600):
+#     # 使用 ThreadPool 来异步执行评估任务
+#     with concurrent.futures.ThreadPoolExecutor() as executor:
+#         future = executor.submit(evaluator.eval, learner_save_checkpoint, learner_train_iter, collector_envstep)
+#         try:
+#             # 等待评估任务完成，超时后抛出 TimeoutError
+#             result = future.result(timeout=timeout)
+#             return result  # 返回评估结果
+#         except concurrent.futures.TimeoutError:
+#             logging.warning(f"Evaluation timed out after {timeout} seconds.")
+#             return None  # 超时后返回 None 或者其他值
 
-def safe_eval(evaluator, learner, collector, rank, world_size):
+import concurrent.futures
+import logging
+import threading
+import time
+
+def eval_async(evaluator, learner_save_checkpoint, learner_train_iter, collector_envstep, rank, timeout=600):
+    """
+    异步执行评估任务，并在完成后执行回调。如果任务超时，尝试取消任务。
+    
+    参数:
+    - evaluator: 评估器对象。
+    - learner_save_checkpoint: 学习器的保存检查点。
+    - learner_train_iter: 当前训练迭代次数。
+    - collector_envstep: 当前环境步骤数。
+    - rank: 当前 rank 信息，用于日志记录。
+    - timeout: 超时时间（秒）。
+    """
+    
+    # 创建 ThreadPoolExecutor，但不使用 `with`，以防止阻塞主线程
+    executor = concurrent.futures.ThreadPoolExecutor()
+
+    # 提交评估任务，异步执行
+    future = executor.submit(evaluator.eval, learner_save_checkpoint, learner_train_iter, collector_envstep)
+    
+    logging.info(f"Rank {rank}: Evaluation submitted")
+
+    """处理评估任务完成后的回调。"""
     try:
-        print(f"=========before eval Rank {rank}/{world_size}===========")
-        # 重置 stop_event，确保每次评估前都处于未设置状态
-        evaluator.stop_event.clear()
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            # 提交 evaluator.eval 任务
-            future = executor.submit(evaluator.eval, learner.save_checkpoint, learner.train_iter, collector.envstep)
-            
-            try:
-                stop, reward = future.result(timeout=TIMEOUT)
-            except concurrent.futures.TimeoutError:
-                # 超时，设置 evaluator 的 stop_event
-                evaluator.stop_event.set()
-                print(f"Eval operation timed out after {TIMEOUT} seconds on Rank {rank}/{world_size}.")
-
-                # future.cancel()  # 对于进程池，这个 cancel 实际上不会有用
-                # executor.shutdown(wait=False)  # 非阻塞关闭池，但好像不起作用
-                # print(f"after executor.shutdown(wait=False)  on Rank {rank}/{world_size}.")
-
-                return None, None
-        
-        print(f"======after eval Rank {rank}/{world_size}======")
-        return stop, reward
+        eval_result = future.result(timeout=timeout)  # 任务已经完成，直接获取结果
+        if eval_result is not None:
+            stop, reward = eval_result
+            logging.info(f"Rank {rank}: Evaluation completed with reward = {reward}")
+        else:
+            logging.info(f"Rank {rank}: Evaluation returned None")
+    except concurrent.futures.TimeoutError:
+        logging.warning(f"Rank {rank}: Evaluation timed out after {timeout} seconds.")
     except Exception as e:
-        print(f"An error occurred during evaluation on Rank {rank}/{world_size}: {e}")
-        return None, None
-
+        logging.error(f"Rank {rank}: Evaluation failed with error: {e}")
+    # NOTE: 在每次收集之前重置初始数据，这对于多任务设置非常重要
+    evaluator._policy.reset(reset_init_data=True)
+    print('dir(evaluator._policy):', dir(evaluator._policy))
+    evaluator._policy.get_attribute('recompute_pos_emb_diff_and_clear_cache')()
+    executor.shutdown(wait=False)
 
 
 
@@ -313,18 +335,27 @@ def train_unizero_multitask_segment(
         for idx, (cfg, collector, evaluator, replay_buffer) in enumerate(
                 zip(cfgs, collectors, evaluators, game_buffers)):
             
-            # TODO: original =========
-            # print(f"=========before eval Rank {rank}/{world_size}===========")
+            # TODO: DEBUG =========
             # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-            # print(f"======after eval Rank {rank}/{world_size}======")
+            
+            # 调用异步评估
+            print(f"=========before eval_async Rank {rank}/{world_size}===========")
+            # device = torch.cuda.current_device()
+            # print(f"当前默认的 GPU 设备编号: {device}")
+            # torch.cuda.set_device(device)
+            # print(f"set device后的 GPU 设备编号: {device}")
+            
+            # 异步执行评估任务，主线程不会被阻塞
+            eval_async(evaluator, learner.save_checkpoint, learner.train_iter, collector.envstep, rank=rank, timeout=6)
 
-            # 在训练进程中调用 safe_eval
-            # stop, reward = safe_eval(evaluator, learner, collector, rank, world_size)
-            # # 判断评估是否成功
-            # if stop is None or reward is None:
-            #     print(f"Rank {rank} encountered an issue during evaluation. Continuing training...")
-            # else:
-            #     print(f"Evaluation successful: stop={stop}, reward={reward}")
+            # 主线程可以继续执行其他任务
+            # logging.info(f"Rank {rank}: Main thread continues running other tasks.")
+            
+            print(f"======after eval_async Rank {rank}/{world_size}======")
+            # device = torch.cuda.current_device()
+            # print(f"当前默认的 GPU 设备编号: {device}")
+            # torch.cuda.set_device(device)
+            # print(f"set device后的 GPU 设备编号: {device}")
 
             log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger, cfg.policy.task_id)
 
@@ -350,18 +381,20 @@ def train_unizero_multitask_segment(
             if evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
                 print(f'Rank {rank} evaluates task_id: {cfg.policy.task_id}...')
-                
                 # stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
-                # if stop:
-                #     break
-        
-                # 在训练进程中调用 safe_eval
-                stop, reward = safe_eval(evaluator, learner, collector, rank, world_size)
-                # 判断评估是否成功
-                if stop is None or reward is None:
-                    print(f"Rank {rank} encountered an issue during evaluation. Continuing training...")
-                else:
-                    print(f"Evaluation successful: stop={stop}, reward={reward}")
+
+                # 异步执行评估任务
+                eval_async(evaluator, learner.save_checkpoint, learner.train_iter, collector.envstep, rank=rank, timeout=600)
+
+                # 异步执行评估任务，返回 Future 对象
+                # eval_result = eval_async(evaluator, learner.save_checkpoint, learner.train_iter, collector.envstep, timeout=600)
+                # # 检查评估是否超时或成功完成
+                # if eval_result is not None:
+                #     stop, reward = eval_result  # 假设评估任务返回 (stop, reward)
+                #     # if stop:
+                #     #     break  # 评估指示停止训练
+                # else:
+                #     logging.info(f"Rank {rank} Evaluation timed out, continuing training...")
 
 
             print('=' * 20)
