@@ -55,8 +55,8 @@ namespace tree
         CNode(float prior, std::vector<CAction> &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space);
         ~CNode();
 
-        // 辅助采样函数
-        std::pair<std::vector<std::vector<float>>, std::vector<float>> sample_actions(
+        // Auxiliary sampling function
+        std::pair<std::vector<std::vector<float> >, std::vector<float> > sample_actions(
             const std::vector<float>& mu,
             const std::vector<float>& sigma,
             int num_samples,
