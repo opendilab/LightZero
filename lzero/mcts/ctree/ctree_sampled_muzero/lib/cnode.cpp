@@ -610,7 +610,7 @@ namespace tree
         }
     }
 
-    std::vector<std::vector<float> > CNode::get_trajectory()
+    std::vector<std::vector<float>> CNode::get_trajectory()
     {
         /*
         Overview:
@@ -629,7 +629,7 @@ namespace tree
             best_action = node->best_action;
         }
 
-        std::vector<std::vector<float> > traj_return;
+        std::vector<std::vector<float>> traj_return;
         for (int i = 0; i < traj.size(); ++i)
         {
             traj_return.push_back(traj[i].value);
@@ -676,7 +676,7 @@ namespace tree
         this->num_of_sampled_actions = 20;
     }
 
-    CRoots::CRoots(int root_num, std::vector<std::vector<float> > legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space)
+    CRoots::CRoots(int root_num, std::vector<std::vector<float>> legal_actions_list, int action_space_size, int num_of_sampled_actions, bool continuous_action_space)
     {
         /*
         Overview:
@@ -728,7 +728,7 @@ namespace tree
 
     CRoots::~CRoots() {}
 
-    void CRoots::prepare(float root_noise_weight, const std::vector<std::vector<float> > &noises, const std::vector<float> &rewards, const std::vector<std::vector<float> > &policies, std::vector<int> &to_play_batch)
+    void CRoots::prepare(float root_noise_weight, const std::vector<std::vector<float>> &noises, const std::vector<float> &rewards, const std::vector<std::vector<float>> &policies, std::vector<int> &to_play_batch)
     {
         /*
         Overview:

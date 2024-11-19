@@ -114,7 +114,7 @@ class WorldModel(nn.Module):
         # TODO: check the size of the shared pool
         # for self.kv_cache_recurrent_infer
         # If needed, recurrent_infer should store the results of the one MCTS search.
-        self.num_simulations = self.config.num_simulations
+        self.num_simulations = getattr(self.config, 'num_simulations', 50)
         self.shared_pool_size = int(self.num_simulations*self.env_num)
         self.shared_pool_recur_infer = [None] * self.shared_pool_size
         self.shared_pool_index = 0

@@ -9,8 +9,6 @@ import torch.nn as nn
 from einops import rearrange
 from torch.nn import functional as F
 
-from lzero.model.unizero_world_models.lpips import LPIPS
-
 
 class LossWithIntermediateLosses:
     def __init__(self, **kwargs):
@@ -47,7 +45,12 @@ class Tokenizer(nn.Module):
             with_lpips (bool, optional): Whether to use LPIPS for perceptual loss. Defaults to False.
         """
         super().__init__()
-        self.lpips = LPIPS().eval() if with_lpips else None
+        if with_lpips:
+            from lzero.model.unizero_world_models.lpips import LPIPS
+            self.lpips = LPIPS().eval()
+        else:
+            self.lpips = None
+
         self.encoder = encoder
         self.decoder_network = decoder_network
 
