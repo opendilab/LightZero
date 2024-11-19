@@ -349,8 +349,8 @@ class UniZeroPolicy(MuZeroPolicy):
         self._learn_model.train()
         self._target_model.train()
 
-        # current_batch, target_batch, _ = data
-        current_batch, target_batch = data
+        current_batch, target_batch, _ = data
+        # current_batch, target_batch = data
 
         obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch

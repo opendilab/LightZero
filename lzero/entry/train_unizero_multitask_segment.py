@@ -25,10 +25,12 @@ import torch.distributed as dist
 import concurrent.futures
 
 
-
+#  ========== TODO ==========
 # 设置超时时间 (秒)
 # TIMEOUT = 300  # 例如5min
-TIMEOUT = 600  # 例如10min
+# TIMEOUT = 60000  # 例如1000min
+TIMEOUT = 6000  # 例如100min
+# TIMEOUT = 600  # 例如10min
 # TIMEOUT = 10  # 例如6秒
 
 def safe_eval(evaluator, learner, collector, rank, world_size):

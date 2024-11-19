@@ -1359,25 +1359,49 @@ class WorldModelMT(WorldModel):
         discounted_orig_policy_loss = (orig_policy_loss.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
         discounted_policy_entropy = (policy_entropy.view(-1, batch['actions'].shape[1]) * discounts).sum()/ batch['mask_padding'].sum()
 
-        return LossWithIntermediateLosses(
-            latent_recon_loss_weight=self.latent_recon_loss_weight,
-            perceptual_loss_weight=self.perceptual_loss_weight,
-            loss_obs=discounted_loss_obs,
-            loss_rewards=discounted_loss_rewards,
-            loss_value=discounted_loss_value,
-            loss_policy=discounted_loss_policy,
-            latent_recon_loss=discounted_latent_recon_loss,
-            perceptual_loss=discounted_perceptual_loss,
-            orig_policy_loss=discounted_orig_policy_loss,
-            policy_entropy=discounted_policy_entropy,
-            first_step_losses=first_step_losses,
-            middle_step_losses=middle_step_losses,
-            last_step_losses=last_step_losses,
-            dormant_ratio_encoder=dormant_ratio_encoder,
-            dormant_ratio_world_model=dormant_ratio_world_model,
-            latent_state_l2_norms=latent_state_l2_norms,
-            logits_value=outputs.logits_value,
-        )
+        if self.continuous_action_space:
+            return LossWithIntermediateLosses(
+                latent_recon_loss_weight=self.latent_recon_loss_weight,
+                perceptual_loss_weight=self.perceptual_loss_weight,
+                continuous_action_space=True,
+                loss_obs=discounted_loss_obs,
+                loss_rewards=discounted_loss_rewards,
+                loss_value=discounted_loss_value,
+                loss_policy=discounted_loss_policy,
+                latent_recon_loss=discounted_latent_recon_loss,
+                perceptual_loss=discounted_perceptual_loss,
+                orig_policy_loss=discounted_orig_policy_loss,
+                policy_entropy=discounted_policy_entropy,
+                first_step_losses=first_step_losses,
+                middle_step_losses=middle_step_losses,
+                last_step_losses=last_step_losses,
+                dormant_ratio_encoder=dormant_ratio_encoder,
+                dormant_ratio_world_model=dormant_ratio_world_model,
+                latent_state_l2_norms=latent_state_l2_norms,
+                policy_mu=mu,
+                policy_sigma=sigma,
+                target_sampled_actions=target_sampled_actions,
+            )
+        else:
+            return LossWithIntermediateLosses(
+                latent_recon_loss_weight=self.latent_recon_loss_weight,
+                perceptual_loss_weight=self.perceptual_loss_weight,
+                continuous_action_space=False,
+                loss_obs=discounted_loss_obs,
+                loss_rewards=discounted_loss_rewards,
+                loss_value=discounted_loss_value,
+                loss_policy=discounted_loss_policy,
+                latent_recon_loss=discounted_latent_recon_loss,
+                perceptual_loss=discounted_perceptual_loss,
+                orig_policy_loss=discounted_orig_policy_loss,
+                policy_entropy=discounted_policy_entropy,
+                first_step_losses=first_step_losses,
+                middle_step_losses=middle_step_losses,
+                last_step_losses=last_step_losses,
+                dormant_ratio_encoder=dormant_ratio_encoder,
+                dormant_ratio_world_model=dormant_ratio_world_model,
+                latent_state_l2_norms=latent_state_l2_norms,
+            )
 
     #@profile
     def compute_cross_entropy_loss(self, outputs, labels, batch, element='rewards'):

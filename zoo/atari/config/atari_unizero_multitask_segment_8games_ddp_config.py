@@ -13,6 +13,10 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False, ),
             full_action_space=True,
+            collect_max_episode_steps=int(5e3), # TODO ===========
+            eval_max_episode_steps=int(1e4), # TODO ===========
+
+
             # ===== only for debug =====
             # collect_max_episode_steps=int(30),
             # eval_max_episode_steps=int(30),
@@ -23,7 +27,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
         ),
         policy=dict(
             multi_gpu=True, # ======== Very important for ddp =============
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000,),),),  # default is 10000
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=50000,),),),  # replay_ratio=0.5时，大约对应100k envsteps 存储一次 default is 10000
             grad_correct_params=dict(
                 # for MoCo
                 MoCo_beta=0.5,
@@ -57,13 +61,41 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     device='cuda',  # 'cuda',
                     action_space_size=action_space_size,
                     # num_layers=2,  # NOTE
-                    num_layers=4,  # NOTE: transformer
-                    num_heads=8,
+                    # ============== TODO: 改exp_name ==========
+                    # NOTE: rl transformer
+                    # batch_size=64 8games训练时，每张卡大约占12G cuda存储
+                    # num_layers=4,  
+                    # num_heads=8,   
+                    # embed_dim=768,
 
-                    # num_layers=8,  # NOTE: gato-79M transformer
+                    # NOTE: gato-79M (small) transformer
+                    # batch_size=64 8games训练时，每张卡大约占12*2=24G cuda存储
+                    # num_layers=8,  
                     # num_heads=24,
+                    # embed_dim=768,
 
+                    # NOTE: gato-medium 修改版 transformer
+                    # batch_size=64 8games训练时，每张卡大约占12*3=36G cuda存储
+                    num_layers=12,  
+                    num_heads=24,
                     embed_dim=768,
+
+                    # NOTE: gato-medium 修改版 transformer
+                    # batch_size=64 8games训练时，每张卡大约占12*2*4 cuda存储
+                    # num_layers=8,  
+                    # num_heads=24,
+                    # embed_dim=1536,
+
+                    # NOTE: gato-364M (medium) transformer
+                    # batch_size=64 8games训练时，每张卡大约占12*3*4 cuda存储
+                    # num_layers=12,  
+                    # num_heads=12,
+                    # embed_dim=1536,
+
+                    # n_layer=12, 
+                    # n_head=12,  # gpt2-base 124M parameters
+                    # embed_dim=768,
+
                     obs_type='image',
                     # env_num=max(collector_env_num, evaluator_env_num),
                     env_num=8,  # TODO: the max of all tasks
@@ -109,7 +141,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             n_episode=n_episode,
             # replay_buffer_size=int(1e6),
             replay_buffer_size=int(5e5), # TODO
-            eval_freq=int(1e4),
+            # eval_freq=int(1e4),
+            eval_freq=int(2e4),
             # eval_freq=int(1),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -126,16 +159,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size):
     configs = []
     # TODO
-    # exp_name_prefix = f'data_unizero_mt_0711/{len(env_id_list)}games_{"-".join(env_id_list)}_1-head-softmoe4_1-encoder-{norm_type}_lsd768-nlayer4-nh8_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_4-head_1-encoder-{norm_type}_MoCo_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0719/{len(env_id_list)}games_pong-boxing-envnum2_4-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer2-nh8_max-bs1500_upc1000_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0716/{len(env_id_list)}games_1-head_1-encoder-{norm_type}_trans-ffw-moe4_lsd768-nlayer4-nh8_max-bs1500_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0722_debug/{len(env_id_list)}games_1-encoder-{norm_type}_trans-ffw-moeV2-expert4_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_0722_profile/lineprofile_{len(env_id_list)}games_1-encoder-{norm_type}_4-head_lsd768-nlayer2-nh8_max-bs2000_upc1000_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}-res2-channel128_gsl20_4-head_lsd768-nlayer4-nh8_max-bs64*4_upc40_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_segcollect_1104/{len(env_id_list)}games_1-encoder-{norm_type}-res2-channel256_gsl20_8-head_lsd768-nlayer4-nh8_max-bs32*8_upc40_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_segcollect_ddp8gpu_fixlearnlog_1115/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_adaptivebs_100epoch-clip-scale1-4/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_segcollect_ddp8gpu_fixlearnlog_1115/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu-8game_1122/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer8-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu-8game_1122/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer8-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_ddp-8gpu-8game_1122/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer12-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -235,59 +261,62 @@ if __name__ == "__main__":
 
 
     action_space_size = 18  # Full action space
-    seed = 0
-    collector_env_num = 8
-    num_segments = 8
-    n_episode = 8
-    evaluator_env_num = 3
-    num_simulations = 50
-    # max_env_step = int(1e6)
-    max_env_step = int(5e5) # TODO
+    for seed in [0,1,2]: # TODO
+        collector_env_num = 8
+        num_segments = 8
+        n_episode = 8
+        evaluator_env_num = 3
+        num_simulations = 50
+        # max_env_step = int(1e6)
+        max_env_step = int(5e5) # TODO
 
-    reanalyze_ratio = 0.
-    # batch_size = [32, 32, 32, 32]
-    # total_batch_size = 2048
+        reanalyze_ratio = 0.
+        # batch_size = [32, 32, 32, 32]
+        # total_batch_size = 2048
 
-    #应该根据一个样本sequence的占用显存量，和最大显存来设置
-    total_batch_size = 512
-    # total_batch_size = 3600
-    batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
-    print(f'=========== batch_size: {batch_size} ===========')
-    # batch_size = [int(64) for i in range(len(env_id_list))]
+        #应该根据一个样本sequence的占用显存量，和最大显存来设置
+        total_batch_size = 512
+        # total_batch_size = 3600
+        batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+        print(f'=========== batch_size: {batch_size} ===========')
+        # batch_size = [int(64) for i in range(len(env_id_list))]
 
-    num_unroll_steps = 10
-    infer_context_length = 4
-    norm_type = 'LN'
-    # # norm_type = 'BN'  # bad performance now
+        num_unroll_steps = 10
+        infer_context_length = 4
+        norm_type = 'LN'
+        # # norm_type = 'BN'  # bad performance now
 
-    # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 1/10 means reanalyze once every ten epochs.
-    # buffer_reanalyze_freq = 1/50 # TODO
-    buffer_reanalyze_freq = 1/100000
-    # buffer_reanalyze_freq = 1/10
-    # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
-    reanalyze_batch_size = 160
-    # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
-    reanalyze_partition = 0.75
+        # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 1/10 means reanalyze once every ten epochs.
+        buffer_reanalyze_freq = 1/50 # TODO
+        # buffer_reanalyze_freq = 1/20 # TODO
+        # buffer_reanalyze_freq = 1/30 # TODO
 
-    # ======== TODO: only for debug ========
-    # collector_env_num = 2
-    # num_segments = 2
-    # n_episode = 2
-    # evaluator_env_num = 2
-    # num_simulations = 2
-    # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
+        # buffer_reanalyze_freq = 1/100000
+        # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+        reanalyze_batch_size = 160
+        # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
+        reanalyze_partition = 0.75
 
-    configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size)
+        # ======== TODO: only for debug ========
+        # collector_env_num = 2
+        # num_segments = 2
+        # n_episode = 2
+        # evaluator_env_num = 2
+        # num_simulations = 2
+        # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
 
-    """
-    Overview:
-        This script should be executed with <nproc_per_node> GPUs.
-        Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
-        torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
-    """
-    from ding.utils import DDPContext
-    from easydict import EasyDict
+        configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size)
 
-    with DDPContext():
-        train_unizero_multitask_segment(configs, seed=seed, max_env_step=max_env_step)
+        """
+        Overview:
+            This script should be executed with <nproc_per_node> GPUs.
+            Run the following command to launch the script:
+            export NCCL_TIMEOUT=3600000  # NOTE
+            python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
+            torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
+        """
+        from ding.utils import DDPContext
+        from easydict import EasyDict
+
+        with DDPContext():
+            train_unizero_multitask_segment(configs, seed=seed, max_env_step=max_env_step)
