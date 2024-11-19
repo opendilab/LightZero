@@ -198,7 +198,6 @@ class LayerNorm(nn.Module):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
 
-
 # modified from https://github.com/karpathy/nanoGPT/blob/master/model.py#L263
 def configure_optimizers_nanogpt(model, weight_decay, learning_rate, betas, device_type):
     # start with all of the candidate parameters
