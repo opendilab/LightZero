@@ -23,9 +23,12 @@ The game is split up into three phases:
     previously collected.
 """
 
-from pycolab import ascii_art
-from pycolab import storytelling
-from pycolab import things as plab_things
+try:
+    from pycolab import ascii_art
+    from pycolab import storytelling
+    from pycolab import things as plab_things
+except ImportError:
+    raise ImportError("Please install the pycolab package: pip install pycolab")
 
 from zoo.memory.envs.pycolab_tvt import common, game, objects
 
