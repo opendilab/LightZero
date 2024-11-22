@@ -4,11 +4,9 @@ moviepy
 numpy>=1.22.4
 pympler
 minigrid
-bsuite
 moviepy
 pycolab
 pytest
-pooltool-billiards>=0.3.1
 line_profiler
 xxhash
 einops

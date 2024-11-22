@@ -1,5 +1,9 @@
-import bsuite
-from bsuite import sweep
+try:
+    import bsuite
+    from bsuite import sweep
+except ImportError:
+    raise ImportError("Please install the bsuite package: pip install bsuite")
+
 
 # List the configurations for the given experiment
 for bsuite_id in sweep.BANDIT_NOISE:

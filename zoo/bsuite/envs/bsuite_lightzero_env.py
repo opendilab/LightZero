@@ -1,14 +1,18 @@
 import copy
 import os
 from datetime import datetime
-from typing import Union, Optional, Dict, List
+from typing import Optional, Dict, List
+
+try:
+    import bsuite
+    from bsuite import sweep
+    from bsuite.utils import gym_wrapper
+except ImportError:
+    raise ImportError("Please install the bsuite package: pip install bsuite")
 
 import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
-import bsuite
-from bsuite import sweep
-from bsuite.utils import gym_wrapper
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY

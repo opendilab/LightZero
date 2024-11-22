@@ -40,14 +40,17 @@ Reward Space:
 from __future__ import annotations
 
 import gc
-
 from dataclasses import dataclass, asdict
 from typing import Optional
+
 import numpy as np
+import pooltool as pt
 from ding.envs import BaseEnvTimestep
 from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
+from gym import spaces
 from numpy.typing import NDArray
+
 from zoo.pooltool.datatypes import (
     Bounds,
     ObservationDict,
@@ -56,9 +59,6 @@ from zoo.pooltool.datatypes import (
     Spaces,
     State,
 )
-from gym import spaces
-
-import pooltool as pt
 from zoo.pooltool.image_representation import PygameRenderer, RenderConfig
 from zoo.pooltool.sum_to_three.envs.utils import (
     ObservationType,
