@@ -28,7 +28,7 @@
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 [![discord badge](https://dcbadge.vercel.app/api/server/dkZS2JF56X?style=flat)](https://discord.gg/dkZS2JF56X)
 
-Updated on 2024.08.18 LightZero-v0.1.0
+Updated on 2024.11.23 LightZero-v0.1.0
 
 English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Documentation](https://opendilab.github.io/LightZero) | [LightZero Paper](https://arxiv.org/abs/2310.08348) | [🔥UniZero Paper](https://arxiv.org/abs/2406.10667) | [🔥ReZero Paper](https://arxiv.org/abs/2404.16364)
 
@@ -58,25 +58,37 @@ For further details, please refer to [Features](#features), [Framework Structure
 
 ### Outline
 
-- [Overview](#overview)
-  - [Outline](#outline)
-  - [Features](#features)
-  - [Framework Structure](#framework-structure)
-  - [Integrated Algorithms](#integrated-algorithms)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Documentation](#documentation)
-- [Benchmark](#benchmark)
-- [Awesome-MCTS Notes](#awesome-mcts-notes)
-  - [Paper Notes](#paper-notes)
-  - [Algo. Overview](#algo-overview)
-- [Awesome-MCTS Papers](#awesome-mcts-papers)
-  - [Key Papers](#key-papers)
-  - [Other Papers](#other-papers)
-- [Feedback and Contribution](#feedback-and-contribution)
-- [Citation](#citation)
-- [Acknowledgments](#acknowledgments)
-- [License](#license)
+- [LightZero](#lightzero)
+  - [🔍 Background](#-background)
+  - [🎨 Overview](#-overview)
+    - [Outline](#outline)
+    - [💥 Features](#-features)
+    - [🧩 Framework Structure](#-framework-structure)
+    - [🎁 Integrated Algorithms](#-integrated-algorithms)
+  - [⚙️ Installation](#️-installation)
+    - [Installation with Docker](#installation-with-docker)
+  - [🚀 Quick Start](#-quick-start)
+  - [📚 Documentation](#-documentation)
+  - [📊 Benchmark](#-benchmark)
+  - [📝 Awesome-MCTS Notes](#-awesome-mcts-notes)
+    - [Paper Notes](#paper-notes)
+    - [Algo. Overview](#algo-overview)
+  - [Awesome-MCTS Papers](#awesome-mcts-papers)
+    - [Key Papers](#key-papers)
+      - [LightZero Implemented series](#lightzero-implemented-series)
+      - [AlphaGo series](#alphago-series)
+      - [MuZero series](#muzero-series)
+      - [MCTS Analysis](#mcts-analysis)
+      - [MCTS Application](#mcts-application)
+    - [Other Papers](#other-papers)
+      - [ICML](#icml)
+      - [ICLR](#iclr)
+      - [NeurIPS](#neurips)
+      - [Other Conference or Journal](#other-conference-or-journal)
+  - [💬 Feedback and Contribution](#-feedback-and-contribution)
+  - [🌏 Citation](#-citation)
+  - [💓 Acknowledgments](#-acknowledgments)
+  - [🏷️ License](#️-license)
 
 ### 💥 Features
 
