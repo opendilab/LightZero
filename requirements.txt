@@ -1,11 +1,9 @@
 DI-engine>=0.4.7
 gymnasium[atari]
-moviepy
 numpy>=1.22.4
 pympler
 minigrid
 moviepy
-pycolab
 pytest
 line_profiler
 xxhash
