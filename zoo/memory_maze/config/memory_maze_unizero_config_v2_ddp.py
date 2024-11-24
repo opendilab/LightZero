@@ -16,7 +16,7 @@ memory_length = 1000  # Length of memory for the agent to store
 # env_id = 'memory_maze:MemoryMaze-15x15-v0'  # The name of the environment
 # memory_length = 4000  # Length of memory for the agent to store
 
-max_env_step = int(10e6)  # Maximum number of environment steps
+max_env_step = int(100e6)  # Maximum number of environment steps
 # embed_dim = 256  # Embedding dimension for the model
 # num_layers = 8  # Number of layers in the model
 # num_heads = 8  # Number of heads in the attention mechanism
@@ -165,7 +165,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        export NCCL_TIMEOUT=36000
+        export NCCL_TIMEOUT=360000
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 /mnt/afs/niuyazhe/code/LightZero/zoo/memory_maze/config/memory_maze_unizero_config_v2_ddp.py
         torchrun --nproc_per_node=2 ./zoo/atari/config/atari_unizero_multigpu_ddp_config.py
     """
@@ -179,7 +179,7 @@ if __name__ == "__main__":
             # 确保每个 Rank 分配到正确的 collector_env_num
             print(f"Rank {dist.get_rank()} Collector Env Num: {main_config.policy.collector_env_num}")
             # Define the experiment name based on the configuration parameters
-            main_config.exp_name = f'data_memory_maze_1122/{env_id}_H{num_unroll_steps}_notclear/td{td_steps}_layer{num_layers}-head{num_heads}_unizero_edim{embed_dim}_bs{batch_size}_upc{update_per_collect}_seed{seed}'
+            main_config.exp_name = f'data_memory_maze_1124/{env_id}_H{num_unroll_steps}_notclear/td{td_steps}_layer{num_layers}-head{num_heads}_unizero_edim{embed_dim}_bs{batch_size}_upc{update_per_collect}_seed{seed}'
             # Import the training function and start training
             from lzero.entry import train_unizero
             train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path,
