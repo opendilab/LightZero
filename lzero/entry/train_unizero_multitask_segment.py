@@ -29,7 +29,9 @@ import concurrent.futures
 # 设置超时时间 (秒)
 # TIMEOUT = 300  # 例如5min
 # TIMEOUT = 60000  # 例如1000min
-TIMEOUT = 6000  # 例如100min
+# TIMEOUT = 6000  # 例如100min
+TIMEOUT = 3600  # 例如60min
+
 # TIMEOUT = 600  # 例如10min
 # TIMEOUT = 10  # 例如6秒
 
@@ -445,13 +447,14 @@ def train_unizero_multitask_segment(
 
                 if train_data_multi_task:
                     # 在训练时，DDP 会自动同步梯度和参数
-                    # log_vars = learner.train(train_data_multi_task, envstep_multi_task)
+                    log_vars = learner.train(train_data_multi_task, envstep_multi_task)
                     # logging.info(f'Rank {rank}: cfg.policy.batch_size : {cfg.policy.batch_size}, batch_size: {batch_size}')
-                    try:
-                        log_vars = learner.train(train_data_multi_task, envstep_multi_task)
-                    except Exception as e:
-                        logging.error(f'Rank {rank}: Training failed with error {e}')
-                        break  # 或者进行其他错误处理
+                    
+                    # try:
+                    #     log_vars = learner.train(train_data_multi_task, envstep_multi_task)
+                    # except Exception as e:
+                    #     logging.error(f'Rank {rank}: Training failed with error {e}')
+                    #     break  # 或者进行其他错误处理
 
                 if cfg.policy.use_priority:
                     for idx, (cfg, replay_buffer) in enumerate(zip(cfgs, game_buffers)):

@@ -14,7 +14,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             manager=dict(shared_memory=False, ),
             full_action_space=True,
             collect_max_episode_steps=int(5e3), # TODO ===========
-            eval_max_episode_steps=int(1e4), # TODO ===========
+            eval_max_episode_steps=int(5e3), # TODO ===========
+            # eval_max_episode_steps=int(1e4), # TODO ===========
             # ===== only for debug =====
             # collect_max_episode_steps=int(30),
             # eval_max_episode_steps=int(30),
@@ -154,9 +155,10 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments):
     configs = []
     # TODO
-    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu-8game_1122/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer4-nhead8_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_ddp-8gpu-8game_1122/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer8-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu-8game_1122/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer12-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu-26game_1124/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer4-nhead8_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
+    
+    exp_name_prefix = f'data_unizero_mt_ddp-8gpu-26game_1124/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer8-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu-26game_1124/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer12-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer12-nh24_mbs-512-bs64_upc80_seed{seed}/'
 
 
     for task_id, env_id in enumerate(env_id_list):
@@ -254,7 +256,7 @@ if __name__ == "__main__":
 
 
     action_space_size = 18  # Full action space
-    for seed in [0,1,2]: # TODO
+    for seed in [0,1]: # TODO
         collector_env_num = 8
         num_segments = 8
         n_episode = 8

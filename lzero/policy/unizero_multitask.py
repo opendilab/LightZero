@@ -623,15 +623,20 @@ class UniZeroMTPolicy(UniZeroPolicy):
             perceptual_loss = intermediate_losses['perceptual_loss']
             latent_state_l2_norms = intermediate_losses['latent_state_l2_norms']
             # value_priority = intermediate_losses['value_priority']
-            logits_value = intermediate_losses['logits_value']
+            # logits_value = intermediate_losses['logits_value']
+
+            # print(f'logits_value:" {logits_value}')
+            # print(f'logits_value.shape:" {logits_value.shape}')
+            # print(f"batch_for_gpt['observations'].shape: {batch_for_gpt['observations'].shape}")
 
             # ============ for value priority  ============ 
             # transform the categorical representation of the scaled value to its original value
-            original_value = self.inverse_scalar_transform_handle(logits_value.reshape(-1, 101)).reshape(
-                    batch_for_gpt['observations'].shape[0], batch_for_gpt['observations'].shape[1], 1)
+            # original_value = self.inverse_scalar_transform_handle(logits_value.reshape(-1, 101)).reshape(
+            #         batch_for_gpt['observations'].shape[0], batch_for_gpt['observations'].shape[1], 1)
             # calculate the new priorities for each transition.
-            value_priority = torch.nn.L1Loss(reduction='none')(original_value.squeeze(-1)[:,0], target_value[:, 0])   # TODO: mix of mean and sum
+            # value_priority = torch.nn.L1Loss(reduction='none')(original_value.squeeze(-1)[:,0], target_value[:, 0])   # TODO: mix of mean and sum
             # value_priority = value_priority.data.cpu().numpy() + 1e-6 # TODO: log-reduce not support array now
+            value_priority = torch.tensor(0., device=self._cfg.device)
             # ============ for value priority  ============ 
 
             obs_loss_multi_task.append(obs_loss)

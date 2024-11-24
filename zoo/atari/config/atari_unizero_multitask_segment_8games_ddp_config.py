@@ -14,7 +14,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             manager=dict(shared_memory=False, ),
             full_action_space=True,
             collect_max_episode_steps=int(5e3), # TODO ===========
-            eval_max_episode_steps=int(1e4), # TODO ===========
+            eval_max_episode_steps=int(5e3), # TODO ===========
 
 
             # ===== only for debug =====
@@ -64,9 +64,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # ============== TODO: 改exp_name ==========
                     # NOTE: rl transformer
                     # batch_size=64 8games训练时，每张卡大约占12G cuda存储
-                    # num_layers=4,  
-                    # num_heads=8,   
-                    # embed_dim=768,
+                    num_layers=4,  
+                    num_heads=8,   
+                    embed_dim=768,
 
                     # NOTE: gato-79M (small) transformer
                     # batch_size=64 8games训练时，每张卡大约占12*2=24G cuda存储
@@ -76,9 +76,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
                     # NOTE: gato-medium 修改版 transformer
                     # batch_size=64 8games训练时，每张卡大约占12*3=36G cuda存储
-                    num_layers=12,  
-                    num_heads=24,
-                    embed_dim=768,
+                    # num_layers=12,  
+                    # num_heads=24,
+                    # embed_dim=768,
 
                     # NOTE: gato-medium 修改版 transformer
                     # batch_size=64 8games训练时，每张卡大约占12*2*4 cuda存储
@@ -159,9 +159,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size):
     configs = []
     # TODO
-    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu-8game_1122/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer8-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu-8game_1122/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer8-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_ddp-8gpu-8game_1122/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer12-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_ddp-8gpu_1124/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer4-nhead8_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu_1124/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer8-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu_1124/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer12-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer12-nh24_mbs-512-bs64_upc80_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -261,7 +261,10 @@ if __name__ == "__main__":
 
 
     action_space_size = 18  # Full action space
-    for seed in [0,1,2]: # TODO
+    for seed in [2, 3, 0, 1]: # TODO
+    # for seed in [1]: # TODO
+    # for seed in [2,3]: # TODO
+    
         collector_env_num = 8
         num_segments = 8
         n_episode = 8
@@ -288,8 +291,11 @@ if __name__ == "__main__":
 
         # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 1/10 means reanalyze once every ten epochs.
         buffer_reanalyze_freq = 1/50 # TODO
-        # buffer_reanalyze_freq = 1/20 # TODO
+        # buffer_reanalyze_freq = 1/20 # TODO 
         # buffer_reanalyze_freq = 1/30 # TODO
+
+
+    
 
         # buffer_reanalyze_freq = 1/100000
         # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
