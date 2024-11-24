@@ -82,7 +82,7 @@ memory_maze_unizero_config = dict(
         evaluator_env_num=evaluator_env_num,  # Number of evaluator envs
         n_evaluator_episode=evaluator_env_num,  # Number of evaluation episodes
         manager=dict(shared_memory=False, ),  # Memory management settings
-        max_steps=10, # ======== TODO: DEBUG ======== 
+        # max_steps=10, # ======== TODO: DEBUG ======== 
         # max_steps=memory_length,  # The default maximum number of steps per episode
         # save_replay=True,
     ),
