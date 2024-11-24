@@ -27,12 +27,16 @@ import concurrent.futures
 
 #  ========== TODO ==========
 # 设置超时时间 (秒)
-# TIMEOUT = 300  # 例如5min
 # TIMEOUT = 60000  # 例如1000min
 # TIMEOUT = 6000  # 例如100min
+
 TIMEOUT = 3600  # 例如60min
 
+# TIMEOUT = 1800  # 例如30min
+
 # TIMEOUT = 600  # 例如10min
+
+# TIMEOUT = 300  # 例如5min
 # TIMEOUT = 10  # 例如6秒
 
 def safe_eval(evaluator, learner, collector, rank, world_size):
@@ -351,7 +355,7 @@ def train_unizero_multitask_segment(
                 )
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
-            if evaluator.should_eval(learner.train_iter):
+            if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
                 print(f'Rank {rank} evaluates task_id: {cfg.policy.task_id}...')
                 
