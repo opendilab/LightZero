@@ -2,7 +2,7 @@ from easydict import EasyDict
 from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
 
-def main(env_id, seed):
+def main(env_id, seed, num_layers, num_unroll_steps):
     action_space_size = atari_env_action_space_map[env_id]
 
     # ==============================================================
@@ -10,7 +10,10 @@ def main(env_id, seed):
     # ==============================================================
     collector_env_num = 8
     num_segments = 8
-    game_segment_length = 20
+    # game_segment_length = 20
+
+    game_segment_length = int(2*num_unroll_steps)
+
     evaluator_env_num = 3 # TODO
     num_simulations = 50
     max_env_step = int(5e5) # TODO
@@ -19,21 +22,23 @@ def main(env_id, seed):
     batch_size = 64
 
     # num_layers = 2
-    # replay_ratio = 0.25
-
-    num_layers = 4
     replay_ratio = 0.25
+
+    # num_layers = 4
+    # # replay_ratio = 0.25
+    # replay_ratio = 1
 
     # num_layers = 4
     # replay_ratio = 1
 
-    num_unroll_steps = 10
+    # num_unroll_steps = 10
     infer_context_length = 4
-
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/100000
     buffer_reanalyze_freq = 1/10
+    # buffer_reanalyze_freq = 1/5
+
 
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
@@ -63,6 +68,8 @@ def main(env_id, seed):
             # TODO: only for debug
             # collect_max_episode_steps=int(50),
             # eval_max_episode_steps=int(50),
+            collect_max_episode_steps=int(5e3),
+            eval_max_episode_steps=int(5e3),
         ),
         policy=dict(
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
@@ -85,6 +92,7 @@ def main(env_id, seed):
                     embed_dim=768,
                     obs_type='image',
                     env_num=max(collector_env_num, evaluator_env_num),
+                    num_simulations=num_simulations,
                 ),
             ),
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
@@ -139,7 +147,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_nlayer{num_layers}_1126/{env_id[:-14]}/{env_id[:-14]}_uz_scale300_pew0_obs10value05_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_pong_ablation_1126/{env_id[:-14]}_nlayer{num_layers}/{env_id[:-14]}_uz_scale300_pew0_obs10value05_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 
@@ -148,10 +156,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process different environments and seeds.')
     parser.add_argument('--env', type=str, help='The environment to use', default='PongNoFrameskip-v4')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
+    parser.add_argument('--nlayer', type=int, help='The numer of layer to use', default=2)
+    parser.add_argument('--H', type=int, help='The num_unroll_steps', default=10)
+
     args = parser.parse_args()
 
     # args.env = 'QbertNoFrameskip-v4'
     # args.env = 'MsPacmanNoFrameskip-v4'
     # args.env = 'RoadRunnerNoFrameskip-v4'
 
-    main(args.env, args.seed)
+    main(args.env, args.seed, args.layer, args.H)

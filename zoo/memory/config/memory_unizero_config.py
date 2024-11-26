@@ -8,13 +8,13 @@ memory_length = 100
 # max_env_step = int(1e6)  # for visual_match [2, 60, 100]
 max_env_step = int(3e6)  # for visual_match [250,500]
 
-# embed_dim=256 
-# num_layers=4
-# num_heads=4
-
 embed_dim=256 
-num_layers=8
-num_heads=8
+num_layers=2
+num_heads=2
+
+# embed_dim=256 
+# num_layers=8
+# num_heads=8
 
 # embed_dim=128
 # num_layers=12
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     seeds = [0, 1, 2]  # You can add more seed values here
     # seeds = [0]  # You can add more seed values here
     for seed in seeds:
-        main_config.exp_name = f'data_{env_id}_1122/{env_id}_memlen-{memory_length}_fixedcolormap_obs10value05_td{td_steps}_layer{num_layers}-head{num_heads}_unizero_edim{embed_dim}_H{num_unroll_steps}_bs{batch_size}_upc{update_per_collect}_seed{seed}'
+        main_config.exp_name = f'data_{env_id}_1126/{env_id}_memlen-{memory_length}_fixedcolormap_obs10value05_td{td_steps}_layer{num_layers}-head{num_heads}_unizero_edim{embed_dim}_H{num_unroll_steps}_bs{batch_size}_upc{update_per_collect}_seed{seed}'
         # main_config.exp_name = f'data_{env_id}_1122/{env_id}_memlen-{memory_length}_randomcolormap/obs10value05_td{td_steps}_layer{num_layers}-head{num_heads}_unizero_edim{embed_dim}_H{num_unroll_steps}_bs{batch_size}_upc{update_per_collect}_seed{seed}'
         from lzero.entry import train_unizero
         train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
