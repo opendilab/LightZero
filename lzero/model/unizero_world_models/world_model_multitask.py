@@ -489,7 +489,7 @@ class WorldModelMT(WorldModel):
             - WorldModelOutput: Model output containing logits for observations, rewards, policy, and value.
         """
         # task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE: TODO
-        self.task_embeddings = torch.zeros(768, device=self.device) # NOTE:TODO no task_embeddings =============
+        self.task_embeddings = torch.zeros(self.config.embed_dim, device=self.device) # NOTE:TODO no task_embeddings =============
 
         # Determine previous steps based on key-value caching method
         if kvcache_independent:

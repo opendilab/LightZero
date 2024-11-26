@@ -62,18 +62,30 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # num_layers=2,  # NOTE
                     # NOTE: rl transformer
                     # batch_size=64 8games训练时，每张卡大约占12G cuda存储, mbs=512
-                    num_layers=4,  
-                    num_heads=8,   
-                    embed_dim=768,
+                    # num_layers=4,  
+                    # num_heads=8,   
+                    # embed_dim=768,
 
                     # NOTE: gato-79M (small) transformer
-                    # batch_size=64 8games训练时，每张卡大约占12*2=24G cuda存储, mbs=512
-                    # num_layers=8,  
+                    # batch_size=64 8games训练时，每张卡大约占12*2=24G cuda存储
+                    num_layers=8,  
+                    num_heads=24,
+                    embed_dim=768,
+
+                    # NOTE: gato-medium 修改版 transformer
+                    # batch_size=32 ====== TODO======
+                    # num_layers=12,  
                     # num_heads=24,
                     # embed_dim=768,
 
+                    # NOTE: gato-medium 修改版 transformer
+                    # batch_size=64 8games训练时，每张卡大约占12*2*4 cuda存储
+                    # num_layers=8,  
+                    # num_heads=24,
+                    # embed_dim=1536,
+
                     # NOTE: gato-364M (medium) transformer
-                    # batch_size=64 8games训练时，每张卡大约占12*3*4 cuda存储, mbs=512/2=256
+                    # batch_size=64 8games训练时，每张卡大约占12*3*4 cuda存储
                     # num_layers=12,  
                     # num_heads=12,
                     # embed_dim=1536,
@@ -127,7 +139,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             replay_buffer_size=int(5e5), # TODO
-            eval_freq=int(1e4),
+            eval_freq=int(2e4),
             # eval_freq=int(1),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -144,10 +156,10 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments):
     configs = []
     # TODO
-    exp_name_prefix = f'data_unizero_mt_ddp-8gpu-26game_1125/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer4-nhead8_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu-26game_1127/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer4-nhead8_eval10min_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
     
-    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu-26game_1125/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer8-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu-26game_1125/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer12-nhead12_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd1536-nlayer12-nh12_mbs-256-bs32_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu-26game_1127/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer8-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_ddp-8gpu-26game_1127/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer12-nhead12_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer12-nh24_mbs-256-bs32_upc80_seed{seed}/'
 
 
     for task_id, env_id in enumerate(env_id_list):
@@ -248,8 +260,8 @@ if __name__ == "__main__":
 
     # TODO ==========
     import os 
-    os.environ["NCCL_BLOCKING_WAIT"] = "1"
-    os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "1"
+    # os.environ["NCCL_BLOCKING_WAIT"] = "1"
+    # os.environ["NCCL_ASYNC_ERROR_HANDLING"] = "1"
     os.environ["NCCL_TIMEOUT"] = "3600000000"
 
     for seed in [0,1]: # TODO
