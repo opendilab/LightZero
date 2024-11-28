@@ -525,7 +525,7 @@ class WorldModelMT(WorldModel):
 
             # TODO: multitask
             # TODO: 对于action_token不需要增加task_embeddings会造成歧义，反而干扰学习
-            self.task_embeddings = torch.zeros(768, device=self.device)
+            self.task_embeddings = torch.zeros(self.config.embed_dim, device=self.device)
             sequences = sequences + self.task_embeddings
 
         # Process combined observation embeddings and action tokens
