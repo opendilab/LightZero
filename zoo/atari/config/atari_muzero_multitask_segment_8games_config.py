@@ -45,6 +45,7 @@ def create_config(
             ),
             task_num=len(env_id_list),
             model=dict(
+                device='cuda',
                 num_res_blocks=2,  # NOTE: encoder for 4 game
                 num_channels=256,
                 reward_head_channels= 16,
@@ -125,7 +126,7 @@ def generate_configs(
     exp_name_prefix = (
         f'data_muzero_mt_8games/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/'
         f'{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_'
-        f'{len(env_id_list)}-pred-head_mbs-{batch_size}_upc80_H{num_unroll_steps}_seed{seed}/'
+        f'{len(env_id_list)}-pred-head_mbs-512_upc80_H{num_unroll_steps}_seed{seed}/'
     )
 
     for task_id, env_id in enumerate(env_id_list):
@@ -171,10 +172,12 @@ def create_env_manager():
     ))
 
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, "/Users/puyuan/code/LightZero")
-    import lzero
-    print("lzero path:", lzero.__file__)
+    # import sys
+    # sys.path.insert(0, "/Users/puyuan/code/LightZero")
+    # sys.path.insert(0, "/mnt/afs/niuyazhe/code/LightZero")
+    # import lzero
+    # print("lzero path:", lzero.__file__)
+
     from lzero.entry import train_muzero_multitask_segment_noddp
     import argparse
 
@@ -207,7 +210,7 @@ if __name__ == "__main__":
     num_simulations = 50
     reanalyze_ratio = 0.0
 
-    max_batch_size = 320
+    max_batch_size = 512
     batch_size = [int(min(64, max_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
     print(f'=========== batch_size: {batch_size} ===========')
 

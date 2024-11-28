@@ -194,7 +194,7 @@ def train_muzero_multitask_segment(
     #     f"train_muzero_multitask_segment now only supports {supported_policies}"
 
     # 根据 CUDA 可用性设置设备
-    cfg.policy.device = cfg.policy.model.world_model_cfg.device if torch.cuda.is_available() else 'cpu'
+    cfg.policy.device = cfg.policy.model.device if torch.cuda.is_available() else 'cpu'
     logging.info(f'cfg.policy.device: {cfg.policy.device}')
 
     # 编译配置

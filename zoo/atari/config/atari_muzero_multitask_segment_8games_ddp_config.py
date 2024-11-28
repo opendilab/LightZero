@@ -174,16 +174,10 @@ def create_env_manager():
     ))
 
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, "/Users/puyuan/code/LightZero")
-    import lzero
-    print("lzero path:", lzero.__file__)
-    from lzero.entry import train_muzero_multitask_segment_noddp
-    import argparse
-
-    parser = argparse.ArgumentParser(description='Train MuZero Multitask on Atari')
-    parser.add_argument('--seed', type=int, default=0, help='Random seed')
-    args = parser.parse_args()
+    # import sys
+    # sys.path.insert(0, "/Users/puyuan/code/LightZero")
+    # import lzero
+    # print("lzero path:", lzero.__file__)
 
     # Define your list of environment IDs
     env_id_list = [
@@ -202,7 +196,7 @@ if __name__ == "__main__":
     # ]
 
     action_space_size = 18  # Full action space, adjust if different per env
-    seed = args.seed
+    seed = 0
     collector_env_num = 8
     evaluator_env_num = 3
     num_segments = 8
