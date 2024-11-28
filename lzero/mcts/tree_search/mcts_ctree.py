@@ -233,7 +233,7 @@ class MuZeroMCTSCtree(object):
     # #@profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]]
+            List[Any]], task_id=None
     ) -> None:
         """
         Overview:
@@ -302,6 +302,13 @@ class MuZeroMCTSCtree(object):
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
                 network_output = model.recurrent_inference(latent_states, last_actions)  # for classic muzero
+
+                try:
+                    # for multi task
+                    network_output = model.recurrent_inference(latent_states, last_actions, task_id=task_id)
+                except Exception as e:
+                    # for single task
+                    network_output = model.recurrent_inference(latent_states, last_actions)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)

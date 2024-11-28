@@ -149,6 +149,11 @@ class MuZeroSegmentCollector(ISerialCollector):
             self.reset_env(_env)
         if _policy is not None:
             self.reset_policy(_policy)
+        # else:
+        #     self._default_num_segments = self.policy_config.get('num_segments', None)
+        #     self._logger.debug(
+        #         'Set default num_segments mode(num_segments({}), env_num({}))'.format(self._default_num_segments, self._env_num)
+        #     )
 
         self._env_info = {env_id: {'time': 0., 'step': 0} for env_id in range(self._env_num)}
 

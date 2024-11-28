@@ -9,5 +9,11 @@ from .train_muzero_with_reward_model import train_muzero_with_reward_model
 from .train_rezero import train_rezero
 from .train_unizero import train_unizero
 from .train_unizero_segment import train_unizero_segment
+
+from .train_muzero_multitask_segment_noddp import train_muzero_multitask_segment_noddp
+from .train_muzero_multitask_segment_ddp import train_muzero_multitask_segment
+
+
 from .train_unizero_multitask import train_unizero_multitask
 from .train_unizero_multitask_segment import train_unizero_multitask_segment
+

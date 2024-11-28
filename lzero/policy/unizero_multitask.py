@@ -792,6 +792,84 @@ class UniZeroMTPolicy(UniZeroPolicy):
             self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
 
+    # TODO: num_tasks
+    def _monitor_vars_learn(self, num_tasks=2) -> List[str]:
+        """
+        Overview:
+            Register the variables to be monitored in learn mode. The registered variables will be logged in
+            tensorboard according to the return value ``_forward_learn``.
+            If num_tasks is provided, generate monitored variables for each task.
+        """
+        # Basic monitored variables that do not depend on the number of tasks
+        monitored_vars = [
+            'Current_GPU',
+            'Max_GPU',
+            'collect_epsilon',
+            'collect_mcts_temperature',
+            'cur_lr_world_model',
+            'weighted_total_loss',
+            'total_grad_norm_before_clip_wm',
+        ]
+
+        # ===== TODO: multitask_ddp learn_log Bug但是能正常运行 =========
+        # Variable names that will have task-specific counterparts
+        # task_specific_vars = [
+        #     'obs_loss',
+        #     'orig_policy_loss',
+        #     'policy_loss',
+        #     'latent_recon_loss',
+        #     'policy_entropy',
+        #     'target_policy_entropy',
+        #     'reward_loss',
+        #     'value_loss',
+        #     'perceptual_loss',
+        #     'latent_state_l2_norms',
+        #     'lambd',
+        #     'value_priority_mean',
+        # ]
+        # num_tasks = self.task_num
+        # # If the number of tasks is provided, extend the monitored variables list with task-specific variables
+        # if num_tasks is not None:
+        #     for var in task_specific_vars:
+        #         for task_idx in range(num_tasks):
+        #             monitored_vars.append(f'{var}_task{task_idx}')
+        # else:
+        #     # If num_tasks is not provided, we assume there's only one task and keep the original variable names
+        #     monitored_vars.extend(task_specific_vars)
+
+        # return monitored_vars
+
+
+        # rank = get_rank()
+        task_specific_vars = [
+            'noreduce_obs_loss',
+            'noreduce_orig_policy_loss',
+            'noreduce_policy_loss',
+            'noreduce_latent_recon_loss',
+            'noreduce_policy_entropy',
+            'noreduce_target_policy_entropy',
+            'noreduce_reward_loss',
+            'noreduce_value_loss',
+            'noreduce_perceptual_loss',
+            'noreduce_latent_state_l2_norms',
+            'noreduce_lambd',
+            'noreduce_value_priority_mean',
+        ]
+        # self.task_num_for_current_rank 作为当前rank的base_index
+        num_tasks = self.task_num_for_current_rank
+        # If the number of tasks is provided, extend the monitored variables list with task-specific variables
+        if num_tasks is not None:
+            for var in task_specific_vars:
+                for task_idx in range(num_tasks):
+                    # print(f"learner policy Rank {rank}, self.task_id: {self.task_id}")
+                    monitored_vars.append(f'{var}_task{self.task_id+task_idx}')
+        else:
+            # If num_tasks is not provided, we assume there's only one task and keep the original variable names
+            monitored_vars.extend(task_specific_vars)
+
+        return monitored_vars
+
+
     #@profile
     def _forward_collect(
             self,
@@ -1134,83 +1212,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             print('evaluator: eval_model clear()')
             print(f'eps_steps_lst[{env_id}]: {current_steps}')
-
-    # TODO: num_tasks
-    def _monitor_vars_learn(self, num_tasks=2) -> List[str]:
-        """
-        Overview:
-            Register the variables to be monitored in learn mode. The registered variables will be logged in
-            tensorboard according to the return value ``_forward_learn``.
-            If num_tasks is provided, generate monitored variables for each task.
-        """
-        # Basic monitored variables that do not depend on the number of tasks
-        monitored_vars = [
-            'Current_GPU',
-            'Max_GPU',
-            'collect_epsilon',
-            'collect_mcts_temperature',
-            'cur_lr_world_model',
-            'weighted_total_loss',
-            'total_grad_norm_before_clip_wm',
-        ]
-
-        # ===== TODO: multitask_ddp learn_log Bug但是能正常运行 =========
-        # Variable names that will have task-specific counterparts
-        # task_specific_vars = [
-        #     'obs_loss',
-        #     'orig_policy_loss',
-        #     'policy_loss',
-        #     'latent_recon_loss',
-        #     'policy_entropy',
-        #     'target_policy_entropy',
-        #     'reward_loss',
-        #     'value_loss',
-        #     'perceptual_loss',
-        #     'latent_state_l2_norms',
-        #     'lambd',
-        #     'value_priority_mean',
-        # ]
-        # num_tasks = self.task_num
-        # # If the number of tasks is provided, extend the monitored variables list with task-specific variables
-        # if num_tasks is not None:
-        #     for var in task_specific_vars:
-        #         for task_idx in range(num_tasks):
-        #             monitored_vars.append(f'{var}_task{task_idx}')
-        # else:
-        #     # If num_tasks is not provided, we assume there's only one task and keep the original variable names
-        #     monitored_vars.extend(task_specific_vars)
-
-        # return monitored_vars
-
-
-        # rank = get_rank()
-        task_specific_vars = [
-            'noreduce_obs_loss',
-            'noreduce_orig_policy_loss',
-            'noreduce_policy_loss',
-            'noreduce_latent_recon_loss',
-            'noreduce_policy_entropy',
-            'noreduce_target_policy_entropy',
-            'noreduce_reward_loss',
-            'noreduce_value_loss',
-            'noreduce_perceptual_loss',
-            'noreduce_latent_state_l2_norms',
-            'noreduce_lambd',
-            'noreduce_value_priority_mean',
-        ]
-        # self.task_num_for_current_rank 作为当前rank的base_index
-        num_tasks = self.task_num_for_current_rank
-        # If the number of tasks is provided, extend the monitored variables list with task-specific variables
-        if num_tasks is not None:
-            for var in task_specific_vars:
-                for task_idx in range(num_tasks):
-                    # print(f"learner policy Rank {rank}, self.task_id: {self.task_id}")
-                    monitored_vars.append(f'{var}_task{self.task_id+task_idx}')
-        else:
-            # If num_tasks is not provided, we assume there's only one task and keep the original variable names
-            monitored_vars.extend(task_specific_vars)
-
-        return monitored_vars
 
 
     def recompute_pos_emb_diff_and_clear_cache(self) -> None:
