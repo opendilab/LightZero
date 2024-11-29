@@ -50,6 +50,7 @@ def create_config(
             ),
             task_num=len(env_id_list),
             model=dict(
+                device='cuda',
                 num_res_blocks=2,  # NOTE: encoder for 4 game
                 num_channels=256,
                 reward_head_channels= 16,
@@ -72,6 +73,9 @@ def create_config(
                 use_sim_norm_kl_loss=False,
                 task_num=len(env_id_list),
             ),
+            allocated_batch_sizes=False,
+            # max_batch_size=max_batch_size,
+            max_batch_size=512,# TODO
             cuda=True,
             env_type='not_board_games',
             # train_start_after_envsteps=2000,
@@ -175,15 +179,13 @@ def create_env_manager():
 
 if __name__ == "__main__":
     import sys
-    sys.path.insert(0, "/Users/puyuan/code/LightZero")
+    sys.path.insert(0, "/mnt/afs/niuyazhe/code/LightZero")
     import lzero
     print("lzero path:", lzero.__file__)
-    from lzero.entry import train_muzero_multitask_segment_noddp
-    import argparse
 
-    parser = argparse.ArgumentParser(description='Train MuZero Multitask on Atari')
-    parser.add_argument('--seed', type=int, default=0, help='Random seed')
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser(description='Train MuZero Multitask on Atari')
+    # parser.add_argument('--seed', type=int, default=0, help='Random seed')
+    # args = parser.parse_args()
 
     # Define your list of environment IDs
     env_id_list = [
@@ -202,7 +204,10 @@ if __name__ == "__main__":
     # ]
 
     action_space_size = 18  # Full action space, adjust if different per env
-    seed = args.seed
+    
+    # seed = args.seed
+    seed = 0
+
     collector_env_num = 8
     evaluator_env_num = 3
     num_segments = 8

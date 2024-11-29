@@ -89,17 +89,17 @@ def allocate_batch_size(cfgs, game_buffers, alpha=1.0, clip_scale=1):
     inv_episodes = np.array([1.0 / (episodes + 1) for episodes in all_task_num_of_collected_episodes])
     inv_sum = np.sum(inv_episodes)
 
-    # 计算总的 batch_size (所有任务 cfg.policy.total_batch_size 的和)
-    total_batch_size = cfgs[0].policy.total_batch_size
+    # 计算总的 batch_size (所有任务 cfg.policy.max_batch_size 的和)
+    max_batch_size = cfgs[0].policy.max_batch_size
 
     # 动态调整的部分：最小和最大的 batch_size 范围
-    avg_batch_size = total_batch_size / world_size
+    avg_batch_size = max_batch_size / world_size
     min_batch_size = avg_batch_size / clip_scale
     max_batch_size = avg_batch_size * clip_scale
 
     # 动态调整 alpha，让 batch_size 的变化更加平滑
     task_weights = (inv_episodes / inv_sum) ** alpha
-    batch_sizes = total_batch_size * task_weights
+    batch_sizes = max_batch_size * task_weights
     
     # 控制 batch_size 在 [min_batch_size, max_batch_size] 之间
     batch_sizes = np.clip(batch_sizes, min_batch_size, max_batch_size)
@@ -121,7 +121,7 @@ evaluator通过ThreadPoolExecutor的timeout和 threading.Event() 强制退出eva
 
 修复了当games>gpu数量时的bug
 """
-def train_muzero_multitask_segment(
+def train_muzero_multitask_segment_ddp(
         input_cfg_list: List[Tuple[int, Tuple[dict, dict]]],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -194,7 +194,7 @@ def train_muzero_multitask_segment(
     #     f"train_muzero_multitask_segment now only supports {supported_policies}"
 
     # 根据 CUDA 可用性设置设备
-    cfg.policy.device = cfg.policy.model.world_model_cfg.device if torch.cuda.is_available() else 'cpu'
+    cfg.policy.device = cfg.policy.model.device if torch.cuda.is_available() else 'cpu'
     logging.info(f'cfg.policy.device: {cfg.policy.device}')
 
     # 编译配置
@@ -353,7 +353,7 @@ def train_muzero_multitask_segment(
             logging.info(f'Rank {rank}: Completed data collection for task {cfg.policy.task_id}')
 
         # 检查是否有足够的数据进行训练
-        not_enough_data = any(replay_buffer.get_num_of_transitions() < cfgs[0].policy.total_batch_size/world_size for replay_buffer in game_buffers)
+        not_enough_data = any(replay_buffer.get_num_of_transitions() < cfgs[0].policy.max_batch_size/world_size for replay_buffer in game_buffers)
 
         # 同步训练前所有 rank 的准备状态
         try:

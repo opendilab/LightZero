@@ -601,8 +601,15 @@ class GameBuffer(ABC, object):
                     # find the max game_segment index to keep in the buffer
                     index = i
                     break
-            if total_transition >= self._cfg.batch_size:
-                self._remove(index + 1)
+            if isinstance(self._cfg.batch_size, int):
+                if total_transition >= self._cfg.batch_size:
+                    self._remove(index + 1)
+            else:
+                try:
+                    if total_transition >= self._cfg.batch_size[0]:
+                        self._remove(index + 1)
+                except Exception as e:
+                    print(e)
 
     def _remove(self, excess_game_segment_index: List[int]) -> None:
         """
