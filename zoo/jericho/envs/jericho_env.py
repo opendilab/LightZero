@@ -113,6 +113,7 @@ if __name__ == '__main__':
         dict(
             game_path="z-machine-games-master/jericho-game-suite/zork1.z5",
             max_action_num=50,
+            max_env_step=100,
             tokenizer_path="google-bert/bert-base-uncased",
             max_seq_len=512
         )
