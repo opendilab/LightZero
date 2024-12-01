@@ -15,6 +15,7 @@ class JerichoEnv(BaseEnv):
 
     def __init__(self, cfg):
         self.cfg = cfg
+        self.max_env_num = cfg.max_env_num
         self.game_path = cfg.game_path
         self.max_action_num = cfg.max_action_num
         self.max_seq_len = cfg.max_seq_len
@@ -24,10 +25,10 @@ class JerichoEnv(BaseEnv):
 
         self._env = FrotzEnv(self.game_path)
         self._action_list = None
-
         self.finished = False
         self._init_flag = False
         self.episode_return = 0
+        self.env_step = 0
 
         self.observation_space = gym.spaces.Dict()
         self.action_space = gym.spaces.Discrete(self.max_action_num)
@@ -49,7 +50,12 @@ class JerichoEnv(BaseEnv):
 
     def reset(self, return_str: bool = False):
         initial_observation, info = self._env.reset()
+        self.finished = False
+        self._init_flag = True
+        self._action_list = None
         self.episode_return = 0
+        self.env_step = 0
+
         return self.prepare_obs(initial_observation, return_str)
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
@@ -68,9 +74,13 @@ class JerichoEnv(BaseEnv):
     def step(self, action: int, return_str: bool = False):
         action_str = self._action_list[action]
         observation, reward, done, info = self._env.step(action_str)
+        self.env_step += 1
         self.episode_return += reward
         self._action_list = None
         observation = self.prepare_obs(observation, return_str)
+
+        if self.env_step >= self.max_env_step:
+            done = True
 
         if done:
             self.finished = True

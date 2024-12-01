@@ -1,3 +1,4 @@
+import os
 from easydict import EasyDict
 
 
@@ -37,9 +38,11 @@ def main(env_id='zork1.z5', seed=0):
             learn=dict(learner=dict(
                 hook=dict(save_ckpt_after_iter=1000000, ), ), ),
             model=dict(
-                observation_shape=(512,),
+                observation_shape=512,
                 action_space_size=action_space_size,
                 encoder_url='google-bert/bert-base-uncased',
+                # The input of the model is text, whose shape is identical to the mlp model.
+                model_type='mlp',
                 world_model_cfg=dict(
                     policy_entropy_weight=5e-3,
                     continuous_action_space=False,
@@ -102,4 +105,5 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
+    os.environ['TOKENIZERS_PARALLELISM'] = 'false'
     main(args.env, args.seed)

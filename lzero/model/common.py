@@ -281,6 +281,7 @@ class HFLanguageRepresentationNetwork(nn.Module):
         self.model = AutoModel.from_pretrained(url)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.long()
         outputs = self.model(x)
         # [batch_size, seq_len, hidden_size] -> [batch_size, hidden_size]
         return outputs.last_hidden_state[:, 0, :]
