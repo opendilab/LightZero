@@ -37,8 +37,10 @@ def main(env_id='zork1.z5', seed=0):
             learn=dict(learner=dict(
                 hook=dict(save_ckpt_after_iter=1000000, ), ), ),
             model=dict(
-                observation_shape=512,
+                observation_shape=(512,),
                 action_space_size=action_space_size,
+                model_type='text',
+                encoder_url='google-bert/bert-base-uncased',
                 world_model_cfg=dict(
                     policy_entropy_weight=5e-3,
                     continuous_action_space=False,
@@ -73,10 +75,11 @@ def main(env_id='zork1.z5', seed=0):
 
     jericho_unizero_create_config = dict(
         env=dict(
-            type='jericho_lightzero',
+            type='jericho',
             import_names=['zoo.jericho.envs.jericho_env'],
         ),
-        env_manager=dict(type='subprocess'),
+        # NOTE: use base env manager to avoid the bug of subprocess env manager.
+        env_manager=dict(type='base'),
         policy=dict(
             type='unizero',
             import_names=['lzero.policy.unizero'],

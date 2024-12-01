@@ -28,19 +28,22 @@ class JerichoEnv(BaseEnv):
 
         self.observation_space = gym.spaces.Dict()
         self.action_space = gym.spaces.Discrete(self.max_action_num)
-        self.reward_space = gym.spaces.Box(low=-np.inf, high=np.inf, shape=(1, ), dtype=np.float32)
-    
+        self.reward_space = gym.spaces.Box(
+            low=-np.inf, high=np.inf, shape=(1, ), dtype=np.float32)
+
     def prepare_obs(self, obs, return_str: bool = False):
         if self._action_list is None:
             self._action_list = self._env.get_valid_actions()
         full_obs = obs + "\nValid actions: " + str(self._action_list)
         if not return_str:
-            full_obs = self.tokenizer([full_obs], truncation=True, padding=True, max_length=self.max_seq_len)
+            full_obs = self.tokenizer(
+                [full_obs], truncation=True, padding="max_length", max_length=self.max_seq_len)
             full_obs = np.array(full_obs['input_ids'][0], dtype=np.int32)
-        action_mask = [1] * len(self._action_list) + [0] * (self.max_action_num - len(self._action_list))
+        action_mask = [1] * len(self._action_list) + [0] * \
+            (self.max_action_num - len(self._action_list))
         action_mask = np.array(action_mask, dtype=np.int8)
         return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1}
-    
+
     def reset(self, return_str: bool = False):
         initial_observation, info = self._env.reset()
         self.episode_return = 0
@@ -71,7 +74,7 @@ class JerichoEnv(BaseEnv):
             info['eval_episode_return'] = self.episode_return
 
         return BaseEnvTimestep(observation, reward, done, info)
-    
+
     @staticmethod
     def create_collector_env_cfg(cfg: dict) -> List[dict]:
         collector_env_num = cfg.pop('collector_env_num')

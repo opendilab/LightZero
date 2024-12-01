@@ -272,6 +272,18 @@ class DownSample(nn.Module):
                                       f"You should transform the observation shape to 64 or 96 in the env.")
 
         return output
+    
+
+class HFLanguageRepresentationNetwork(nn.Module):
+    def __init__(self, url: str = 'google-bert/bert-base-uncased'):
+        super().__init__()
+        from transformers import AutoModel
+        self.model = AutoModel.from_pretrained(url)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        outputs = self.model(x)
+        # [batch_size, seq_len, hidden_size] -> [batch_size, hidden_size]
+        return outputs.last_hidden_state[:, 0, :]
 
 
 class RepresentationNetworkUniZero(nn.Module):
