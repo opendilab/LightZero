@@ -28,9 +28,10 @@ import concurrent.futures
 #  ========== TODO ==========
 # 设置超时时间 (秒)
 # TIMEOUT = 60000  # 例如1000min
-# TIMEOUT = 6000  # 例如100min
 
-TIMEOUT = 3600  # 例如60min
+TIMEOUT = 6000  # 例如100min
+
+# TIMEOUT = 3600  # 例如60min
 
 # TIMEOUT = 1800  # 例如30min
 
@@ -67,7 +68,29 @@ def safe_eval(evaluator, learner, collector, rank, world_size):
         print(f"An error occurred during evaluation on Rank {rank}/{world_size}: {e}")
         return None, None
 
+# def safe_eval(evaluator, learner, collector, rank, world_size):
+#     print(f"=========before eval Rank {rank}/{world_size}===========")
+#     # 重置 stop_event，确保每次评估前都处于未设置状态
+#     evaluator.stop_event.clear()
+#     with concurrent.futures.ThreadPoolExecutor() as executor:
+#         # 提交 evaluator.eval 任务
+#         future = executor.submit(evaluator.eval, learner.save_checkpoint, learner.train_iter, collector.envstep)
+        
+#         try:
+#             stop, reward = future.result(timeout=TIMEOUT)
+#         except concurrent.futures.TimeoutError:
+#             # 超时，设置 evaluator 的 stop_event
+#             evaluator.stop_event.set()
+#             print(f"Eval operation timed out after {TIMEOUT} seconds on Rank {rank}/{world_size}.")
 
+#             # future.cancel()  # 对于进程池，这个 cancel 实际上不会有用
+#             # executor.shutdown(wait=False)  # 非阻塞关闭池，但好像不起作用
+#             # print(f"after executor.shutdown(wait=False)  on Rank {rank}/{world_size}.")
+
+#             return None, None
+    
+#     print(f"======after eval Rank {rank}/{world_size}======")
+#     return stop, reward
 
 
 def allocate_batch_size(cfgs, game_buffers, alpha=1.0, clip_scale=1):

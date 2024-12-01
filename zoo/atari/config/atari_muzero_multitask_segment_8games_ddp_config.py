@@ -130,7 +130,7 @@ def generate_configs(
 ):
     configs = []
     exp_name_prefix = (
-        f'data_muzero_mt_8games_ddp_8gpu/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/'
+        f'data_muzero_mt_8games_ddp_8gpu_1129/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/'
         f'{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_'
         f'{len(env_id_list)}-pred-head_mbs-512_upc80_H{num_unroll_steps}_seed{seed}/'
     )
@@ -169,8 +169,8 @@ def create_env_manager():
             type='atari_lightzero',
             import_names=['zoo.atari.envs.atari_lightzero_env'],
         ),
-        # env_manager=dict(type='subprocess'),
-        env_manager=dict(type='base'),
+        env_manager=dict(type='subprocess'),
+        # env_manager=dict(type='base'),
         policy=dict(
             type='muzero_multitask',
             import_names=['lzero.policy.muzero_multitask'],
