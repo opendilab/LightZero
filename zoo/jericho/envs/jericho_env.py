@@ -11,11 +11,16 @@ from jericho import FrotzEnv
 
 @ENV_REGISTRY.register('jericho')
 class JerichoEnv(BaseEnv):
+    """
+    Overview:
+        The environment for Jericho games. For more details about the game, please refer to the \
+        `Jericho <https://github.com/microsoft/GameZero/tree/main/zoo/jericho>`.
+    """
     tokenizer = None
 
     def __init__(self, cfg):
         self.cfg = cfg
-        self.max_env_num = cfg.max_env_num
+        self.max_steps = cfg.max_steps
         self.game_path = cfg.game_path
         self.max_action_num = cfg.max_action_num
         self.max_seq_len = cfg.max_seq_len
@@ -79,7 +84,7 @@ class JerichoEnv(BaseEnv):
         self._action_list = None
         observation = self.prepare_obs(observation, return_str)
 
-        if self.env_step >= self.max_env_step:
+        if self.env_step >= self.max_steps:
             done = True
 
         if done:

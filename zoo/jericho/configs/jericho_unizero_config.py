@@ -24,7 +24,7 @@ def main(env_id='zork1.z5', seed=0):
     jericho_unizero_config = dict(
         env=dict(
             stop_value=int(1e6),
-            max_env_step=100,
+            max_steps=100,
             max_action_num=action_space_size,
             tokenizer_path="google-bert/bert-base-uncased",
             max_seq_len=512,
