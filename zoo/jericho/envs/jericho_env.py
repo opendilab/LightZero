@@ -11,13 +11,16 @@ from jericho import FrotzEnv
 
 @ENV_REGISTRY.register('jericho')
 class JerichoEnv(BaseEnv):
+    tokenizer = None
 
     def __init__(self, cfg):
         self.cfg = cfg
         self.game_path = cfg.game_path
         self.max_action_num = cfg.max_action_num
         self.max_seq_len = cfg.max_seq_len
-        self.tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer_path)
+
+        if JerichoEnv.tokenizer is None:
+            JerichoEnv.tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer_path)
 
         self._env = FrotzEnv(self.game_path)
         self._action_list = None
@@ -36,7 +39,7 @@ class JerichoEnv(BaseEnv):
             self._action_list = self._env.get_valid_actions()
         full_obs = obs + "\nValid actions: " + str(self._action_list)
         if not return_str:
-            full_obs = self.tokenizer(
+            full_obs = JerichoEnv.tokenizer(
                 [full_obs], truncation=True, padding="max_length", max_length=self.max_seq_len)
             full_obs = np.array(full_obs['input_ids'][0], dtype=np.int32)
         action_mask = [1] * len(self._action_list) + [0] * \

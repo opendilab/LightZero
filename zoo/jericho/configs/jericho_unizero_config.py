@@ -39,7 +39,6 @@ def main(env_id='zork1.z5', seed=0):
             model=dict(
                 observation_shape=(512,),
                 action_space_size=action_space_size,
-                model_type='text',
                 encoder_url='google-bert/bert-base-uncased',
                 world_model_cfg=dict(
                     policy_entropy_weight=5e-3,
@@ -53,7 +52,7 @@ def main(env_id='zork1.z5', seed=0):
                     num_layers=num_layers,
                     num_heads=8,
                     embed_dim=768,
-                    obs_type='vector',  # TODO: Change it.
+                    obs_type='text',  # TODO: Change it.
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),
             ),
