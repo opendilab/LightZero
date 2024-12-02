@@ -33,6 +33,12 @@ import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import numpy as np
 import os
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import torch
+from matplotlib.patches import Patch
 
 class WorldModelMT(WorldModel):
     """
@@ -59,7 +65,42 @@ class WorldModelMT(WorldModel):
         self.config = config
         self.transformer = Transformer(self.config)
 
+        # TODO ========
         self.analysis_mode = self.config.get('analysis_mode', False)
+        if self.analysis_mode:
+            self.env_id_list = self.config.env_id_list
+            # 自动生成 self.env_short_names
+            self = type('', (), {})()  # 创建一个空对象来模拟 self
+            self.env_short_names = {}
+
+            # 遍历 env_id_list，提取短名称
+            for env_id in self.config.env_id_list:
+                # 提取 'NoFrameskip-v4' 之前的部分作为短名称
+                short_name = env_id.replace('NoFrameskip-v4', '')
+                self.env_short_names[env_id] = short_name
+
+            # 映射环境 ID 到简写名称
+            # self.env_short_names = {
+            #     'PongNoFrameskip-v4': 'Pong',
+            #     'MsPacmanNoFrameskip-v4': 'MsPacman',
+            #     'SeaquestNoFrameskip-v4': 'Seaquest',
+            #     'BoxingNoFrameskip-v4': 'Boxing',
+            #     'AlienNoFrameskip-v4': 'Alien',
+            #     'ChopperCommandNoFrameskip-v4': 'Chopper',
+            #     'HeroNoFrameskip-v4': 'Hero',
+            #     'RoadRunnerNoFrameskip-v4': 'RoadRunner'
+            # }
+            # 颜色映射，确保每个任务有固定的颜色
+            self.num_tasks = len(self.env_id_list)
+            
+            # 生成足够多的颜色
+            self.colors = self._generate_colors(len(self.env_id_list))
+
+            # self.cmap = plt.get_cmap('tab10')
+            # if self.num_tasks > 10:
+            #     # 如果任务数超过10，选择一个更大的色图
+            #     self.cmap = plt.get_cmap('tab20')
+
 
         # TODO: multitask
         self.task_num = config.task_num
@@ -194,6 +235,32 @@ class WorldModelMT(WorldModel):
 
         self.reanalyze_phase = False
         self._rank = get_rank()
+
+
+
+    def _generate_colors(self, num_colors):
+        """
+        生成足够多的独特颜色，适用于大量分类。
+
+        参数:
+        - num_colors: 所需颜色数量。
+
+        返回:
+        - colors: 颜色列表。
+        """
+        # 使用多个matplotlib离散色图拼接
+        color_maps = ['tab20', 'tab20b', 'tab20c']
+        colors = []
+        for cmap_name in color_maps:
+            cmap = plt.get_cmap(cmap_name)
+            colors.extend([cmap(i) for i in range(cmap.N)])
+            if len(colors) >= num_colors:
+                break
+        if len(colors) < num_colors:
+            # 生成额外的颜色，如果需要
+            additional_colors = plt.cm.get_cmap('hsv', num_colors - len(colors))
+            colors.extend([additional_colors(i) for i in range(num_colors - len(colors))])
+        return colors[:num_colors]
 
     def _initialize_config_parameters(self) -> None:
         """Initialize configuration parameters."""
@@ -1144,34 +1211,165 @@ class WorldModelMT(WorldModel):
 
         return self.keys_values_wm_size_list
 
-    def plot_embeddings(self, tsne_results, task_ids, observations, save_dir='tsne_plots'):
+    def plot_embeddings(self, tsne_results, task_ids, observations, samples_per_task=5, save_dir='tsne_plots_26games'):
+        """
+        生成 t-SNE 可视化图，并在图中为每个任务随机标注指定数量的观测样本图像。
+
+        参数:
+        - tsne_results: t-SNE 降维结果 (N x 2 的数组)
+        - task_ids: 环境任务 ID，用于着色 (N 的数组)
+        - observations: 对应的观测样本 (N x C x H x W 的张量或数组)
+        - samples_per_task: 每个任务选择的样本数量，默认 5
+        - save_dir: 保存路径，默认 'tsne_plots'
+        """
+        import matplotlib.colors as mcolors
+
+        # 创建保存目录
         os.makedirs(save_dir, exist_ok=True)
-        
+        print(f"[INFO] 保存目录已创建或已存在: {save_dir}")
+
+        # 创建 t-SNE 图
+        print("[INFO] 开始绘制 t-SNE 散点图...")
         plt.figure(figsize=(16, 10))
-        scatter = plt.scatter(tsne_results[:,0], tsne_results[:,1], c=task_ids, cmap='tab10', alpha=0.6)
-        plt.legend(*scatter.legend_elements(), title="Env IDs")
-        plt.title("t-SNE of Observations Embeddings across Environments")
         
-        # 添加典型点的图像标注（这里以随机选择10个点为例）
-        num_images = 10
-        if len(tsne_results) > num_images:
-            indices = np.random.choice(range(len(tsne_results)), size=num_images, replace=False)
-        else:
-            indices = range(len(tsne_results))
+        # 散点图
+        scatter = plt.scatter(
+            tsne_results[:, 0],
+            tsne_results[:, 1],
+            c=[self.colors[tid] for tid in task_ids],
+            alpha=0.6,
+            edgecolor='w',
+            linewidth=0.5
+        )
+
+        # 创建自定义图例
+        legend_elements = []
+        for idx, env_id in enumerate(self.env_id_list):
+            short_name = self.env_short_names.get(env_id, env_id)
+            color = self.colors[idx]
+            legend_elements.append(
+                Patch(facecolor=color, edgecolor='w', label=f"{idx}: {short_name}")
+            )
         
-        for idx in indices:
-            img = observations[idx]  # 假设 observations 是图像的 numpy 数组或类似格式
-            if isinstance(img, torch.Tensor):
-                img = img.cpu().numpy()
-                # 将 [C, H, W] 转换为 [H, W, C]
-                if img.shape[0] in [1, 3]:  # 处理灰度图或RGB图
+        # 动态调整图例的列数，根据任务数量
+        num_cols = min(4, len(legend_elements))  # 最多4列
+        plt.legend(
+            handles=legend_elements,
+            title="Environment IDs",
+            bbox_to_anchor=(1.05, 1),
+            loc='upper left',
+            fontsize=8,
+            title_fontsize=10,
+            ncol=num_cols
+        )
+
+        plt.title("t-SNE of Observations Embeddings across Environments", fontsize=16)
+        plt.xlabel("t-SNE Dimension 1", fontsize=14)
+        plt.ylabel("t-SNE Dimension 2", fontsize=14)
+        plt.xticks(fontsize=12)
+        plt.yticks(fontsize=12)
+        plt.grid(True, linestyle='--', alpha=0.5)
+        print(f"[INFO] t-SNE 散点图绘制完成，共有 {len(tsne_results)} 个点。")
+
+        # 为每个任务选择指定数量的样本进行图像标注
+        print(f"[INFO] 开始为每个任务选择 {samples_per_task} 个样本进行图像标注...")
+        for task_id in range(len(self.env_id_list)):
+            # 找到当前任务的所有索引
+            task_indices = np.where(task_ids == task_id)[0]
+            if len(task_indices) == 0:
+                print(f"[WARNING] 任务 ID {task_id} 没有对应的样本。")
+                continue
+            # 如果样本数量少于所需，全部选取
+            if len(task_indices) < samples_per_task:
+                selected_indices = task_indices
+                print(f"[INFO] 任务 ID {task_id} 的样本数量 ({len(task_indices)}) 少于 {samples_per_task}，选取全部。")
+            else:
+                selected_indices = np.random.choice(task_indices, size=samples_per_task, replace=False)
+                print(f"[INFO] 任务 ID {task_id} 随机选取 {samples_per_task} 个样本进行标注。")
+
+            for idx in selected_indices:
+                img = observations[idx]
+                if isinstance(img, torch.Tensor):
+                    img = img.cpu().numpy()
+                if img.shape[0] == 1 or img.shape[0] == 3:  # 处理灰度图或 RGB 图
                     img = np.transpose(img, (1, 2, 0))
-            imagebox = OffsetImage(img, zoom=0.5)
-            ab = AnnotationBbox(imagebox, tsne_results[idx], frameon=False, pad=0.5)
-            plt.gca().add_artist(ab)
+                else:
+                    raise ValueError(f"Unsupported image shape: {img.shape}")
         
-        plt.savefig(os.path.join(save_dir, 'tsne_plot.png'))
+                # 标准化图像到 [0,1] 范围
+                img_min, img_max = img.min(), img.max()
+                if img_max - img_min > 1e-5:
+                    img = (img - img_min) / (img_max - img_min)
+                else:
+                    img = np.zeros_like(img)
+        
+                imagebox = OffsetImage(img, zoom=0.5)
+                ab = AnnotationBbox(
+                    imagebox,
+                    (tsne_results[idx, 0], tsne_results[idx, 1]),
+                    frameon=False,
+                    pad=0.3
+                )
+                plt.gca().add_artist(ab)
+                print(f"[INFO] 已添加图像标注: 任务 ID {task_id}, 点索引 {idx}, t-SNE 坐标 ({tsne_results[idx, 0]:.2f}, {tsne_results[idx, 1]:.2f})")
+
+        # 调整布局以适应图例
+        plt.tight_layout(rect=[0, 0, 0.85, 1])
+
+        # 保存图像，使用高分辨率
+        save_path_png = os.path.join(save_dir, 'tsne_plot.png')
+        save_path_pdf = os.path.join(save_dir, 'tsne_plot.pdf')
+        plt.savefig(save_path_png, dpi=300, bbox_inches='tight')
+        plt.savefig(save_path_pdf, dpi=300, bbox_inches='tight')
+        print(f"[INFO] t-SNE 可视化图已保存至: {save_path_png} 和 {save_path_pdf}")
         plt.close()
+
+    @torch.no_grad()
+    def gather_and_plot(self, local_embeddings, local_task_ids, local_observations):
+        world_size = dist.get_world_size()
+        rank = dist.get_rank()
+        
+        # 准备接收来自所有进程的CUDA张量
+        embeddings_list = [torch.zeros_like(local_embeddings) for _ in range(world_size)]
+        task_ids_list = [torch.zeros_like(local_task_ids) for _ in range(world_size)]
+        
+        # 准备接收来自所有进程的CPU对象
+        observations_list = [None for _ in range(world_size)]
+
+        try:
+            # 收集CUDA张量：embeddings和task_ids
+            dist.all_gather(embeddings_list, local_embeddings)
+            dist.all_gather(task_ids_list, local_task_ids)
+            
+            # 收集CPU对象：observations
+            local_observations_cpu = local_observations.cpu().numpy().tolist()
+            dist.all_gather_object(observations_list, local_observations_cpu)
+        except RuntimeError as e:
+            print(f"Rank {rank}: all_gather failed with error: {e}")
+            return
+        
+        if rank == 0:
+            # 拼接所有embeddings和task_ids
+            all_embeddings = torch.cat(embeddings_list, dim=0).cpu().numpy()
+            all_task_ids = torch.cat(task_ids_list, dim=0).cpu().numpy()
+            
+            # 拼接所有observations
+            all_observations = []
+            for obs in observations_list:
+                all_observations.extend(obs)
+            all_observations = np.array(all_observations)
+
+            print(f"Shape of all_embeddings: {all_embeddings.shape}")
+            all_embeddings = all_embeddings.reshape(-1, all_embeddings.shape[-1])
+            print(f"Shape of all_observations: {all_observations.shape}")
+            all_observations = all_observations.reshape(-1,  *all_observations.shape[-3:])
+        
+            # 执行t-SNE降维
+            tsne = TSNE(n_components=2, random_state=42)
+            tsne_results = tsne.fit_transform(all_embeddings)
+        
+            # 绘制并保存图像
+            self.plot_embeddings(tsne_results, all_task_ids, all_observations, save_dir=f'tsne_plots_{self.num_tasks}games')
 
     #@profile
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None, task_id=0, **kwargs: Any) -> LossWithIntermediateLosses:
@@ -1179,8 +1377,6 @@ class WorldModelMT(WorldModel):
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], task_id=task_id)
 
         if self.analysis_mode:
-            # ========= TODO: for visual analysis =========
-            # Uncomment the lines below for visual analysis in Pong
             # 确保embeddings在CUDA设备上且为稠密张量
             if not obs_embeddings.is_cuda:
                 obs_embeddings = obs_embeddings.cuda()
@@ -1189,49 +1385,12 @@ class WorldModelMT(WorldModel):
             # 保存当前进程的 embeddings 和 task_id
             local_embeddings = obs_embeddings.detach()
             local_task_ids = torch.full((local_embeddings.size(0),), task_id, dtype=torch.long, device=local_embeddings.device)
-
-            # 获取世界大小和当前进程的rank
-            world_size = dist.get_world_size()
-            rank = dist.get_rank()
-
-            # 准备接收所有进程的embeddings和task_ids
-            embeddings_list = [torch.zeros_like(local_embeddings) for _ in range(world_size)]
-            task_ids_list = [torch.zeros_like(local_task_ids) for _ in range(world_size)]
-
-            # 执行all_gather
-            try:
-                dist.all_gather(embeddings_list, local_embeddings)
-                dist.all_gather(task_ids_list, local_task_ids)
-            except RuntimeError as e:
-                print(f"Rank {rank}: all_gather failed with error: {e}")
-                return None  # 或者根据需求处理
-
-            if rank == 0:
-                # 将列表转换为单一的 tensor
-                all_embeddings = torch.cat(embeddings_list, dim=0).cpu().numpy()
-                all_task_ids = torch.cat(task_ids_list, dim=0).cpu().numpy()
-
-                # 假设 batch['observations'] 是图像数据的张量 [batch_size, C, H, W]
-                # 这里需要收集所有进程的observations。为了简化，假设每个进程有相同数量的observations
-                # 你可能需要根据实际情况调整这里的实现方式
-                # 例如，使用 all_gather 收集所有observations
-                local_observations = batch['observations'].detach().cpu()
-                observations_list = [torch.zeros_like(local_observations) for _ in range(world_size)]
-                dist.all_gather(observations_list, local_observations)
-                all_observations = torch.cat(observations_list, dim=0).numpy()
-
-                # 执行 t-SNE
-                tsne = TSNE(n_components=2, random_state=42)
-                tsne_results = tsne.fit_transform(all_embeddings)
-
-                # 可视化并保存
-                self.plot_embeddings(tsne_results, all_task_ids, all_observations)
-
-            # self.plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong_H10_H4_tsne')
-            # self.save_as_image_with_timestep(batch['observations'], suffix='pong_H10_H4_tsne')
-            # Uncomment the lines below for visual analysis in visual match
-            # self.plot_latent_tsne_each_and_all(obs_embeddings, suffix='visual_match_memlen1-60-15_tsne')
-            # self.save_as_image_with_timestep(batch['observations'], suffix='visual_match_memlen1-60-15_tsne')
+            
+            # 将observations移到CPU并转换为numpy
+            local_observations = batch['observations'].detach().cpu()
+            
+            # 进行数据收集和可视化
+            self.gather_and_plot(local_embeddings, local_task_ids, local_observations)
             
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio:

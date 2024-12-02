@@ -396,7 +396,6 @@ def train_unizero_multitask_segment_eval(
                 else:
                     print(f"Evaluation successful: stop={stop}, reward={reward}")
 
-    
 
             print('=' * 20)
             print(f'entry: Rank {rank} collects task_id: {cfg.policy.task_id}...')

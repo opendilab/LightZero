@@ -53,6 +53,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 # num_res_blocks=2,  # NOTE: encoder for 8 game
                 num_channels=256,
                 world_model_cfg=dict(
+                    env_id_list=env_id_list,
                     analysis_mode=True,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,
@@ -215,6 +216,7 @@ if __name__ == "__main__":
     #     'BoxingNoFrameskip-v4'
     # ]
 
+    # 8games
     env_id_list = [
         'PongNoFrameskip-v4',
         'MsPacmanNoFrameskip-v4',
@@ -309,8 +311,11 @@ if __name__ == "__main__":
         num_segments = 2
         n_episode = 2
         evaluator_env_num = 2
-        num_simulations = 2
-        batch_size = [4,4,4,4,4,4,4,4]
+        num_simulations = 50
+        # batch_size = [4,4,4,4,4,4,4,4]
+        batch_size = [4 for i in range(len(env_id_list))]
+
+        total_batch_size = 2
 
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size)
 
@@ -325,6 +330,10 @@ if __name__ == "__main__":
         from ding.utils import DDPContext
         from easydict import EasyDict
 
+        # 8games
         pretrained_model_path = '/mnt/afs/niuyazhe/code/LightZero/data_unizero_mt_ddp-8gpu_1127/8games_brf0.02_nlayer8-nhead24_seed1/8games_brf0.02_1-encoder-LN-res2-channel256_gsl20_8-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed1/Pong_unizero-mt_seed1/ckpt/iteration_200000.pth.tar'
+        
+        # 26games
+        # pretrained_model_path = '/mnt/afs/niuyazhe/code/LightZero/data_unizero_mt_ddp-8gpu-26game_1127/26games_brf0.02_nlayer8-nhead24_seed0/26games_brf0.02_1-encoder-LN-res2-channel256_gsl20_26-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed0/Pong_unizero-mt_seed0/ckpt/iteration_150000.pth.tar'
         with DDPContext():
             train_unizero_multitask_segment_eval(configs, seed=seed, model_path=pretrained_model_path, max_env_step=max_env_step)
