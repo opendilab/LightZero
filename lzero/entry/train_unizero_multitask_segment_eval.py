@@ -164,7 +164,7 @@ evaluator通ThreadPoolExecutor的timeout和 threading.Event() 强制退出eval()
 
 修复了当games>gpu数量时的bug
 """
-def train_unizero_multitask_segment(
+def train_unizero_multitask_segment_eval(
         input_cfg_list: List[Tuple[int, Tuple[dict, dict]]],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -380,7 +380,7 @@ def train_unizero_multitask_segment(
                 )
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
-            if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            if evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
                 print(f'Rank {rank} evaluates task_id: {cfg.policy.task_id}...')
                 
@@ -396,7 +396,8 @@ def train_unizero_multitask_segment(
                 else:
                     print(f"Evaluation successful: stop={stop}, reward={reward}")
 
-        
+    
+
             print('=' * 20)
             print(f'entry: Rank {rank} collects task_id: {cfg.policy.task_id}...')
 
@@ -404,6 +405,7 @@ def train_unizero_multitask_segment(
             collector._policy.reset(reset_init_data=True)
             # 收集数据
             new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+
 
             # 更新 replay buffer
             replay_buffer.push_game_segments(new_data)
@@ -478,12 +480,19 @@ def train_unizero_multitask_segment(
                     # 在训练时，DDP 会自动同步梯度和参数
                     log_vars = learner.train(train_data_multi_task, envstep_multi_task)
                     # logging.info(f'Rank {rank}: cfg.policy.batch_size : {cfg.policy.batch_size}, batch_size: {batch_size}')
-                    
-                    # try:
-                    #     log_vars = learner.train(train_data_multi_task, envstep_multi_task)
-                    # except Exception as e:
-                    #     logging.error(f'Rank {rank}: Training failed with error {e}')
-                    #     break  # 或者进行其他错误处理
+
+                # ========== TODO: ==========
+                # 同步训练前所有 rank 的准备状态
+                try:
+                    # logging.info(f'Rank {rank}: Reached barrier before training')
+                    dist.barrier()
+                    logging.info(f'Rank {rank}: Passed barrier before training')
+                except Exception as e:
+                    logging.error(f'Rank {rank}: Barrier failed with error {e}')
+                    break  # 或者进行其他错误处理
+                import sys
+                sys.exit(0)
+                # ========== TODO: ==========
 
                 if cfg.policy.use_priority:
                     for idx, (cfg, replay_buffer) in enumerate(zip(cfgs, game_buffers)):

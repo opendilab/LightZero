@@ -53,6 +53,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 # num_res_blocks=2,  # NOTE: encoder for 8 game
                 num_channels=256,
                 world_model_cfg=dict(
+                    analysis_mode=True,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,
                     context_length=2 * infer_context_length,
@@ -158,8 +159,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size):
     configs = []
     # TODO
-    # exp_name_prefix = f'data_unizero_mt_ddp-2gpu_1201/finetune_demonattack/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed{seed}/'
-    exp_name_prefix = f'data_unizero_mt_ddp-2gpu_1201/finetune_pong/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu_1201/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer4-nhead8_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_ddp-8gpu_eval_1201/latent_state_tsne/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_ddp-1gpu_fintune_1201/{len(env_id_list)}games_eval200min_brf{buffer_reanalyze_freq}_nlayer12-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer12-nh24_mbs-512-bs64_upc80_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -204,7 +206,7 @@ def create_env_manager():
     ))
 
 if __name__ == "__main__":
-    from lzero.entry import train_unizero_multitask_segment
+    from lzero.entry import train_unizero_multitask_segment_eval
     # TODO
     # env_id_list = [
     #     'PongNoFrameskip-v4',
@@ -213,25 +215,24 @@ if __name__ == "__main__":
     #     'BoxingNoFrameskip-v4'
     # ]
 
-    # env_id_list = [
-    #     'PongNoFrameskip-v4',
-    #     'MsPacmanNoFrameskip-v4',
-    #     'SeaquestNoFrameskip-v4',
-    #     'BoxingNoFrameskip-v4',
-    #     'AlienNoFrameskip-v4',
-    #     'ChopperCommandNoFrameskip-v4',
-    #     'HeroNoFrameskip-v4',
-    #     'RoadRunnerNoFrameskip-v4',
-    # ]
-
     env_id_list = [
-         'PongNoFrameskip-v4', # ======== TODO: only for debug =======
-        # 'DemonAttackNoFrameskip-v4',
-            #     'AssaultNoFrameskip-v4',
-
-    #     'BankHeistNoFrameskip-v4',
-    #     'AmidarNoFrameskip-v4',
+        'PongNoFrameskip-v4',
+        'MsPacmanNoFrameskip-v4',
+        'SeaquestNoFrameskip-v4',
+        'BoxingNoFrameskip-v4',
+        'AlienNoFrameskip-v4',
+        'ChopperCommandNoFrameskip-v4',
+        'HeroNoFrameskip-v4',
+        'RoadRunnerNoFrameskip-v4',
     ]
+
+    # env_id_list = [
+    #     'DemonAttackNoFrameskip-v4',
+    #         #     'AssaultNoFrameskip-v4',
+
+    # #     'BankHeistNoFrameskip-v4',
+    # #     'AmidarNoFrameskip-v4',
+    # ]
 
     # 26games
     # env_id_list = [
@@ -275,51 +276,41 @@ if __name__ == "__main__":
 
     # for seed in [2, 3, 0, 1]: # TODO
     # for seed in [1]: # TODO
-    for seed in [0,1,2]: # TODO
+    for seed in [0]: # TODO
     
         collector_env_num = 8
         num_segments = 8
         n_episode = 8
         evaluator_env_num = 3
         num_simulations = 50
-        # max_env_step = int(1e6)
         max_env_step = int(4e5) # TODO
-
         reanalyze_ratio = 0.
-        # batch_size = [32, 32, 32, 32]
-        # total_batch_size = 2048
 
         #应该根据一个样本sequence的占用显存量，和最大显存来设置
         total_batch_size = 512
         # total_batch_size = 3600
-        batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+        batch_size = [int(min(100, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
         print(f'=========== batch_size: {batch_size} ===========')
         # batch_size = [int(64) for i in range(len(env_id_list))]
 
         num_unroll_steps = 10
         infer_context_length = 4
         norm_type = 'LN'
-        # # norm_type = 'BN'  # bad performance now
 
         # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 1/10 means reanalyze once every ten epochs.
         buffer_reanalyze_freq = 1/50 # TODO
-        # buffer_reanalyze_freq = 1/20 # TODO 
-        # buffer_reanalyze_freq = 1/30 # TODO
-    
-
-        # buffer_reanalyze_freq = 1/100000
         # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
         reanalyze_batch_size = 160
         # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
         reanalyze_partition = 0.75
 
         # ======== TODO: only for debug ========
-        # collector_env_num = 2
-        # num_segments = 2
-        # n_episode = 2
-        # evaluator_env_num = 2
-        # num_simulations = 2
-        # batch_size = [4]
+        collector_env_num = 2
+        num_segments = 2
+        n_episode = 2
+        evaluator_env_num = 2
+        num_simulations = 2
+        batch_size = [4,4,4,4,4,4,4,4]
 
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size)
 
@@ -336,4 +327,4 @@ if __name__ == "__main__":
 
         pretrained_model_path = '/mnt/afs/niuyazhe/code/LightZero/data_unizero_mt_ddp-8gpu_1127/8games_brf0.02_nlayer8-nhead24_seed1/8games_brf0.02_1-encoder-LN-res2-channel256_gsl20_8-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed1/Pong_unizero-mt_seed1/ckpt/iteration_200000.pth.tar'
         with DDPContext():
-            train_unizero_multitask_segment(configs, seed=seed, model_path=pretrained_model_path, max_env_step=max_env_step)
+            train_unizero_multitask_segment_eval(configs, seed=seed, model_path=pretrained_model_path, max_env_step=max_env_step)

@@ -25,6 +25,14 @@ logging.getLogger().setLevel(logging.DEBUG)
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, get_rank, get_world_size
 
 from line_profiler import line_profiler
+import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import numpy as np
+import os
 
 class WorldModelMT(WorldModel):
     """
@@ -50,6 +58,8 @@ class WorldModelMT(WorldModel):
         self.tokenizer = tokenizer
         self.config = config
         self.transformer = Transformer(self.config)
+
+        self.analysis_mode = self.config.get('analysis_mode', False)
 
         # TODO: multitask
         self.task_num = config.task_num
@@ -1134,19 +1144,95 @@ class WorldModelMT(WorldModel):
 
         return self.keys_values_wm_size_list
 
+    def plot_embeddings(self, tsne_results, task_ids, observations, save_dir='tsne_plots'):
+        os.makedirs(save_dir, exist_ok=True)
+        
+        plt.figure(figsize=(16, 10))
+        scatter = plt.scatter(tsne_results[:,0], tsne_results[:,1], c=task_ids, cmap='tab10', alpha=0.6)
+        plt.legend(*scatter.legend_elements(), title="Env IDs")
+        plt.title("t-SNE of Observations Embeddings across Environments")
+        
+        # 添加典型点的图像标注（这里以随机选择10个点为例）
+        num_images = 10
+        if len(tsne_results) > num_images:
+            indices = np.random.choice(range(len(tsne_results)), size=num_images, replace=False)
+        else:
+            indices = range(len(tsne_results))
+        
+        for idx in indices:
+            img = observations[idx]  # 假设 observations 是图像的 numpy 数组或类似格式
+            if isinstance(img, torch.Tensor):
+                img = img.cpu().numpy()
+                # 将 [C, H, W] 转换为 [H, W, C]
+                if img.shape[0] in [1, 3]:  # 处理灰度图或RGB图
+                    img = np.transpose(img, (1, 2, 0))
+            imagebox = OffsetImage(img, zoom=0.5)
+            ab = AnnotationBbox(imagebox, tsne_results[idx], frameon=False, pad=0.5)
+            plt.gca().add_artist(ab)
+        
+        plt.savefig(os.path.join(save_dir, 'tsne_plot.png'))
+        plt.close()
+
     #@profile
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None, task_id=0, **kwargs: Any) -> LossWithIntermediateLosses:
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], task_id=task_id)
 
-        # ========= for visual analysis =========
-        # Uncomment the lines below for visual analysis in Pong
-        # self.plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong_H10_H4_tsne')
-        # self.save_as_image_with_timestep(batch['observations'], suffix='pong_H10_H4_tsne')
-        # Uncomment the lines below for visual analysis in visual match
-        # self.plot_latent_tsne_each_and_all(obs_embeddings, suffix='visual_match_memlen1-60-15_tsne')
-        # self.save_as_image_with_timestep(batch['observations'], suffix='visual_match_memlen1-60-15_tsne')
-        
+        if self.analysis_mode:
+            # ========= TODO: for visual analysis =========
+            # Uncomment the lines below for visual analysis in Pong
+            # 确保embeddings在CUDA设备上且为稠密张量
+            if not obs_embeddings.is_cuda:
+                obs_embeddings = obs_embeddings.cuda()
+            obs_embeddings = obs_embeddings.contiguous()
+
+            # 保存当前进程的 embeddings 和 task_id
+            local_embeddings = obs_embeddings.detach()
+            local_task_ids = torch.full((local_embeddings.size(0),), task_id, dtype=torch.long, device=local_embeddings.device)
+
+            # 获取世界大小和当前进程的rank
+            world_size = dist.get_world_size()
+            rank = dist.get_rank()
+
+            # 准备接收所有进程的embeddings和task_ids
+            embeddings_list = [torch.zeros_like(local_embeddings) for _ in range(world_size)]
+            task_ids_list = [torch.zeros_like(local_task_ids) for _ in range(world_size)]
+
+            # 执行all_gather
+            try:
+                dist.all_gather(embeddings_list, local_embeddings)
+                dist.all_gather(task_ids_list, local_task_ids)
+            except RuntimeError as e:
+                print(f"Rank {rank}: all_gather failed with error: {e}")
+                return None  # 或者根据需求处理
+
+            if rank == 0:
+                # 将列表转换为单一的 tensor
+                all_embeddings = torch.cat(embeddings_list, dim=0).cpu().numpy()
+                all_task_ids = torch.cat(task_ids_list, dim=0).cpu().numpy()
+
+                # 假设 batch['observations'] 是图像数据的张量 [batch_size, C, H, W]
+                # 这里需要收集所有进程的observations。为了简化，假设每个进程有相同数量的observations
+                # 你可能需要根据实际情况调整这里的实现方式
+                # 例如，使用 all_gather 收集所有observations
+                local_observations = batch['observations'].detach().cpu()
+                observations_list = [torch.zeros_like(local_observations) for _ in range(world_size)]
+                dist.all_gather(observations_list, local_observations)
+                all_observations = torch.cat(observations_list, dim=0).numpy()
+
+                # 执行 t-SNE
+                tsne = TSNE(n_components=2, random_state=42)
+                tsne_results = tsne.fit_transform(all_embeddings)
+
+                # 可视化并保存
+                self.plot_embeddings(tsne_results, all_task_ids, all_observations)
+
+            # self.plot_latent_tsne_each_and_all_for_pong(obs_embeddings, suffix='pong_H10_H4_tsne')
+            # self.save_as_image_with_timestep(batch['observations'], suffix='pong_H10_H4_tsne')
+            # Uncomment the lines below for visual analysis in visual match
+            # self.plot_latent_tsne_each_and_all(obs_embeddings, suffix='visual_match_memlen1-60-15_tsne')
+            # self.save_as_image_with_timestep(batch['observations'], suffix='visual_match_memlen1-60-15_tsne')
+            
         # ========= logging for analysis =========
         if self.analysis_dormant_ratio:
             # Calculate dormant ratio of the encoder

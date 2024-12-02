@@ -17,3 +17,4 @@ from .train_muzero_multitask_segment_ddp import train_muzero_multitask_segment_d
 from .train_unizero_multitask import train_unizero_multitask
 from .train_unizero_multitask_segment import train_unizero_multitask_segment
 
+from .train_unizero_multitask_segment_eval import train_unizero_multitask_segment_eval
