@@ -29,7 +29,9 @@ import concurrent.futures
 # 设置超时时间 (秒)
 # TIMEOUT = 60000  # 例如1000min
 
-TIMEOUT = 6000  # 例如100min
+TIMEOUT = 12000  # 例如200min
+
+# TIMEOUT = 6000  # 例如100min
 
 # TIMEOUT = 3600  # 例如60min
 
