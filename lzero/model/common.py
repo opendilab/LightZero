@@ -275,16 +275,31 @@ class DownSample(nn.Module):
     
 
 class HFLanguageRepresentationNetwork(nn.Module):
-    def __init__(self, url: str = 'google-bert/bert-base-uncased'):
+    def __init__(self, url: str = 'google-bert/bert-base-uncased', embedding_size: int = 768):
         super().__init__()
         from transformers import AutoModel
         self.model = AutoModel.from_pretrained(url)
+
+        self.embedding_size =  embedding_size
+        if self.embedding_size !=  768:
+            self.embed_head = nn.Linear(768, self.embedding_size)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.long()
+
+        # print(f'='*20)
+        # print(f'google-bert/bert-base-uncased x.shape: {x.shape}')
+
         outputs = self.model(x)
         # [batch_size, seq_len, hidden_size] -> [batch_size, hidden_size]
-        return outputs.last_hidden_state[:, 0, :]
+
+        # print(f'google-bert/bert-base-uncased outputs.last_hidden_state.shape: {outputs.last_hidden_state.shape}')
+        # print(f'='*20)
+        if self.embedding_size ==  768:
+            return outputs.last_hidden_state[:, 0, :]
+        else:
+            return self.embed_head(outputs.last_hidden_state[:, 0, :])
+
 
 
 class RepresentationNetworkUniZero(nn.Module):

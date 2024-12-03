@@ -20,7 +20,7 @@ def main(env_id='detective.z5', seed=0):
     num_layers = 2
     replay_ratio = 0.25
     embed_dim = 768
-    max_steps=100
+    max_steps = 100
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/10
     buffer_reanalyze_freq = 1/100000
@@ -42,7 +42,6 @@ def main(env_id='detective.z5', seed=0):
     infer_context_length = 2
     num_layers = 1
     replay_ratio = 0.05
-    # embed_dim = 768
     embed_dim = 32
 
     # ==============================================================
@@ -51,8 +50,8 @@ def main(env_id='detective.z5', seed=0):
     jericho_unizero_config = dict(
         env=dict(
             stop_value=int(1e6),
-            observation_shape=512,
             max_steps=max_steps,
+            observation_shape=512,
             max_action_num=action_space_size,
             # tokenizer_path="google-bert/bert-base-uncased",
             tokenizer_path="/mnt/afs/zhangshenghan/.cache/huggingface/hub/models--google-bert--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594",
@@ -91,7 +90,7 @@ def main(env_id='detective.z5', seed=0):
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),
             ),
-            action_type = 'varied_action_space',
+            action_type='varied_action_space',
             model_path=None,
             num_unroll_steps=num_unroll_steps,
             reanalyze_ratio=0,
@@ -100,7 +99,8 @@ def main(env_id='detective.z5', seed=0):
             learning_rate=0.0001,
             num_simulations=num_simulations,
             num_segments=num_segments,
-            train_start_after_envsteps=0, # TODO
+            # train_start_after_envsteps=2000,
+            train_start_after_envsteps=0, # TODO: only for debug
             game_segment_length=game_segment_length,
             replay_buffer_size=int(1e6),
             eval_freq=int(5e3),
@@ -135,8 +135,8 @@ def main(env_id='detective.z5', seed=0):
     create_config = jericho_unizero_create_config
 
     main_config.exp_name = f'data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
-    from lzero.entry import train_unizero
-    train_unizero([main_config, create_config], seed=seed,
+    from lzero.entry import train_unizero_segment
+    train_unizero_segment([main_config, create_config], seed=seed,
                   model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 

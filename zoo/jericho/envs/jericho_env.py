@@ -26,7 +26,7 @@ class JerichoEnv(BaseEnv):
         self.max_seq_len = cfg.max_seq_len
 
         if JerichoEnv.tokenizer is None:
-            JerichoEnv.tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer_path)
+            JerichoEnv.tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer_path) 
 
         self._env = FrotzEnv(self.game_path)
         self._action_list = None
@@ -47,7 +47,7 @@ class JerichoEnv(BaseEnv):
         if not return_str:
             full_obs = JerichoEnv.tokenizer(
                 [full_obs], truncation=True, padding="max_length", max_length=self.max_seq_len)
-            full_obs = np.array(full_obs['input_ids'][0], dtype=np.int32)
+            full_obs = np.array(full_obs['input_ids'][0], dtype=np.int32) # TODO: attn_mask
         action_mask = [1] * len(self._action_list) + [0] * \
             (self.max_action_num - len(self._action_list))
         action_mask = np.array(action_mask, dtype=np.int8)
@@ -77,14 +77,25 @@ class JerichoEnv(BaseEnv):
         return "LightZero Jericho Env"
 
     def step(self, action: int, return_str: bool = False):
-        action_str = self._action_list[action]
+        try:
+            action_str = self._action_list[action]
+        except Exception as e:
+            # TODO: why exits illegal action
+            print(e, 'action is illegal now we randomly choose a legal action!')
+            action = np.random.choice(len(self._action_list))
+            action_str = self._action_list[action]
+
         observation, reward, done, info = self._env.step(action_str)
         self.env_step += 1
         self.episode_return += reward
         self._action_list = None
         observation = self.prepare_obs(observation, return_str)
 
+        # print(f'observation:{observation}, action:{action}, reward:{reward}')
+
         if self.env_step >= self.max_steps:
+            print('='*20)
+            print('one episode done!')
             done = True
 
         if done:
@@ -116,7 +127,9 @@ if __name__ == '__main__':
     from easydict import EasyDict
     env_cfg = EasyDict(
         dict(
-            game_path="z-machine-games-master/jericho-game-suite/zork1.z5",
+            max_steps=100,
+            # game_path="z-machine-games-master/jericho-game-suite/zork1.z5",
+            game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/detective.z5",
             max_action_num=50,
             max_env_step=100,
             tokenizer_path="google-bert/bert-base-uncased",

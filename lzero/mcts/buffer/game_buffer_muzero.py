@@ -730,7 +730,7 @@ class MuZeroGameBuffer(GameBuffer):
                             # for atari/classic_control/box2d environments that only have one player.
                             target_policies.append(distributions)
                         else:
-                            # for board games that have two players.
+                            # for board games that have two players or envs that have varied action space.
                             policy_tmp = [0 for _ in range(policy_shape)]
                             for index, legal_action in enumerate(legal_actions[policy_index]):
                                 # only the action in ``legal_action`` the policy logits is nonzero

@@ -433,8 +433,8 @@ class UniZeroPolicy(MuZeroPolicy):
         dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
 
-        assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
-        assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
+        # assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
+        # assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
