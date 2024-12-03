@@ -14,6 +14,7 @@ def main(env_id='zork1.z5', seed=0):
     num_simulations = 50
     max_env_step = int(5e5)
     batch_size = 64
+    reanalyze_ratio = 0
     num_unroll_steps = 10
     infer_context_length = 4
     num_layers = 2
@@ -69,6 +70,7 @@ def main(env_id='zork1.z5', seed=0):
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             replay_buffer_size=int(1e6),
+            reanalyze_ratio=reanalyze_ratio,
             eval_freq=int(5e3),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -102,7 +104,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Process some environment.')
     parser.add_argument('--env', type=str,
-                        help='The environment to use', default='zork1.z5')
+                        help='The environment to use', default='detective.z5')
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
