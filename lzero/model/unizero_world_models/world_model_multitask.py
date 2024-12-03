@@ -1210,6 +1210,7 @@ class WorldModelMT(WorldModel):
 
         return self.keys_values_wm_size_list
 
+    # TODO: legend在下边
     # def plot_embeddings(self, tsne_results, task_ids, observations, samples_per_task=5, save_dir='tsne_plots_26games'):
     #     """
     #     生成 t-SNE 可视化图，并在图中为每个任务随机标注指定数量的观测样本图像。
@@ -1327,6 +1328,7 @@ class WorldModelMT(WorldModel):
     #     print(f"[INFO] t-SNE 可视化图已保存至: {save_path_png} 和 {save_path_pdf}")
     #     plt.close()
 
+    # TODO: legend在右边
     def plot_embeddings(self, tsne_results, task_ids, observations, samples_per_task=5, save_dir='tsne_plots_26games'):
         """
         生成 t-SNE 可视化图，并在图中为每个任务随机标注指定数量的观测样本图像。

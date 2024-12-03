@@ -124,7 +124,8 @@ def main(env_id, seed):
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
             eval_freq=int(5e3),
-            replay_buffer_size=int(1e6),
+            # replay_buffer_size=int(1e6),
+            replay_buffer_size=int(5e5), # TODO
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             # ============= The key different params for ReZero =============
@@ -154,7 +155,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name=f'data_sampled_unizero/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
+    main_config.exp_name=f'data_sampled_unizero_1210/dmc2gym_{env_id}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}_learnsigma'
     train_unizero_segment([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 
 
