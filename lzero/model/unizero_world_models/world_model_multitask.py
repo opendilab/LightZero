@@ -23,7 +23,6 @@ from .moe import MoeLayer, MultiplicationFeedForward
 from lzero.model.unizero_world_models.world_model import WorldModel
 logging.getLogger().setLevel(logging.DEBUG)
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, get_rank, get_world_size
-
 from line_profiler import line_profiler
 import torch
 import torch.distributed as dist
@@ -39,6 +38,13 @@ import matplotlib.pyplot as plt
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import torch
 from matplotlib.patches import Patch
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
+import torch  # 假设您的 `observations` 可能是 torch.Tensor
+
 
 class WorldModelMT(WorldModel):
     """
@@ -70,7 +76,6 @@ class WorldModelMT(WorldModel):
         if self.analysis_mode:
             self.env_id_list = self.config.env_id_list
             # 自动生成 self.env_short_names
-            self = type('', (), {})()  # 创建一个空对象来模拟 self
             self.env_short_names = {}
 
             # 遍历 env_id_list，提取短名称
@@ -78,7 +83,6 @@ class WorldModelMT(WorldModel):
                 # 提取 'NoFrameskip-v4' 之前的部分作为短名称
                 short_name = env_id.replace('NoFrameskip-v4', '')
                 self.env_short_names[env_id] = short_name
-
             # 映射环境 ID 到简写名称
             # self.env_short_names = {
             #     'PongNoFrameskip-v4': 'Pong',
@@ -95,11 +99,6 @@ class WorldModelMT(WorldModel):
             
             # 生成足够多的颜色
             self.colors = self._generate_colors(len(self.env_id_list))
-
-            # self.cmap = plt.get_cmap('tab10')
-            # if self.num_tasks > 10:
-            #     # 如果任务数超过10，选择一个更大的色图
-            #     self.cmap = plt.get_cmap('tab20')
 
 
         # TODO: multitask
@@ -1211,6 +1210,123 @@ class WorldModelMT(WorldModel):
 
         return self.keys_values_wm_size_list
 
+    # def plot_embeddings(self, tsne_results, task_ids, observations, samples_per_task=5, save_dir='tsne_plots_26games'):
+    #     """
+    #     生成 t-SNE 可视化图，并在图中为每个任务随机标注指定数量的观测样本图像。
+
+    #     参数:
+    #     - tsne_results: t-SNE 降维结果 (N x 2 的数组)
+    #     - task_ids: 环境任务 ID，用于着色 (N 的数组)
+    #     - observations: 对应的观测样本 (N x C x H x W 的张量或数组)
+    #     - samples_per_task: 每个任务选择的样本数量，默认 5
+    #     - save_dir: 保存路径，默认 'tsne_plots_26games'
+    #     """
+    #     import matplotlib.colors as mcolors
+
+    #     # 创建保存目录
+    #     os.makedirs(save_dir, exist_ok=True)
+    #     print(f"[INFO] 保存目录已创建或已存在: {save_dir}")
+
+    #     # 创建 t-SNE 图
+    #     print("[INFO] 开始绘制 t-SNE 散点图...")
+    #     plt.figure(figsize=(16, 10))
+        
+    #     # 散点图
+    #     scatter = plt.scatter(
+    #         tsne_results[:, 0],
+    #         tsne_results[:, 1],
+    #         c=[self.colors[tid] for tid in task_ids],
+    #         alpha=0.6,
+    #         edgecolor='w',
+    #         linewidth=0.5
+    #     )
+
+    #     # 创建自定义图例
+    #     legend_elements = []
+    #     for idx, env_id in enumerate(self.env_id_list):
+    #         short_name = self.env_short_names.get(env_id, env_id)
+    #         color = self.colors[idx]
+    #         legend_elements.append(
+    #             Patch(facecolor=color, edgecolor='w', label=f"{idx}: {short_name}")
+    #         )
+        
+    #     # 动态调整图例的列数，根据任务数量
+    #     num_cols = min(4, len(legend_elements))  # 最多4列
+
+    #     # 将图例放在图像下方
+    #     plt.legend(
+    #         handles=legend_elements,
+    #         title="Environment IDs",
+    #         loc='upper center',
+    #         bbox_to_anchor=(0.5, -0.15),  # 调整 y 值将图例移至下方
+    #         fontsize=10,
+    #         title_fontsize=12,
+    #         ncol=num_cols,
+    #         frameon=False  # 去除图例边框，增强美观
+    #     )
+
+    #     # 设置标题和轴标签
+    #     plt.title("t-SNE of Latent States across Environments", fontsize=16)
+    #     plt.xlabel("t-SNE Dimension 1", fontsize=14)
+    #     plt.ylabel("t-SNE Dimension 2", fontsize=14)
+    #     plt.xticks(fontsize=12)
+    #     plt.yticks(fontsize=12)
+    #     plt.grid(True, linestyle='--', alpha=0.5)
+    #     print(f"[INFO] t-SNE 散点图绘制完成，共有 {len(tsne_results)} 个点。")
+
+    #     # 为每个任务选择指定数量的样本进行图像标注
+    #     print(f"[INFO] 开始为每个任务选择 {samples_per_task} 个样本进行图像标注...")
+    #     for task_id in range(len(self.env_id_list)):
+    #         # 找到当前任务的所有索引
+    #         task_indices = np.where(task_ids == task_id)[0]
+    #         if len(task_indices) == 0:
+    #             print(f"[WARNING] 任务 ID {task_id} 没有对应的样本。")
+    #             continue
+    #         # 如果样本数量少于所需，全部选取
+    #         if len(task_indices) < samples_per_task:
+    #             selected_indices = task_indices
+    #             print(f"[INFO] 任务 ID {task_id} 的样本数量 ({len(task_indices)}) 少于 {samples_per_task}，选取全部。")
+    #         else:
+    #             selected_indices = np.random.choice(task_indices, size=samples_per_task, replace=False)
+    #             print(f"[INFO] 任务 ID {task_id} 随机选取 {samples_per_task} 个样本进行标注。")
+
+    #         for idx in selected_indices:
+    #             img = observations[idx]
+    #             if isinstance(img, torch.Tensor):
+    #                 img = img.cpu().numpy()
+    #             if img.shape[0] == 1 or img.shape[0] == 3:  # 处理灰度图或 RGB 图
+    #                 img = np.transpose(img, (1, 2, 0))
+    #             else:
+    #                 raise ValueError(f"Unsupported image shape: {img.shape}")
+        
+    #             # 标准化图像到 [0,1] 范围
+    #             img_min, img_max = img.min(), img.max()
+    #             if img_max - img_min > 1e-5:
+    #                 img = (img - img_min) / (img_max - img_min)
+    #             else:
+    #                 img = np.zeros_like(img)
+        
+    #             imagebox = OffsetImage(img, zoom=0.5)
+    #             ab = AnnotationBbox(
+    #                 imagebox,
+    #                 (tsne_results[idx, 0], tsne_results[idx, 1]),
+    #                 frameon=False,
+    #                 pad=0.3
+    #             )
+    #             plt.gca().add_artist(ab)
+    #             print(f"[INFO] 已添加图像标注: 任务 ID {task_id}, 点索引 {idx}, t-SNE 坐标 ({tsne_results[idx, 0]:.2f}, {tsne_results[idx, 1]:.2f})")
+
+    #     # 调整布局以适应图例
+    #     plt.tight_layout(rect=[0, 0.05, 1, 1])  # 为下方的图例预留空间
+
+    #     # 保存图像，使用高分辨率
+    #     save_path_png = os.path.join(save_dir, 'tsne_plot.png')
+    #     save_path_pdf = os.path.join(save_dir, 'tsne_plot.pdf')
+    #     plt.savefig(save_path_png, dpi=300, bbox_inches='tight')
+    #     plt.savefig(save_path_pdf, dpi=300, bbox_inches='tight')
+    #     print(f"[INFO] t-SNE 可视化图已保存至: {save_path_png} 和 {save_path_pdf}")
+    #     plt.close()
+
     def plot_embeddings(self, tsne_results, task_ids, observations, samples_per_task=5, save_dir='tsne_plots_26games'):
         """
         生成 t-SNE 可视化图，并在图中为每个任务随机标注指定数量的观测样本图像。
@@ -1220,7 +1336,7 @@ class WorldModelMT(WorldModel):
         - task_ids: 环境任务 ID，用于着色 (N 的数组)
         - observations: 对应的观测样本 (N x C x H x W 的张量或数组)
         - samples_per_task: 每个任务选择的样本数量，默认 5
-        - save_dir: 保存路径，默认 'tsne_plots'
+        - save_dir: 保存路径，默认 'tsne_plots_26games'
         """
         import matplotlib.colors as mcolors
 
@@ -1230,8 +1346,8 @@ class WorldModelMT(WorldModel):
 
         # 创建 t-SNE 图
         print("[INFO] 开始绘制 t-SNE 散点图...")
-        plt.figure(figsize=(16, 10))
-        
+        plt.figure(figsize=(18, 10))  # 增大图像宽度以适应右侧图例
+
         # 散点图
         scatter = plt.scatter(
             tsne_results[:, 0],
@@ -1251,19 +1367,20 @@ class WorldModelMT(WorldModel):
                 Patch(facecolor=color, edgecolor='w', label=f"{idx}: {short_name}")
             )
         
-        # 动态调整图例的列数，根据任务数量
-        num_cols = min(4, len(legend_elements))  # 最多4列
+        # 将图例放在图像右侧，并且每个图例项占一行
         plt.legend(
             handles=legend_elements,
             title="Environment IDs",
-            bbox_to_anchor=(1.05, 1),
-            loc='upper left',
-            fontsize=8,
-            title_fontsize=10,
-            ncol=num_cols
+            loc='center left',
+            bbox_to_anchor=(1, 0.5),  # 图例在图像右侧中央
+            fontsize=10,
+            title_fontsize=12,
+            ncol=1,
+            frameon=False  # 去除图例边框，增强美观
         )
 
-        plt.title("t-SNE of Observations Embeddings across Environments", fontsize=16)
+        # 设置标题和轴标签
+        plt.title("t-SNE of Latent States across Environments", fontsize=16)
         plt.xlabel("t-SNE Dimension 1", fontsize=14)
         plt.ylabel("t-SNE Dimension 2", fontsize=14)
         plt.xticks(fontsize=12)
@@ -1314,7 +1431,7 @@ class WorldModelMT(WorldModel):
                 print(f"[INFO] 已添加图像标注: 任务 ID {task_id}, 点索引 {idx}, t-SNE 坐标 ({tsne_results[idx, 0]:.2f}, {tsne_results[idx, 1]:.2f})")
 
         # 调整布局以适应图例
-        plt.tight_layout(rect=[0, 0, 0.85, 1])
+        plt.tight_layout(rect=[0, 0, 0.9, 1])  # 为右侧的图例预留空间
 
         # 保存图像，使用高分辨率
         save_path_png = os.path.join(save_dir, 'tsne_plot.png')
@@ -1323,7 +1440,7 @@ class WorldModelMT(WorldModel):
         plt.savefig(save_path_pdf, dpi=300, bbox_inches='tight')
         print(f"[INFO] t-SNE 可视化图已保存至: {save_path_png} 和 {save_path_pdf}")
         plt.close()
-
+    
     @torch.no_grad()
     def gather_and_plot(self, local_embeddings, local_task_ids, local_observations):
         world_size = dist.get_world_size()
