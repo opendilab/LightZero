@@ -734,7 +734,13 @@ class MuZeroGameBuffer(GameBuffer):
                             policy_tmp = [0 for _ in range(policy_shape)]
                             for index, legal_action in enumerate(legal_actions[policy_index]):
                                 # only the action in ``legal_action`` the policy logits is nonzero
-                                policy_tmp[legal_action] = distributions[index]
+                                # policy_tmp[legal_action] = distributions[index]
+                                try:
+                                    policy_tmp[legal_action] = distributions[index]
+                                except Exception as e:
+                                    print('='*20)
+                                    print(f'Exception:{e}, distributions:{distributions}, legal_action:{legal_actions[policy_index]}')
+                                    # TODO
                             target_policies.append(policy_tmp)
                     else:
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0

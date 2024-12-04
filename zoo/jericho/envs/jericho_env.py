@@ -47,11 +47,17 @@ class JerichoEnv(BaseEnv):
         if not return_str:
             full_obs = JerichoEnv.tokenizer(
                 [full_obs], truncation=True, padding="max_length", max_length=self.max_seq_len)
+            # obs_attn_mask = full_obs['attn_mask']
             full_obs = np.array(full_obs['input_ids'][0], dtype=np.int32) # TODO: attn_mask
-        action_mask = [1] * len(self._action_list) + [0] * \
-            (self.max_action_num - len(self._action_list))
+        if len(self._action_list) <= self.max_action_num:
+            action_mask = [1] * len(self._action_list) + [0] * \
+                (self.max_action_num - len(self._action_list))
+        else:
+            action_mask = [1] * len(self._action_list)
+
         action_mask = np.array(action_mask, dtype=np.int8)
         return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1}
+        # return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask,'action_mask': action_mask, 'to_play': -1}
 
     def reset(self, return_str: bool = False):
         initial_observation, info = self._env.reset()
@@ -81,6 +87,7 @@ class JerichoEnv(BaseEnv):
             action_str = self._action_list[action]
         except Exception as e:
             # TODO: why exits illegal action
+            print('='*20)
             print(e, 'action is illegal now we randomly choose a legal action!')
             action = np.random.choice(len(self._action_list))
             action_str = self._action_list[action]
@@ -92,10 +99,12 @@ class JerichoEnv(BaseEnv):
         observation = self.prepare_obs(observation, return_str)
 
         # print(f'observation:{observation}, action:{action}, reward:{reward}')
+        # print(f'self._action_list:{self._action_list}, action:{action}, reward:{reward}')
 
         if self.env_step >= self.max_steps:
             print('='*20)
             print('one episode done!')
+            print(f'self._action_list:{self._action_list}, action:{action}, reward:{reward}')
             done = True
 
         if done:
@@ -130,6 +139,7 @@ if __name__ == '__main__':
             max_steps=100,
             # game_path="z-machine-games-master/jericho-game-suite/zork1.z5",
             game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/detective.z5",
+            # game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/905.z5",
             max_action_num=50,
             max_env_step=100,
             tokenizer_path="google-bert/bert-base-uncased",

@@ -272,34 +272,82 @@ class DownSample(nn.Module):
                                       f"You should transform the observation shape to 64 or 96 in the env.")
 
         return output
-    
+
 
 class HFLanguageRepresentationNetwork(nn.Module):
-    def __init__(self, url: str = 'google-bert/bert-base-uncased', embedding_size: int = 768):
+    def __init__(self, url: str = 'google-bert/bert-base-uncased', embedding_size: int = 768, group_size: int = 8):
+        """
+        初始化语言表示网络
+
+        参数:
+        - url (str): 预训练 Hugging Face 模型的地址，默认为 'google-bert/bert-base-uncased'。
+        - embedding_size (int): 输出嵌入的维度大小，默认为 768。
+        """
         super().__init__()
         from transformers import AutoModel
+        # 加载 Hugging Face 预训练模型
         self.model = AutoModel.from_pretrained(url)
 
-        self.embedding_size =  embedding_size
-        if self.embedding_size !=  768:
+        # 设置嵌入维度，如果目标维度不是 768，则添加一个线性变换层用于降维或升维
+        self.embedding_size = embedding_size
+        if self.embedding_size != 768:
             self.embed_head = nn.Linear(768, self.embedding_size)
-    
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x.long()
 
-        # print(f'='*20)
-        # print(f'google-bert/bert-base-uncased x.shape: {x.shape}')
+        self.sim_norm = SimNorm(simnorm_dim=group_size)
 
-        outputs = self.model(x)
-        # [batch_size, seq_len, hidden_size] -> [batch_size, hidden_size]
+    def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
+        """
+        前向传播，获取输入序列的语言表示。
 
-        # print(f'google-bert/bert-base-uncased outputs.last_hidden_state.shape: {outputs.last_hidden_state.shape}')
-        # print(f'='*20)
-        if self.embedding_size ==  768:
-            return outputs.last_hidden_state[:, 0, :]
+        参数:
+        - x (torch.Tensor): 输入的张量，通常是序列的 token 索引，形状为 [batch_size, seq_len]。
+        - no_grad (bool): 是否在无梯度模式下运行，默认为 True。
+
+        返回:
+        - torch.Tensor: 经过处理的语言嵌入向量，形状为 [batch_size, embedding_size]。
+        """
+        if no_grad:
+            # 在 no_grad 模式下禁用梯度计算以节省显存
+            with torch.no_grad():
+                x = x.long()  # 确保输入张量为长整型
+                outputs = self.model(x)  # 获取模型的输出
+                
+                # 模型输出的 last_hidden_state 形状为 [batch_size, seq_len, hidden_size]
+                # 我们通常取 [CLS] 标记对应的向量，即 outputs.last_hidden_state[:, 0, :]
+                cls_embedding = outputs.last_hidden_state[:, 0, :]
+                
+                # 如果目标的 embedding_size 不是 768，则应用线性变换
+                if self.embedding_size == 768:
+                    # NOTE: very important for training stability.
+                    cls_embedding = self.sim_norm(cls_embedding)
+
+                    return cls_embedding
+                else:
+                    cls_embedding = self.embed_head(cls_embedding)
+
+                    # NOTE: very important for training stability.
+                    cls_embedding = self.sim_norm(cls_embedding)
+
+                    return cls_embedding
         else:
-            return self.embed_head(outputs.last_hidden_state[:, 0, :])
+            # 非 no_grad 模式下，启用梯度计算
+            x = x.long()  # 确保输入张量为长整型
+            outputs = self.model(x)
+            cls_embedding = outputs.last_hidden_state[:, 0, :]
+            
+            # 如果目标的 embedding_size 不是 768，则应用线性变换
+            if self.embedding_size == 768:
+                # NOTE: very important for training stability.
+                cls_embedding = self.sim_norm(cls_embedding)
 
+                return cls_embedding
+            else:
+                cls_embedding = self.embed_head(cls_embedding)
+
+                # NOTE: very important for training stability.
+                cls_embedding = self.sim_norm(cls_embedding)
+
+                return cls_embedding
 
 
 class RepresentationNetworkUniZero(nn.Module):

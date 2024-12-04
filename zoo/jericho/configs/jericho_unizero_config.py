@@ -4,14 +4,15 @@ from easydict import EasyDict
 
 def main(env_id='detective.z5', seed=0):
     action_space_size = 50
+    max_steps = 51
 
     # ==============================================================
     # begin of the most frequently changed config specified by the user
     # ==============================================================
-    collector_env_num = 8
+    collector_env_num = 2
+    num_segments = 2
     game_segment_length = 20
-    evaluator_env_num = 5
-    num_segments = 8
+    evaluator_env_num = 2
     num_simulations = 50
     max_env_step = int(5e5)
     batch_size = 64
@@ -20,7 +21,6 @@ def main(env_id='detective.z5', seed=0):
     num_layers = 2
     replay_ratio = 0.25
     embed_dim = 768
-    max_steps=100
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/10
     buffer_reanalyze_freq = 1/100000
@@ -30,20 +30,20 @@ def main(env_id='detective.z5', seed=0):
     reanalyze_partition = 0.75
     
     # =========== TODO: only for debug  =========== 
-    collector_env_num = 2
-    num_segments = 2
-    max_steps=20
-    game_segment_length = 20
-    evaluator_env_num = 2
-    num_simulations = 5
-    max_env_step = int(5e5)
-    batch_size = 10
-    num_unroll_steps = 5
-    infer_context_length = 2
-    num_layers = 1
-    replay_ratio = 0.05
+    # collector_env_num = 2
+    # num_segments = 2
+    # game_segment_length = 20
+    # evaluator_env_num = 2
+    # max_env_step = int(5e5)
+    # batch_size = 10
+    # num_simulations = 5
+    # num_unroll_steps = 5
+    # infer_context_length = 2
+    # max_steps = 10
+    # num_layers = 1
+    # replay_ratio = 0.05
     # embed_dim = 768
-    embed_dim = 32
+    # TODO: MCTS内部的action_space受限于root节点的legal action
 
     # ==============================================================
     # end of the most frequently changed config specified by the user
@@ -144,7 +144,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Process some environment.')
     parser.add_argument('--env', type=str,
-                help='The environment to use', default='detective.z5') # 'zork1.z5'                 
+                help='The environment to use', default='detective.z5') # 'detective.z5'  'zork1.z5'                 
     parser.add_argument('--seed', type=int, help='The seed to use', default=0)
     args = parser.parse_args()
 
