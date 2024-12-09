@@ -28,7 +28,7 @@ cartpole_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
-        use_wandb=True,
+        use_wandb=False,
         model=dict(
             observation_shape=4,
             action_space_size=2,
