@@ -345,5 +345,4 @@ PYBIND11_MODULE(mcts_alphazero, m) {
          py::arg("policy_value_func"),
          py::arg("temperature"),
          py::arg("sample"));
-
 }
