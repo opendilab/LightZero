@@ -10,7 +10,9 @@ num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
-mcts_ctree = False
+# mcts_ctree = False
+mcts_ctree = True
+
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
