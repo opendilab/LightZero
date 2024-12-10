@@ -220,7 +220,7 @@ class AlphaZeroPolicy(Policy):
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
             import sys
-            sys.path.append('/Users/your_user_name/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
+            sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
             import mcts_alphazero
             self._collect_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves, self._cfg.mcts.num_simulations,
                                                      self._cfg.mcts.pb_c_base,
@@ -279,7 +279,7 @@ class AlphaZeroPolicy(Policy):
         self._get_simulation_env()
         if self._cfg.mcts_ctree:
             import sys
-            sys.path.append('/Users/your_user_name/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
+            sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
             import mcts_alphazero
             # TODO(pu): how to set proper num_simulations for evaluation
             self._eval_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves,

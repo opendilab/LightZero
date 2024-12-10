@@ -7,9 +7,7 @@ specifically within the context of MCTS.
 import sys
 
 import torch
-
-sys.path.append('./LightZero/lzero/mcts/ctree/ctree_alphazero/build')
-
+sys.path.append('/Users/puyuan/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
 import mcts_alphazero
 mcts_alphazero = mcts_alphazero.MCTS()
 
