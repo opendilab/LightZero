@@ -27,7 +27,7 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
-最近更新于 2024.11.23 LightZero-v0.1.0
+最近更新于 2024.12.10 LightZero-v0.1.0
 
 [English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [文档](https://opendilab.github.io/LightZero) | [LightZero 论文](https://arxiv.org/abs/2310.08348) | [🔥UniZero 论文](https://arxiv.org/abs/2406.10667) | [🔥ReZero 论文](https://arxiv.org/abs/2404.16364)
 
@@ -189,7 +189,7 @@ python3 -u zoo/classic_control/cartpole/config/cartpole_muzero_config.py
 
 ```bash
 cd LightZero
-python3 -u zoo/atari/config/atari_muzero_config.py
+python3 -u zoo/atari/config/atari_muzero_segment_config.py
 ```
 
 使用如下代码在 [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-toe) 环境上快速训练一个 MuZero 智能体：
@@ -203,7 +203,7 @@ python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 
 ```bash
 cd LightZero
-python3 -u zoo/atari/config/atari_unizero_config.py
+python3 -u zoo/atari/config/atari_unizero_segment_config.py
 ```
 
 ## 📚 文档

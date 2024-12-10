@@ -28,7 +28,7 @@
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 [![discord badge](https://dcbadge.vercel.app/api/server/dkZS2JF56X?style=flat)](https://discord.gg/dkZS2JF56X)
 
-Updated on 2024.11.23 LightZero-v0.1.0
+Updated on 2024.12.10 LightZero-v0.1.0
 
 English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Documentation](https://opendilab.github.io/LightZero) | [LightZero Paper](https://arxiv.org/abs/2310.08348) | [🔥UniZero Paper](https://arxiv.org/abs/2406.10667) | [🔥ReZero Paper](https://arxiv.org/abs/2404.16364)
 
@@ -221,7 +221,7 @@ Train a MuZero agent to play [Pong](https://gymnasium.farama.org/environments/at
 
 ```bash
 cd LightZero
-python3 -u zoo/atari/config/atari_muzero_config.py
+python3 -u zoo/atari/config/atari_muzero_segment_config.py
 ```
 
 Train a MuZero agent to play [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-toe):
@@ -235,7 +235,7 @@ Train a UniZero agent to play [Pong](https://gymnasium.farama.org/environments/a
 
 ```bash
 cd LightZero
-python3 -u zoo/atari/config/atari_unizero_config.py
+python3 -u zoo/atari/config/atari_unizero_segment_config.py
 ```
 
 ## 📚 Documentation
