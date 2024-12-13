@@ -47,7 +47,7 @@ class JerichoEnv(BaseEnv):
         if not return_str:
             full_obs = JerichoEnv.tokenizer(
                 [full_obs], truncation=True, padding="max_length", max_length=self.max_seq_len)
-            # obs_attn_mask = full_obs['attn_mask']
+            # obs_attn_mask = full_obs['attention_mask']
             full_obs = np.array(full_obs['input_ids'][0], dtype=np.int32) # TODO: attn_mask
         if len(self._action_list) <= self.max_action_num:
             action_mask = [1] * len(self._action_list) + [0] * \

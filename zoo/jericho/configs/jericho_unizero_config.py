@@ -19,7 +19,7 @@ def main(env_id='detective.z5', seed=0):
     num_unroll_steps = 10
     infer_context_length = 4
     num_layers = 2
-    replay_ratio = 0.25
+    replay_ratio = 0.1
     embed_dim = 768
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/10
@@ -75,6 +75,7 @@ def main(env_id='detective.z5', seed=0):
                 encoder_url='/mnt/afs/zhangshenghan/.cache/huggingface/hub/models--google-bert--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594',
                 # The input of the model is text, whose shape is identical to the mlp model.
                 model_type='mlp',
+                continuous_action_space=False,
                 world_model_cfg=dict(
                     policy_entropy_weight=5e-3,
                     continuous_action_space=False,
@@ -91,7 +92,7 @@ def main(env_id='detective.z5', seed=0):
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),
             ),
-            action_type = 'varied_action_space',
+            action_type='varied_action_space',
             model_path=None,
             num_unroll_steps=num_unroll_steps,
             reanalyze_ratio=0,
