@@ -14,12 +14,13 @@ def main(env_id='detective.z5', seed=0):
     game_segment_length = 20
     evaluator_env_num = 2
     num_simulations = 50
-    max_env_step = int(5e5)
-    batch_size = 64
+    max_env_step = int(10e6)
+    # batch_size = 64
+    batch_size = 32
     num_unroll_steps = 10
     infer_context_length = 4
     num_layers = 2
-    replay_ratio = 0.1
+    replay_ratio = 0.25
     embed_dim = 768
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/10
@@ -65,7 +66,10 @@ def main(env_id='detective.z5', seed=0):
             manager=dict(shared_memory=False, )
         ),
         policy=dict(
+            multi_gpu=False, # ======== Very important for ddp =============
+            # multi_gpu=True, # ======== Very important for ddp =============
             # default is 10000
+            use_wandb=False,
             learn=dict(learner=dict(
                 hook=dict(save_ckpt_after_iter=1000000, ), ), ),
             model=dict(
@@ -135,7 +139,7 @@ def main(env_id='detective.z5', seed=0):
     main_config = jericho_unizero_config
     create_config = jericho_unizero_create_config
 
-    main_config.exp_name = f'data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_detective_20241219/{env_id[:8]}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed,
                   model_path=main_config.policy.model_path, max_env_step=max_env_step)

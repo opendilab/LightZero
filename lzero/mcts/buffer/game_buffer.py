@@ -405,7 +405,7 @@ class GameBuffer(ABC, object):
                 #     list(np.ones(self._cfg.model.action_space_size, dtype=np.int8))
                 #     for _ in range(unroll_steps + 1 - len(action_mask_tmp))
                 # ] 
-                # TODO
+                # TODO: padded data
                 action_mask_tmp += [
                     list(np.zeros(self._cfg.model.action_space_size, dtype=np.int8))
                     for _ in range(unroll_steps + 1 - len(action_mask_tmp))
