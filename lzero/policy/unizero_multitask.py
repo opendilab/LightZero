@@ -1,5 +1,4 @@
 import copy
-import sys
 from collections import defaultdict
 from typing import List, Dict, Any, Tuple, Union
 
@@ -16,30 +15,14 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
-from line_profiler import line_profiler
-from ding.utils import set_pkg_seed, get_rank, get_world_size
+
 
 # sys.path.append('/Users/puyuan/code/LibMTL/')
 # from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
-
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
+
 # from LibMTL.weighting.abstract_weighting import AbsWeighting
 
-# def generate_task_loss_dict(multi_task_losses, task_name_template):
-#     """
-#     生成每个任务的损失字典
-#     :param multi_task_losses: 包含每个任务损失的列表
-#     :param task_name_template: 任务名称模板，例如 'obs_loss_task{}'
-#     :return: 一个字典，包含每个任务的损失
-#     """
-#     task_loss_dict = {}
-#     for task_idx, task_loss in enumerate(multi_task_losses):
-#         task_name = task_name_template.format(task_idx)
-#         try:
-#             task_loss_dict[task_name] = task_loss.item() if hasattr(task_loss, 'item') else task_loss
-#         except Exception as e:
-#             task_loss_dict[task_name] = task_loss
-#     return task_loss_dict
 
 def generate_task_loss_dict(multi_task_losses, task_name_template, task_id):
     """
@@ -57,22 +40,19 @@ def generate_task_loss_dict(multi_task_losses, task_name_template, task_id):
             task_loss_dict[task_name] = task_loss
     return task_loss_dict
 
+
+
 class WrappedModel:
-    def __init__(self, tokenizer, transformer):
-        self.tokenizer = tokenizer
-        self.transformer = transformer
+    def __init__(self, world_model):
+        self.world_model = world_model
 
     def parameters(self):
-        # pos_emb.weight
-        # task_emb.weight
-        # act_embedding_table.weight
-        # 返回 tokenizer 和 transformer 的参数
-        return list(self.tokenizer.parameters()) + list(self.transformer.parameters())
+        # 返回 tokenizer, transformer 以及所有嵌入层的参数
+        return self.world_model.parameters()
 
     def zero_grad(self, set_to_none=False):
-        # 将 tokenizer 和 transformer 的梯度设为零
-        self.tokenizer.zero_grad(set_to_none=set_to_none)
-        self.transformer.zero_grad(set_to_none=set_to_none)
+        # 将 tokenizer, transformer 和所有嵌入层的梯度设为零
+        self.world_model.zero_grad(set_to_none=set_to_none)
 
 
 class WrappedModelV2:
@@ -101,19 +81,6 @@ class WrappedModelV2:
 
 
 class WrappedModelV3:
-    def __init__(self, world_model):
-        self.world_model = world_model
-
-    def parameters(self):
-        # 返回 tokenizer, transformer 以及所有嵌入层的参数
-        return self.world_model.parameters()
-
-    def zero_grad(self, set_to_none=False):
-        # 将 tokenizer, transformer 和所有嵌入层的梯度设为零
-        self.world_model.zero_grad(set_to_none=set_to_none)
-
-
-class WrappedModelV4:
     def __init__(self, transformer, pos_emb, task_emb, act_embedding_table):
         self.transformer = transformer
         self.pos_emb = pos_emb
@@ -134,6 +101,7 @@ class WrappedModelV4:
         self.pos_emb.zero_grad(set_to_none=set_to_none)
         self.task_emb.zero_grad(set_to_none=set_to_none)
         self.act_embedding_table.zero_grad(set_to_none=set_to_none)
+
 
 
 @POLICY_REGISTRY.register('unizero_multitask')
@@ -242,7 +210,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # (bool) whether to use rnd model.
         use_rnd_model=False,
         # (bool) Whether to use multi-gpu training.
-        multi_gpu=False,
+        multi_gpu=True,
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
         # this variable is used in ``collector``.
         sampled_algo=False,
@@ -401,7 +369,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             The user can define and use customized network model but must obey the same interface definition indicated \
             by import_names path. For MuZero, ``lzero.model.unizero_model.MuZeroModel``
         """
-        # return 'UniZeroModel', ['lzero.model.unizero_model']
+        # NOTE: multi-task model
         return 'UniZeroMTModel', ['lzero.model.unizero_model_multitask']
 
     def _init_learn(self) -> None:
@@ -450,28 +418,23 @@ class UniZeroMTPolicy(UniZeroPolicy):
         self.grad_norm_after = 0.
 
         # 创建 WrappedModel 实例
-        # head和nn.Embedding 没有矫正梯度
+        # 所有参数都共享，即所有参数都需要进行矫正
         # wrapped_model = WrappedModel(
-        #     self._learn_model.world_model.tokenizer,
-        #     self._learn_model.world_model.transformer
+        #     self._learn_model.world_model,
         # )
 
         # head 没有矫正梯度
         wrapped_model = WrappedModelV2(
-            # self._learn_model.world_model.tokenizer, # TODO
+            # self._learn_model.world_model.tokenizer, # TODO:
             self._learn_model.world_model.tokenizer.encoder[0],  # TODO: one encoder
             self._learn_model.world_model.transformer,
             self._learn_model.world_model.pos_emb,
             self._learn_model.world_model.task_emb,
             self._learn_model.world_model.act_embedding_table,
         )
-        # 所有参数都共享，即所有参数都需要进行矫正
-        # wrapped_model = WrappedModelV3( 
-        #     self._learn_model.world_model,
-        # )
 
         # head 和 tokenizer.encoder 没有矫正梯度
-        # wrapped_model = WrappedModelV4(
+        # wrapped_model = WrappedModelV3(
         #     self._learn_model.world_model.transformer,
         #     self._learn_model.world_model.pos_emb,
         #     self._learn_model.world_model.task_emb,
@@ -480,12 +443,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
         # 将 wrapped_model 作为 share_model 传递给 GradCorrect
         # ========= 初始化 MoCo CAGrad 参数 =========
-        self.task_num_for_current_rank = self._cfg.task_num
-        self.task_id = self._cfg.task_id
-
         # self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
         # self.grad_correct.init_param()  
         # self.grad_correct.rep_grad = False
+
+        self.task_id = self._cfg.task_id
+        self.task_num_for_current_rank = self._cfg.task_num
+
 
     #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -512,13 +476,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
         perceptual_loss_multi_task = []
         orig_policy_loss_multi_task = []
         policy_entropy_multi_task = []
-        # weighted_total_loss = torch.tensor(0., device=self._cfg.device)
-        # weighted_total_loss.requires_grad = True
         weighted_total_loss = 0.0  # 初始化为0,避免使用in-place操作
 
         latent_state_l2_norms_multi_task = []
-
-
         average_target_policy_entropy_multi_task = []
         value_priority_multi_task = []
         value_priority_mean_multi_task = []
@@ -571,7 +531,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
             target_value_categorical = phi_transform(self.value_support, transformed_target_value)
 
-            # Prepare batch for GPT model
+            # Prepare batch for a transformer-based world model
             batch_for_gpt = {}
             if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
                 batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
@@ -602,14 +562,12 @@ class UniZeroMTPolicy(UniZeroPolicy):
             )
 
             weighted_total_loss += losses.loss_total  # TODO
-            # weighted_total_loss = torch.tensor(0., device=self._cfg.device)
 
-            # assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
-            # assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
+            assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
+            assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
             losses_list.append(losses.loss_total)  # TODO: for moco
 
-            # weighted_total_loss = weighted_total_loss + losses.loss_total  # 修改为非in-place操作
             for loss_name, loss_value in losses.intermediate_losses.items():
                 intermediate_losses[f"{loss_name}"] = loss_value
 
@@ -656,7 +614,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
 
-        # TODO 使用 MoCo 和 CAGrad 来计算梯度和权重
+        # TODO: 使用 MoCo 或 CAGrad 来计算梯度和权重
         #  ============= for CAGrad and MoCo =============
         # lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
 
@@ -680,6 +638,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
                                                                         self._cfg.grad_clip_value)
         
         if self._cfg.multi_gpu:
+            # Very important to sync gradients before updating the model
             # rank = get_rank()
             # print(f'Rank {rank} train task_id: {self._cfg.task_id} sync grad begin...')
             self.sync_gradients(self._learn_model)
@@ -715,29 +674,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
         }
 
-        # ===== TODO: multitask_ddp learn_log Bug但是能正常运行 =========
-        # # 用于存储多任务损失的字典
-        # multi_task_loss_dicts = {
-        #     **generate_task_loss_dict(obs_loss_multi_task, 'obs_loss_task{}'),
-        #     **generate_task_loss_dict(latent_recon_loss_multi_task, 'latent_recon_loss_task{}'),
-        #     **generate_task_loss_dict(perceptual_loss_multi_task, 'perceptual_loss_task{}'),
-        #     **generate_task_loss_dict(latent_state_l2_norms_multi_task, 'latent_state_l2_norms_task{}'),
-        #     **generate_task_loss_dict(policy_loss_multi_task, 'policy_loss_task{}'),
-        #     **generate_task_loss_dict(orig_policy_loss_multi_task, 'orig_policy_loss_task{}'),
-        #     **generate_task_loss_dict(policy_entropy_multi_task, 'policy_entropy_task{}'),
-        #     **generate_task_loss_dict(reward_loss_multi_task, 'reward_loss_task{}'),
-        #     **generate_task_loss_dict(value_loss_multi_task, 'value_loss_task{}'),
-        #     **generate_task_loss_dict(average_target_policy_entropy_multi_task, 'target_policy_entropy_task{}'),
-        #     **generate_task_loss_dict(lambd, 'lambd_task{}'), 
-        #     # ==============================================================
-        #     # priority related
-        #     # ==============================================================
-        #     **generate_task_loss_dict(value_priority_multi_task, 'value_priority_task{}'),
-        #     **generate_task_loss_dict(value_priority_mean_multi_task, 'value_priority_mean_task{}'),
-        # }
-        # # 合并两个字典
-        # return_loss_dict.update(multi_task_loss_dicts)
-
         # 生成任务相关的损失字典，并为每个任务相关的 loss 添加前缀 "noreduce_"
         multi_task_loss_dicts = {
             **generate_task_loss_dict(obs_loss_multi_task, 'noreduce_obs_loss_task{}', task_id=self.task_id),
@@ -756,7 +692,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
         }
         # 合并两个字典
         return_loss_dict.update(multi_task_loss_dicts)
-
         # print(f'return_loss_dict:{return_loss_dict}')
 
         # 返回最终的损失字典
@@ -811,35 +746,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'total_grad_norm_before_clip_wm',
         ]
 
-        # ===== TODO: multitask_ddp learn_log Bug但是能正常运行 =========
-        # Variable names that will have task-specific counterparts
-        # task_specific_vars = [
-        #     'obs_loss',
-        #     'orig_policy_loss',
-        #     'policy_loss',
-        #     'latent_recon_loss',
-        #     'policy_entropy',
-        #     'target_policy_entropy',
-        #     'reward_loss',
-        #     'value_loss',
-        #     'perceptual_loss',
-        #     'latent_state_l2_norms',
-        #     'lambd',
-        #     'value_priority_mean',
-        # ]
-        # num_tasks = self.task_num
-        # # If the number of tasks is provided, extend the monitored variables list with task-specific variables
-        # if num_tasks is not None:
-        #     for var in task_specific_vars:
-        #         for task_idx in range(num_tasks):
-        #             monitored_vars.append(f'{var}_task{task_idx}')
-        # else:
-        #     # If num_tasks is not provided, we assume there's only one task and keep the original variable names
-        #     monitored_vars.extend(task_specific_vars)
-
-        # return monitored_vars
-
-
         # rank = get_rank()
         task_specific_vars = [
             'noreduce_obs_loss',
@@ -868,7 +774,6 @@ class UniZeroMTPolicy(UniZeroPolicy):
             monitored_vars.extend(task_specific_vars)
 
         return monitored_vars
-
 
     #@profile
     def _forward_collect(
@@ -1238,6 +1143,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             'optimizer_world_model': self._optimizer_world_model.state_dict(),
         }
 
+    # ========== TODO: original version: load all parameters ==========
     # def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
     #     """
     #     Overview:
@@ -1249,7 +1155,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
     #     self._target_model.load_state_dict(state_dict['target_model'])
     #     self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
 
-    # ========== TODO ==========
+    # ========== TODO: pretrain-finetue version: only load encoder and transformer-backbone parameters  ==========
     def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
         """
         Overview:

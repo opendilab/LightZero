@@ -304,11 +304,11 @@ class MuZeroMCTSCtree(object):
                 """
                 network_output = model.recurrent_inference(latent_states, last_actions)  # for classic muzero
 
-                try:
-                    # for multi task
+                if task_id is not None:
+                    # multi task setting
                     network_output = model.recurrent_inference(latent_states, last_actions, task_id=task_id)
-                except Exception as e:
-                    # for single task
+                else:
+                    # single task setting
                     network_output = model.recurrent_inference(latent_states, last_actions)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)

@@ -1,15 +1,13 @@
 import copy
-from collections import defaultdict
 from typing import List, Dict, Tuple, Union
 
 import numpy as np
 import torch
 import torch.optim as optim
 from ding.model import model_wrap
-from ding.utils import POLICY_REGISTRY
 from ding.torch_utils import to_tensor
+from ding.utils import POLICY_REGISTRY
 
-from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.model.utils import cal_dormant_ratio
@@ -26,9 +24,7 @@ from lzero.policy import (
     prepare_obs,
 )
 from lzero.policy.muzero import MuZeroPolicy
-from .utils import configure_optimizers_nanogpt
-from line_profiler import line_profiler
-from ding.utils import set_pkg_seed, get_rank, get_world_size
+
 
 def generate_task_loss_dict(multi_task_losses, task_name_template, task_id):
     """

@@ -66,10 +66,12 @@ class Tokenizer(nn.Module):
         """
         shape = x.shape
         if task_id is None:
+            # for compatibility with multitask setting
             task_id = 0
         else:
-            task_id = 0  # one encoder
-            # task_id = task_id
+            task_id = 0  # one share encoder
+            # task_id = task_id  # TODO: one encoder per task
+
         # Process input tensor based on its dimensionality
         if len(shape) == 2:
             # Case when input is 2D (B, E)

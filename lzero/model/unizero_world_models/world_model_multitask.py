@@ -1,49 +1,33 @@
 import collections
-import copy
 import logging
 from typing import Any, Tuple
 from typing import Optional
 from typing import Union, Dict
 
-import numpy as np
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
 from lzero.model.common import SimNorm
+from lzero.model.unizero_world_models.world_model import WorldModel
 from lzero.model.utils import cal_dormant_ratio
+from .moe import MoeLayer, MultiplicationFeedForward
 from .slicer import Head
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
-from .utils import LossWithIntermediateLosses, init_weights, to_device_for_kvcache
+from .utils import LossWithIntermediateLosses, init_weights
 from .utils import WorldModelOutput, hash_state
 
-from .moe import MoeLayer, MultiplicationFeedForward
-from lzero.model.unizero_world_models.world_model import WorldModel
 logging.getLogger().setLevel(logging.DEBUG)
-from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, get_rank, get_world_size
-from line_profiler import line_profiler
-import torch
+from ding.utils import get_rank
 import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
 from sklearn.manifold import TSNE
-import matplotlib.pyplot as plt
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-import numpy as np
-import os
-import os
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-import torch
-from matplotlib.patches import Patch
 import os
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-import torch  # 假设您的 `observations` 可能是 torch.Tensor
+import torch 
 
 
 class WorldModelMT(WorldModel):
@@ -72,8 +56,9 @@ class WorldModelMT(WorldModel):
         self.transformer = Transformer(self.config)
 
         # TODO ========
-        self.analysis_mode = self.config.get('analysis_mode', False)
-        if self.analysis_mode:
+        self.analysis_tsne = self.config.get('analysis_tsne', False)
+        
+        if self.analysis_tsne:
             self.env_id_list = self.config.env_id_list
             # 自动生成 self.env_short_names
             self.env_short_names = {}
@@ -153,8 +138,6 @@ class WorldModelMT(WorldModel):
             print('We use normal head')
             # TODO: Normal Head
             for task_id in range(self.task_num):  # TODO
-                action_space_size = self.action_space_size # TODO:======================
-                # action_space_size=18  # TODO:======================
                 self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
                 self.head_policy_multi_task.append(self.head_policy)
 
@@ -223,7 +206,7 @@ class WorldModelMT(WorldModel):
         # for self.kv_cache_init_infer
         # In contrast, init_infer only needs to retain the results of the most recent step.
         # self.shared_pool_size_init = int(2*self.env_num)
-        self.shared_pool_size_init = int(2) # NOTE: 过多会导致检索到错误的kvcache吗
+        self.shared_pool_size_init = int(2)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
         self.shared_pool_init_infer = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
         self.shared_pool_index_init_envs = [0 for _ in range(self.env_num)]
 
@@ -234,8 +217,6 @@ class WorldModelMT(WorldModel):
 
         self.reanalyze_phase = False
         self._rank = get_rank()
-
-
 
     def _generate_colors(self, num_colors):
         """
@@ -565,7 +546,7 @@ class WorldModelMT(WorldModel):
             - WorldModelOutput: Model output containing logits for observations, rewards, policy, and value.
         """
         # task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE: TODO
-        self.task_embeddings = torch.zeros(self.config.embed_dim, device=self.device) # NOTE:TODO no task_embeddings =============
+        self.task_embeddings = torch.zeros(self.config.embed_dim, device=self.device) #  ============= TODO: no task_embeddings now =============
 
         # Determine previous steps based on key-value caching method
         if kvcache_independent:
@@ -621,7 +602,7 @@ class WorldModelMT(WorldModel):
             logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
             logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
         else:
-            # TODO: N head
+            # TODO: in total N head, one head per task
             logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
             logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
             logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
@@ -714,7 +695,7 @@ class WorldModelMT(WorldModel):
 
     #@profile
     @torch.no_grad()
-    def reset_for_initial_inference(self, obs_act_dict: torch.FloatTensor, task_id=0) -> torch.FloatTensor:
+    def reset_for_initial_inference(self, obs_act_dict: torch.FloatTensor, task_id = 0) -> torch.FloatTensor:
         """
         Reset the model state based on initial observations and actions.
 
@@ -751,7 +732,7 @@ class WorldModelMT(WorldModel):
     @torch.no_grad()
     def wm_forward_for_initial_inference(self, last_obs_embeddings: torch.LongTensor,
                                                              batch_action=None,
-                                                             current_obs_embeddings=None, task_id=0) -> torch.FloatTensor:
+                                                             current_obs_embeddings=None, task_id = 0) -> torch.FloatTensor:
         """
         Refresh key-value pairs with the initial latent state for inference.
 
@@ -866,7 +847,7 @@ class WorldModelMT(WorldModel):
 
     #@profile
     @torch.no_grad()
-    def forward_initial_inference(self, obs_act_dict, task_id=0):
+    def forward_initial_inference(self, obs_act_dict, task_id = 0):
         """
         Perform initial inference based on the given observation-action dictionary.
 
@@ -885,7 +866,7 @@ class WorldModelMT(WorldModel):
     #@profile
     @torch.no_grad()
     def forward_recurrent_inference(self, state_action_history, simulation_index=0,
-                                    latent_state_index_in_search_path=[], task_id=0):
+                                    latent_state_index_in_search_path=[], task_id = 0):
         """
         Perform recurrent inference based on the state-action history.
 
@@ -1155,7 +1136,7 @@ class WorldModelMT(WorldModel):
 
     #@profile
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
-                                     simulation_index: int = 0, task_id=0) -> list:
+                                     simulation_index: int = 0, task_id = 0) -> list:
         """
         Retrieves or generates key-value caches for each environment based on the latent state.
 
@@ -1338,7 +1319,6 @@ class WorldModelMT(WorldModel):
         - samples_per_task: 每个任务选择的样本数量，默认 5
         - save_dir: 保存路径，默认 'tsne_plots_26games'
         """
-        import matplotlib.colors as mcolors
 
         # 创建保存目录
         os.makedirs(save_dir, exist_ok=True)
@@ -1489,11 +1469,12 @@ class WorldModelMT(WorldModel):
             self.plot_embeddings(tsne_results, all_task_ids, all_observations, save_dir=f'tsne_plots_{self.num_tasks}games')
 
     #@profile
-    def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None, task_id=0, **kwargs: Any) -> LossWithIntermediateLosses:
+    def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None, task_id = 0, **kwargs: Any) -> LossWithIntermediateLosses:
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'], task_id=task_id)
 
-        if self.analysis_mode:
+        if self.analysis_tsne:
+            # =========== tsne analysis ===========
             # 确保embeddings在CUDA设备上且为稠密张量
             if not obs_embeddings.is_cuda:
                 obs_embeddings = obs_embeddings.cuda()
@@ -1848,7 +1829,6 @@ class WorldModelMT(WorldModel):
         """
         Clears the caches of the world model.
         """
-        # self.past_kv_cache_init_infer.clear()
         for kv_cache_dict_env in self.past_kv_cache_init_infer_envs:
             kv_cache_dict_env.clear()
         self.past_kv_cache_recurrent_infer.clear()

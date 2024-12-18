@@ -100,7 +100,7 @@ class UniZeroMTModel(nn.Module):
             print('==' * 20)
         elif world_model_cfg.obs_type == 'image':
             self.representation_network = nn.ModuleList()
-            # for task_id in range(self.task_num):  # N independent encoder
+            # for task_id in range(self.task_num):  # TODO: N independent encoder
             for task_id in range(1):  # TODO: one share encoder
                 self.representation_network.append(RepresentationNetworkUniZero(
                     observation_shape,

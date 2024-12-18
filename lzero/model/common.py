@@ -819,11 +819,6 @@ class PredictionNetwork(nn.Module):
         self.conv1x1_value = nn.Conv2d(num_channels, value_head_channels, 1)
         self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
 
-        # if observation_shape[1] == 96:
-        #     latent_shape = (observation_shape[1] / 16, observation_shape[2] / 16)
-        # elif observation_shape[1] == 64:
-        #     latent_shape = (observation_shape[1] / 8, observation_shape[2] / 8)
-        
         if observation_shape[1] == 96:
             latent_shape = (observation_shape[1] // 16, observation_shape[2] // 16)
         elif observation_shape[1] == 64:
