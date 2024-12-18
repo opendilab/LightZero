@@ -61,6 +61,13 @@ class MuZeroGameBuffer(GameBuffer):
         self.sample_times = 0
         self.active_root_num = 0
 
+        if hasattr(self._cfg, 'task_id'):
+            self.task_id = self._cfg.task_id
+            print(f"Task ID is set to {self.task_id}.")
+        else:
+            self.task_id = None
+            print("No task_id found in configuration. Task ID is set to None.")
+
     def reset_runtime_metrics(self):
         """
         Overview:
@@ -448,7 +455,11 @@ class MuZeroGameBuffer(GameBuffer):
                 end_index = self._cfg.mini_infer_size * (i + 1)
                 m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device)
                 # calculate the target value
-                m_output = model.initial_inference(m_obs)
+                if self.task_id is not None:
+                    m_output = model.initial_inference(m_obs, task_id=self.task_id)
+                else:
+                    m_output = model.initial_inference(m_obs)
+                
 
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
@@ -573,7 +584,10 @@ class MuZeroGameBuffer(GameBuffer):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
                 m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device)
-                m_output = model.initial_inference(m_obs)
+                if self.task_id is not None:
+                    m_output = model.initial_inference(m_obs, task_id=self.task_id)
+                else:
+                    m_output = model.initial_inference(m_obs)
 
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
@@ -603,7 +617,11 @@ class MuZeroGameBuffer(GameBuffer):
                     roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 with self._origin_search_timer:
-                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                    if self.task_id is not None:
+                        MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
+                    else:
+                        MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                
                 self.origin_search_time += self._origin_search_timer.value
             else:
                 # python mcts_tree
@@ -613,7 +631,11 @@ class MuZeroGameBuffer(GameBuffer):
                 else:
                     roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                if self.task_id is not None:
+                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
+                else:
+                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+
 
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
@@ -757,6 +779,7 @@ class MuZeroGameBuffer(GameBuffer):
         NOTE:
             train_data = [current_batch, target_batch]
             current_batch = [obs_list, action_list, improved_policy_list(only in Gumbel MuZero), mask_list, batch_index_list, weights, make_time_list]
+            target_batch = [batch_rewards, batch_target_values, batch_target_policies]
         """
         indices = train_data[0][-3]
         metas = {'make_time': train_data[0][-1], 'batch_priorities': batch_priorities}

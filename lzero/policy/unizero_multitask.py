@@ -4,22 +4,108 @@ from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch
-import wandb
 from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
 
 from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
+from lzero.policy import prepare_obs_stack4_for_unizero
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
-    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
-    prepare_obs_stack4_for_unizero
-from lzero.policy.muzero import MuZeroPolicy
+    DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs
+from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 
 
-@POLICY_REGISTRY.register('unizero')
-class UniZeroPolicy(MuZeroPolicy):
+# sys.path.append('/Users/puyuan/code/LibMTL/')
+# from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+# from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
+
+# from LibMTL.weighting.abstract_weighting import AbsWeighting
+
+
+def generate_task_loss_dict(multi_task_losses, task_name_template, task_id):
+    """
+    生成每个任务的损失字典
+    :param multi_task_losses: 包含每个任务损失的列表
+    :param task_name_template: 任务名称模板，例如 'obs_loss_task{}'
+    :return: 一个字典，包含每个任务的损失
+    """
+    task_loss_dict = {}
+    for task_idx, task_loss in enumerate(multi_task_losses):
+        task_name = task_name_template.format(task_idx + task_id)
+        try:
+            task_loss_dict[task_name] = task_loss.item() if hasattr(task_loss, 'item') else task_loss
+        except Exception as e:
+            task_loss_dict[task_name] = task_loss
+    return task_loss_dict
+
+
+
+class WrappedModel:
+    def __init__(self, world_model):
+        self.world_model = world_model
+
+    def parameters(self):
+        # 返回 tokenizer, transformer 以及所有嵌入层的参数
+        return self.world_model.parameters()
+
+    def zero_grad(self, set_to_none=False):
+        # 将 tokenizer, transformer 和所有嵌入层的梯度设为零
+        self.world_model.zero_grad(set_to_none=set_to_none)
+
+
+class WrappedModelV2:
+    def __init__(self, tokenizer, transformer, pos_emb, task_emb, act_embedding_table):
+        self.tokenizer = tokenizer
+        self.transformer = transformer
+        self.pos_emb = pos_emb
+        self.task_emb = task_emb
+        self.act_embedding_table = act_embedding_table
+
+    def parameters(self):
+        # 返回 tokenizer, transformer 以及所有嵌入层的参数
+        return (list(self.tokenizer.parameters()) +
+                list(self.transformer.parameters()) +
+                list(self.pos_emb.parameters()) +
+                list(self.task_emb.parameters()) +
+                list(self.act_embedding_table.parameters()))
+
+    def zero_grad(self, set_to_none=False):
+        # 将 tokenizer, transformer 和所有嵌入层的梯度设为零
+        self.tokenizer.zero_grad(set_to_none=set_to_none)
+        self.transformer.zero_grad(set_to_none=set_to_none)
+        self.pos_emb.zero_grad(set_to_none=set_to_none)
+        self.task_emb.zero_grad(set_to_none=set_to_none)
+        self.act_embedding_table.zero_grad(set_to_none=set_to_none)
+
+
+class WrappedModelV3:
+    def __init__(self, transformer, pos_emb, task_emb, act_embedding_table):
+        self.transformer = transformer
+        self.pos_emb = pos_emb
+        self.task_emb = task_emb
+        self.act_embedding_table = act_embedding_table
+
+    def parameters(self):
+        # 返回 tokenizer, transformer 以及所有嵌入层的参数
+        return (list(self.transformer.parameters()) +
+                list(self.pos_emb.parameters()) +
+                list(self.task_emb.parameters()) +
+                list(self.act_embedding_table.parameters()))
+
+    def zero_grad(self, set_to_none=False):
+        # 将 tokenizer, transformer 和所有嵌入层的梯度设为零
+        # self.tokenizer.zero_grad(set_to_none=set_to_none)
+        self.transformer.zero_grad(set_to_none=set_to_none)
+        self.pos_emb.zero_grad(set_to_none=set_to_none)
+        self.task_emb.zero_grad(set_to_none=set_to_none)
+        self.act_embedding_table.zero_grad(set_to_none=set_to_none)
+
+
+
+@POLICY_REGISTRY.register('unizero_multitask')
+class UniZeroMTPolicy(UniZeroPolicy):
     """
     Overview:
         The policy class for UniZero, official implementation for paper UniZero: Generalized and Efficient Planning
@@ -30,7 +116,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
     # The default_config for UniZero policy.
     config = dict(
-        type='unizero',
+        type='unizero_multitask',
         model=dict(
             # (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.
             model_type='conv',  # options={'mlp', 'conv'}
@@ -58,14 +144,12 @@ class UniZeroPolicy(MuZeroPolicy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'BN'.
-            norm_type='BN',
+            norm_type='LN',  # NOTE: TODO
             # (bool) Whether to analyze simulation normalization.
             analysis_sim_norm=False,
             # (int) The save interval of the model.
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=10000, ), ), ),
             world_model_cfg=dict(
-                # (bool) If True, the action space of the environment is continuous, otherwise discrete.
-                continuous_action_space=False,
                 # (int) The number of tokens per block.
                 tokens_per_block=2,
                 # (int) The maximum number of blocks.
@@ -110,8 +194,8 @@ class UniZeroPolicy(MuZeroPolicy):
                 latent_recon_loss_weight=0.,
                 # (float) The weight of the perceptual loss.
                 perceptual_loss_weight=0.,
-                # (float) The weight of the policy entropy loss.
-                policy_entropy_weight=0,
+                # (float) The weight of the policy entropy.
+                policy_entropy_weight=1e-4,
                 # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
                 predict_latent_loss_type='group_kl',
                 # (str) The type of observation. Options are ['image', 'vector'].
@@ -126,7 +210,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # (bool) whether to use rnd model.
         use_rnd_model=False,
         # (bool) Whether to use multi-gpu training.
-        multi_gpu=False,
+        multi_gpu=True,
         # (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)
         # this variable is used in ``collector``.
         sampled_algo=False,
@@ -158,6 +242,7 @@ class UniZeroPolicy(MuZeroPolicy):
         eval_freq=int(5e3),
         # (str) The sample type. Options are ['episode', 'transition'].
         sample_type='transition',
+
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
         transform2string=False,
@@ -199,7 +284,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # (float) One-order Momentum in optimizer, which stabilizes the training process (gradient direction).
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
-        grad_clip_value=20,
+        grad_clip_value=5,
         # (int) The number of episodes in each collecting stage when use muzero_collector.
         n_episode=8,
         # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
@@ -222,13 +307,13 @@ class UniZeroPolicy(MuZeroPolicy):
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        piecewise_decay_lr_scheduler=False,
+        lr_piecewise_constant_decay=False,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e4),
         # (bool) Whether to use manually decayed temperature.
         manual_temperature_decay=False,
         # (int) The number of final training iterations to control temperature, which is only used for manually decay.
-        threshold_training_steps_for_final_temperature=int(5e4),
+        threshold_training_steps_for_final_temperature=int(1e5),
         # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
         # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
         fixed_temperature_value=0.25,
@@ -284,7 +369,8 @@ class UniZeroPolicy(MuZeroPolicy):
             The user can define and use customized network model but must obey the same interface definition indicated \
             by import_names path. For MuZero, ``lzero.model.unizero_model.MuZeroModel``
         """
-        return 'UniZeroModel', ['lzero.model.unizero_model']
+        # NOTE: multi-task model
+        return 'UniZeroMTModel', ['lzero.model.unizero_model_multitask']
 
     def _init_learn(self) -> None:
         """
@@ -330,12 +416,42 @@ class UniZeroPolicy(MuZeroPolicy):
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
-        
-        if self._cfg.use_wandb:
-            # TODO: add the model to wandb
-            wandb.watch(self._learn_model.representation_network, log="all")
 
-    # @profile
+        # 创建 WrappedModel 实例
+        # 所有参数都共享，即所有参数都需要进行矫正
+        # wrapped_model = WrappedModel(
+        #     self._learn_model.world_model,
+        # )
+
+        # head 没有矫正梯度
+        wrapped_model = WrappedModelV2(
+            # self._learn_model.world_model.tokenizer, # TODO:
+            self._learn_model.world_model.tokenizer.encoder[0],  # TODO: one encoder
+            self._learn_model.world_model.transformer,
+            self._learn_model.world_model.pos_emb,
+            self._learn_model.world_model.task_emb,
+            self._learn_model.world_model.act_embedding_table,
+        )
+
+        # head 和 tokenizer.encoder 没有矫正梯度
+        # wrapped_model = WrappedModelV3(
+        #     self._learn_model.world_model.transformer,
+        #     self._learn_model.world_model.pos_emb,
+        #     self._learn_model.world_model.task_emb,
+        #     self._learn_model.world_model.act_embedding_table,
+        # )
+
+        # 将 wrapped_model 作为 share_model 传递给 GradCorrect
+        # ========= 初始化 MoCo CAGrad 参数 =========
+        # self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
+        # self.grad_correct.init_param()  
+        # self.grad_correct.rep_grad = False
+
+        self.task_id = self._cfg.task_id
+        self.task_num_for_current_rank = self._cfg.task_num
+
+
+    #@profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         Overview:
@@ -352,92 +468,158 @@ class UniZeroPolicy(MuZeroPolicy):
         self._learn_model.train()
         self._target_model.train()
 
-        current_batch, target_batch, _ = data
-        obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time = current_batch
-        target_reward, target_value, target_policy = target_batch
+        obs_loss_multi_task = []
+        reward_loss_multi_task = []
+        policy_loss_multi_task = []
+        value_loss_multi_task = []
+        latent_recon_loss_multi_task = []
+        perceptual_loss_multi_task = []
+        orig_policy_loss_multi_task = []
+        policy_entropy_multi_task = []
+        weighted_total_loss = 0.0  # 初始化为0,避免使用in-place操作
 
-        # Prepare observations based on frame stack number
-        if self._cfg.model.frame_stack_num == 4:
-            obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
-        else:
-            obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)  # TODO: optimize
+        latent_state_l2_norms_multi_task = []
+        average_target_policy_entropy_multi_task = []
+        value_priority_multi_task = []
+        value_priority_mean_multi_task = []
 
-        # Apply augmentations if needed
-        if self._cfg.use_augmentation:
-            obs_batch = self.image_transforms.transform(obs_batch)
-            if self._cfg.model.self_supervised_learning_loss:
-                obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
-        # Prepare action batch and convert to torch tensor
-        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
-            -1).long()  # For discrete action space
-        data_list = [mask_batch, target_reward, target_value, target_policy, weights]
-        mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
-                                                                                                self._cfg.device)
-        target_reward = target_reward.view(self._cfg.batch_size, -1)
-        target_value = target_value.view(self._cfg.batch_size, -1)
+        losses_list = []  # 用于存储每个任务的损失
+        for task_id, data_one_task in enumerate(data):
+            current_batch, target_batch, task_id = data_one_task
+            # current_batch, target_batch, _ = data
+            obs_batch_ori, action_batch, target_action_batch, mask_batch, indices, weights, make_time = current_batch
+            target_reward, target_value, target_policy = target_batch
 
-        # Transform rewards and values to their scaled forms
-        transformed_target_reward = scalar_transform(target_reward)
-        transformed_target_value = scalar_transform(target_value)
+            # Prepare observations based on frame stack number
+            if self._cfg.model.frame_stack_num == 4:
+                obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
+            else:
+                obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 
-        # Convert to categorical distributions
-        target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
-        target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+            # Apply augmentations if needed
+            if self._cfg.use_augmentation:
+                obs_batch = self.image_transforms.transform(obs_batch)
+                if self._cfg.model.self_supervised_learning_loss:
+                    obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
-        # Prepare batch for GPT model
-        batch_for_gpt = {}
-        if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
-            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                self._cfg.batch_size, -1, self._cfg.model.observation_shape)
-        elif len(self._cfg.model.observation_shape) == 3:
-            batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
-                self._cfg.batch_size, -1, *self._cfg.model.observation_shape)
+            # Prepare action batch and convert to torch tensor
+            action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
+                -1).long()  # For discrete action space
+            data_list = [mask_batch, target_reward.astype('float32'), target_value.astype('float32'), target_policy,
+                         weights]
+            mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
+                                                                                                    self._cfg.device)
 
-        batch_for_gpt['actions'] = action_batch.squeeze(-1)
-        batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
-        batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
-        batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
-        batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
-        batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long,
-                                            device=self._cfg.device)
-        batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
-        batch_for_gpt['target_policy'] = target_policy[:, :-1]
+            
+            # rank = get_rank()
+            # print(f'Rank {rank}: cfg.policy.task_id : {self._cfg.task_id}, self._cfg.batch_size {self._cfg.batch_size}')
 
-        # Extract valid target policy data and compute entropy
-        valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
-        target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
-        average_target_policy_entropy = target_policy_entropy.mean()
+            target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
+            target_value = target_value.view(self._cfg.batch_size[task_id], -1)
 
-        # Update world model
-        losses = self._learn_model.world_model.compute_loss(
-            batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle
-        )
+            target_reward = target_reward.view(self._cfg.batch_size[task_id], -1)
+            target_value = target_value.view(self._cfg.batch_size[task_id], -1)
 
-        weighted_total_loss = losses.loss_total
-        for loss_name, loss_value in losses.intermediate_losses.items():
-            self.intermediate_losses[f"{loss_name}"] = loss_value
+            # assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
-        obs_loss = self.intermediate_losses['loss_obs']
-        reward_loss = self.intermediate_losses['loss_rewards']
-        policy_loss = self.intermediate_losses['loss_policy']
-        value_loss = self.intermediate_losses['loss_value']
-        latent_recon_loss = self.intermediate_losses['latent_recon_loss']
-        perceptual_loss = self.intermediate_losses['perceptual_loss']
-        orig_policy_loss = self.intermediate_losses['orig_policy_loss']
-        policy_entropy = self.intermediate_losses['policy_entropy']
-        first_step_losses = self.intermediate_losses['first_step_losses']
-        middle_step_losses = self.intermediate_losses['middle_step_losses']
-        last_step_losses = self.intermediate_losses['last_step_losses']
-        dormant_ratio_encoder = self.intermediate_losses['dormant_ratio_encoder']
-        dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
-        latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
+            # Transform rewards and values to their scaled forms
+            transformed_target_reward = scalar_transform(target_reward)
+            transformed_target_value = scalar_transform(target_value)
 
-        assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
-        assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
+            # Convert to categorical distributions
+            target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
+            target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+
+            # Prepare batch for a transformer-based world model
+            batch_for_gpt = {}
+            if isinstance(self._cfg.model.observation_shape, int) or len(self._cfg.model.observation_shape) == 1:
+                batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+                    self._cfg.batch_size[task_id], -1, self._cfg.model.observation_shape)
+            elif len(self._cfg.model.observation_shape) == 3:
+                batch_for_gpt['observations'] = torch.cat((obs_batch, obs_target_batch), dim=1).reshape(
+                    self._cfg.batch_size[task_id], -1, *self._cfg.model.observation_shape)
+
+            batch_for_gpt['actions'] = action_batch.squeeze(-1)
+            batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
+            batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
+            batch_for_gpt['mask_padding'] = batch_for_gpt['mask_padding'][:, :-1]
+            batch_for_gpt['observations'] = batch_for_gpt['observations'][:, :-1]
+            batch_for_gpt['ends'] = torch.zeros(batch_for_gpt['mask_padding'].shape, dtype=torch.long,
+                                                device=self._cfg.device)
+            batch_for_gpt['target_value'] = target_value_categorical[:, :-1]
+            batch_for_gpt['target_policy'] = target_policy[:, :-1]
+
+            # Extract valid target policy data and compute entropy
+            valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
+            target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
+            average_target_policy_entropy = target_policy_entropy.mean().item()
+
+            # Update world model
+            intermediate_losses = defaultdict(float)
+            losses = self._learn_model.world_model.compute_loss(
+                batch_for_gpt, self._target_model.world_model.tokenizer, self.inverse_scalar_transform_handle, task_id=task_id
+            )
+
+            weighted_total_loss += losses.loss_total  # TODO
+
+            assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
+            assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
+
+            losses_list.append(losses.loss_total)  # TODO: for moco
+
+            for loss_name, loss_value in losses.intermediate_losses.items():
+                intermediate_losses[f"{loss_name}"] = loss_value
+
+            obs_loss = intermediate_losses['loss_obs']
+            reward_loss = intermediate_losses['loss_rewards']
+            policy_loss = intermediate_losses['loss_policy']
+            orig_policy_loss = intermediate_losses['orig_policy_loss']
+            policy_entropy = intermediate_losses['policy_entropy']
+            value_loss = intermediate_losses['loss_value']
+            latent_recon_loss = intermediate_losses['latent_recon_loss']
+            perceptual_loss = intermediate_losses['perceptual_loss']
+            latent_state_l2_norms = intermediate_losses['latent_state_l2_norms']
+            # value_priority = intermediate_losses['value_priority']
+            # logits_value = intermediate_losses['logits_value']
+
+            # print(f'logits_value:" {logits_value}')
+            # print(f'logits_value.shape:" {logits_value.shape}')
+            # print(f"batch_for_gpt['observations'].shape: {batch_for_gpt['observations'].shape}")
+
+            # ============ for value priority  ============ 
+            # transform the categorical representation of the scaled value to its original value
+            # original_value = self.inverse_scalar_transform_handle(logits_value.reshape(-1, 101)).reshape(
+            #         batch_for_gpt['observations'].shape[0], batch_for_gpt['observations'].shape[1], 1)
+            # calculate the new priorities for each transition.
+            # value_priority = torch.nn.L1Loss(reduction='none')(original_value.squeeze(-1)[:,0], target_value[:, 0])   # TODO: mix of mean and sum
+            # value_priority = value_priority.data.cpu().numpy() + 1e-6 # TODO: log-reduce not support array now
+            value_priority = torch.tensor(0., device=self._cfg.device)
+            # ============ for value priority  ============ 
+
+            obs_loss_multi_task.append(obs_loss)
+            reward_loss_multi_task.append(reward_loss)
+            policy_loss_multi_task.append(policy_loss)
+            orig_policy_loss_multi_task.append(orig_policy_loss)
+            policy_entropy_multi_task.append(policy_entropy)
+            reward_loss_multi_task.append(reward_loss)
+            value_loss_multi_task.append(value_loss)
+            latent_recon_loss_multi_task.append(latent_recon_loss)
+            perceptual_loss_multi_task.append(perceptual_loss)
+            latent_state_l2_norms_multi_task.append(latent_state_l2_norms)
+            value_priority_multi_task.append(value_priority)
+            value_priority_mean_multi_task.append(value_priority.mean().item())
+
 
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
+
+        # TODO: 使用 MoCo 或 CAGrad 来计算梯度和权重
+        #  ============= for CAGrad and MoCo =============
+        # lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+
+        #  ============= TODO: 不使用梯度矫正的情况  =============
+        lambd = torch.tensor([0. for i in range(self.task_num_for_current_rank)], device=self._cfg.device)
         weighted_total_loss.backward()
 
         #  ========== for debugging ==========
@@ -451,13 +633,19 @@ class UniZeroPolicy(MuZeroPolicy):
             self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
             self._target_model.encoder_hook.clear_data()
 
+
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
                                                                         self._cfg.grad_clip_value)
+        
         if self._cfg.multi_gpu:
+            # Very important to sync gradients before updating the model
+            # rank = get_rank()
+            # print(f'Rank {rank} train task_id: {self._cfg.task_id} sync grad begin...')
             self.sync_gradients(self._learn_model)
+            # print(f'Rank {rank} train task_id: {self._cfg.task_id} sync grad end...')
 
         self._optimizer_world_model.step()
-        if self._cfg.piecewise_decay_lr_scheduler:
+        if self._cfg.lr_piecewise_constant_decay:
             self.lr_scheduler.step()
 
         # Core target model update step
@@ -473,57 +661,41 @@ class UniZeroPolicy(MuZeroPolicy):
             current_memory_allocated_gb = 0.
             max_memory_allocated_gb = 0.
 
-        return_log_dict = {
-            'analysis/first_step_loss_value': first_step_losses['loss_value'].item(),
-            'analysis/first_step_loss_policy': first_step_losses['loss_policy'].item(),
-            'analysis/first_step_loss_rewards': first_step_losses['loss_rewards'].item(),
-            'analysis/first_step_loss_obs': first_step_losses['loss_obs'].item(),
-
-            'analysis/middle_step_loss_value': middle_step_losses['loss_value'].item(),
-            'analysis/middle_step_loss_policy': middle_step_losses['loss_policy'].item(),
-            'analysis/middle_step_loss_rewards': middle_step_losses['loss_rewards'].item(),
-            'analysis/middle_step_loss_obs': middle_step_losses['loss_obs'].item(),
-
-            'analysis/last_step_loss_value': last_step_losses['loss_value'].item(),
-            'analysis/last_step_loss_policy': last_step_losses['loss_policy'].item(),
-            'analysis/last_step_loss_rewards': last_step_losses['loss_rewards'].item(),
-            'analysis/last_step_loss_obs': last_step_losses['loss_obs'].item(),
-
+        # 然后，在您的代码中，使用这个函数来构建损失字典：
+        return_loss_dict = {
             'Current_GPU': current_memory_allocated_gb,
             'Max_GPU': max_memory_allocated_gb,
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self._collect_epsilon,
             'cur_lr_world_model': self._optimizer_world_model.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
-            'obs_loss': obs_loss.item(),
-            'latent_recon_loss': latent_recon_loss.item(),
-            'perceptual_loss': perceptual_loss.item(),
-            'policy_loss': policy_loss.item(),
-            'orig_policy_loss': orig_policy_loss.item(),
-            'policy_entropy': policy_entropy.item(),
-            'target_policy_entropy': average_target_policy_entropy.item(),
-            'reward_loss': reward_loss.item(),
-            'value_loss': value_loss.item(),
-            # 'value_priority_orig': np.zeros(self._cfg.batch_size),  # TODO
-            'target_reward': target_reward.mean().item(),
-            'target_value': target_value.mean().item(),
-            'transformed_target_reward': transformed_target_reward.mean().item(),
-            'transformed_target_value': transformed_target_value.mean().item(),
+            # 'policy_entropy': policy_entropy,
+            # 'target_policy_entropy': average_target_policy_entropy,
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
-            'analysis/dormant_ratio_encoder': dormant_ratio_encoder.item(),
-            'analysis/dormant_ratio_world_model': dormant_ratio_world_model.item(),
-            'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
-            'analysis/l2_norm_before': self.l2_norm_before,
-            'analysis/l2_norm_after': self.l2_norm_after,
-            'analysis/grad_norm_before': self.grad_norm_before,
-            'analysis/grad_norm_after': self.grad_norm_after,
         }
-        
-        if self._cfg.use_wandb:
-            wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
-            wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
 
-        return return_log_dict
+        # 生成任务相关的损失字典，并为每个任务相关的 loss 添加前缀 "noreduce_"
+        multi_task_loss_dicts = {
+            **generate_task_loss_dict(obs_loss_multi_task, 'noreduce_obs_loss_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(latent_recon_loss_multi_task, 'noreduce_latent_recon_loss_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(perceptual_loss_multi_task, 'noreduce_perceptual_loss_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(latent_state_l2_norms_multi_task, 'noreduce_latent_state_l2_norms_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(policy_loss_multi_task, 'noreduce_policy_loss_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(orig_policy_loss_multi_task, 'noreduce_orig_policy_loss_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(policy_entropy_multi_task, 'noreduce_policy_entropy_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(reward_loss_multi_task, 'noreduce_reward_loss_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(value_loss_multi_task, 'noreduce_value_loss_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(average_target_policy_entropy_multi_task, 'noreduce_target_policy_entropy_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(lambd, 'noreduce_lambd_task{}', task_id=self.task_id), 
+            **generate_task_loss_dict(value_priority_multi_task, 'noreduce_value_priority_task{}', task_id=self.task_id),
+            **generate_task_loss_dict(value_priority_mean_multi_task, 'noreduce_value_priority_mean_task{}', task_id=self.task_id),
+        }
+        # 合并两个字典
+        return_loss_dict.update(multi_task_loss_dicts)
+        # print(f'return_loss_dict:{return_loss_dict}')
+
+        # 返回最终的损失字典
+        return return_loss_dict
 
     def monitor_weights_and_grads(self, model):
         for name, param in model.named_parameters():
@@ -555,7 +727,55 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_obs = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for i in range(self.collector_env_num)]
 
-    # @profile
+    # TODO: num_tasks
+    def _monitor_vars_learn(self, num_tasks=2) -> List[str]:
+        """
+        Overview:
+            Register the variables to be monitored in learn mode. The registered variables will be logged in
+            tensorboard according to the return value ``_forward_learn``.
+            If num_tasks is provided, generate monitored variables for each task.
+        """
+        # Basic monitored variables that do not depend on the number of tasks
+        monitored_vars = [
+            'Current_GPU',
+            'Max_GPU',
+            'collect_epsilon',
+            'collect_mcts_temperature',
+            'cur_lr_world_model',
+            'weighted_total_loss',
+            'total_grad_norm_before_clip_wm',
+        ]
+
+        # rank = get_rank()
+        task_specific_vars = [
+            'noreduce_obs_loss',
+            'noreduce_orig_policy_loss',
+            'noreduce_policy_loss',
+            'noreduce_latent_recon_loss',
+            'noreduce_policy_entropy',
+            'noreduce_target_policy_entropy',
+            'noreduce_reward_loss',
+            'noreduce_value_loss',
+            'noreduce_perceptual_loss',
+            'noreduce_latent_state_l2_norms',
+            'noreduce_lambd',
+            'noreduce_value_priority_mean',
+        ]
+        # self.task_num_for_current_rank 作为当前rank的base_index
+        num_tasks = self.task_num_for_current_rank
+        # If the number of tasks is provided, extend the monitored variables list with task-specific variables
+        if num_tasks is not None:
+            for var in task_specific_vars:
+                for task_idx in range(num_tasks):
+                    # print(f"learner policy Rank {rank}, self.task_id: {self.task_id}")
+                    monitored_vars.append(f'{var}_task{self.task_id+task_idx}')
+        else:
+            # If num_tasks is not provided, we assume there's only one task and keep the original variable names
+            monitored_vars.extend(task_specific_vars)
+
+        return monitored_vars
+
+    #@profile
     def _forward_collect(
             self,
             data: torch.Tensor,
@@ -576,7 +796,6 @@ class UniZeroPolicy(MuZeroPolicy):
             - temperature (:obj:`float`): The temperature of the policy.
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
-            - task_id (:obj:`int`): The task id. Default is None, which means UniZero is in the single-task mode.
         Shape:
             - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
@@ -600,7 +819,7 @@ class UniZeroPolicy(MuZeroPolicy):
         output = {i: None for i in ready_env_id}
 
         with torch.no_grad():
-            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
+            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, task_id=task_id)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
@@ -621,7 +840,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
+            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, task_id=task_id)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
@@ -674,8 +893,6 @@ class UniZeroPolicy(MuZeroPolicy):
                 print('==========collect_forward============')
                 print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
                 self._reset_collect(reset_init_data=True)
-                if getattr(self._cfg, 'sample_type', '') == 'episode':
-                    print('BUG: sample_type is episode, but len(self.last_batch_obs) < self.collector_env_num')
 
         return output
 
@@ -698,8 +915,9 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
+    #@profile
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
-                      ready_env_id: np.array = None, task_id: int = None,) -> Dict:
+                      ready_env_id: np.array = None, task_id: int = None) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -709,7 +927,6 @@ class UniZeroPolicy(MuZeroPolicy):
             - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
-            - task_id (:obj:`int`): The task id. Default is None, which means UniZero is in the single-task mode.
         Shape:
             - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
@@ -728,7 +945,7 @@ class UniZeroPolicy(MuZeroPolicy):
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
+            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, task_id=task_id)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             if not self._eval_model.training:
@@ -745,7 +962,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play)
+            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, task_id=task_id)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
@@ -783,7 +1000,8 @@ class UniZeroPolicy(MuZeroPolicy):
 
         return output
 
-    def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+    #@profile
+    def _reset_collect(self, env_id: int = None, current_steps: int = 0, reset_init_data: bool = True) -> None:
         """
         Overview:
             This method resets the collection process for a specific environment. It clears caches and memory
@@ -802,6 +1020,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 self._cfg.device
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
+            # print('collector: last_batch_obs, last_batch_action reset()', self.last_batch_obs.shape)
 
         # Return immediately if env_id is None or a list
         if env_id is None or isinstance(env_id, list):
@@ -816,6 +1035,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # Clear various caches in the collect model's world model
             world_model = self._collect_model.world_model
+            world_model.past_kv_cache_init_infer.clear()
             for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
                 kv_cache_dict_env.clear()
             world_model.past_kv_cache_recurrent_infer.clear()
@@ -827,7 +1047,32 @@ class UniZeroPolicy(MuZeroPolicy):
             print('collector: collect_model clear()')
             print(f'eps_steps_lst[{env_id}]: {current_steps}')
 
-    def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+            # TODO: check its correctness =========
+            self._reset_target_model()
+
+    #@profile
+    def _reset_target_model(self) -> None:
+        """
+        Overview:
+            This method resets the target model. It clears caches and memory, ensuring optimal performance.
+        Arguments:
+            - None
+        """
+
+        # Clear various caches in the target_model
+        world_model = self._target_model.world_model
+        world_model.past_kv_cache_init_infer.clear()
+        for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
+            kv_cache_dict_env.clear()
+        world_model.past_kv_cache_recurrent_infer.clear()
+        world_model.keys_values_wm_list.clear()
+
+        # Free up GPU memory
+        torch.cuda.empty_cache()
+        print('collector: target_model past_kv_cache.clear()')
+
+    #@profile
+    def _reset_eval(self, env_id: int = None, current_steps: int = 0, reset_init_data: bool = True) -> None:
         """
         Overview:
             This method resets the evaluation process for a specific environment. It clears caches and memory
@@ -846,6 +1091,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 self._cfg.device
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
+            # print('evaluator: last_batch_obs, last_batch_action reset()', self.last_batch_obs.shape)
 
         # Return immediately if env_id is None or a list
         if env_id is None or isinstance(env_id, list):
@@ -860,6 +1106,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # Clear various caches in the eval model's world model
             world_model = self._eval_model.world_model
+            # world_model.past_kv_cache_init_infer.clear()
             for kv_cache_dict_env in world_model.past_kv_cache_init_infer_envs:
                 kv_cache_dict_env.clear()
             world_model.past_kv_cache_recurrent_infer.clear()
@@ -871,62 +1118,17 @@ class UniZeroPolicy(MuZeroPolicy):
             print('evaluator: eval_model clear()')
             print(f'eps_steps_lst[{env_id}]: {current_steps}')
 
-    def _monitor_vars_learn(self) -> List[str]:
+
+    def recompute_pos_emb_diff_and_clear_cache(self) -> None:
         """
         Overview:
-            Register the variables to be monitored in learn mode. The registered variables will be logged in
-            tensorboard according to the return value ``_forward_learn``.
+            Clear the caches and precompute positional embedding matrices in the model.
         """
-        return [
-            'analysis/dormant_ratio_encoder',
-            'analysis/dormant_ratio_world_model',
-            'analysis/latent_state_l2_norms',
-            'analysis/l2_norm_before',
-            'analysis/l2_norm_after',
-            'analysis/grad_norm_before',
-            'analysis/grad_norm_after',
-
-            'analysis/first_step_loss_value',
-            'analysis/first_step_loss_policy',
-            'analysis/first_step_loss_rewards',
-            'analysis/first_step_loss_obs',
-
-            'analysis/middle_step_loss_value',
-            'analysis/middle_step_loss_policy',
-            'analysis/middle_step_loss_rewards',
-            'analysis/middle_step_loss_obs',
-
-            'analysis/last_step_loss_value',
-            'analysis/last_step_loss_policy',
-            'analysis/last_step_loss_rewards',
-            'analysis/last_step_loss_obs',
-
-            'Current_GPU',
-            'Max_GPU',
-            'collect_epsilon',
-            'collect_mcts_temperature',
-            'cur_lr_world_model',
-            'cur_lr_tokenizer',
-
-            'weighted_total_loss',
-            'obs_loss',
-            'policy_loss',
-            'orig_policy_loss',
-            'policy_entropy',
-            'latent_recon_loss',
-            'target_policy_entropy',
-            'reward_loss',
-            'value_loss',
-            'consistency_loss',
-            'value_priority',
-            'target_reward',
-            'target_value',
-            'total_grad_norm_before_clip_wm',
-            # tokenizer
-            'commitment_loss',
-            'reconstruction_loss',
-            'perceptual_loss',
-        ]
+        # NOTE: Clear caches and precompute positional embedding matrices both for the collect and target models
+        for model in [self._collect_model, self._target_model]:
+            model.world_model.precompute_pos_emb_diff_kv()
+            model.world_model.clear_caches()
+        torch.cuda.empty_cache()
 
     def _state_dict_learn(self) -> Dict[str, Any]:
         """
@@ -941,23 +1143,89 @@ class UniZeroPolicy(MuZeroPolicy):
             'optimizer_world_model': self._optimizer_world_model.state_dict(),
         }
 
+    # ========== TODO: original version: load all parameters ==========
+    # def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
+    #     """
+    #     Overview:
+    #         Load the state_dict variable into policy learn mode.
+    #     Arguments:
+    #         - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
+    #     """
+    #     self._learn_model.load_state_dict(state_dict['model'])
+    #     self._target_model.load_state_dict(state_dict['target_model'])
+    #     self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
+
+    # ========== TODO: pretrain-finetue version: only load encoder and transformer-backbone parameters  ==========
     def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
         """
         Overview:
-            Load the state_dict variable into policy learn mode.
+            Load the state_dict variable into policy learn mode, excluding multi-task related parameters.
         Arguments:
-            - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
+            - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved previously.
         """
-        self._learn_model.load_state_dict(state_dict['model'])
-        self._target_model.load_state_dict(state_dict['target_model'])
-        self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
+        # 定义需要排除的参数前缀
+        exclude_prefixes = [
+            '_orig_mod.world_model.head_policy_multi_task.',
+            '_orig_mod.world_model.head_value_multi_task.',
+            '_orig_mod.world_model.head_rewards_multi_task.',
+            '_orig_mod.world_model.head_observations_multi_task.',
+            '_orig_mod.world_model.task_emb.'
+        ]
+        
+        # 定义需要排除的具体参数（如果有特殊情况）
+        exclude_keys = [
+            '_orig_mod.world_model.task_emb.weight',
+            '_orig_mod.world_model.task_emb.bias',  # 如果存在则添加
+            # 添加其他需要排除的具体参数名
+        ]
+        
+        def filter_state_dict(state_dict_loader: Dict[str, Any], exclude_prefixes: list, exclude_keys: list = []) -> Dict[str, Any]:
+            """
+            过滤掉需要排除的参数。
+            """
+            filtered = {}
+            for k, v in state_dict_loader.items():
+                if any(k.startswith(prefix) for prefix in exclude_prefixes):
+                    print(f"Excluding parameter: {k}")  # 调试用，查看哪些参数被排除
+                    continue
+                if k in exclude_keys:
+                    print(f"Excluding specific parameter: {k}")  # 调试用
+                    continue
+                filtered[k] = v
+            return filtered
 
-    def recompute_pos_emb_diff_and_clear_cache(self) -> None:
-        """
-        Overview:
-            Clear the caches and precompute positional embedding matrices in the model.
-        """
-        for model in [self._collect_model, self._target_model]:
-            model.world_model.precompute_pos_emb_diff_kv()
-            model.world_model.clear_caches()
-        torch.cuda.empty_cache()
+        # 过滤并加载 'model' 部分
+        if 'model' in state_dict:
+            model_state_dict = state_dict['model']
+            filtered_model_state_dict = filter_state_dict(model_state_dict, exclude_prefixes, exclude_keys)
+            missing_keys, unexpected_keys = self._learn_model.load_state_dict(filtered_model_state_dict, strict=False)
+            if missing_keys:
+                print(f"Missing keys when loading _learn_model: {missing_keys}")
+            if unexpected_keys:
+                print(f"Unexpected keys when loading _learn_model: {unexpected_keys}")
+        else:
+            print("No 'model' key found in the state_dict.")
+
+        # 过滤并加载 'target_model' 部分
+        if 'target_model' in state_dict:
+            target_model_state_dict = state_dict['target_model']
+            filtered_target_model_state_dict = filter_state_dict(target_model_state_dict, exclude_prefixes, exclude_keys)
+            missing_keys, unexpected_keys = self._target_model.load_state_dict(filtered_target_model_state_dict, strict=False)
+            if missing_keys:
+                print(f"Missing keys when loading _target_model: {missing_keys}")
+            if unexpected_keys:
+                print(f"Unexpected keys when loading _target_model: {unexpected_keys}")
+        else:
+            print("No 'target_model' key found in the state_dict.")
+
+        # 加载优化器的 state_dict，不需要过滤，因为优化器通常不包含模型参数
+        if 'optimizer_world_model' in state_dict:
+            optimizer_state_dict = state_dict['optimizer_world_model']
+            try:
+                self._optimizer_world_model.load_state_dict(optimizer_state_dict)
+            except Exception as e:
+                print(f"Error loading optimizer state_dict: {e}")
+        else:
+            print("No 'optimizer_world_model' key found in the state_dict.")
+
+        # 如果需要，还可以加载其他部分，例如 scheduler 等
