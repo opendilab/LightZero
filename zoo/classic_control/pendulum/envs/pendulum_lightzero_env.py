@@ -139,7 +139,7 @@ class PendulumEnv(CartPoleEnv):
         self._eval_episode_return += rew
         obs = to_ndarray(obs).astype(np.float32)
         # wrapped to be transferred to an array with shape (1,)
-        rew = to_ndarray([rew]).astype(np.float32)
+        rew = to_ndarray(rew).astype(np.float32)
 
         if done:
             info['eval_episode_return'] = self._eval_episode_return

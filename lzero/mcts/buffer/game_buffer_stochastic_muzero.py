@@ -85,7 +85,7 @@ class StochasticMuZeroGameBuffer(MuZeroGameBuffer):
             ]
             if self._cfg.use_ture_chance_label_in_chance_encoder:
                 chances_tmp += [
-                    np.random.randint(0, game.action_space_size)
+                    np.random.randint(0, self._cfg.model.chance_space_size)
                     for _ in range(self._cfg.num_unroll_steps - len(chances_tmp))
                 ]
             # obtain the input observations

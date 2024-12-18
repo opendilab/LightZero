@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from torch.distributions import Categorical, Independent, Normal
+from torch.distributions import TransformedDistribution, TanhTransform
 
 from lzero.model.common import SimNorm
 from lzero.model.utils import cal_dormant_ratio
@@ -51,7 +52,7 @@ class WorldModel(nn.Module):
         else:
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         # Move all modules to the specified device
-        print(f"self.device: {self.device}")
+        logging.info(f"self.device: {self.device}")
         self.to(self.device)
 
         # Initialize configuration parameters
@@ -65,7 +66,7 @@ class WorldModel(nn.Module):
         # Position embedding
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
         self.precompute_pos_emb_diff_kv()
-        print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
+        logging.info(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
         self.continuous_action_space = self.config.continuous_action_space
 
         # Initialize action embedding table
@@ -77,7 +78,7 @@ class WorldModel(nn.Module):
         else:
             # for discrete action space
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
-            print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
+            logging.info(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
@@ -85,10 +86,6 @@ class WorldModel(nn.Module):
                                                    self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
         if self.continuous_action_space:
             self.sigma_type = self.config.sigma_type
-            if self.sigma_type == 'fixed':
-                self.fixed_sigma_value = self.config.fixed_sigma_value
-            else:
-                self.fixed_sigma_value = 0.3
             self.bound_type = self.config.bound_type
             self.head_policy = self._create_head_cont(self.value_policy_tokens_pattern, self.action_space_size)
         else:
@@ -116,15 +113,16 @@ class WorldModel(nn.Module):
 
         # TODO: check the size of the shared pool
         # for self.kv_cache_recurrent_infer
-        # If needed, recurrent_infer should store the results of the one MCTS search. 
-        self.shared_pool_size = int(50*self.env_num)
+        # If needed, recurrent_infer should store the results of the one MCTS search.
+        self.num_simulations = getattr(self.config, 'num_simulations', 50)
+        self.shared_pool_size = int(self.num_simulations*self.env_num)
         self.shared_pool_recur_infer = [None] * self.shared_pool_size
         self.shared_pool_index = 0
 
         # for self.kv_cache_init_infer
         # In contrast, init_infer only needs to retain the results of the most recent step.
         # self.shared_pool_size_init = int(2*self.env_num)
-        self.shared_pool_size_init = int(2) # NOTE: 过多会导致检索到错误的kvcache吗
+        self.shared_pool_size_init = int(2)  # NOTE: Will having too many cause incorrect retrieval of the kv cache?
         self.shared_pool_init_infer = [[None] * self.shared_pool_size_init for _ in range(self.env_num)]
         self.shared_pool_index_init_envs = [0 for _ in range(self.env_num)]
 
@@ -135,32 +133,32 @@ class WorldModel(nn.Module):
 
         self.reanalyze_phase = False
 
-    #@profile
     def custom_copy_kv_cache_to_shared_init_envs(self, src_kv: KeysValues, env_id) -> int:
         """
         Overview:
-            Efficiently copy the contents of a KeysValues object to the shared pool.
+            Efficiently copies the contents of a KeysValues object to the shared pool for a specific environment in the init_infer stage.
         Arguments:
-            - src_kv (:obj:`KeysValues`): The source KeysValues object to copy from.
+            - src_kv (:obj:`KeysValues`): The source KeysValues object from which data is copied.
+            - env_id (:obj:`int`): The identifier of the environment for which the cache is being copied.
         Returns:
-            - index (:obj:`int`): The index of the copied KeysValues object in the shared pool.
+            - index (:obj:`int`): The index in the shared pool where the KeysValues object is stored.
         """
         src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
         
         if self.shared_pool_init_infer[env_id][self.shared_pool_index_init_envs[env_id]] is None:
             self.shared_pool_init_infer[env_id][self.shared_pool_index_init_envs[env_id]] = KeysValues(
-                src_kv_shape[0],  # n
-                src_kv_shape[1],  # num_heads
-                src_kv_shape[2],  # max_tokens
-                src_kv_shape[3] * src_kv_shape[1],  # embed_dim
-                len(src_kv),  # num_layers
-                src_kv._keys_values[0]._k_cache._cache.device,  # device
+                src_kv_shape[0],  # Number of elements (n)
+                src_kv_shape[1],  # Number of attention heads (num_heads)
+                src_kv_shape[2],  # Maximum number of tokens (max_tokens)
+                src_kv_shape[3] * src_kv_shape[1],  # Embedding dimension (embed_dim)
+                len(src_kv),  # Number of layers (num_layers)
+                src_kv._keys_values[0]._k_cache._cache.device,  # Device where the cache is stored
             )
         
         dst_kv = self.shared_pool_init_infer[env_id][self.shared_pool_index_init_envs[env_id]]
         
         for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
-            # Copy the key and value caches using torch.copy_()
+            # Copy the key and value caches using torch.copy_() for efficient data transfer
             dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
             dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
             dst_layer._k_cache._size = src_layer._k_cache._size
@@ -171,35 +169,31 @@ class WorldModel(nn.Module):
         
         return index
 
-    #@profile
     def custom_copy_kv_cache_to_shared_wm(self, src_kv: KeysValues) -> int:
         """
         Overview:
-            Efficiently copy the contents of a KeysValues object to the shared pool.
+            Efficiently copies the contents of a KeysValues object to the shared pool for world model usage.
         Arguments:
-            - src_kv (:obj:`KeysValues`): The source KeysValues object to copy from.
+            - src_kv (:obj:`KeysValues`): The source KeysValues object from which data is copied.
         Returns:
-            - index (:obj:`int`): The index of the copied KeysValues object in the shared pool.
+            - index (:obj:`int`): The index in the shared pool where the KeysValues object is stored.
         """
-        try:
-            src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
-        except Exception as e:
-            print(f"src_kv_shape: {src_kv_shape}")
+        src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
         
         if self.shared_pool_wm[self.shared_pool_index_wm] is None:
             self.shared_pool_wm[self.shared_pool_index_wm] = KeysValues(
-                src_kv_shape[0],  # n
-                src_kv_shape[1],  # num_heads
-                src_kv_shape[2],  # max_tokens
-                src_kv_shape[3] * src_kv_shape[1],  # embed_dim
-                len(src_kv),  # num_layers
-                src_kv._keys_values[0]._k_cache._cache.device,  # device
+                src_kv_shape[0],  # Number of elements (n)
+                src_kv_shape[1],  # Number of attention heads (num_heads)
+                src_kv_shape[2],  # Maximum number of tokens (max_tokens)
+                src_kv_shape[3] * src_kv_shape[1],  # Embedding dimension (embed_dim)
+                len(src_kv),  # Number of layers (num_layers)
+                src_kv._keys_values[0]._k_cache._cache.device,  # Device where the cache is stored
             )
         
         dst_kv = self.shared_pool_wm[self.shared_pool_index_wm]
         
         for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
-            # Copy the key and value caches using torch.copy_()
+            # Copy the key and value caches using torch.copy_() for efficient data transfer
             dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
             dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
             dst_layer._k_cache._size = src_layer._k_cache._size
@@ -209,32 +203,31 @@ class WorldModel(nn.Module):
         
         return dst_kv
 
-    #@profile
     def custom_copy_kv_cache_to_shared_recur(self, src_kv: KeysValues) -> int:
         """
         Overview:
-            Efficiently copy the contents of a KeysValues object to the shared pool.
+            Efficiently copies the contents of a KeysValues object to the shared pool for recurrent inference.
         Arguments:
-            - src_kv (:obj:`KeysValues`): The source KeysValues object to copy from.
+            - src_kv (:obj:`KeysValues`): The source KeysValues object from which data is copied.
         Returns:
-            - index (:obj:`int`): The index of the copied KeysValues object in the shared pool.
+            - index (:obj:`int`): The index in the shared pool where the KeysValues object is stored.
         """
         src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
         
         if self.shared_pool_recur_infer[self.shared_pool_index] is None:
             self.shared_pool_recur_infer[self.shared_pool_index] = KeysValues(
-                src_kv_shape[0],  # n
-                src_kv_shape[1],  # num_heads
-                src_kv_shape[2],  # max_tokens
-                src_kv_shape[3] * src_kv_shape[1],  # embed_dim
-                len(src_kv),  # num_layers
-                src_kv._keys_values[0]._k_cache._cache.device,  # device
+                src_kv_shape[0],  # Number of elements (n)
+                src_kv_shape[1],  # Number of attention heads (num_heads)
+                src_kv_shape[2],  # Maximum number of tokens (max_tokens)
+                src_kv_shape[3] * src_kv_shape[1],  # Embedding dimension (embed_dim)
+                len(src_kv),  # Number of layers (num_layers)
+                src_kv._keys_values[0]._k_cache._cache.device,  # Device where the cache is stored
             )
         
         dst_kv = self.shared_pool_recur_infer[self.shared_pool_index]
         
         for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
-            # Copy the key and value caches using torch.copy_()
+            # Copy the key and value caches using torch.copy_() for efficient data transfer
             dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
             dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
             dst_layer._k_cache._size = src_layer._k_cache._size
@@ -244,7 +237,6 @@ class WorldModel(nn.Module):
         self.shared_pool_index = (self.shared_pool_index + 1) % self.shared_pool_size
         
         return index
-
 
     def _initialize_config_parameters(self) -> None:
         """Initialize configuration parameters."""
@@ -303,7 +295,7 @@ class WorldModel(nn.Module):
             layer_num=2,  # TODO: check the effect of layer_num
             sigma_type=self.sigma_type,
             activation=nn.GELU(approximate='tanh'),
-            fixed_sigma_value=self.fixed_sigma_value,
+            fixed_sigma_value=self.config.fixed_sigma_value if self.sigma_type == 'fixed' else 0.5,
             norm_type=None,
             bound_type=self.bound_type
         )
@@ -331,10 +323,6 @@ class WorldModel(nn.Module):
 
     def _initialize_cache_structures(self) -> None:
         """Initialize cache structures for past keys and values."""
-        # self.past_kv_cache_init_infer = collections.OrderedDict()
-        # self.past_kv_cache_recurrent_infer = collections.OrderedDict()
-        # self.past_kv_cache_init_infer_envs = [collections.OrderedDict() for _ in range(self.env_num)]
-        # TODO: check
         from collections import defaultdict
         self.past_kv_cache_recurrent_infer = defaultdict(dict)
         self.past_kv_cache_init_infer_envs = [defaultdict(dict) for _ in range(self.env_num)]
@@ -641,18 +629,18 @@ class WorldModel(nn.Module):
             current_obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch_current_obs)
             # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
             self.latent_state = current_obs_embeddings
-            outputs_wm = self.wm_forward_for_initial_inference(obs_embeddings, batch_action,
+            outputs_wm = self.wm_forward_for_initial_infererence(obs_embeddings, batch_action,
                                                                                    current_obs_embeddings)
         else:
             # ================ calculate the target value in Train phase ================
             self.latent_state = obs_embeddings
-            outputs_wm = self.wm_forward_for_initial_inference(obs_embeddings, batch_action, None)
+            outputs_wm = self.wm_forward_for_initial_infererence(obs_embeddings, batch_action, None)
 
         return outputs_wm, self.latent_state
 
     #@profile
     @torch.no_grad()
-    def wm_forward_for_initial_inference(self, last_obs_embeddings: torch.LongTensor,
+    def wm_forward_for_initial_infererence(self, last_obs_embeddings: torch.LongTensor,
                                                              batch_action=None,
                                                              current_obs_embeddings=None) -> torch.FloatTensor:
         """
@@ -1131,7 +1119,6 @@ class WorldModel(nn.Module):
         return self.keys_values_wm_size_list
 
 
-    #@profile
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None,
                      **kwargs: Any) -> LossWithIntermediateLosses:
         # Encode observations into latent state representations
@@ -1152,7 +1139,6 @@ class WorldModel(nn.Module):
             inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
             dormant_ratio_encoder = cal_dormant_ratio(self.tokenizer.representation_network, inputs.detach(),
                                                       percentage=self.dormant_threshold)
-            # self.past_kv_cache_init_infer.clear()
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
@@ -1176,7 +1162,7 @@ class WorldModel(nn.Module):
             #     batch['observations'].shape[0], batch['observations'].shape[1], 1)
             #  ========== for visualization ==========
 
-            # Calculate reconstruction loss and perceptual loss
+            # ========== Calculate reconstruction loss and perceptual loss ============
             # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
             # perceptual_loss = self.tokenizer.perceptual_loss(batch['observations'].reshape(-1, 3, 64, 64), reconstructed_images) # NOTE: for stack=1
             
@@ -1189,16 +1175,16 @@ class WorldModel(nn.Module):
 
             # Reconstruct observations from latent state representations
             # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings.reshape(-1, self.embed_dim))
+
             # # Calculate reconstruction loss
             # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 25),
             #                                                        reconstructed_images)
-            latent_recon_loss = torch.tensor(0., device=batch['observations'].device,
-                                             dtype=batch['observations'].dtype)
+            latent_recon_loss = self.latent_recon_loss
 
         elif self.obs_type == 'image_memory':
             # Reconstruct observations from latent state representations
-            reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
-            original_images, reconstructed_images = batch['observations'], reconstructed_images
+            # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
+            # original_images, reconstructed_images = batch['observations'], reconstructed_images
 
             #  ========== for visualization ==========
             # Uncomment the lines below for visual analysis
@@ -1210,10 +1196,10 @@ class WorldModel(nn.Module):
             #  ========== for visualization ==========
 
             # Calculate reconstruction loss and perceptual loss
-            latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 5, 5),
-                                                                   reconstructed_images)
-            perceptual_loss = torch.tensor(0., device=batch['observations'].device,
-                                           dtype=batch['observations'].dtype)
+            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 3, 5, 5),
+            #                                                        reconstructed_images)
+            latent_recon_loss = self.latent_recon_loss
+            perceptual_loss = self.perceptual_loss
 
         # Action tokens
         if self.continuous_action_space:
@@ -1230,7 +1216,6 @@ class WorldModel(nn.Module):
             dormant_ratio_world_model = cal_dormant_ratio(self, {
                 'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())},
                                                           percentage=self.dormant_threshold)
-            # self.past_kv_cache_init_infer.clear()
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
@@ -1376,6 +1361,7 @@ class WorldModel(nn.Module):
             return LossWithIntermediateLosses(
                 latent_recon_loss_weight=self.latent_recon_loss_weight,
                 perceptual_loss_weight=self.perceptual_loss_weight,
+                continuous_action_space=True,
                 loss_obs=discounted_loss_obs,
                 loss_rewards=discounted_loss_rewards,
                 loss_value=discounted_loss_value,
@@ -1398,6 +1384,7 @@ class WorldModel(nn.Module):
             return LossWithIntermediateLosses(
                 latent_recon_loss_weight=self.latent_recon_loss_weight,
                 perceptual_loss_weight=self.perceptual_loss_weight,
+                continuous_action_space=False,
                 loss_obs=discounted_loss_obs,
                 loss_rewards=discounted_loss_rewards,
                 loss_value=discounted_loss_value,
@@ -1449,7 +1436,8 @@ class WorldModel(nn.Module):
         target_best_action = target_sampled_actions[torch.arange(target_best_action_idx.size(0)), target_best_action_idx]
 
         # Clip the target actions to prevent numerical issues during arctanh
-        target_best_action_clamped = torch.clamp(target_best_action, -1 + 1e-6, 1 - 1e-6)
+        # target_best_action_clamped = torch.clamp(target_best_action, -1 + 1e-6, 1 - 1e-6)
+        target_best_action_clamped = torch.clamp(target_best_action, -0.999, 0.999)
         target_best_action_before_tanh = torch.arctanh(target_best_action_clamped)
 
         # Calculate the log probability of the best action
@@ -1515,14 +1503,24 @@ class WorldModel(nn.Module):
         policy_entropy = dist.entropy().mean(dim=1)
         policy_entropy_loss = -policy_entropy * mask_batch
 
-        y = 1 - target_sampled_actions.pow(2)
-        target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
-        target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
+        # NOTE： Alternative way to calculate the log probability of the target actions
+        # y = 1 - target_sampled_actions.pow(2)
+        # target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -1 + 1e-6, 1 - 1e-6)
+        # target_sampled_actions_before_tanh = torch.arctanh(target_sampled_actions_clamped)
+        # log_prob = dist.log_prob(target_sampled_actions_before_tanh)
+        # log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
+        # log_prob_sampled_actions = log_prob
 
-        log_prob = dist.log_prob(target_sampled_actions_before_tanh)
-        log_prob = log_prob - torch.log(y + 1e-6).sum(-1)
+        base_dist = Normal(mu, sigma)
+        tanh_transform = TanhTransform()
+        dist = TransformedDistribution(base_dist, [tanh_transform])
+        dist = Independent(dist, 1)
+        target_sampled_actions_clamped = torch.clamp(target_sampled_actions, -0.999, 0.999)
+        # assert torch.all(target_sampled_actions_clamped < 1) and torch.all(target_sampled_actions_clamped > -1), "Actions are not properly clamped."
+        log_prob = dist.log_prob(target_sampled_actions_clamped)
         log_prob_sampled_actions = log_prob
 
+        # KL as projector
         target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
 
         # KL as projector
@@ -1605,6 +1603,7 @@ class WorldModel(nn.Module):
         return labels_observations, labels_rewards.view(-1, self.support_size), None
 
 
+
     #@profile
     def compute_labels_world_model_value_policy(self, target_value: torch.Tensor, target_policy: torch.Tensor,
                                                 mask_padding: torch.BoolTensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -1628,7 +1627,6 @@ class WorldModel(nn.Module):
         """
         Clears the caches of the world model.
         """
-        # self.past_kv_cache_init_infer.clear()
         for kv_cache_dict_env in self.past_kv_cache_init_infer_envs:
             kv_cache_dict_env.clear()
         self.past_kv_cache_recurrent_infer.clear()

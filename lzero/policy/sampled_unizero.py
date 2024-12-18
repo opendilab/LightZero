@@ -5,6 +5,7 @@ from typing import List, Dict, Tuple, Union
 
 import numpy as np
 import torch
+import wandb
 from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
 
@@ -117,8 +118,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 latent_recon_loss_weight=0.,
                 # (float) The weight of the perceptual loss.
                 perceptual_loss_weight=0.,
-                # (float) The weight of the policy entropy.
-                policy_entropy_weight=1e-4,
+                # (float) The weight of the policy entropy loss.
+                policy_entropy_weight=5e-3,
                 # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
                 predict_latent_loss_type='group_kl',
                 # (str) The type of observation. Options are ['image', 'vector'].
@@ -127,6 +128,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 gamma=1,
                 # (float) The threshold for a dormant neuron.
                 dormant_threshold=0.025,
+                # (str) The type of policy loss. Options could be ['kl', 'simple'].
+                policy_loss_type='kl',
             ),
         ),
         # ****** common ******
@@ -226,15 +229,13 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         value_loss_weight=0.25,
         # (float) The weight of policy loss.
         policy_loss_weight=1,
-        # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=1e-4,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
         # (bool) Whether to use the cosine learning rate decay.
         cos_lr_scheduler=False,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e4),
         # (bool) Whether to use manually decayed temperature.
@@ -312,9 +313,10 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             betas=(0.9, 0.95),
         )
 
-        if self._cfg.cos_lr_scheduler is True:
+        if self._cfg.cos_lr_scheduler:
             from torch.optim.lr_scheduler import CosineAnnealingLR
-            self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e6, eta_min=0, last_epoch=-1)
+            # TODO: check the total training steps
+            self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
 
         if self._cfg.model.continuous_action_space:
             # Weight Init for the last output layer of gaussian policy head in prediction network.
@@ -379,7 +381,6 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         # ==============================================================
         # sampled related core code
         # ==============================================================
-        # obs_batch_ori, action_batch, mask_batch, indices, weights, make_time = current_batch
         obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
@@ -516,7 +517,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
 
         self._optimizer_world_model.step()
         
-        if self._cfg.cos_lr_scheduler or self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
         # Core target model update step
@@ -532,7 +533,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
             current_memory_allocated_gb = 0.
             max_memory_allocated_gb = 0.
 
-        return_loss_dict = {
+        return_log_dict = {
             'analysis/first_step_loss_value': first_step_losses['loss_value'].item(),
             'analysis/first_step_loss_policy': first_step_losses['loss_policy'].item(),
             'analysis/first_step_loss_rewards': first_step_losses['loss_rewards'].item(),
@@ -579,7 +580,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         }
 
         if self._cfg.model.continuous_action_space:
-            return_loss_dict.update({
+            return_log_dict.update({
                 # ==============================================================
                 # sampled related core code
                 # ==============================================================
@@ -595,7 +596,11 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 'target_sampled_actions_mean': target_sampled_actions_mean
             })
 
-        return return_loss_dict
+        if self._cfg.use_wandb:
+            wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
+            wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
+
+        return return_log_dict
 
     def monitor_weights_and_grads(self, model):
         for name, param in model.named_parameters():

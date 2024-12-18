@@ -22,16 +22,16 @@ infer_context_length = 4
 seed = 0
 
 # ====== only for debug =====
-# num_simulations = 10
+# num_simulations = 2
 # max_env_step = int(2e5)
-# batch_size = 32
+# batch_size = 2
 # num_unroll_steps = 10
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 atari_unizero_config = dict(
-    exp_name = f'data_unizero_ddp_1107/{env_id[:-14]}/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}',
+    exp_name = f'data_unizero/{env_id[:-14]}/{env_id[:-14]}_stack1_unizero_ddp_{gpu_num}gpu_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -63,17 +63,12 @@ atari_unizero_config = dict(
                 env_num=max(collector_env_num, evaluator_env_num),
                 task_num=1,
                 use_normal_head=True,
-                # use_normal_head=False,
                 use_softmoe_head=False,
-                # use_moe_head=True,
                 use_moe_head=False,
-                num_experts_in_moe_head=4,  # NOTE
-                # moe_in_transformer=True,
-                moe_in_transformer=False,  # NOTE
-                # multiplication_moe_in_transformer=True,
-                multiplication_moe_in_transformer=False,  # NOTE
+                num_experts_in_moe_head=4,
+                moe_in_transformer=False,
+                multiplication_moe_in_transformer=False,
                 num_experts_of_moe_in_transformer=4,
-                # num_experts_of_moe_in_transformer=2,
             ),
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.

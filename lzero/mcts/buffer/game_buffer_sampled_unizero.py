@@ -69,22 +69,8 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         # obtain the current_batch and prepare target context
         policy_re_context, current_batch = self._make_batch_for_reanalyze(batch_size, 1)
         # target policy: current_batch[1]: action, current_batch[2]: child_sampled_actions
-        _, root_sampled_actions = self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1])
+        self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1])
 
-        # current_batch = [obs_list, action_list, root_sampled_actions_list, mask_list, batch_index_list, weights_list, make_time_list]
-        if self._cfg.model.continuous_action_space:
-            # TODO: check whether current_batch[2]/root_sampled_actions_list is update correctly
-            current_batch[2] = root_sampled_actions.reshape(
-                batch_size, self._cfg.num_unroll_steps + 1,
-                self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size
-            )
-        else:
-            current_batch[2] = root_sampled_actions.reshape(
-                batch_size, self._cfg.num_unroll_steps + 1,
-                self._cfg.model.num_of_sampled_actions, 1
-            )
-
-    
     def _make_batch_for_reanalyze(self, batch_size: int, reanalyze_ratio: float) -> Tuple[Any]:
         """
         Overview:
@@ -121,12 +107,9 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_segment:pos_in_game_segment +
                                                                  self._cfg.num_unroll_steps + 1]
 
+            # the game.root_sampled_actions is not padded, the length is at most segment_length
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
-            # mask_tmp = [1. for i in range(len(actions_tmp))]
-            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
-
-            # TODO: original buffer mask
-            mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
+            mask_tmp = [1. for i in range(len(root_sampled_actions_tmp))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
 
@@ -228,27 +211,9 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
         if self._cfg.reanalyze_ratio > 0:
             # target policy
-            batch_target_policies_re, root_sampled_actions = self._compute_target_policy_reanalyzed(
+            batch_target_policies_re = self._compute_target_policy_reanalyzed(
                 policy_re_context, policy._target_model, current_batch[1]
             )
-            # ==============================================================
-            # fix reanalyze in suz:
-            # use the latest root_sampled_actions after the reanalyze process,
-            # because the batch_target_policies_re is corresponding to the latest root_sampled_actions
-            # ==============================================================
-
-            assert (self._cfg.reanalyze_ratio > 0 and self._cfg.reanalyze_outdated is True), \
-                "in sampled effiicientzero, if self._cfg.reanalyze_ratio>0, you must set self._cfg.reanalyze_outdated=True"
-            if self._cfg.model.continuous_action_space:
-                current_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
-                    max(int(batch_size * self._cfg.reanalyze_ratio), 1), self._cfg.num_unroll_steps + 1,
-                    self._cfg.model.num_of_sampled_actions, self._cfg.model.action_space_size
-                )
-            else:
-                current_batch[2][:int(batch_size * self._cfg.reanalyze_ratio)] = root_sampled_actions.reshape(
-                    max(int(batch_size * self._cfg.reanalyze_ratio), 1), self._cfg.num_unroll_steps + 1,
-                    self._cfg.model.num_of_sampled_actions, 1
-                )
 
         if 0 < self._cfg.reanalyze_ratio < 1:
             batch_target_policies = np.concatenate([batch_target_policies_re, batch_target_policies_non_re])
@@ -300,12 +265,9 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_segment:pos_in_game_segment +
                                                                  self._cfg.num_unroll_steps + 1]
 
+            # the game.root_sampled_actions is not padded, the length is at most segment_length
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
-            # mask_tmp = [1. for i in range(len(actions_tmp))]
-            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
-
-            # TODO: original buffer mask
-            mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
+            mask_tmp = [1. for i in range(len(root_sampled_actions_tmp))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
@@ -432,6 +394,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             # 0 -> Invalid target policy for padding outside of game segments,
             # 1 -> Previous target policy for game segments.
             rewards, child_visits, game_segment_lens, root_values = [], [], [], []
+            root_sampled_actions = []
 
             # for board games
             action_mask_segment, to_play_segment = [], []
@@ -443,6 +406,8 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                 action_mask_segment.append(game_segment.action_mask_segment)
                 to_play_segment.append(game_segment.to_play_segment)
                 child_visits.append(game_segment.child_visit_segment)
+                root_sampled_actions.append(game_segment.root_sampled_actions)
+
                 root_values.append(game_segment.root_value_segment)
 
                 # prepare the corresponding observations
@@ -460,7 +425,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                     policy_obs_list.append(obs)
 
         policy_re_context = [
-            policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, root_values, game_segment_lens,
+            policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, root_sampled_actions, root_values, game_segment_lens,
             action_mask_segment, to_play_segment
         ]
         return policy_re_context
@@ -479,7 +444,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         batch_target_policies_re = []
 
         # for board games
-        policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, root_values, game_segment_lens, action_mask_segment, \
+        policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, root_sampled_actions, root_values, game_segment_lens, action_mask_segment, \
             to_play_segment = policy_re_context  # noqa
         transition_batch_size = len(policy_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)
@@ -554,23 +519,26 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
             reanalyzed_root_values = roots.get_values()
-            policy_index = 0
-            
+
             # ==============================================================
-            # fix reanalyze in sez
+            # fix reanalyze in suz:
+            # use the latest root_sampled_actions after the reanalyze process,
+            # because the batch_target_policies_re is corresponding to the latest root_sampled_actions
             # ==============================================================
-            roots_sampled_actions = roots.get_sampled_actions()
+            reanalyzed_roots_sampled_actions = roots.get_sampled_actions()
             try:
-                root_sampled_actions = np.array([action.value for action in roots_sampled_actions])
+                reanalyzed_root_sampled_actions = np.array([action.value for action in reanalyzed_roots_sampled_actions])
             except Exception:
-                root_sampled_actions = np.array([action for action in roots_sampled_actions])
-            
+                reanalyzed_root_sampled_actions = np.array([action for action in reanalyzed_roots_sampled_actions])
+            root_sampled_actions = reanalyzed_root_sampled_actions
+
             policy_index = 0
-            for state_index, child_visit, root_value in zip(pos_in_game_segment_list, child_visits, root_values):
+            for state_index, child_visit, root_sampled_action, root_value in zip(pos_in_game_segment_list, child_visits, root_sampled_actions, root_values):
                 target_policies = []
                 for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
                     distributions = roots_distributions[policy_index]
                     searched_value = reanalyzed_root_values[policy_index]
+                    reanalyzed_root_sampled_action = reanalyzed_root_sampled_actions[policy_index]
                     # ==============================================================
                     # sampled related core code
                     # ==============================================================
@@ -589,10 +557,15 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                         else:
                             # Update the data in game segment:
                             # after the reanalyze search, new target policies and root values are obtained
-                            # the target policies and root values are stored in the gamesegment, specifically, ``child_visit_segment`` and ``root_value_segment``
+                            # the target policies and root values are stored in the game segment, specifically, ``child_visit_segment`` and ``root_value_segment``
                             # we replace the data at the corresponding location with the latest search results to keep the most up-to-date targets
+                            # If continuous action space, we also need update the root_sampled_actions
                             sim_num = sum(distributions)
                             child_visit[current_index] = [visit_count/sim_num for visit_count in distributions]
+                            try:
+                                root_sampled_action[current_index] = reanalyzed_root_sampled_action
+                            except Exception as e:
+                                print(e, 'length of root_sampled_action is <batch_size>*<self._cfg.num_unroll_steps>')
                             root_value[current_index] = searched_value
                             
                             if self._cfg.action_type == 'fixed_action_space':

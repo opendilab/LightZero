@@ -19,3 +19,4 @@ from .train_unizero_multitask_segment_ddp import train_unizero_multitask_segment
 from .train_unizero_multitask_segment_serial import train_unizero_multitask_segment_serial
 
 from .train_unizero_multitask_segment_eval import train_unizero_multitask_segment_eval
+from .utils import *

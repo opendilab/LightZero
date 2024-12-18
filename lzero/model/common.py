@@ -260,6 +260,7 @@ class DownSample(nn.Module):
         for block in self.resblocks3:
             x = block(x)
 
+        # 64, 84, 96 are the most common observation shapes in Atari games.
         if self.observation_shape[1] == 64:
             output = x
         elif self.observation_shape[1] == 84:

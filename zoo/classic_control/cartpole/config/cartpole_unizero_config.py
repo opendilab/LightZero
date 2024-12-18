@@ -8,7 +8,7 @@ evaluator_env_num = 3
 num_simulations = 25
 update_per_collect = None
 replay_ratio = 0.25
-max_env_step = int(2e5)
+max_env_step = int(1e5)
 reanalyze_ratio = 0
 batch_size = 256
 num_unroll_steps = 5
@@ -52,6 +52,7 @@ cartpole_unizero_config = dict(
                 norm_type='BN',
             ),
         ),
+        use_wandb=True,
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
         num_unroll_steps=num_unroll_steps,
@@ -62,7 +63,7 @@ cartpole_unizero_config = dict(
         replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type='AdamW',
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         learning_rate=0.0001,
         target_update_freq=100,
         grad_clip_value=5,

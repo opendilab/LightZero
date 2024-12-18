@@ -4,6 +4,7 @@ from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch
+import wandb
 from ding.model import model_wrap
 from ding.utils import POLICY_REGISTRY
 
@@ -109,8 +110,8 @@ class UniZeroPolicy(MuZeroPolicy):
                 latent_recon_loss_weight=0.,
                 # (float) The weight of the perceptual loss.
                 perceptual_loss_weight=0.,
-                # (float) The weight of the policy entropy.
-                policy_entropy_weight=1e-4,
+                # (float) The weight of the policy entropy loss.
+                policy_entropy_weight=0,
                 # (str) The type of loss for predicting latent variables. Options could be ['group_kl', 'mse'].
                 predict_latent_loss_type='group_kl',
                 # (str) The type of observation. Options are ['image', 'vector'].
@@ -157,8 +158,6 @@ class UniZeroPolicy(MuZeroPolicy):
         eval_freq=int(5e3),
         # (str) The sample type. Options are ['episode', 'transition'].
         sample_type='transition',
-        reanalyze_ratio=0,
-
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
         transform2string=False,
@@ -200,7 +199,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # (float) One-order Momentum in optimizer, which stabilizes the training process (gradient direction).
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
-        grad_clip_value=5,
+        grad_clip_value=20,
         # (int) The number of episodes in each collecting stage when use muzero_collector.
         n_episode=8,
         # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
@@ -223,13 +222,13 @@ class UniZeroPolicy(MuZeroPolicy):
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e4),
         # (bool) Whether to use manually decayed temperature.
         manual_temperature_decay=False,
         # (int) The number of final training iterations to control temperature, which is only used for manually decay.
-        threshold_training_steps_for_final_temperature=int(1e5),
+        threshold_training_steps_for_final_temperature=int(5e4),
         # (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.
         # The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.
         fixed_temperature_value=0.25,
@@ -331,6 +330,10 @@ class UniZeroPolicy(MuZeroPolicy):
         self.l2_norm_after = 0.
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
+        
+        if self._cfg.use_wandb:
+            # TODO: add the model to wandb
+            wandb.watch(self._learn_model.representation_network, log="all")
 
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -350,8 +353,6 @@ class UniZeroPolicy(MuZeroPolicy):
         self._target_model.train()
 
         current_batch, target_batch, _ = data
-        # current_batch, target_batch = data
-
         obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
@@ -456,7 +457,7 @@ class UniZeroPolicy(MuZeroPolicy):
             self.sync_gradients(self._learn_model)
 
         self._optimizer_world_model.step()
-        if self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
         # Core target model update step
@@ -472,7 +473,7 @@ class UniZeroPolicy(MuZeroPolicy):
             current_memory_allocated_gb = 0.
             max_memory_allocated_gb = 0.
 
-        return_loss_dict = {
+        return_log_dict = {
             'analysis/first_step_loss_value': first_step_losses['loss_value'].item(),
             'analysis/first_step_loss_policy': first_step_losses['loss_policy'].item(),
             'analysis/first_step_loss_rewards': first_step_losses['loss_rewards'].item(),
@@ -517,8 +518,12 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/grad_norm_before': self.grad_norm_before,
             'analysis/grad_norm_after': self.grad_norm_after,
         }
+        
+        if self._cfg.use_wandb:
+            wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
+            wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
 
-        return return_loss_dict
+        return return_log_dict
 
     def monitor_weights_and_grads(self, model):
         for name, param in model.named_parameters():
@@ -670,6 +675,8 @@ class UniZeroPolicy(MuZeroPolicy):
                 print('==========collect_forward============')
                 print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
                 self._reset_collect(reset_init_data=True)
+                if getattr(self._cfg, 'sample_type', '') == 'episode':
+                    print('BUG: sample_type is episode, but len(self.last_batch_obs) < self.collector_env_num')
 
         return output
 

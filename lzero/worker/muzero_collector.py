@@ -4,6 +4,7 @@ from typing import Optional, Any, List
 
 import numpy as np
 import torch
+import wandb
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray
 from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, get_rank, get_world_size, \
@@ -254,13 +255,13 @@ class MuZeroCollector(ISerialCollector):
         pad_obs_lst = game_segments[i].obs_segment[beg_index:end_index]
 
         # NOTE: for unizero
-        pad_action_lst = game_segments[i].action_segment[
-                         :self.policy_config.num_unroll_steps + self.policy_config.td_steps]
+        beg_index = 0
+        end_index = beg_index + self.policy_config.num_unroll_steps + self.policy_config.td_steps
+        pad_action_lst = game_segments[i].action_segment[beg_index:end_index]
 
         # NOTE: for unizero
         pad_child_visits_lst = game_segments[i].child_visit_segment[
                                :self.policy_config.num_unroll_steps + self.policy_config.td_steps]
-        # pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps]
 
         # EfficientZero original repo bug:
         # pad_child_visits_lst = game_segments[i].child_visit_segment[beg_index:end_index]
@@ -283,17 +284,14 @@ class MuZeroCollector(ISerialCollector):
 
         # pad over and save
         if self.policy_config.gumbel_algo:
-            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst,
-                                           pad_child_visits_lst,
+            last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst,
                                            next_segment_improved_policy=pad_improved_policy_prob)
         else:
             if self.policy_config.use_ture_chance_label_in_chance_encoder:
-                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst,
-                                               pad_child_visits_lst,
+                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst,
                                                next_chances=chance_lst)
             else:
-                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst,
-                                               pad_child_visits_lst)
+                last_game_segments[i].pad_over(pad_obs_lst, pad_reward_lst, pad_action_lst, pad_root_values_lst, pad_child_visits_lst)
         """
         Note:
             game_segment element shape:
@@ -566,7 +564,7 @@ class MuZeroCollector(ISerialCollector):
 
                     eps_steps_lst[env_id] += 1
                     if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero', 'unizero_multitask']:
-                        # only for UniZero now
+                        # TODO: only for UniZero now
                         self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)  # NOTE: reset_init_data=False
 
                     total_transitions += 1
@@ -795,3 +793,6 @@ class MuZeroCollector(ISerialCollector):
                     self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
                 else:
                     self._tb_logger.add_scalar('{}_step_task{}/'.format(self._instance_name, self.task_id) + k, v, self._total_envstep_count)
+
+            if self.policy_config.use_wandb:
+                wandb.log({'{}_step/'.format(self._instance_name) + k: v for k, v in info.items()}, step=self._total_envstep_count)

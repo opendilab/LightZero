@@ -249,7 +249,7 @@ class SampledMuZeroGameBuffer(MuZeroGameBuffer):
             - batch_rewards (:obj:'np.ndarray): batch of value prefix
             - batch_target_values (:obj:'np.ndarray): batch of value estimation
         """
-        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, game_segment_lens, td_steps_list, action_mask_segment, \
+        value_obs_list, value_mask, pos_in_game_segment_list, rewards_list, root_values, game_segment_lens, td_steps_list, action_mask_segment, \
         to_play_segment = reward_value_context  # noqa
 
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)

@@ -262,7 +262,6 @@ class LossWithIntermediateLosses:
         # Get a reference device from one of the provided losses
         device = next(iter(kwargs.values())).device
 
-        # Define the weights for each loss type
         # NOTE: Define the weights for each loss type
         if not continuous_action_space:
             # like EZV2, for atari and memory

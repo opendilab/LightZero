@@ -326,7 +326,10 @@ class DMC2GymEnv(BaseEnv):
         self._eval_episode_return = 0
         obs = self._env.reset()  # This line will cause errors when subprocess_env_manager is used
 
-        obs = obs['state']
+        if self._cfg["from_pixels"]:
+            obs = obs
+        else:
+            obs = obs['state']
 
         obs = to_ndarray(obs).astype(np.float32)
         action_mask = None
@@ -363,7 +366,6 @@ class DMC2GymEnv(BaseEnv):
         action = action.astype('float32')
         action = affine_transform(action, min_val=self._env.action_space.low, max_val=self._env.action_space.high)
 
-
         # if self._cfg.is_eval:
         #     # TODO: test the effect of extreme action
         #     action = np.where(action > 0.9500, 0.9999, action)
@@ -383,9 +385,11 @@ class DMC2GymEnv(BaseEnv):
 
         self._eval_episode_return += rew
         obs = to_ndarray(obs).astype(np.float32)
-        rew = to_ndarray(rew).astype(np.float32)  # wrapped to be transferred to an array with shape (1,)
+        rew = to_ndarray(rew).astype(np.float32)
+
         if self._save_replay_gif:
             self._frames.append(image_obs)
+
         if done:
             info['eval_episode_return'] = self._eval_episode_return
             if self._save_replay_gif:

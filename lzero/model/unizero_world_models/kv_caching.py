@@ -68,6 +68,7 @@ class Cache:
             Update the cache with new values.
         Arguments:
             - x (:obj:`torch.Tensor`): The new values to update the cache with.
+            - tokens (:obj:`int`): The number of tokens to update.
         """
         # assert (x.ndim == self._cache.ndim) and all([x.size(i) == self._cache.size(i) for i in (0, 1, 3)])
         # assert self._size + tokens <= self._cache.shape[2]  # TODO

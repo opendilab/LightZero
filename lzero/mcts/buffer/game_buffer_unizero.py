@@ -138,7 +138,12 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                                                                   self._cfg.num_unroll_steps].tolist()
             
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
-            mask_tmp = [1. for i in range(len(actions_tmp))]
+            # mask_tmp = [1. for i in range(len(actions_tmp))]
+            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
+
+            # TODO: the child_visits after position <self._cfg.game_segment_length> in the segment (with padded part) may not be updated
+            # So the corresponding position should not be used in the training
+            mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # TODO: original buffer mask
@@ -420,9 +425,10 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # To obtain the target policy from MCTS guided by the recent target model
             # TODO: batch_obs (policy_obs_list) is at timestep t, batch_action is at timestep t
-            try:
+
+            if self.task_id is not None:
                 m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], task_id=self.task_id)  # NOTE: :self.reanalyze_num
-            except Exception as e:
+            else:
                 m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
 
             # =======================================================================
@@ -536,9 +542,9 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # calculate the bootstrapped value and target value
             # NOTE: batch_obs(value_obs_list) is at t+td_steps, batch_action is at timestep t+td_steps
-            try:
+            if self.task_id is not None:
                 m_output = model.initial_inference(batch_obs, batch_action, task_id=self.task_id)
-            except Exception as e:
+            else:
                 m_output = model.initial_inference(batch_obs, batch_action)
 
             # ======================================================================

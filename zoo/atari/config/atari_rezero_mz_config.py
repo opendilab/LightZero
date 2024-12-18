@@ -14,7 +14,6 @@ update_per_collect = None
 batch_size = 256
 replay_ratio = 0.25
 max_env_step = int(5e5)
-
 # ============= The key different params for ReZero =============
 reuse_search = True
 collect_with_pure_policy = True
@@ -65,7 +64,7 @@ atari_muzero_config = dict(
         replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type='SGD',
-        lr_piecewise_constant_decay=True,
+        piecewise_decay_lr_scheduler=True,
         learning_rate=0.2,
         num_simulations=num_simulations,
         ssl_loss_weight=2,

@@ -207,7 +207,8 @@ class MemoryEnvLightZero(BaseEnv):
 
         # print(f"Step: {self._current_step}, Action: {action}, Reward: {reward}, Observation: {observation}, Done: {done}, Info: {info}")  # TODO
         observation = to_ndarray(observation, dtype=np.float32)
-        reward = to_ndarray([reward])
+        # reward = to_ndarray([reward])
+        reward = to_ndarray(reward)
         action_mask = np.ones(self.action_space.n, 'int8')
 
         if self._save_replay or self._render or self.rgb_img_observation:
