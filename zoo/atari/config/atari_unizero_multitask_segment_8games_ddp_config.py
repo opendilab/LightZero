@@ -122,7 +122,7 @@ if __name__ == "__main__":
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
 
-    from lzero.entry import train_unizero_multitask_segment
+    from lzero.entry import train_unizero_multitask_segment_ddp
     from ding.utils import DDPContext
     import os
 
@@ -166,5 +166,5 @@ if __name__ == "__main__":
                                    num_segments, total_batch_size)
 
         with DDPContext():
-            train_unizero_multitask_segment(configs, seed=seed, max_env_step=max_env_step)
-            # train_unizero_multitask_segment(configs[:4], seed=seed, max_env_step=max_env_step) # train on the first four tasks
+            train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
+            # train_unizero_multitask_segment_ddp(configs[:4], seed=seed, max_env_step=max_env_step) # train on the first four tasks

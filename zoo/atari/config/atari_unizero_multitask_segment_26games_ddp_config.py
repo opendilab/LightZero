@@ -130,7 +130,7 @@ if __name__ == "__main__":
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 ./zoo/atari/config/atari_unizero_multitask_segment_26games_ddp_config.py
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_26games_ddp_config.py
     """
-    from lzero.entry import train_unizero_multitask_segment
+    from lzero.entry import train_unizero_multitask_segment_ddp
     from ding.utils import DDPContext
     import os
 
@@ -168,4 +168,4 @@ if __name__ == "__main__":
 
         # Training with distributed data parallel (DDP)
         with DDPContext():
-            train_unizero_multitask_segment(configs, seed=seed, max_env_step=max_env_step)
+            train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)

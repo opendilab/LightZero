@@ -131,7 +131,7 @@ if __name__ == "__main__":
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_finetune_config.py
     """
 
-    from lzero.entry import train_unizero_multitask_segment
+    from lzero.entry import train_unizero_multitask_segment_ddp
     from ding.utils import DDPContext
     from easydict import EasyDict
 
@@ -166,4 +166,4 @@ if __name__ == "__main__":
         pretrained_model_path = '/mnt/afs/niuyazhe/code/LightZero/data_unizero_mt_ddp-8gpu_1127/8games_brf0.02_nlayer8-nhead24_seed1/8games_brf0.02_1-encoder-LN-res2-channel256_gsl20_8-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed1/Pong_unizero-mt_seed1/ckpt/iteration_200000.pth.tar'
 
         with DDPContext():
-            train_unizero_multitask_segment(configs, seed=seed, model_path=pretrained_model_path, max_env_step=max_env_step)
+            train_unizero_multitask_segment_ddp(configs, seed=seed, model_path=pretrained_model_path, max_env_step=max_env_step)
