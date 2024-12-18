@@ -1,38 +1,33 @@
 from easydict import EasyDict
 from copy import deepcopy
-# from zoo.atari.config.atari_env_action_space_map import atari_env_action_space_map
 
 def create_config(env_id, action_space_size, collector_env_num, evaluator_env_num, n_episode, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments):
+    """
+    Create the configuration for a specific environment.
+    """
     return EasyDict(dict(
         env=dict(
             stop_value=int(1e6),
             env_id=env_id,
-            observation_shape=(3, 64, 64),
-            # observation_shape=(3, 96, 96),
+            observation_shape=(3, 64, 64),  # Input observation dimensions
             gray_scale=False,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
-            manager=dict(shared_memory=False, ),
+            manager=dict(shared_memory=False),
             full_action_space=True,
-            # ===== only for debug =====
-            # collect_max_episode_steps=int(30),
-            # eval_max_episode_steps=int(30),
+            # ===== TODO: only for debug =====
             # collect_max_episode_steps=int(50),
             # eval_max_episode_steps=int(50),
-            # collect_max_episode_steps=int(500),
-            # eval_max_episode_steps=int(500),
         ),
         policy=dict(
-            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000,),),),  # default is 10000
+            learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000))),
             grad_correct_params=dict(
-                # for MoCo
                 MoCo_beta=0.5,
                 MoCo_beta_sigma=0.5,
                 MoCo_gamma=0.1,
                 MoCo_gamma_sigma=0.5,
                 MoCo_rho=0,
-                # for CAGrad
                 calpha=0.5,
                 rescale=1,
             ),
@@ -40,63 +35,35 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             task_id=0,
             model=dict(
                 observation_shape=(3, 64, 64),
-                # observation_shape=(3, 96, 96),
                 action_space_size=action_space_size,
                 norm_type=norm_type,
-                # num_res_blocks=1, # NOTE: encoder for 1 game
-                # num_channels=64,
-                # num_res_blocks=2,  # NOTE: encoder for 4 game
-                # num_channels=128,
-                # num_res_blocks=4,  # NOTE: encoder for 8 game
-                num_res_blocks=2,  # NOTE: encoder for 8 game
+                num_res_blocks=2,  # Encoder configuration
                 num_channels=256,
                 world_model_cfg=dict(
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,
                     context_length=2 * infer_context_length,
-                    # device='cpu',  # 'cuda',
-                    device='cuda',  # 'cuda',
+                    device='cuda',
                     action_space_size=action_space_size,
-                    # num_layers=2,  # NOTE
-                    num_layers=4,  # NOTE: transformer
+                    num_layers=4,  # Transformer layers
                     num_heads=8,
-
-                    # num_layers=8,  # NOTE: gato-79M transformer
-                    # num_heads=24,
-
                     embed_dim=768,
                     obs_type='image',
-                    # env_num=max(collector_env_num, evaluator_env_num),
-                    env_num=8,  # TODO: the max of all tasks
-                    # collector_env_num=collector_env_num,
-                    # evaluator_env_num=evaluator_env_num,
+                    env_num=8,
                     task_num=len(env_id_list),
                     use_normal_head=True,
-                    # use_normal_head=False,
-                    use_softmoe_head=False,
-                    # use_moe_head=True,
                     use_moe_head=False,
-                    num_experts_in_moe_head=4,  # NOTE
-                    # moe_in_transformer=True,
-                    moe_in_transformer=False,  # NOTE
-                    # multiplication_moe_in_transformer=True,
-                    multiplication_moe_in_transformer=False,  # NOTE
+                    moe_in_transformer=False,
                     num_experts_of_moe_in_transformer=4,
-                    # num_experts_of_moe_in_transformer=2,
                 ),
             ),
             use_priority=False,
-            # print_task_priority_logs=False,
-            # use_priority=True,  # TODO
             print_task_priority_logs=False,
             cuda=True,
             model_path=None,
             num_unroll_steps=num_unroll_steps,
             game_segment_length=20,
-            # update_per_collect=None,
-            # update_per_collect=40, # TODO: 4/8games max-bs=64*4 8*20*0.25
-            # update_per_collect=160, # TODO: 26games max-bs=400, 8*20*1=160
-            update_per_collect=80, # TODO: 26games max-bs=400, 8*20*1=160
+            update_per_collect=80,  # Update steps per collection
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -104,33 +71,27 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
-            replay_buffer_size=int(5e5), # TODO
+            replay_buffer_size=int(5e5),
             eval_freq=int(1e4),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
-            # ============= The key different params for reanalyze =============
-            # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
             buffer_reanalyze_freq=buffer_reanalyze_freq,
-            # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
             reanalyze_batch_size=reanalyze_batch_size,
-            # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
             reanalyze_partition=reanalyze_partition,
         ),
     ))
 
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments):
+    """
+    Generate configurations for all environments in `env_id_list`.
+    """
     configs = []
-    # TODO
-    # exp_name_prefix = f'data_unizero_mt_segcollect_1107/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_maxbs-320_upc160_seed{seed}/'
     exp_name_prefix = f'data_unizero_mt_segcollect_1107/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_maxbs-640_upc80_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
             env_id,
             action_space_size,
-            # collector_env_num if env_id not in ['PongNoFrameskip-v4', 'BoxingNoFrameskip-v4'] else 2,  # TODO: different collector_env_num for Pong and Boxing
-            # evaluator_env_num if env_id not in ['PongNoFrameskip-v4', 'BoxingNoFrameskip-v4'] else 2,
-            # n_episode if env_id not in ['PongNoFrameskip-v4', 'BoxingNoFrameskip-v4'] else 2,
             collector_env_num,
             evaluator_env_num,
             n_episode,
@@ -147,12 +108,13 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
         )
         config.policy.task_id = task_id
         config.exp_name = exp_name_prefix + f"{env_id.split('NoFrameskip')[0]}_unizero-mt_seed{seed}"
-
         configs.append([task_id, [config, create_env_manager()]])
     return configs
 
-
 def create_env_manager():
+    """
+    Create the environment manager configuration.
+    """
     return EasyDict(dict(
         env=dict(
             type='atari_lightzero',
@@ -166,15 +128,9 @@ def create_env_manager():
     ))
 
 if __name__ == "__main__":
-    from lzero.entry import train_unizero_multitask_segment
-    # TODO
-    env_id_list = [
-        'PongNoFrameskip-v4',
-        'MsPacmanNoFrameskip-v4',
-        'SeaquestNoFrameskip-v4',
-        'BoxingNoFrameskip-v4'
-    ]
+    from lzero.entry import train_unizero_multitask_segment_serial
 
+    # Define environments
     env_id_list = [
         'PongNoFrameskip-v4',
         'MsPacmanNoFrameskip-v4',
@@ -184,19 +140,6 @@ if __name__ == "__main__":
         'ChopperCommandNoFrameskip-v4',
         'HeroNoFrameskip-v4',
         'RoadRunnerNoFrameskip-v4',
-    ]
-
-    # 26games
-    env_id_list = [
-        'PongNoFrameskip-v4',
-        'MsPacmanNoFrameskip-v4',
-        'SeaquestNoFrameskip-v4',
-        'BoxingNoFrameskip-v4',
-        'AlienNoFrameskip-v4',
-        'ChopperCommandNoFrameskip-v4',
-        'HeroNoFrameskip-v4',
-        'RoadRunnerNoFrameskip-v4',
-
         'AmidarNoFrameskip-v4',
         'AssaultNoFrameskip-v4',
         'AsterixNoFrameskip-v4',
@@ -217,41 +160,23 @@ if __name__ == "__main__":
         'BreakoutNoFrameskip-v4',
     ]
 
-
-    action_space_size = 18  # Full action space
-    seed = 0 # TODO
+    # Define hyperparameters
+    action_space_size = 18
+    seed = 0
     collector_env_num = 8
     num_segments = 8
     n_episode = 8
     evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(1e6) # TODO
+    max_env_step = int(1e6)
     reanalyze_ratio = 0.
-    # batch_size = [32, 32, 32, 32]
-    # max_batch_size = 2048
-
-    # max_batch_size = 320
     max_batch_size = 640
-
-    # max_batch_size = int(64*4)
-    # batch_size = [int(max_batch_size/len(env_id_list)) for i in range(len(env_id_list))]
-    batch_size = [int(min(64, max_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
-    # batch_size = [int(min(32, max_batch_size/len(env_id_list))) for i in range(len(env_id_list))]
-    print(f'=========== batch_size: {batch_size} ===========')
-    # batch_size = [int(64) for i in range(len(env_id_list))]
-
+    batch_size = [int(min(64, max_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
     num_unroll_steps = 10
     infer_context_length = 4
     norm_type = 'LN'
-    # # norm_type = 'BN'  # bad performance now
-
-    # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    # buffer_reanalyze_freq = 1/10
-    buffer_reanalyze_freq = 1/50
-    # buffer_reanalyze_freq = 1/100000
-    # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
+    buffer_reanalyze_freq = 1 / 50
     reanalyze_batch_size = 160
-    # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
@@ -262,15 +187,8 @@ if __name__ == "__main__":
     # num_simulations = 2
     # batch_size = [4, 4, 4, 4]
 
+    # Generate configurations
     configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments)
 
-    # Uncomment the desired training run
-    # train_unizero_multitask_segment(configs[:1], seed=seed, max_env_step=max_env_step)  # Pong
-    # train_unizero_multitask_segment(configs[:2], seed=seed, max_env_step=max_env_step)  # Pong, MsPacman
-    train_unizero_multitask_segment(configs, seed=seed, max_env_step=max_env_step)      # Pong, MsPacman, Seaquest, Boxing
-
-    #  ==== only for cprofile =====
-    # def run(max_env_step: int):
-    #     train_unizero_multitask_segment(configs, seed=seed, max_env_step=max_env_step)      # Pong, MsPacman, Seaquest, Boxing
-    # import cProfile
-    # cProfile.run(f"run({20000})", filename="unizero_mt_4games_cprofile_20k_envstep", sort="cumulative")
+    # Train using the generated configurations
+    train_unizero_multitask_segment_serial(configs, seed=seed, max_env_step=max_env_step)

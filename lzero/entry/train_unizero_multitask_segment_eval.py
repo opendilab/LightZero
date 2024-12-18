@@ -31,16 +31,6 @@ import concurrent.futures
 
 TIMEOUT = 12000  # 例如200min
 
-# TIMEOUT = 6000  # 例如100min
-
-# TIMEOUT = 3600  # 例如60min
-
-# TIMEOUT = 1800  # 例如30min
-
-# TIMEOUT = 600  # 例如10min
-
-# TIMEOUT = 300  # 例如5min
-# TIMEOUT = 10  # 例如6秒
 
 def safe_eval(evaluator, learner, collector, rank, world_size):
     try:
@@ -69,30 +59,6 @@ def safe_eval(evaluator, learner, collector, rank, world_size):
     except Exception as e:
         print(f"An error occurred during evaluation on Rank {rank}/{world_size}: {e}")
         return None, None
-
-# def safe_eval(evaluator, learner, collector, rank, world_size):
-#     print(f"=========before eval Rank {rank}/{world_size}===========")
-#     # 重置 stop_event，确保每次评估前都处于未设置状态
-#     evaluator.stop_event.clear()
-#     with concurrent.futures.ThreadPoolExecutor() as executor:
-#         # 提交 evaluator.eval 任务
-#         future = executor.submit(evaluator.eval, learner.save_checkpoint, learner.train_iter, collector.envstep)
-        
-#         try:
-#             stop, reward = future.result(timeout=TIMEOUT)
-#         except concurrent.futures.TimeoutError:
-#             # 超时，设置 evaluator 的 stop_event
-#             evaluator.stop_event.set()
-#             print(f"Eval operation timed out after {TIMEOUT} seconds on Rank {rank}/{world_size}.")
-
-#             # future.cancel()  # 对于进程池，这个 cancel 实际上不会有用
-#             # executor.shutdown(wait=False)  # 非阻塞关闭池，但好像不起作用
-#             # print(f"after executor.shutdown(wait=False)  on Rank {rank}/{world_size}.")
-
-#             return None, None
-    
-#     print(f"======after eval Rank {rank}/{world_size}======")
-#     return stop, reward
 
 
 def allocate_batch_size(cfgs, game_buffers, alpha=1.0, clip_scale=1):
@@ -492,40 +458,6 @@ def train_unizero_multitask_segment_eval(
                 import sys
                 sys.exit(0)
                 # ========== TODO: ==========
-
-                if cfg.policy.use_priority:
-                    for idx, (cfg, replay_buffer) in enumerate(zip(cfgs, game_buffers)):
-                        # 更新任务特定的 replay buffer 的优先级
-                        task_id = cfg.policy.task_id
-                        replay_buffer.update_priority(train_data_multi_task[idx], log_vars[0][f'value_priority_task{task_id}'])
-
-                        current_priorities = log_vars[0][f'value_priority_task{task_id}']
-
-                        mean_priority = np.mean(current_priorities)
-                        std_priority = np.std(current_priorities)
-
-                        alpha = 0.1  # 运行均值的平滑因子
-                        if f'running_mean_priority_task{task_id}' not in value_priority_tasks:
-                            # 如果不存在，则初始化运行均值
-                            value_priority_tasks[f'running_mean_priority_task{task_id}'] = mean_priority
-                        else:
-                            # 更新运行均值
-                            value_priority_tasks[f'running_mean_priority_task{task_id}'] = (
-                                alpha * mean_priority + (1 - alpha) * value_priority_tasks[f'running_mean_priority_task{task_id}']
-                            )
-
-                        # 使用运行均值计算归一化的优先级
-                        running_mean_priority = value_priority_tasks[f'running_mean_priority_task{task_id}']
-                        normalized_priorities = (current_priorities - running_mean_priority) / (std_priority + 1e-6)
-
-                        # 如果需要，可以将归一化的优先级存储回 replay buffer
-                        # replay_buffer.update_priority(train_data_multi_task[idx], normalized_priorities)
-
-                        # 如果设置了 print_task_priority_logs 标志，则记录统计信息
-                        if cfg.policy.print_task_priority_logs:
-                            print(f"Task {task_id} - Mean Priority: {mean_priority:.8f}, "
-                                  f"Running Mean Priority: {running_mean_priority:.8f}, "
-                                  f"Standard Deviation: {std_priority:.8f}")
 
         train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()

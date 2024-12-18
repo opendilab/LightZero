@@ -21,7 +21,7 @@ from lzero.mcts import UniZeroGameBuffer as GameBuffer
 from line_profiler import line_profiler
 
 #@profile
-def train_unizero_multitask(
+def train_unizero_multitask_serial(
         input_cfg_list: List[Tuple[int, Tuple[dict, dict]]],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,

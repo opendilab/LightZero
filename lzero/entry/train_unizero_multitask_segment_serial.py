@@ -3,27 +3,28 @@ import os
 from functools import partial
 from typing import Tuple, Optional, List
 
-import torch
 import numpy as np
+import torch
 from ding.config import compile_config
 from ding.envs import create_env_manager, get_vec_env_setting
 from ding.policy import create_policy
 from ding.rl_utils import get_epsilon_greedy_fn
+from ding.utils import EasyTimer
 from ding.utils import set_pkg_seed, get_rank
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
 from lzero.entry.utils import log_buffer_memory_usage
+from lzero.mcts import UniZeroGameBuffer as GameBuffer
 from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroEvaluator as Evaluator
-from lzero.mcts import UniZeroGameBuffer as GameBuffer
 from lzero.worker import MuZeroSegmentCollector as Collector
-from ding.utils import EasyTimer
+
 timer = EasyTimer()
-from line_profiler import line_profiler
+
 
 #@profile
-def train_unizero_multitask_segment(
+def train_unizero_multitask_segment_serial(
         input_cfg_list: List[Tuple[int, Tuple[dict, dict]]],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
