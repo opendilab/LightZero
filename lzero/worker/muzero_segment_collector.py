@@ -472,7 +472,13 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, task_id=self.task_id)
+                if self.task_id is None:
+                    # single task setting
+                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
+                else:
+                    # multi task setting
+                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, task_id=self.task_id)
+
 
                 # Extract relevant policy outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
@@ -783,7 +789,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             if self.policy_config.gumbel_algo:
                 info['completed_value'] = np.mean(completed_value)
             self._episode_info.clear()
-            print(f'collector _output_log: rank {self._rank}, self.task_id: {self.task_id}')
+            print(f'collector output_log: rank {self._rank}, self.task_id: {self.task_id}')
             self._logger.info("collect end:\n{}".format('\n'.join(['{}: {}'.format(k, v) for k, v in info.items()])))
             for k, v in info.items():
                 if k in ['each_reward']:

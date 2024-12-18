@@ -441,8 +441,12 @@ class MuZeroCollector(ISerialCollector):
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
                 # policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, task_id=self.task_id)
-
+                if self.task_id is None:
+                    # single task setting
+                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
+                else:
+                    # multi-task setting
+                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, task_id=self.task_id)
                 # Extract relevant policy outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                 value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
