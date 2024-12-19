@@ -56,8 +56,10 @@ class JerichoEnv(BaseEnv):
             action_mask = [1] * len(self._action_list)
 
         action_mask = np.array(action_mask, dtype=np.int8)
-        # return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1}
-        return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask,'action_mask': action_mask, 'to_play': -1}
+        if return_str:
+            return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1}
+        else:
+            return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1}
 
     def reset(self, return_str: bool = False):
         initial_observation, info = self._env.reset()
