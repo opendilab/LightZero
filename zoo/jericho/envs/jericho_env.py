@@ -1,3 +1,6 @@
+"""
+env返回的obs是id 不是string
+"""
 import copy
 from typing import List
 

@@ -11,6 +11,7 @@ from ding.utils import build_logger, EasyTimer, SERIAL_COLLECTOR_REGISTRY, get_r
     allreduce_data
 from ding.worker.collector.base_serial_collector import ISerialCollector
 from torch.nn import L1Loss
+import torch.distributed as dist
 
 from lzero.mcts.buffer.game_segment import GameSegment
 from lzero.mcts.utils import prepare_observation
@@ -327,6 +328,9 @@ class MuZeroCollector(ISerialCollector):
         Returns:
             - return_data (:obj:`List[Any]`): Collected data in the form of a list.
         """
+        # Before starting collection
+        # self._logger.info(f"Rank {self._rank} starting collection for {n_episode} episodes.")
+
         # TODO: collect_with_pure_policy as a separate collector
         if n_episode is None:
             if self._default_n_episode is None:
@@ -716,11 +720,21 @@ class MuZeroCollector(ISerialCollector):
                 break
 
         collected_duration = sum([d['time'] for d in self._episode_info])
+
+        # Before allreduce
+        self._logger.info(f"Rank {self._rank} before allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
+        
         # reduce data when enables DDP
         if self._world_size > 1:
+            dist.barrier()
+            # print(f"Rank {dist.get_rank()} collected_step: {collected_step}, collected_episode: {collected_episode}, collected_duration: {collected_duration}")
             collected_step = allreduce_data(collected_step, 'sum')
             collected_episode = allreduce_data(collected_episode, 'sum')
             collected_duration = allreduce_data(collected_duration, 'sum')
+        
+        # After allreduce
+        self._logger.info(f"Rank {self._rank} after allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
+
         self._total_envstep_count += collected_step
         self._total_episode_count += collected_episode
         self._total_duration += collected_duration
