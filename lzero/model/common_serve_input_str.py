@@ -19,6 +19,7 @@ from ding.utils import SequenceType
 from ditk import logging
 from openai import OpenAI
 from transformers import AutoTokenizer
+	
 
 # use dataclass to make the output of network more convenient to use
 @dataclass
@@ -273,8 +274,9 @@ class DownSample(nn.Module):
                                       f"You should transform the observation shape to 64 or 96 in the env.")
 
         return output
+
 """
-使用vllm的BAAI/bge-base-en-v1.5 server, 模型的输入为id 需要先decode回string
+使用vllm的BAAI/bge-base-en-v1.5 server, 模型的输入为string
 """
 class HFLanguageRepresentationNetwork(nn.Module):
     def __init__(
@@ -320,49 +322,35 @@ class HFLanguageRepresentationNetwork(nn.Module):
         # 初始化 SimNorm
         self.sim_norm = SimNorm(simnorm_dim=group_size)
 
-        # 初始化分词器，用于将 token 索引解码为字符串
+        # 初始化分词器，用于将字符串转为 token
         self.tokenizer = AutoTokenizer.from_pretrained(url)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: List[str]) -> torch.Tensor:
         """
         前向传播，获取输入序列的语言表示。
 
         参数:
-        - x (torch.Tensor): 输入的张量，形状为 [batch_size, seq_len]，类型为 torch.long。
-        
+        - x (List[str]): 输入的字符串列表，长度为 batch_size。
+
         返回:
         - torch.Tensor: 经过处理的语言嵌入向量，形状为 [batch_size, embedding_size]。
         """
         with torch.no_grad():
-            x = x.long()  # 确保输入张量为长整型
-
-            # # 检查索引范围
-            # min_idx = x.min().item()
-            # max_idx = x.max().item()
-            # # print(f"min_idx: {min_idx}, max_idx: {max_idx}")
-            # assert min_idx >= 0, "Negative token indices found."
-            # assert max_idx < self.tokenizer.vocab_size, f"Token index {max_idx} exceeds vocab size {self.tokenizer.vocab_size}."
-
-            # 将 token 索引解码为字符串
-            # 假设每个样本的 [CLS] token 在位置 0
-            # 可以根据实际情况调整
-            batch_size = x.size(0)
-            sentences: List[str] = []
-            for i in range(batch_size):
-                # 解码为字符串 
-                tokens = x[i].tolist()
-                sentence = self.tokenizer.decode(tokens, skip_special_tokens=True)
-                sentences.append(sentence)
+            # 分词
+            encoded_inputs = self.tokenizer(
+                x, truncation=True, padding="max_length", max_length=self.max_seq_len, return_tensors='pt'
+            )
+            input_texts = encoded_inputs['input_ids'].tolist()
 
             # 调用 vLLM 的嵌入 API
             response = self.client.embeddings.create(
-                input=sentences,
+                input=x,
                 model=self.model_id,
             )
 
             # 提取嵌入并转换为张量
             embeddings = [data.embedding for data in response.data]  # List[List[float]]
-            embeddings_tensor = torch.tensor(embeddings, dtype=torch.float32, device=x.device)  # [batch_size, 768]
+            embeddings_tensor = torch.tensor(embeddings, dtype=torch.float32, device=self.device)  # [batch_size, 768]
 
             # 如果需要降维或升维
             if self.embed_head is not None:
@@ -372,7 +360,7 @@ class HFLanguageRepresentationNetwork(nn.Module):
             embeddings_tensor = self.sim_norm(embeddings_tensor)  # [batch_size, embedding_size]
 
             return embeddings_tensor
-    
+
     def __getstate__(self):
         state = self.__dict__.copy()
         # 移除无法序列化的对象
