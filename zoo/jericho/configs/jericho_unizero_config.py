@@ -1,27 +1,35 @@
 import os
 from easydict import EasyDict
-import os
-os.environ["HF_HOME"] = "/mnt/afs/zhangshenghan/.cache/huggingface/hub"
+# import os
+# os.environ["HF_HOME"] = "/mnt/afs/zhangshenghan/.cache/huggingface/hub"
 
 def main(env_id='detective.z5', seed=0):
-    action_space_size = 50
-    max_steps = 51
+    # action_space_size = 50
+    action_space_size = 10
+    max_steps = 50
 
     # ==============================================================
     # begin of the most frequently changed config specified by the user
     # ==============================================================
-    collector_env_num = 2
-    num_segments = 2
-    game_segment_length = 20
+    # collector_env_num = 8
+    # n_episode = 8
+    collector_env_num = 4
+    n_episode = 4
     evaluator_env_num = 2
     num_simulations = 50
     max_env_step = int(10e6)
-    batch_size = 32
-    num_unroll_steps = 10
-    infer_context_length = 4
+
+    # batch_size = 8
+    # num_unroll_steps = 10
+    # infer_context_length = 4
+
+    batch_size = 16
+    num_unroll_steps = 5
+    infer_context_length = 2
+
     num_layers = 2
     replay_ratio = 0.25
-    update_per_collect = 20 # NOTE: very important for ddp
+    update_per_collect = None # NOTE: very important for ddp
     embed_dim = 768
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/10
@@ -30,8 +38,8 @@ def main(env_id='detective.z5', seed=0):
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
     reanalyze_partition = 0.75
-    # model_name = 'BAAI/bge-base-en-v1.5'
-    model_name = 'google-bert/bert-base-uncased'
+    model_name = 'BAAI/bge-base-en-v1.5'
+    # model_name = 'google-bert/bert-base-uncased'
     # =========== TODO: only for debug  =========== 
     # collector_env_num = 2
     # num_segments = 2
@@ -84,7 +92,7 @@ def main(env_id='detective.z5', seed=0):
                 model_type='mlp',
                 continuous_action_space=False,
                 world_model_cfg=dict(
-                    policy_entropy_weight=5e-3,
+                    policy_entropy_weight=5e-2,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
                     # NOTE: each timestep has 2 tokens: obs and action
@@ -107,11 +115,16 @@ def main(env_id='detective.z5', seed=0):
             replay_ratio=replay_ratio,
             batch_size=batch_size,
             learning_rate=0.0001,
+            cos_lr_scheduler=True,
+            manual_temperature_decay=True,
+            threshold_training_steps_for_final_temperature=int(2.5e4),
             num_simulations=num_simulations,
-            num_segments=num_segments,
+            # num_segments=num_segments,
+            n_episode=n_episode,
             train_start_after_envsteps=0, # TODO
-            game_segment_length=game_segment_length,
-            replay_buffer_size=int(1e6),
+            # game_segment_length=game_segment_length,
+            # replay_buffer_size=int(1e6),
+            replay_buffer_size=int(1e5),
             eval_freq=int(5e3),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -143,7 +156,7 @@ def main(env_id='detective.z5', seed=0):
     main_config = jericho_unizero_config
     create_config = jericho_unizero_create_config
 
-    main_config.exp_name = f'data_unizero_detective_20241220/{env_id[:8]}_ms{max_steps}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_detective_20250107/{model_name}/{env_id[:8]}_ms{max_steps}_action-space-{action_space_size}_uz_nlayer{num_layers}_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed,
                   model_path=main_config.policy.model_path, max_env_step=max_env_step)

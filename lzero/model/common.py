@@ -17,7 +17,8 @@ import torch.nn.init as init
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import SequenceType
 from ditk import logging
-
+from ding.utils import set_pkg_seed, get_rank, get_world_size
+import torch
 
 # use dataclass to make the output of network more convenient to use
 @dataclass
@@ -278,7 +279,7 @@ class DownSample(nn.Module):
 使用 google-bert/bert-base-uncased , 模型的输入为id
 """
 class HFLanguageRepresentationNetwork(nn.Module):
-    def __init__(self, url: str = 'google-bert/bert-base-uncased', embedding_size: int = 768, group_size: int = 8):
+    def __init__(self, url: str = 'google-bert/bert-base-uncased', embedding_size: int = 768, group_size: int = 8, tokenizer=None):
         """
         初始化语言表示网络
 
@@ -287,9 +288,33 @@ class HFLanguageRepresentationNetwork(nn.Module):
         - embedding_size (int): 输出嵌入的维度大小，默认为 768。
         """
         super().__init__()
-        from transformers import AutoModel
+        from transformers import AutoModel, AutoTokenizer
+
+        print(f"="*20)
+        print(f"url:{url}")
+        print(f"="*20)
+
         # 加载 Hugging Face 预训练模型
-        self.model = AutoModel.from_pretrained(url)
+
+        # 只让 rank 0 下载模型
+        if  get_rank() == 0:
+            self.model = AutoModel.from_pretrained(url)
+        if get_world_size() > 1: 
+            # 等待 rank 0 完成模型加载
+            torch.distributed.barrier()
+        if get_rank() != 0:  # 非 rank 0 的进程从本地缓存加载
+            self.model = AutoModel.from_pretrained(url)
+
+
+        if tokenizer is None:
+            # 只让 rank 0 下载模型
+            if get_rank() == 0:
+                self.tokenizer = AutoTokenizer.from_pretrained(url) 
+            if get_world_size() > 1: 
+                # 等待 rank 0 完成模型加载
+                torch.distributed.barrier()
+            if get_rank() != 0:  # 非 rank 0 的进程从本地缓存加载
+                self.tokenizer = AutoTokenizer.from_pretrained(url) 
 
         # 设置嵌入维度，如果目标维度不是 768，则添加一个线性变换层用于降维或升维
         self.embedding_size = embedding_size
@@ -309,11 +334,12 @@ class HFLanguageRepresentationNetwork(nn.Module):
         返回:
         - torch.Tensor: 经过处理的语言嵌入向量，形状为 [batch_size, embedding_size]。
         """
+        attention_mask =  x!= self.tokenizer.pad_token_id
         if no_grad:
             # 在 no_grad 模式下禁用梯度计算以节省显存
             with torch.no_grad():
                 x = x.long()  # 确保输入张量为长整型
-                outputs = self.model(x)  # 获取模型的输出
+                outputs = self.model(x,  attention_mask= attention_mask)  # 获取模型的输出
                 
                 # 模型输出的 last_hidden_state 形状为 [batch_size, seq_len, hidden_size]
                 # 我们通常取 [CLS] 标记对应的向量，即 outputs.last_hidden_state[:, 0, :]

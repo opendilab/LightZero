@@ -721,19 +721,20 @@ class MuZeroCollector(ISerialCollector):
 
         collected_duration = sum([d['time'] for d in self._episode_info])
 
-        # Before allreduce
-        self._logger.info(f"Rank {self._rank} before allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
-        
+
         # reduce data when enables DDP
         if self._world_size > 1:
+            # Before allreduce
+            self._logger.info(f"Rank {self._rank} before allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
+        
             dist.barrier()
             # print(f"Rank {dist.get_rank()} collected_step: {collected_step}, collected_episode: {collected_episode}, collected_duration: {collected_duration}")
             collected_step = allreduce_data(collected_step, 'sum')
             collected_episode = allreduce_data(collected_episode, 'sum')
             collected_duration = allreduce_data(collected_duration, 'sum')
         
-        # After allreduce
-        self._logger.info(f"Rank {self._rank} after allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
+            # After allreduce
+            self._logger.info(f"Rank {self._rank} after allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
 
         self._total_envstep_count += collected_step
         self._total_episode_count += collected_episode

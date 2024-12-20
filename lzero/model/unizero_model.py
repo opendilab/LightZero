@@ -89,6 +89,10 @@ class UniZeroModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
             print('==' * 20)
         elif world_model_cfg.obs_type == 'text':
+            print(f"="*20)
+            print(f"kwargs['encoder_url']:{kwargs['encoder_url']}")
+            print(f"="*20)
+
             self.representation_network = HFLanguageRepresentationNetwork(url=kwargs['encoder_url'], embedding_size=world_model_cfg.embed_dim)
             self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=None, with_lpips=False,)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)

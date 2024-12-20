@@ -11,7 +11,7 @@ from ding.utils import ENV_REGISTRY
 from ding.envs import BaseEnv, BaseEnvTimestep
 from jericho import FrotzEnv
 from ding.utils import set_pkg_seed, get_rank, get_world_size
-
+import torch
 
 @ENV_REGISTRY.register('jericho')
 class JerichoEnv(BaseEnv):
@@ -29,8 +29,20 @@ class JerichoEnv(BaseEnv):
         self.max_action_num = cfg.max_action_num
         self.max_seq_len = cfg.max_seq_len
 
+
+        # 获取当前的 world_size 和 rank
+        self.world_size = get_world_size()
+        self.rank = get_rank()
+
         if JerichoEnv.tokenizer is None:
-            JerichoEnv.tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer_path) 
+            # 只让 rank 0 下载模型
+            if self.rank == 0:
+                JerichoEnv.tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer_path) 
+            if self.world_size > 1: 
+                # 等待 rank 0 完成模型加载
+                torch.distributed.barrier()
+            if self.rank != 0:  # 非 rank 0 的进程从本地缓存加载
+                JerichoEnv.tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer_path) 
 
         self._env = FrotzEnv(self.game_path)
         self._action_list = None
@@ -93,14 +105,17 @@ class JerichoEnv(BaseEnv):
         return "LightZero Jericho Env"
 
     def step(self, action: int, return_str: bool = False):
-        try:
-            action_str = self._action_list[action]
-        except Exception as e:
-            # TODO: why exits illegal action
-            print('='*20)
-            print(e, f'rank {self.rank}, action {action} is illegal now we randomly choose a legal action from {self._action_list}!')
-            action = np.random.choice(len(self._action_list))
-            action_str = self._action_list[action]
+        if isinstance(action, str):
+            action_str = action
+        else:
+            try:
+                action_str = self._action_list[action]
+            except Exception as e:
+                # TODO: why exits illegal action
+                print('='*20)
+                print(e, f'rank {self.rank}, action {action} is illegal now we randomly choose a legal action from {self._action_list}!')
+                action = np.random.choice(len(self._action_list))
+                action_str = self._action_list[action]
 
         observation, reward, done, info = self._env.step(action_str)
         self.env_step += 1
@@ -165,4 +180,5 @@ if __name__ == '__main__':
         obs, reward, done, info = env.step(action_id, return_str=True)
         print(f'[OBS]:\n{obs["observation"]}')
         if done:
+            action_id = input('Would you like to RESTART, RESTORE a saved game, give the FULL score for that game or QUIT?')
             break
