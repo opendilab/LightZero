@@ -22,6 +22,7 @@ from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroCollector as Collector
 from .utils import random_collect
 import torch.distributed as dist
+from ding.utils import set_pkg_seed, get_rank, get_world_size
 
 
 def train_unizero(
@@ -138,8 +139,17 @@ def train_unizero(
 
     batch_size = policy._cfg.batch_size
 
-    rank = dist.get_rank()
+    if cfg.policy.multi_gpu:
+        # 获取当前的 world_size 和 rank
+        world_size = get_world_size()
+        rank = get_rank()
+    else:
+        world_size = 1
+        rank = 0
+
     while True:
+        # torch.cuda.empty_cache()
+
         # 记录 replay buffer 的内存使用情况
         # logging.info(f"训练迭代 {learner.train_iter}: 正在记录 replay buffer 的内存使用情况...")
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
@@ -197,13 +207,14 @@ def train_unizero(
         replay_buffer.remove_oldest_data_to_fit()
         # logging.info(f"训练迭代 {learner.train_iter}: replay buffer 更新完成！")
 
-       # 同步训练前所有rank的准备状态
-        try:
-            dist.barrier()
-            # logging.info(f'Rank {rank}: 通过训练前的同步障碍')
-        except Exception as e:
-            logging.error(f'Rank {rank}: 同步障碍失败，错误: {e}')
-            break
+        if  world_size > 1:
+        # 同步训练前所有rank的准备状态
+            try:
+                dist.barrier()
+                # logging.info(f'Rank {rank}: 通过训练前的同步障碍')
+            except Exception as e:
+                logging.error(f'Rank {rank}: 同步障碍失败，错误: {e}')
+                break
 
         # 检查是否有足够数据进行训练
         if collector.envstep > cfg.policy.train_start_after_envsteps:
@@ -211,11 +222,13 @@ def train_unizero(
                 data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
             else:
                 data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
-            if not data_sufficient:
-                logging.warning(f"训练迭代 {learner.train_iter}: replay buffer 数据不足，继续收集数据...")
-                continue
             
-            # logging.info(f"Rank {dist.get_rank()}, update_per_collect:{update_per_collect}, 训练迭代 {learner.train_iter}: replay buffer 数据充足，开始训练！")
+            if not data_sufficient:
+                # NOTE: 注意ddp训练时，不同rank可能有的replay buffer 数据不足，导致有的没有进入训练阶段，从而通信超时，需要确保同时进入训练阶段
+                logging.warning(f"Rank {rank}: 训练迭代 {learner.train_iter}: replay buffer 数据不足，继续收集数据...")
+                continue
+
+            logging.info(f"Rank {rank}, 训练迭代 {learner.train_iter}: 开始训练！")
 
             # 执行多轮训练
             for i in range(update_per_collect):
@@ -230,7 +243,8 @@ def train_unizero(
                 log_vars = learner.train(train_data, collector.envstep)
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
-            logging.info(f"Rank {dist.get_rank()}, 训练迭代 {learner.train_iter}: 训练完成！")
+            
+            logging.info(f"Rank {rank}, 训练迭代 {learner.train_iter}: 训练完成！")
 
         policy.recompute_pos_emb_diff_and_clear_cache()
 
@@ -240,6 +254,7 @@ def train_unizero(
             break
 
     learner.call_hook('after_run')
-    wandb.finish()
+    if cfg.policy.use_wandb:
+        wandb.finish()
     logging.info("===== 训练完成 =====")
     return policy

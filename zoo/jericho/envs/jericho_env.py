@@ -10,6 +10,7 @@ from transformers import AutoTokenizer
 from ding.utils import ENV_REGISTRY
 from ding.envs import BaseEnv, BaseEnvTimestep
 from jericho import FrotzEnv
+from ding.utils import set_pkg_seed, get_rank, get_world_size
 
 
 @ENV_REGISTRY.register('jericho')
@@ -72,6 +73,10 @@ class JerichoEnv(BaseEnv):
         self.episode_return = 0
         self.env_step = 0
 
+        # 获取当前的 world_size 和 rank
+        self.world_size = get_world_size()
+        self.rank = get_rank()
+
         return self.prepare_obs(initial_observation, return_str)
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
@@ -93,7 +98,7 @@ class JerichoEnv(BaseEnv):
         except Exception as e:
             # TODO: why exits illegal action
             print('='*20)
-            print(e, 'action is illegal now we randomly choose a legal action!')
+            print(e, f'rank {self.rank}, action {action} is illegal now we randomly choose a legal action from {self._action_list}!')
             action = np.random.choice(len(self._action_list))
             action_str = self._action_list[action]
 
@@ -103,16 +108,17 @@ class JerichoEnv(BaseEnv):
         self._action_list = None
         observation = self.prepare_obs(observation, return_str)
 
-        # print(f'observation:{observation}, action:{action}, reward:{reward}')
-        # print(f'self._action_list:{self._action_list}, action:{action}, reward:{reward}')
+        # print(f'rank {self.rank}, step: {self.env_step}')
+        # print(f'self._action_list:{self._action_list}')
+        # print(f'rank {self.rank}, step: {self.env_step}, observation:{observation}, action:{action}, reward:{reward}')
 
         if self.env_step >= self.max_steps:
-            print('='*20)
-            print('one episode done!')
-            print(f'self._action_list:{self._action_list}, action:{action}, reward:{reward}')
             done = True
 
         if done:
+            print('='*20)
+            print(f'rank {self.rank} one episode done!')
+            # print(f'self._action_list:{self._action_list}, action:{action}, reward:{reward}')
             self.finished = True
             info['eval_episode_return'] = self.episode_return
 

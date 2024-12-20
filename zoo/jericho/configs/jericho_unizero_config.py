@@ -1,6 +1,7 @@
 import os
 from easydict import EasyDict
-
+import os
+os.environ["HF_HOME"] = "/mnt/afs/zhangshenghan/.cache/huggingface/hub"
 
 def main(env_id='detective.z5', seed=0):
     action_space_size = 50
@@ -15,12 +16,12 @@ def main(env_id='detective.z5', seed=0):
     evaluator_env_num = 2
     num_simulations = 50
     max_env_step = int(10e6)
-    # batch_size = 64
     batch_size = 32
     num_unroll_steps = 10
     infer_context_length = 4
     num_layers = 2
     replay_ratio = 0.25
+    update_per_collect = 20 # NOTE: very important for ddp
     embed_dim = 768
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/10
@@ -29,7 +30,8 @@ def main(env_id='detective.z5', seed=0):
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
     reanalyze_partition = 0.75
-    
+    # model_name = 'BAAI/bge-base-en-v1.5'
+    model_name = 'google-bert/bert-base-uncased'
     # =========== TODO: only for debug  =========== 
     # collector_env_num = 2
     # num_segments = 2
@@ -55,8 +57,8 @@ def main(env_id='detective.z5', seed=0):
             observation_shape=512,
             max_steps=max_steps,
             max_action_num=action_space_size,
-            # tokenizer_path="google-bert/bert-base-uncased",
-            tokenizer_path="/mnt/afs/zhangshenghan/.cache/huggingface/hub/models--google-bert--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594",
+            tokenizer_path=model_name,
+            # tokenizer_path="/mnt/afs/zhangshenghan/.cache/huggingface/hub/models--google-bert--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594",
             max_seq_len=512,
             # game_path="z-machine-games-master/jericho-game-suite/" + env_id,
             game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/"+ env_id,
@@ -75,8 +77,9 @@ def main(env_id='detective.z5', seed=0):
             model=dict(
                 observation_shape=512,
                 action_space_size=action_space_size,
+                encoder_url=model_name,
                 # encoder_url='google-bert/bert-base-uncased',
-                encoder_url='/mnt/afs/zhangshenghan/.cache/huggingface/hub/models--google-bert--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594',
+                # encoder_url='/mnt/afs/zhangshenghan/.cache/huggingface/hub/models--google-bert--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594',
                 # The input of the model is text, whose shape is identical to the mlp model.
                 model_type='mlp',
                 continuous_action_space=False,
@@ -96,6 +99,7 @@ def main(env_id='detective.z5', seed=0):
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),
             ),
+            update_per_collect=update_per_collect,
             action_type='varied_action_space',
             model_path=None,
             num_unroll_steps=num_unroll_steps,
@@ -139,7 +143,7 @@ def main(env_id='detective.z5', seed=0):
     main_config = jericho_unizero_config
     create_config = jericho_unizero_create_config
 
-    main_config.exp_name = f'data_unizero_detective_20241219/{env_id[:8]}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_detective_20241220/{env_id[:8]}_ms{max_steps}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed,
                   model_path=main_config.policy.model_path, max_env_step=max_env_step)
