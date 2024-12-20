@@ -8,3 +8,5 @@ pytest
 line_profiler
 xxhash
 einops
+openai==1.57.1
+jericho
