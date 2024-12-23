@@ -408,7 +408,7 @@ class WorldModel(nn.Module):
          - torch.Tensor: The positional embedding tensor.
          """
         tmp = self.transformer._get_positional_embedding(layer, attn_type, self.pos_emb).view(
-                1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
+                1, self.config.max_tokens, -1, self.embed_dim // self.num_heads
             )
         if torch.cuda.is_available():
             return tmp.transpose(1, 2).to(self.device).detach()

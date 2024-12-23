@@ -96,7 +96,8 @@ def main(env_id='detective.z5', seed=0):
                     pretrained_path='/data/share/Llama-3.2-1B',
                     # These parameters should be the same as the config file of original model.
                     num_layers=num_layers,
-                    num_heads=2048 // 64,
+                    # Note: llama uses GQA, and the number of heads should equal to the number of key-value heads.
+                    num_heads=8,
                     embed_dim=embed_dim,
                     obs_type='text',  # TODO: Change it.
                     env_num=max(collector_env_num, evaluator_env_num),

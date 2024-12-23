@@ -92,6 +92,7 @@ def main(env_id='detective.z5', seed=0):
                     context_length=2 * infer_context_length,
                     device='cuda',
                     action_space_size=action_space_size,
+                    use_hf=False,
                     num_layers=num_layers,
                     num_heads=8,
                     embed_dim=embed_dim,

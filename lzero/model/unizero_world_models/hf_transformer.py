@@ -17,6 +17,11 @@ def kv2dc(cache: KeysValues):
     return res
 
 
+def update_kv(cache: KeysValues, new_cache: DynamicCache):
+    for i in range(len(new_cache.key_cache)):
+        cache[i].update(new_cache.key_cache[-1], new_cache.value_cache[-1])
+
+
 class HuggingfaceLlamaTransformer(LlamaForCausalLM):
     @classmethod
     def from_pretrained(cls, lzero_config, *args, **kwargs):
@@ -59,7 +64,7 @@ class HuggingfaceLlamaTransformer(LlamaForCausalLM):
             module_name = 'q_proj'
         else:
             assert False
-        attn_func = getattr(self.layers[layer].self_attn, module_name)
+        attn_func = getattr(self.model.layers[layer].self_attn, module_name)
         return attn_func(pos_emb.weight)
 
     def forward(self, sequences: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
@@ -75,7 +80,7 @@ class HuggingfaceLlamaTransformer(LlamaForCausalLM):
         Returns:
             - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
-        assert past_keys_values is None or len(past_keys_values) == len(self.blocks)
+        assert past_keys_values is None or len(past_keys_values) == len(self.model.layers)
         if past_keys_values is not None:
             kv_cache = kv2dc(past_keys_values)
             use_cache = True
@@ -84,17 +89,21 @@ class HuggingfaceLlamaTransformer(LlamaForCausalLM):
             use_cache = False
 
         B, T, _ = sequences.shape
-        attention_mask = torch.arange(T).expand(B, T) >= (T - valid_context_lengths.unsqueeze(1))
+        if valid_context_lengths is not None:
+            attention_mask = torch.arange(T).expand(B, T) >= (T - valid_context_lengths.unsqueeze(1))
+        else:
+            attention_mask = torch.ones_like(sequences)
         # print(valid_context_lengths.shape)
         # print(attention_mask.shape)
         # print(sequences.shape)
         # assert False
 
-        output = super.forward(
+        output = self.model.forward(
             attention_mask=attention_mask,
             past_key_values=kv_cache,
             inputs_embeds=sequences,
             use_cache=use_cache
         )
 
+        update_kv(past_keys_values, kv_cache)
         return output.logits[:, -1, :]
