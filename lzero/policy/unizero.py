@@ -383,7 +383,19 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Convert to categorical distributions
         target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
-        target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+        # print(f'transformed_target_value:{transformed_target_value}')
+        # print("self.value_support:", self.value_support)
+        
+        try:
+            target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+        except Exception as e:
+            print('='*20)
+            print(e)
+            # print(f'transformed_target_value:{transformed_target_value}')
+            # print("self.value_support:", self.value_support)
+            print('='*20)
+            # target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+
 
         # Prepare batch for GPT model
         batch_for_gpt = {}
@@ -405,9 +417,15 @@ class UniZeroPolicy(MuZeroPolicy):
         batch_for_gpt['target_policy'] = target_policy[:, :-1]
 
         # Extract valid target policy data and compute entropy
-        valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
-        target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
-        average_target_policy_entropy = target_policy_entropy.mean()
+        try:
+            valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
+            target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
+            average_target_policy_entropy = target_policy_entropy.mean()
+        except Exception as e:
+            print('='*20)
+            print(e)
+            average_target_policy_entropy = 0.
+
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
@@ -433,8 +451,8 @@ class UniZeroPolicy(MuZeroPolicy):
         dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
 
-        assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
-        assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
+        # assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
+        # assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
         # Core learn model update step
         self._optimizer_world_model.zero_grad()

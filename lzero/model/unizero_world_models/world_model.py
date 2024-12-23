@@ -1168,6 +1168,18 @@ class WorldModel(nn.Module):
             #                                                        reconstructed_images)
             latent_recon_loss = self.latent_recon_loss
 
+        elif self.obs_type == 'text':
+            perceptual_loss = torch.tensor(0., device=batch['observations'].device,
+                                           dtype=torch.float32)
+
+            # Reconstruct observations from latent state representations
+            # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings.reshape(-1, self.embed_dim))
+
+            # # Calculate reconstruction loss
+            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 25),
+            #                                                        reconstructed_images)
+            latent_recon_loss = self.latent_recon_loss
+
         elif self.obs_type == 'image_memory':
             # Reconstruct observations from latent state representations
             # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)
