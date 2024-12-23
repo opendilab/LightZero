@@ -19,6 +19,7 @@ from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
 from .utils import WorldModelOutput, hash_state
+from .hf_transformer import HuggingfaceTransformer
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -45,7 +46,10 @@ class WorldModel(nn.Module):
         super().__init__()
         self.tokenizer = tokenizer
         self.config = config
-        self.transformer = Transformer(self.config)
+        if self.config.use_hf:
+            self.transformer = HuggingfaceTransformer.from_pretrained(self.config, self.config.pretrained_path)
+        else:
+            self.transformer = Transformer(self.config)
 
         if self.config.device == 'cpu':
             self.device = torch.device('cpu')
