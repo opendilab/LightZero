@@ -19,7 +19,7 @@ from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
 from .utils import WorldModelOutput, hash_state
-from .hf_transformer import HuggingfaceTransformer
+from .hf_transformer import HuggingfaceLlamaTransformer
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -47,7 +47,7 @@ class WorldModel(nn.Module):
         self.tokenizer = tokenizer
         self.config = config
         if self.config.use_hf:
-            self.transformer = HuggingfaceTransformer.from_pretrained(self.config, self.config.pretrained_path)
+            self.transformer = HuggingfaceLlamaTransformer.from_pretrained(self.config, self.config.pretrained_path)
         else:
             self.transformer = Transformer(self.config)
 
@@ -407,15 +407,13 @@ class WorldModel(nn.Module):
          Returns:
          - torch.Tensor: The positional embedding tensor.
          """
-        attn_func = getattr(self.transformer.blocks[layer].attn, attn_type)
+        tmp = self.transformer._get_positional_embedding(layer, attn_type, self.pos_emb).view(
+                1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
+            )
         if torch.cuda.is_available():
-            return attn_func(self.pos_emb.weight).view(
-                1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
-            ).transpose(1, 2).to(self.device).detach()
+            return tmp.transpose(1, 2).to(self.device).detach()
         else:
-            return attn_func(self.pos_emb.weight).view(
-                1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
-            ).transpose(1, 2).detach()
+            return tmp.transpose(1, 2).detach()
 
     def forward(self, obs_embeddings_or_act_tokens: Dict[str, Union[torch.Tensor, tuple]],
                 past_keys_values: Optional[torch.Tensor] = None,

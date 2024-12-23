@@ -22,6 +22,7 @@ def main(env_id='detective.z5', seed=0):
     replay_ratio = 0.25
     update_per_collect = 20  # NOTE: very important for ddp
     embed_dim = 2048
+    num_layers = 16
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/10
     buffer_reanalyze_freq = 1/100000
@@ -59,8 +60,8 @@ def main(env_id='detective.z5', seed=0):
             tokenizer_path=model_name,
             # tokenizer_path="/mnt/afs/zhangshenghan/.cache/huggingface/hub/models--google-bert--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594",
             max_seq_len=512,
-            # game_path="z-machine-games-master/jericho-game-suite/" + env_id,
-            game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/"+ env_id,
+            game_path="z-machine-games-master/jericho-game-suite/" + env_id,
+            # game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/"+ env_id,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
@@ -94,9 +95,9 @@ def main(env_id='detective.z5', seed=0):
                     use_hf=True,
                     pretrained_path='/data/share/Llama-3.2-1B',
                     # These parameters should be the same as the config file of original model.
-                    num_layers=16,
+                    num_layers=num_layers,
                     num_heads=2048 // 64,
-                    embed_dim=2048,
+                    embed_dim=embed_dim,
                     obs_type='text',  # TODO: Change it.
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),

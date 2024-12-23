@@ -1,8 +1,8 @@
 from typing import Optional
 
 import torch
-from transformers import AutoModelForCausalLM
-from transformers.utils.cache_utils import DynamicCache
+from transformers import LlamaForCausalLM
+from transformers.cache_utils import DynamicCache
 
 from .kv_caching import KeysValues
 
@@ -17,10 +17,13 @@ def kv2dc(cache: KeysValues):
     return res
 
 
-class HuggingfaceTransformer(AutoModelForCausalLM):
-    def from_pretrained(self, lzero_config, *args, **kwargs):
-        self.lzero_config = lzero_config
-        super(HuggingfaceTransformer, self).from_pretrained(*args, **kwargs)
+class HuggingfaceLlamaTransformer(LlamaForCausalLM):
+    @classmethod
+    def from_pretrained(cls, lzero_config, *args, **kwargs):
+        # Add custom logic here
+        model = super(HuggingfaceLlamaTransformer, cls).from_pretrained(*args, **kwargs)
+        model.lzero_config = lzero_config
+        return model
 
     def generate_empty_keys_values(self, n: int, max_tokens: int) -> KeysValues:
         """
@@ -36,6 +39,28 @@ class HuggingfaceTransformer(AutoModelForCausalLM):
         device = self.lzero_config.device  # Assumption: All submodules are on the same device
         return KeysValues(n, self.lzero_config.num_heads, max_tokens,
                           self.lzero_config.embed_dim, self.lzero_config.num_layers, device)
+
+    def _get_positional_embedding(self, layer, attn_type, pos_emb) -> torch.Tensor:
+        """
+         Helper function to get positional embedding for a given layer and attention type.
+
+         Arguments:
+         - layer (:obj:`int`): Layer index.
+         - attn_type (:obj:`str`): Attention type, either 'key' or 'value'.
+
+         Returns:
+         - torch.Tensor: The positional embedding tensor.
+         """
+        if attn_type == 'key':
+            module_name = 'k_proj'
+        elif attn_type == 'value':
+            module_name = 'v_proj'
+        elif attn_type == 'query':
+            module_name = 'q_proj'
+        else:
+            assert False
+        attn_func = getattr(self.layers[layer].self_attn, module_name)
+        return attn_func(pos_emb.weight)
 
     def forward(self, sequences: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
                 valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
