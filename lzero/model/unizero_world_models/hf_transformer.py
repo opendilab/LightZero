@@ -43,7 +43,8 @@ class HuggingfaceLlamaTransformer(LlamaForCausalLM):
         """
         device = self.lzero_config.device  # Assumption: All submodules are on the same device
         return KeysValues(n, self.lzero_config.num_heads, max_tokens,
-                          self.lzero_config.embed_dim, self.lzero_config.num_layers, device)
+                          self.lzero_config.embed_dim, self.lzero_config.num_layers,
+                          device, self.lzero_config.hidden_size)
 
     def _get_positional_embedding(self, layer, attn_type, pos_emb) -> torch.Tensor:
         """

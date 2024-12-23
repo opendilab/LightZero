@@ -65,7 +65,8 @@ class WorldModel(nn.Module):
         # Initialize patterns for block masks
         self._initialize_patterns()
 
-        self.hidden_size = config.embed_dim // config.num_heads
+        self.hidden_size = config['hidden_size'] if "hidden_size" in config else config.embed_dim // config.num_heads
+        config['hidden_size'] = self.hidden_size
 
         # Position embedding
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)

@@ -99,6 +99,7 @@ def main(env_id='detective.z5', seed=0):
                     # Note: llama uses GQA, and the number of heads should equal to the number of key-value heads.
                     num_heads=8,
                     embed_dim=embed_dim,
+                    hidden_size=64,  # The dim for each head is 64 in this case.
                     obs_type='text',  # TODO: Change it.
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),

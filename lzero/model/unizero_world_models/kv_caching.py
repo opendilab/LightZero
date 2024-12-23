@@ -1,13 +1,14 @@
 # Modified from https://github.com/eloialonso/iris/blob/main/src/models/kv_caching.py
 
-from typing import Tuple
+from typing import Tuple, Optional
 
 import numpy as np
 import torch
 
 
 class Cache:
-    def __init__(self, num_samples: int, num_heads: int, max_tokens: int, embed_dim: int, device: torch.device) -> None:
+    def __init__(self, num_samples: int, num_heads: int, max_tokens: int, embed_dim: int, device: torch.device,
+                 hidden_size: Optional[int]) -> None:
         """
         Overview:
             Cache for storing intermediate results in a transformer model.
@@ -20,7 +21,9 @@ class Cache:
         """
         assert embed_dim % num_heads == 0
         self._num_samples, self._cache, self._size = num_samples, None, None
-        self._reset = lambda n: torch.empty(n, num_heads, max_tokens, embed_dim // num_heads, device=device)  # (B, nh, T, hs)
+        if hidden_size == None:
+            hidden_size = embed_dim // num_heads
+        self._reset = lambda n: torch.empty(n, num_heads, max_tokens, hidden_size, device=device)  # (B, nh, T, hs)
         self.reset()
 
     @property
@@ -77,7 +80,8 @@ class Cache:
 
 
 class KVCache:
-    def __init__(self, n: int, num_heads: int, max_tokens: int, embed_dim: int, device: torch.device) -> None:
+    def __init__(self, n: int, num_heads: int, max_tokens: int, embed_dim: int, device: torch.device,
+                 hidden_size: Optional[int]) -> None:
         """
         Overview:
             Cache for storing key and value tensors in a transformer model.
@@ -88,8 +92,8 @@ class KVCache:
             - embed_dim (:obj:`int`): The dimension of the embeddings.
             - device (:obj:`torch.device`): The device on which to store the cache.
         """
-        self._k_cache = Cache(n, num_heads, max_tokens, embed_dim, device)
-        self._v_cache = Cache(n, num_heads, max_tokens, embed_dim, device)
+        self._k_cache = Cache(n, num_heads, max_tokens, embed_dim, device, hidden_size)
+        self._v_cache = Cache(n, num_heads, max_tokens, embed_dim, device, hidden_size)
 
     @property
     def shape(self) -> Tuple[int, int, int, int]:
@@ -142,7 +146,8 @@ class KVCache:
 
 
 class KeysValues:
-    def __init__(self, n: int, num_heads: int, max_tokens: int, embed_dim: int, num_layers: int, device: torch.device) -> None:
+    def __init__(self, n: int, num_heads: int, max_tokens: int, embed_dim: int, num_layers: int, device: torch.device,
+                 hidden_size: Optional[int] = None) -> None:
         """
         Overview:
             Class for managing multiple layers of key and value caches in a transformer model.
@@ -154,7 +159,8 @@ class KeysValues:
             - num_layers (:obj:`int`): The number of layers in the transformer model.
             - device (:obj:`torch.device`): The device on which to store the caches.
         """
-        self._keys_values = tuple([KVCache(n, num_heads, max_tokens, embed_dim, device) for _ in range(num_layers)])
+        self._keys_values = tuple([KVCache(n, num_heads, max_tokens, embed_dim, device, hidden_size)
+                                   for _ in range(num_layers)])
 
     def __getitem__(self, index: int) -> KVCache:
         """
