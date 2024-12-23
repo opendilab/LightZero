@@ -107,4 +107,4 @@ class HuggingfaceLlamaTransformer(LlamaForCausalLM):
         )
 
         update_kv(past_keys_values, kv_cache)
-        return output.logits[:, -1, :]
+        return output.last_hidden_state
