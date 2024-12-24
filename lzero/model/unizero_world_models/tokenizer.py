@@ -93,9 +93,10 @@ class Tokenizer(nn.Module):
         elif len(shape) == 4:
             # Case when input is 4D (B, C, H, W)
             try:
-                # obs_embeddings = self.encoder[task_id](x)
                 obs_embeddings = self.encoder(x, task_id=task_id)  # TODO: for dmc multitask
+                # obs_embeddings = self.encoder[task_id](x)
             except Exception as e:
+                print(e)
                 obs_embeddings = self.encoder(x) # TODO: for memory env
 
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')

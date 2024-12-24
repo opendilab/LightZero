@@ -889,8 +889,8 @@ class WorldModelMT(WorldModel):
                     # Copy and store keys_values_wm for a single environment
                     self.update_cache_context(current_obs_embeddings, is_init_infer=True)
 
-        # elif n > self.env_num and batch_action is not None and current_obs_embeddings is None:
         elif batch_action is not None and current_obs_embeddings is None:
+        # elif n > self.env_num and batch_action is not None and current_obs_embeddings is None:
             # ================ calculate the target value in Train phase ================
             # [192, 16, 64] -> [32, 6, 16, 64]
             last_obs_embeddings = last_obs_embeddings.contiguous().view(batch_action.shape[0], -1, num_observations_tokens,

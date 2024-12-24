@@ -330,6 +330,9 @@ def train_unizero_multitask_segment_ddp(
                 print('=' * 20)
                 print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
 
+                # =========TODO=========
+                evaluator._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
+
                 # 执行安全评估
                 stop, reward = safe_eval(evaluator, learner, collector, rank, world_size)
                 # 判断评估是否成功

@@ -121,7 +121,7 @@ def generate_configs(env_id_list: List[str],
                     num_segments: int,
                     total_batch_size: int):
     configs = []
-    exp_name_prefix = f'data_suz_mt_ddp_20241224/8gpu_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_suz_mt_20241224/ddp_8gpu_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_seed{seed}/'
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
     observation_shape_list = [dmc_state_env_obs_space_map[env_id] for env_id in env_id_list]
 

@@ -61,7 +61,7 @@ def create_config(env_id, action_space_size_list, observation_shape_list, collec
                     num_layers=2,
                     num_heads=8,
                     embed_dim=768,
-                    env_num=len(env_id_list),
+                    env_num=max(collector_env_num, evaluator_env_num),
                     task_num=len(env_id_list),
                     use_normal_head=True,
                     use_softmoe_head=False,
@@ -111,7 +111,7 @@ def generate_configs(env_id_list, seed, collector_env_num, evaluator_env_num, n_
     Generate configurations for all DMC tasks in the environment list.
     """
     configs = []
-    exp_name_prefix = f'data_suz_mt_debug/{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}/'
+    exp_name_prefix = f'data_suz_mt_20241224/{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}/'
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
     observation_shape_list = [dmc_state_env_obs_space_map[env_id] for env_id in env_id_list]
     for task_id, env_id in enumerate(env_id_list):
@@ -195,7 +195,7 @@ if __name__ == "__main__":
     num_segments = 8
     n_episode = 8
     num_simulations = 50
-    batch_size = [64, 64] # 可以根据需要调整或者设置为列表
+    batch_size = [64 for _ in range(len(env_id_list))]
     num_unroll_steps = 5
     infer_context_length = 2
     norm_type = 'LN'
@@ -206,13 +206,13 @@ if __name__ == "__main__":
     update_per_collect = 100
 
     # ========== TODO: debug config ============
-    collector_env_num = 2
-    evaluator_env_num = 2
-    num_segments = 2
-    n_episode = 2
-    num_simulations = 2
-    batch_size = [4,4]  # 可以根据需要调整或者设置为列表
-    update_per_collect = 1
+    # collector_env_num = 2
+    # evaluator_env_num = 2
+    # num_segments = 2
+    # n_episode = 2
+    # num_simulations = 2
+    # batch_size = [4,4]  # 可以根据需要调整或者设置为列表
+    # update_per_collect = 1
 
     # 生成配置
     configs = generate_configs(
