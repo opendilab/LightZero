@@ -133,7 +133,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             self._logger.debug(
                 'Set default num_segments mode(num_segments({}), env_num({}))'.format(self._default_num_segments, self._env_num)
             )
-        self._policy.reset()
+        self._policy.reset(task_id=self.task_id)
 
     def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
         """
@@ -393,7 +393,8 @@ class MuZeroSegmentCollector(ISerialCollector):
             GameSegment(
                 self._env.action_space,
                 game_segment_length=self.policy_config.game_segment_length,
-                config=self.policy_config
+                config=self.policy_config,
+                task_id=self.task_id
             ) for _ in range(env_nums)
         ]
         # stacked observation windows in reset stage for init game_segments
@@ -639,7 +640,8 @@ class MuZeroSegmentCollector(ISerialCollector):
                         game_segments[env_id] = GameSegment(
                             self._env.action_space,
                             game_segment_length=self.policy_config.game_segment_length,
-                            config=self.policy_config
+                            config=self.policy_config,
+                            task_id=self.task_id
                         )
                         game_segments[env_id].reset(observation_window_stack[env_id])
 
@@ -701,7 +703,7 @@ class MuZeroSegmentCollector(ISerialCollector):
 
                     # Env reset is done by env_manager automatically
                     # NOTE: ============ reset the policy for the env_id. Default reset_init_data=True. ================
-                    self._policy.reset([env_id])
+                    self._policy.reset([env_id], task_id=self.task_id)
                     self._reset_stat(env_id)
                     ready_env_id.remove(env_id)
 
@@ -710,7 +712,8 @@ class MuZeroSegmentCollector(ISerialCollector):
                     game_segments[env_id] =  GameSegment(
                             self._env.action_space,
                             game_segment_length=self.policy_config.game_segment_length,
-                            config=self.policy_config
+                            config=self.policy_config,
+                            task_id=self.task_id
                         )
                     game_segments[env_id].reset(observation_window_stack[env_id])
 

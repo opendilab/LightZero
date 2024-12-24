@@ -563,7 +563,7 @@ class MuZeroCollector(ISerialCollector):
                             completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
 
                     eps_steps_lst[env_id] += 1
-                    if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero', 'unizero_multitask']:
+                    if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero', 'unizero_multitask', 'sampled_unizero_multitask']:
                         # TODO: only for UniZero now
                         self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)  # NOTE: reset_init_data=False
 

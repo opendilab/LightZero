@@ -196,8 +196,15 @@ def train_unizero_multitask_segment_ddp(
         for config in tasks_for_this_rank:
             config[1][0].policy.task_num = tasks_per_rank
 
-        # 确保指定的policy类型是支持的
-        assert create_cfg.policy.type in ['unizero_multitask'], "当前仅支持 'unizero_multitask' 类型的policy"
+        # 确保指定的策略类型受支持
+        assert create_cfg.policy.type in ['unizero_multitask',
+                                          'sampled_unizero_multitask'], "train_unizero entry 目前仅支持 'unizero_multitask'"
+
+        if create_cfg.policy.type == 'unizero_multitask':
+            from lzero.mcts import UniZeroGameBuffer as GameBuffer
+        if create_cfg.policy.type == 'sampled_unizero_multitask':
+            from lzero.mcts import SampledUniZeroGameBuffer as GameBuffer
+
 
         # 根据CUDA可用性设置设备
         cfg.policy.device = cfg.policy.model.world_model_cfg.device if torch.cuda.is_available() else 'cpu'

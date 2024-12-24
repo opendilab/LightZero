@@ -124,9 +124,17 @@ class WorldModelMT(WorldModel):
         # Initialize action embedding table
         if self.continuous_action_space:
             # TODO: check the effect of SimNorm
-            self.act_embedding_table = nn.Sequential(
-                nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
-                SimNorm(simnorm_dim=self.group_size))
+            # self.act_embedding_table = nn.Sequential(
+            #     nn.Linear(config.action_space_size, config.embed_dim, device=self.device, bias=False),
+            #     SimNorm(simnorm_dim=self.group_size))
+            # print(f'config.action_space_size_list:{config.action_space_size_list}')
+            self.act_embedding_table = nn.ModuleList([
+                nn.Sequential(
+                    nn.Linear(config.action_space_size_list[task_id], config.embed_dim, device=self.device, bias=False),
+                    SimNorm(simnorm_dim=self.group_size)
+                )
+                for task_id in range(self.task_num)
+            ])
         else:
             # for discrete action space
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
@@ -137,8 +145,15 @@ class WorldModelMT(WorldModel):
         if self.use_normal_head:
             print('We use normal head')
             # TODO: Normal Head
-            for task_id in range(self.task_num):  # TODO
-                self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
+            for task_id in range(self.task_num):
+                if self.continuous_action_space:
+                    # TODO
+                    self.sigma_type = self.config.sigma_type
+                    self.bound_type = self.config.bound_type
+                    self.head_policy = self._create_head_cont(self.value_policy_tokens_pattern, self.config.action_space_size_list[task_id]) # TODO
+                else:
+                    self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
+
                 self.head_policy_multi_task.append(self.head_policy)
 
                 self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
@@ -418,9 +433,14 @@ class WorldModelMT(WorldModel):
         """Initialize the last linear layer."""
         last_linear_layer_init_zero = True
         if last_linear_layer_init_zero:
+            if self.continuous_action_space:
+                module_to_initialize = [self.head_value, self.head_rewards, self.head_observations]
+            else:
+                module_to_initialize = [self.head_policy, self.head_value, self.head_rewards, self.head_observations]
+
             # TODO: multitask
             if self.task_num == 1:
-                for head in [self.head_policy, self.head_value, self.head_rewards, self.head_observations]:
+                for head in module_to_initialize:
                     for layer in reversed(head.head_module):
                         if isinstance(layer, nn.Linear):
                             nn.init.zeros_(layer.weight)
@@ -428,7 +448,12 @@ class WorldModelMT(WorldModel):
                                 nn.init.zeros_(layer.bias)
                             break
             elif self.task_num > 1:
-                for head in self.head_policy_multi_task + self.head_value_multi_task + self.head_rewards_multi_task + self.head_observations_multi_task:
+                if self.continuous_action_space:
+                    module_to_initialize = self.head_value_multi_task + self.head_rewards_multi_task + self.head_observations_multi_task
+                else:
+                    module_to_initialize = self.head_policy_multi_task + self.head_value_multi_task + self.head_rewards_multi_task + self.head_observations_multi_task
+
+                for head in module_to_initialize:
                     for layer in reversed(head.head_module):
                         if isinstance(layer, nn.Linear):
                             nn.init.zeros_(layer.weight)
@@ -573,10 +598,19 @@ class WorldModelMT(WorldModel):
         # Process action tokens
         elif 'act_tokens' in obs_embeddings_or_act_tokens:
             act_tokens = obs_embeddings_or_act_tokens['act_tokens']
-            if len(act_tokens.shape) == 3:
-                act_tokens = act_tokens.squeeze(1)
-            num_steps = act_tokens.size(1)
-            act_embeddings = self.act_embedding_table(act_tokens)
+            if self.continuous_action_space:
+                num_steps = 1
+                act_tokens = act_tokens.float()
+                if len(act_tokens.shape) == 2:
+                    act_tokens = act_tokens.unsqueeze(1)
+            else:
+                if len(act_tokens.shape) == 3:
+                    act_tokens = act_tokens.squeeze(1)
+                num_steps = act_tokens.size(1)
+            if self.task_num > 1:
+                act_embeddings = self.act_embedding_table[task_id](act_tokens)
+            else:
+                act_embeddings = self.act_embedding_table(act_tokens)
             sequences = self._add_position_embeddings(act_embeddings, prev_steps, num_steps, kvcache_independent,
                                                       is_init_infer, valid_context_lengths)
 
@@ -587,8 +621,10 @@ class WorldModelMT(WorldModel):
 
         # Process combined observation embeddings and action tokens
         else:
-            sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
-
+            if self.continuous_action_space:
+                sequences, num_steps = self._process_obs_act_combined_cont(obs_embeddings_or_act_tokens, prev_steps, task_id=task_id)
+            else:
+                sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
         # Pass sequences through transformer
         x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths)
 
@@ -642,7 +678,7 @@ class WorldModelMT(WorldModel):
                 return embeddings + position_embeddings
 
     #@profile
-    def _process_obs_act_combined(self, obs_embeddings_or_act_tokens, prev_steps):
+    def _process_obs_act_combined_cont(self, obs_embeddings_or_act_tokens, prev_steps, task_id=0):
         """
         Process combined observation embeddings and action tokens.
 
@@ -658,7 +694,45 @@ class WorldModelMT(WorldModel):
                                                  -1)
 
         num_steps = int(obs_embeddings.size(1) * (obs_embeddings.size(2) + 1))
-        act_embeddings = self.act_embedding_table(act_tokens)
+        if self.continuous_action_space:
+            act_tokens = act_tokens.float()
+            if len(act_tokens.shape) == 2:  # TODO
+                act_tokens = act_tokens.unsqueeze(-1)
+
+        # B, L, E
+        act_embeddings = self.act_embedding_table[task_id](act_tokens)
+
+        B, L, K, E = obs_embeddings.size()
+        # B, L*2, E
+        obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=self.device)
+
+        for i in range(L):
+            obs = obs_embeddings[:, i, :, :]
+            act = act_embeddings[:, i, :].unsqueeze(1)
+            obs_act = torch.cat([obs, act], dim=1)
+            obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
+
+        return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
+
+
+    #@profile
+    def _process_obs_act_combined(self, obs_embeddings_or_act_tokens, prev_steps, task_id=0):
+        """
+        Process combined observation embeddings and action tokens.
+
+        Arguments:
+            - obs_embeddings_or_act_tokens (:obj:`dict`): Dictionary containing combined observation embeddings and action tokens.
+            - prev_steps (:obj:`torch.Tensor`): Previous steps.
+        Returns:
+            - torch.Tensor: Combined observation and action embeddings with position information added.
+        """
+        obs_embeddings, act_tokens = obs_embeddings_or_act_tokens['obs_embeddings_and_act_tokens']
+        if len(obs_embeddings.shape) == 3:
+            obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1], self.num_observations_tokens,
+                                                 -1)
+
+        num_steps = int(obs_embeddings.size(1) * (obs_embeddings.size(2) + 1))
+        act_embeddings = self.act_embedding_table[task_id](act_tokens)
 
         B, L, K, E = obs_embeddings.size()
         obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=self.device)
@@ -802,7 +876,10 @@ class WorldModelMT(WorldModel):
                     batch_action = batch_action[:ready_env_num]
                     # if ready_env_num < self.env_num:
                     #     print(f'init inference ready_env_num: {ready_env_num} < env_num: {self.env_num}')
-                    act_tokens = torch.from_numpy(np.array(batch_action)).to(last_obs_embeddings.device).unsqueeze(-1)
+                    if self.continuous_action_space:
+                        act_tokens = torch.from_numpy(np.array(batch_action)).to(last_obs_embeddings.device).unsqueeze(1)
+                    else:
+                        act_tokens = torch.from_numpy(np.array(batch_action)).to(last_obs_embeddings.device).unsqueeze(-1)
                     outputs_wm = self.forward({'act_tokens': act_tokens}, past_keys_values=self.keys_values_wm,
                                               is_init_infer=True, task_id=task_id)
 
@@ -821,7 +898,11 @@ class WorldModelMT(WorldModel):
 
             last_obs_embeddings = last_obs_embeddings[:, :-1, :]
             batch_action = torch.from_numpy(batch_action).to(last_obs_embeddings.device)
-            act_tokens = rearrange(batch_action, 'b l -> b l 1')
+            if self.continuous_action_space:
+                act_tokens = batch_action
+            else:
+                act_tokens = rearrange(batch_action, 'b l -> b l 1')
+
 
             # select the last timestep for each sample
             # This will select the last column while keeping the dimensions unchanged, and the target policy/value in the final step itself is not used.
@@ -885,7 +966,10 @@ class WorldModelMT(WorldModel):
         self.keys_values_wm_size_list = self.retrieve_or_generate_kvcache(latest_state, ready_env_num, simulation_index, task_id=task_id)
 
         latent_state_list = []
-        token = action.reshape(-1, 1)
+        if not self.continuous_action_space:
+            token = action.reshape(-1, 1)
+        else:
+            token = action.reshape(-1, self.config.action_space_size_list[task_id])
 
         # ======= Print statistics for debugging =============
         # min_size = min(self.keys_values_wm_size_list)
@@ -1565,8 +1649,11 @@ class WorldModelMT(WorldModel):
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=batch['observations'].dtype)
 
-            # Action tokens
-        act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
+        # Action tokens
+        if self.continuous_action_space:
+            act_tokens = batch['actions']
+        else:
+            act_tokens = rearrange(batch['actions'], 'b l -> b l 1')
 
         # Forward pass to obtain predictions for observations, rewards, and policies
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, task_id=task_id)
@@ -1643,8 +1730,23 @@ class WorldModelMT(WorldModel):
 
         # Compute losses for rewards, policy, and value
         loss_rewards = self.compute_cross_entropy_loss(outputs, labels_rewards, batch, element='rewards')
-        loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy, batch,
-                                                                                        element='policy')
+
+        if not self.continuous_action_space:
+            loss_policy, orig_policy_loss, policy_entropy = self.compute_cross_entropy_loss(outputs, labels_policy,
+                                                                                            batch,
+                                                                                            element='policy')
+        else:
+            # NOTE: for continuous action space
+            if self.config.policy_loss_type == 'simple':
+                orig_policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont_simple(
+                    outputs, batch)
+            else:
+                orig_policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma = self._calculate_policy_loss_cont(
+                    outputs, batch, task_id=task_id)
+
+            loss_policy = orig_policy_loss + self.policy_entropy_weight * policy_entropy_loss
+            policy_entropy = - policy_entropy_loss
+
         loss_value = self.compute_cross_entropy_loss(outputs, labels_value, batch, element='value')
 
         # Compute timesteps

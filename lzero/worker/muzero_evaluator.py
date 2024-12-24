@@ -279,7 +279,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                 GameSegment(
                     self._env.action_space,
                     game_segment_length=self.policy_config.game_segment_length,
-                    config=self.policy_config
+                    config=self.policy_config,
+                    task_id=self.task_id
                 ) for _ in range(env_nums)
             ]
             for i in range(env_nums):
@@ -430,7 +431,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                                 game_segments[env_id] = GameSegment(
                                     self._env.action_space,
                                     game_segment_length=self.policy_config.game_segment_length,
-                                    config=self.policy_config
+                                    config=self.policy_config,
+                                    task_id=self.task_id
                                 )
 
                                 game_segments[env_id].reset(

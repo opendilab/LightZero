@@ -14,7 +14,6 @@ from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 
 from lzero.entry.utils import log_buffer_memory_usage
-from lzero.mcts import UniZeroGameBuffer as GameBuffer
 from lzero.policy import visit_count_temperature
 from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroSegmentCollector as Collector
@@ -59,7 +58,12 @@ def train_unizero_multitask_segment_serial(
     task_id, [cfg, create_cfg] = input_cfg_list[0]
 
     # 确保指定的策略类型受支持
-    assert create_cfg.policy.type in ['unizero_multitask'], "train_unizero entry 目前仅支持 'unizero_multitask'"
+    assert create_cfg.policy.type in ['unizero_multitask', 'sampled_unizero_multitask'], "train_unizero entry 目前仅支持 'unizero_multitask'"
+
+    if create_cfg.policy.type == 'unizero_multitask':
+        from lzero.mcts import UniZeroGameBuffer as GameBuffer
+    if create_cfg.policy.type == 'sampled_unizero_multitask':
+        from lzero.mcts import SampledUniZeroGameBuffer as GameBuffer
 
     # 根据CUDA可用性设置设备
     cfg.policy.device = cfg.policy.model.world_model_cfg.device if torch.cuda.is_available() else 'cpu'
@@ -181,7 +185,7 @@ def train_unizero_multitask_segment_serial(
             print(f'开始收集任务 id: {task_id}...')
 
             # 在每次收集前重置初始数据，对于多任务设置非常重要
-            collector._policy.reset(reset_init_data=True)
+            collector._policy.reset(reset_init_data=True, task_id=task_id)
             new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
             # 确定每次收集后的更新次数

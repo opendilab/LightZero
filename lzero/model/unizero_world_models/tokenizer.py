@@ -65,22 +65,27 @@ class Tokenizer(nn.Module):
             - torch.Tensor: Encoded embeddings of shape (B, 1, E).
         """
         shape = x.shape
+        # TODO: ======
         if task_id is None:
             # for compatibility with multitask setting
             task_id = 0
         else:
-            task_id = 0  # one share encoder
-            # task_id = task_id  # TODO: one encoder per task
+            # task_id = 0  # one share encoder
+            task_id = task_id  # TODO: one encoder per task
 
         # Process input tensor based on its dimensionality
         if len(shape) == 2:
             # Case when input is 2D (B, E)
-            obs_embeddings = self.encoder[task_id](x)
+            # obs_embeddings = self.encoder[task_id](x)
+            obs_embeddings = self.encoder(x, task_id)  # TODO:
+
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 3:
             # Case when input is 3D (B, T, E)
             x = x.contiguous().view(-1, shape[-1])  # Flatten the last two dimensions (B * T, E)
-            obs_embeddings = self.encoder[task_id](x)
+            # obs_embeddings = self.encoder[task_id](x)
+            obs_embeddings = self.encoder(x,task_id)  # TODO:
+
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 4:
             # Case when input is 4D (B, C, H, W)

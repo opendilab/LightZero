@@ -64,9 +64,12 @@ class MuZeroGameBuffer(GameBuffer):
         if hasattr(self._cfg, 'task_id'):
             self.task_id = self._cfg.task_id
             print(f"Task ID is set to {self.task_id}.")
+            self.action_space_size = self._cfg.model.action_space_size_list[self.task_id]
+
         else:
             self.task_id = None
             print("No task_id found in configuration. Task ID is set to None.")
+            self.action_space_size = self._cfg.model.action_space_size
 
     def reset_runtime_metrics(self):
         """
@@ -153,7 +156,7 @@ class MuZeroGameBuffer(GameBuffer):
         self.compute_target_re_time += self._compute_target_timer.value
 
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
-            policy_non_re_context, self._cfg.model.action_space_size
+            policy_non_re_context, self.action_space_size
         )
 
         # fusion of batch_target_policies_re and batch_target_policies_non_re to batch_target_policies
@@ -605,7 +608,7 @@ class MuZeroGameBuffer(GameBuffer):
             reward_pool = reward_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
             noises = [
-                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
+                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self.action_space_size
                                     ).astype(np.float32).tolist() for _ in range(transition_batch_size)
             ]
             if self._cfg.mcts_ctree:
@@ -651,7 +654,7 @@ class MuZeroGameBuffer(GameBuffer):
 
                     if policy_mask[policy_index] == 0:
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
-                        target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
+                        target_policies.append([0 for _ in range(self.action_space_size)])
                     else:
                         # NOTE: It is very important to use the latest MCTS visit count distribution.
                         sum_visits = sum(distributions)
@@ -660,7 +663,7 @@ class MuZeroGameBuffer(GameBuffer):
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
                             target_policies.append(
-                                list(np.ones(self._cfg.model.action_space_size) / self._cfg.model.action_space_size)
+                                list(np.ones(self.action_space_size) / self.action_space_size)
                             )
                         else:
                             # Update the data in game segment:
@@ -677,7 +680,7 @@ class MuZeroGameBuffer(GameBuffer):
                                 target_policies.append(policy)
                             else:
                                 # for board games that have two players and legal_actions is dy
-                                policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
+                                policy_tmp = [0 for _ in range(self.action_space_size)]
                                 # to make sure target_policies have the same dimension
                                 sum_visits = sum(distributions)
                                 policy = [visit_count / sum_visits for visit_count in distributions]
@@ -706,7 +709,7 @@ class MuZeroGameBuffer(GameBuffer):
                 - game_segment_lens
                 - action_mask_segment
                 - to_play_segment
-            - policy_shape: self._cfg.model.action_space_size
+            - policy_shape: self.action_space_size
         Returns:
             - batch_target_policies_non_re
         """
@@ -729,7 +732,7 @@ class MuZeroGameBuffer(GameBuffer):
             ]
             # NOTE: in continuous action space env: we set all legal_actions as -1
             legal_actions = [
-                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
+                [-1 for _ in range(self.action_space_size)] for _ in range(transition_batch_size)
             ]
         else:
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]

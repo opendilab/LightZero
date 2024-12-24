@@ -1463,7 +1463,7 @@ class WorldModel(nn.Module):
 
         return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
 
-    def _calculate_policy_loss_cont(self, outputs, batch: dict) -> Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _calculate_policy_loss_cont(self, outputs, batch: dict, task_id=None) -> Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Calculate the policy loss for continuous actions.
 
@@ -1478,9 +1478,12 @@ class WorldModel(nn.Module):
             - mu (:obj:`torch.Tensor`): The mean of the normal distribution.
             - sigma (:obj:`torch.Tensor`): The standard deviation of the normal distribution.
         """
-        batch_size, num_unroll_steps, action_space_size = outputs.logits_policy.shape[
+        if  task_id is None:
+            batch_size, num_unroll_steps, action_space_size = outputs.logits_policy.shape[
             0], self.config.num_unroll_steps, self.config.action_space_size
-
+        else:
+            batch_size, num_unroll_steps, action_space_size = outputs.logits_policy.shape[
+                0], self.config.num_unroll_steps, self.config.action_space_size_list[task_id]
         policy_logits_all = outputs.logits_policy
         mask_batch = batch['mask_padding']
         child_sampled_actions_batch = batch['child_sampled_actions']
