@@ -56,8 +56,8 @@ def create_config(env_id, action_space_size_list, observation_shape_list, collec
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,  # 每个时间步有2个token: obs 和 action
                     context_length=2 * infer_context_length,
-                    # device='cuda',
-                    device='cpu', # TODO
+                    device='cuda',
+                    # device='cpu', # TODO
                     num_layers=2,
                     num_heads=8,
                     embed_dim=768,
@@ -111,7 +111,7 @@ def generate_configs(env_id_list, seed, collector_env_num, evaluator_env_num, n_
     Generate configurations for all DMC tasks in the environment list.
     """
     configs = []
-    exp_name_prefix = f'data_suz_mt/{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}/'
+    exp_name_prefix = f'data_suz_mt_debug/{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}/'
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
     observation_shape_list = [dmc_state_env_obs_space_map[env_id] for env_id in env_id_list]
     for task_id, env_id in enumerate(env_id_list):

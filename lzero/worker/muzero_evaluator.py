@@ -149,7 +149,7 @@ class MuZeroEvaluator(ISerialEvaluator):
         assert hasattr(self, '_env'), "please set env first"
         if _policy is not None:
             self._policy = _policy
-        self._policy.reset()
+        self._policy.reset(task_id=self.task_id)
 
     def reset(self, _policy: Optional[namedtuple] = None, _env: Optional[BaseEnvManager] = None) -> None:
         """
@@ -230,11 +230,12 @@ class MuZeroEvaluator(ISerialEvaluator):
             - stop_flag (:obj:`bool`): Indicates whether the training can be stopped based on the stop value.
             - episode_info (:obj:`Dict[str, Any]`): A dictionary containing information about the evaluation episodes.
         """
-        print(f"=========in eval() Rank {get_rank()} ===========")
-        device = torch.cuda.current_device()
-        print(f"当前默认的 GPU 设备编号: {device}")
-        torch.cuda.set_device(get_rank())
-        print(f"set device后的 GPU 设备编号: {get_rank()}")
+        if torch.cuda.is_available():
+            print(f"=========in eval() Rank {get_rank()} ===========")
+            device = torch.cuda.current_device()
+            print(f"当前默认的 GPU 设备编号: {device}")
+            torch.cuda.set_device(get_rank())
+            print(f"set device后的 GPU 设备编号: {get_rank()}")
 
         # the evaluator only works on rank0
         episode_info = None
@@ -251,7 +252,7 @@ class MuZeroEvaluator(ISerialEvaluator):
             env_nums = self._env.env_num
 
             self._env.reset()
-            self._policy.reset()
+            self._policy.reset(task_id=self.task_id)
 
             # initializations
             init_obs = self._env.ready_obs

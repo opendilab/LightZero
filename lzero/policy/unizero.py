@@ -728,7 +728,7 @@ class UniZeroPolicy(MuZeroPolicy):
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
+            network_output = self._eval_model.initial_inference(self.last_batch_obs_eval, self.last_batch_action, data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             if not self._eval_model.training:
@@ -778,12 +778,12 @@ class UniZeroPolicy(MuZeroPolicy):
                 }
                 batch_action.append(action)
 
-            self.last_batch_obs = data
+            self.last_batch_obs_eval = data
             self.last_batch_action = batch_action
 
         return output
 
-    def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+    def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
         Overview:
             This method resets the collection process for a specific environment. It clears caches and memory
@@ -827,7 +827,7 @@ class UniZeroPolicy(MuZeroPolicy):
             print('collector: collect_model clear()')
             print(f'eps_steps_lst[{env_id}]: {current_steps}')
 
-    def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+    def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
         Overview:
             This method resets the evaluation process for a specific environment. It clears caches and memory
@@ -840,11 +840,20 @@ class UniZeroPolicy(MuZeroPolicy):
             - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
         if reset_init_data:
-            self.last_batch_obs = initialize_zeros_batch(
-                self._cfg.model.observation_shape,
-                self._cfg.evaluator_env_num,
-                self._cfg.device
-            )
+            if task_id is not None:
+                self.last_batch_obs_eval = initialize_zeros_batch(
+                    self._cfg.model.observation_shape_list[task_id],
+                    self._cfg.evaluator_env_num,
+                    self._cfg.device
+                )
+            else:
+                self.last_batch_obs_eval = initialize_zeros_batch(
+                    self._cfg.model.observation_shape,
+                    self._cfg.evaluator_env_num,
+                    self._cfg.device
+                )
+            print('after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
 
         # Return immediately if env_id is None or a list

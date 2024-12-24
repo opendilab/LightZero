@@ -15,7 +15,6 @@ from tensorboardX import SummaryWriter
 
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
-from lzero.mcts import UniZeroGameBuffer as GameBuffer
 from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroSegmentCollector as Collector
 from ding.utils import EasyTimer
@@ -73,7 +72,7 @@ def safe_eval(
 
 def allocate_batch_size(
         cfgs: List[dict],
-        game_buffers: List[GameBuffer],
+        game_buffers,
         alpha: float = 1.0,
         clip_scale: int = 1
 ) -> List[int]:
@@ -327,6 +326,7 @@ def train_unizero_multitask_segment_ddp(
 
             # 判断是否需要进行评估
             if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            # if evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
                 print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
 
@@ -340,9 +340,10 @@ def train_unizero_multitask_segment_ddp(
 
             print('=' * 20)
             print(f'开始收集 Rank {rank} 的任务_id: {cfg.policy.task_id}...')
+            print(f'Rank {rank}: cfg.policy.task_id={cfg.policy.task_id} ')
 
             # 在每次收集之前重置初始数据，这对于多任务设置非常重要
-            collector._policy.reset(reset_init_data=True)
+            collector._policy.reset(reset_init_data=True, task_id=cfg.policy.task_id)
             # 收集数据
             new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 

@@ -452,6 +452,8 @@ class MuZeroSegmentCollector(ISerialCollector):
                 #     ready_env_id = set(obs.keys())
 
                 stack_obs = {env_id: game_segments[env_id].get_obs() for env_id in ready_env_id}
+
+
                 stack_obs = list(stack_obs.values())
 
                 self.action_mask_dict_tmp = {env_id: self.action_mask_dict[env_id] for env_id in ready_env_id}

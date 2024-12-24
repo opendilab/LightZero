@@ -187,6 +187,8 @@ class UniZeroMTModel(nn.Module):
                 latent state, W_ is the width of latent state.
          """
         batch_size = obs_batch.size(0)
+        print('=here 5='*20)
+        import ipdb; ipdb.set_trace()
         obs_act_dict = {'obs': obs_batch, 'action': action_batch, 'current_obs': current_obs_batch}
         _, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(obs_act_dict, task_id=task_id)
         latent_state, reward, policy_logits, value = obs_token, logits_rewards, logits_policy, logits_value

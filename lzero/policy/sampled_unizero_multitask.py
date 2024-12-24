@@ -572,8 +572,6 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             latent_state_roots = latent_state_roots.detach().cpu().numpy()
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
-            child_sampled_actions_batch = data[:, 2].numpy() if isinstance(data, torch.Tensor) else data[2]
-
             legal_actions = [
                 [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)
             ] if not self._cfg.model.continuous_action_space else [
@@ -647,6 +645,8 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         """
         Evaluate mode init method. Initialize the eval model and MCTS utils.
         """
+        from ding.utils import EasyTimer, set_pkg_seed, get_rank
+
         self._eval_model = self._model
         if self._cfg.mcts_ctree:
             self._mcts_eval = MCTSCtree(self._cfg)
@@ -654,6 +654,9 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             self._mcts_eval = MCTSPtree(self._cfg)
         self.evaluator_env_num = self._cfg.evaluator_env_num
 
+        self.task_id_for_eval = self._cfg.task_id
+        self.task_num_for_current_rank = self._cfg.task_num
+        
         if self._cfg.model.model_type == 'conv':
             self.last_batch_obs = torch.zeros(
                 [self.evaluator_env_num, self._cfg.model.observation_shape[0], 64, 64]
@@ -661,8 +664,9 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
         elif self._cfg.model.model_type == 'mlp':
             self.last_batch_obs = torch.zeros(
-                [self.evaluator_env_num, self._cfg.model.observation_shape_list[0]] # TODO
+                [self.evaluator_env_num, self._cfg.model.observation_shape_list[self.task_id_for_eval]] # TODO
             ).to(self._cfg.device)
+            print(f'rank {get_rank()} last_batch_obs:', self.last_batch_obs.shape)
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
@@ -752,13 +756,20 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         Reset the collection process for a specific environment.
         """
         if reset_init_data:
-            self.last_batch_obs = initialize_zeros_batch(
-                self._cfg.model.observation_shape_list[task_id],
-                self._cfg.collector_env_num,
-                self._cfg.device
-            )
+            if task_id is not None:
+                self.last_batch_obs = initialize_zeros_batch(
+                    self._cfg.model.observation_shape_list[task_id],
+                    self._cfg.collector_env_num,
+                    self._cfg.device
+                )
+            else:
+                self.last_batch_obs = initialize_zeros_batch(
+                    self._cfg.model.observation_shape,
+                    self._cfg.collector_env_num,
+                    self._cfg.device
+                )
             self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
-            logging.info('collector: last_batch_obs, last_batch_action reset()', self.last_batch_obs.shape)
+            logging.info(f'collector: last_batch_obs, last_batch_action reset() {self.last_batch_obs.shape}')
 
         if env_id is None or isinstance(env_id, list):
             return

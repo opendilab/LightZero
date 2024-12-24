@@ -1,7 +1,7 @@
 from easydict import EasyDict
 from typing import List
 
-def create_config(env_id, observation_shape, action_space_size, collector_env_num, evaluator_env_num, n_episode,
+def create_config(env_id, observation_shape_list, action_space_size_list, collector_env_num, evaluator_env_num, n_episode,
                  num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length,
                  norm_type, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments,
                  total_batch_size):
@@ -15,6 +15,8 @@ def create_config(env_id, observation_shape, action_space_size, collector_env_nu
             task_name=task_name,
             observation_shape_list=observation_shape_list,
             action_space_size_list=action_space_size_list,
+            from_pixels=False,
+            frame_skip=2,
             continuous=True,  # Assuming all DMC tasks use continuous action spaces
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -33,15 +35,14 @@ def create_config(env_id, observation_shape, action_space_size, collector_env_nu
                 MoCo_beta=0.5, MoCo_beta_sigma=0.5, MoCo_gamma=0.1, MoCo_gamma_sigma=0.5, MoCo_rho=0,
                 calpha=0.5, rescale=1,
             ),
-            task_num=len(env_id),  # Number of tasks
+            task_num=len(env_id_list),
             task_id=0,  # To be set per task
             model=dict(
                 observation_shape_list=observation_shape_list,
                 action_space_size_list=action_space_size_list,
-                norm_type=norm_type,
-                num_layers=2,
-                num_unroll_steps=num_unroll_steps,
-                infer_context_length=infer_context_length,
+                continuous_action_space=True,
+                num_of_sampled_actions=20,
+                model_type='mlp',
                 world_model_cfg=dict(
                     observation_shape_list=observation_shape_list,
                     action_space_size_list=action_space_size_list,
@@ -50,7 +51,7 @@ def create_config(env_id, observation_shape, action_space_size, collector_env_nu
                     num_unroll_steps=num_unroll_steps,
                     policy_entropy_weight=5e-2,
                     continuous_action_space=True,
-                    num_of_sampled_actions=batch_size,  # Adjust as per batch_size
+                    num_of_sampled_actions=20,
                     sigma_type='conditioned',
                     fixed_sigma_value=0.5,
                     bound_type=None,
@@ -59,13 +60,20 @@ def create_config(env_id, observation_shape, action_space_size, collector_env_nu
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,  # Each timestep has 2 tokens: obs and action
                     context_length=2 * infer_context_length,
-                    # device='cuda',
-                    device='cpu', # TODO
-                    action_space_size=action_space_size,
-                    num_layers=num_unroll_steps,  # Adjust if different
+                    device='cuda',
+                    # device='cpu', # TODO
+                    num_layers=2,
                     num_heads=8,
                     embed_dim=768,
                     env_num=max(collector_env_num, evaluator_env_num),
+                    task_num=len(env_id_list),
+                    use_normal_head=True,
+                    use_softmoe_head=False,
+                    use_moe_head=False,
+                    num_experts_in_moe_head=4,
+                    moe_in_transformer=False,
+                    multiplication_moe_in_transformer=False,
+                    num_experts_of_moe_in_transformer=4,
                 ),
             ),
             total_batch_size=total_batch_size,
@@ -76,7 +84,8 @@ def create_config(env_id, observation_shape, action_space_size, collector_env_nu
             cuda=True,
             model_path=None,
             num_unroll_steps=num_unroll_steps,
-            update_per_collect=80,  # TODO
+            # update_per_collect=2,  # TODO: 80
+            update_per_collect=80,  # TODO: 80
             replay_ratio=reanalyze_ratio,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -96,8 +105,6 @@ def create_config(env_id, observation_shape, action_space_size, collector_env_nu
 
 
 def generate_configs(env_id_list: List[str],
-                    observation_shape_list: List[int],
-                    action_space_size_list: List[int],
                     collector_env_num: int,
                     n_episode: int,
                     evaluator_env_num: int,
@@ -114,19 +121,21 @@ def generate_configs(env_id_list: List[str],
                     num_segments: int,
                     total_batch_size: int):
     configs = []
-    exp_name_prefix = f'data_suz_mt_ddp/{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_suz_mt_ddp_20241224/8gpu_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_seed{seed}/'
+    action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
+    observation_shape_list = [dmc_state_env_obs_space_map[env_id] for env_id in env_id_list]
 
     for task_id, (env_id, obs_shape, act_space) in enumerate(zip(env_id_list, observation_shape_list, action_space_size_list)):
         config = create_config(
             env_id=env_id,
-            observation_shape=obs_shape,
-            action_space_size=act_space,
+            action_space_size_list=action_space_size_list,
+            observation_shape_list=observation_shape_list,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             n_episode=n_episode,
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
-            batch_size=batch_size[task_id],
+            batch_size=batch_size,
             num_unroll_steps=num_unroll_steps,
             infer_context_length=infer_context_length,
             norm_type=norm_type,
@@ -150,8 +159,8 @@ def create_env_manager():
         ),
         env_manager=dict(type='subprocess'),
         policy=dict(
-            type='unizero_multitask',
-            import_names=['lzero.policy.unizero_multitask'],
+            type='sampled_unizero_multitask',
+            import_names=['lzero.policy.sampled_unizero_multitask'],
         ),
     ))
 
@@ -161,8 +170,8 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 ./zoo/dmc2gym/config/dmc2gym_multitask_segment_ddp_config.py
-        torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_multitask_segment_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=2 --master_port=29501 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
+        torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
     from lzero.entry import train_unizero_multitask_segment_ddp
@@ -184,10 +193,34 @@ if __name__ == "__main__":
         # 'finger-spin',
     ]
 
+    # DMC 18games
+    env_id_list = [
+        'acrobot-swingup',
+        'cartpole-balance',
+        'cartpole-balance_sparse',
+        'cartpole-swingup',
+        'cartpole-swingup_sparse',
+        'cheetah-run',
+        "ball_in_cup-catch",
+        "finger-spin",
+        "finger-turn_easy",
+        "finger-turn_hard",
+        'hopper-hop',
+        'hopper-stand',
+        'pendulum-swingup',
+        'quadruped-run',
+        'quadruped-walk',
+        'reacher-easy',
+        'reacher-hard',
+        'walker-run',
+        'walker-stand',
+        'walker-walk',
+        'humanoid-run',
+    ]
+
     # 获取各环境的 action_space_size 和 observation_shape
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
     observation_shape_list = [dmc_state_env_obs_space_map[env_id] for env_id in env_id_list]
-
 
     collector_env_num = 8
     num_segments = 8
@@ -211,15 +244,13 @@ if __name__ == "__main__":
     # n_episode = 2
     # evaluator_env_num = 2
     # num_simulations = 2
-    # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
+    # batch_size = [4 for _ in range(len(env_id_list))]
     # =======================================
 
     seed = 0  # You can iterate over multiple seeds if needed
 
     configs = generate_configs(
         env_id_list=env_id_list,
-        observation_shape_list=observation_shape_list,
-        action_space_size_list=action_space_size_list,
         collector_env_num=collector_env_num,
         n_episode=n_episode,
         evaluator_env_num=evaluator_env_num,
