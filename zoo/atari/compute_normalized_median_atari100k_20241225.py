@@ -1,15 +1,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from typing import List, Tuple, Dict
+from typing import List, Dict
 
-def compute_normalized_mean_and_median(
+
+def compute_normalized_median(
     random_scores: List[float],
     human_scores: List[float],
-    algo_scores: List[float]
-) -> Tuple[float, float]:
+    algo_scores: List[float],
+) -> float:
     """
-    计算基于随机、人类和算法分数的归一化均值和中位数。
+    计算基于随机、人类和算法分数的归一化中位数。
 
     参数:
         random_scores (List[float]): 每个游戏的随机分数列表。
@@ -17,7 +18,7 @@ def compute_normalized_mean_and_median(
         algo_scores (List[float]): 每个游戏的算法分数列表。
 
     返回:
-        Tuple[float, float]: 归一化均值和中位数。
+        float: 归一化中位数。
 
     异常:
         ValueError: 如果任一输入列表为空或长度不一致。
@@ -34,87 +35,88 @@ def compute_normalized_mean_and_median(
         for random_score, human_score, algo_score in zip(random_scores, human_scores, algo_scores)
     ]
 
-    # 计算均值和中位数
-    normalized_mean = np.mean(normalized_scores)
+    # 计算中位数
     normalized_median = np.median(normalized_scores)
+    return normalized_median
 
-    return normalized_mean, normalized_median
 
-
-def plot_normalized_scores(
+def plot_normalized_medians(
     algorithms: List[str],
-    means: List[float],
     medians: List[float],
-    filename: str = "normalized_scores.png"
+    filename: str = "normalized_medians.png",
 ) -> None:
     """
-    绘制不同算法的归一化均值和中位数的柱状图。
+    绘制不同算法的归一化中位数的柱状图。
 
     参数:
         algorithms (List[str]): 算法名称列表。
-        means (List[float]): 归一化均值列表。
         medians (List[float]): 归一化中位数列表。
-        filename (str, optional): 保存图表的文件名（默认是 'normalized_scores.png'）。
+        filename (str, optional): 保存图表的文件名（默认是 'normalized_medians.png'）。
 
     返回:
         None
 
     异常:
-        ValueError: 如果算法、均值或中位数列表长度不一致。
+        ValueError: 如果算法或中位数列表长度不一致。
     """
-    if not (len(algorithms) == len(means) == len(medians)):
-        raise ValueError("算法、均值和中位数列表的长度必须一致。")
+    if not (len(algorithms) == len(medians)):
+        raise ValueError("算法和中位数列表的长度必须一致。")
 
-    # 设置适合学术论文的风格，并增加字体比例
+    # 设置学术风格和字体比例
     sns.set(style="whitegrid", font_scale=1.5)
 
+    # 定义颜色：所有算法有独立颜色，UniZero 为蓝色
+    colors = ['#2ca02c', '#d62728', '#1f77b4']  # 绿色, 红色, 蓝色
+    color_mapping = {algo: colors[i] for i, algo in enumerate(algorithms)}
+
     x = np.arange(len(algorithms))  # 算法位置
-    width = 0.35  # 柱状图的宽度
+    width = 0.6  # 柱宽
 
     # 设置图表尺寸
     plt.figure(figsize=(14, 8))
 
-    # 定义颜色：均值为蓝色，中位数为红色
-    mean_color = '#1f77b4'   # Matplotlib 默认的蓝色
-    median_color = '#d62728' # Matplotlib 默认的红色
-
-    # 绘制均值和中位数的柱状图
-    # bars_mean = plt.bar(x - width/2, means, width, label='归一化均值', color=mean_color)
-    # bars_median = plt.bar(x + width/2, medians, width, label='归一化中位数', color=median_color)
-    bars_mean = plt.bar(x - width/2, means, width, label='Normalized Mean', color=mean_color)
-    bars_median = plt.bar(x + width/2, medians, width, label='Normalized Median', color=median_color)
+    # 绘制柱状图
+    bars = plt.bar(
+        x, medians, width, color=[color_mapping[algo] for algo in algorithms], edgecolor="black"
+    )
 
     # 添加标签和标题
-    # plt.ylabel('分数', fontsize=18)
-    # plt.title('Atari 100k 人类归一化分数', fontsize=22, pad=20)
-    plt.ylabel('Score', fontsize=20)
-    plt.title('Human Normalized Score (Atari 100k)', fontsize=30, pad=20)
+    # plt.ylabel('Normalized Median Score', fontsize=30)
+    plt.ylabel('Score', fontsize=30)
+
+    plt.title('Human Normalized Median Score (Atari 100k)', fontsize=30, pad=20)
 
     plt.xticks(x, algorithms, fontsize=30)
     plt.yticks(fontsize=20)
-    plt.legend(fontsize=20)
-
-    # 添加网格线
+    plt.ylim(0, max(medians) * 1.2)  # 设置 y 轴范围，留空间给标签
     plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+    # 添加图例，放在图表顶部，避免与柱状图重叠
+    for algo, color in color_mapping.items():
+        plt.bar(0, 0, color=color, label=algo, edgecolor="black")  # 虚拟柱子用于图例
+    # plt.legend(fontsize=20, loc="upper center", bbox_to_anchor=(0.5, 0.98), ncol=3)
 
     # 在每个柱子上添加数值标签
     def attach_labels(bars):
         for bar in bars:
             height = bar.get_height()
-            plt.annotate(f'{height:.2f}',
-                         xy=(bar.get_x() + bar.get_width() / 2, height),
-                         xytext=(0, 5),  # 偏移量
-                         textcoords="offset points",
-                         ha='center', va='bottom', fontsize=18)
+            plt.annotate(
+                f'{height:.2f}',
+                xy=(bar.get_x() + bar.get_width() / 2, height),
+                xytext=(0, 5),  # 偏移量
+                textcoords="offset points",
+                ha='center',
+                va='bottom',
+                fontsize=30,
+            )
 
-    attach_labels(bars_mean)
-    attach_labels(bars_median)
+    attach_labels(bars)
 
-    # 调整布局避免标签被截断
+    # 调整布局避免标签和内容被截断
     plt.tight_layout()
 
     # 保存图表
-    plt.savefig(filename, dpi=300)
+    plt.savefig(filename, dpi=300, bbox_inches='tight')
     print(f"图表已保存为 {filename}")
     plt.close()
 
@@ -170,21 +172,20 @@ def main():
 
     for algo in algo_names:
         algo_scores = scores_data[algo]['scores']
-        mean, median = compute_normalized_mean_and_median(random_scores, human_scores, algo_scores)
-        normalized_results[algo] = {'mean': mean, 'median': median}
-        print(f"{algo} - 归一化均值: {mean:.4f}, 归一化中位数: {median:.4f}")
+        median = compute_normalized_median(random_scores, human_scores, algo_scores)
+        normalized_results[algo] = {'median': median}
+        print(f"{algo} - 归一化中位数: {median:.4f}")
 
     # 准备绘图数据
     algorithms = list(normalized_results.keys())
-    means = [normalized_results[algo]['mean'] for algo in algorithms]
     medians = [normalized_results[algo]['median'] for algo in algorithms]
 
-    plot_normalized_scores(
+    plot_normalized_medians(
         algorithms=algorithms,
-        means=means,
         medians=medians,
-        filename="atari100k_normalized_scores_20241225.png"
+        filename="atari100k_normalized_medians_20241225.png"
     )
+
 
 if __name__ == "__main__":
     main()
