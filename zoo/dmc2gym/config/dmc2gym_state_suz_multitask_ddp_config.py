@@ -62,7 +62,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     context_length=2 * infer_context_length,
                     device='cuda',
                     # device='cpu', # TODO
-                    num_layers=2,
+                    # num_layers=2,
+                    num_layers=4, # TODO
                     num_heads=8,
                     embed_dim=768,
                     env_num=max(collector_env_num, evaluator_env_num),
@@ -121,7 +122,7 @@ def generate_configs(env_id_list: List[str],
                     num_segments: int,
                     total_batch_size: int):
     configs = []
-    exp_name_prefix = f'data_suz_mt_20241224/ddp_8gpu_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_suz_mt_20241224/debug_ddp_8gpu_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_seed{seed}/'
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
     observation_shape_list = [dmc_state_env_obs_space_map[env_id] for env_id in env_id_list]
 
@@ -170,7 +171,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=2 --master_port=29501 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -208,14 +209,11 @@ if __name__ == "__main__":
         'hopper-hop',
         'hopper-stand',
         'pendulum-swingup',
-        'quadruped-run',
-        'quadruped-walk',
         'reacher-easy',
         'reacher-hard',
         'walker-run',
         'walker-stand',
         'walker-walk',
-        'humanoid-run',
     ]
 
     # 获取各环境的 action_space_size 和 observation_shape
@@ -239,12 +237,12 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    # collector_env_num = 2
-    # num_segments = 2
-    # n_episode = 2
-    # evaluator_env_num = 2
-    # num_simulations = 2
-    # batch_size = [4 for _ in range(len(env_id_list))]
+    collector_env_num = 2
+    num_segments = 2
+    n_episode = 2
+    evaluator_env_num = 2
+    num_simulations = 2
+    batch_size = [4 for _ in range(len(env_id_list))]
     # =======================================
 
     seed = 0  # You can iterate over multiple seeds if needed

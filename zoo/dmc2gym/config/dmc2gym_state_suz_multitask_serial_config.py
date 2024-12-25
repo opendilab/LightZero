@@ -58,7 +58,8 @@ def create_config(env_id, action_space_size_list, observation_shape_list, collec
                     context_length=2 * infer_context_length,
                     device='cuda',
                     # device='cpu', # TODO
-                    num_layers=2,
+                    # num_layers=2,
+                    num_layers=4, # TODO
                     num_heads=8,
                     embed_dim=768,
                     env_num=max(collector_env_num, evaluator_env_num),
@@ -182,6 +183,31 @@ if __name__ == "__main__":
         # 'humanoid-walk',
         # 'quadruped-run',
         # 'finger-spin',
+    ]
+    
+    # DMC 18games
+    env_id_list = [
+        'acrobot-swingup',
+        'cartpole-balance',
+        'cartpole-balance_sparse',
+        'cartpole-swingup',
+        'cartpole-swingup_sparse',
+        'cheetah-run',
+        "ball_in_cup-catch",
+        "finger-spin",
+        "finger-turn_easy",
+        "finger-turn_hard",
+        'hopper-hop',
+        'hopper-stand',
+        'pendulum-swingup',
+        # 'quadruped-run',
+        # 'quadruped-walk',
+        'reacher-easy',
+        'reacher-hard',
+        'walker-run',
+        'walker-stand',
+        'walker-walk',
+        # 'humanoid-run',
     ]
 
     # 获取各环境的 action_space_size 和 observation_shape
