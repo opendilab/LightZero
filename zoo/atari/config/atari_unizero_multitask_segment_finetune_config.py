@@ -50,8 +50,10 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     use_normal_head=True,
                     use_softmoe_head=False,
                     moe_in_transformer=False,
-                    multiplication_moe_in_transformer=False,
                     num_experts_of_moe_in_transformer=4,
+                    multiplication_moe_in_transformer=False,
+                    num_experts_in_moe_head=4,
+                    use_moe_head=False,
                 ),
             ),
             total_batch_size=total_batch_size,
@@ -83,7 +85,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size):
     configs = []
-    exp_name_prefix = f'data_unizero_mt_ddp-2gpu_1201/finetune_pong/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed{seed}/'
+    exp_name_prefix = f'data_unizero_mt_ddp-2gpu_1201/finetune_amidar_load-encoder-backbone/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_mt_ddp-2gpu_1201_debug/finetune_amidar_load-backbone/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -127,7 +130,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 ./zoo/atari/config/atari_unizero_multitask_segment_finetune_config.py
+        python -m torch.distributed.launch --nproc_per_node=1 --master_port=29503 ./zoo/atari/config/atari_unizero_multitask_segment_finetune_config.py
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_finetune_config.py
     """
 
@@ -135,14 +138,18 @@ if __name__ == "__main__":
     from ding.utils import DDPContext
     from easydict import EasyDict
 
-    env_id_list = ['PongNoFrameskip-v4']  # Debug setup
+    # env_id_list = ['PongNoFrameskip-v4']  # Debug setup
+    env_id_list = ['AmidarNoFrameskip-v4']  # Debug setup
+
     action_space_size = 18
 
     # NCCL environment setup
     import os
     os.environ["NCCL_TIMEOUT"] = "3600000000"
 
-    for seed in [0, 1, 2]:
+    # for seed in [0, 1, 2]:
+    for seed in [0]:
+    
         collector_env_num = 8
         num_segments = 8
         n_episode = 8
@@ -163,7 +170,7 @@ if __name__ == "__main__":
 
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size)
 
-        pretrained_model_path = '/mnt/afs/niuyazhe/code/LightZero/data_unizero_mt_ddp-8gpu_1127/8games_brf0.02_nlayer8-nhead24_seed1/8games_brf0.02_1-encoder-LN-res2-channel256_gsl20_8-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed1/Pong_unizero-mt_seed1/ckpt/iteration_200000.pth.tar'
+        pretrained_model_path = '/mnt/afs/niuyazhe/code/LightZero/data_unizero_mt_ddp-8gpu_1127/8games_brf0.02_nlayer8-nhead24_seed1/8games_brf0.02_1-encoder-LN-res2-channel256_gsl20_8-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed1/Pong_unizero-mt_seed1/ckpt/ckpt_best.pth.tar'
 
         with DDPContext():
             train_unizero_multitask_segment_ddp(configs, seed=seed, model_path=pretrained_model_path, max_env_step=max_env_step)

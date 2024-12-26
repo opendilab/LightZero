@@ -43,7 +43,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     device='cuda',
                     action_space_size=action_space_size,
                     # batch_size=64 8games训练时，每张卡大约占 12*3=36G cuda显存
-                    num_layers=12,
+                    # num_layers=12,
+                    # num_heads=24,
+                    num_layers=8,
                     num_heads=24,
                     embed_dim=768,
                     obs_type='image',
@@ -91,7 +93,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
                      num_segments, total_batch_size):
     configs = []
-    exp_name_prefix = f'data_unizero_mt_ddp-8gpu_20241226/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_20250216/{len(env_id_list)}games_nlayer8_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -155,12 +157,12 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    collector_env_num = 2
-    num_segments = 2
-    n_episode = 2
-    evaluator_env_num = 2
-    num_simulations = 2
-    batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
+    # collector_env_num = 2
+    # num_segments = 2
+    # n_episode = 2
+    # evaluator_env_num = 2
+    # num_simulations = 2
+    # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
 
 
     for seed in [0]:
