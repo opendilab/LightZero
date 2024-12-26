@@ -63,6 +63,7 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     device='cuda',
                     # device='cpu', # TODO
                     # num_layers=2,
+                    # num_layers=8, # TODO
                     num_layers=4, # TODO
                     num_heads=8,
                     embed_dim=768,
@@ -79,14 +80,16 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             ),
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
-            train_start_after_envsteps=int(2e3),
+            # train_start_after_envsteps=int(2e3),
+            train_start_after_envsteps=int(0),
             use_priority=False,
             print_task_priority_logs=False,
             cuda=True,
             model_path=None,
             num_unroll_steps=num_unroll_steps,
             # update_per_collect=2,  # TODO: 80
-            update_per_collect=80,  # TODO: 80
+            # update_per_collect=200,  # TODO: 8*100*0.25=200
+            update_per_collect=80,  # TODO: 8*100*0.1=80
             replay_ratio=reanalyze_ratio,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -96,6 +99,14 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             n_episode=n_episode,
             replay_buffer_size=int(1e6),
             eval_freq=int(5e3),
+            grad_clip_value=5,
+            learning_rate=1e-4,
+            discount_factor=0.99,
+            td_steps=5,
+            piecewise_decay_lr_scheduler=False,
+            manual_temperature_decay=True,
+            threshold_training_steps_for_final_temperature=int(2.5e4),
+            cos_lr_scheduler=True,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             buffer_reanalyze_freq=buffer_reanalyze_freq,
@@ -122,7 +133,7 @@ def generate_configs(env_id_list: List[str],
                     num_segments: int,
                     total_batch_size: int):
     configs = []
-    exp_name_prefix = f'data_suz_mt_20241224/debug_ddp_8gpu_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_suz_mt_20241230/ddp_8gpu_nlayer8_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_seed{seed}/'
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
     observation_shape_list = [dmc_state_env_obs_space_map[env_id] for env_id in env_id_list]
 
@@ -237,12 +248,12 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    collector_env_num = 2
-    num_segments = 2
-    n_episode = 2
-    evaluator_env_num = 2
-    num_simulations = 2
-    batch_size = [4 for _ in range(len(env_id_list))]
+    # collector_env_num = 2
+    # num_segments = 2
+    # n_episode = 2
+    # evaluator_env_num = 2
+    # num_simulations = 2
+    # batch_size = [4 for _ in range(len(env_id_list))]
     # =======================================
 
     seed = 0  # You can iterate over multiple seeds if needed

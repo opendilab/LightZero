@@ -31,7 +31,7 @@ def create_config(env_id, action_space_size_list, observation_shape_list, collec
             replay_path_gif='./replay_gif',
         ),
         policy=dict(
-            multi_gpu=False,
+            multi_gpu=False, # TODO: nable multi-GPU for DDP
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000))),
             model=dict(
                 observation_shape_list=observation_shape_list,
@@ -87,11 +87,6 @@ def create_config(env_id, action_space_size_list, observation_shape_list, collec
             num_simulations=num_simulations,
             n_episode=n_episode,
             replay_buffer_size=int(1e6),
-            collector_env_num=collector_env_num,
-            evaluator_env_num=evaluator_env_num,
-            buffer_reanalyze_freq=buffer_reanalyze_freq,
-            reanalyze_batch_size=reanalyze_batch_size,
-            reanalyze_partition=reanalyze_partition,
             grad_clip_value=5,
             learning_rate=1e-4,
             discount_factor=0.99,
@@ -100,6 +95,11 @@ def create_config(env_id, action_space_size_list, observation_shape_list, collec
             manual_temperature_decay=True,
             threshold_training_steps_for_final_temperature=int(2.5e4),
             cos_lr_scheduler=True,
+            collector_env_num=collector_env_num,
+            evaluator_env_num=evaluator_env_num,
+            buffer_reanalyze_freq=buffer_reanalyze_freq,
+            reanalyze_batch_size=reanalyze_batch_size,
+            reanalyze_partition=reanalyze_partition,
         ),
         seed=seed,
     ))

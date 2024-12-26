@@ -817,105 +817,89 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             'optimizer_world_model': self._optimizer_world_model.state_dict(),
         }
 
+    # ========== TODO: original version: load all parameters ==========
     def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
         """
-        Load the state_dict into policy learn mode, excluding multi-task related parameters.
+        Overview:
+            Load the state_dict variable into policy learn mode.
+        Arguments:
+            - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.
         """
-        exclude_prefixes = [
-            '_orig_mod.world_model.head_policy_multi_task.',
-            '_orig_mod.world_model.head_value_multi_task.',
-            '_orig_mod.world_model.head_rewards_multi_task.',
-            '_orig_mod.world_model.head_observations_multi_task.',
-            '_orig_mod.world_model.task_emb.'
-        ]
+        self._learn_model.load_state_dict(state_dict['model'])
+        self._target_model.load_state_dict(state_dict['target_model'])
+        self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
 
-        exclude_keys = [
-            '_orig_mod.world_model.task_emb.weight',
-            '_orig_mod.world_model.task_emb.bias',
-            # 可根据需要添加更多需要排除的具体参数名
-        ]
+    # ========== TODO: pretrain-finetue version: only load encoder and transformer-backbone parameters  ==========
+    # def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
+    #     """
+    #     Overview:
+    #         Load the state_dict variable into policy learn mode, excluding multi-task related parameters.
+    #     Arguments:
+    #         - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved previously.
+    #     """
+    #     # 定义需要排除的参数前缀
+    #     exclude_prefixes = [
+    #         '_orig_mod.world_model.head_policy_multi_task.',
+    #         '_orig_mod.world_model.head_value_multi_task.',
+    #         '_orig_mod.world_model.head_rewards_multi_task.',
+    #         '_orig_mod.world_model.head_observations_multi_task.',
+    #         '_orig_mod.world_model.task_emb.'
+    #     ]
+        
+    #     # 定义需要排除的具体参数（如果有特殊情况）
+    #     exclude_keys = [
+    #         '_orig_mod.world_model.task_emb.weight',
+    #         '_orig_mod.world_model.task_emb.bias',  # 如果存在则添加
+    #         # 添加其他需要排除的具体参数名
+    #     ]
+        
+    #     def filter_state_dict(state_dict_loader: Dict[str, Any], exclude_prefixes: list, exclude_keys: list = []) -> Dict[str, Any]:
+    #         """
+    #         过滤掉需要排除的参数。
+    #         """
+    #         filtered = {}
+    #         for k, v in state_dict_loader.items():
+    #             if any(k.startswith(prefix) for prefix in exclude_prefixes):
+    #                 print(f"Excluding parameter: {k}")  # 调试用，查看哪些参数被排除
+    #                 continue
+    #             if k in exclude_keys:
+    #                 print(f"Excluding specific parameter: {k}")  # 调试用
+    #                 continue
+    #             filtered[k] = v
+    #         return filtered
 
-        def filter_state_dict(state_dict_loader: Dict[str, Any], exclude_prefixes: list, exclude_keys: list = []) -> Dict[str, Any]:
-            """
-            过滤掉需要排除的参数。
-            """
-            filtered = {}
-            for k, v in state_dict_loader.items():
-                if any(k.startswith(prefix) for prefix in exclude_prefixes):
-                    logging.info(f"Excluding parameter: {k}")  # 调试用
-                    continue
-                if k in exclude_keys:
-                    logging.info(f"Excluding specific parameter: {k}")  # 调试用
-                    continue
-                filtered[k] = v
-            return filtered
+    #     # 过滤并加载 'model' 部分
+    #     if 'model' in state_dict:
+    #         model_state_dict = state_dict['model']
+    #         filtered_model_state_dict = filter_state_dict(model_state_dict, exclude_prefixes, exclude_keys)
+    #         missing_keys, unexpected_keys = self._learn_model.load_state_dict(filtered_model_state_dict, strict=False)
+    #         if missing_keys:
+    #             print(f"Missing keys when loading _learn_model: {missing_keys}")
+    #         if unexpected_keys:
+    #             print(f"Unexpected keys when loading _learn_model: {unexpected_keys}")
+    #     else:
+    #         print("No 'model' key found in the state_dict.")
 
-        # 过滤并加载 'model' 部分
-        if 'model' in state_dict:
-            model_state_dict = state_dict['model']
-            filtered_model_state_dict = filter_state_dict(model_state_dict, exclude_prefixes, exclude_keys)
-            missing_keys, unexpected_keys = self._learn_model.load_state_dict(filtered_model_state_dict, strict=False)
-            if missing_keys:
-                logging.info(f"Missing keys when loading _learn_model: {missing_keys}")
-            if unexpected_keys:
-                logging.info(f"Unexpected keys when loading _learn_model: {unexpected_keys}")
-        else:
-            logging.info("No 'model' key found in the state_dict.")
+    #     # 过滤并加载 'target_model' 部分
+    #     if 'target_model' in state_dict:
+    #         target_model_state_dict = state_dict['target_model']
+    #         filtered_target_model_state_dict = filter_state_dict(target_model_state_dict, exclude_prefixes, exclude_keys)
+    #         missing_keys, unexpected_keys = self._target_model.load_state_dict(filtered_target_model_state_dict, strict=False)
+    #         if missing_keys:
+    #             print(f"Missing keys when loading _target_model: {missing_keys}")
+    #         if unexpected_keys:
+    #             print(f"Unexpected keys when loading _target_model: {unexpected_keys}")
+    #     else:
+    #         print("No 'target_model' key found in the state_dict.")
 
-        # 过滤并加载 'target_model' 部分
-        if 'target_model' in state_dict:
-            target_model_state_dict = state_dict['target_model']
-            filtered_target_model_state_dict = filter_state_dict(target_model_state_dict, exclude_prefixes, exclude_keys)
-            missing_keys, unexpected_keys = self._target_model.load_state_dict(filtered_target_model_state_dict, strict=False)
-            if missing_keys:
-                logging.info(f"Missing keys when loading _target_model: {missing_keys}")
-            if unexpected_keys:
-                logging.info(f"Unexpected keys when loading _target_model: {unexpected_keys}")
-        else:
-            logging.info("No 'target_model' key found in the state_dict.")
+    #     # 加载优化器的 state_dict，不需要过滤，因为优化器通常不包含模型参数
+    #     if 'optimizer_world_model' in state_dict:
+    #         optimizer_state_dict = state_dict['optimizer_world_model']
+    #         try:
+    #             self._optimizer_world_model.load_state_dict(optimizer_state_dict)
+    #         except Exception as e:
+    #             print(f"Error loading optimizer state_dict: {e}")
+    #     else:
+    #         print("No 'optimizer_world_model' key found in the state_dict.")
 
-        # 加载优化器的 state_dict
-        if 'optimizer_world_model' in state_dict:
-            optimizer_state_dict = state_dict['optimizer_world_model']
-            try:
-                self._optimizer_world_model.load_state_dict(optimizer_state_dict)
-            except Exception as e:
-                logging.info(f"Error loading optimizer state_dict: {e}")
-        else:
-            logging.info("No 'optimizer_world_model' key found in the state_dict.")
-
-    def _monitor_vars_learn(self, num_tasks=2) -> List[str]:
-        """
-        Register the variables to be monitored in learn mode, including multi-task specific variables.
-        """
-        monitored_vars = [
-            'Current_GPU',
-            'Max_GPU',
-            'collect_mcts_temperature',
-            'collect_epsilon',
-            'cur_lr_world_model',
-            'weighted_total_loss',
-            'total_grad_norm_before_clip_wm',
-        ]
-
-        task_specific_vars = [
-            'noreduce_obs_loss',
-            'noreduce_orig_policy_loss',
-            'noreduce_policy_loss',
-            'noreduce_latent_recon_loss',
-            'noreduce_perceptual_loss',
-            'noreduce_latent_state_l2_norms',
-            'noreduce_policy_entropy',
-            'noreduce_target_policy_entropy',
-            'noreduce_reward_loss',
-            'noreduce_value_loss',
-            'noreduce_lambd',
-            'noreduce_value_priority',
-            'noreduce_value_priority_mean',
-        ]
-
-        for var in task_specific_vars:
-            for task_idx in range(num_tasks):
-                monitored_vars.append(f'{var}_task{self.task_id + task_idx}')
-
-        return monitored_vars
+    #     # 如果需要，还可以加载其他部分，例如 scheduler 等
