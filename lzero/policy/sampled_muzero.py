@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Tuple, Union
 
 import numpy as np
 import torch
+import wandb
 import torch.optim as optim
 from ding.model import model_wrap
 from ding.torch_utils import to_tensor
@@ -158,14 +159,14 @@ class SampledMuZeroPolicy(MuZeroPolicy):
         # (float) The weight of policy loss.
         policy_loss_weight=1,
         # (float) The weight of policy entropy loss.
-        policy_entropy_weight=0,
+        policy_entropy_weight=5e-3,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=2,
         # (bool) Whether to use the cosine learning rate decay.
         cos_lr_scheduler=False,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e4),
         # (int) The number of final training iterations to control temperature, which is only used for manually decay.
@@ -279,7 +280,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
             from torch.optim.lr_scheduler import CosineAnnealingLR
             self.lr_scheduler = CosineAnnealingLR(self._optimizer, 1e6, eta_min=0, last_epoch=-1)
 
-        if self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.piecewise_decay_lr_scheduler:
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
             # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
@@ -508,7 +509,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
             self._learn_model.parameters(), self._cfg.grad_clip_value
         )
         self._optimizer.step()
-        if self._cfg.cos_lr_scheduler or self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
         # ==============================================================
@@ -520,7 +521,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
             predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
             predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
 
-        return_data = {
+        return_log_dict = {
             'cur_lr': self._optimizer.param_groups[0]['lr'],
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'weighted_total_loss': weighted_total_loss.item(),
@@ -546,7 +547,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
         }
 
         if self._cfg.model.continuous_action_space:
-            return_data.update({
+            return_log_dict.update({
                 # ==============================================================
                 # sampled related core code
                 # ==============================================================
@@ -563,7 +564,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
                 'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
             })
         else:
-            return_data.update({
+            return_log_dict.update({
                 # ==============================================================
                 # sampled related core code
                 # ==============================================================
@@ -574,7 +575,11 @@ class SampledMuZeroPolicy(MuZeroPolicy):
                 'total_grad_norm_before_clip': total_grad_norm_before_clip.item()
             })
 
-        return return_data
+        if self._cfg.use_wandb:
+            wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
+            wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
+            
+        return return_log_dict
 
     def _calculate_policy_loss_cont(
             self, policy_loss: torch.Tensor, policy_logits: torch.Tensor, target_policy: torch.Tensor,

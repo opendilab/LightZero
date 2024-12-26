@@ -28,7 +28,7 @@ norm_type = 'LN'
 # ==============================================================
 
 lunarlander_cont_sampled_unizero_config = dict(
-    exp_name=f'data_suz/lunarlander_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_{norm_type}_seed0',
+    exp_name=f'data_sampled_unizero/lunarlander_cont_sampled_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}-infer{infer_context_length}_bs{batch_size}_{norm_type}_seed0',
     env=dict(
         env_id='LunarLanderContinuous-v2',
         continuous=True,
@@ -46,21 +46,21 @@ lunarlander_cont_sampled_unizero_config = dict(
             num_of_sampled_actions=K,
             model_type='mlp',
             world_model_cfg=dict(
+                policy_loss_type='kl',
                 obs_type='vector',
                 num_unroll_steps=num_unroll_steps,
-                policy_entropy_loss_weight=1e-4,
+                policy_entropy_weight=5e-3,
                 continuous_action_space=continuous_action_space,
                 num_of_sampled_actions=K,
                 sigma_type='conditioned',
-                fixed_sigma_value=0.3,
+                fixed_sigma_value=0.5,
                 bound_type=None,
                 model_type='mlp',
                 norm_type=norm_type,
                 max_blocks=num_unroll_steps,
                 max_tokens=2 * num_unroll_steps,  # NOTE: each timestep has 2 tokens: obs and action
                 context_length=2 * infer_context_length,
-                device='cpu',
-                # device='cuda',
+                device='cuda',
                 action_space_size=2,
                 env_num=max(collector_env_num, evaluator_env_num),
             ),

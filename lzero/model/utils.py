@@ -117,7 +117,7 @@ def renormalize(inputs: torch.Tensor, first_dim: int = 1) -> torch.Tensor:
     min_val = torch.min(flat_input, first_dim, keepdim=True).values
     flat_input = (flat_input - min_val) / (max_val - min_val)
 
-    return flat_input.view(*input.shape)
+    return flat_input.view(*inputs.shape)
 
 
 def get_dynamic_mean(model: nn.Module) -> float:

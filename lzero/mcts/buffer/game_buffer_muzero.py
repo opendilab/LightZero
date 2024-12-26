@@ -199,8 +199,14 @@ class MuZeroGameBuffer(GameBuffer):
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
                                               self._cfg.num_unroll_steps].tolist()
+
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
-            mask_tmp = [1. for i in range(len(actions_tmp))]
+            # mask_tmp = [1. for i in range(len(actions_tmp))]
+            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
+
+            # TODO: the child_visits after position <self._cfg.game_segment_length> in the segment (with padded part) may not be updated
+            # So the corresponding position should not be used in the training
+            mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
@@ -449,9 +455,9 @@ class MuZeroGameBuffer(GameBuffer):
                 end_index = self._cfg.mini_infer_size * (i + 1)
                 m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device)
                 # calculate the target value
-                try:
+                if self.task_id is not None:
                     m_output = model.initial_inference(m_obs, task_id=self.task_id)
-                except Exception as e:
+                else:
                     m_output = model.initial_inference(m_obs)
                 
 
@@ -578,11 +584,9 @@ class MuZeroGameBuffer(GameBuffer):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
                 m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device)
-                # m_output = model.initial_inference(m_obs)
-
-                try:
+                if self.task_id is not None:
                     m_output = model.initial_inference(m_obs, task_id=self.task_id)
-                except Exception as e:
+                else:
                     m_output = model.initial_inference(m_obs)
 
                 if not model.training:
@@ -613,10 +617,9 @@ class MuZeroGameBuffer(GameBuffer):
                     roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 with self._origin_search_timer:
-                    # MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-                    try:
+                    if self.task_id is not None:
                         MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
-                    except Exception as e:
+                    else:
                         MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
                 
                 self.origin_search_time += self._origin_search_timer.value
@@ -628,8 +631,10 @@ class MuZeroGameBuffer(GameBuffer):
                 else:
                     roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                # MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
-                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
+                if self.task_id is not None:
+                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
+                else:
+                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
 
 
             roots_legal_actions_list = legal_actions

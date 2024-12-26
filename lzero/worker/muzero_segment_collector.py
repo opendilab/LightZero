@@ -1,3 +1,4 @@
+import logging
 import time
 from collections import deque, namedtuple
 from typing import Optional, Any, List
@@ -19,16 +20,21 @@ from lzero.mcts.utils import prepare_observation
 class MuZeroSegmentCollector(ISerialCollector):
     """
     Overview:
-        The Segment Collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, Gumbel MuZero.
+        MuZeroSegmentCollector is a data collector for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero, and Gumbel MuZero.
         It manages the data collection process for training these algorithms using a serial mechanism.
+
+        The main difference from MuZeroCollector is that MuZeroSegmentCollector returns after collecting a specified number of segments,
+        whereas MuZeroCollector returns after collecting a complete game. This provides more extensibility and flexibility in data collection.
+
     Interfaces:
         ``__init__``, ``reset``, ``reset_env``, ``reset_policy``, ``_reset_stat``, ``envstep``, ``__del__``, ``_compute_priorities``,
         ``pad_and_save_last_trajectory``, ``collect``, ``_output_log``, ``close``
+
     Properties:
-        ``envstep``
+        ``envstep``: Counter for the current number of environment steps.
     """
 
-    # TO be compatible with ISerialCollector
+    # To be compatible with ISerialCollector
     config = dict()
 
     def __init__(
@@ -84,8 +90,6 @@ class MuZeroSegmentCollector(ISerialCollector):
             self._logger, _ = build_logger(
                 path='./{}/log/{}'.format(self._exp_name, self._instance_name), name=self._instance_name, need_tb=False
             )
-            # self._tb_logger = None
-
             # =========== TODO: for unizero_multitask ddp_v2 ========
             self._tb_logger = tb_logger
 
@@ -149,11 +153,6 @@ class MuZeroSegmentCollector(ISerialCollector):
             self.reset_env(_env)
         if _policy is not None:
             self.reset_policy(_policy)
-        # else:
-        #     self._default_num_segments = self.policy_config.get('num_segments', None)
-        #     self._logger.debug(
-        #         'Set default num_segments mode(num_segments({}), env_num({}))'.format(self._default_num_segments, self._env_num)
-        #     )
 
         self._env_info = {env_id: {'time': 0., 'step': 0} for env_id in range(self._env_num)}
 
@@ -282,7 +281,6 @@ class MuZeroSegmentCollector(ISerialCollector):
         
         # NOTE: for unizero
         pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps + self.policy_config.td_steps]
-        # pad_child_visits_lst = game_segments[i].child_visit_segment[:self.policy_config.num_unroll_steps]
 
         # EfficientZero original repo bug:
         # pad_child_visits_lst = game_segments[i].child_visit_segment[beg_index:end_index]
@@ -330,7 +328,7 @@ class MuZeroSegmentCollector(ISerialCollector):
         # put the game segment into the pool
         self.game_segment_pool.append((last_game_segments[i], last_game_priorities[i], done[i]))
 
-        # reset last game_segments # TODO:origin
+        # reset last game_segments and last game_priorities for the next collection
         last_game_segments[i] = None
         last_game_priorities[i] = None
 
@@ -433,7 +431,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                 obs = self._env.ready_obs
                 ready_env_id = set(obs.keys())
                 if len(ready_env_id) < self._env_num:
-                    print(f'muzero_segment_collector: len(ready_env_id) < self._env_num, ready_env_id: {ready_env_id}')
+                    logging.info(f'muzero_segment_collector: len(ready_env_id) < self._env_num, ready_env_id: {ready_env_id}, self._env_num: {self._env_num}')
                 
                 # TODO: For UniZero, during the init-infer process, it is necessary to retrieve the current kv_cache from the kv_cache_dict corresponding to each env_id.
                 #  In theory, this requires waiting for all environments to be ready. However, in practice,
@@ -472,7 +470,13 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, task_id=self.task_id)
+                if self.task_id is None:
+                    # single task setting
+                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
+                else:
+                    # multi task setting
+                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, task_id=self.task_id)
+
 
                 # Extract relevant policy outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
@@ -644,7 +648,7 @@ class MuZeroSegmentCollector(ISerialCollector):
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
                 if timestep.done:
-                    print(f'========env {env_id} done!========')
+                    logging.info(f'========env {env_id} done!========')
                     self._total_episode_count += 1
 
                     reward = timestep.info['eval_episode_return']
@@ -713,7 +717,7 @@ class MuZeroSegmentCollector(ISerialCollector):
 
             # NOTE: must after the for loop to make sure all env_id's data are collected
             if len(self.game_segment_pool) >= self._default_num_segments:
-                print(f'collect {len(self.game_segment_pool)} segments now!')
+                logging.info(f'env {env_id} collected {len(self.game_segment_pool)} segments now!')
 
                 # [data, meta_data]
                 return_data = [self.game_segment_pool[i][0] for i in range(len(self.game_segment_pool))], [
@@ -727,7 +731,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                 break
 
         collected_duration = sum([d['time'] for d in self._episode_info])
-        # ========== TODO: unizero_multitask ddp_v2 ========
+        # TODO: for atari multitask new ddp pipeline
         # reduce data when enables DDP
         # if self._world_size > 1:
         #     collected_step = allreduce_data(collected_step, 'sum')
@@ -749,6 +753,7 @@ class MuZeroSegmentCollector(ISerialCollector):
         Arguments:
             - train_iter (:obj:`int`): Current training iteration number for logging context.
         """
+        # TODO: for atari multitask new ddp pipeline
         # if self._rank != 0:
         #     return
         if (train_iter - self._last_train_iter) >= self._collect_print_freq and len(self._episode_info) > 0:
@@ -783,7 +788,7 @@ class MuZeroSegmentCollector(ISerialCollector):
             if self.policy_config.gumbel_algo:
                 info['completed_value'] = np.mean(completed_value)
             self._episode_info.clear()
-            print(f'collector _output_log: rank {self._rank}, self.task_id: {self.task_id}')
+            print(f'collector output_log: rank {self._rank}, self.task_id: {self.task_id}')
             self._logger.info("collect end:\n{}".format('\n'.join(['{}: {}'.format(k, v) for k, v in info.items()])))
             for k, v in info.items():
                 if k in ['each_reward']:

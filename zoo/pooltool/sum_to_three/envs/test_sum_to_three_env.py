@@ -1,6 +1,10 @@
 import math
-import pytest
+
 import numpy as np
+import pooltool as pt
+import pytest
+from easydict import EasyDict
+
 from zoo.pooltool.datatypes import Spaces
 from zoo.pooltool.image_representation import PygameRenderer, RenderConfig
 from zoo.pooltool.sum_to_three.envs.sum_to_three_env import (
@@ -10,15 +14,12 @@ from zoo.pooltool.sum_to_three.envs.sum_to_three_env import (
     create_initial_state,
     get_action_space,
 )
-
-import pooltool as pt
 from zoo.pooltool.sum_to_three.envs.utils import (
     ObservationType,
     get_coordinate_obs_space,
     get_image_obs_space,
     get_reward_space,
 )
-from easydict import EasyDict
 
 np.random.seed(42)
 

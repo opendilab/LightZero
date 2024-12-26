@@ -161,7 +161,7 @@ class BipedalWalkerEnv(CartPoleEnv):
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
                 self._save_replay_count += 1
         obs = to_ndarray(obs)
-        rew = to_ndarray([rew])  # wrapped to be transferred to a array with shape (1,)
+        rew = to_ndarray(rew)
         return BaseEnvTimestep(obs, rew, done, info)
 
     @property

@@ -5,6 +5,7 @@ from typing import Optional, Callable, Tuple, Dict, Any
 
 import numpy as np
 import torch
+import wandb
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray, to_item, to_tensor
 from ding.utils import build_logger, EasyTimer
@@ -319,7 +320,12 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # policy forward
                     # ==============================================================
                     # policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id)
-                    policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id, task_id=self.task_id)
+                    if self.task_id is None:
+                        # single task setting
+                        policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id)
+                    else:
+                        # multi task setting
+                        policy_output = self._policy.forward(stack_obs, action_mask, to_play, ready_env_id=ready_env_id, task_id=self.task_id)
 
                     actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                     distributions_dict_with_env_id = {k: v['visit_count_distributions'] for k, v in policy_output.items()}
@@ -478,6 +484,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                                                train_iter)
                     self._tb_logger.add_scalar('{}_step_task{}/'.format(self._instance_name, self.task_id) + k, v,
                                                envstep)
+                if self.policy_config.use_wandb:
+                    wandb.log({'{}_step/'.format(self._instance_name) + k: v}, step=envstep)
+
             episode_return = np.mean(episode_return)
             if episode_return > self._max_episode_return:
                 if save_ckpt_fn:

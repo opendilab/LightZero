@@ -11,11 +11,12 @@
 # limitations under the License.
 import os
 import re
+import sys
 from distutils.core import setup
 
 import numpy as np
+from Cython.Build import cythonize
 from setuptools import find_packages, Extension
-from Cython.Build import cythonize  # this line should be after 'from setuptools import find_packages'
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -31,6 +32,19 @@ group_requirements = {
     item.group(1): _load_req(item.group(0))
     for item in [_REQ_PATTERN.fullmatch(reqpath) for reqpath in os.listdir()] if item
 }
+
+# Set C++11 compile parameters according to the operating system
+extra_compile_args = []
+extra_link_args = []
+
+if sys.platform == 'win32':
+    # Use the VS compiler on Windows platform
+    extra_compile_args = ["/std:c++11"]
+    extra_link_args = ["/std:c++11"]
+else:
+    # Linux/macOS Platform
+    extra_compile_args = ["-std=c++11"]
+    extra_link_args = ["-std=c++11"]
 
 
 def find_pyx(path=None):
@@ -60,8 +74,8 @@ def find_cython_extensions(path=None):
             extname, [item],
             include_dirs=[np.get_include()],
             language="c++",
-            # extra_compile_args=["/std:c++latest"],  # only for Windows
-            # extra_link_args=["/std:c++latest"],  # only for Windows
+            extra_compile_args=extra_compile_args,
+            extra_link_args=extra_link_args,
         ))
 
     return extensions

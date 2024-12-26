@@ -52,12 +52,12 @@ bipedalwalker_cont_disc_efficientzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         learning_rate=0.003,
         # NOTE: this parameter is important for stability in bipedalwalker.
         grad_clip_value=0.5,
         # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
-        policy_entropy_loss_weight=5e-3,
+        policy_entropy_weight=5e-3,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

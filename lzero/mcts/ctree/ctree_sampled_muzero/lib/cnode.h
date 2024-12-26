@@ -13,6 +13,7 @@
 #include <sys/timeb.h>
 #include <time.h>
 #include <map>
+#include <random>
 
 const int DEBUG_MODE = 0;
 
@@ -54,6 +55,15 @@ namespace tree
         CNode(float prior, std::vector<CAction> &legal_actions, int action_space_size, int num_of_sampled_actions, bool continuous_action_space);
         ~CNode();
 
+        // Auxiliary sampling function
+        std::pair<std::vector<std::vector<float> >, std::vector<float> > sample_actions(
+            const std::vector<float>& mu,
+            const std::vector<float>& sigma,
+            int num_samples,
+            float std_magnification,
+            float clamp_limit,
+            std::default_random_engine& generator
+        );
         void expand(int to_play, int current_latent_state_index, int batch_index, float reward, const std::vector<float> &policy_logits);
         void add_exploration_noise(float exploration_fraction, const std::vector<float> &noises);
         float compute_mean_q(int isRoot, float parent_q, float discount_factor);

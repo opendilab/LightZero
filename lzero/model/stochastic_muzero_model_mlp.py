@@ -113,8 +113,8 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
         # here, the input is two concatenated frames
         self.chance_encoder = ChanceEncoder(observation_shape * 2, chance_space_size, encoder_backbone_type='mlp')
         self.dynamics_network = DynamicsNetwork(
-            action_encoding_dim=self.action_encoding_dim,
-            num_channels=self.latent_state_dim + self.action_encoding_dim,
+            action_encoding_dim=self.chance_space_size,
+            num_channels=self.latent_state_dim + self.chance_space_size,
             common_layer_num=2,
             fc_reward_layers=fc_reward_layers,
             output_support_size=self.reward_support_size,
@@ -190,27 +190,19 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
         """
         # NOTE: the discrete action encoding type is important for some environments
 
-        # discrete action space
-        if self.discrete_action_encoding_type == 'one_hot':
-            # Stack latent_state with the one hot encoded action
-            if len(action.shape) == 1:
-                # (batch_size, ) -> (batch_size, 1)
-                # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
-                action = action.unsqueeze(-1)
+        # Stack latent_state with the one hot encoded action
+        if len(action.shape) == 1:
+            # (batch_size, ) -> (batch_size, 1)
+            # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
+            action = action.unsqueeze(-1)
 
-            # transform action to one-hot encoding.
-            # action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)
-            action_one_hot = torch.zeros(action.shape[0], self.action_space_size, device=action.device)
-            # transform action to torch.int64
-            action = action.long()
-            action_one_hot.scatter_(1, action, 1)
-            action_encoding = action_one_hot
-        elif self.discrete_action_encoding_type == 'not_one_hot':
-            action_encoding = action / self.action_space_size
-            if len(action_encoding.shape) == 1:
-                # (batch_size, ) -> (batch_size, 1)
-                # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
-                action_encoding = action_encoding.unsqueeze(-1)
+        # transform action to one-hot encoding.
+        # action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)
+        action_one_hot = torch.zeros(action.shape[0], self.chance_space_size, device=action.device)
+        # transform action to torch.int64
+        action = action.long()
+        action_one_hot.scatter_(1, action, 1)
+        action_encoding = action_one_hot
 
         action_encoding = action_encoding.to(latent_state.device).float()
         # state_action_encoding shape: (batch_size, latent_state[1] + action_dim]) or
@@ -274,7 +266,7 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
         # (batch_size, latent_state[1] + action_space_size]) depending on the discrete_action_encoding_type.
         state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
 
-        next_latent_state, reward = self.dynamics_network(state_action_encoding)
+        next_latent_state, reward = self.afterstate_dynamics_network(state_action_encoding)
 
         if not self.state_norm:
             return next_latent_state, reward

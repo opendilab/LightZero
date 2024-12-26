@@ -145,10 +145,11 @@ class UniZeroMCTSCtree(object):
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
                 # for UniZero
-                try:
+                if task_id is not None:
+                    # multi task setting
                     network_output = model.recurrent_inference(state_action_history, simulation_index, latent_state_index_in_search_path, task_id=task_id)
-                except Exception as e:
-                    # print(e) # for single task
+                else:
+                    # single task setting
                     network_output = model.recurrent_inference(state_action_history, simulation_index, latent_state_index_in_search_path)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
@@ -303,11 +304,11 @@ class MuZeroMCTSCtree(object):
                 """
                 network_output = model.recurrent_inference(latent_states, last_actions)  # for classic muzero
 
-                try:
-                    # for multi task
+                if task_id is not None:
+                    # multi task setting
                     network_output = model.recurrent_inference(latent_states, last_actions, task_id=task_id)
-                except Exception as e:
-                    # for single task
+                else:
+                    # single task setting
                     network_output = model.recurrent_inference(latent_states, last_actions)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)

@@ -1,5 +1,3 @@
-# lzero/policy/muzero_multitask.py
-
 from typing import Optional, Tuple
 
 import math
@@ -13,7 +11,6 @@ from .common import MZNetworkOutput, RepresentationNetwork, PredictionNetwork, F
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
-# 使用ModelRegistry注册多任务MuZero模型
 @MODEL_REGISTRY.register('MuZeroMTModel')
 class MuZeroMTModel(nn.Module):
 

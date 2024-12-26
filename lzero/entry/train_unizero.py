@@ -4,6 +4,7 @@ from functools import partial
 from typing import Tuple, Optional
 
 import torch
+import wandb
 from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
@@ -76,6 +77,16 @@ def train_unizero(
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=torch.cuda.is_available())
 
+    if cfg.policy.use_wandb:
+        # Initialize wandb
+        wandb.init(
+            project="LightZero",
+            config=cfg,
+            sync_tensorboard=False,
+            monitor_gym=False,
+            save_code=True,
+        )
+
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # Load pretrained model if specified
@@ -99,6 +110,8 @@ def train_unizero(
 
     # Learner's before_run hook
     learner.call_hook('before_run')
+    if policy_config.use_wandb:
+        policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
     # Collect random data before training
     if cfg.policy.random_collect_episode_num > 0:
@@ -176,6 +189,10 @@ def train_unizero(
                     # Clear caches and precompute positional embedding matrices
                     policy.recompute_pos_emb_diff_and_clear_cache()  # TODO
 
+                if policy_config.use_wandb:
+                    policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
+
+                train_data.append({'train_which_component': 'transformer'})
                 log_vars = learner.train(train_data, collector.envstep)
 
                 if cfg.policy.use_priority:
@@ -188,4 +205,5 @@ def train_unizero(
             break
 
     learner.call_hook('after_run')
+    wandb.finish()
     return policy

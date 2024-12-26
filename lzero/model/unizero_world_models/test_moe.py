@@ -22,6 +22,10 @@ class MoeLayer(nn.Module):
         self.num_experts_per_tok = num_experts_per_tok
 
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
+        if len(self.experts) == 1:
+            # 只有一个专家时，直接使用该专家
+            return self.experts[0](inputs)
+        
         gate_logits = self.gate(inputs)
         weights, selected_experts = torch.topk(gate_logits, self.num_experts_per_tok)
         weights = F.softmax(weights, dim=1, dtype=torch.float).to(inputs.dtype)
@@ -35,13 +39,14 @@ class MoeLayer(nn.Module):
 class TransformerBlock(nn.Module):
     def __init__(self, config):
         super().__init__()
+        self.mlp = nn.Sequential(
+            nn.Linear(config.embed_dim, 4 * config.embed_dim),
+            nn.GELU(approximate='tanh'),
+            nn.Linear(4 * config.embed_dim, config.embed_dim),
+            nn.Dropout(config.resid_pdrop),
+        )
+        
         if config.moe_in_transformer:
-            self.mlp = nn.Sequential(
-                nn.Linear(config.embed_dim, 4 * config.embed_dim),
-                nn.GELU(approximate='tanh'),
-                nn.Linear(4 * config.embed_dim, config.embed_dim),
-                nn.Dropout(config.resid_pdrop),
-            )
             self.feed_forward = MoeLayer(
                 experts=[self.mlp for _ in range(config.num_experts_of_moe_in_transformer)],
                 gate=nn.Linear(config.embed_dim, config.num_experts_of_moe_in_transformer, bias=False),
@@ -51,12 +56,7 @@ class TransformerBlock(nn.Module):
             print('使用MoE在Transformer的feed_forward中')
             print("="*20)
         else:
-            self.feed_forward = nn.Sequential(
-                nn.Linear(config.embed_dim, 4 * config.embed_dim),
-                nn.GELU(approximate='tanh'),
-                nn.Linear(4 * config.embed_dim, config.embed_dim),
-                nn.Dropout(config.resid_pdrop),
-            )
+            self.feed_forward = self.mlp
 
     def forward(self, x):
         return self.feed_forward(x)
@@ -75,13 +75,16 @@ def test_transformer_block():
     embed_dim = 64
     resid_pdrop = 0.1
     num_experts_of_moe_in_transformer = 1
-    moe_in_transformer_values = [True, False]
 
     # 创建输入数据
     inputs = torch.randn(10, 5, embed_dim)  # (batch_size, seq_len, embed_dim)
 
+    # 初始化两个输出变量
+    outputs_true = None
+    outputs_false = None
+
     # 对于moe_in_transformer为True和False分别进行测试
-    for moe_in_transformer in moe_in_transformer_values:
+    for moe_in_transformer in [True, False]:
         config = Config(embed_dim, resid_pdrop, num_experts_of_moe_in_transformer, moe_in_transformer)
         transformer_block = TransformerBlock(config)
         

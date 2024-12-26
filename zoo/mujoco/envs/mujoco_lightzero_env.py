@@ -127,7 +127,7 @@ class MujocoEnvLightZero(MujocoEnv):
             info['eval_episode_return'] = self._eval_episode_return
 
         obs = to_ndarray(obs).astype(np.float32)
-        rew = to_ndarray([rew]).astype(np.float32)
+        rew = to_ndarray(rew).astype(np.float32)
 
         action_mask = None
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}

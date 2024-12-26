@@ -74,7 +74,7 @@ class AlphaZeroPolicy(Policy):
         evaluator_env_num=3,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=True,
+        piecewise_decay_lr_scheduler=True,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e5),
         # (bool) Whether to use manually temperature decay.
@@ -136,7 +136,7 @@ class AlphaZeroPolicy(Policy):
                 device_type=self._cfg.device
             )
 
-        if self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.piecewise_decay_lr_scheduler:
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
             # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
@@ -195,7 +195,7 @@ class AlphaZeroPolicy(Policy):
             max_norm=self._cfg.grad_clip_value,
         )
         self._optimizer.step()
-        if self._cfg.lr_piecewise_constant_decay is True:
+        if self._cfg.piecewise_decay_lr_scheduler is True:
             self.lr_scheduler.step()
 
         # =============
@@ -364,6 +364,26 @@ class AlphaZeroPolicy(Policy):
             else:
                 raise NotImplementedError
             self.simulate_env = Connect4Env(connect4_alphazero_config.env)
+        elif self._cfg.simulation_env_id == 'chess':
+            from zoo.board_games.chess.envs.chess_lightzero_env import ChessLightZeroEnv
+            if self._cfg.simulation_env_config_type == 'play_with_bot':
+                from zoo.board_games.chess.config.chess_alphazero_bot_mode_config import chess_alphazero_config
+            elif self._cfg.simulation_env_config_type == 'self_play':
+                from zoo.board_games.chess.config.chess_alphazero_sp_mode_config import chess_alphazero_config
+            else:
+                raise NotImplementedError
+            self.simulate_env = ChessLightZeroEnv(chess_alphazero_config.env)
+        elif self._cfg.simulation_env_id == 'dummy_any_game':
+            from zoo.board_games.tictactoe.envs.dummy_any_game_env import AnyGameEnv
+            if self._cfg.simulation_env_config_type == 'single_player_mode':
+                from zoo.board_games.tictactoe.config.dummy_any_game_alphazero_single_player_mode_config import \
+                    dummy_any_game_alphazero_config
+            elif self._cfg.simulation_env_config_type == 'self_play':
+                from zoo.board_games.tictactoe.config.dummy_any_game_alphazero_self_play_mode_config import \
+                    dummy_any_game_alphazero_config
+            else:
+                raise NotImplementedError
+            self.simulate_env = AnyGameEnv(dummy_any_game_alphazero_config.env)
         else:
             raise NotImplementedError
 

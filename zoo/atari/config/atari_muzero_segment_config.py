@@ -85,7 +85,7 @@ def main(env_id, seed):
             batch_size=batch_size,
             optim_type='SGD',
             td_steps=5,
-            lr_piecewise_constant_decay=True,
+            piecewise_decay_lr_scheduler=True,
             manual_temperature_decay=False,
             learning_rate=0.2,
             target_update_freq=100,

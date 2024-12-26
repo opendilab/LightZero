@@ -19,10 +19,13 @@
 import colorsys
 
 import numpy as np
-from pycolab import ascii_art
-from pycolab import cropping
-from pycolab import things as plab_things
-from pycolab.prefab_parts import sprites as prefab_sprites
+try:
+    from pycolab import ascii_art
+    from pycolab import cropping
+    from pycolab import things as plab_things
+    from pycolab.prefab_parts import sprites as prefab_sprites
+except ImportError:
+    raise ImportError("Please install the pycolab package: pip install pycolab")
 
 # Actions.
 # Those with a negative ID are not allowed for the agent.
