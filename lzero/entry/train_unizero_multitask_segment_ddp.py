@@ -324,7 +324,7 @@ def train_unizero_multitask_segment_ddp(
 
             # 判断是否需要进行评估
             if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-                print(f'cfg.policy.eval_offline:{cfg.policy.eval_offline}')
+                # print(f'cfg.policy.eval_offline:{cfg.policy.eval_offline}')
                 if cfg.policy.eval_offline:
                     eval_train_iter_list.append(learner.train_iter)
                     eval_train_envstep_list.append(collector.envstep)

@@ -18,8 +18,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             collect_max_episode_steps=int(5e3),
             eval_max_episode_steps=int(5e3),
             # ===== only for debug =====
-            # collect_max_episode_steps=int(30),
-            # eval_max_episode_steps=int(30),
+            # collect_max_episode_steps=int(100),
+            # eval_max_episode_steps=int(100),
         ),
         policy=dict(
             multi_gpu=True,  # Very important for ddp
@@ -37,6 +37,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 num_res_blocks=2,
                 num_channels=256,
                 world_model_cfg=dict(
+                    norm_type=norm_type,
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,
                     context_length=2 * infer_context_length,
@@ -48,6 +49,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     num_layers=8,
                     num_heads=24,
                     embed_dim=768,
+
                     obs_type='image',
                     env_num=8,
                     task_num=len(env_id_list),
@@ -60,7 +62,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     use_moe_head=False,
                 ),
             ),
-            eval_offline=False,
+            # eval_offline=False,
+            eval_offline=True, # TODO
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
             train_start_after_envsteps=int(0),
@@ -70,10 +73,10 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             model_path=None,
             num_unroll_steps=num_unroll_steps,
             game_segment_length=20,
-            update_per_collect=80,
+            # update_per_collect=80,
+            update_per_collect=10, # only for debug
             replay_ratio=0.25,
             batch_size=batch_size,
-            optim_type='AdamW',
             num_segments=num_segments,
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
@@ -124,7 +127,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29501 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
 
@@ -132,7 +135,7 @@ if __name__ == "__main__":
     from ding.utils import DDPContext
     import os
 
-    os.environ["NCCL_TIMEOUT"] = "3600000000"
+    # os.environ["NCCL_TIMEOUT"] = "3600000000"
 
     env_id_list = [
         'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
@@ -172,5 +175,5 @@ if __name__ == "__main__":
                                    num_segments, total_batch_size)
 
         with DDPContext():
-            train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
-            # train_unizero_multitask_segment_ddp(configs[:4], seed=seed, max_env_step=max_env_step) # train on the first four tasks
+            # train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
+            train_unizero_multitask_segment_ddp(configs[:4], seed=seed, max_env_step=max_env_step) # train on the first four tasks, only for debug

@@ -67,7 +67,7 @@ class UniZeroMTModel(nn.Module):
         """
         super(UniZeroMTModel, self).__init__()
 
-        print(f'==========UniZeroMTModel, num_res_blocks:{num_res_blocks}, num_channels:{num_channels}===========')
+        print(f'==========UniZeroMTModel, num_res_blocks:{num_res_blocks}, num_channels:{num_channels}, norm_type:{norm_type}===========')
 
         self.action_space_size = action_space_size
 

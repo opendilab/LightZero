@@ -51,10 +51,10 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         if hasattr(self._cfg, 'task_id'):
             self.task_id = self._cfg.task_id
-            print(f"Task ID is set to {self.task_id}.")
+            print(f"game_buffer_unizero: Task ID is set to {self.task_id}.")
         else:
             self.task_id = None
-            print("No task_id found in configuration. Task ID is set to None.")
+            print("game_buffer_unizero: No task_id found in configuration. Task ID is set to None.")
 
     #@profile
     def sample(
@@ -433,15 +433,15 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             # =======================================================================
 
-            if not model.training:
-                # if not in training, obtain the scalars of the value/reward
-                [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                    [
-                        m_output.latent_state,
-                        inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
-                        m_output.policy_logits
-                    ]
-                )
+            # if not model.training:
+            # if not in training, obtain the scalars of the value/reward
+            [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                [
+                    m_output.latent_state,
+                    inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    m_output.policy_logits
+                ]
+            )
 
             network_output.append(m_output)
 
@@ -544,6 +544,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # calculate the bootstrapped value and target value
             # NOTE: batch_obs(value_obs_list) is at t+td_steps, batch_action is at timestep t+td_steps
+            # import ipdb;ipdb.set_trace()
             if self.task_id is not None:
                 m_output = model.initial_inference(batch_obs, batch_action, task_id=self.task_id)
             else:
@@ -551,15 +552,15 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             # ======================================================================
 
-            if not model.training:
-                # if not in training, obtain the scalars of the value/reward
-                [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                    [
-                        m_output.latent_state,
-                        inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
-                        m_output.policy_logits
-                    ]
-                )
+            # if not model.training:
+            # if not in training, obtain the scalars of the value/reward
+            [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                [
+                    m_output.latent_state,
+                    inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    m_output.policy_logits
+                ]
+            )
 
             network_output.append(m_output)
 

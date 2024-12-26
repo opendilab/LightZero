@@ -130,7 +130,7 @@ def generate_configs(
 ):
     configs = []
     exp_name_prefix = (
-        f'data_muzero_mt_8games_ddp_8gpu_1129/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/'
+        f'data_muzero_atari_mt_20250216/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/'
         f'{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_'
         f'{len(env_id_list)}-pred-head_mbs-512_upc80_H{num_unroll_steps}_seed{seed}/'
     )

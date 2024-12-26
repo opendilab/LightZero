@@ -63,10 +63,10 @@ class MuZeroGameBuffer(GameBuffer):
 
         if hasattr(self._cfg, 'task_id'):
             self.task_id = self._cfg.task_id
-            print(f"Task ID is set to {self.task_id}.")
+            print(f"game_buffer_muzero: Task ID is set to {self.task_id}.")
         else:
             self.task_id = None
-            print("No task_id found in configuration. Task ID is set to None.")
+            print("game_buffer_muzero: No task_id found in configuration. Task ID is set to None.")
 
     def reset_runtime_metrics(self):
         """
