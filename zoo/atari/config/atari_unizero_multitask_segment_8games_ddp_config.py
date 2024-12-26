@@ -53,8 +53,12 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     use_softmoe_head=False,
                     moe_in_transformer=False,
                     num_experts_of_moe_in_transformer=4,
+                    multiplication_moe_in_transformer=False,
+                    num_experts_in_moe_head=4,
+                    use_moe_head=False,
                 ),
             ),
+            eval_offline=False,
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
             train_start_after_envsteps=int(0),
@@ -87,14 +91,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
                      num_segments, total_batch_size):
     configs = []
-<<<<<<< HEAD
-    # TODO
-    exp_name_prefix = f'data_unizero_mt_ddp-8gpu_1204/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer4-nhead8/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer4-nh8_mbs-512-bs64_upc80_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu_1204/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer8-nhead24/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_mt_ddp-8gpu_1201/{len(env_id_list)}games_eval100min_brf{buffer_reanalyze_freq}_nlayer12-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer12-nh24_mbs-512-bs64_upc80_seed{seed}/'
-=======
-    exp_name_prefix = f'data_unizero_mt_ddp-8gpu/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_seed{seed}/'
->>>>>>> origin/dev-mz-multitask-ddp
+    exp_name_prefix = f'data_unizero_mt_ddp-8gpu_20241226/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -158,12 +155,12 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    # collector_env_num = 2
-    # num_segments = 2
-    # n_episode = 2
-    # evaluator_env_num = 2
-    # num_simulations = 2
-    # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
+    collector_env_num = 2
+    num_segments = 2
+    n_episode = 2
+    evaluator_env_num = 2
+    num_simulations = 2
+    batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
 
 
     for seed in [0]:

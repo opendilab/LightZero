@@ -280,6 +280,10 @@ def train_unizero_multitask_segment_ddp(
     reanalyze_batch_size = cfg.policy.reanalyze_batch_size
     update_per_collect = cfg.policy.update_per_collect
 
+    if cfg.policy.eval_offline:
+        eval_train_iter_list = []
+        eval_train_envstep_list = []
+
     while True:
         # 动态调整batch_size
         if cfg.policy.allocated_batch_sizes:
@@ -320,16 +324,21 @@ def train_unizero_multitask_segment_ddp(
 
             # 判断是否需要进行评估
             if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-                print('=' * 20)
-                print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
-
-                # 执行安全评估
-                stop, reward = safe_eval(evaluator, learner, collector, rank, world_size)
-                # 判断评估是否成功
-                if stop is None or reward is None:
-                    print(f"Rank {rank} 在评估过程中遇到问题，继续训练...")
+                print(f'cfg.policy.eval_offline:{cfg.policy.eval_offline}')
+                if cfg.policy.eval_offline:
+                    eval_train_iter_list.append(learner.train_iter)
+                    eval_train_envstep_list.append(collector.envstep)
                 else:
-                    print(f"评估成功: stop={stop}, reward={reward}")
+                    print('=' * 20)
+                    print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
+
+                    # 执行安全评估
+                    stop, reward = safe_eval(evaluator, learner, collector, rank, world_size)
+                    # 判断评估是否成功
+                    if stop is None or reward is None:
+                        print(f"Rank {rank} 在评估过程中遇到问题，继续训练...")
+                    else:
+                        print(f"评估成功: stop={stop}, reward={reward}")
 
             print('=' * 20)
             print(f'开始收集 Rank {rank} 的任务_id: {cfg.policy.task_id}...')
@@ -468,13 +477,80 @@ def train_unizero_multitask_segment_ddp(
 
             max_train_iter_reached = torch.any(torch.stack(all_train_iters) >= max_train_iter)
 
+            # 同步所有Rank，确保所有Rank完成训练
+            try:
+                dist.barrier()
+                logging.info(f'Rank {rank}: 通过训练后的同步障碍')
+            except Exception as e:
+                logging.error(f'Rank {rank}: 同步障碍失败，错误: {e}')
+                break
+
             if max_envstep_reached.item() or max_train_iter_reached.item():
                 logging.info(f'Rank {rank}: 达到终止条件')
+
+                if cfg.policy.eval_offline:
+                    # 对于当前进程的每个任务，进行数据收集和评估
+                    for idx, (cfg, collector, evaluator, replay_buffer) in enumerate(
+                        zip(cfgs, collectors, evaluators, game_buffers)):
+                        
+                        logging.info(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}: eval offline beginning...')
+
+                        # ========= 注意目前只有rank0存储ckpt =========
+                        # ckpt_dirname = './data_unizero_mt_ddp-8gpu_20241226/8games_brf0.02_seed0/Pong_seed0/ckpt'
+
+                        # 让 rank0 生成 ckpt_dirname，其他 Rank 等待接收
+                        if rank == 0:
+                            ckpt_dirname = './{}/ckpt'.format(learner.exp_name)
+                            logging.info(f'Rank {rank}: 生成 ckpt_dirname 为 {ckpt_dirname}')
+                        else:
+                            ckpt_dirname = None
+
+                        # 使用一个列表来存储 ckpt_dirname
+                        ckpt_dirname_list = [ckpt_dirname]
+                        # 广播 ckpt_dirname
+                        dist.broadcast_object_list(ckpt_dirname_list, src=0)
+                        # 从列表中提取更新后的 ckpt_dirname
+                        ckpt_dirname = ckpt_dirname_list[0]
+
+                        # 确认所有 Rank 都接收到正确的 ckpt_dirname
+                        logging.info(f'Rank {rank}: 接收到的 ckpt_dirname 为 {ckpt_dirname}')
+
+                        # 检查 ckpt_dirname 是否有效
+                        if not isinstance(ckpt_dirname, str):
+                            logging.error(f'Rank {rank}: 接收到的 ckpt_dirname 无效')
+                            continue
+
+                        # Evaluate the performance of the pretrained model.
+                        for train_iter, collector_envstep in zip(eval_train_iter_list, eval_train_envstep_list):
+                            # if train_iter==0:
+                            #     continue
+                            ckpt_name = 'iteration_{}.pth.tar'.format(train_iter)
+                            ckpt_path = os.path.join(ckpt_dirname, ckpt_name)
+                            try:
+                                # load the ckpt of pretrained model
+                                policy.learn_mode.load_state_dict(torch.load(ckpt_path, map_location=cfg.policy.device))
+                            except Exception as e:
+                                logging.error(f'Rank {rank}: load_state_dict 失败，错误: {e}')
+                                continue
+
+                            stop, reward = evaluator.eval(learner.save_checkpoint, train_iter, collector_envstep)
+                            logging.info(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}: eval offline at train_iter: {train_iter}, collector_envstep: {collector_envstep}, reward: {reward}')
+                    
+                            logging.info(f'eval_train_envstep_list: {eval_train_envstep_list}, eval_train_iter_list:{eval_train_iter_list}')
+
+                        logging.info(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}: eval offline finished!')
+
+
+
                 dist.barrier()  # 确保所有进程同步
+                # 评估结束后，显式关闭所有评估器
+                for evaluator in evaluators:
+                    evaluator.close()
                 break
         except Exception as e:
             logging.error(f'Rank {rank}: 终止检查失败，错误: {e}')
             break
+
 
     # 调用learner的after_run钩子
     learner.call_hook('after_run')
