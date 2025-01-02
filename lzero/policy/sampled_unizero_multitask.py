@@ -658,15 +658,15 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         self.task_num_for_current_rank = self._cfg.task_num
         
         if self._cfg.model.model_type == 'conv':
-            self.last_batch_obs = torch.zeros(
+            self.last_batch_obs_eval = torch.zeros(
                 [self.evaluator_env_num, self._cfg.model.observation_shape[0], 64, 64]
             ).to(self._cfg.device)
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
         elif self._cfg.model.model_type == 'mlp':
-            self.last_batch_obs = torch.zeros(
+            self.last_batch_obs_eval = torch.zeros(
                 [self.evaluator_env_num, self._cfg.model.observation_shape_list[self.task_id_for_eval]] # TODO
             ).to(self._cfg.device)
-            print(f'rank {get_rank()} last_batch_obs:', self.last_batch_obs.shape)
+            print(f'rank {get_rank()} last_batch_obs_eval:', self.last_batch_obs_eval.shape)
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
@@ -681,7 +681,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
             network_output = self._eval_model.initial_inference(
-                self.last_batch_obs,
+                self.last_batch_obs_eval,
                 self.last_batch_action,
                 data,
                 task_id=task_id
@@ -746,7 +746,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
                 }
                 batch_action.append(action)
 
-            self.last_batch_obs = data
+            self.last_batch_obs_eval = data
             self.last_batch_action = batch_action
 
         return output

@@ -133,7 +133,7 @@ def generate_configs(env_id_list: List[str],
                     num_segments: int,
                     total_batch_size: int):
     configs = []
-    exp_name_prefix = f'data_suz_mt_20241230/ddp_8gpu_nlayer8_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_suz_mt_20250102/ddp_8gpu_nlayer4_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_seed{seed}/'
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
     observation_shape_list = [dmc_state_env_obs_space_map[env_id] for env_id in env_id_list]
 
@@ -193,16 +193,17 @@ if __name__ == "__main__":
 
     os.environ["NCCL_TIMEOUT"] = "3600000000"
 
-    # 定义环境列表
+
+    # DMC 8games
     env_id_list = [
-        'cartpole-swingup',
+        'acrobot-swingup',
         'cartpole-balance',
+        'cartpole-balance_sparse',
+        # 'cartpole-swingup',
+        # 'cartpole-swingup_sparse',
         # 'cheetah-run',
-        # 'walker-walk',
-        # 'hopper-hop',
-        # 'humanoid-walk',
-        # 'quadruped-run',
-        # 'finger-spin',
+        # "ball_in_cup-catch",
+        # "finger-spin",
     ]
 
     # DMC 18games

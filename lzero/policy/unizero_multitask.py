@@ -1072,7 +1072,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         print('collector: target_model past_kv_cache.clear()')
 
     #@profile
-    def _reset_eval(self, env_id: int = None, current_steps: int = 0, reset_init_data: bool = True) -> None:
+    def _reset_eval(self, env_id: int = None, current_steps: int = 0, reset_init_data: bool = True, task_id: int = None) -> None:
         """
         Overview:
             This method resets the evaluation process for a specific environment. It clears caches and memory
@@ -1085,13 +1085,24 @@ class UniZeroMTPolicy(UniZeroPolicy):
             - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
         if reset_init_data:
-            self.last_batch_obs = initialize_zeros_batch(
-                self._cfg.model.observation_shape,
-                self._cfg.evaluator_env_num,
-                self._cfg.device
-            )
+            if task_id is not None:
+                self.last_batch_obs_eval = initialize_zeros_batch(
+                    self._cfg.model.observation_shape_list[task_id],
+                    self._cfg.evaluator_env_num,
+                    self._cfg.device
+                )
+                print('unizero_multitask.py task_id is not None after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+
+            else:
+                self.last_batch_obs_eval = initialize_zeros_batch(
+                    self._cfg.model.observation_shape,
+                    self._cfg.evaluator_env_num,
+                    self._cfg.device
+                )
+                print('unizero_multitask.py task_id is None after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
-            # print('evaluator: last_batch_obs, last_batch_action reset()', self.last_batch_obs.shape)
+
 
         # Return immediately if env_id is None or a list
         if env_id is None or isinstance(env_id, list):

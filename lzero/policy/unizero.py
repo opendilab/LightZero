@@ -846,13 +846,15 @@ class UniZeroPolicy(MuZeroPolicy):
                     self._cfg.evaluator_env_num,
                     self._cfg.device
                 )
+                print(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+
             else:
                 self.last_batch_obs_eval = initialize_zeros_batch(
                     self._cfg.model.observation_shape,
                     self._cfg.evaluator_env_num,
                     self._cfg.device
                 )
-            print('after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+                print(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
 
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
 
