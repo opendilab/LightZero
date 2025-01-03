@@ -12,10 +12,10 @@ num_res_blocks = [3]
 num_channels = [3]
 value_head_channels = [8]
 policy_head_channels = [8]
-fc_value_layers = [[
+value_head_hidden_channels = [[
     16,
 ]]
-fc_policy_layers = [[
+policy_head_hidden_channels = [[
     16,
 ]]
 output_support_size = [2]
@@ -29,8 +29,8 @@ prediction_network_args = list(
         num_channels,
         value_head_channels,
         policy_head_channels,
-        fc_value_layers,
-        fc_policy_layers,
+        value_head_hidden_channels,
+        policy_head_hidden_channels,
         output_support_size,
     )
 )
@@ -49,19 +49,19 @@ class TestAlphaZeroModel:
         is_differentiable(loss, model)
 
     @pytest.mark.parametrize(
-        'action_space_size, batch_size, num_res_blocks, num_channels, value_head_channels, policy_head_channels, fc_value_layers, fc_policy_layers, output_support_size',
+        'action_space_size, batch_size, num_res_blocks, num_channels, value_head_channels, policy_head_channels, value_head_hidden_channels, policy_head_hidden_channels, output_support_size',
         prediction_network_args
     )
     def test_prediction_network(
             self, action_space_size, batch_size, num_res_blocks, num_channels, value_head_channels,
             policy_head_channels,
-            fc_value_layers, fc_policy_layers, output_support_size
+            value_head_hidden_channels, policy_head_hidden_channels, output_support_size
     ):
         obs = torch.rand(batch_size, num_channels, 3, 3)
-        flatten_output_size_for_value_head = value_head_channels * observation_shape[1] * observation_shape[2]
-        flatten_output_size_for_policy_head = policy_head_channels * observation_shape[1] * observation_shape[2]
+        flatten_input_size_for_value_head = value_head_channels * observation_shape[1] * observation_shape[2]
+        flatten_input_size_for_policy_head = policy_head_channels * observation_shape[1] * observation_shape[2]
         # print('='*20)
-        # print(batch_size, num_res_blocks, num_channels, action_space_size, fc_value_layers, fc_policy_layers, output_support_size)
+        # print(batch_size, num_res_blocks, num_channels, action_space_size, value_head_hidden_channels, policy_head_hidden_channels, output_support_size)
         # print('='*20)
         prediction_network = PredictionNetwork(
             action_space_size=action_space_size,
@@ -70,11 +70,11 @@ class TestAlphaZeroModel:
             num_channels=num_channels,
             value_head_channels=value_head_channels,
             policy_head_channels=policy_head_channels,
-            fc_value_layers=fc_value_layers,
-            fc_policy_layers=fc_policy_layers,
+            value_head_hidden_channels=value_head_hidden_channels,
+            policy_head_hidden_channels=policy_head_hidden_channels,
             output_support_size=output_support_size,
-            flatten_output_size_for_value_head=flatten_output_size_for_value_head,
-            flatten_output_size_for_policy_head=flatten_output_size_for_policy_head,
+            flatten_input_size_for_value_head=flatten_input_size_for_value_head,
+            flatten_input_size_for_policy_head=flatten_input_size_for_policy_head,
             last_linear_layer_init_zero=True,
         )
         policy, value = prediction_network(obs)
@@ -90,17 +90,17 @@ if __name__ == "__main__":
     reward_head_channels = 2
     value_head_channels = 8
     policy_head_channels = 8
-    fc_value_layers = [16]
-    fc_policy_layers = [16]
+    value_head_hidden_channels = [16]
+    policy_head_hidden_channels = [16]
     output_support_size = 2
     observation_shape = [1, 3, 3]
     obs = torch.rand(batch_size, num_channels, 3, 3)
-    flatten_output_size_for_value_head = value_head_channels * observation_shape[1] * observation_shape[2]
-    flatten_output_size_for_policy_head = policy_head_channels * observation_shape[1] * observation_shape[2]
+    flatten_input_size_for_value_head = value_head_channels * observation_shape[1] * observation_shape[2]
+    flatten_input_size_for_policy_head = policy_head_channels * observation_shape[1] * observation_shape[2]
     print('=' * 20)
     print(
-        batch_size, num_res_blocks, num_channels, action_space_size, reward_head_channels, fc_value_layers,
-        fc_policy_layers, output_support_size
+        batch_size, num_res_blocks, num_channels, action_space_size, reward_head_channels, value_head_hidden_channels,
+        policy_head_hidden_channels, output_support_size
     )
     print('=' * 20)
     prediction_network = PredictionNetwork(
@@ -109,11 +109,11 @@ if __name__ == "__main__":
         num_channels=num_channels,
         value_head_channels=value_head_channels,
         policy_head_channels=policy_head_channels,
-        fc_value_layers=fc_value_layers,
-        fc_policy_layers=fc_policy_layers,
+        value_head_hidden_channels=value_head_hidden_channels,
+        policy_head_hidden_channels=policy_head_hidden_channels,
         output_support_size=output_support_size,
-        flatten_output_size_for_value_head=flatten_output_size_for_value_head,
-        flatten_output_size_for_policy_head=flatten_output_size_for_policy_head,
+        flatten_input_size_for_value_head=flatten_input_size_for_value_head,
+        flatten_input_size_for_policy_head=flatten_input_size_for_policy_head,
         last_linear_layer_init_zero=True,
     )
     policy, value = prediction_network(obs)

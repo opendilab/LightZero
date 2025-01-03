@@ -35,9 +35,9 @@ cfg = dict(
                 # We use the small size model for tictactoe.
                 num_res_blocks=1,
                 num_channels=16,
-                fc_reward_layers=[8],
-                fc_value_layers=[8],
-                fc_policy_layers=[8],
+                reward_head_hidden_channels=[8],
+                value_head_hidden_channels=[8],
+                policy_head_hidden_channels=[8],
                 support_scale=10,
                 reward_support_size=21,
                 value_support_size=21,
