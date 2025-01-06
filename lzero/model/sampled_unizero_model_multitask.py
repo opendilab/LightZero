@@ -11,7 +11,6 @@ from .common import MZNetworkOutput, RepresentationNetworkUniZero, LatentDecoder
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model_multitask import WorldModelMT
 
-
 class RepresentationNetworkMLPMT(nn.Module):
     def __init__(
             self,
@@ -21,11 +20,13 @@ class RepresentationNetworkMLPMT(nn.Module):
             activation: nn.Module = nn.GELU(approximate='tanh'),
             norm_type: Optional[str] = 'BN',
             group_size: int = 8,
+            use_shared_projection: bool = False,  # 控制是否启用共享投影层
+            shared_projection_dim: Optional[int] = None,  # 共享投影层的维度
     ) -> torch.Tensor:
         """
         Overview:
             Representation network used in MuZero and derived algorithms. Encode the vector obs into latent state \
-            with Multi-Layer Perceptron (MLP).
+            with Multi-Layer Perceptron (MLP), optionally followed by a shared projection layer.
         Arguments:
             - observation_shape_list (:obj:`List[int]`): The list of observation shape for each task.
             - hidden_channels (:obj:`int`): The channel of output hidden state.
@@ -33,9 +34,17 @@ class RepresentationNetworkMLPMT(nn.Module):
             - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.GELU(approximate='tanh').
             - norm_type (:obj:`str`): The type of normalization in networks, defaults to 'BN'.
             - group_size (:obj:`int`): The group size used in SimNorm.
+            - use_shared_projection (:obj:`bool`): Whether to use a shared projection layer, defaults to False.
+            - shared_projection_dim (:obj:`Optional[int]`): The dimension of the shared projection layer. \
+                If None, defaults to `hidden_channels`.
         """
         super().__init__()
         self.env_num = len(observation_shape_list)
+        self.use_shared_projection = use_shared_projection
+        self.hidden_channels = hidden_channels
+        self.shared_projection_dim = shared_projection_dim or hidden_channels
+
+        # Task-specific representation networks
         self.fc_representation = nn.ModuleList([
             MLP(
                 in_channels=obs_shape,
@@ -52,6 +61,14 @@ class RepresentationNetworkMLPMT(nn.Module):
             )
             for obs_shape in observation_shape_list
         ])
+        
+        # Shared projection layer
+        if self.use_shared_projection:
+            self.shared_projection = nn.Linear(hidden_channels, self.shared_projection_dim)
+            # self.projection_norm = nn.LayerNorm(self.shared_projection_dim)  # Optional normalization for shared space
+            self.projection_norm = SimNorm(simnorm_dim=group_size)  # Optional normalization for shared space
+
+        # SimNorm for task-specific outputs
         self.sim_norm = SimNorm(simnorm_dim=group_size)
 
     def forward(self, x: torch.Tensor, task_id: int) -> torch.Tensor:
@@ -59,11 +76,72 @@ class RepresentationNetworkMLPMT(nn.Module):
         Shapes:
             - x (:obj:`torch.Tensor`): :math:`(B, N)`, where B is batch size, N is the length of vector observation.
             - task_id (:obj:`int`): The ID of the current task.
-            - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
+            - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)` if shared projection is not used, \
+                otherwise :math:`(B, shared_projection_dim)`.
         """
+        # Task-specific representation
         x = self.fc_representation[task_id](x)
         x = self.sim_norm(x)
+
+        # Shared projection layer (if enabled)
+        if self.use_shared_projection:
+            x = self.shared_projection(x)
+            x = self.projection_norm(x)  # Optional normalization
         return x
+
+
+# class RepresentationNetworkMLPMT(nn.Module):
+#     def __init__(
+#             self,
+#             observation_shape_list: List[int],  # List of observation shapes for each task
+#             hidden_channels: int = 64,
+#             layer_num: int = 2,
+#             activation: nn.Module = nn.GELU(approximate='tanh'),
+#             norm_type: Optional[str] = 'BN',
+#             group_size: int = 8,
+#     ) -> torch.Tensor:
+#         """
+#         Overview:
+#             Representation network used in MuZero and derived algorithms. Encode the vector obs into latent state \
+#             with Multi-Layer Perceptron (MLP).
+#         Arguments:
+#             - observation_shape_list (:obj:`List[int]`): The list of observation shape for each task.
+#             - hidden_channels (:obj:`int`): The channel of output hidden state.
+#             - layer_num (:obj:`int`): The number of layers in the MLP.
+#             - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.GELU(approximate='tanh').
+#             - norm_type (:obj:`str`): The type of normalization in networks, defaults to 'BN'.
+#             - group_size (:obj:`int`): The group size used in SimNorm.
+#         """
+#         super().__init__()
+#         self.env_num = len(observation_shape_list)
+#         self.fc_representation = nn.ModuleList([
+#             MLP(
+#                 in_channels=obs_shape,
+#                 hidden_channels=hidden_channels,
+#                 out_channels=hidden_channels,
+#                 layer_num=layer_num,
+#                 activation=activation,
+#                 norm_type=norm_type,
+#                 # don't use activation and norm in the last layer of representation network is important for convergence.
+#                 output_activation=False,
+#                 output_norm=False,
+#                 # last_linear_layer_init_zero=True is beneficial for convergence speed.
+#                 last_linear_layer_init_zero=True,
+#             )
+#             for obs_shape in observation_shape_list
+#         ])
+#         self.sim_norm = SimNorm(simnorm_dim=group_size)
+
+#     def forward(self, x: torch.Tensor, task_id: int) -> torch.Tensor:
+#         """
+#         Shapes:
+#             - x (:obj:`torch.Tensor`): :math:`(B, N)`, where B is batch size, N is the length of vector observation.
+#             - task_id (:obj:`int`): The ID of the current task.
+#             - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
+#         """
+#         x = self.fc_representation[task_id](x)
+#         x = self.sim_norm(x)
+#         return x
 
 
 @MODEL_REGISTRY.register('SampledUniZeroMTModel')
@@ -127,6 +205,7 @@ class SampledUniZeroMTModel(nn.Module):
                     activation=self.activation,
                     norm_type=norm_type,
                     group_size=world_model_cfg.group_size,
+                    use_shared_projection=world_model_cfg.use_shared_projection,
                 )
                 self.tokenizer = Tokenizer(encoder=self.representation_network,
                                       decoder_network=None, with_lpips=False)

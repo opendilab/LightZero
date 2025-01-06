@@ -48,6 +48,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     action_space_size_list=action_space_size_list,
                     policy_loss_type='kl',
                     obs_type='vector',
+                    use_shared_projection=True,
+                    # use_shared_projection=False,
                     num_unroll_steps=num_unroll_steps,
                     policy_entropy_weight=5e-2,
                     continuous_action_space=True,
@@ -64,10 +66,13 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     # device='cpu', # TODO
                     # num_layers=2,
                     # num_layers=4, # TODO
+
                     num_layers=8, # TODO
                     num_heads=8,
+
                     # num_layers=12, # TODO
                     # num_heads=12,
+
                     embed_dim=768,
                     env_num=max(collector_env_num, evaluator_env_num),
                     task_num=len(env_id_list),
@@ -90,8 +95,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             model_path=None,
             num_unroll_steps=num_unroll_steps,
             # update_per_collect=2,  # TODO: 80
-            update_per_collect=200,  # TODO: 8*100*0.25=200
-            # update_per_collect=80,  # TODO: 8*100*0.1=80
+            # update_per_collect=200,  # TODO: 8*100*0.25=200
+            update_per_collect=80,  # TODO: 8*100*0.1=80
             replay_ratio=reanalyze_ratio,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -136,7 +141,7 @@ def generate_configs(env_id_list: List[str],
                     num_segments: int,
                     total_batch_size: int):
     configs = []
-    exp_name_prefix = f'data_suz_mt_20250102/ddp_8gpu_nlayer8_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs256_seed{seed}/'
+    exp_name_prefix = f'data_suz_mt_20250102/ddp_8gpu_nlayer8_upc80_usp_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
     observation_shape_list = [dmc_state_env_obs_space_map[env_id] for env_id in env_id_list]
 
@@ -185,7 +190,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29500 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_config.py
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -194,22 +199,15 @@ if __name__ == "__main__":
     import os
     from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
-    os.environ["NCCL_TIMEOUT"] = "3600000000"
+    # os.environ["NCCL_TIMEOUT"] = "3600000000"
 
+    # 定义环境列表
+    # env_id_list = [
+    #     'acrobot-swingup', # 6 1
+    #     'cartpole-swingup', # 5 1
+    # ]
 
     # DMC 8games
-    env_id_list = [
-        'acrobot-swingup',
-        'cartpole-balance',
-        'cartpole-balance_sparse',
-        # 'cartpole-swingup',
-        # 'cartpole-swingup_sparse',
-        # 'cheetah-run',
-        # "ball_in_cup-catch",
-        # "finger-spin",
-    ]
-
-    # DMC 18games
     env_id_list = [
         'acrobot-swingup',
         'cartpole-balance',
@@ -219,17 +217,29 @@ if __name__ == "__main__":
         'cheetah-run',
         "ball_in_cup-catch",
         "finger-spin",
-        "finger-turn_easy",
-        "finger-turn_hard",
-        'hopper-hop',
-        'hopper-stand',
-        'pendulum-swingup',
-        'reacher-easy',
-        'reacher-hard',
-        'walker-run',
-        'walker-stand',
-        'walker-walk',
     ]
+
+    # DMC 18games
+    # env_id_list = [
+    #     'acrobot-swingup',
+    #     'cartpole-balance',
+    #     'cartpole-balance_sparse',
+    #     'cartpole-swingup',
+    #     'cartpole-swingup_sparse',
+    #     'cheetah-run',
+    #     "ball_in_cup-catch",
+    #     "finger-spin",
+    #     "finger-turn_easy",
+    #     "finger-turn_hard",
+    #     'hopper-hop',
+    #     'hopper-stand',
+    #     'pendulum-swingup',
+    #     'reacher-easy',
+    #     'reacher-hard',
+    #     'walker-run',
+    #     'walker-stand',
+    #     'walker-walk',
+    # ]
 
     # 获取各环境的 action_space_size 和 observation_shape
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
@@ -250,7 +260,7 @@ if __name__ == "__main__":
     # nlayer=8/12
     total_batch_size = 256
     batch_size = [int(min(32, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
-    
+
     num_unroll_steps = 5
     infer_context_length = 2
     norm_type = 'LN'
