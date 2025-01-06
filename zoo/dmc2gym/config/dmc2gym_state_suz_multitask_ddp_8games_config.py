@@ -16,6 +16,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             observation_shape_list=observation_shape_list,
             action_space_size_list=action_space_size_list,
             from_pixels=False,
+            # ===== only for debug =====
+            # frame_skip=10, # 100
             frame_skip=2,
             continuous=True,  # Assuming all DMC tasks use continuous action spaces
             collector_env_num=collector_env_num,
@@ -48,8 +50,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     action_space_size_list=action_space_size_list,
                     policy_loss_type='kl',
                     obs_type='vector',
-                    use_shared_projection=True,
-                    # use_shared_projection=False,
+                    # use_shared_projection=True, # TODO
+                    use_shared_projection=False,
                     num_unroll_steps=num_unroll_steps,
                     policy_entropy_weight=5e-2,
                     continuous_action_space=True,
@@ -85,6 +87,7 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     num_experts_of_moe_in_transformer=4,
                 ),
             ),
+            task_complexity_weight=True, # TODO
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
             # train_start_after_envsteps=int(2e3),
@@ -141,7 +144,7 @@ def generate_configs(env_id_list: List[str],
                     num_segments: int,
                     total_batch_size: int):
     configs = []
-    exp_name_prefix = f'data_suz_mt_20250102/ddp_8gpu_nlayer8_upc80_usp_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    exp_name_prefix = f'data_suz_mt_20250102/ddp_8gpu_nlayer8_upc80_notusp_taskweight_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
     observation_shape_list = [dmc_state_env_obs_space_map[env_id] for env_id in env_id_list]
 
@@ -202,10 +205,10 @@ if __name__ == "__main__":
     # os.environ["NCCL_TIMEOUT"] = "3600000000"
 
     # 定义环境列表
-    # env_id_list = [
-    #     'acrobot-swingup', # 6 1
-    #     'cartpole-swingup', # 5 1
-    # ]
+    env_id_list = [
+        'acrobot-swingup', # 6 1
+        'cartpole-swingup', # 5 1
+    ]
 
     # DMC 8games
     env_id_list = [

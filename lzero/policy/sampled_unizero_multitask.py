@@ -297,7 +297,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         self.task_id = self._cfg.task_id
         self.task_num_for_current_rank = self._cfg.task_num
 
-    def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
+    def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None) -> Dict[str, Union[float, int]]:
         """
         Forward function for learning policy in learn mode, handling multiple tasks.
         """
@@ -394,8 +394,10 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
                 self.inverse_scalar_transform_handle,
                 task_id=task_id
             )
+            if task_weights is not None:
+                weighted_total_loss += losses.loss_total * task_weights[task_id]
 
-            weighted_total_loss += losses.loss_total
+            # weighted_total_loss += losses.loss_total
             assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
             assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
