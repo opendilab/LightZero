@@ -27,7 +27,10 @@ from lzero.policy import (
 )
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
-
+import sys
+sys.path.append('/mnt/afs/niuyazhe/code/LibMTL/')
+from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+# from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 
 def generate_task_loss_dict(multi_task_losses, task_name_template, task_id):
     """
@@ -41,7 +44,7 @@ def generate_task_loss_dict(multi_task_losses, task_name_template, task_id):
     for task_idx, task_loss in enumerate(multi_task_losses):
         task_name = task_name_template.format(task_idx + task_id)
         try:
-            task_loss_dict[task_name] = task_loss.item() if hasattr(task_loss, 'item') else task_loss
+            task_loss_dict[task_name] = task_loss.item() if hasattr(task_loss, 'item') else float(task_loss)
         except Exception as e:
             task_loss_dict[task_name] = task_loss
     return task_loss_dict
@@ -280,22 +283,36 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         self.grad_norm_before = 0.
         self.grad_norm_after = 0.
 
-        # 创建 WrappedModel 实例，仅矫正部分参数，保持可扩展性
-        # wrapped_model = WrappedModelV2(
-        #     self._learn_model.world_model.tokenizer.encoder[0],  # 假设只有一个编码器
-        #     self._learn_model.world_model.transformer,
-        #     self._learn_model.world_model.pos_emb,
-        #     self._learn_model.world_model.task_emb,
-        #     self._learn_model.world_model.act_embedding_table,
-        # )
-
-        # 如果需要，可以在这里初始化梯度校正方法（如 MoCo, CAGrad）
-        # self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
-        # self.grad_correct.init_param()
-        # self.grad_correct.rep_grad = False
-
         self.task_id = self._cfg.task_id
         self.task_num_for_current_rank = self._cfg.task_num
+
+        if self._cfg.use_moco:
+            # 创建 WrappedModel 实例，仅矫正部分参数，保持可扩展性
+            # wrapped_model = WrappedModelV2(
+            #     self._learn_model.world_model.tokenizer.encoder[0],  # 假设只有一个编码器
+            #     self._learn_model.world_model.transformer,
+            #     self._learn_model.world_model.pos_emb,
+            #     self._learn_model.world_model.task_emb,
+            #     self._learn_model.world_model.act_embedding_table,
+            # )
+
+            # head 没有矫正梯度
+            wrapped_model = WrappedModelV2(
+                self._learn_model.world_model.tokenizer.encoder,  # TODO: one or N encoder inside
+                self._learn_model.world_model.transformer,
+                self._learn_model.world_model.pos_emb,
+                self._learn_model.world_model.task_emb,
+                self._learn_model.world_model.act_embedding_table,
+            )
+
+            # TODO
+            # 如果需要，可以在这里初始化梯度校正方法（如 MoCo, CAGrad）
+            # self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
+            self.grad_correct = GradCorrect(wrapped_model, self._cfg.task_num, self._cfg.device) # only compatiable with for 1GPU training
+
+            self.grad_correct.init_param()
+            self.grad_correct.rep_grad = False
+
 
     def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None) -> Dict[str, Union[float, int]]:
         """
@@ -305,6 +322,8 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         self._target_model.train()
 
         # Initialize multi-task loss lists
+        task_weight_multi_task = []
+
         obs_loss_multi_task = []
         reward_loss_multi_task = []
         policy_loss_multi_task = []
@@ -396,26 +415,35 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             )
             if task_weights is not None:
                 weighted_total_loss += losses.loss_total * task_weights[task_id]
+                losses_list.append(losses.loss_total * task_weights[task_id])
 
-            # weighted_total_loss += losses.loss_total
+                task_weight_multi_task.append(task_weights[task_id])
+            else:
+                weighted_total_loss += losses.loss_total
+                losses_list.append(losses.loss_total)
+
+                task_weight_multi_task.append(1)
+
+
+            # print(f"=== 全局任务权重 (按 task_id 排列): {task_weights}")
+
             assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
             assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
-            losses_list.append(losses.loss_total)
 
             for loss_name, loss_value in losses.intermediate_losses.items():
                 self.intermediate_losses[f"{loss_name}"] = loss_value
 
             # Collect losses per task
-            obs_loss = self.intermediate_losses.get('loss_obs', 0.0)
-            reward_loss = self.intermediate_losses.get('loss_rewards', 0.0)
-            policy_loss = self.intermediate_losses.get('loss_policy', 0.0)
-            orig_policy_loss = self.intermediate_losses.get('orig_policy_loss', 0.0)
-            policy_entropy = self.intermediate_losses.get('policy_entropy', 0.0)
-            value_loss = self.intermediate_losses.get('loss_value', 0.0)
-            latent_recon_loss = self.intermediate_losses.get('latent_recon_loss', 0.0)
-            perceptual_loss = self.intermediate_losses.get('perceptual_loss', 0.0)
-            latent_state_l2_norms = self.intermediate_losses.get('latent_state_l2_norms', 0.0)
+            obs_loss = self.intermediate_losses.get('loss_obs', 0.0) or 0.0
+            reward_loss = self.intermediate_losses.get('loss_rewards', 0.0) or 0.0
+            policy_loss = self.intermediate_losses.get('loss_policy', 0.0) or 0.0
+            orig_policy_loss = self.intermediate_losses.get('orig_policy_loss', 0.0) or 0.0
+            policy_entropy = self.intermediate_losses.get('policy_entropy', 0.0) or 0.0
+            value_loss = self.intermediate_losses.get('loss_value', 0.0) or 0.0
+            latent_recon_loss = self.intermediate_losses.get('latent_recon_loss', 0.0) or 0.0
+            perceptual_loss = self.intermediate_losses.get('perceptual_loss', 0.0) or 0.0
+            latent_state_l2_norms = self.intermediate_losses.get('latent_state_l2_norms', 0.0) or 0.0
             value_priority = torch.tensor(0., device=self._cfg.device)  # Placeholder, adjust as needed
 
             obs_loss_multi_task.append(obs_loss)
@@ -434,12 +462,13 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
 
-        # 这里可以集成 MoCo 或 CAGrad 等梯度校正方法
-        # lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
-
-        # 不使用梯度校正的情况
-        lambd = torch.tensor([0. for _ in range(self.task_num_for_current_rank)], device=self._cfg.device)
-        weighted_total_loss.backward()
+        if self._cfg.use_moco:
+            # 这里可以集成 MoCo 或 CAGrad 等梯度校正方法, 1gpu 需要知道所有task对应的梯度
+            lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+        else:
+            # 不使用梯度校正的情况
+            lambd = torch.tensor([0. for _ in range(self.task_num_for_current_rank)], device=self._cfg.device)
+            weighted_total_loss.backward()
 
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(), self._cfg.grad_clip_value)
 
@@ -475,9 +504,17 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             'weighted_total_loss': weighted_total_loss.item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
         }
+        # if task_weights is None:
+        #     task_weights = {self.task_id+i: 1 for i in range(self.task_num_for_current_rank)}
+        # else:
+        #     print(f'task_weights:{task_weights}')
+        # from ding.utils import EasyTimer, set_pkg_seed, get_rank
+
+        # print(f'rank:{get_rank()}, task_id:{self.task_id}')
 
         # 生成任务相关的损失字典，并为每个任务相关的 loss 添加前缀 "noreduce_"
         multi_task_loss_dicts = {
+            **generate_task_loss_dict(task_weight_multi_task, 'noreduce_task_weight_task{}', task_id=self.task_id),
             **generate_task_loss_dict(obs_loss_multi_task, 'noreduce_obs_loss_task{}', task_id=self.task_id),
             **generate_task_loss_dict(latent_recon_loss_multi_task, 'noreduce_latent_recon_loss_task{}', task_id=self.task_id),
             **generate_task_loss_dict(perceptual_loss_multi_task, 'noreduce_perceptual_loss_task{}', task_id=self.task_id),
@@ -493,6 +530,8 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             **generate_task_loss_dict(value_priority_mean_multi_task, 'noreduce_value_priority_mean_task{}', task_id=self.task_id),
         }
 
+        # print(f'multi_task_loss_dicts:{ multi_task_loss_dicts}')
+
         # 合并两个字典
         return_loss_dict.update(multi_task_loss_dicts)
 
@@ -503,6 +542,55 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
         return return_loss_dict
 
+    # TODO: num_tasks
+    def _monitor_vars_learn(self, num_tasks=2) -> List[str]:
+        """
+        Overview:
+            Register the variables to be monitored in learn mode. The registered variables will be logged in
+            tensorboard according to the return value ``_forward_learn``.
+            If num_tasks is provided, generate monitored variables for each task.
+        """
+        # Basic monitored variables that do not depend on the number of tasks
+        monitored_vars = [
+            'Current_GPU',
+            'Max_GPU',
+            'collect_epsilon',
+            'collect_mcts_temperature',
+            'cur_lr_world_model',
+            'weighted_total_loss',
+            'total_grad_norm_before_clip_wm',
+        ]
+
+        # rank = get_rank()
+        task_specific_vars = [
+            'noreduce_task_weight',
+            'noreduce_obs_loss',
+            'noreduce_orig_policy_loss',
+            'noreduce_policy_loss',
+            'noreduce_latent_recon_loss',
+            'noreduce_policy_entropy',
+            'noreduce_target_policy_entropy',
+            'noreduce_reward_loss',
+            'noreduce_value_loss',
+            'noreduce_perceptual_loss',
+            'noreduce_latent_state_l2_norms',
+            'noreduce_lambd',
+            'noreduce_value_priority_mean',
+        ]
+        # self.task_num_for_current_rank 作为当前rank的base_index
+        num_tasks = self.task_num_for_current_rank
+        # If the number of tasks is provided, extend the monitored variables list with task-specific variables
+        if num_tasks is not None:
+            for var in task_specific_vars:
+                for task_idx in range(num_tasks):
+                    # print(f"learner policy Rank {rank}, self.task_id: {self.task_id}")
+                    monitored_vars.append(f'{var}_task{self.task_id+task_idx}')
+        else:
+            # If num_tasks is not provided, we assume there's only one task and keep the original variable names
+            monitored_vars.extend(task_specific_vars)
+
+        return monitored_vars
+        
     def monitor_weights_and_grads(self, model):
         """
         Monitor and print the weights and gradients of the model.
@@ -526,6 +614,8 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         else:
             self._mcts_collect = MCTSPtree(self._cfg)
         self._collect_mcts_temperature = 1.
+        self._task_weight_temperature = 10.
+
         self._collect_epsilon = 0.0
         self.collector_env_num = self._cfg.collector_env_num
         if self._cfg.model.model_type == 'conv':

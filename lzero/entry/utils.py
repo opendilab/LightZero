@@ -6,6 +6,49 @@ from pympler.asizeof import asizeof
 from tensorboardX import SummaryWriter
 from typing import Optional, Callable
 import torch
+import numpy as np
+import torch
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+
+class TemperatureScheduler:
+    def __init__(self, initial_temp: float, final_temp: float, threshold_steps: int, mode: str = 'linear'):
+        """
+        温度调度器，用于根据当前训练步数逐渐调整温度。
+
+        Args:
+            initial_temp (float): 初始温度值。
+            final_temp (float): 最终温度值。
+            threshold_steps (int): 温度衰减到最终温度所需的训练步数。
+            mode (str): 衰减方式，可选 'linear' 或 'exponential'。默认 'linear'。
+        """
+        self.initial_temp = initial_temp
+        self.final_temp = final_temp
+        self.threshold_steps = threshold_steps
+        assert mode in ['linear', 'exponential'], "Mode must be 'linear' or 'exponential'."
+        self.mode = mode
+
+    def get_temperature(self, current_step: int) -> float:
+        """
+        根据当前步数计算温度。
+
+        Args:
+            current_step (int): 当前的训练步数。
+
+        Returns:
+            float: 当前温度值。
+        """
+        if current_step >= self.threshold_steps:
+            return self.final_temp
+        progress = current_step / self.threshold_steps
+        if self.mode == 'linear':
+            temp = self.initial_temp - (self.initial_temp - self.final_temp) * progress
+        elif self.mode == 'exponential':
+            # 指数衰减，确保温度逐渐接近 final_temp
+            decay_rate = np.log(self.final_temp / self.initial_temp) / self.threshold_steps
+            temp = self.initial_temp * np.exp(decay_rate * current_step)
+            temp = max(temp, self.final_temp)
+        return temp
 
 
 def initialize_zeros_batch(observation_shape, batch_size, device):

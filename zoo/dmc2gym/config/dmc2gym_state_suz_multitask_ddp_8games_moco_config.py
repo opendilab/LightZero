@@ -16,7 +16,7 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             observation_shape_list=observation_shape_list,
             action_space_size_list=action_space_size_list,
             from_pixels=False,
-            # ===== TODO: only for debug =====
+            # ===== only for debug =====
             # frame_skip=100, # 100
             frame_skip=2,
             continuous=True,  # Assuming all DMC tasks use continuous action spaces
@@ -30,15 +30,14 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             # eval_max_episode_steps=int(20),
         ),
         policy=dict(
-            multi_gpu=True,  # TODO: enable multi-GPU for DDP
+            multi_gpu=True,  # TODO: nable multi-GPU for DDP
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000))),
             grad_correct_params=dict(
                 # Example gradient correction parameters, adjust as needed
                 MoCo_beta=0.5, MoCo_beta_sigma=0.5, MoCo_gamma=0.1, MoCo_gamma_sigma=0.5, MoCo_rho=0,
                 calpha=0.5, rescale=1,
             ),
-            # use_moco=True,  # ==============TODO==============
-            use_moco=False,  # ==============TODO==============
+            use_moco=True,  # ==============TODO==============
             task_num=len(env_id_list),
             task_id=0,  # To be set per task
             model=dict(
@@ -91,7 +90,6 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     num_experts_of_moe_in_transformer=4,
                 ),
             ),
-            use_task_exploitation_weight=True, # TODO
             # task_complexity_weight=True, # TODO
             task_complexity_weight=False, # TODO
             total_batch_size=total_batch_size,
@@ -113,11 +111,11 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
             n_episode=n_episode,
-            replay_buffer_size=int(5e5),
+            replay_buffer_size=int(1e6),
             # eval_freq=int(5e3),
             eval_freq=int(4e3),
             # eval_freq=int(2e3),
-            # eval_freq=int(1e3), # TODO: task_weight===========
+            # eval_freq=int(1e3), # TODO ===========
             grad_clip_value=5,
             learning_rate=1e-4,
             discount_factor=0.99,
@@ -153,10 +151,9 @@ def generate_configs(env_id_list: List[str],
                     total_batch_size: int):
     configs = []
     # TODO: debug
-    exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_taskweight-obsloss-temp1_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
-
     # exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_taskweight-eval1e3-10k-temp10-1_task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
-    # exp_name_prefix = f'data_suz_mt_20250113_debug/ddp_8gpu_nlayer8_upc200_taskweight-eval1e3-10k-temp10-1_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    
+    exp_name_prefix = f'data_suz_mt_20250113/ddp_1gpu-moco_nlayer8_upc80_notaskweight-eval1e3-10k-temp10-1_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
 
     # exp_name_prefix = f'data_suz_mt_20250113/ddp_3gpu_3games_nlayer8_upc200_notusp_notaskweight-symlog-01-05-eval1e3_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
 
@@ -208,7 +205,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_config.py
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29500 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_config.py
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -237,17 +234,6 @@ if __name__ == "__main__":
     #     # "ball_in_cup-catch",
     #     "finger-spin",
     # ]
-
-    env_id_list = [
-        # 'acrobot-swingup',
-        # 'cartpole-balance',
-        # 'cartpole-balance_sparse',
-        # 'cartpole-swingup',
-        # 'cartpole-swingup_sparse',
-        # 'cheetah-run',
-        # "ball_in_cup-catch",
-        "finger-spin",
-    ]
 
     # DMC 8games
     env_id_list = [
@@ -294,6 +280,7 @@ if __name__ == "__main__":
     num_simulations = 50
     # max_env_step = int(5e5)
     max_env_step = int(1e6)
+
     reanalyze_ratio = 0.0
 
     # nlayer=4
@@ -301,8 +288,8 @@ if __name__ == "__main__":
     batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
 
     # nlayer=8/12
-    total_batch_size = 512
-    batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+    total_batch_size = 256
+    batch_size = [int(min(32, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
 
     num_unroll_steps = 5
     infer_context_length = 2
