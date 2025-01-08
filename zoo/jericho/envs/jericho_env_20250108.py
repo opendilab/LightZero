@@ -1,3 +1,6 @@
+"""
+env返回的obs是id 不是string
+"""
 import copy
 from typing import List
 
@@ -26,17 +29,10 @@ class JerichoEnv(BaseEnv):
         self.max_action_num = cfg.max_action_num
         self.max_seq_len = cfg.max_seq_len
 
-        # 新增：记录上一次的观察和动作，以及阻止的动作列表
-        self.last_observation = None
-        self.last_action = None
-        self.blocked_actions = set()
 
         # 获取当前的 world_size 和 rank
         self.world_size = get_world_size()
         self.rank = get_rank()
-
-        # 新增：是否启用移除无效动作的功能
-        self.remove_stuck_actions = cfg.get('remove_stuck_actions', True)
 
         if JerichoEnv.tokenizer is None:
             # 只让 rank 0 下载模型
@@ -63,30 +59,19 @@ class JerichoEnv(BaseEnv):
     def prepare_obs(self, obs, return_str: bool = False):
         if self._action_list is None:
             self._action_list = self._env.get_valid_actions()
-
-        # full_obs = obs + "\nValid actions: " + str(self._action_list)
-
-        # 根据是否启用移除无效动作的功能，调整可用动作列表
-        if self.remove_stuck_actions:
-            available_actions = [a for a in self._action_list if a not in self.blocked_actions]
-            self._action_list = available_actions
-
-        full_obs = obs + "\nValid actions: " + str(available_actions)
-
+        full_obs = obs + "\nValid actions: " + str(self._action_list)
         if not return_str:
             full_obs = JerichoEnv.tokenizer(
                 [full_obs], truncation=True, padding="max_length", max_length=self.max_seq_len)
             obs_attn_mask = full_obs['attention_mask']
-            full_obs = np.array(full_obs['input_ids'][0], dtype=np.int32)  # TODO: attn_mask
-
-
-        if len(available_actions) <= self.max_action_num:
-            action_mask = [1] * len(available_actions) + [0] * (self.max_action_num - len(available_actions))
+            full_obs = np.array(full_obs['input_ids'][0], dtype=np.int32) # TODO: attn_mask
+        if len(self._action_list) <= self.max_action_num:
+            action_mask = [1] * len(self._action_list) + [0] * \
+                (self.max_action_num - len(self._action_list))
         else:
-            action_mask = [1] * len(available_actions)
+            action_mask = [1] * len(self._action_list)
 
         action_mask = np.array(action_mask, dtype=np.int8)
-
         if return_str:
             return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1}
         else:
@@ -99,12 +84,6 @@ class JerichoEnv(BaseEnv):
         self._action_list = None
         self.episode_return = 0
         self.env_step = 0
-
-        # 设置初始的 last_observation
-        if self.remove_stuck_actions:
-            self.last_observation = initial_observation
-        else:
-            self.last_observation = None
 
         # 获取当前的 world_size 和 rank
         self.world_size = get_world_size()
@@ -126,53 +105,35 @@ class JerichoEnv(BaseEnv):
         return "LightZero Jericho Env"
 
     def step(self, action: int, return_str: bool = False):
-        self.blocked_actions = set()
-
         if isinstance(action, str):
             action_str = action
         else:
             try:
                 action_str = self._action_list[action]
             except Exception as e:
-                # TODO: 为什么会有非法动作
+                # TODO: why exits illegal action
                 print('='*20)
                 print(e, f'rank {self.rank}, action {action} is illegal now we randomly choose a legal action from {self._action_list}!')
                 action = np.random.choice(len(self._action_list))
                 action_str = self._action_list[action]
 
-        # 记录上一次的观察
-        if self.remove_stuck_actions and self.last_observation is not None:
-            previous_obs = self.last_observation
-        else:
-            previous_obs = None
-
-        # 执行动作
         observation, reward, done, info = self._env.step(action_str)
         self.env_step += 1
         self.episode_return += reward
         self._action_list = None
-
-        # 比较观察，判断动作是否有效
-        if self.remove_stuck_actions and previous_obs is not None:
-            if observation == previous_obs:
-                # 动作无效，移除该动作
-                self.blocked_actions.add(action_str)
-                print(f'[Removing action] "{action_str}" as it did not change the observation.')
-
-        # 更新上一次的观察
-        if self.remove_stuck_actions:
-            self.last_observation = observation
-
-        # 准备观察和动作掩码
         observation = self.prepare_obs(observation, return_str)
 
-        # 检查是否超过最大步数
+        # print(f'rank {self.rank}, step: {self.env_step}')
+        # print(f'self._action_list:{self._action_list}')
+        # print(f'rank {self.rank}, step: {self.env_step}, observation:{observation}, action:{action}, reward:{reward}')
+
         if self.env_step >= self.max_steps:
             done = True
 
         if done:
             print('='*20)
             print(f'rank {self.rank} one episode done!')
+            # print(f'self._action_list:{self._action_list}, action:{action}, reward:{reward}')
             self.finished = True
             info['eval_episode_return'] = self.episode_return
 
@@ -182,7 +143,8 @@ class JerichoEnv(BaseEnv):
     def create_collector_env_cfg(cfg: dict) -> List[dict]:
         collector_env_num = cfg.pop('collector_env_num')
         cfg = copy.deepcopy(cfg)
-        # collect phase 可能需要归一化奖励
+        # when in collect phase, sometimes we need to normalize the reward
+        # reward_normalize is determined by the config.
         cfg.is_collect = True
         return [cfg for _ in range(collector_env_num)]
 
@@ -190,7 +152,7 @@ class JerichoEnv(BaseEnv):
     def create_evaluator_env_cfg(cfg: dict) -> List[dict]:
         evaluator_env_num = cfg.pop('evaluator_env_num')
         cfg = copy.deepcopy(cfg)
-        # evaluate phase 不需要归一化奖励
+        # when in evaluate phase, we don't need to normalize the reward.
         cfg.reward_normalize = False
         cfg.is_collect = False
         return [cfg for _ in range(evaluator_env_num)]
@@ -207,8 +169,7 @@ if __name__ == '__main__':
             max_action_num=50,
             max_env_step=100,
             tokenizer_path="google-bert/bert-base-uncased",
-            max_seq_len=512,
-            remove_stuck_actions=True  # 启用移除无效动作的功能
+            max_seq_len=512
         )
     )
     env = JerichoEnv(env_cfg)

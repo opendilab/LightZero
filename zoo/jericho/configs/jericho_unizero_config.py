@@ -19,18 +19,20 @@ def main(env_id='detective.z5', seed=0):
     num_simulations = 50
     max_env_step = int(10e6)
 
-    # batch_size = 8
-    # num_unroll_steps = 10
-    # infer_context_length = 4
-
     batch_size = 16
-    num_unroll_steps = 5
-    infer_context_length = 2
+    num_unroll_steps = 10
+    infer_context_length = 4
+
+    # batch_size = 16
+    # num_unroll_steps = 5
+    # infer_context_length = 2
 
     num_layers = 2
     replay_ratio = 0.25
     update_per_collect = None # NOTE: very important for ddp
-    embed_dim = 768
+    # embed_dim = 768
+    embed_dim = 512
+
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/10
     buffer_reanalyze_freq = 1/100000
@@ -156,7 +158,7 @@ def main(env_id='detective.z5', seed=0):
     main_config = jericho_unizero_config
     create_config = jericho_unizero_create_config
 
-    main_config.exp_name = f'data_unizero_detective_20250107/{model_name}/{env_id[:8]}_ms{max_steps}_action-space-{action_space_size}_uz_nlayer{num_layers}_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_detective_20250107/{model_name}/{env_id[:8]}_ms{max_steps}_action-space-{action_space_size}_remove-novalid-action_uz_nlayer{num_layers}_embed512_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed,
                   model_path=main_config.policy.model_path, max_env_step=max_env_step)
