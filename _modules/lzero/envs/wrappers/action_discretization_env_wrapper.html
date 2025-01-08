@@ -89,19 +89,19 @@
     
     
   <h1>Source code for lzero.envs.wrappers.action_discretization_env_wrapper</h1><div class="highlight"><pre>
-<span></span><span class="kn">from</span> <span class="nn">itertools</span> <span class="kn">import</span> <span class="n">product</span>
+<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">itertools</span><span class="w"> </span><span class="kn">import</span> <span class="n">product</span>
 
-<span class="kn">import</span> <span class="nn">gym</span>
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">from</span> <span class="nn">easydict</span> <span class="kn">import</span> <span class="n">EasyDict</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">gym</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">easydict</span><span class="w"> </span><span class="kn">import</span> <span class="n">EasyDict</span>
 
-<span class="kn">from</span> <span class="nn">ding.envs</span> <span class="kn">import</span> <span class="n">BaseEnvTimestep</span>
-<span class="kn">from</span> <span class="nn">ding.torch_utils</span> <span class="kn">import</span> <span class="n">to_ndarray</span>
-<span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">ENV_WRAPPER_REGISTRY</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.envs</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseEnvTimestep</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.torch_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_ndarray</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ENV_WRAPPER_REGISTRY</span>
 
 
 <div class="viewcode-block" id="ActionDiscretizationEnvWrapper"><a class="viewcode-back" href="../../../../api_doc/envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper">[docs]</a><span class="nd">@ENV_WRAPPER_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;action_discretization_env_wrapper&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">ActionDiscretizationEnvWrapper</span><span class="p">(</span><span class="n">gym</span><span class="o">.</span><span class="n">Wrapper</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">ActionDiscretizationEnvWrapper</span><span class="p">(</span><span class="n">gym</span><span class="o">.</span><span class="n">Wrapper</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The modified environment with manually discretized action space. For each dimension, equally dividing the</span>
@@ -113,7 +113,7 @@
 <span class="sd">        - env (:obj:`gym.Env`): the environment to wrap.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-<div class="viewcode-block" id="ActionDiscretizationEnvWrapper.__init__"><a class="viewcode-back" href="../../../../api_doc/envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="n">gym</span><span class="o">.</span><span class="n">Env</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="ActionDiscretizationEnvWrapper.__init__"><a class="viewcode-back" href="../../../../api_doc/envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="n">gym</span><span class="o">.</span><span class="n">Env</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Initialize ``self.`` See ``help(type(self))`` for accurate signature;  \</span>
@@ -128,7 +128,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">env_id</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">env_id</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">continuous</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">continuous</span></div>
 
-<div class="viewcode-block" id="ActionDiscretizationEnvWrapper.reset"><a class="viewcode-back" href="../../../../api_doc/envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.reset">[docs]</a>    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<div class="viewcode-block" id="ActionDiscretizationEnvWrapper.reset"><a class="viewcode-back" href="../../../../api_doc/envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.reset">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Resets the state of the environment and reset properties.</span>
@@ -151,7 +151,7 @@
 
         <span class="k">return</span> <span class="n">obs</span></div>
 
-<div class="viewcode-block" id="ActionDiscretizationEnvWrapper.step"><a class="viewcode-back" href="../../../../api_doc/envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.step">[docs]</a>    <span class="k">def</span> <span class="nf">step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
+<div class="viewcode-block" id="ActionDiscretizationEnvWrapper.step"><a class="viewcode-back" href="../../../../api_doc/envs/index.html#lzero.envs.wrappers.action_discretization_env_wrapper.ActionDiscretizationEnvWrapper.step">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Step the environment with the given action. Repeat action, sum reward,  \</span>
@@ -179,7 +179,7 @@
 
         <span class="k">return</span> <span class="n">BaseEnvTimestep</span><span class="p">(</span><span class="n">obs</span><span class="p">,</span> <span class="n">rew</span><span class="p">,</span> <span class="n">done</span><span class="p">,</span> <span class="n">info</span><span class="p">)</span></div>
 
-    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
         <span class="k">return</span> <span class="s2">&quot;Action Discretization Env.&quot;</span></div>
 </pre></div>
 

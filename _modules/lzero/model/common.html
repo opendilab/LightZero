@@ -96,23 +96,23 @@
 <span class="sd">    customize their custom algorithms, ensuring efficient and effective development.</span>
 <span class="sd">    BTW, users can refer to the unittest of these model templates to learn how to use them.</span>
 <span class="sd">&quot;&quot;&quot;</span>
-<span class="kn">import</span> <span class="nn">math</span>
-<span class="kn">from</span> <span class="nn">dataclasses</span> <span class="kn">import</span> <span class="n">dataclass</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
 
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
-<span class="kn">import</span> <span class="nn">torch.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
-<span class="kn">import</span> <span class="nn">torch.nn.init</span> <span class="k">as</span> <span class="nn">init</span>
-<span class="kn">from</span> <span class="nn">ding.torch_utils</span> <span class="kn">import</span> <span class="n">MLP</span><span class="p">,</span> <span class="n">ResBlock</span>
-<span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">SequenceType</span>
-<span class="kn">from</span> <span class="nn">ditk</span> <span class="kn">import</span> <span class="n">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.init</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">init</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.torch_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">MLP</span><span class="p">,</span> <span class="n">ResBlock</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">SequenceType</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ditk</span><span class="w"> </span><span class="kn">import</span> <span class="n">logging</span>
 
 
 <span class="c1"># use dataclass to make the output of network more convenient to use</span>
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">MZRNNNetworkOutput</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MZRNNNetworkOutput</span><span class="p">:</span>
     <span class="c1"># output format of the MuZeroRNN model</span>
     <span class="n">value</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
     <span class="n">value_prefix</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
@@ -123,7 +123,7 @@
 
 
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">EZNetworkOutput</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">EZNetworkOutput</span><span class="p">:</span>
     <span class="c1"># output format of the EfficientZero model</span>
     <span class="n">value</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
     <span class="n">value_prefix</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
@@ -133,7 +133,7 @@
 
 
 <span class="nd">@dataclass</span>
-<span class="k">class</span> <span class="nc">MZNetworkOutput</span><span class="p">:</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MZNetworkOutput</span><span class="p">:</span>
     <span class="c1"># output format of the MuZero model</span>
     <span class="n">value</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
     <span class="n">reward</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
@@ -141,9 +141,9 @@
     <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span>
 
 
-<div class="viewcode-block" id="SimNorm"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.SimNorm">[docs]</a><span class="k">class</span> <span class="nc">SimNorm</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<div class="viewcode-block" id="SimNorm"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.SimNorm">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">SimNorm</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
-<div class="viewcode-block" id="SimNorm.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.SimNorm.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">simnorm_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="SimNorm.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.SimNorm.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">simnorm_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Simplicial normalization. Adapted from https://arxiv.org/abs/2204.00616.</span>
@@ -153,7 +153,7 @@
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">dim</span> <span class="o">=</span> <span class="n">simnorm_dim</span></div>
 
-<div class="viewcode-block" id="SimNorm.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.SimNorm.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<div class="viewcode-block" id="SimNorm.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.SimNorm.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Forward pass of the SimNorm layer.</span>
@@ -171,7 +171,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">return</span> <span class="n">x</span></div>
 
-    <span class="k">def</span> <span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            String representation of the SimNorm layer.</span>
@@ -181,7 +181,7 @@
         <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;SimNorm(dim=</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">dim</span><span class="si">}</span><span class="s2">)&quot;</span></div>
 
 
-<span class="k">def</span> <span class="nf">AvgL1Norm</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-8</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">AvgL1Norm</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-8</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        Normalize the input tensor by the L1 norm.</span>
@@ -194,9 +194,9 @@
     <span class="k">return</span> <span class="n">x</span> <span class="o">/</span> <span class="n">x</span><span class="o">.</span><span class="n">abs</span><span class="p">()</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span><span class="o">.</span><span class="n">clamp</span><span class="p">(</span><span class="nb">min</span><span class="o">=</span><span class="n">eps</span><span class="p">)</span>
 
 
-<div class="viewcode-block" id="FeatureAndGradientHook"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook">[docs]</a><span class="k">class</span> <span class="nc">FeatureAndGradientHook</span><span class="p">:</span>
+<div class="viewcode-block" id="FeatureAndGradientHook"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">FeatureAndGradientHook</span><span class="p">:</span>
 
-<div class="viewcode-block" id="FeatureAndGradientHook.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="FeatureAndGradientHook.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Class to capture features and gradients at SimNorm.</span>
@@ -206,22 +206,22 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">grads_before</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">grads_after</span> <span class="o">=</span> <span class="p">[]</span></div>
 
-<div class="viewcode-block" id="FeatureAndGradientHook.setup_hooks"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook.setup_hooks">[docs]</a>    <span class="k">def</span> <span class="nf">setup_hooks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">):</span>
+<div class="viewcode-block" id="FeatureAndGradientHook.setup_hooks"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook.setup_hooks">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">setup_hooks</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">):</span>
         <span class="c1"># Hooks to capture features and gradients at SimNorm</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">forward_handler</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">sim_norm</span><span class="o">.</span><span class="n">register_forward_hook</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">forward_hook</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">backward_handler</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">sim_norm</span><span class="o">.</span><span class="n">register_full_backward_hook</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">backward_hook</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="FeatureAndGradientHook.forward_hook"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook.forward_hook">[docs]</a>    <span class="k">def</span> <span class="nf">forward_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
+<div class="viewcode-block" id="FeatureAndGradientHook.forward_hook"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook.forward_hook">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">module</span><span class="p">,</span> <span class="nb">input</span><span class="p">,</span> <span class="n">output</span><span class="p">):</span>
         <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">features_before</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">input</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">features_after</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">output</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="FeatureAndGradientHook.backward_hook"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook.backward_hook">[docs]</a>    <span class="k">def</span> <span class="nf">backward_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">module</span><span class="p">,</span> <span class="n">grad_input</span><span class="p">,</span> <span class="n">grad_output</span><span class="p">):</span>
+<div class="viewcode-block" id="FeatureAndGradientHook.backward_hook"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook.backward_hook">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">backward_hook</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">module</span><span class="p">,</span> <span class="n">grad_input</span><span class="p">,</span> <span class="n">grad_output</span><span class="p">):</span>
         <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">grads_before</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">grad_input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">grad_input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">grads_after</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">grad_output</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">grad_output</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="FeatureAndGradientHook.analyze"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook.analyze">[docs]</a>    <span class="k">def</span> <span class="nf">analyze</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="FeatureAndGradientHook.analyze"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook.analyze">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">analyze</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># Calculate L2 norms of features</span>
         <span class="n">l2_norm_before</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">torch</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">features_before</span><span class="p">]))</span>
         <span class="n">l2_norm_after</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">torch</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">features_after</span><span class="p">]))</span>
@@ -241,20 +241,20 @@
 
         <span class="k">return</span> <span class="n">l2_norm_before</span><span class="p">,</span> <span class="n">l2_norm_after</span><span class="p">,</span> <span class="n">grad_norm_before</span><span class="p">,</span> <span class="n">grad_norm_after</span></div>
 
-<div class="viewcode-block" id="FeatureAndGradientHook.clear_data"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook.clear_data">[docs]</a>    <span class="k">def</span> <span class="nf">clear_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="FeatureAndGradientHook.clear_data"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook.clear_data">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">clear_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">features_before</span><span class="p">[:]</span>
         <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">features_after</span><span class="p">[:]</span>
         <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">grads_before</span><span class="p">[:]</span>
         <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">grads_after</span><span class="p">[:]</span></div>
 
-<div class="viewcode-block" id="FeatureAndGradientHook.remove_hooks"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook.remove_hooks">[docs]</a>    <span class="k">def</span> <span class="nf">remove_hooks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="FeatureAndGradientHook.remove_hooks"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.FeatureAndGradientHook.remove_hooks">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">remove_hooks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">forward_handler</span><span class="o">.</span><span class="n">remove</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">backward_handler</span><span class="o">.</span><span class="n">remove</span><span class="p">()</span></div></div>
 
 
-<div class="viewcode-block" id="DownSample"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.DownSample">[docs]</a><span class="k">class</span> <span class="nc">DownSample</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<div class="viewcode-block" id="DownSample"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.DownSample">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">DownSample</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
-<div class="viewcode-block" id="DownSample.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.DownSample.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_shape</span><span class="p">:</span> <span class="n">SequenceType</span><span class="p">,</span> <span class="n">out_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+<div class="viewcode-block" id="DownSample.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.DownSample.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">observation_shape</span><span class="p">:</span> <span class="n">SequenceType</span><span class="p">,</span> <span class="n">out_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
                  <span class="n">activation</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="kc">True</span><span class="p">),</span>
                  <span class="n">norm_type</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;BN&#39;</span><span class="p">,</span>
                  <span class="n">num_resblocks</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
@@ -328,7 +328,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">pooling2</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">AvgPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">activation</span> <span class="o">=</span> <span class="n">activation</span></div>
 
-<div class="viewcode-block" id="DownSample.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.DownSample.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<div class="viewcode-block" id="DownSample.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.DownSample.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Shapes:</span>
 <span class="sd">            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \</span>
@@ -365,9 +365,9 @@
         <span class="k">return</span> <span class="n">output</span></div></div>
 
 
-<div class="viewcode-block" id="RepresentationNetworkUniZero"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkUniZero">[docs]</a><span class="k">class</span> <span class="nc">RepresentationNetworkUniZero</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<div class="viewcode-block" id="RepresentationNetworkUniZero"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkUniZero">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">RepresentationNetworkUniZero</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
     
-<div class="viewcode-block" id="RepresentationNetworkUniZero.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkUniZero.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="RepresentationNetworkUniZero.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkUniZero.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">observation_shape</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">),</span>
             <span class="n">num_res_blocks</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
@@ -441,7 +441,7 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">sim_norm</span> <span class="o">=</span> <span class="n">SimNorm</span><span class="p">(</span><span class="n">simnorm_dim</span><span class="o">=</span><span class="n">group_size</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="RepresentationNetworkUniZero.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkUniZero.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<div class="viewcode-block" id="RepresentationNetworkUniZero.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkUniZero.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Shapes:</span>
 <span class="sd">            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \</span>
@@ -471,9 +471,9 @@
         <span class="k">return</span> <span class="n">x</span></div></div>
 
 
-<div class="viewcode-block" id="RepresentationNetwork"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetwork">[docs]</a><span class="k">class</span> <span class="nc">RepresentationNetwork</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<div class="viewcode-block" id="RepresentationNetwork"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetwork">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">RepresentationNetwork</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
-<div class="viewcode-block" id="RepresentationNetwork.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetwork.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="RepresentationNetwork.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetwork.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">observation_shape</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">),</span>
             <span class="n">num_res_blocks</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
@@ -543,7 +543,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">embedding_dim</span> <span class="o">=</span> <span class="n">embedding_dim</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">sim_norm</span> <span class="o">=</span> <span class="n">SimNorm</span><span class="p">(</span><span class="n">simnorm_dim</span><span class="o">=</span><span class="n">group_size</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="RepresentationNetwork.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetwork.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<div class="viewcode-block" id="RepresentationNetwork.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetwork.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Shapes:</span>
 <span class="sd">            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \</span>
@@ -569,9 +569,9 @@
         <span class="k">return</span> <span class="n">x</span></div></div>
 
 
-<div class="viewcode-block" id="RepresentationNetworkMLP"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkMLP">[docs]</a><span class="k">class</span> <span class="nc">RepresentationNetworkMLP</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<div class="viewcode-block" id="RepresentationNetworkMLP"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkMLP">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">RepresentationNetworkMLP</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
-<div class="viewcode-block" id="RepresentationNetworkMLP.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkMLP.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="RepresentationNetworkMLP.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkMLP.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">observation_shape</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
             <span class="n">hidden_channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span><span class="p">,</span>
@@ -611,7 +611,7 @@
         <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">sim_norm</span> <span class="o">=</span> <span class="n">SimNorm</span><span class="p">(</span><span class="n">simnorm_dim</span><span class="o">=</span><span class="n">group_size</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="RepresentationNetworkMLP.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkMLP.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<div class="viewcode-block" id="RepresentationNetworkMLP.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkMLP.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Shapes:</span>
 <span class="sd">            - x (:obj:`torch.Tensor`): :math:`(B, N)`, where B is batch size, N is the length of vector observation.</span>
@@ -623,9 +623,9 @@
         <span class="k">return</span> <span class="n">x</span></div></div>
 
 
-<div class="viewcode-block" id="LatentDecoder"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentDecoder">[docs]</a><span class="k">class</span> <span class="nc">LatentDecoder</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<div class="viewcode-block" id="LatentDecoder"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentDecoder">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">LatentDecoder</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
     
-<div class="viewcode-block" id="LatentDecoder.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentDecoder.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">embedding_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">output_shape</span><span class="p">:</span> <span class="n">SequenceType</span><span class="p">,</span> <span class="n">num_channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span><span class="p">,</span> <span class="n">activation</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">(</span><span class="n">approximate</span><span class="o">=</span><span class="s1">&#39;tanh&#39;</span><span class="p">)):</span>
+<div class="viewcode-block" id="LatentDecoder.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentDecoder.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">embedding_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">output_shape</span><span class="p">:</span> <span class="n">SequenceType</span><span class="p">,</span> <span class="n">num_channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span><span class="p">,</span> <span class="n">activation</span><span class="p">:</span> <span class="n">nn</span><span class="o">.</span><span class="n">Module</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">(</span><span class="n">approximate</span><span class="o">=</span><span class="s1">&#39;tanh&#39;</span><span class="p">)):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Decoder network used in UniZero. Decode the latent state into 2D image obs.</span>
@@ -665,7 +665,7 @@
         <span class="p">])</span></div>
         <span class="c1"># TODO: last layer use sigmoid?</span>
 
-<div class="viewcode-block" id="LatentDecoder.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentDecoder.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">embeddings</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<div class="viewcode-block" id="LatentDecoder.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentDecoder.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">embeddings</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
         <span class="c1"># Map embeddings back to the image space</span>
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc</span><span class="p">(</span><span class="n">embeddings</span><span class="p">)</span>  <span class="c1"># (B, embedding_dim) -&gt; (B, C*H/8*W/8)</span>
         <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">initial_size</span><span class="p">)</span>  <span class="c1"># (B, C*H/8*W/8) -&gt; (B, C, H/8, W/8)</span>
@@ -678,9 +678,9 @@
         <span class="k">return</span> <span class="n">x</span></div></div>
 
 
-<div class="viewcode-block" id="LatentEncoderForMemoryEnv"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentEncoderForMemoryEnv">[docs]</a><span class="k">class</span> <span class="nc">LatentEncoderForMemoryEnv</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<div class="viewcode-block" id="LatentEncoderForMemoryEnv"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentEncoderForMemoryEnv">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">LatentEncoderForMemoryEnv</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
-<div class="viewcode-block" id="LatentEncoderForMemoryEnv.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentEncoderForMemoryEnv.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="LatentEncoderForMemoryEnv.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentEncoderForMemoryEnv.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">image_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span>
             <span class="n">embedding_size</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
@@ -733,7 +733,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">normalize_pixel</span> <span class="o">=</span> <span class="n">normalize_pixel</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">sim_norm</span> <span class="o">=</span> <span class="n">SimNorm</span><span class="p">(</span><span class="n">simnorm_dim</span><span class="o">=</span><span class="n">group_size</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="LatentEncoderForMemoryEnv.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentEncoderForMemoryEnv.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">):</span>
+<div class="viewcode-block" id="LatentEncoderForMemoryEnv.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentEncoderForMemoryEnv.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">normalize_pixel</span><span class="p">:</span>
             <span class="n">image</span> <span class="o">=</span> <span class="n">image</span> <span class="o">/</span> <span class="mf">255.0</span>
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">cnn</span><span class="p">(</span><span class="n">image</span><span class="o">.</span><span class="n">float</span><span class="p">())</span>  <span class="c1"># (B, C, 1, 1)</span>
@@ -743,9 +743,9 @@
         <span class="k">return</span> <span class="n">x</span></div></div>
 
 
-<div class="viewcode-block" id="LatentDecoderForMemoryEnv"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentDecoderForMemoryEnv">[docs]</a><span class="k">class</span> <span class="nc">LatentDecoderForMemoryEnv</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<div class="viewcode-block" id="LatentDecoderForMemoryEnv"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentDecoderForMemoryEnv">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">LatentDecoderForMemoryEnv</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
-<div class="viewcode-block" id="LatentDecoderForMemoryEnv.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentDecoderForMemoryEnv.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="LatentDecoderForMemoryEnv.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentDecoderForMemoryEnv.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">image_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span>
             <span class="n">embedding_size</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
@@ -790,16 +790,16 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">deconv</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Sequential</span><span class="p">(</span><span class="o">*</span><span class="n">layers</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="LatentDecoderForMemoryEnv.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentDecoderForMemoryEnv.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">embedding</span><span class="p">):</span>
+<div class="viewcode-block" id="LatentDecoderForMemoryEnv.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.LatentDecoderForMemoryEnv.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">embedding</span><span class="p">):</span>
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">linear</span><span class="p">(</span><span class="n">embedding</span><span class="p">)</span>
         <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">channels</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
         <span class="n">x</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">deconv</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>  <span class="c1"># (B, C, H, W)</span>
         <span class="k">return</span> <span class="n">x</span></div></div>
 
 
-<div class="viewcode-block" id="VectorDecoderForMemoryEnv"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.VectorDecoderForMemoryEnv">[docs]</a><span class="k">class</span> <span class="nc">VectorDecoderForMemoryEnv</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<div class="viewcode-block" id="VectorDecoderForMemoryEnv"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.VectorDecoderForMemoryEnv">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">VectorDecoderForMemoryEnv</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
-<div class="viewcode-block" id="VectorDecoderForMemoryEnv.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.VectorDecoderForMemoryEnv.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="VectorDecoderForMemoryEnv.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.VectorDecoderForMemoryEnv.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">embedding_dim</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
             <span class="n">output_shape</span><span class="p">:</span> <span class="n">SequenceType</span><span class="p">,</span>
@@ -837,7 +837,7 @@
             <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
         <span class="p">)</span></div>
 
-<div class="viewcode-block" id="VectorDecoderForMemoryEnv.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.VectorDecoderForMemoryEnv.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<div class="viewcode-block" id="VectorDecoderForMemoryEnv.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.VectorDecoderForMemoryEnv.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Shapes:</span>
 <span class="sd">            - x (:obj:`torch.Tensor`): :math:`(B, N)`, where B is batch size, N is the length of vector observation.</span>
@@ -847,9 +847,9 @@
         <span class="k">return</span> <span class="n">x</span></div></div>
 
 
-<div class="viewcode-block" id="PredictionNetwork"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetwork">[docs]</a><span class="k">class</span> <span class="nc">PredictionNetwork</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<div class="viewcode-block" id="PredictionNetwork"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetwork">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">PredictionNetwork</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
-<div class="viewcode-block" id="PredictionNetwork.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetwork.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="PredictionNetwork.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetwork.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">observation_shape</span><span class="p">:</span> <span class="n">SequenceType</span><span class="p">,</span>
             <span class="n">action_space_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
@@ -957,7 +957,7 @@
             <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="n">last_linear_layer_init_zero</span>
         <span class="p">)</span></div>
 
-<div class="viewcode-block" id="PredictionNetwork.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetwork.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+<div class="viewcode-block" id="PredictionNetwork.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetwork.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Forward computation of the prediction network.</span>
@@ -986,9 +986,9 @@
         <span class="k">return</span> <span class="n">policy</span><span class="p">,</span> <span class="n">value</span></div></div>
 
 
-<div class="viewcode-block" id="PredictionNetworkMLP"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetworkMLP">[docs]</a><span class="k">class</span> <span class="nc">PredictionNetworkMLP</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<div class="viewcode-block" id="PredictionNetworkMLP"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetworkMLP">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">PredictionNetworkMLP</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
-<div class="viewcode-block" id="PredictionNetworkMLP.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetworkMLP.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="PredictionNetworkMLP.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetworkMLP.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">action_space_size</span><span class="p">,</span>
             <span class="n">num_channels</span><span class="p">,</span>
@@ -1060,7 +1060,7 @@
             <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="n">last_linear_layer_init_zero</span>
         <span class="p">)</span></div>
 
-<div class="viewcode-block" id="PredictionNetworkMLP.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetworkMLP.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
+<div class="viewcode-block" id="PredictionNetworkMLP.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionNetworkMLP.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Forward computation of the prediction network.</span>
@@ -1077,9 +1077,9 @@
         <span class="k">return</span> <span class="n">policy</span><span class="p">,</span> <span class="n">value</span></div></div>
 
 
-<div class="viewcode-block" id="PredictionHiddenNetwork"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionHiddenNetwork">[docs]</a><span class="k">class</span> <span class="nc">PredictionHiddenNetwork</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<div class="viewcode-block" id="PredictionHiddenNetwork"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionHiddenNetwork">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">PredictionHiddenNetwork</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
-<div class="viewcode-block" id="PredictionHiddenNetwork.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionHiddenNetwork.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="PredictionHiddenNetwork.__init__"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionHiddenNetwork.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">observation_shape</span><span class="p">:</span> <span class="n">SequenceType</span><span class="p">,</span>
             <span class="n">action_space_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
@@ -1186,7 +1186,7 @@
             <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="n">last_linear_layer_init_zero</span>
         <span class="p">)</span></div>
 
-<div class="viewcode-block" id="PredictionHiddenNetwork.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionHiddenNetwork.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">world_model_latent_history</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span>
+<div class="viewcode-block" id="PredictionHiddenNetwork.forward"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.PredictionHiddenNetwork.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">latent_state</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">world_model_latent_history</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span>
         <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>

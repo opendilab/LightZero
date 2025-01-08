@@ -129,9 +129,9 @@
 <section id="id2">
 <h3>1. 创建环境类<a class="headerlink" href="#id2" title="Permalink to this heading"></a></h3>
 <p>首先，需要创建一个新的环境类，该类需要继承自 DI-engine 的 BaseEnv 类。例如：</p>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">ding.envs</span> <span class="kn">import</span> <span class="n">BaseEnv</span>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ding.envs</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseEnv</span>
 
-<span class="k">class</span> <span class="nc">MyCustomEnv</span><span class="p">(</span><span class="n">BaseEnv</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MyCustomEnv</span><span class="p">(</span><span class="n">BaseEnv</span><span class="p">):</span>
     <span class="k">pass</span>
 </pre></div>
 </div>
@@ -139,7 +139,7 @@
 <section id="init">
 <h3>2. __init__方法<a class="headerlink" href="#init" title="Permalink to this heading"></a></h3>
 <p>在自定义环境类中，需要定义一个初始化方法 <code class="docutils literal notranslate"><span class="pre">__init__</span></code> 。在这个方法中，需要设置一些环境的基本属性，例如观察空间、动作空间、奖励空间等。例如：</p>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span> <span class="o">=</span> <span class="n">cfg</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_init_flag</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="c1"># set other properties...</span>
@@ -149,7 +149,7 @@
 <section id="reset">
 <h3>3. Reset 方法<a class="headerlink" href="#reset" title="Permalink to this heading"></a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">reset</span></code> 方法用于重置环境到一个初始状态。这个方法应该返回环境的初始观察。例如：</p>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="c1"># reset the environment...</span>
     <span class="n">obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
     <span class="c1"># get the action_mask according to the legal action</span>
@@ -162,7 +162,7 @@
 <section id="step">
 <h3>4. Step 方法<a class="headerlink" href="#step" title="Permalink to this heading"></a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">step</span></code> 方法接受一个动作作为输入，执行这个动作，并返回一个元组，包含新的观察、奖励、是否完成和其他信息。例如：</p>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
   <span class="c1"># The core original env step.</span>
     <span class="n">obs</span><span class="p">,</span> <span class="n">rew</span><span class="p">,</span> <span class="n">done</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
     
@@ -186,15 +186,15 @@
 <h3>5. 观察空间和动作空间<a class="headerlink" href="#id3" title="Permalink to this heading"></a></h3>
 <p>在自定义环境中，需要提供观察空间和动作空间的属性。这些属性是 <code class="docutils literal notranslate"><span class="pre">gym.Space</span></code> 对象，描述了观察和动作的形状和类型。例如：</p>
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="nd">@property</span>
-<span class="k">def</span> <span class="nf">observation_space</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">observation_space</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_observation_space</span>
 
 <span class="nd">@property</span>
-<span class="k">def</span> <span class="nf">action_space</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">action_space</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_action_space</span>
     
 <span class="nd">@property</span>
-<span class="k">def</span> <span class="nf">legal_actions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">legal_actions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="c1"># get the actual legal actions</span>
     <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_action_space</span><span class="o">.</span><span class="n">n</span><span class="p">)</span>
 </pre></div>
@@ -203,7 +203,7 @@
 <section id="render">
 <h3>6. render 方法<a class="headerlink" href="#render" title="Permalink to this heading"></a></h3>
 <p><code class="docutils literal notranslate"><span class="pre">render</span></code> 方法会将游戏的对局演示出来，供用户查看。对于实现了 <code class="docutils literal notranslate"><span class="pre">render</span></code> 方法的环境，用户可以选择是否在执行 <code class="docutils literal notranslate"><span class="pre">step</span></code> 函数时调用 <code class="docutils literal notranslate"><span class="pre">render</span></code> 来实现每一步游戏状态的渲染。</p>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;image_savefile_mode&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;image_savefile_mode&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        Renders the game environment.</span>
@@ -244,10 +244,10 @@
 <section id="id5">
 <h3>8. 注册环境<a class="headerlink" href="#id5" title="Permalink to this heading"></a></h3>
 <p>最后，需要使用 <code class="docutils literal notranslate"><span class="pre">ENV_REGISTRY.register</span></code> 装饰器来注册新的环境，使得可以在配置文件中使用它。例如：</p>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">ENV_REGISTRY</span>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ENV_REGISTRY</span>
 
 <span class="nd">@ENV_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;my_custom_env&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">MyCustomEnv</span><span class="p">(</span><span class="n">BaseEnv</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MyCustomEnv</span><span class="p">(</span><span class="n">BaseEnv</span><span class="p">):</span>
     <span class="c1"># ...</span>
 </pre></div>
 </div>
@@ -279,14 +279,14 @@
 </li>
 <li><p>在棋类环境中，随着对局的推进，可以采取的动作会不断变少，因此还需要实现 <code class="docutils literal notranslate"><span class="pre">legal_action</span></code> 方法。该方法可以用于检验玩家输入的动作是否合法，以及在 MCTS 过程中根据合法动作生成子节点。以 Connect4 环境为例，该方法会检查棋盘中的每一列是否下满，然后返回一个列表。该列表在可以落子的列取值为1，其余位置取值为0。</p></li>
 </ol>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">legal_actions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">legal_actions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
         <span class="k">return</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span>
 </pre></div>
 </div>
 <ol class="simple">
 <li><p>LightZero的棋类环境中，还需要实现一些动作生成方法，例如 <code class="docutils literal notranslate"><span class="pre">bot_action</span></code> 和 <code class="docutils literal notranslate"><span class="pre">random_action</span></code> 。其中 <code class="docutils literal notranslate"><span class="pre">bot_action</span></code> 会根据 <code class="docutils literal notranslate"><span class="pre">self.bot_action_type</span></code> 的值调取相应种类的 bot ，通过 bot 中预实现的算法生成一个动作。而 <code class="docutils literal notranslate"><span class="pre">random_action</span></code> 则会从当前的合法动作列表中随机选取一个动作返回。 <code class="docutils literal notranslate"><span class="pre">bot_action</span></code> 用于实现环境的 <code class="docutils literal notranslate"><span class="pre">play_with_bot_mode</span></code> ，而 <code class="docutils literal notranslate"><span class="pre">random_action</span></code> 则会在 agent 和 bot 选取动作时依一定概率被调用，来增加对局样本的随机性。</p></li>
 </ol>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">bot_action</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">bot_action</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">()</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">prob_random_action_in_bot</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">random_action</span><span class="p">()</span>
         <span class="k">else</span><span class="p">:</span>
@@ -300,16 +300,16 @@
 <section id="lightzeroenvwrapper">
 <h2>LightZeroEnvWrapper<a class="headerlink" href="#lightzeroenvwrapper" title="Permalink to this heading"></a></h2>
 <p>我们在 lzero/envs/wrappers 中提供了一个 <a class="reference external" href="https://github.com/opendilab/LightZero/blob/main/lzero/envs/wrappers/lightzero_env_wrapper.py">LightZeroEnvWrapper</a>。它能够将经典的 <code class="docutils literal notranslate"><span class="pre">classic_control</span></code>, <code class="docutils literal notranslate"><span class="pre">box2d</span></code> 环境包装成 LightZero 所需要的环境格式。在初始化实例时，会传入一个原始环境，这个原始环境通过父类 <code class="docutils literal notranslate"><span class="pre">gym.Wrapper</span></code> 被初始化，这使得实例可以调用原始环境中的 <code class="docutils literal notranslate"><span class="pre">render</span></code> ， <code class="docutils literal notranslate"><span class="pre">close</span></code> ， <code class="docutils literal notranslate"><span class="pre">seed</span></code> 等方法。在此基础上， <code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper</span></code> 类重写了 <code class="docutils literal notranslate"><span class="pre">step</span></code> 和 <code class="docutils literal notranslate"><span class="pre">reset</span></code> 方法，将其输出封装成符合 LightZero 要求的字典 <code class="docutils literal notranslate"><span class="pre">lightzero_obs_dict</span></code> 。这样一来，封装后的新环境实例就满足了 LightZero 自定义环境的要求。</p>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">LightZeroEnvWrapper</span><span class="p">(</span><span class="n">gym</span><span class="o">.</span><span class="n">Wrapper</span><span class="p">):</span>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">LightZeroEnvWrapper</span><span class="p">(</span><span class="n">gym</span><span class="o">.</span><span class="n">Wrapper</span><span class="p">):</span>
     <span class="c1"># overview comments</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="n">gym</span><span class="o">.</span><span class="n">Env</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="n">gym</span><span class="o">.</span><span class="n">Env</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="c1"># overview comments</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">env</span><span class="p">)</span>
         <span class="o">...</span>
 </pre></div>
 </div>
 <p>具体使用时，使用下面的函数，将一个 gym 环境，通过 <code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper</span></code> 包装成 LightZero 所需要的环境格式。 <code class="docutils literal notranslate"><span class="pre">get_wrappered_env</span></code> 会返回一个匿名函数，该匿名函数每次调用都会产生一个 <code class="docutils literal notranslate"><span class="pre">DingEnvWrapper</span></code> 实例，该实例会将 <code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper</span></code> 作为匿名函数传入，并在实例内部将原始环境封装成 LightZero 所需的格式。</p>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">get_wrappered_env</span><span class="p">(</span><span class="n">wrapper_cfg</span><span class="p">:</span> <span class="n">EasyDict</span><span class="p">,</span> <span class="n">env_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_wrappered_env</span><span class="p">(</span><span class="n">wrapper_cfg</span><span class="p">:</span> <span class="n">EasyDict</span><span class="p">,</span> <span class="n">env_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
     <span class="c1"># overview comments</span>
     <span class="o">...</span>
     <span class="k">if</span> <span class="n">wrapper_cfg</span><span class="o">.</span><span class="n">manually_discretization</span><span class="p">:</span>
@@ -335,7 +335,7 @@
 <span class="sd">        The ``train_muzero_with_gym_env`` entry means that the environment used in the training process is generated by wrapping the original gym environment with LightZeroEnvWrapper.</span>
 <span class="sd">        Users can refer to lzero/envs/wrappers for more details.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="kn">from</span> <span class="nn">lzero.entry</span> <span class="kn">import</span> <span class="n">train_muzero_with_gym_env</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.entry</span><span class="w"> </span><span class="kn">import</span> <span class="n">train_muzero_with_gym_env</span>
     <span class="n">train_muzero_with_gym_env</span><span class="p">([</span><span class="n">main_config</span><span class="p">,</span> <span class="n">create_config</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">max_env_step</span><span class="o">=</span><span class="n">max_env_step</span><span class="p">)</span>
 </pre></div>
 </div>

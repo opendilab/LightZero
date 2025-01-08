@@ -89,31 +89,31 @@
     
     
   <h1>Source code for lzero.agent.alphazero</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">os</span>
-<span class="kn">from</span> <span class="nn">functools</span> <span class="kn">import</span> <span class="n">partial</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">List</span>
-<span class="kn">import</span> <span class="nn">copy</span>
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">from</span> <span class="nn">ding.bonus.common</span> <span class="kn">import</span> <span class="n">TrainingReturn</span><span class="p">,</span> <span class="n">EvalReturn</span>
-<span class="kn">from</span> <span class="nn">ding.config</span> <span class="kn">import</span> <span class="n">save_config_py</span><span class="p">,</span> <span class="n">compile_config</span>
-<span class="kn">from</span> <span class="nn">ding.envs</span> <span class="kn">import</span> <span class="n">create_env_manager</span>
-<span class="kn">from</span> <span class="nn">ding.envs</span> <span class="kn">import</span> <span class="n">get_vec_env_setting</span>
-<span class="kn">from</span> <span class="nn">ding.policy</span> <span class="kn">import</span> <span class="n">create_policy</span>
-<span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">set_pkg_seed</span><span class="p">,</span> <span class="n">get_rank</span>
-<span class="kn">from</span> <span class="nn">ding.worker</span> <span class="kn">import</span> <span class="n">BaseLearner</span><span class="p">,</span> <span class="n">create_buffer</span>
-<span class="kn">from</span> <span class="nn">ditk</span> <span class="kn">import</span> <span class="n">logging</span>
-<span class="kn">from</span> <span class="nn">easydict</span> <span class="kn">import</span> <span class="n">EasyDict</span>
-<span class="kn">from</span> <span class="nn">tensorboardX</span> <span class="kn">import</span> <span class="n">SummaryWriter</span>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">List</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">copy</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.bonus.common</span><span class="w"> </span><span class="kn">import</span> <span class="n">TrainingReturn</span><span class="p">,</span> <span class="n">EvalReturn</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">save_config_py</span><span class="p">,</span> <span class="n">compile_config</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.envs</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_env_manager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.envs</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_vec_env_setting</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_policy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_pkg_seed</span><span class="p">,</span> <span class="n">get_rank</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.worker</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseLearner</span><span class="p">,</span> <span class="n">create_buffer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ditk</span><span class="w"> </span><span class="kn">import</span> <span class="n">logging</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">easydict</span><span class="w"> </span><span class="kn">import</span> <span class="n">EasyDict</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tensorboardX</span><span class="w"> </span><span class="kn">import</span> <span class="n">SummaryWriter</span>
 
-<span class="kn">from</span> <span class="nn">lzero.agent.config.alphazero</span> <span class="kn">import</span> <span class="n">supported_env_cfg</span>
-<span class="kn">from</span> <span class="nn">lzero.policy</span> <span class="kn">import</span> <span class="n">visit_count_temperature</span>
-<span class="kn">from</span> <span class="nn">lzero.policy.alphazero</span> <span class="kn">import</span> <span class="n">AlphaZeroPolicy</span>
-<span class="kn">from</span> <span class="nn">lzero.worker</span> <span class="kn">import</span> <span class="n">AlphaZeroCollector</span> <span class="k">as</span> <span class="n">Collector</span>
-<span class="kn">from</span> <span class="nn">lzero.worker</span> <span class="kn">import</span> <span class="n">AlphaZeroEvaluator</span> <span class="k">as</span> <span class="n">Evaluator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.agent.config.alphazero</span><span class="w"> </span><span class="kn">import</span> <span class="n">supported_env_cfg</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">visit_count_temperature</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy.alphazero</span><span class="w"> </span><span class="kn">import</span> <span class="n">AlphaZeroPolicy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.worker</span><span class="w"> </span><span class="kn">import</span> <span class="n">AlphaZeroCollector</span> <span class="k">as</span> <span class="n">Collector</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.worker</span><span class="w"> </span><span class="kn">import</span> <span class="n">AlphaZeroEvaluator</span> <span class="k">as</span> <span class="n">Evaluator</span>
 
 
-<div class="viewcode-block" id="AlphaZeroAgent"><a class="viewcode-back" href="../../../api_doc/agent/index.html#lzero.agent.alphazero.AlphaZeroAgent">[docs]</a><span class="k">class</span> <span class="nc">AlphaZeroAgent</span><span class="p">:</span>
+<div class="viewcode-block" id="AlphaZeroAgent"><a class="viewcode-back" href="../../../api_doc/agent/index.html#lzero.agent.alphazero.AlphaZeroAgent">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">AlphaZeroAgent</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        Agent class for executing AlphaZero algorithms which include methods for training, deployment, and batch evaluation.</span>
@@ -130,7 +130,7 @@
 
     <span class="n">supported_env_list</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">supported_env_cfg</span><span class="o">.</span><span class="n">keys</span><span class="p">())</span>
 
-<div class="viewcode-block" id="AlphaZeroAgent.__init__"><a class="viewcode-back" href="../../../api_doc/agent/index.html#lzero.agent.alphazero.AlphaZeroAgent.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="AlphaZeroAgent.__init__"><a class="viewcode-back" href="../../../api_doc/agent/index.html#lzero.agent.alphazero.AlphaZeroAgent.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">env_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
             <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
@@ -191,7 +191,7 @@
             <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">exp_name</span><span class="p">)</span>
         <span class="n">save_config_py</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">exp_name</span><span class="p">,</span> <span class="s1">&#39;policy_config.py&#39;</span><span class="p">))</span>
         <span class="k">if</span> <span class="n">model</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="kn">from</span> <span class="nn">lzero.model.alphazero_model</span> <span class="kn">import</span> <span class="n">AlphaZeroModel</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.model.alphazero_model</span><span class="w"> </span><span class="kn">import</span> <span class="n">AlphaZeroModel</span>
             <span class="n">model</span> <span class="o">=</span> <span class="n">AlphaZeroModel</span><span class="p">(</span><span class="o">**</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">model</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">and</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
@@ -205,7 +205,7 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">env_fn</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">collector_env_cfg</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">evaluator_env_cfg</span> <span class="o">=</span> <span class="n">get_vec_env_setting</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">cfg</span><span class="o">.</span><span class="n">env</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="AlphaZeroAgent.train"><a class="viewcode-back" href="../../../api_doc/agent/index.html#lzero.agent.alphazero.AlphaZeroAgent.train">[docs]</a>    <span class="k">def</span> <span class="nf">train</span><span class="p">(</span>
+<div class="viewcode-block" id="AlphaZeroAgent.train"><a class="viewcode-back" href="../../../api_doc/agent/index.html#lzero.agent.alphazero.AlphaZeroAgent.train">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">train</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">step</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="mf">1e7</span><span class="p">),</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TrainingReturn</span><span class="p">:</span>
@@ -315,7 +315,7 @@
 
         <span class="k">return</span> <span class="n">TrainingReturn</span><span class="p">(</span><span class="n">wandb_url</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="AlphaZeroAgent.deploy"><a class="viewcode-back" href="../../../api_doc/agent/index.html#lzero.agent.alphazero.AlphaZeroAgent.deploy">[docs]</a>    <span class="k">def</span> <span class="nf">deploy</span><span class="p">(</span>
+<div class="viewcode-block" id="AlphaZeroAgent.deploy"><a class="viewcode-back" href="../../../api_doc/agent/index.html#lzero.agent.alphazero.AlphaZeroAgent.deploy">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">deploy</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">enable_save_replay</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
             <span class="n">concatenate_all_replay</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
@@ -404,7 +404,7 @@
 
         <span class="k">return</span> <span class="n">EvalReturn</span><span class="p">(</span><span class="n">eval_value</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">reward_list</span><span class="p">),</span> <span class="n">eval_value_std</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">std</span><span class="p">(</span><span class="n">reward_list</span><span class="p">))</span></div>
 
-<div class="viewcode-block" id="AlphaZeroAgent.batch_evaluate"><a class="viewcode-back" href="../../../api_doc/agent/index.html#lzero.agent.alphazero.AlphaZeroAgent.batch_evaluate">[docs]</a>    <span class="k">def</span> <span class="nf">batch_evaluate</span><span class="p">(</span>
+<div class="viewcode-block" id="AlphaZeroAgent.batch_evaluate"><a class="viewcode-back" href="../../../api_doc/agent/index.html#lzero.agent.alphazero.AlphaZeroAgent.batch_evaluate">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">batch_evaluate</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">n_evaluator_episode</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EvalReturn</span><span class="p">:</span>
@@ -452,7 +452,7 @@
         <span class="p">)</span></div>
 
     <span class="nd">@property</span>
-    <span class="k">def</span> <span class="nf">best</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">best</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Provides access to the best model according to evaluation metrics.</span>

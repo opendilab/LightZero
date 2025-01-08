@@ -93,24 +93,24 @@
 <span class="sd">Overview:</span>
 <span class="sd">    BTW, users can refer to the unittest of these model templates to learn how to use them.</span>
 <span class="sd">&quot;&quot;&quot;</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Tuple</span>
 
-<span class="kn">import</span> <span class="nn">math</span>
-<span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
-<span class="kn">import</span> <span class="nn">torch.nn.functional</span> <span class="k">as</span> <span class="nn">F</span>
-<span class="kn">from</span> <span class="nn">ding.model</span> <span class="kn">import</span> <span class="n">ReparameterizationHead</span>
-<span class="kn">from</span> <span class="nn">ding.torch_utils</span> <span class="kn">import</span> <span class="n">MLP</span><span class="p">,</span> <span class="n">ResBlock</span>
-<span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">MODEL_REGISTRY</span><span class="p">,</span> <span class="n">SequenceType</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">nn</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReparameterizationHead</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.torch_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">MLP</span><span class="p">,</span> <span class="n">ResBlock</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">MODEL_REGISTRY</span><span class="p">,</span> <span class="n">SequenceType</span>
 
-<span class="kn">from</span> <span class="nn">.common</span> <span class="kn">import</span> <span class="n">RepresentationNetwork</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.common</span><span class="w"> </span><span class="kn">import</span> <span class="n">RepresentationNetwork</span>
 
 
 <span class="c1"># use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine&#39;s document.</span>
 <div class="viewcode-block" id="AlphaZeroModel"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.AlphaZeroModel">[docs]</a><span class="nd">@MODEL_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;AlphaZeroModel&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">AlphaZeroModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">AlphaZeroModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
-<div class="viewcode-block" id="AlphaZeroModel.__init__"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.AlphaZeroModel.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="AlphaZeroModel.__init__"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.AlphaZeroModel.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">observation_shape</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">96</span><span class="p">,</span> <span class="mi">96</span><span class="p">),</span>
         <span class="n">action_space_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span>
@@ -238,7 +238,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">representation_network</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">representation_network</span></div>
 
-<div class="viewcode-block" id="AlphaZeroModel.forward"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.AlphaZeroModel.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_batch</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+<div class="viewcode-block" id="AlphaZeroModel.forward"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.AlphaZeroModel.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_batch</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            The common computation graph of AlphaZero model.</span>
@@ -257,7 +257,7 @@
         <span class="n">logit</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">prediction_network</span><span class="p">(</span><span class="n">encoded_state</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">logit</span><span class="p">,</span> <span class="n">value</span></div>
 
-<div class="viewcode-block" id="AlphaZeroModel.compute_policy_value"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.AlphaZeroModel.compute_policy_value">[docs]</a>    <span class="k">def</span> <span class="nf">compute_policy_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_batch</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+<div class="viewcode-block" id="AlphaZeroModel.compute_policy_value"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.AlphaZeroModel.compute_policy_value">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compute_policy_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_batch</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            The computation graph of AlphaZero model to calculate action selection probability and value.</span>
@@ -276,7 +276,7 @@
         <span class="n">prob</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">functional</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">logit</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">prob</span><span class="p">,</span> <span class="n">value</span></div>
 
-<div class="viewcode-block" id="AlphaZeroModel.compute_logp_value"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.AlphaZeroModel.compute_logp_value">[docs]</a>    <span class="k">def</span> <span class="nf">compute_logp_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_batch</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+<div class="viewcode-block" id="AlphaZeroModel.compute_logp_value"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.AlphaZeroModel.compute_logp_value">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">compute_logp_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_batch</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            The computation graph of AlphaZero model to calculate log probability and value.</span>
@@ -297,9 +297,9 @@
         <span class="k">return</span> <span class="n">log_prob</span><span class="p">,</span> <span class="n">value</span></div></div>
 
 
-<div class="viewcode-block" id="PredictionNetwork"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.PredictionNetwork">[docs]</a><span class="k">class</span> <span class="nc">PredictionNetwork</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+<div class="viewcode-block" id="PredictionNetwork"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.PredictionNetwork">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">PredictionNetwork</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
 
-<div class="viewcode-block" id="PredictionNetwork.__init__"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.PredictionNetwork.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="PredictionNetwork.__init__"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.PredictionNetwork.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">action_space_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
             <span class="n">continuous_action_space</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
@@ -406,7 +406,7 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">activation</span> <span class="o">=</span> <span class="n">activation</span></div>
 
-<div class="viewcode-block" id="PredictionNetwork.forward"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.PredictionNetwork.forward">[docs]</a>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
+<div class="viewcode-block" id="PredictionNetwork.forward"><a class="viewcode-back" href="../../../api_doc/model/alphazero_model.html#lzero.model.alphazero_model.PredictionNetwork.forward">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Use the hidden state to predict the value and policy.</span>

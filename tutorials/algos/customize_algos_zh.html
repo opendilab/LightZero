@@ -118,7 +118,7 @@
 <p>在你的策略文件中，你需要定义一个类来实现你的策略。这个类应该继承自 DI-engine中的 <code class="docutils literal notranslate"><span class="pre">Policy</span></code> 类，并实现所需的方法。</p>
 <p>以下是一个基本的策略类的框架：</p>
 <div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="nd">@POLICY_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;my_algorithm&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">MyAlgorithmPolicy</span><span class="p">(</span><span class="n">Policy</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MyAlgorithmPolicy</span><span class="p">(</span><span class="n">Policy</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The policy class for MyAlgorithm.</span>
@@ -128,29 +128,29 @@
         <span class="c1"># Add your config here</span>
     <span class="p">)</span>
     
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
         <span class="c1"># Initialize your policy here</span>
 
-    <span class="k">def</span> <span class="nf">default_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">default_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
         <span class="c1"># Set the default model name and the import path so that the default model can be loaded during policy initialization</span>
     
-    <span class="k">def</span> <span class="nf">_init_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># Initialize the learn mode here</span>
     
-    <span class="k">def</span> <span class="nf">_forward_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
         <span class="c1"># Implement the forward function for learning mode here</span>
     
-    <span class="k">def</span> <span class="nf">_init_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># Initialize the collect mode here</span>
     
-    <span class="k">def</span> <span class="nf">_forward_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="c1"># Implement the forward function for collect mode here</span>
     
-    <span class="k">def</span> <span class="nf">_init_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># Initialize the eval mode here</span>
     
-    <span class="k">def</span> <span class="nf">_forward_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="c1"># Implement the forward function for eval mode here</span>
 </pre></div>
 </div>
@@ -207,13 +207,13 @@
 <h3>6. <strong>测试你的策略</strong><a class="headerlink" href="#id9" title="Permalink to this heading"></a></h3>
 <p>在你实现你的策略之后，确保策略的正确性和有效性是非常重要的。为此，你应该编写一些单元测试来验证你的策略是否正常工作。比如，你可以测试策略是否能在特定的环境中执行，策略的输出是否符合预期等。单元测试的编写及意义可以参考 DI-engine 中的<a class="reference external" href="https://di-engine-docs.readthedocs.io/zh_CN/latest/22_test/index_zh.html">单元测试指南</a> ,你可以在 <code class="docutils literal notranslate"><span class="pre">lzero/policy/tests</span></code> 目录下添加你的测试。在编写测试时，尽可能考虑到所有可能的场景和边界条件，确保你的策略在各种情况下都能正常运行。
 下面是一个 LightZero 中单元测试的例子。在这个例子中，所测试的对象是 <code class="docutils literal notranslate"><span class="pre">inverse_scalar_transform</span></code> 和 <code class="docutils literal notranslate"><span class="pre">InverseScalarTransform</span></code> 方法。这两个方法都将经过变换的 value 逆变换为原本的值，但是采取了不同的实现。单元测试时，用这两个方法对同一组数据进行处理，并比较输出的结果是否相同。如果相同，则会通过测试。</p>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">pytest</span>
-<span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">from</span> <span class="nn">lzero.policy.scaling_transform</span> <span class="kn">import</span> <span class="n">inverse_scalar_transform</span><span class="p">,</span> <span class="n">InverseScalarTransform</span>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy.scaling_transform</span><span class="w"> </span><span class="kn">import</span> <span class="n">inverse_scalar_transform</span><span class="p">,</span> <span class="n">InverseScalarTransform</span>
 
 <span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">unittest</span>
-<span class="k">def</span> <span class="nf">test_scaling_transform</span><span class="p">():</span>
-    <span class="kn">import</span> <span class="nn">time</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">test_scaling_transform</span><span class="p">():</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
     <span class="n">logit</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">601</span><span class="p">)</span>
     <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
     <span class="n">output_1</span> <span class="o">=</span> <span class="n">inverse_scalar_transform</span><span class="p">(</span><span class="n">logit</span><span class="p">,</span> <span class="mi">300</span><span class="p">)</span>

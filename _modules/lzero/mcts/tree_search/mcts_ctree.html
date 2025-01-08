@@ -89,25 +89,25 @@
     
     
   <h1>Source code for lzero.mcts.tree_search.mcts_ctree</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">copy</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Union</span>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">copy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Union</span>
 
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">from</span> <span class="nn">easydict</span> <span class="kn">import</span> <span class="n">EasyDict</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">easydict</span><span class="w"> </span><span class="kn">import</span> <span class="n">EasyDict</span>
 
-<span class="kn">from</span> <span class="nn">lzero.mcts.ctree.ctree_efficientzero</span> <span class="kn">import</span> <span class="n">ez_tree</span> <span class="k">as</span> <span class="n">tree_efficientzero</span>
-<span class="kn">from</span> <span class="nn">lzero.mcts.ctree.ctree_gumbel_muzero</span> <span class="kn">import</span> <span class="n">gmz_tree</span> <span class="k">as</span> <span class="n">tree_gumbel_muzero</span>
-<span class="kn">from</span> <span class="nn">lzero.mcts.ctree.ctree_muzero</span> <span class="kn">import</span> <span class="n">mz_tree</span> <span class="k">as</span> <span class="n">tree_muzero</span>
-<span class="kn">from</span> <span class="nn">lzero.policy</span> <span class="kn">import</span> <span class="n">InverseScalarTransform</span><span class="p">,</span> <span class="n">to_detach_cpu_numpy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.ctree.ctree_efficientzero</span><span class="w"> </span><span class="kn">import</span> <span class="n">ez_tree</span> <span class="k">as</span> <span class="n">tree_efficientzero</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.ctree.ctree_gumbel_muzero</span><span class="w"> </span><span class="kn">import</span> <span class="n">gmz_tree</span> <span class="k">as</span> <span class="n">tree_gumbel_muzero</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.ctree.ctree_muzero</span><span class="w"> </span><span class="kn">import</span> <span class="n">mz_tree</span> <span class="k">as</span> <span class="n">tree_muzero</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">InverseScalarTransform</span><span class="p">,</span> <span class="n">to_detach_cpu_numpy</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
-    <span class="kn">from</span> <span class="nn">lzero.mcts.ctree.ctree_efficientzero</span> <span class="kn">import</span> <span class="n">ez_tree</span> <span class="k">as</span> <span class="n">ez_ctree</span>
-    <span class="kn">from</span> <span class="nn">lzero.mcts.ctree.ctree_muzero</span> <span class="kn">import</span> <span class="n">mz_tree</span> <span class="k">as</span> <span class="n">mz_ctree</span>
-    <span class="kn">from</span> <span class="nn">lzero.mcts.ctree.ctree_gumbel_muzero</span> <span class="kn">import</span> <span class="n">gmz_tree</span> <span class="k">as</span> <span class="n">gmz_ctree</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.ctree.ctree_efficientzero</span><span class="w"> </span><span class="kn">import</span> <span class="n">ez_tree</span> <span class="k">as</span> <span class="n">ez_ctree</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.ctree.ctree_muzero</span><span class="w"> </span><span class="kn">import</span> <span class="n">mz_tree</span> <span class="k">as</span> <span class="n">mz_ctree</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.ctree.ctree_gumbel_muzero</span><span class="w"> </span><span class="kn">import</span> <span class="n">gmz_tree</span> <span class="k">as</span> <span class="n">gmz_ctree</span>
 
 
-<span class="k">class</span> <span class="nc">UniZeroMCTSCtree</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">UniZeroMCTSCtree</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        MCTSCtree for UniZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in C++.</span>
@@ -131,12 +131,12 @@
     <span class="p">)</span>
 
     <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">default_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EasyDict</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">default_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EasyDict</span><span class="p">:</span>
         <span class="n">cfg</span> <span class="o">=</span> <span class="n">EasyDict</span><span class="p">(</span><span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">config</span><span class="p">))</span>
         <span class="n">cfg</span><span class="o">.</span><span class="n">cfg_type</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">+</span> <span class="s1">&#39;Dict&#39;</span>
         <span class="k">return</span> <span class="n">cfg</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key</span>
@@ -151,7 +151,7 @@
         <span class="p">)</span>
 
     <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">roots</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">active_collect_env_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;mz_ctree&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">roots</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">active_collect_env_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;mz_ctree&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            The initialization of CRoots with root num and legal action lists.</span>
@@ -159,11 +159,11 @@
 <span class="sd">            - root_num (:obj:`int`): the number of the current root.</span>
 <span class="sd">            - legal_action_list (:obj:`list`): the vector of the legal action of this root.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="kn">from</span> <span class="nn">lzero.mcts.ctree.ctree_muzero</span> <span class="kn">import</span> <span class="n">mz_tree</span> <span class="k">as</span> <span class="n">ctree</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.ctree.ctree_muzero</span><span class="w"> </span><span class="kn">import</span> <span class="n">mz_tree</span> <span class="k">as</span> <span class="n">ctree</span>
         <span class="k">return</span> <span class="n">ctree</span><span class="o">.</span><span class="n">Roots</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
 
     <span class="c1"># @profile</span>
-    <span class="k">def</span> <span class="nf">search</span><span class="p">(</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">search</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">roots</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">to_play_batch</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span>
             <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -261,7 +261,7 @@
                 <span class="p">)</span>
 
 
-<div class="viewcode-block" id="MuZeroMCTSCtree"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree">[docs]</a><span class="k">class</span> <span class="nc">MuZeroMCTSCtree</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<div class="viewcode-block" id="MuZeroMCTSCtree"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">MuZeroMCTSCtree</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        MCTSCtree for MuZero. The core ``batch_traverse`` and ``batch_backpropagate`` function is implemented in C++.</span>
@@ -285,12 +285,12 @@
     <span class="p">)</span>
 
 <div class="viewcode-block" id="MuZeroMCTSCtree.default_config"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.default_config">[docs]</a>    <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">default_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EasyDict</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">default_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EasyDict</span><span class="p">:</span>
         <span class="n">cfg</span> <span class="o">=</span> <span class="n">EasyDict</span><span class="p">(</span><span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">cls</span><span class="o">.</span><span class="n">config</span><span class="p">))</span>
         <span class="n">cfg</span><span class="o">.</span><span class="n">cfg_type</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">+</span> <span class="s1">&#39;Dict&#39;</span>
         <span class="k">return</span> <span class="n">cfg</span></div>
 
-<div class="viewcode-block" id="MuZeroMCTSCtree.__init__"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroMCTSCtree.__init__"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key</span>
@@ -305,7 +305,7 @@
         <span class="p">)</span></div>
 
 <div class="viewcode-block" id="MuZeroMCTSCtree.roots"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.roots">[docs]</a>    <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">roots</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">active_collect_env_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;mz_ctree&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">roots</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">active_collect_env_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;mz_ctree&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            The initialization of CRoots with root num and legal action lists.</span>
@@ -313,11 +313,11 @@
 <span class="sd">            - root_num (:obj:`int`): the number of the current root.</span>
 <span class="sd">            - legal_action_list (:obj:`list`): the vector of the legal action of this root.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="kn">from</span> <span class="nn">lzero.mcts.ctree.ctree_muzero</span> <span class="kn">import</span> <span class="n">mz_tree</span> <span class="k">as</span> <span class="n">ctree</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.ctree.ctree_muzero</span><span class="w"> </span><span class="kn">import</span> <span class="n">mz_tree</span> <span class="k">as</span> <span class="n">ctree</span>
         <span class="k">return</span> <span class="n">ctree</span><span class="o">.</span><span class="n">Roots</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span></div>
 
     <span class="c1"># @profile</span>
-<div class="viewcode-block" id="MuZeroMCTSCtree.search"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.search">[docs]</a>    <span class="k">def</span> <span class="nf">search</span><span class="p">(</span>
+<div class="viewcode-block" id="MuZeroMCTSCtree.search"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.search">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">search</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">roots</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">to_play_batch</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span>
             <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -412,7 +412,7 @@
                     <span class="n">min_max_stats_lst</span><span class="p">,</span> <span class="n">results</span><span class="p">,</span> <span class="n">virtual_to_play_batch</span>
                 <span class="p">)</span></div>
 
-<div class="viewcode-block" id="MuZeroMCTSCtree.search_with_reuse"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.search_with_reuse">[docs]</a>    <span class="k">def</span> <span class="nf">search_with_reuse</span><span class="p">(</span>
+<div class="viewcode-block" id="MuZeroMCTSCtree.search_with_reuse"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.MuZeroMCTSCtree.search_with_reuse">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">search_with_reuse</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">roots</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
             <span class="n">model</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span>
@@ -512,7 +512,7 @@
         <span class="k">return</span> <span class="n">length</span><span class="p">,</span> <span class="n">average_infer</span></div></div>
 
 
-<span class="k">class</span> <span class="nc">MuZeroRNNFullObsMCTSCtree</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MuZeroRNNFullObsMCTSCtree</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The C++ implementation of MCTS (batch format) for EfficientZero.  \</span>
@@ -541,7 +541,7 @@
     <span class="p">)</span>
 
     <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">default_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EasyDict</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">default_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EasyDict</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            A class method that returns a default configuration in the form of an EasyDict object.</span>
@@ -554,7 +554,7 @@
         <span class="n">cfg</span><span class="o">.</span><span class="n">cfg_type</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">+</span> <span class="s1">&#39;Dict&#39;</span>
         <span class="k">return</span> <span class="n">cfg</span>
 
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key</span>
@@ -573,7 +573,7 @@
         <span class="p">)</span>
 
     <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">roots</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">active_collect_env_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;ez_ctree.Roots&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">roots</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">active_collect_env_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;ez_ctree.Roots&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Initializes a batch of roots to search parallel later.</span>
@@ -587,7 +587,7 @@
         <span class="k">return</span> <span class="n">tree_muzero</span><span class="o">.</span><span class="n">Roots</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
 
     <span class="c1"># @profile</span>
-    <span class="k">def</span> <span class="nf">search</span><span class="p">(</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">search</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">roots</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
             <span class="n">world_model_latent_history_roots</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">to_play_batch</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]],</span> <span class="n">ready_env_id</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -713,7 +713,7 @@
                 <span class="p">)</span>
 
 
-<div class="viewcode-block" id="EfficientZeroMCTSCtree"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree">[docs]</a><span class="k">class</span> <span class="nc">EfficientZeroMCTSCtree</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<div class="viewcode-block" id="EfficientZeroMCTSCtree"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">EfficientZeroMCTSCtree</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The C++ implementation of MCTS (batch format) for EfficientZero.  \</span>
@@ -741,7 +741,7 @@
     <span class="p">)</span>
 
 <div class="viewcode-block" id="EfficientZeroMCTSCtree.default_config"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.default_config">[docs]</a>    <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">default_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EasyDict</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">default_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EasyDict</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            A class method that returns a default configuration in the form of an EasyDict object.</span>
@@ -754,7 +754,7 @@
         <span class="n">cfg</span><span class="o">.</span><span class="n">cfg_type</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">+</span> <span class="s1">&#39;Dict&#39;</span>
         <span class="k">return</span> <span class="n">cfg</span></div>
 
-<div class="viewcode-block" id="EfficientZeroMCTSCtree.__init__"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="EfficientZeroMCTSCtree.__init__"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key</span>
@@ -773,7 +773,7 @@
         <span class="p">)</span></div>
 
 <div class="viewcode-block" id="EfficientZeroMCTSCtree.roots"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.roots">[docs]</a>    <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">roots</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">active_collect_env_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;ez_ctree.Roots&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">roots</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">active_collect_env_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;ez_ctree.Roots&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Initializes a batch of roots to search parallelly later.</span>
@@ -786,7 +786,7 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">tree_efficientzero</span><span class="o">.</span><span class="n">Roots</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="EfficientZeroMCTSCtree.search"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.search">[docs]</a>    <span class="k">def</span> <span class="nf">search</span><span class="p">(</span>
+<div class="viewcode-block" id="EfficientZeroMCTSCtree.search"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.search">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">search</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">roots</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
             <span class="n">reward_hidden_state_roots</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">to_play_batch</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
@@ -919,7 +919,7 @@
                     <span class="n">min_max_stats_lst</span><span class="p">,</span> <span class="n">results</span><span class="p">,</span> <span class="n">is_reset_list</span><span class="p">,</span> <span class="n">virtual_to_play_batch</span>
                 <span class="p">)</span></div>
 
-<div class="viewcode-block" id="EfficientZeroMCTSCtree.search_with_reuse"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.search_with_reuse">[docs]</a>    <span class="k">def</span> <span class="nf">search_with_reuse</span><span class="p">(</span>
+<div class="viewcode-block" id="EfficientZeroMCTSCtree.search_with_reuse"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.EfficientZeroMCTSCtree.search_with_reuse">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">search_with_reuse</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">roots</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
             <span class="n">reward_hidden_state_roots</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">to_play_batch</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]],</span>
             <span class="n">true_action_list</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">reuse_value_list</span><span class="o">=</span><span class="kc">None</span>
@@ -1046,7 +1046,7 @@
         <span class="k">return</span> <span class="n">length</span><span class="p">,</span> <span class="n">average_infer</span></div></div>
 
 
-<div class="viewcode-block" id="GumbelMuZeroMCTSCtree"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree">[docs]</a><span class="k">class</span> <span class="nc">GumbelMuZeroMCTSCtree</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<div class="viewcode-block" id="GumbelMuZeroMCTSCtree"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">GumbelMuZeroMCTSCtree</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The C++ implementation of MCTS (batch format) for  Gumbel MuZero.  \</span>
@@ -1071,7 +1071,7 @@
     <span class="p">)</span>
 
 <div class="viewcode-block" id="GumbelMuZeroMCTSCtree.default_config"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.default_config">[docs]</a>    <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">default_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EasyDict</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">default_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EasyDict</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            A class method that returns a default configuration in the form of an EasyDict object.</span>
@@ -1084,7 +1084,7 @@
         <span class="n">cfg</span><span class="o">.</span><span class="n">cfg_type</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">+</span> <span class="s1">&#39;Dict&#39;</span>
         <span class="k">return</span> <span class="n">cfg</span></div>
 
-<div class="viewcode-block" id="GumbelMuZeroMCTSCtree.__init__"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="GumbelMuZeroMCTSCtree.__init__"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Use the default configuration mechanism. If a user passes in a cfg with a key that matches an existing key \</span>
@@ -1103,7 +1103,7 @@
         <span class="p">)</span></div>
 
 <div class="viewcode-block" id="GumbelMuZeroMCTSCtree.roots"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.roots">[docs]</a>    <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">roots</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">active_collect_env_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;gmz_ctree&quot;</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">roots</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">active_collect_env_num</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="s2">&quot;gmz_ctree&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Initializes a batch of roots to search parallelly later.</span>
@@ -1116,7 +1116,7 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="n">tree_gumbel_muzero</span><span class="o">.</span><span class="n">Roots</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="GumbelMuZeroMCTSCtree.search"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.search">[docs]</a>    <span class="k">def</span> <span class="nf">search</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">roots</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">to_play_batch</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="GumbelMuZeroMCTSCtree.search"><a class="viewcode-back" href="../../../../api_doc/mcts/tree_search/index.html#lzero.mcts.tree_search.mcts_ctree.GumbelMuZeroMCTSCtree.search">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">search</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">roots</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">to_play_batch</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Do MCTS for a batch of roots. Parallel in model inference. \</span>

@@ -89,24 +89,24 @@
     
     
   <h1>Source code for lzero.entry.eval_muzero_with_gym_env</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">os</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Tuple</span>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tuple</span>
 
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">from</span> <span class="nn">tensorboardX</span> <span class="kn">import</span> <span class="n">SummaryWriter</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tensorboardX</span><span class="w"> </span><span class="kn">import</span> <span class="n">SummaryWriter</span>
 
-<span class="kn">from</span> <span class="nn">ding.config</span> <span class="kn">import</span> <span class="n">compile_config</span>
-<span class="kn">from</span> <span class="nn">ding.envs</span> <span class="kn">import</span> <span class="n">DingEnvWrapper</span><span class="p">,</span> <span class="n">BaseEnvManager</span>
-<span class="kn">from</span> <span class="nn">ding.policy</span> <span class="kn">import</span> <span class="n">create_policy</span>
-<span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">set_pkg_seed</span>
-<span class="kn">from</span> <span class="nn">ding.worker</span> <span class="kn">import</span> <span class="n">BaseLearner</span>
-<span class="kn">from</span> <span class="nn">lzero.envs.get_wrapped_env</span> <span class="kn">import</span> <span class="n">get_wrappered_env</span>
-<span class="kn">from</span> <span class="nn">lzero.worker</span> <span class="kn">import</span> <span class="n">MuZeroEvaluator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">compile_config</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.envs</span><span class="w"> </span><span class="kn">import</span> <span class="n">DingEnvWrapper</span><span class="p">,</span> <span class="n">BaseEnvManager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_policy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_pkg_seed</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.worker</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseLearner</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.envs.get_wrapped_env</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_wrappered_env</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.worker</span><span class="w"> </span><span class="kn">import</span> <span class="n">MuZeroEvaluator</span>
 
 
-<div class="viewcode-block" id="eval_muzero_with_gym_env"><a class="viewcode-back" href="../../../api_doc/entry/index.html#lzero.entry.eval_muzero_with_gym_env.eval_muzero_with_gym_env">[docs]</a><span class="k">def</span> <span class="nf">eval_muzero_with_gym_env</span><span class="p">(</span>
+<div class="viewcode-block" id="eval_muzero_with_gym_env"><a class="viewcode-back" href="../../../api_doc/entry/index.html#lzero.entry.eval_muzero_with_gym_env.eval_muzero_with_gym_env">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">eval_muzero_with_gym_env</span><span class="p">(</span>
         <span class="n">input_cfg</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">dict</span><span class="p">,</span> <span class="nb">dict</span><span class="p">],</span>
         <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
         <span class="n">model</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>

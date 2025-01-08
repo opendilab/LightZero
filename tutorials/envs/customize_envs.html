@@ -142,14 +142,14 @@
 <section id="create-the-environment-class">
 <h3>1. Create the Environment Class<a class="headerlink" href="#create-the-environment-class" title="Permalink to this heading"></a></h3>
 <p>First, you need to create a new environment class that inherits from the <code class="docutils literal notranslate"><span class="pre">BaseEnv</span></code> class in DI-engine. For example:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">ding.envs</span> <span class="kn">import</span> <span class="n">BaseEnv</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ding.envs</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseEnv</span>
 </pre></div>
 </div>
 </section>
 <section id="init-method-br">
 <h3>2. <strong><strong>init</strong> Method</strong><br><a class="headerlink" href="#init-method-br" title="Permalink to this heading"></a></h3>
 <p>In your custom environment class, you need to define an initialization method <code class="docutils literal notranslate"><span class="pre">__init__</span></code>. In this method, you need to set some basic properties of the environment, such as observation space, action space, reward space, etc. For example:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">cfg</span> <span class="o">=</span> <span class="n">cfg</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">_init_flag</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="c1"># set other properties...</span>
@@ -159,7 +159,7 @@
 <section id="reset-method-br">
 <h3>3. <strong>Reset Method</strong><br><a class="headerlink" href="#reset-method-br" title="Permalink to this heading"></a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">reset</span></code> method is used to reset the environment to an initial state. This method should return the initial observation of the environment. For example:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="c1"># reset the environment...</span>
     <span class="n">obs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span>
     <span class="c1"># get the action_mask according to the legal action</span>
@@ -172,7 +172,7 @@
 <section id="step-method-br">
 <h3>4. <strong>Step Method</strong><br><a class="headerlink" href="#step-method-br" title="Permalink to this heading"></a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">step</span></code> method takes an action as input, executes this action, and returns a tuple containing the new observation, reward, whether it’s done, and other information. For example:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
   <span class="c1"># The core original env step.</span>
     <span class="n">obs</span><span class="p">,</span> <span class="n">rew</span><span class="p">,</span> <span class="n">done</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">step</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
     
@@ -200,7 +200,7 @@
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">observation_space</span>
 
 <span class="nd">@property</span>
-<span class="k">def</span> <span class="nf">action_space</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">action_space</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
     <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">action_space</span>
 </pre></div>
 </div>
@@ -208,7 +208,7 @@
 <section id="render-method-br">
 <h3>6. <strong>Render Method</strong><br><a class="headerlink" href="#render-method-br" title="Permalink to this heading"></a></h3>
 <p>The <code class="docutils literal notranslate"><span class="pre">render</span></code> method displays the gameplay of the game for users to observe. For environments that have implemented the <code class="docutils literal notranslate"><span class="pre">render</span></code> method, users can choose whether to call <code class="docutils literal notranslate"><span class="pre">render</span></code> during the execution of the <code class="docutils literal notranslate"><span class="pre">step</span></code> function to render the game state at each step.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;image_savefile_mode&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">render</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;image_savefile_mode&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Renders the game environment.</span>
@@ -249,10 +249,10 @@
 <section id="register-the-environment-br">
 <h3>8. <strong>Register the Environment</strong><br><a class="headerlink" href="#register-the-environment-br" title="Permalink to this heading"></a></h3>
 <p>Lastly, you need to use the <code class="docutils literal notranslate"><span class="pre">ENV_REGISTRY.register</span></code> decorator to register your new environment so that it can be used in the configuration file. For example:</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">ENV_REGISTRY</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">ENV_REGISTRY</span>
 
 <span class="nd">@ENV_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;my_custom_env&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">MyCustomEnv</span><span class="p">(</span><span class="n">BaseEnv</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MyCustomEnv</span><span class="p">(</span><span class="n">BaseEnv</span><span class="p">):</span>
     <span class="c1"># ...</span>
 </pre></div>
 </div>
@@ -284,14 +284,14 @@
 </li>
 <li><p>In board game environments, as the game progresses, the available actions may decrease. Therefore, it is necessary to implement the <code class="docutils literal notranslate"><span class="pre">legal_action</span></code> method. This method can be used to validate the actions provided by the players and generate child nodes during the MCTS process. Taking the Connect4 environment as an example, this method checks if each column on the game board is full and returns a list. The value in the list is 1 for columns where a move can be made and 0 for other positions.</p></li>
 </ol>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">legal_actions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">legal_actions</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
     <span class="k">return</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">board</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span><span class="p">]</span>
 </pre></div>
 </div>
 <ol class="simple">
 <li><p>In LightZero’s board game environments, additional action generation methods need to be implemented, such as <code class="docutils literal notranslate"><span class="pre">bot_action</span></code> and <code class="docutils literal notranslate"><span class="pre">random_action</span></code>. The <code class="docutils literal notranslate"><span class="pre">bot_action</span></code> method retrieves the corresponding type of bot based on the value of <code class="docutils literal notranslate"><span class="pre">self.bot_action_type</span></code> and generates an action using the pre-implemented algorithm in the bot. On the other hand, <code class="docutils literal notranslate"><span class="pre">random_action</span></code> selects a random action from the current list of legal actions. <code class="docutils literal notranslate"><span class="pre">bot_action</span></code> is used in the <code class="docutils literal notranslate"><span class="pre">play_with_bot_mode</span></code> to implement the interaction with the bot, while <code class="docutils literal notranslate"><span class="pre">random_action</span></code> is called with a certain probability during action selection by the agent and the bot to increase the randomness of the game samples.</p></li>
 </ol>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">bot_action</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">bot_action</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
     <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">()</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">prob_random_action_in_bot</span><span class="p">:</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">random_action</span><span class="p">()</span>
     <span class="k">else</span><span class="p">:</span>
@@ -305,16 +305,16 @@
 <section id="lightzeroenvwrapper">
 <h2><strong>LightZeroEnvWrapper</strong><a class="headerlink" href="#lightzeroenvwrapper" title="Permalink to this heading"></a></h2>
 <p>We provide a <a class="reference external" href="https://github.com/opendilab/LightZero/blob/main/lzero/envs/wrappers/lightzero_env_wrapper.py">LightZeroEnvWrapper</a> in the lzero/envs/wrappers directory. It wraps <code class="docutils literal notranslate"><span class="pre">classic_control</span></code> and <code class="docutils literal notranslate"><span class="pre">box2d</span></code> environments into the format required by LightZero. During initialization, an original environment is passed to the LightZeroEnvWrapper instance, which is initialized using the parent class <code class="docutils literal notranslate"><span class="pre">gym.Wrapper</span></code>. This allows the instance to call methods like <code class="docutils literal notranslate"><span class="pre">render</span></code>, <code class="docutils literal notranslate"><span class="pre">close</span></code>, and <code class="docutils literal notranslate"><span class="pre">seed</span></code> from the original environment. Based on this, the <code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper</span></code> class overrides the <code class="docutils literal notranslate"><span class="pre">step</span></code> and <code class="docutils literal notranslate"><span class="pre">reset</span></code> methods to wrap their outputs into a dictionary <code class="docutils literal notranslate"><span class="pre">lightzero_obs_dict</span></code> that conforms to the requirements of LightZero. As a result, the wrapped environment instance meets the requirements of LightZero’s custom environments.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">LightZeroEnvWrapper</span><span class="p">(</span><span class="n">gym</span><span class="o">.</span><span class="n">Wrapper</span><span class="p">):</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">LightZeroEnvWrapper</span><span class="p">(</span><span class="n">gym</span><span class="o">.</span><span class="n">Wrapper</span><span class="p">):</span>
     <span class="c1"># overview comments</span>
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="n">gym</span><span class="o">.</span><span class="n">Env</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="n">gym</span><span class="o">.</span><span class="n">Env</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="n">EasyDict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
         <span class="c1"># overview comments</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">env</span><span class="p">)</span>
         <span class="o">...</span>
 </pre></div>
 </div>
 <p>Specifically, use the following function to wrap a gym environment into the format required by LightZero using <code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper</span></code>. The <code class="docutils literal notranslate"><span class="pre">get_wrappered_env</span></code> function returns an anonymous function that generates a <code class="docutils literal notranslate"><span class="pre">DingEnvWrapper</span></code> instance each time it is called. This instance takes <code class="docutils literal notranslate"><span class="pre">LightZeroEnvWrapper</span></code> as an anonymous function and internally wraps the original environment into the format required by LightZero.</p>
-<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">get_wrappered_env</span><span class="p">(</span><span class="n">wrapper_cfg</span><span class="p">:</span> <span class="n">EasyDict</span><span class="p">,</span> <span class="n">env_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">get_wrappered_env</span><span class="p">(</span><span class="n">wrapper_cfg</span><span class="p">:</span> <span class="n">EasyDict</span><span class="p">,</span> <span class="n">env_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
     <span class="c1"># overview comments</span>
     <span class="o">...</span>
     <span class="k">if</span> <span class="n">wrapper_cfg</span><span class="o">.</span><span class="n">manually_discretization</span><span class="p">:</span>
@@ -340,7 +340,7 @@
 <span class="sd">        The ``train_muzero_with_gym_env`` entry means that the environment used in the training process is generated by wrapping the original gym environment with LightZeroEnvWrapper.</span>
 <span class="sd">        Users can refer to lzero/envs/wrappers for more details.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
-    <span class="kn">from</span> <span class="nn">lzero.entry</span> <span class="kn">import</span> <span class="n">train_muzero_with_gym_env</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.entry</span><span class="w"> </span><span class="kn">import</span> <span class="n">train_muzero_with_gym_env</span>
     <span class="n">train_muzero_with_gym_env</span><span class="p">([</span><span class="n">main_config</span><span class="p">,</span> <span class="n">create_config</span><span class="p">],</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">max_env_step</span><span class="o">=</span><span class="n">max_env_step</span><span class="p">)</span>
 </pre></div>
 </div>

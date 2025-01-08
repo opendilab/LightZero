@@ -89,31 +89,31 @@
     
     
   <h1>Source code for lzero.mcts.buffer.game_buffer_muzero</h1><div class="highlight"><pre>
-<span></span><span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Optional</span>
+<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">TYPE_CHECKING</span><span class="p">,</span> <span class="n">Optional</span>
 
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">BUFFER_REGISTRY</span><span class="p">,</span> <span class="n">EasyTimer</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">BUFFER_REGISTRY</span><span class="p">,</span> <span class="n">EasyTimer</span>
 <span class="c1"># from line_profiler import line_profiler</span>
 
-<span class="kn">from</span> <span class="nn">lzero.mcts.tree_search.mcts_ctree</span> <span class="kn">import</span> <span class="n">MuZeroMCTSCtree</span> <span class="k">as</span> <span class="n">MCTSCtree</span>
-<span class="kn">from</span> <span class="nn">lzero.mcts.tree_search.mcts_ptree</span> <span class="kn">import</span> <span class="n">MuZeroMCTSPtree</span> <span class="k">as</span> <span class="n">MCTSPtree</span>
-<span class="kn">from</span> <span class="nn">lzero.mcts.utils</span> <span class="kn">import</span> <span class="n">prepare_observation</span>
-<span class="kn">from</span> <span class="nn">lzero.policy</span> <span class="kn">import</span> <span class="n">to_detach_cpu_numpy</span><span class="p">,</span> <span class="n">concat_output</span><span class="p">,</span> <span class="n">concat_output_value</span><span class="p">,</span> <span class="n">inverse_scalar_transform</span>
-<span class="kn">from</span> <span class="nn">.game_buffer</span> <span class="kn">import</span> <span class="n">GameBuffer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.tree_search.mcts_ctree</span><span class="w"> </span><span class="kn">import</span> <span class="n">MuZeroMCTSCtree</span> <span class="k">as</span> <span class="n">MCTSCtree</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.tree_search.mcts_ptree</span><span class="w"> </span><span class="kn">import</span> <span class="n">MuZeroMCTSPtree</span> <span class="k">as</span> <span class="n">MCTSPtree</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">prepare_observation</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_detach_cpu_numpy</span><span class="p">,</span> <span class="n">concat_output</span><span class="p">,</span> <span class="n">concat_output_value</span><span class="p">,</span> <span class="n">inverse_scalar_transform</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.game_buffer</span><span class="w"> </span><span class="kn">import</span> <span class="n">GameBuffer</span>
 
 <span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
-    <span class="kn">from</span> <span class="nn">lzero.policy</span> <span class="kn">import</span> <span class="n">MuZeroPolicy</span><span class="p">,</span> <span class="n">EfficientZeroPolicy</span><span class="p">,</span> <span class="n">SampledEfficientZeroPolicy</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">MuZeroPolicy</span><span class="p">,</span> <span class="n">EfficientZeroPolicy</span><span class="p">,</span> <span class="n">SampledEfficientZeroPolicy</span>
 
 
 <div class="viewcode-block" id="MuZeroGameBuffer"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer">[docs]</a><span class="nd">@BUFFER_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;game_buffer_muzero&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">MuZeroGameBuffer</span><span class="p">(</span><span class="n">GameBuffer</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MuZeroGameBuffer</span><span class="p">(</span><span class="n">GameBuffer</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The specific game buffer for MuZero policy.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
-<div class="viewcode-block" id="MuZeroGameBuffer.__init__"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
+<div class="viewcode-block" id="MuZeroGameBuffer.__init__"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">:</span> <span class="nb">dict</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">cfg</span><span class="p">)</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
@@ -152,7 +152,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">sample_times</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">active_root_num</span> <span class="o">=</span> <span class="mi">0</span></div>
 
-<div class="viewcode-block" id="MuZeroGameBuffer.reset_runtime_metrics"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.reset_runtime_metrics">[docs]</a>    <span class="k">def</span> <span class="nf">reset_runtime_metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<div class="viewcode-block" id="MuZeroGameBuffer.reset_runtime_metrics"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.reset_runtime_metrics">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">reset_runtime_metrics</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Reset the runtime metrics of the buffer.</span>
@@ -163,7 +163,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">sample_times</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">active_root_num</span> <span class="o">=</span> <span class="mi">0</span></div>
 
-<div class="viewcode-block" id="MuZeroGameBuffer.reanalyze_buffer"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.reanalyze_buffer">[docs]</a>    <span class="k">def</span> <span class="nf">reanalyze_buffer</span><span class="p">(</span>
+<div class="viewcode-block" id="MuZeroGameBuffer.reanalyze_buffer"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.reanalyze_buffer">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">reanalyze_buffer</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="s2">&quot;MuZeroPolicy&quot;</span><span class="p">,</span> <span class="s2">&quot;EfficientZeroPolicy&quot;</span><span class="p">,</span> <span class="s2">&quot;SampledEfficientZeroPolicy&quot;</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -183,7 +183,7 @@
         <span class="c1"># target policy</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_compute_target_policy_reanalyzed</span><span class="p">(</span><span class="n">policy_re_context</span><span class="p">,</span> <span class="n">policy</span><span class="o">.</span><span class="n">_target_model</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="MuZeroGameBuffer._make_batch_for_reanalyze"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._make_batch_for_reanalyze">[docs]</a>    <span class="k">def</span> <span class="nf">_make_batch_for_reanalyze</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<div class="viewcode-block" id="MuZeroGameBuffer._make_batch_for_reanalyze"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._make_batch_for_reanalyze">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_make_batch_for_reanalyze</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            first sample orig_data through ``_sample_orig_data()``,</span>
@@ -209,7 +209,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">reanalyze_num</span> <span class="o">=</span> <span class="n">batch_size</span>
         <span class="k">return</span> <span class="n">policy_re_context</span></div>
 
-<div class="viewcode-block" id="MuZeroGameBuffer.sample"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.sample">[docs]</a>    <span class="k">def</span> <span class="nf">sample</span><span class="p">(</span>
+<div class="viewcode-block" id="MuZeroGameBuffer.sample"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.sample">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">sample</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">policy</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="s2">&quot;MuZeroPolicy&quot;</span><span class="p">,</span> <span class="s2">&quot;EfficientZeroPolicy&quot;</span><span class="p">,</span> <span class="s2">&quot;SampledEfficientZeroPolicy&quot;</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -256,7 +256,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">sample_times</span> <span class="o">+=</span> <span class="mi">1</span>
         <span class="k">return</span> <span class="n">train_data</span></div>
 
-<div class="viewcode-block" id="MuZeroGameBuffer._make_batch"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._make_batch">[docs]</a>    <span class="k">def</span> <span class="nf">_make_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">reanalyze_ratio</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
+<div class="viewcode-block" id="MuZeroGameBuffer._make_batch"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._make_batch">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_make_batch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">reanalyze_ratio</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            first sample orig_data through ``_sample_orig_data()``,</span>
@@ -353,7 +353,7 @@
         <span class="n">context</span> <span class="o">=</span> <span class="n">reward_value_context</span><span class="p">,</span> <span class="n">policy_re_context</span><span class="p">,</span> <span class="n">policy_non_re_context</span><span class="p">,</span> <span class="n">current_batch</span>
         <span class="k">return</span> <span class="n">context</span></div>
 
-<div class="viewcode-block" id="MuZeroGameBuffer._prepare_reward_value_context"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._prepare_reward_value_context">[docs]</a>    <span class="k">def</span> <span class="nf">_prepare_reward_value_context</span><span class="p">(</span>
+<div class="viewcode-block" id="MuZeroGameBuffer._prepare_reward_value_context"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._prepare_reward_value_context">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_prepare_reward_value_context</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">pos_in_game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span>
             <span class="n">total_transitions</span><span class="p">:</span> <span class="nb">int</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
@@ -424,7 +424,7 @@
         <span class="p">]</span>
         <span class="k">return</span> <span class="n">reward_value_context</span></div>
 
-<div class="viewcode-block" id="MuZeroGameBuffer._prepare_policy_non_reanalyzed_context"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._prepare_policy_non_reanalyzed_context">[docs]</a>    <span class="k">def</span> <span class="nf">_prepare_policy_non_reanalyzed_context</span><span class="p">(</span>
+<div class="viewcode-block" id="MuZeroGameBuffer._prepare_policy_non_reanalyzed_context"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._prepare_policy_non_reanalyzed_context">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_prepare_policy_non_reanalyzed_context</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">pos_in_game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -456,7 +456,7 @@
         <span class="p">]</span>
         <span class="k">return</span> <span class="n">policy_non_re_context</span></div>
 
-<div class="viewcode-block" id="MuZeroGameBuffer._prepare_policy_reanalyzed_context"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._prepare_policy_reanalyzed_context">[docs]</a>    <span class="k">def</span> <span class="nf">_prepare_policy_reanalyzed_context</span><span class="p">(</span>
+<div class="viewcode-block" id="MuZeroGameBuffer._prepare_policy_reanalyzed_context"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._prepare_policy_reanalyzed_context">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_prepare_policy_reanalyzed_context</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">batch_index_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span> <span class="n">game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">pos_in_game_segment_list</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -511,7 +511,7 @@
         <span class="p">]</span>
         <span class="k">return</span> <span class="n">policy_re_context</span></div>
 
-<div class="viewcode-block" id="MuZeroGameBuffer._compute_target_reward_value"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._compute_target_reward_value">[docs]</a>    <span class="k">def</span> <span class="nf">_compute_target_reward_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reward_value_context</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<div class="viewcode-block" id="MuZeroGameBuffer._compute_target_reward_value"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._compute_target_reward_value">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_compute_target_reward_value</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">reward_value_context</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">Any</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            prepare reward and value targets from the context of rewards and values.</span>
@@ -619,7 +619,7 @@
         <span class="k">return</span> <span class="n">batch_rewards</span><span class="p">,</span> <span class="n">batch_target_values</span></div>
 
     <span class="c1"># @profile</span>
-<div class="viewcode-block" id="MuZeroGameBuffer._compute_target_policy_reanalyzed"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._compute_target_policy_reanalyzed">[docs]</a>    <span class="k">def</span> <span class="nf">_compute_target_policy_reanalyzed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy_re_context</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroGameBuffer._compute_target_policy_reanalyzed"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._compute_target_policy_reanalyzed">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_compute_target_policy_reanalyzed</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">policy_re_context</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">model</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            prepare policy targets from the reanalyzed context of policies</span>
@@ -762,7 +762,7 @@
 
         <span class="k">return</span> <span class="n">batch_target_policies_re</span></div>
 
-<div class="viewcode-block" id="MuZeroGameBuffer._compute_target_policy_non_reanalyzed"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._compute_target_policy_non_reanalyzed">[docs]</a>    <span class="k">def</span> <span class="nf">_compute_target_policy_non_reanalyzed</span><span class="p">(</span>
+<div class="viewcode-block" id="MuZeroGameBuffer._compute_target_policy_non_reanalyzed"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer._compute_target_policy_non_reanalyzed">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_compute_target_policy_non_reanalyzed</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">policy_non_re_context</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">policy_shape</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
@@ -838,7 +838,7 @@
         <span class="n">batch_target_policies_non_re</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">batch_target_policies_non_re</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">batch_target_policies_non_re</span></div>
 
-<div class="viewcode-block" id="MuZeroGameBuffer.update_priority"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.update_priority">[docs]</a>    <span class="k">def</span> <span class="nf">update_priority</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">train_data</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="n">batch_priorities</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroGameBuffer.update_priority"><a class="viewcode-back" href="../../../../api_doc/mcts/buffer/muzero_buffer.html#lzero.mcts.buffer.game_buffer_muzero.MuZeroGameBuffer.update_priority">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">update_priority</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">train_data</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">],</span> <span class="n">batch_priorities</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Update the priority of training data.</span>

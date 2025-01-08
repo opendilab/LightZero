@@ -136,7 +136,7 @@
 <h3>3. Implement Your Policy<a class="headerlink" href="#implement-your-policy" title="Permalink to this heading"></a></h3>
 <p>Within your policy file, you need to define a class to implement your strategy. This class should inherit from the <code class="docutils literal notranslate"><span class="pre">Policy</span></code> class in DI-engine and implement required methods. Below is a basic framework for a policy class:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@POLICY_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;my_algorithm&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">MyAlgorithmPolicy</span><span class="p">(</span><span class="n">Policy</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MyAlgorithmPolicy</span><span class="p">(</span><span class="n">Policy</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The policy class for MyAlgorithm.</span>
@@ -146,29 +146,29 @@
         <span class="c1"># Add your config here</span>
     <span class="p">)</span>
     
-    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cfg</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
         <span class="c1"># Initialize your policy here</span>
 
-    <span class="k">def</span> <span class="nf">default_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">default_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
         <span class="c1"># Set the default model name and the import path so that the default model can be loaded during policy initialization</span>
     
-    <span class="k">def</span> <span class="nf">_init_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># Initialize the learn mode here</span>
     
-    <span class="k">def</span> <span class="nf">_forward_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
         <span class="c1"># Implement the forward function for learning mode here</span>
     
-    <span class="k">def</span> <span class="nf">_init_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># Initialize the collect mode here</span>
     
-    <span class="k">def</span> <span class="nf">_forward_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="c1"># Implement the forward function for collect mode here</span>
     
-    <span class="k">def</span> <span class="nf">_init_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="c1"># Initialize the eval mode here</span>
     
-    <span class="k">def</span> <span class="nf">_forward_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
         <span class="c1"># Implement the forward function for eval mode here</span>
 </pre></div>
 </div>
@@ -224,13 +224,13 @@
 <h3>6. Test Your Policy<a class="headerlink" href="#test-your-policy" title="Permalink to this heading"></a></h3>
 <p>After implementing your strategy, it is crucial to ensure its correctness and effectiveness. To do so, you should write some unit tests to verify that your strategy is functioning correctly. For example, you can test if the strategy can execute in a specific environment and if the output of the strategy matches the expected results. You can refer to the <a class="reference external" href="https://di-engine-docs.readthedocs.io/zh_CN/latest/22_test/index_zh.html">documentation</a> in the DI-engine for guidance on how to write unit tests. You can add your tests in the <code class="docutils literal notranslate"><span class="pre">lzero/policy/tests</span></code>. When writing tests, try to consider all possible scenarios and boundary conditions to ensure your strategy can run properly in various situations.</p>
 <p>Here is an example of unit testing in LightZero. In this example, we test the <code class="docutils literal notranslate"><span class="pre">inverse_scalar_transform</span></code> and <code class="docutils literal notranslate"><span class="pre">InverseScalarTransform</span></code>methods. Both methods reverse the transformation of a given value, but they have different implementations. In the unit test, we apply these two methods to the same set of data and compare the output results. If the results are the same, the test passes.</p>
-<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">pytest</span>
-<span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">from</span> <span class="nn">lzero.policy.scaling_transform</span> <span class="kn">import</span> <span class="n">inverse_scalar_transform</span><span class="p">,</span> <span class="n">InverseScalarTransform</span>
+<div class="highlight-Python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pytest</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy.scaling_transform</span><span class="w"> </span><span class="kn">import</span> <span class="n">inverse_scalar_transform</span><span class="p">,</span> <span class="n">InverseScalarTransform</span>
 
 <span class="nd">@pytest</span><span class="o">.</span><span class="n">mark</span><span class="o">.</span><span class="n">unittest</span>
-<span class="k">def</span> <span class="nf">test_scaling_transform</span><span class="p">():</span>
-    <span class="kn">import</span> <span class="nn">time</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">test_scaling_transform</span><span class="p">():</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
     <span class="n">logit</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">601</span><span class="p">)</span>
     <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
     <span class="n">output_1</span> <span class="o">=</span> <span class="n">inverse_scalar_transform</span><span class="p">(</span><span class="n">logit</span><span class="p">,</span> <span class="mi">300</span><span class="p">)</span>

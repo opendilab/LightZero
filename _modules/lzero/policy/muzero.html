@@ -89,31 +89,31 @@
     
     
   <h1>Source code for lzero.policy.muzero</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">copy</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Optional</span>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">copy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span><span class="p">,</span> <span class="n">Optional</span>
 
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">import</span> <span class="nn">torch.optim</span> <span class="k">as</span> <span class="nn">optim</span>
-<span class="kn">import</span> <span class="nn">wandb</span>
-<span class="kn">from</span> <span class="nn">ding.model</span> <span class="kn">import</span> <span class="n">model_wrap</span>
-<span class="kn">from</span> <span class="nn">ding.policy.base_policy</span> <span class="kn">import</span> <span class="n">Policy</span>
-<span class="kn">from</span> <span class="nn">ding.torch_utils</span> <span class="kn">import</span> <span class="n">to_tensor</span>
-<span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">POLICY_REGISTRY</span>
-<span class="kn">from</span> <span class="nn">torch.nn</span> <span class="kn">import</span> <span class="n">L1Loss</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch.optim</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">optim</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">wandb</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">model_wrap</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.policy.base_policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">Policy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.torch_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_tensor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">POLICY_REGISTRY</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="kn">import</span> <span class="n">L1Loss</span>
 
-<span class="kn">from</span> <span class="nn">lzero.entry.utils</span> <span class="kn">import</span> <span class="n">initialize_zeros_batch</span>
-<span class="kn">from</span> <span class="nn">lzero.mcts</span> <span class="kn">import</span> <span class="n">MuZeroMCTSCtree</span> <span class="k">as</span> <span class="n">MCTSCtree</span>
-<span class="kn">from</span> <span class="nn">lzero.mcts</span> <span class="kn">import</span> <span class="n">MuZeroMCTSPtree</span> <span class="k">as</span> <span class="n">MCTSPtree</span>
-<span class="kn">from</span> <span class="nn">lzero.model</span> <span class="kn">import</span> <span class="n">ImageTransforms</span>
-<span class="kn">from</span> <span class="nn">lzero.model.utils</span> <span class="kn">import</span> <span class="n">cal_dormant_ratio</span>
-<span class="kn">from</span> <span class="nn">lzero.policy</span> <span class="kn">import</span> <span class="n">scalar_transform</span><span class="p">,</span> <span class="n">InverseScalarTransform</span><span class="p">,</span> <span class="n">cross_entropy_loss</span><span class="p">,</span> <span class="n">phi_transform</span><span class="p">,</span> \
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.entry.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">initialize_zeros_batch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts</span><span class="w"> </span><span class="kn">import</span> <span class="n">MuZeroMCTSCtree</span> <span class="k">as</span> <span class="n">MCTSCtree</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts</span><span class="w"> </span><span class="kn">import</span> <span class="n">MuZeroMCTSPtree</span> <span class="k">as</span> <span class="n">MCTSPtree</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">ImageTransforms</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.model.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">cal_dormant_ratio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">scalar_transform</span><span class="p">,</span> <span class="n">InverseScalarTransform</span><span class="p">,</span> <span class="n">cross_entropy_loss</span><span class="p">,</span> <span class="n">phi_transform</span><span class="p">,</span> \
     <span class="n">DiscreteSupport</span><span class="p">,</span> <span class="n">to_torch_float_tensor</span><span class="p">,</span> <span class="n">mz_network_output_unpack</span><span class="p">,</span> <span class="n">select_action</span><span class="p">,</span> <span class="n">negative_cosine_similarity</span><span class="p">,</span> \
     <span class="n">prepare_obs</span><span class="p">,</span> <span class="n">configure_optimizers</span>
 
 
 <div class="viewcode-block" id="MuZeroPolicy"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy">[docs]</a><span class="nd">@POLICY_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;muzero&#39;</span><span class="p">)</span>
-<span class="k">class</span> <span class="nc">MuZeroPolicy</span><span class="p">(</span><span class="n">Policy</span><span class="p">):</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">MuZeroPolicy</span><span class="p">(</span><span class="n">Policy</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        if self._cfg.model.model_type in [&quot;conv&quot;, &quot;mlp&quot;]:</span>
@@ -327,7 +327,7 @@
         <span class="p">),</span>
     <span class="p">)</span>
 
-<div class="viewcode-block" id="MuZeroPolicy.default_model"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy.default_model">[docs]</a>    <span class="k">def</span> <span class="nf">default_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<div class="viewcode-block" id="MuZeroPolicy.default_model"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy.default_model">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">default_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Return this algorithm default model setting for demonstration.</span>
@@ -348,7 +348,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;model type </span><span class="si">{}</span><span class="s2"> is not supported&quot;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">model_type</span><span class="p">))</span></div>
 
-<div class="viewcode-block" id="MuZeroPolicy.set_train_iter_env_step"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy.set_train_iter_env_step">[docs]</a>    <span class="k">def</span> <span class="nf">set_train_iter_env_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">env_step</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroPolicy.set_train_iter_env_step"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy.set_train_iter_env_step">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">set_train_iter_env_step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">,</span> <span class="n">env_step</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Set the train_iter and env_step for the policy.</span>
@@ -359,7 +359,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">train_iter</span> <span class="o">=</span> <span class="n">train_iter</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">env_step</span> <span class="o">=</span> <span class="n">env_step</span></div>
 
-<div class="viewcode-block" id="MuZeroPolicy._init_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._init_learn">[docs]</a>    <span class="k">def</span> <span class="nf">_init_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroPolicy._init_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._init_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_init_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.</span>
@@ -382,7 +382,7 @@
                                                    <span class="n">learning_rate</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">learning_rate</span><span class="p">,</span> <span class="n">device_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">piecewise_decay_lr_scheduler</span><span class="p">:</span>
-            <span class="kn">from</span> <span class="nn">torch.optim.lr_scheduler</span> <span class="kn">import</span> <span class="n">LambdaLR</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">torch.optim.lr_scheduler</span><span class="w"> </span><span class="kn">import</span> <span class="n">LambdaLR</span>
             <span class="n">max_step</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">threshold_training_steps_for_final_lr</span>
             <span class="c1"># NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.</span>
             <span class="n">lr_lambda</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">step</span><span class="p">:</span> <span class="mi">1</span> <span class="k">if</span> <span class="n">step</span> <span class="o">&lt;</span> <span class="n">max_step</span> <span class="o">*</span> <span class="mf">0.5</span> <span class="k">else</span> <span class="p">(</span><span class="mf">0.1</span> <span class="k">if</span> <span class="n">step</span> <span class="o">&lt;</span> <span class="n">max_step</span> <span class="k">else</span> <span class="mf">0.01</span><span class="p">)</span>  <span class="c1"># noqa</span>
@@ -448,7 +448,7 @@
             <span class="c1"># TODO: add the model to wandb</span>
             <span class="n">wandb</span><span class="o">.</span><span class="n">watch</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">representation_network</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">)</span></div>
 
-<div class="viewcode-block" id="MuZeroPolicy._forward_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._forward_learn">[docs]</a>    <span class="k">def</span> <span class="nf">_forward_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+<div class="viewcode-block" id="MuZeroPolicy._forward_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._forward_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            The forward function for learning policy in learn mode, which is the core of the learning process.</span>
@@ -762,7 +762,7 @@
 
         <span class="k">return</span> <span class="n">return_log_dict</span></div>
     
-<div class="viewcode-block" id="MuZeroPolicy._init_collect"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._init_collect">[docs]</a>    <span class="k">def</span> <span class="nf">_init_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroPolicy._init_collect"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._init_collect">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_init_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.</span>
@@ -778,7 +778,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="mi">8</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">])</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">8</span><span class="p">)]</span></div>
 
-<div class="viewcode-block" id="MuZeroPolicy._forward_collect"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._forward_collect">[docs]</a>    <span class="k">def</span> <span class="nf">_forward_collect</span><span class="p">(</span>
+<div class="viewcode-block" id="MuZeroPolicy._forward_collect"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._forward_collect">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_collect</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">data</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
             <span class="n">action_mask</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -903,7 +903,7 @@
 
         <span class="k">return</span> <span class="n">output</span></div>
 
-<div class="viewcode-block" id="MuZeroPolicy._get_target_obs_index_in_step_k"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._get_target_obs_index_in_step_k">[docs]</a>    <span class="k">def</span> <span class="nf">_get_target_obs_index_in_step_k</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">step</span><span class="p">):</span>
+<div class="viewcode-block" id="MuZeroPolicy._get_target_obs_index_in_step_k"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._get_target_obs_index_in_step_k">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_get_target_obs_index_in_step_k</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">step</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Get the begin index and end index of the target obs in step k.</span>
@@ -927,7 +927,7 @@
             <span class="n">end_index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span> <span class="o">*</span> <span class="p">(</span><span class="n">step</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">beg_index</span><span class="p">,</span> <span class="n">end_index</span></div>
 
-<div class="viewcode-block" id="MuZeroPolicy._init_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._init_eval">[docs]</a>    <span class="k">def</span> <span class="nf">_init_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroPolicy._init_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._init_eval">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_init_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.</span>
@@ -944,7 +944,7 @@
         <span class="c1">#     self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape]).to(self._cfg.device)</span>
         <span class="c1">#     self.last_batch_action = [-1 for _ in range(3)]</span>
 
-<div class="viewcode-block" id="MuZeroPolicy._forward_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._forward_eval">[docs]</a>    <span class="k">def</span> <span class="nf">_forward_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">action_mask</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">to_play</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
+<div class="viewcode-block" id="MuZeroPolicy._forward_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._forward_eval">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">action_mask</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">to_play</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
                       <span class="n">ready_env_id</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
@@ -1030,7 +1030,7 @@
 
         <span class="k">return</span> <span class="n">output</span></div>
 
-<div class="viewcode-block" id="MuZeroPolicy._reset_collect"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._reset_collect">[docs]</a>    <span class="k">def</span> <span class="nf">_reset_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroPolicy._reset_collect"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._reset_collect">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_reset_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Reset the observation and action for the collector environment.</span>
@@ -1045,7 +1045,7 @@
             <span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">)]</span></div>
 
-<div class="viewcode-block" id="MuZeroPolicy._reset_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._reset_eval">[docs]</a>    <span class="k">def</span> <span class="nf">_reset_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroPolicy._reset_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._reset_eval">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_reset_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data_id</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Reset the observation and action for the evaluator environment.</span>
@@ -1059,7 +1059,7 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span>
             <span class="p">)</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">evaluator_env_num</span><span class="p">)]</span></div>
-<div class="viewcode-block" id="MuZeroPolicy._monitor_vars_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._monitor_vars_learn">[docs]</a>    <span class="k">def</span> <span class="nf">_monitor_vars_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<div class="viewcode-block" id="MuZeroPolicy._monitor_vars_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._monitor_vars_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_monitor_vars_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Register the variables to be monitored in learn mode. The registered variables will be logged in</span>
@@ -1105,7 +1105,7 @@
             <span class="n">return_list</span><span class="o">.</span><span class="n">extend</span><span class="p">(</span><span class="n">harmony_list</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">return_list</span></div>
 
-<div class="viewcode-block" id="MuZeroPolicy._state_dict_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._state_dict_learn">[docs]</a>    <span class="k">def</span> <span class="nf">_state_dict_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<div class="viewcode-block" id="MuZeroPolicy._state_dict_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._state_dict_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_state_dict_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Return the state_dict of learn mode, usually including model, target_model and optimizer.</span>
@@ -1118,7 +1118,7 @@
             <span class="s1">&#39;optimizer&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer</span><span class="o">.</span><span class="n">state_dict</span><span class="p">(),</span>
         <span class="p">}</span></div>
 
-<div class="viewcode-block" id="MuZeroPolicy._load_state_dict_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._load_state_dict_learn">[docs]</a>    <span class="k">def</span> <span class="nf">_load_state_dict_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroPolicy._load_state_dict_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._load_state_dict_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_load_state_dict_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Load the state_dict variable into policy learn mode.</span>
@@ -1129,17 +1129,17 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">[</span><span class="s1">&#39;target_model&#39;</span><span class="p">])</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">[</span><span class="s1">&#39;optimizer&#39;</span><span class="p">])</span></div>
 
-    <span class="k">def</span> <span class="fm">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">analysis_sim_norm</span><span class="p">:</span>
             <span class="c1"># Remove hooks after training.</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="o">.</span><span class="n">encoder_hook</span><span class="o">.</span><span class="n">remove_hooks</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">encoder_hook</span><span class="o">.</span><span class="n">remove_hooks</span><span class="p">()</span>
 
-<div class="viewcode-block" id="MuZeroPolicy._process_transition"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._process_transition">[docs]</a>    <span class="k">def</span> <span class="nf">_process_transition</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obs</span><span class="p">,</span> <span class="n">policy_output</span><span class="p">,</span> <span class="n">timestep</span><span class="p">):</span>
+<div class="viewcode-block" id="MuZeroPolicy._process_transition"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._process_transition">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_process_transition</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">obs</span><span class="p">,</span> <span class="n">policy_output</span><span class="p">,</span> <span class="n">timestep</span><span class="p">):</span>
         <span class="c1"># be compatible with DI-engine Policy class</span>
         <span class="k">pass</span></div>
 
-<div class="viewcode-block" id="MuZeroPolicy._get_train_sample"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._get_train_sample">[docs]</a>    <span class="k">def</span> <span class="nf">_get_train_sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+<div class="viewcode-block" id="MuZeroPolicy._get_train_sample"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.muzero.MuZeroPolicy._get_train_sample">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_get_train_sample</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
         <span class="c1"># be compatible with DI-engine Policy class</span>
         <span class="k">pass</span></div></div>
 

@@ -89,26 +89,26 @@
     
     
   <h1>Source code for lzero.worker.muzero_evaluator</h1><div class="highlight"><pre>
-<span></span><span class="kn">import</span> <span class="nn">copy</span>
-<span class="kn">import</span> <span class="nn">time</span>
-<span class="kn">from</span> <span class="nn">collections</span> <span class="kn">import</span> <span class="n">namedtuple</span>
-<span class="kn">from</span> <span class="nn">typing</span> <span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">copy</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">namedtuple</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span><span class="p">,</span> <span class="n">Callable</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span>
 
-<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
-<span class="kn">import</span> <span class="nn">torch</span>
-<span class="kn">import</span> <span class="nn">wandb</span>
-<span class="kn">from</span> <span class="nn">ding.envs</span> <span class="kn">import</span> <span class="n">BaseEnvManager</span>
-<span class="kn">from</span> <span class="nn">ding.torch_utils</span> <span class="kn">import</span> <span class="n">to_ndarray</span><span class="p">,</span> <span class="n">to_item</span><span class="p">,</span> <span class="n">to_tensor</span>
-<span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">build_logger</span><span class="p">,</span> <span class="n">EasyTimer</span>
-<span class="kn">from</span> <span class="nn">ding.utils</span> <span class="kn">import</span> <span class="n">get_world_size</span><span class="p">,</span> <span class="n">get_rank</span><span class="p">,</span> <span class="n">broadcast_object_list</span>
-<span class="kn">from</span> <span class="nn">ding.worker.collector.base_serial_evaluator</span> <span class="kn">import</span> <span class="n">ISerialEvaluator</span><span class="p">,</span> <span class="n">VectorEvalMonitor</span>
-<span class="kn">from</span> <span class="nn">easydict</span> <span class="kn">import</span> <span class="n">EasyDict</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">wandb</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.envs</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseEnvManager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.torch_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">to_ndarray</span><span class="p">,</span> <span class="n">to_item</span><span class="p">,</span> <span class="n">to_tensor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_logger</span><span class="p">,</span> <span class="n">EasyTimer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_world_size</span><span class="p">,</span> <span class="n">get_rank</span><span class="p">,</span> <span class="n">broadcast_object_list</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.worker.collector.base_serial_evaluator</span><span class="w"> </span><span class="kn">import</span> <span class="n">ISerialEvaluator</span><span class="p">,</span> <span class="n">VectorEvalMonitor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">easydict</span><span class="w"> </span><span class="kn">import</span> <span class="n">EasyDict</span>
 
-<span class="kn">from</span> <span class="nn">lzero.mcts.buffer.game_segment</span> <span class="kn">import</span> <span class="n">GameSegment</span>
-<span class="kn">from</span> <span class="nn">lzero.mcts.utils</span> <span class="kn">import</span> <span class="n">prepare_observation</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.buffer.game_segment</span><span class="w"> </span><span class="kn">import</span> <span class="n">GameSegment</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">prepare_observation</span>
 
 
-<div class="viewcode-block" id="MuZeroEvaluator"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator">[docs]</a><span class="k">class</span> <span class="nc">MuZeroEvaluator</span><span class="p">(</span><span class="n">ISerialEvaluator</span><span class="p">):</span>
+<div class="viewcode-block" id="MuZeroEvaluator"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">MuZeroEvaluator</span><span class="p">(</span><span class="n">ISerialEvaluator</span><span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Overview:</span>
 <span class="sd">        The Evaluator class for MCTS+RL algorithms, such as MuZero, EfficientZero, and Sampled EfficientZero.</span>
@@ -119,7 +119,7 @@
 <span class="sd">    &quot;&quot;&quot;</span>
 
 <div class="viewcode-block" id="MuZeroEvaluator.default_config"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.default_config">[docs]</a>    <span class="nd">@classmethod</span>
-    <span class="k">def</span> <span class="nf">default_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EasyDict</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">default_config</span><span class="p">(</span><span class="bp">cls</span><span class="p">:</span> <span class="nb">type</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">EasyDict</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Retrieve the default configuration for the evaluator by merging evaluator-specific defaults with other</span>
@@ -136,7 +136,7 @@
         <span class="n">eval_freq</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
     <span class="p">)</span>
 
-<div class="viewcode-block" id="MuZeroEvaluator.__init__"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.__init__">[docs]</a>    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span>
+<div class="viewcode-block" id="MuZeroEvaluator.__init__"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.__init__">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">eval_freq</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span>
             <span class="n">n_evaluator_episode</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span>
@@ -192,7 +192,7 @@
         <span class="c1"># ==============================================================</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">policy_config</span> <span class="o">=</span> <span class="n">policy_config</span></div>
 
-<div class="viewcode-block" id="MuZeroEvaluator.reset_env"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.reset_env">[docs]</a>    <span class="k">def</span> <span class="nf">reset_env</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_env</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">BaseEnvManager</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroEvaluator.reset_env"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.reset_env">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">reset_env</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_env</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">BaseEnvManager</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Reset the environment for the evaluator, optionally replacing it with a new environment.</span>
@@ -208,7 +208,7 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_env</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="MuZeroEvaluator.reset_policy"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.reset_policy">[docs]</a>    <span class="k">def</span> <span class="nf">reset_policy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_policy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">namedtuple</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroEvaluator.reset_policy"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.reset_policy">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">reset_policy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_policy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">namedtuple</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Reset the policy for the evaluator, optionally replacing it with a new policy.</span>
@@ -222,7 +222,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">_policy</span> <span class="o">=</span> <span class="n">_policy</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_policy</span><span class="o">.</span><span class="n">reset</span><span class="p">()</span></div>
 
-<div class="viewcode-block" id="MuZeroEvaluator.reset"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.reset">[docs]</a>    <span class="k">def</span> <span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_policy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">namedtuple</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">_env</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">BaseEnvManager</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroEvaluator.reset"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.reset">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">reset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">_policy</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">namedtuple</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">_env</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">BaseEnvManager</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Reset both the policy and environment for the evaluator, optionally replacing them.</span>
@@ -243,7 +243,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_last_eval_iter</span> <span class="o">=</span> <span class="mi">0</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_end_flag</span> <span class="o">=</span> <span class="kc">False</span></div>
 
-<div class="viewcode-block" id="MuZeroEvaluator.close"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.close">[docs]</a>    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroEvaluator.close"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.close">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Close the evaluator, the environment, flush and close the TensorBoard logger if applicable.</span>
@@ -256,7 +256,7 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">_tb_logger</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_tb_logger</span><span class="o">.</span><span class="n">close</span><span class="p">()</span></div>
 
-    <span class="k">def</span> <span class="fm">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__del__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Execute the close command and close the evaluator. __del__ is automatically called \</span>
@@ -264,7 +264,7 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
 
-<div class="viewcode-block" id="MuZeroEvaluator.should_eval"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.should_eval">[docs]</a>    <span class="k">def</span> <span class="nf">should_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<div class="viewcode-block" id="MuZeroEvaluator.should_eval"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.should_eval">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">should_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">train_iter</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
 <span class="sd">            Determine whether to initiate evaluation based on the training iteration count and evaluation frequency.</span>
@@ -280,7 +280,7 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_last_eval_iter</span> <span class="o">=</span> <span class="n">train_iter</span>
         <span class="k">return</span> <span class="kc">True</span></div>
 
-<div class="viewcode-block" id="MuZeroEvaluator.eval"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.eval">[docs]</a>    <span class="k">def</span> <span class="nf">eval</span><span class="p">(</span>
+<div class="viewcode-block" id="MuZeroEvaluator.eval"><a class="viewcode-back" href="../../../api_doc/worker/index.html#lzero.worker.muzero_evaluator.MuZeroEvaluator.eval">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">eval</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">save_ckpt_fn</span><span class="p">:</span> <span class="n">Callable</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
             <span class="n">train_iter</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span>
