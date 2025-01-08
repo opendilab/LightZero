@@ -5,7 +5,7 @@ import torch.nn as nn
 from ding.torch_utils import MLP
 from ding.utils import MODEL_REGISTRY, SequenceType
 
-from .common import MZNetworkOutput, RepresentationNetworkMLP, PredictionNetworkMLP
+from .common import MZNetworkOutput, RepresentationNetworkMLP, PredictionNetworkMLP, MLP_V2
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 
 
@@ -17,9 +17,9 @@ class MuZeroModelMLP(nn.Module):
         observation_shape: int = 2,
         action_space_size: int = 6,
         latent_state_dim: int = 256,
-        fc_reward_layers: SequenceType = [32],
-        fc_value_layers: SequenceType = [32],
-        fc_policy_layers: SequenceType = [32],
+        reward_head_hidden_channels: SequenceType = [32],
+        value_head_hidden_channels: SequenceType = [32],
+        policy_head_hidden_channels: SequenceType = [32],
         reward_support_size: int = 601,
         value_support_size: int = 601,
         proj_hid: int = 1024,
@@ -48,9 +48,9 @@ class MuZeroModelMLP(nn.Module):
             - observation_shape (:obj:`int`): Observation space shape, e.g. 8 for Lunarlander.
             - action_space_size: (:obj:`int`): Action space size, e.g. 4 for Lunarlander.
             - latent_state_dim (:obj:`int`): The dimension of latent state, such as 256.
-            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
-            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - reward_support_size (:obj:`int`): The size of categorical reward output
             - value_support_size (:obj:`int`): The size of categorical value output.
             - proj_hid (:obj:`int`): The size of projection hidden layer.
@@ -109,7 +109,7 @@ class MuZeroModelMLP(nn.Module):
             action_encoding_dim=self.action_encoding_dim,
             num_channels=self.latent_state_dim + self.action_encoding_dim,
             common_layer_num=2,
-            fc_reward_layers=fc_reward_layers,
+            reward_head_hidden_channels=reward_head_hidden_channels,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             norm_type=norm_type,
@@ -119,8 +119,8 @@ class MuZeroModelMLP(nn.Module):
         self.prediction_network = PredictionNetworkMLP(
             action_space_size=action_space_size,
             num_channels=latent_state_dim,
-            fc_value_layers=fc_value_layers,
-            fc_policy_layers=fc_policy_layers,
+            value_head_hidden_channels=value_head_hidden_channels,
+            policy_head_hidden_channels=policy_head_hidden_channels,
             output_support_size=self.value_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             norm_type=norm_type
@@ -332,7 +332,7 @@ class DynamicsNetwork(nn.Module):
         action_encoding_dim: int = 2,
         num_channels: int = 64,
         common_layer_num: int = 2,
-        fc_reward_layers: SequenceType = [32],
+        reward_head_hidden_channels: SequenceType = [32],
         output_support_size: int = 601,
         last_linear_layer_init_zero: bool = True,
         activation: Optional[nn.Module] = nn.ReLU(inplace=True),
@@ -348,7 +348,7 @@ class DynamicsNetwork(nn.Module):
             - action_encoding_dim (:obj:`int`): The dimension of action encoding.
             - num_channels (:obj:`int`): The num of channels in latent states.
             - common_layer_num (:obj:`int`): The number of common layers in dynamics network.
-            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical reward output.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.
             - activation (:obj:`Optional[nn.Module]`): Activation function used in network, which often use in-place \
@@ -403,10 +403,9 @@ class DynamicsNetwork(nn.Module):
                 last_linear_layer_init_zero=False,
             )
 
-        self.fc_reward_head = MLP(
+        self.fc_reward_head = MLP_V2(
             in_channels=self.latent_state_dim,
-            hidden_channels=fc_reward_layers[0],
-            layer_num=2,
+            hidden_channels=reward_head_hidden_channels,
             out_channels=output_support_size,
             activation=activation,
             norm_type=norm_type,

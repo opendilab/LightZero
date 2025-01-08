@@ -29,9 +29,9 @@ class EfficientZeroModel(nn.Module):
             reward_head_channels: int = 16,
             value_head_channels: int = 16,
             policy_head_channels: int = 16,
-            fc_reward_layers: SequenceType = [32],
-            fc_value_layers: SequenceType = [32],
-            fc_policy_layers: SequenceType = [32],
+            reward_head_hidden_channels: SequenceType = [32],
+            value_head_hidden_channels: SequenceType = [32],
+            policy_head_hidden_channels: SequenceType = [32],
             reward_support_size: int = 601,
             value_support_size: int = 601,
             proj_hid: int = 1024,
@@ -63,9 +63,9 @@ class EfficientZeroModel(nn.Module):
             - reward_head_channels (:obj:`int`): The channels of reward head.
             - value_head_channels (:obj:`int`): The channels of value head.
             - policy_head_channels (:obj:`int`): The channels of policy head.
-            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
-            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - reward_support_size (:obj:`int`): The size of categorical reward output
             - value_support_size (:obj:`int`): The size of categorical value output.
             - proj_hid (:obj:`int`): The size of projection hidden layer.
@@ -122,15 +122,15 @@ class EfficientZeroModel(nn.Module):
         elif observation_shape[1] == 64:
             latent_size = math.ceil(observation_shape[1] / 8) * math.ceil(observation_shape[2] / 8)
 
-        flatten_output_size_for_reward_head = (
+        flatten_input_size_for_reward_head = (
             (reward_head_channels * latent_size) if downsample else
             (reward_head_channels * observation_shape[1] * observation_shape[2])
         )
-        flatten_output_size_for_value_head = (
+        flatten_input_size_for_value_head = (
             (value_head_channels * latent_size) if downsample else
             (value_head_channels * observation_shape[1] * observation_shape[2])
         )
-        flatten_output_size_for_policy_head = (
+        flatten_input_size_for_policy_head = (
             (policy_head_channels * latent_size) if downsample else
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
@@ -149,9 +149,9 @@ class EfficientZeroModel(nn.Module):
             num_res_blocks,
             num_channels + self.action_encoding_dim,
             reward_head_channels,
-            fc_reward_layers,
+            reward_head_hidden_channels,
             self.reward_support_size,
-            flatten_output_size_for_reward_head,
+            flatten_input_size_for_reward_head,
             downsample,
             lstm_hidden_size=lstm_hidden_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
@@ -165,11 +165,11 @@ class EfficientZeroModel(nn.Module):
             num_channels,
             value_head_channels,
             policy_head_channels,
-            fc_value_layers,
-            fc_policy_layers,
+            value_head_hidden_channels,
+            policy_head_hidden_channels,
             self.value_support_size,
-            flatten_output_size_for_value_head,
-            flatten_output_size_for_policy_head,
+            flatten_input_size_for_value_head,
+            flatten_input_size_for_policy_head,
             downsample,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             activation=self.activation,
@@ -432,9 +432,9 @@ class DynamicsNetwork(nn.Module):
         num_res_blocks: int = 1,
         num_channels: int = 64,
         reward_head_channels: int = 64,
-        fc_reward_layers: SequenceType = [32],
+        reward_head_hidden_channels: SequenceType = [32],
         output_support_size: int = 601,
-        flatten_output_size_for_reward_head: int = 64,
+        flatten_input_size_for_reward_head: int = 64,
         downsample: bool = False,
         lstm_hidden_size: int = 512,
         last_linear_layer_init_zero: bool = True,
@@ -451,9 +451,9 @@ class DynamicsNetwork(nn.Module):
             - num_res_blocks (:obj:`int`): The number of res blocks in EfficientZero model.
             - num_channels (:obj:`int`): The channels of latent states.
             - reward_head_channels (:obj:`int`): The channels of reward head.
-            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical reward output.
-            - flatten_output_size_for_reward_head (:obj:`int`): The flatten size of output for reward head, i.e., \
+            - flatten_input_size_for_reward_head (:obj:`int`): The flatten size of output for reward head, i.e., \
                 the input size of reward head.
             - downsample (:obj:`bool`): Whether to downsample the input observation, default set it to False.
             - lstm_hidden_size (:obj:`int`): The hidden size of lstm in dynamics network.
@@ -469,7 +469,7 @@ class DynamicsNetwork(nn.Module):
 
         self.action_encoding_dim = action_encoding_dim
         self.num_channels = num_channels
-        self.flatten_output_size_for_reward_head = flatten_output_size_for_reward_head
+        self.flatten_input_size_for_reward_head = flatten_input_size_for_reward_head
         self.lstm_hidden_size = lstm_hidden_size
         self.activation = activation
 
@@ -507,15 +507,15 @@ class DynamicsNetwork(nn.Module):
 
         # input_shape: （sequence_length，batch_size，input_size)
         # output_shape: (sequence_length, batch_size, hidden_size)
-        self.lstm = nn.LSTM(input_size=self.flatten_output_size_for_reward_head, hidden_size=self.lstm_hidden_size)
+        self.lstm = nn.LSTM(input_size=self.flatten_input_size_for_reward_head, hidden_size=self.lstm_hidden_size)
 
         self.norm_value_prefix = nn.BatchNorm1d(self.lstm_hidden_size)
 
         self.fc_reward_head = MLP(
             in_channels=self.lstm_hidden_size,
-            hidden_channels=fc_reward_layers[0],
+            hidden_channels=reward_head_hidden_channels[0],
             out_channels=output_support_size,
-            layer_num=len(fc_reward_layers) + 1,
+            layer_num=len(reward_head_hidden_channels) + 1,
             activation=self.activation,
             norm_type=norm_type,
             output_activation=False,
@@ -555,7 +555,7 @@ class DynamicsNetwork(nn.Module):
         x = self.conv1x1_reward(next_latent_state)
         x = self.norm_reward(x)
         x = self.activation(x)
-        x = x.reshape(-1, self.flatten_output_size_for_reward_head).unsqueeze(0)
+        x = x.reshape(-1, self.flatten_input_size_for_reward_head).unsqueeze(0)
 
         # use lstm to predict value_prefix and reward_hidden_state
         value_prefix, next_reward_hidden_state = self.lstm(x, reward_hidden_state)
