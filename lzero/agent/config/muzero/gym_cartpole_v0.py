@@ -74,3 +74,31 @@ cfg = dict(
 )
 
 cfg = EasyDict(cfg)
+
+
+if __name__ == "__main__":
+    # Note: Install the `huggingface_ding` package using the following shell commands
+    # git clone https://github.com/opendilab/huggingface_ding.git
+    # cd huggingface_ding
+    # pip3 install -e .
+
+    # Import the required modules for downloading a pretrained model from Hugging Face Model Zoo
+    from lzero.agent import MuZeroAgent
+    from huggingface_ding import pull_model_from_hub
+
+    # Pull the pretrained model and its configuration from the Hugging Face Hub
+    policy_state_dict, cfg = pull_model_from_hub(repo_id="OpenDILabCommunity/CartPole-v0-MuZero")
+
+    # Instantiate the agent (MuZeroAgent) with the environment, configuration, and policy state
+    agent = MuZeroAgent(
+        env_id="CartPole-v0",  # Environment ID
+        exp_name="CartPole-v0-MuZero",  # Experiment name
+        cfg=cfg.exp_config,  # Configuration for the experiment
+        policy_state_dict=policy_state_dict  # Pretrained policy states
+    )
+
+    # Train the agent for 5000 steps
+    agent.train(step=5000)
+
+    # Render the performance of the trained agent and save the replay
+    agent.deploy(enable_save_replay=True)
