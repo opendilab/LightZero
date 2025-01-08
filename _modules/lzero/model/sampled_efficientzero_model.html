@@ -117,9 +117,9 @@
             <span class="n">reward_head_channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>
             <span class="n">value_head_channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>
             <span class="n">policy_head_channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">16</span><span class="p">,</span>
-            <span class="n">fc_reward_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">256</span><span class="p">],</span>
-            <span class="n">fc_value_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">256</span><span class="p">],</span>
-            <span class="n">fc_policy_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">256</span><span class="p">],</span>
+            <span class="n">reward_head_hidden_channels</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">256</span><span class="p">],</span>
+            <span class="n">value_head_hidden_channels</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">256</span><span class="p">],</span>
+            <span class="n">policy_head_hidden_channels</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">256</span><span class="p">],</span>
             <span class="n">reward_support_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">601</span><span class="p">,</span>
             <span class="n">value_support_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">601</span><span class="p">,</span>
             <span class="n">proj_hid</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1024</span><span class="p">,</span>
@@ -164,9 +164,9 @@
 <span class="sd">            - reward_head_channels (:obj:`int`): The channels of reward head.</span>
 <span class="sd">            - value_head_channels (:obj:`int`): The channels of value head.</span>
 <span class="sd">            - policy_head_channels (:obj:`int`): The channels of policy head.</span>
-<span class="sd">            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).</span>
-<span class="sd">            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).</span>
-<span class="sd">            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).</span>
+<span class="sd">            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).</span>
+<span class="sd">            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).</span>
+<span class="sd">            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).</span>
 <span class="sd">            - reward_support_size (:obj:`int`): The size of categorical reward output</span>
 <span class="sd">            - value_support_size (:obj:`int`): The size of categorical value output.</span>
 <span class="sd">            - proj_hid (:obj:`int`): The size of projection hidden layer.</span>
@@ -249,15 +249,15 @@
         <span class="k">else</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;Invalid observation shape, only support 64, 84, 96 for now.&quot;</span><span class="p">)</span>
 
-        <span class="n">flatten_output_size_for_reward_head</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">flatten_input_size_for_reward_head</span> <span class="o">=</span> <span class="p">(</span>
             <span class="p">(</span><span class="n">reward_head_channels</span> <span class="o">*</span> <span class="n">latent_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
             <span class="p">(</span><span class="n">reward_head_channels</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
         <span class="p">)</span>
-        <span class="n">flatten_output_size_for_value_head</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">flatten_input_size_for_value_head</span> <span class="o">=</span> <span class="p">(</span>
             <span class="p">(</span><span class="n">value_head_channels</span> <span class="o">*</span> <span class="n">latent_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
             <span class="p">(</span><span class="n">value_head_channels</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
         <span class="p">)</span>
-        <span class="n">flatten_output_size_for_policy_head</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">flatten_input_size_for_policy_head</span> <span class="o">=</span> <span class="p">(</span>
             <span class="p">(</span><span class="n">policy_head_channels</span> <span class="o">*</span> <span class="n">latent_size</span><span class="p">)</span> <span class="k">if</span> <span class="n">downsample</span> <span class="k">else</span>
             <span class="p">(</span><span class="n">policy_head_channels</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
         <span class="p">)</span>
@@ -277,9 +277,9 @@
             <span class="n">num_res_blocks</span><span class="p">,</span>
             <span class="n">num_channels</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_encoding_dim</span><span class="p">,</span>
             <span class="n">reward_head_channels</span><span class="p">,</span>
-            <span class="n">fc_reward_layers</span><span class="p">,</span>
+            <span class="n">reward_head_hidden_channels</span><span class="p">,</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">reward_support_size</span><span class="p">,</span>
-            <span class="n">flatten_output_size_for_reward_head</span><span class="p">,</span>
+            <span class="n">flatten_input_size_for_reward_head</span><span class="p">,</span>
             <span class="n">downsample</span><span class="p">,</span>
             <span class="n">lstm_hidden_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">lstm_hidden_size</span><span class="p">,</span>
             <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">last_linear_layer_init_zero</span><span class="p">,</span>
@@ -295,11 +295,11 @@
             <span class="n">num_channels</span><span class="p">,</span>
             <span class="n">value_head_channels</span><span class="p">,</span>
             <span class="n">policy_head_channels</span><span class="p">,</span>
-            <span class="n">fc_value_layers</span><span class="p">,</span>
-            <span class="n">fc_policy_layers</span><span class="p">,</span>
+            <span class="n">value_head_hidden_channels</span><span class="p">,</span>
+            <span class="n">policy_head_hidden_channels</span><span class="p">,</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">value_support_size</span><span class="p">,</span>
-            <span class="n">flatten_output_size_for_value_head</span><span class="p">,</span>
-            <span class="n">flatten_output_size_for_policy_head</span><span class="p">,</span>
+            <span class="n">flatten_input_size_for_value_head</span><span class="p">,</span>
+            <span class="n">flatten_input_size_for_policy_head</span><span class="p">,</span>
             <span class="n">downsample</span><span class="p">,</span>
             <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">last_linear_layer_init_zero</span><span class="p">,</span>
             <span class="n">sigma_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sigma_type</span><span class="p">,</span>
@@ -589,11 +589,11 @@
             <span class="n">num_channels</span><span class="p">,</span>
             <span class="n">value_head_channels</span><span class="p">,</span>
             <span class="n">policy_head_channels</span><span class="p">,</span>
-            <span class="n">fc_value_layers</span><span class="p">,</span>
-            <span class="n">fc_policy_layers</span><span class="p">,</span>
+            <span class="n">value_head_hidden_channels</span><span class="p">,</span>
+            <span class="n">policy_head_hidden_channels</span><span class="p">,</span>
             <span class="n">output_support_size</span><span class="p">,</span>
-            <span class="n">flatten_output_size_for_value_head</span><span class="p">,</span>
-            <span class="n">flatten_output_size_for_policy_head</span><span class="p">,</span>
+            <span class="n">flatten_input_size_for_value_head</span><span class="p">,</span>
+            <span class="n">flatten_input_size_for_policy_head</span><span class="p">,</span>
             <span class="n">downsample</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
             <span class="n">last_linear_layer_init_zero</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
             <span class="n">activation</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">GELU</span><span class="p">(</span><span class="n">approximate</span><span class="o">=</span><span class="s1">&#39;tanh&#39;</span><span class="p">),</span>
@@ -620,11 +620,11 @@
 <span class="sd">            - num_channels (:obj:`int`): channels of hidden states.</span>
 <span class="sd">            - value_head_channels (:obj:`int`): channels of value head.</span>
 <span class="sd">            - policy_head_channels (:obj:`int`): channels of policy head.</span>
-<span class="sd">            - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).</span>
-<span class="sd">            - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).</span>
+<span class="sd">            - value_head_hidden_channels (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).</span>
+<span class="sd">            - policy_head_hidden_channels (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).</span>
 <span class="sd">            - output_support_size (:obj:`int`): dim of value output.</span>
-<span class="sd">            - flatten_output_size_for_value_head (:obj:`int`): dim of flatten hidden states.</span>
-<span class="sd">            - flatten_output_size_for_policy_head (:obj:`int`): dim of flatten hidden states.</span>
+<span class="sd">            - flatten_input_size_for_value_head (:obj:`int`): dim of flatten hidden states.</span>
+<span class="sd">            - flatten_input_size_for_policy_head (:obj:`int`): dim of flatten hidden states.</span>
 <span class="sd">            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.</span>
 <span class="sd">            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializationss for the last layer of value/policy mlp, default sets it to True.</span>
 <span class="sd">            # ==============================================================</span>
@@ -638,8 +638,8 @@
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">continuous_action_space</span> <span class="o">=</span> <span class="n">continuous_action_space</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_value_head</span> <span class="o">=</span> <span class="n">flatten_output_size_for_value_head</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_policy_head</span> <span class="o">=</span> <span class="n">flatten_output_size_for_policy_head</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flatten_input_size_for_value_head</span> <span class="o">=</span> <span class="n">flatten_input_size_for_value_head</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">flatten_input_size_for_policy_head</span> <span class="o">=</span> <span class="n">flatten_input_size_for_policy_head</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">norm_type</span> <span class="o">=</span> <span class="n">norm_type</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">sigma_type</span> <span class="o">=</span> <span class="n">sigma_type</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">fixed_sigma_value</span> <span class="o">=</span> <span class="n">fixed_sigma_value</span>
@@ -675,10 +675,10 @@
                 <span class="bp">self</span><span class="o">.</span><span class="n">norm_policy</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">([</span><span class="n">policy_head_channels</span><span class="p">,</span> <span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">2</span><span class="p">],</span> <span class="n">observation_shape</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]])</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">fc_value_head</span> <span class="o">=</span> <span class="n">MLP</span><span class="p">(</span>
-            <span class="n">in_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_value_head</span><span class="p">,</span>
-            <span class="n">hidden_channels</span><span class="o">=</span><span class="n">fc_value_layers</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+            <span class="n">in_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">flatten_input_size_for_value_head</span><span class="p">,</span>
+            <span class="n">hidden_channels</span><span class="o">=</span><span class="n">value_head_hidden_channels</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
             <span class="n">out_channels</span><span class="o">=</span><span class="n">output_support_size</span><span class="p">,</span>
-            <span class="n">layer_num</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">fc_value_layers</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="n">layer_num</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">value_head_hidden_channels</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
             <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span>
             <span class="n">norm_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">norm_type</span><span class="p">,</span>
             <span class="n">output_activation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
@@ -690,9 +690,9 @@
         <span class="c1"># sampled related core code</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">continuous_action_space</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">fc_policy_head</span> <span class="o">=</span> <span class="n">ReparameterizationHead</span><span class="p">(</span>
-                <span class="n">input_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_policy_head</span><span class="p">,</span>
+                <span class="n">input_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">flatten_input_size_for_policy_head</span><span class="p">,</span>
                 <span class="n">output_size</span><span class="o">=</span><span class="n">action_space_size</span><span class="p">,</span>
-                <span class="n">layer_num</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">fc_policy_layers</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+                <span class="n">layer_num</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">policy_head_hidden_channels</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
                 <span class="n">sigma_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">sigma_type</span><span class="p">,</span>
                 <span class="n">fixed_sigma_value</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">fixed_sigma_value</span><span class="p">,</span>
                 <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span>
@@ -701,10 +701,10 @@
             <span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">fc_policy_head</span> <span class="o">=</span> <span class="n">MLP</span><span class="p">(</span>
-                <span class="n">in_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_policy_head</span><span class="p">,</span>
-                <span class="n">hidden_channels</span><span class="o">=</span><span class="n">fc_policy_layers</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+                <span class="n">in_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">flatten_input_size_for_policy_head</span><span class="p">,</span>
+                <span class="n">hidden_channels</span><span class="o">=</span><span class="n">policy_head_hidden_channels</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
                 <span class="n">out_channels</span><span class="o">=</span><span class="n">action_space_size</span><span class="p">,</span>
-                <span class="n">layer_num</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">fc_policy_layers</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+                <span class="n">layer_num</span><span class="o">=</span><span class="nb">len</span><span class="p">(</span><span class="n">policy_head_hidden_channels</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
                 <span class="n">activation</span><span class="o">=</span><span class="n">activation</span><span class="p">,</span>
                 <span class="n">norm_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">norm_type</span><span class="p">,</span>
                 <span class="n">output_activation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
@@ -735,8 +735,8 @@
         <span class="n">policy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm_policy</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
         <span class="n">policy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">(</span><span class="n">policy</span><span class="p">)</span>
 
-        <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_value_head</span><span class="p">)</span>
-        <span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">flatten_output_size_for_policy_head</span><span class="p">)</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">flatten_input_size_for_value_head</span><span class="p">)</span>
+        <span class="n">policy</span> <span class="o">=</span> <span class="n">policy</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">flatten_input_size_for_policy_head</span><span class="p">)</span>
         <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc_value_head</span><span class="p">(</span><span class="n">value</span><span class="p">)</span>
 
         <span class="c1"># sampled related core code</span>

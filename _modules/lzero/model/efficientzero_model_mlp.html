@@ -110,9 +110,9 @@
         <span class="n">action_space_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span><span class="p">,</span>
         <span class="n">lstm_hidden_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">512</span><span class="p">,</span>
         <span class="n">latent_state_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span>
-        <span class="n">fc_reward_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
-        <span class="n">fc_value_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
-        <span class="n">fc_policy_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
+        <span class="n">reward_head_hidden_channels</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
+        <span class="n">value_head_hidden_channels</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
+        <span class="n">policy_head_hidden_channels</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
         <span class="n">reward_support_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">601</span><span class="p">,</span>
         <span class="n">value_support_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">601</span><span class="p">,</span>
         <span class="n">proj_hid</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1024</span><span class="p">,</span>
@@ -143,9 +143,9 @@
 <span class="sd">            - action_space_size: (:obj:`int`): Action space size, e.g. 4 for Lunarlander.</span>
 <span class="sd">            - lstm_hidden_size (:obj:`int`): The hidden size of LSTM in dynamics network to predict value_prefix.</span>
 <span class="sd">            - latent_state_dim (:obj:`int`): The dimension of latent state, such as 256.</span>
-<span class="sd">            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).</span>
-<span class="sd">            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).</span>
-<span class="sd">            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).</span>
+<span class="sd">            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).</span>
+<span class="sd">            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).</span>
+<span class="sd">            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).</span>
 <span class="sd">            - reward_support_size (:obj:`int`): The size of categorical reward output</span>
 <span class="sd">            - value_support_size (:obj:`int`): The size of categorical value output.</span>
 <span class="sd">            - proj_hid (:obj:`int`): The size of projection hidden layer.</span>
@@ -204,7 +204,7 @@
             <span class="n">num_channels</span><span class="o">=</span><span class="n">latent_state_dim</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">action_encoding_dim</span><span class="p">,</span>
             <span class="n">common_layer_num</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
             <span class="n">lstm_hidden_size</span><span class="o">=</span><span class="n">lstm_hidden_size</span><span class="p">,</span>
-            <span class="n">fc_reward_layers</span><span class="o">=</span><span class="n">fc_reward_layers</span><span class="p">,</span>
+            <span class="n">reward_head_hidden_channels</span><span class="o">=</span><span class="n">reward_head_hidden_channels</span><span class="p">,</span>
             <span class="n">output_support_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">reward_support_size</span><span class="p">,</span>
             <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">last_linear_layer_init_zero</span><span class="p">,</span>
             <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span><span class="p">,</span>
@@ -214,8 +214,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">prediction_network</span> <span class="o">=</span> <span class="n">PredictionNetworkMLP</span><span class="p">(</span>
             <span class="n">action_space_size</span><span class="o">=</span><span class="n">action_space_size</span><span class="p">,</span>
             <span class="n">num_channels</span><span class="o">=</span><span class="n">latent_state_dim</span><span class="p">,</span>
-            <span class="n">fc_value_layers</span><span class="o">=</span><span class="n">fc_value_layers</span><span class="p">,</span>
-            <span class="n">fc_policy_layers</span><span class="o">=</span><span class="n">fc_policy_layers</span><span class="p">,</span>
+            <span class="n">value_head_hidden_channels</span><span class="o">=</span><span class="n">value_head_hidden_channels</span><span class="p">,</span>
+            <span class="n">policy_head_hidden_channels</span><span class="o">=</span><span class="n">policy_head_hidden_channels</span><span class="p">,</span>
             <span class="n">output_support_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">value_support_size</span><span class="p">,</span>
             <span class="n">last_linear_layer_init_zero</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">last_linear_layer_init_zero</span><span class="p">,</span>
             <span class="n">norm_type</span><span class="o">=</span><span class="n">norm_type</span>
@@ -436,7 +436,7 @@
         <span class="n">action_encoding_dim</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
         <span class="n">num_channels</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">64</span><span class="p">,</span>
         <span class="n">common_layer_num</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">2</span><span class="p">,</span>
-        <span class="n">fc_reward_layers</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
+        <span class="n">reward_head_hidden_channels</span><span class="p">:</span> <span class="n">SequenceType</span> <span class="o">=</span> <span class="p">[</span><span class="mi">32</span><span class="p">],</span>
         <span class="n">output_support_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">601</span><span class="p">,</span>
         <span class="n">lstm_hidden_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">512</span><span class="p">,</span>
         <span class="n">last_linear_layer_init_zero</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
@@ -453,7 +453,7 @@
 <span class="sd">            - action_encoding_dim (:obj:`int`): The dimension of action encoding.</span>
 <span class="sd">            - num_channels (:obj:`int`): The num of channels in latent states.</span>
 <span class="sd">            - common_layer_num (:obj:`int`): The number of common layers in dynamics network.</span>
-<span class="sd">            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).</span>
+<span class="sd">            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).</span>
 <span class="sd">            - output_support_size (:obj:`int`): The size of categorical reward output.</span>
 <span class="sd">            - lstm_hidden_size (:obj:`int`): The hidden size of lstm in dynamics network.</span>
 <span class="sd">            - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializationss for the last layer of value/policy head, default sets it to True.</span>
@@ -517,7 +517,7 @@
 
         <span class="bp">self</span><span class="o">.</span><span class="n">fc_reward_head</span> <span class="o">=</span> <span class="n">MLP</span><span class="p">(</span>
             <span class="n">in_channels</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">lstm_hidden_size</span><span class="p">,</span>
-            <span class="n">hidden_channels</span><span class="o">=</span><span class="n">fc_reward_layers</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+            <span class="n">hidden_channels</span><span class="o">=</span><span class="n">reward_head_hidden_channels</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
             <span class="n">layer_num</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
             <span class="n">out_channels</span><span class="o">=</span><span class="n">output_support_size</span><span class="p">,</span>
             <span class="n">activation</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">activation</span><span class="p">,</span>
