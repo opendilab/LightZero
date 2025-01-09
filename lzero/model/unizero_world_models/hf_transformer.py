@@ -106,5 +106,6 @@ class HuggingfaceLlamaTransformer(LlamaForCausalLM):
             use_cache=use_cache
         )
 
-        update_kv(past_keys_values, kv_cache)
+        if kv_cache is not None:
+            update_kv(past_keys_values, kv_cache)
         return output.last_hidden_state
