@@ -50,8 +50,7 @@ class HuggingfaceLlamaTransformer(LlamaForCausalLM):
     def __init__(self, config: LlamaConfig) -> None:
         super().__init__(config)
         # 假设需要一个自定义的投影层，如果不需要可以移除
-        # self.projection_layer = nn.Linear(config.hidden_size, config.hidden_size)
-        self.projection_layer = nn.Linear(2048, 768) # TODO=======
+        self.projection_layer = nn.Linear(config.hidden_size, config.hidden_size)
 
     @classmethod
     def from_pretrained(cls, model_name_or_path: str, *args, **kwargs):
