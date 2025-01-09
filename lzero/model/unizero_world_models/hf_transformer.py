@@ -19,7 +19,7 @@ def kv2dc(cache: KeysValues):
 
 def update_kv(cache: KeysValues, new_cache: DynamicCache):
     for i in range(len(new_cache.key_cache)):
-        cache[i].update(new_cache.key_cache[-1], new_cache.value_cache[-1])
+        cache[i].update(new_cache.key_cache[i][:, :, -1:, :], new_cache.value_cache[i][:, :, -1:, :])
 
 
 class HuggingfaceLlamaTransformer(LlamaForCausalLM):
