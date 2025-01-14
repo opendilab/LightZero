@@ -18,18 +18,20 @@ def main(env_id='detective.z5', seed=0):
     num_simulations = 50
     max_env_step = int(10e6)
 
-    # collector_env_num = 4
-    # n_episode = 4
-    # batch_size = 16 # proj train
-    # num_unroll_steps = 10
-    # infer_context_length = 4
+    # proj train
+    collector_env_num = 4
+    n_episode = 4
+    batch_size = 16 
+    num_unroll_steps = 10
+    infer_context_length = 4
 
-    collector_env_num = 2
-    n_episode = 2
-    evaluator_env_num = 2
-    batch_size = 4 # all train
-    num_unroll_steps = 5
-    infer_context_length = 2
+    # all train
+    # collector_env_num = 2
+    # n_episode = 2
+    # evaluator_env_num = 2
+    # batch_size = 4 
+    # num_unroll_steps = 5
+    # infer_context_length = 2
 
     # batch_size = 16
     # num_unroll_steps = 5
@@ -52,19 +54,14 @@ def main(env_id='detective.z5', seed=0):
     # model_name = 'google-bert/bert-base-uncased'
 
     # =========== TODO: only for debug  =========== 
-    # collector_env_num = 2
-    # num_segments = 2
-    # game_segment_length = 20
-    # evaluator_env_num = 2
     # max_env_step = int(5e5)
     # batch_size = 10
-    # num_simulations = 5
+    # num_simulations = 2
     # num_unroll_steps = 5
     # infer_context_length = 2
     # max_steps = 10
     # num_layers = 1
     # replay_ratio = 0.05
-    # embed_dim = 768
     # TODO: MCTS内部的action_space受限于root节点的legal action
 
     # ==============================================================
@@ -72,7 +69,9 @@ def main(env_id='detective.z5', seed=0):
     # ==============================================================
     jericho_unizero_config = dict(
         env=dict(
-            remove_stuck_actions=False,
+            # remove_stuck_actions=False,
+            remove_stuck_actions=True,
+
             stop_value=int(1e6),
             observation_shape=512,
             max_steps=max_steps,
@@ -168,7 +167,10 @@ def main(env_id='detective.z5', seed=0):
     main_config = jericho_unizero_config
     create_config = jericho_unizero_create_config
 
-    main_config.exp_name = f'data_unizero_detective_20250107/{model_name}/{env_id[:8]}_ms{max_steps}_action-space-{action_space_size}_all-train_uz_nlayer{num_layers}_embed512_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_detective_20250107/{model_name}/{env_id[:8]}_ms{max_steps}_action-space-{action_space_size}-remove-novalid_proj-train-accstep4_uz_nlayer{num_layers}_embed512_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    # main_config.exp_name = f'data_unizero_detective_20250107/{model_name}/{env_id[:8]}_ms{max_steps}_action-space-{action_space_size}_proj-train-accstep4_uz_nlayer{num_layers}_embed512_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    
+    # main_config.exp_name = f'data_unizero_detective_20250107/{model_name}/{env_id[:8]}_ms{max_steps}_action-space-{action_space_size}_all-train_uz_nlayer{num_layers}_embed512_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     # main_config.exp_name = f'data_unizero_detective_20250107/{model_name}/{env_id[:8]}_ms{max_steps}_action-space-{action_space_size}_remove-novalid-action_uz_nlayer{num_layers}_embed512_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed,

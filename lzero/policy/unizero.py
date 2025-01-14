@@ -220,6 +220,8 @@ class UniZeroPolicy(MuZeroPolicy):
         policy_loss_weight=1,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
+        # (bool) Whether to use the cosine learning rate decay.
+        cos_lr_scheduler=False,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
         piecewise_decay_lr_scheduler=False,
@@ -300,6 +302,11 @@ class UniZeroPolicy(MuZeroPolicy):
             betas=(0.9, 0.95),
         )
 
+        if self._cfg.cos_lr_scheduler:
+            from torch.optim.lr_scheduler import CosineAnnealingLR
+            # TODO: check the total training steps
+            self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
+
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
         # Ensure that the installed torch version is greater than or equal to 2.0
@@ -335,6 +342,9 @@ class UniZeroPolicy(MuZeroPolicy):
             # TODO: add the model to wandb
             wandb.watch(self._learn_model.representation_network, log="all")
 
+        # TODO: ========
+        self.accumulation_steps = 4  # 累积的步数
+
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -352,7 +362,9 @@ class UniZeroPolicy(MuZeroPolicy):
         self._learn_model.train()
         self._target_model.train()
 
-        current_batch, target_batch, _ = data
+        # current_batch, target_batch, _ = data
+        current_batch, target_batch, train_iter = data
+
         obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time = current_batch
         target_reward, target_value, target_policy = target_batch
 
@@ -386,14 +398,14 @@ class UniZeroPolicy(MuZeroPolicy):
         # print(f'transformed_target_value:{transformed_target_value}')
         # print("self.value_support:", self.value_support)
         
-        try:
-            target_value_categorical = phi_transform(self.value_support, transformed_target_value)
-        except Exception as e:
-            print('='*20)
-            print(e)
-            # print(f'transformed_target_value:{transformed_target_value}')
-            # print("self.value_support:", self.value_support)
-            print('='*20)
+        # try:
+        target_value_categorical = phi_transform(self.value_support, transformed_target_value)
+        # except Exception as e:
+        #     print('='*20)
+        #     print(e)
+        #     # print(f'transformed_target_value:{transformed_target_value}')
+        #     # print("self.value_support:", self.value_support)
+        #     print('='*20)
             # target_value_categorical = phi_transform(self.value_support, transformed_target_value)
 
 
@@ -455,7 +467,12 @@ class UniZeroPolicy(MuZeroPolicy):
         # assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
         # Core learn model update step
-        self._optimizer_world_model.zero_grad()
+        if train_iter % self.accumulation_steps == 0:  # 每 accumulation_steps 步更新一次参数
+            # print(f'train_iter:{train_iter}')
+            self._optimizer_world_model.zero_grad()
+
+        weighted_total_loss = weighted_total_loss / self.accumulation_steps  # 累积梯度时对 loss 进行缩放
+
         weighted_total_loss.backward()
 
         #  ========== for debugging ==========
@@ -471,15 +488,23 @@ class UniZeroPolicy(MuZeroPolicy):
 
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
                                                                         self._cfg.grad_clip_value)
-        if self._cfg.multi_gpu:
-            self.sync_gradients(self._learn_model)
 
-        self._optimizer_world_model.step()
-        if self._cfg.piecewise_decay_lr_scheduler:
-            self.lr_scheduler.step()
+        if train_iter % self.accumulation_steps == 0:  # 每 accumulation_steps 步更新一次参数
+            # print(f'pos 2 train_iter:{train_iter}')
 
-        # Core target model update step
-        self._target_model.update(self._learn_model.state_dict())
+            if self._cfg.multi_gpu:
+                self.sync_gradients(self._learn_model)
+
+            self._optimizer_world_model.step()
+
+            if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
+                self.lr_scheduler.step()
+
+            # Core target model update step
+            self._target_model.update(self._learn_model.state_dict())
+
+            if self.accumulation_steps>1:
+                torch.cuda.empty_cache()
 
         if torch.cuda.is_available():
             torch.cuda.synchronize()

@@ -239,7 +239,9 @@ def train_unizero(
                 if cfg.policy.use_wandb:
                     policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
-                train_data.append({'train_which_component': 'transformer'})
+                # train_data.append({'train_which_component': 'transformer'})
+                train_data.append(learner.train_iter)
+
                 log_vars = learner.train(train_data, collector.envstep)
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])

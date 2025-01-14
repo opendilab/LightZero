@@ -37,6 +37,7 @@ class JerichoEnv(BaseEnv):
 
         # 新增：是否启用移除无效动作的功能
         self.remove_stuck_actions = cfg.get('remove_stuck_actions', False)
+        self.add_location_and_inventory = cfg.get('add_location_and_inventory', False)
 
         if JerichoEnv.tokenizer is None:
             # 只让 rank 0 下载模型
@@ -48,7 +49,7 @@ class JerichoEnv(BaseEnv):
             if self.rank != 0:  # 非 rank 0 的进程从本地缓存加载
                 JerichoEnv.tokenizer = AutoTokenizer.from_pretrained(cfg.tokenizer_path) 
 
-        self._env = FrotzEnv(self.game_path)
+        self._env = FrotzEnv(self.game_path, 0)
         self._action_list = None
         self.finished = False
         self._init_flag = False
@@ -69,12 +70,22 @@ class JerichoEnv(BaseEnv):
         # 根据是否启用移除无效动作的功能，调整可用动作列表
         if self.remove_stuck_actions:
             available_actions = [a for a in self._action_list if a not in self.blocked_actions]
+            if len(available_actions) < 1 and len(self._action_list)>0:
+                # TODO=========
+                # import ipdb;ipdb.set_trace()
+                # if self._action_list is None
+                available_actions = [self._action_list[0]]
             self._action_list = available_actions
         else:
             available_actions = self._action_list
         
-
-        full_obs = obs + "\nValid actions: " + str(available_actions)
+        # import ipdb;ipdb.set_trace()
+        if self.add_location_and_inventory:
+            look = self._env.get_player_location()
+            inv = self._env.get_inventory()
+            full_obs = "Location: " + str(look) + "\nInventory: " + str(inv) + obs + "\nValid actions: " + str(available_actions)
+        else:
+            full_obs = obs + "\nValid actions: " + str(available_actions)
 
         if not return_str:
             full_obs = JerichoEnv.tokenizer(
@@ -90,10 +101,13 @@ class JerichoEnv(BaseEnv):
 
         action_mask = np.array(action_mask, dtype=np.int8)
 
-        if return_str:
-            return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1}
+        if return_str: # TODO===============
+            # return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1}
+            return {'observation': full_obs, 'action_mask': action_mask}
         else:
-            return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1}
+            # return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1}
+            return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask}
+             
 
     def reset(self, return_str: bool = False):
         initial_observation, info = self._env.reset()
@@ -102,6 +116,7 @@ class JerichoEnv(BaseEnv):
         self._action_list = None
         self.episode_return = 0
         self.env_step = 0
+        self.timestep = 0
 
         # 设置初始的 last_observation
         if self.remove_stuck_actions:
@@ -129,19 +144,28 @@ class JerichoEnv(BaseEnv):
         return "LightZero Jericho Env"
 
     def step(self, action: int, return_str: bool = False):
+        # import ipdb;ipdb.set_trace()
+        # print(action)
         self.blocked_actions = set()
 
         if isinstance(action, str):
             action_str = action
         else:
+            if isinstance(action, np.ndarray):
+                action = int(action)
             try:
                 action_str = self._action_list[action]
             except Exception as e:
                 # TODO: 为什么会有非法动作
                 print('='*20)
                 print(e, f'rank {self.rank}, action {action} is illegal now we randomly choose a legal action from {self._action_list}!')
-                action = np.random.choice(len(self._action_list))
-                action_str = self._action_list[action]
+
+                if len(self._action_list) > 0:
+                    action = np.random.choice(len(self._action_list))
+                    action_str = self._action_list[action]
+                else:
+                    action_str = 'go'
+                    print(f'rank {self.rank}, len(self._action_list) == 0, self._env.get_valid_actions():{self._env.get_valid_actions()}')
 
         # 记录上一次的观察
         if self.remove_stuck_actions and self.last_observation is not None:
@@ -151,6 +175,13 @@ class JerichoEnv(BaseEnv):
 
         # 执行动作
         observation, reward, done, info = self._env.step(action_str)
+
+        self.timestep += 1
+        # print(f'step: {self.timestep}, [OBS]:{observation} self._action_list:{self._action_list}')
+
+        # TODO: for PPO
+        reward = np.array([float(reward)])
+
         self.env_step += 1
         self.episode_return += reward
         self._action_list = None
@@ -160,7 +191,7 @@ class JerichoEnv(BaseEnv):
             if observation == previous_obs:
                 # 动作无效，移除该动作
                 self.blocked_actions.add(action_str)
-                print(f'[Removing action] "{action_str}" as it did not change the observation.')
+                # print(f'[Removing action] "{action_str}" as it did not change the observation.')
 
         # 更新上一次的观察
         if self.remove_stuck_actions:
@@ -211,7 +242,8 @@ if __name__ == '__main__':
             max_env_step=100,
             tokenizer_path="google-bert/bert-base-uncased",
             max_seq_len=512,
-            remove_stuck_actions=True  # 启用移除无效动作的功能
+            remove_stuck_actions=True,  # 启用移除无效动作的功能
+            add_location_and_inventory=True
         )
     )
     env = JerichoEnv(env_cfg)

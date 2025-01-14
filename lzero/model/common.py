@@ -323,8 +323,8 @@ class HFLanguageRepresentationNetwork(nn.Module):
 
         self.sim_norm = SimNorm(simnorm_dim=group_size)
 
-    # def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
-    def forward(self, x: torch.Tensor, no_grad: bool = False) -> torch.Tensor: # TODO ======
+    def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor: # TODO: train projection ======
+    # def forward(self, x: torch.Tensor, no_grad: bool = False) -> torch.Tensor: # TODO: train encoder ======
     
         """
         前向传播，获取输入序列的语言表示。
