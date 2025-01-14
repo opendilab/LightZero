@@ -192,6 +192,11 @@ class SampledUniZeroMTModel(nn.Module):
         # self.decoder_networks = nn.ModuleList()
         # self.world_models = nn.ModuleList()
 
+        if world_model_cfg.task_embed_option == "concat_task_embed":
+            obs_act_embed_dim = world_model_cfg.embed_dim - 96
+        else:
+            obs_act_embed_dim = world_model_cfg.embed_dim
+            
         for task_id in range(self.task_num):
             # world_model_cfg = world_model_cfgs[task_id]
             world_model_cfg.norm_type = norm_type
@@ -200,7 +205,7 @@ class SampledUniZeroMTModel(nn.Module):
             if world_model_cfg.obs_type == 'vector':
                 self.representation_network = RepresentationNetworkMLPMT(
                     observation_shape_list=observation_shape_list,
-                    hidden_channels=world_model_cfg.embed_dim,
+                    hidden_channels=obs_act_embed_dim,
                     layer_num=2,
                     activation=self.activation,
                     norm_type=norm_type,
@@ -221,7 +226,7 @@ class SampledUniZeroMTModel(nn.Module):
                         self.downsample,
                         activation=self.activation,
                         norm_type=norm_type,
-                        embedding_dim=world_model_cfg.embed_dim,
+                        embedding_dim=obs_act_embed_dim,
                         group_size=world_model_cfg.group_size,
                     ))
                 # TODO: we should change the output_shape to the real observation shape

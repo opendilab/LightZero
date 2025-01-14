@@ -69,7 +69,11 @@ class Transformer(nn.Module):
             - KeysValues: An object containing empty keys and values.
         """
         device = self.ln_f.weight.device  # Assumption: All submodules are on the same device
-        return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
+        if self.config.task_embed_option == "concat_task_embed":
+            return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
+        else:
+            return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
+
 
     #@profile
     def forward(self, sequences: torch.Tensor, past_keys_values: Optional[KeysValues] = None,

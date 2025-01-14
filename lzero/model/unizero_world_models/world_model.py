@@ -45,6 +45,8 @@ class WorldModel(nn.Module):
         super().__init__()
         self.tokenizer = tokenizer
         self.config = config
+        self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
+
         self.transformer = Transformer(self.config)
         self.task_num = 1
         if self.config.device == 'cpu':
@@ -82,7 +84,7 @@ class WorldModel(nn.Module):
 
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
-        self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim,
+        self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.config.embed_dim,
                                                    self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
         if self.continuous_action_space:
             self.sigma_type = self.config.sigma_type
@@ -259,7 +261,6 @@ class WorldModel(nn.Module):
         self.max_cache_size = self.config.max_cache_size
         self.env_num = self.config.env_num
         self.num_layers = self.config.num_layers
-        self.obs_per_embdding_dim = self.config.embed_dim
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
 
     def _initialize_patterns(self) -> None:
@@ -335,7 +336,13 @@ class WorldModel(nn.Module):
         if self.num_observations_tokens == 16:
             self.projection_input_dim = 128
         elif self.num_observations_tokens == 1:
-            self.projection_input_dim = self.obs_per_embdding_dim
+            # self.projection_input_dim = self.config.embed_dim
+            if self.task_embed_option == "concat_task_embed":
+                self.projection_input_dim = self.config.embed_dim - 96
+            elif self.task_embed_option == "register_task_embed":
+                self.projection_input_dim = self.config.embed_dim
+            elif self.task_embed_option == "add_task_embed":
+                self.projection_input_dim = self.config.embed_dim
 
     def _initialize_statistics(self) -> None:
         """Initialize counters for hit count and query count statistics."""
@@ -732,7 +739,7 @@ class WorldModel(nn.Module):
             # ================ calculate the target value in Train phase ================
             # [192, 16, 64] -> [32, 6, 16, 64]
             last_obs_embeddings = last_obs_embeddings.contiguous().view(batch_action.shape[0], -1, num_observations_tokens,
-                                                          self.obs_per_embdding_dim)  # (BL, K) for unroll_step=1
+                                                          self.config.embed_dim)  # (BL, K) for unroll_step=1
 
             last_obs_embeddings = last_obs_embeddings[:, :-1, :]
             batch_action = torch.from_numpy(batch_action).to(last_obs_embeddings.device)

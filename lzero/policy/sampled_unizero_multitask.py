@@ -425,14 +425,14 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
                 task_weight_multi_task.append(1)
 
 
-            # print(f"=== 全局任务权重 (按 task_id 排列): {task_weights}")
-
-            assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
-            assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
-
-
             for loss_name, loss_value in losses.intermediate_losses.items():
                 self.intermediate_losses[f"{loss_name}"] = loss_value
+                # print(f'{loss_name}: {loss_value.sum()}')
+                # print(f'{loss_name}: {loss_value[0][0]}')
+
+            # print(f"=== 全局任务权重 (按 task_id 排列): {task_weights}")
+            assert not torch.isnan(losses.loss_total).any(), f"Loss contains NaN values, losses.loss_total:{losses.loss_total}, losses:{losses}"
+            assert not torch.isinf(losses.loss_total).any(), f"Loss contains Inf values, losses.loss_total:{losses.loss_total}, losses:{losses}"
 
             # Collect losses per task
             obs_loss = self.intermediate_losses.get('loss_obs', 0.0) or 0.0
@@ -780,10 +780,12 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             )
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            if not self._eval_model.training:
-                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
-                latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                policy_logits = policy_logits.detach().cpu().numpy().tolist()
+            # TODO:========
+            # self._eval_model.training = False
+            # if not self._eval_model.training:
+            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
+            latent_state_roots = latent_state_roots.detach().cpu().numpy()
+            policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [
                 [i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)
@@ -802,6 +804,10 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
                 )
             else:
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
+
+            # print(f'type(policy_logits): {type(policy_logits)}')
+            # print(f'policy_logits.shape: {policy_logits.shape}')
+            # print(f'policy_logits: {policy_logits}')
 
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
             self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, task_id=task_id)

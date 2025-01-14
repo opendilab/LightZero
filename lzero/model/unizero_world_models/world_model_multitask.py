@@ -49,12 +49,53 @@ class WorldModelMT(WorldModel):
         Arguments:
             - config (:obj:`TransformerConfig`): The configuration for the transformer.
             - tokenizer (:obj:`Tokenizer`): The tokenizer.
+            
+            - task_embed_option (str): Strategy for incorporating task embeddings. Options:
+                - "add_task_embed": Adds task embeddings to observation embeddings (default).
+                - "concat_task_embed": Concatenates task embeddings with observation embeddings.
+                - "register_task_embed": Uses task embeddings as additional input tokens.
         """
         super().__init__(config, tokenizer)
         self.tokenizer = tokenizer
         self.config = config
 
+        if self.config.device == 'cpu':
+            self.device = torch.device('cpu')
+        else:
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        # Move all modules to the specified device
+        print(f"self.device: {self.device}")
+        # Position embedding
+        self.pos_emb = nn.Embedding(config.max_tokens, self.config.embed_dim, device=self.device)
+        self.precompute_pos_emb_diff_kv()
+        print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
+
+        # Task embedding setup
         self.use_task_embed = config.use_task_embed
+        self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
+        self.task_num = config.task_num
+        self.task_embed_dim = config.task_embed_dim if hasattr(config, "task_embed_dim") else 96
+        self.register_token_length = config.register_token_length if hasattr(config, "register_token_length") else 4
+        
+        self.sim_norm = SimNorm(simnorm_dim=self.group_size)
+        if self.task_embed_option == "concat_task_embed":
+            # TODO：目前在 "concat_task_embed"下面，self.pos_emb需要设置为固定的0
+            self.task_emb = nn.Embedding(self.task_num, self.task_embed_dim, max_norm=1)  # TODO
+            # self.task_emb.weight = self.sim_norm(self.task_emb.weight)
+
+            self.obs_act_embed_dim = config.embed_dim - 96
+        elif self.task_embed_option == "register_task_embed":
+            self.task_emb = nn.Embedding(self.task_num, config.embed_dim, max_norm=1)  # TODO
+            self.obs_act_embed_dim = config.embed_dim
+            # self.register_task_tokens = nn.Parameter(
+            #     torch.zeros(self.register_token_length, config.embed_dim)
+            # )
+            # nn.init.normal_(self.register_task_tokens, mean=0.0, std=0.02)
+        elif self.task_embed_option == "add_task_embed":
+            self.task_emb = nn.Embedding(self.task_num, config.embed_dim, max_norm=1)  # TODO
+            self.obs_act_embed_dim = config.embed_dim
+
+
 
         self.transformer = Transformer(self.config)
 
@@ -88,13 +129,6 @@ class WorldModelMT(WorldModel):
             # 生成足够多的颜色
             self.colors = self._generate_colors(len(self.env_id_list))
 
-
-        # TODO: multitask
-        self.task_num = config.task_num
-        if self.use_task_embed:
-            self.task_emb = nn.Embedding(self.task_num, config.embed_dim, max_norm=1)  # TODO
-        else:
-            self.task_emb = nn.Embedding(self.task_num, config.embed_dim, max_norm=1)  # TODO
             
         self.head_policy_multi_task = nn.ModuleList()
         self.head_value_multi_task = nn.ModuleList()
@@ -106,12 +140,7 @@ class WorldModelMT(WorldModel):
         self.use_moe_head = config.use_moe_head
         self.use_softmoe_head = config.use_softmoe_head
 
-        if self.config.device == 'cpu':
-            self.device = torch.device('cpu')
-        else:
-            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        # Move all modules to the specified device
-        print(f"self.device: {self.device}")
+
         self.to(self.device)
 
         # Initialize configuration parameters
@@ -122,10 +151,6 @@ class WorldModelMT(WorldModel):
 
         self.hidden_size = config.embed_dim // config.num_heads
 
-        # Position embedding
-        self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
-        self.precompute_pos_emb_diff_kv()
-        print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
         self.continuous_action_space = self.config.continuous_action_space
 
         # Initialize action embedding table
@@ -137,14 +162,14 @@ class WorldModelMT(WorldModel):
             # print(f'config.action_space_size_list:{config.action_space_size_list}')
             self.act_embedding_table = nn.ModuleList([
                 nn.Sequential(
-                    nn.Linear(config.action_space_size_list[task_id], config.embed_dim, device=self.device, bias=False),
+                    nn.Linear(config.action_space_size_list[task_id], self.obs_act_embed_dim, device=self.device, bias=False),
                     SimNorm(simnorm_dim=self.group_size)
                 )
                 for task_id in range(self.task_num)
             ])
         else:
             # for discrete action space
-            self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
+            self.act_embedding_table = nn.Embedding(config.action_space_size, self.obs_act_embed_dim, device=self.device)
             print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
         # if self.num_experts_in_moe_head == -1:
@@ -170,7 +195,7 @@ class WorldModelMT(WorldModel):
                 self.head_rewards_multi_task.append(self.head_rewards)
 
                 self.head_observations = self._create_head(self.all_but_last_latent_state_pattern,
-                                                        self.obs_per_embdding_dim,
+                                                        self.config.embed_dim,
                                                         self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
                 self.head_observations_multi_task.append(self.head_observations)
         elif self.use_softmoe_head:
@@ -286,7 +311,6 @@ class WorldModelMT(WorldModel):
         self.max_cache_size = self.config.max_cache_size
         self.env_num = self.config.env_num
         self.num_layers = self.config.num_layers
-        self.obs_per_embdding_dim = self.config.embed_dim
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
 
     def _initialize_patterns(self) -> None:
@@ -354,7 +378,7 @@ class WorldModelMT(WorldModel):
         # Observations head
         self.head_observations = self._create_head_moe(
             self.all_but_last_latent_state_pattern,
-            self.obs_per_embdding_dim,
+            self.embdding_dim,
             norm_layer=self.sim_norm,  # NOTE
             moe=self.get_moe("observations_moe")
         )
@@ -417,7 +441,7 @@ class WorldModelMT(WorldModel):
         # Observations head
         self.head_observations = self._create_head_softmoe(
             self.all_but_last_latent_state_pattern,
-            self.obs_per_embdding_dim,
+            self.config.embed_dim,
             norm_layer=self.sim_norm,  # NOTE
             soft_moe=self.get_soft_moe("observations_soft_moe")
         )
@@ -482,7 +506,14 @@ class WorldModelMT(WorldModel):
         if self.num_observations_tokens == 16:
             self.projection_input_dim = 128
         elif self.num_observations_tokens == 1:
-            self.projection_input_dim = self.obs_per_embdding_dim
+            # self.projection_input_dim = self.config.embed_dim
+
+            if self.task_embed_option == "concat_task_embed":
+                self.projection_input_dim = self.config.embed_dim - 96
+            elif self.task_embed_option == "register_task_embed":
+                self.projection_input_dim = self.config.embed_dim
+            elif self.task_embed_option == "add_task_embed":
+                self.projection_input_dim = self.config.embed_dim
 
     def _initialize_statistics(self) -> None:
         """Initialize counters for hit count and query count statistics."""
@@ -551,6 +582,7 @@ class WorldModelMT(WorldModel):
          Returns:
          - torch.Tensor: The positional embedding tensor.
          """
+        # TODO: detach() ==========
         attn_func = getattr(self.transformer.blocks[layer].attn, attn_type)
         if torch.cuda.is_available():
             return attn_func(self.pos_emb.weight).view(
@@ -580,6 +612,7 @@ class WorldModelMT(WorldModel):
         """
         if self.use_task_embed:
             self.task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE: TODO
+            self.task_embeddings = self.sim_norm(self.task_embeddings.view(1,-1)).view(-1) # TODO
         else:
             self.task_embeddings = torch.zeros(self.config.embed_dim, device=self.device) #  ============= TODO: no task_embeddings now =============
 
@@ -599,15 +632,36 @@ class WorldModelMT(WorldModel):
             obs_embeddings = obs_embeddings_or_act_tokens['obs_embeddings']
             if len(obs_embeddings.shape) == 2:
                 obs_embeddings = obs_embeddings.unsqueeze(1)
+            
+            # TODO: multitask
+            if self.task_embed_option == "add_task_embed":
+                obs_embeddings = obs_embeddings + self.task_embeddings
+            elif self.task_embed_option == "concat_task_embed":
+                # print(f'=='*20)
+                # print(f'obs_embeddings.shape:{obs_embeddings.shape}')
+                # print(f'self.task_embeddings.shape:{self.task_embeddings.shape}')
+                # print(f'=='*20)
+                if is_init_infer:
+                    # 注意只有在inference时，只有在is_init_infer时拼接task embeddings，recurr_infer中以及含义task embeddings的信息了
+                    # Expand task embeddings to match the sequence shape
+                    task_emb_expanded = self.task_embeddings.view(1, 1, -1).expand(obs_embeddings.shape[0], obs_embeddings.shape[1], -1)
+                    obs_embeddings = torch.cat([obs_embeddings, task_emb_expanded], dim=-1)
+
+            if is_init_infer:
+                if self.task_embed_option == "register_task_embed":
+                    # Register task embeddings as input tokens
+                    task_tokens = self.task_embeddings.expand(obs_embeddings.shape[0], self.register_token_length, -1)
+                    obs_embeddings = torch.cat([task_tokens, obs_embeddings], dim=1)
+
             num_steps = obs_embeddings.size(1)
             sequences = self._add_position_embeddings(obs_embeddings, prev_steps, num_steps, kvcache_independent,
                                                       is_init_infer, valid_context_lengths)
-            # TODO: multitask
-            sequences = sequences + self.task_embeddings
+
 
         # Process action tokens
         elif 'act_tokens' in obs_embeddings_or_act_tokens:
             act_tokens = obs_embeddings_or_act_tokens['act_tokens']
+
             if self.continuous_action_space:
                 num_steps = 1
                 act_tokens = act_tokens.float()
@@ -621,20 +675,34 @@ class WorldModelMT(WorldModel):
                 act_embeddings = self.act_embedding_table[task_id](act_tokens)
             else:
                 act_embeddings = self.act_embedding_table(act_tokens)
+            
+            if self.task_embed_option == "add_task_embed":
+                # TODO: 对于action_token不需要增加task_embeddings会造成歧义，反而干扰学习
+                # obs_embeddings = obs_embeddings + self.task_embeddings
+                pass
+            elif self.task_embed_option == "concat_task_embed":
+                # print(f'=='*20)
+                # print(f'act_embeddings.shape:{act_embeddings.shape}')
+                # print(f'self.task_embeddings.shape:{self.task_embeddings.shape}')
+                # print(f'=='*20)
+                # Expand task embeddings to match the sequence shape
+                task_emb_expanded = self.task_embeddings.view(1, 1, -1).expand(act_embeddings.shape[0], act_embeddings.shape[1], -1)
+                act_embeddings = torch.cat([act_embeddings, task_emb_expanded], dim=-1)
+
+            
             sequences = self._add_position_embeddings(act_embeddings, prev_steps, num_steps, kvcache_independent,
                                                       is_init_infer, valid_context_lengths)
 
-            # TODO: multitask
-            # TODO: 对于action_token不需要增加task_embeddings会造成歧义，反而干扰学习
-            self.act_task_embeddings = torch.zeros(self.config.embed_dim, device=self.device)
-            sequences = sequences + self.act_task_embeddings
-
         # Process combined observation embeddings and action tokens
         else:
+
+            # "add_task_embed"在self._process_obs_act_combined_cont方法内部处理
             if self.continuous_action_space:
                 sequences, num_steps = self._process_obs_act_combined_cont(obs_embeddings_or_act_tokens, prev_steps, task_id=task_id)
             else:
                 sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
+        
+
         # Pass sequences through transformer
         x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths)
 
@@ -713,14 +781,50 @@ class WorldModelMT(WorldModel):
         act_embeddings = self.act_embedding_table[task_id](act_tokens)
 
         B, L, K, E = obs_embeddings.size()
-        # B, L*2, E
-        obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=self.device)
+
+        if self.task_embed_option == "concat_task_embed":
+            # B, L*2, E
+            obs_act_embeddings = torch.empty(B, L * (K + 1), self.config.embed_dim, device=self.device)
+        else:
+            # B, L*2, E
+            obs_act_embeddings = torch.empty(B, L * (K + 1), self.config.embed_dim, device=self.device)
+
+
+        if self.task_embed_option == "concat_task_embed":
+            # print(f'=='*20)
+            # print(f'self.task_embeddings.shape:{self.task_embeddings.shape}')
+            # print(f'=='*20)
+            # Expand task embeddings to match the sequence shape
+            task_emb_expanded = self.task_embeddings.view(1, 1, -1).expand(B, 1, -1)
 
         for i in range(L):
-            obs = obs_embeddings[:, i, :, :] + self.task_embeddings  # Shape: (B, K, E) TODO: task_embeddings
+            if self.task_embed_option == "add_task_embed":
+                obs = obs_embeddings[:, i, :, :] + self.task_embeddings  # Shape: (B, K, E) TODO: task_embeddings
+            elif self.task_embed_option == "concat_task_embed":
+                # print(f'=='*20)
+                # print(f'obs_embeddings.shape:{obs_embeddings.shape}')
+                # print(f'=='*20)
+                obs = torch.cat([obs_embeddings[:, i, :, :], task_emb_expanded], dim=-1)
+            else:
+                obs = obs_embeddings[:, i, :, :]  # Shape: (B, K, E)
+
             act = act_embeddings[:, i, :].unsqueeze(1)
+            if self.task_embed_option == "concat_task_embed":
+                # print(f'=='*20)
+                # print(f'act_embeddings.shape:{act_embeddings.shape}')
+                # print(f'=='*20)
+                act = torch.cat([act, task_emb_expanded], dim=-1)
+
             obs_act = torch.cat([obs, act], dim=1)
+            # print(f'obs_act.shape:{obs_act.shape}')
+
             obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
+
+        if self.task_embed_option == "register_task_embed":
+            # =====TODO=====
+            # Register task embeddings as input tokens
+            task_tokens = self.task_embeddings.expand(B, self.register_token_length, -1)
+            obs_act_embeddings = torch.cat([task_tokens, obs_act_embeddings], dim=1)
 
         return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
 
@@ -904,7 +1008,7 @@ class WorldModelMT(WorldModel):
             # ================ calculate the target value in Train phase ================
             # [192, 16, 64] -> [32, 6, 16, 64]
             last_obs_embeddings = last_obs_embeddings.contiguous().view(batch_action.shape[0], -1, num_observations_tokens,
-                                                          self.obs_per_embdding_dim)  # (BL, K) for unroll_step=1
+                                                          self.obs_act_embed_dim)  # (BL, K) for unroll_step=1
 
             last_obs_embeddings = last_obs_embeddings[:, :-1, :]
             batch_action = torch.from_numpy(batch_action).to(last_obs_embeddings.device)
@@ -1592,6 +1696,25 @@ class WorldModelMT(WorldModel):
         logits_observations = rearrange(outputs.logits_observations[:, :-1], 'b t o -> (b t) o')
         labels_observations = labels_observations.reshape(-1, self.projection_input_dim)
 
+        if self.use_task_embed and self.task_embed_option == "concat_task_embed":
+            # print(f'=='*20)
+            # print(f'labels_observations.shape:{labels_observations.shape}')
+            # print(f'=='*20)
+            # Expand task embeddings to match the sequence shape
+            self.task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE: TODO
+            self.task_embeddings = self.sim_norm(self.task_embeddings.view(1,-1)).view(-1) # TODO
+            task_emb_expanded = self.task_embeddings.expand(labels_observations.shape[0], -1)
+            # print(f'task_emb_expanded:{task_emb_expanded}')
+            # print(f"task_emb_expanded.shape: {task_emb_expanded.shape}")
+            # print(f"task_emb_expanded (min, max, mean): {task_emb_expanded.min()}, {task_emb_expanded.max()}, {task_emb_expanded.mean()}")
+            # assert not torch.isnan(task_emb_expanded).any(), "task_emb_expanded 存在 NaN 值"
+            # print(f"logits_observations.shape: {logits_observations.shape}")
+            labels_observations = torch.cat([labels_observations, task_emb_expanded.detach()], dim=-1) # NOTE: detach()
+            # print(f"labels_observations.shape: {labels_observations.shape}")
+            # assert logits_observations.shape == labels_observations.shape, "logits 和 labels 的形状不匹配"
+
+
+
         # Compute prediction loss for observations. Options: MSE and Group KL
         if self.predict_latent_loss_type == 'mse':
             # MSE loss, directly compare logits and labels
@@ -1607,11 +1730,13 @@ class WorldModelMT(WorldModel):
             loss_obs = F.kl_div(logits_reshaped.log(), labels_reshaped, reduction='none').sum(dim=-1).mean(dim=-1)
 
             #  ========== for debugging ==========
+            # assert not torch.isnan(logits_reshaped).any(), "logits_reshaped contains NaN values"
+            # assert not torch.isnan(labels_reshaped).any(), "labels_reshaped contains NaN values"
             # print('loss_obs:', loss_obs.mean())
-            # assert not torch.isnan(loss_obs).any(), "loss_obs contains NaN values"
-            # assert not torch.isinf(loss_obs).any(), "loss_obs contains Inf values"
-            # for name, param in self.tokenizer.representation_network.named_parameters():
+            # for name, param in self.tokenizer.encoder.named_parameters():
             #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
+            # logits_grad = torch.autograd.grad(loss_obs.mean(), logits_observations, retain_graph=True)[0]
+            # print(f"logits_grad (min, max, mean): {logits_grad.min()}, {logits_grad.max()}, {logits_grad.mean()}")
 
         # Apply mask to loss_obs
         mask_padding_expanded = batch['mask_padding'][:, 1:].contiguous().view(-1)

@@ -556,7 +556,11 @@ def concat_output_value(output_lst: List) -> np.ndarray:
     # concat the values of the model output list
     value_lst = []
     for output in output_lst:
-        value_lst.append(output.value)
+        value_lst.append(output.value) # TODO:cpu
+
+    # print(f'value_lst:{value_lst}')
+    # print(f'value_lst[0]:{value_lst[0]}')
+    # print(f'value_lst[0].shape:{value_lst[0].shape}')
 
     value_lst = np.concatenate(value_lst)
 
