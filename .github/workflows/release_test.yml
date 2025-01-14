@@ -56,7 +56,7 @@ jobs:
       matrix:
         os:
           - 'ubuntu-20.04'
-          - 'macos-12'
+          - 'macos-13'
         python:
           - '3.7.17'
           - '3.8.17'
@@ -76,11 +76,11 @@ jobs:
             architecture: x86
           - os: ubuntu-20.04
             architecture: AMD64
-          - os: macos-12
+          - os: macos-13
             architecture: aarch64
-          - os: macos-12
+          - os: macos-13
             architecture: x86
-          - os: macos-12
+          - os: macos-13
             architecture: AMD64
           - python: '3.7.17'
             architecture: arm64

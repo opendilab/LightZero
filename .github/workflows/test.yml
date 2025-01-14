@@ -20,7 +20,7 @@ jobs:
       matrix:
         os:
           - 'self-hosted'
-          - 'macos-12'
+          - 'macos-13'
         python-version:
           - '3.8'
           - '3.9'
