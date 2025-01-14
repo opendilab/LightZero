@@ -13,15 +13,23 @@ def main(env_id='detective.z5', seed=0):
     # ==============================================================
     # collector_env_num = 8
     # n_episode = 8
-    collector_env_num = 4
-    n_episode = 4
+
     evaluator_env_num = 2
     num_simulations = 50
     max_env_step = int(10e6)
 
-    batch_size = 16
-    num_unroll_steps = 10
-    infer_context_length = 4
+    # collector_env_num = 4
+    # n_episode = 4
+    # batch_size = 16 # proj train
+    # num_unroll_steps = 10
+    # infer_context_length = 4
+
+    collector_env_num = 2
+    n_episode = 2
+    evaluator_env_num = 2
+    batch_size = 4 # all train
+    num_unroll_steps = 5
+    infer_context_length = 2
 
     # batch_size = 16
     # num_unroll_steps = 5
@@ -42,6 +50,7 @@ def main(env_id='detective.z5', seed=0):
     reanalyze_partition = 0.75
     model_name = 'BAAI/bge-base-en-v1.5'
     # model_name = 'google-bert/bert-base-uncased'
+
     # =========== TODO: only for debug  =========== 
     # collector_env_num = 2
     # num_segments = 2
@@ -63,6 +72,7 @@ def main(env_id='detective.z5', seed=0):
     # ==============================================================
     jericho_unizero_config = dict(
         env=dict(
+            remove_stuck_actions=False,
             stop_value=int(1e6),
             observation_shape=512,
             max_steps=max_steps,
@@ -158,7 +168,8 @@ def main(env_id='detective.z5', seed=0):
     main_config = jericho_unizero_config
     create_config = jericho_unizero_create_config
 
-    main_config.exp_name = f'data_unizero_detective_20250107/{model_name}/{env_id[:8]}_ms{max_steps}_action-space-{action_space_size}_remove-novalid-action_uz_nlayer{num_layers}_embed512_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_detective_20250107/{model_name}/{env_id[:8]}_ms{max_steps}_action-space-{action_space_size}_all-train_uz_nlayer{num_layers}_embed512_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    # main_config.exp_name = f'data_unizero_detective_20250107/{model_name}/{env_id[:8]}_ms{max_steps}_action-space-{action_space_size}_remove-novalid-action_uz_nlayer{num_layers}_embed512_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed,
                   model_path=main_config.policy.model_path, max_env_step=max_env_step)

@@ -323,7 +323,9 @@ class HFLanguageRepresentationNetwork(nn.Module):
 
         self.sim_norm = SimNorm(simnorm_dim=group_size)
 
-    def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
+    # def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, no_grad: bool = False) -> torch.Tensor: # TODO ======
+    
         """
         前向传播，获取输入序列的语言表示。
 
@@ -345,38 +347,39 @@ class HFLanguageRepresentationNetwork(nn.Module):
                 # 我们通常取 [CLS] 标记对应的向量，即 outputs.last_hidden_state[:, 0, :]
                 cls_embedding = outputs.last_hidden_state[:, 0, :]
                 
-                # 如果目标的 embedding_size 不是 768，则应用线性变换
-                if self.embedding_size == 768:
-                    # NOTE: very important for training stability.
-                    cls_embedding = self.sim_norm(cls_embedding)
+            # 如果目标的 embedding_size 不是 768，则应用线性变换
+            # if self.embedding_size == 768:
+            #     # NOTE: very important for training stability.
+            #     cls_embedding = self.sim_norm(cls_embedding)
 
-                    return cls_embedding
-                else:
-                    cls_embedding = self.embed_head(cls_embedding)
+            #     return cls_embedding
+            # else:
+            cls_embedding = self.embed_head(cls_embedding)
 
-                    # NOTE: very important for training stability.
-                    cls_embedding = self.sim_norm(cls_embedding)
+            # NOTE: very important for training stability.
+            cls_embedding = self.sim_norm(cls_embedding)
 
-                    return cls_embedding
+            return cls_embedding
         else:
             # 非 no_grad 模式下，启用梯度计算
             x = x.long()  # 确保输入张量为长整型
-            outputs = self.model(x)
+            outputs = self.model(x,  attention_mask= attention_mask)  # 获取模型的输出
+
             cls_embedding = outputs.last_hidden_state[:, 0, :]
             
             # 如果目标的 embedding_size 不是 768，则应用线性变换
-            if self.embedding_size == 768:
-                # NOTE: very important for training stability.
-                cls_embedding = self.sim_norm(cls_embedding)
+            # if self.embedding_size == 768:
+            #     # NOTE: very important for training stability.
+            #     cls_embedding = self.sim_norm(cls_embedding)
 
-                return cls_embedding
-            else:
-                cls_embedding = self.embed_head(cls_embedding)
+            #     return cls_embedding
+            # else:
+            cls_embedding = self.embed_head(cls_embedding)
 
-                # NOTE: very important for training stability.
-                cls_embedding = self.sim_norm(cls_embedding)
+            # NOTE: very important for training stability.
+            cls_embedding = self.sim_norm(cls_embedding)
 
-                return cls_embedding
+            return cls_embedding
 
 
 

@@ -36,7 +36,7 @@ class JerichoEnv(BaseEnv):
         self.rank = get_rank()
 
         # 新增：是否启用移除无效动作的功能
-        self.remove_stuck_actions = cfg.get('remove_stuck_actions', True)
+        self.remove_stuck_actions = cfg.get('remove_stuck_actions', False)
 
         if JerichoEnv.tokenizer is None:
             # 只让 rank 0 下载模型
@@ -70,6 +70,9 @@ class JerichoEnv(BaseEnv):
         if self.remove_stuck_actions:
             available_actions = [a for a in self._action_list if a not in self.blocked_actions]
             self._action_list = available_actions
+        else:
+            available_actions = self._action_list
+        
 
         full_obs = obs + "\nValid actions: " + str(available_actions)
 
