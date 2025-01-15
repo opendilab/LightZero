@@ -21,8 +21,8 @@ def main(env_id='detective.z5', seed=0):
     infer_context_length = 4
     replay_ratio = 0.25
     update_per_collect = 20  # NOTE: very important for ddp
-    embed_dim = 2048
-    num_layers = 16
+    embed_dim = 896
+    num_layers = 24
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
     # buffer_reanalyze_freq = 1/10
     buffer_reanalyze_freq = 1/100000
@@ -68,7 +68,7 @@ def main(env_id='detective.z5', seed=0):
             manager=dict(shared_memory=False, )
         ),
         policy=dict(
-            multi_gpu=False, # ======== Very important for ddp =============
+            multi_gpu=False,  # ======== Very important for ddp =============
             # multi_gpu=True, # ======== Very important for ddp =============
             # default is 10000
             use_wandb=False,
@@ -93,11 +93,11 @@ def main(env_id='detective.z5', seed=0):
                     device='cuda',
                     action_space_size=action_space_size,
                     use_hf=True,
-                    pretrained_path='/data/share/Llama-3.2-1B',
+                    pretrained_path='/data/share/Qwen2.5-0.5B',
                     # These parameters should be the same as the config file of original model.
                     num_layers=num_layers,
-                    # Note: llama uses GQA, and the number of heads should equal to the number of key-value heads.
-                    num_heads=16,
+                    # Note: qwen uses GQA, and the number of heads should equal to the number of key-value heads.
+                    num_heads=2,
                     embed_dim=embed_dim,
                     hidden_size=64,  # The dim for each head is 64 in this case.
                     obs_type='text',  # TODO: Change it.

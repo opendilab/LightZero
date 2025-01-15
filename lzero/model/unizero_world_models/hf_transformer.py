@@ -1,7 +1,7 @@
 from typing import Optional
 
 import torch
-from transformers import LlamaForCausalLM
+from transformers import Qwen2ForCausalLM
 from transformers.cache_utils import DynamicCache
 
 from .kv_caching import KeysValues
@@ -22,7 +22,7 @@ def update_kv(cache: KeysValues, new_cache: DynamicCache):
         cache[i].update(new_cache.key_cache[i][:, :, -1:, :], new_cache.value_cache[i][:, :, -1:, :])
 
 
-class HuggingfaceLlamaTransformer(LlamaForCausalLM):
+class HuggingfaceLlamaTransformer(Qwen2ForCausalLM):
     @classmethod
     def from_pretrained(cls, lzero_config, *args, **kwargs):
         # Add custom logic here
@@ -94,10 +94,6 @@ class HuggingfaceLlamaTransformer(LlamaForCausalLM):
             attention_mask = torch.arange(T).expand(B, T) >= (T - valid_context_lengths.unsqueeze(1))
         else:
             attention_mask = torch.ones_like(sequences)
-        # print(valid_context_lengths.shape)
-        # print(attention_mask.shape)
-        # print(sequences.shape)
-        # assert False
 
         output = self.model.forward(
             attention_mask=attention_mask,
