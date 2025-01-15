@@ -15,6 +15,7 @@ from torch.nn import functional as F
 from .kv_caching import KeysValues
 from .moe import MoeLayer, MultiplicationFeedForward
 from line_profiler import line_profiler
+from lzero.model.common import SimNorm
 
 
 @dataclass
@@ -50,12 +51,57 @@ class Transformer(nn.Module):
         - ln_f (:obj:`nn.LayerNorm`): Layer normalization applied to the final output.
     """
 
-    def __init__(self, config: TransformerConfig) -> None:
+    def __init__(self, config: TransformerConfig, task_embed=None) -> None:
         super().__init__()
         self.config = config
         self.drop = nn.Dropout(config.embed_pdrop)
         self.blocks = nn.ModuleList([Block(config) for _ in range(config.num_layers)])
         self.ln_f = nn.LayerNorm(config.embed_dim)
+
+        self.task_embed = task_embed
+        self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
+        if self.task_embed_option == "register_task_embed":
+            self.use_register_token = True # TODO
+            # Register token setup
+            self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
+            self.sim_norm = SimNorm(simnorm_dim=config.embed_dim)  # Normalization for task embeddings
+        else:
+            self.use_register_token = False # TODO
+   
+
+    def add_register_tokens(self, sequences: torch.Tensor, task_id: int) -> torch.Tensor:
+        """
+        将 register_token_num 个 Register Token 拼接到序列最前面。
+
+        Arguments:
+            - sequences (:obj:`torch.Tensor`): (B, T, C)
+            - task_id (:obj:`int`): 当前任务的 ID
+
+        Returns:
+            - new_sequences (:obj:`torch.Tensor`): (B, T + register_token_num, C)
+        """
+        B = sequences.size(0)
+        device = sequences.device
+
+        # 生成一个可学习的 task embedding
+        # 并进行 SimNorm
+        task_embedding = self.task_embed(torch.tensor([task_id], device=device))  # (1, C)
+        task_embedding = self.sim_norm(task_embedding.view(1, -1)).view(-1)     # (C, )
+        # 扩展出 register_token_num
+        register_tokens = task_embedding.unsqueeze(0).expand(self.register_token_num, -1)  # (register_token_num, C)
+        register_tokens = register_tokens.unsqueeze(0).expand(B, -1, -1)        # (B, register_token_num, C)
+
+        # 拼接：将 Register Token 拼到最前面
+        new_sequences = torch.cat([sequences, register_tokens], dim=1)  # (B, register_token_num + T, C)
+        return new_sequences
+
+    def remove_register_tokens_from_kv(self, past_keys_values: KeysValues) -> None:
+        """
+        移除所有层 KV 中最前面的 register_token_num 个 token，用于在 forward() 结束时调用。
+        """
+        if past_keys_values is None:
+            return
+        past_keys_values.remove_register_tokens(self.register_token_num)
 
     def generate_empty_keys_values(self, n: int, max_tokens: int) -> KeysValues:
         """
@@ -69,32 +115,60 @@ class Transformer(nn.Module):
             - KeysValues: An object containing empty keys and values.
         """
         device = self.ln_f.weight.device  # Assumption: All submodules are on the same device
-        if self.config.task_embed_option == "concat_task_embed":
-            return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
+        if self.use_register_token: # ======= TODO ========
+            return KeysValues(n, self.config.num_heads, max_tokens+self.register_token_num, self.config.embed_dim, self.config.num_layers, device)
         else:
             return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
 
 
     #@profile
-    def forward(self, sequences: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
-                valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
+    def forward(
+        self,
+        sequences: torch.Tensor,         # (B, T, C)
+        past_keys_values: Optional[KeysValues] = None,
+        valid_context_lengths: Optional[torch.Tensor] = None,
+        task_id: int = 0
+    ) -> torch.Tensor:
         """
         Forward pass of the Transformer model.
 
         Arguments:
-            - sequences (:obj:`torch.Tensor`): Input tensor of shape (batch_size, seq_length, embed_dim).
-            - past_keys_values (:obj:`Optional[KeysValues]`): Precomputed keys and values for faster generation (default: None).
-            - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid lengths of context for masking (default: None).
+            - sequences (:obj:`torch.Tensor`): (B, T, C)
+            - past_keys_values (:obj:`Optional[KeysValues]`): 缓存，用于推理时加速
+            - valid_context_lengths (:obj:`Optional[torch.Tensor]`): 某些场景下可用的有效上下文长度
+            - task_id (:obj:`int`): 任务 ID
 
         Returns:
-            - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
+            - 输出张量 (B, T + register_token_num, C) 或 (B, T, C)，视是否添加 Register Token 而定
         """
-        assert past_keys_values is None or len(past_keys_values) == len(self.blocks)
-        x = self.drop(sequences)
-        for i, block in enumerate(self.blocks):
-            x = block(x, None if past_keys_values is None else past_keys_values[i], valid_context_lengths)
+        # 若使用 Register Token，则将其拼到序列最前面
+        # 训练阶段和推理阶段都统一处理
+        if self.use_register_token:
+            sequences = self.add_register_tokens(sequences, task_id)
 
+        # 接入 dropout
+        x = self.drop(sequences)
+
+        # 逐层调用
+        for i, block in enumerate(self.blocks):
+            x = block(x,
+                      None if past_keys_values is None else past_keys_values[i],
+                      valid_context_lengths)
+
+        # 最后层 LN
         x = self.ln_f(x)
+
+        # 如果 past_keys_values 不为 None，说明是推理阶段，此时我们需要把 KV 缓存中
+        # 开头多加的 Register Token 移除，以保证外键信息一致，不用修改外部逻辑
+        if self.use_register_token and (past_keys_values is not None):
+            self.remove_register_tokens_from_kv(past_keys_values)
+
+        import ipdb; ipdb.set_trace()
+
+        # TODO
+        if self.use_register_token:
+            x = x[:,:,-register_token_num,:]
+
         return x
 
 
@@ -235,7 +309,7 @@ class SelfAttention(nn.Module):
 
     #@profile
     def forward(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None,
-                valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
+                valid_context_lengths: Optional[torch.Tensor] = None, ) -> torch.Tensor:
         """
         Forward pass for the self-attention mechanism.
 
@@ -263,8 +337,23 @@ class SelfAttention(nn.Module):
         v = self.value(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, num_heads, T, head_size)
 
         if kv_cache is not None:
+            # import ipdb; ipdb.set_trace()
+
             kv_cache.update(k, v) # time occupancy 21%
             k, v = kv_cache.get() # time occupancy 5%
+        
+        # # 如果存在缓存，就更新缓存
+        # if kv_cache is not None:
+        #     # 判断是否是 register_token
+        #     # 在这里逻辑简单处理：如果当前 T == register_token_num，
+        #     # 说明这一批只包含 Register Token，就 is_register_token=True
+        #     is_register = (T == kv_cache.register_token_num)
+        #     kv_cache.update(k, v, is_register_token=is_register)
+        #     k, v = kv_cache.get()  # (B, nh, L+T, hs) 等
+
+        #     L_total = k.shape[2]  # L + T
+        # else:
+        #     L_total = T
 
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
 
@@ -293,6 +382,8 @@ class SelfAttention(nn.Module):
 
         y = rearrange(y, 'b h t e -> b t (h e)')  # Combine the heads back together (B, T, embed_dim)
         y = self.resid_drop(self.proj(y))
+
+
 
         return y
 

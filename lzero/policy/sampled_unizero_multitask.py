@@ -688,7 +688,18 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
+            
+            # try:
             self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, task_id=task_id)
+                # print("latent_state_roots.shape:", latent_state_roots.shape)
+            # except Exception as e:
+            #     print("="*20)
+            #     print(e)
+            #     print("roots:", roots, "latent_state_roots:", latent_state_roots)
+            #     print("latent_state_roots.shape:", latent_state_roots.shape)
+            #     print("="*20)
+            #     import ipdb; ipdb.set_trace()
+
 
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()

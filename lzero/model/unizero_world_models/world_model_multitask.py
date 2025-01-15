@@ -75,7 +75,7 @@ class WorldModelMT(WorldModel):
         self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
         self.task_num = config.task_num
         self.task_embed_dim = config.task_embed_dim if hasattr(config, "task_embed_dim") else 96
-        self.register_token_length = config.register_token_length if hasattr(config, "register_token_length") else 4
+        self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
         
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
         if self.task_embed_option == "concat_task_embed":
@@ -87,17 +87,11 @@ class WorldModelMT(WorldModel):
         elif self.task_embed_option == "register_task_embed":
             self.task_emb = nn.Embedding(self.task_num, config.embed_dim, max_norm=1)  # TODO
             self.obs_act_embed_dim = config.embed_dim
-            # self.register_task_tokens = nn.Parameter(
-            #     torch.zeros(self.register_token_length, config.embed_dim)
-            # )
-            # nn.init.normal_(self.register_task_tokens, mean=0.0, std=0.02)
         elif self.task_embed_option == "add_task_embed":
             self.task_emb = nn.Embedding(self.task_num, config.embed_dim, max_norm=1)  # TODO
             self.obs_act_embed_dim = config.embed_dim
 
-
-
-        self.transformer = Transformer(self.config)
+        self.transformer = Transformer(self.config, self.task_emb)
 
         # TODO ========
         self.analysis_tsne = self.config.get('analysis_tsne', False)
@@ -627,7 +621,7 @@ class WorldModelMT(WorldModel):
         if is_init_infer:
             valid_context_lengths = None
 
-        # Process observation embeddings
+        # inference阶段： collect或者eval Process observation embeddings
         if 'obs_embeddings' in obs_embeddings_or_act_tokens:
             obs_embeddings = obs_embeddings_or_act_tokens['obs_embeddings']
             if len(obs_embeddings.shape) == 2:
@@ -642,23 +636,23 @@ class WorldModelMT(WorldModel):
                 # print(f'self.task_embeddings.shape:{self.task_embeddings.shape}')
                 # print(f'=='*20)
                 if is_init_infer:
-                    # 注意只有在inference时，只有在is_init_infer时拼接task embeddings，recurr_infer中以及含义task embeddings的信息了
+                    # 注意只有在inference时，只有在is_init_infer时拼接task embeddings，recurr_infer中已经在init_infer中增加了task embeddings的信息了
                     # Expand task embeddings to match the sequence shape
                     task_emb_expanded = self.task_embeddings.view(1, 1, -1).expand(obs_embeddings.shape[0], obs_embeddings.shape[1], -1)
                     obs_embeddings = torch.cat([obs_embeddings, task_emb_expanded], dim=-1)
 
-            if is_init_infer:
-                if self.task_embed_option == "register_task_embed":
-                    # Register task embeddings as input tokens
-                    task_tokens = self.task_embeddings.expand(obs_embeddings.shape[0], self.register_token_length, -1)
-                    obs_embeddings = torch.cat([task_tokens, obs_embeddings], dim=1)
+            # if is_init_infer:
+            #     if self.task_embed_option == "register_task_embed":
+            #         # Register task embeddings as input tokens
+            #         task_tokens = self.task_embeddings.expand(obs_embeddings.shape[0], self.register_token_length, -1)
+            #         obs_embeddings = torch.cat([task_tokens, obs_embeddings], dim=1)
 
             num_steps = obs_embeddings.size(1)
             sequences = self._add_position_embeddings(obs_embeddings, prev_steps, num_steps, kvcache_independent,
                                                       is_init_infer, valid_context_lengths)
 
 
-        # Process action tokens
+        # inference阶段： collect或者eval  Process action tokens
         elif 'act_tokens' in obs_embeddings_or_act_tokens:
             act_tokens = obs_embeddings_or_act_tokens['act_tokens']
 
@@ -693,10 +687,10 @@ class WorldModelMT(WorldModel):
             sequences = self._add_position_embeddings(act_embeddings, prev_steps, num_steps, kvcache_independent,
                                                       is_init_infer, valid_context_lengths)
 
-        # Process combined observation embeddings and action tokens
+        # 训练阶段： Process combined observation embeddings and action tokens
         else:
-
-            # "add_task_embed"在self._process_obs_act_combined_cont方法内部处理
+            # "add_task_embed"在self._process_obs_act_combined_cont方法内部处理, 
+            # process_obs_act_combined目前还没有增加task_embed的concat和register模式
             if self.continuous_action_space:
                 sequences, num_steps = self._process_obs_act_combined_cont(obs_embeddings_or_act_tokens, prev_steps, task_id=task_id)
             else:
@@ -704,7 +698,7 @@ class WorldModelMT(WorldModel):
         
 
         # Pass sequences through transformer
-        x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths)
+        x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths, task_id=task_id)
 
         # Generate logits
 
@@ -820,11 +814,11 @@ class WorldModelMT(WorldModel):
 
             obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
 
-        if self.task_embed_option == "register_task_embed":
-            # =====TODO=====
-            # Register task embeddings as input tokens
-            task_tokens = self.task_embeddings.expand(B, self.register_token_length, -1)
-            obs_act_embeddings = torch.cat([task_tokens, obs_act_embeddings], dim=1)
+        # if self.task_embed_option == "register_task_embed":
+        #     # =====TODO=====
+        #     # Register task embeddings as input tokens
+        #     task_tokens = self.task_embeddings.expand(B, self.register_token_length, -1)
+        #     obs_act_embeddings = torch.cat([task_tokens, obs_act_embeddings], dim=1)
 
         return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
 
@@ -861,7 +855,7 @@ class WorldModelMT(WorldModel):
         return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
 
     #@profile
-    def _transformer_pass(self, sequences, past_keys_values, kvcache_independent, valid_context_lengths):
+    def _transformer_pass(self, sequences, past_keys_values, kvcache_independent, valid_context_lengths, task_id=0):
         """
         Pass sequences through the transformer.
 
@@ -879,7 +873,7 @@ class WorldModelMT(WorldModel):
                  enumerate(past_keys_values)]
             return torch.cat(x, dim=0)
         else:
-            return self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths)
+            return self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths, task_id=task_id)
 
     #@profile
     @torch.no_grad()
@@ -892,6 +886,13 @@ class WorldModelMT(WorldModel):
         Returns:
             - torch.FloatTensor: The outputs from the world model and the latent state.
         """
+        if self.use_task_embed:
+            self.task_embeddings = self.task_emb(torch.tensor(task_id, device=self.device))  # NOTE: TODO
+            self.task_embeddings = self.sim_norm(self.task_embeddings.view(1,-1)).view(-1) # TODO
+        else:
+            self.task_embeddings = torch.zeros(self.config.embed_dim, device=self.device) #  ============= TODO: no task_embeddings now =============
+        
+
         # Extract observations, actions, and current observations from the dictionary.
         if isinstance(obs_act_dict, dict):
             batch_obs = obs_act_dict['obs']
@@ -906,7 +907,18 @@ class WorldModelMT(WorldModel):
             # Encode current observations to latent embeddings
             current_obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch_current_obs, task_id=task_id)
             # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
-            self.latent_state = current_obs_embeddings
+            # self.latent_state = current_obs_embeddings
+
+            #  ================ NOTE ================
+            # import ipdb; ipdb.set_trace()
+            # self.latent_state 是原来的obs_embeddings与task_embedding的组合： add或者concat
+            if self.use_task_embed and self.task_embed_option == "add_task_embed":
+                self.latent_state = current_obs_embeddings + self.task_embeddings
+            if self.use_task_embed and self.task_embed_option == "concat_task_embed":
+                task_emb_expanded = self.task_embeddings.view(1, 1, -1).expand(current_obs_embeddings.shape[0], current_obs_embeddings.shape[1], -1)
+                self.latent_state = torch.cat([current_obs_embeddings, task_emb_expanded], dim=-1)
+            #  ================ NOTE ================
+
             outputs_wm = self.wm_forward_for_initial_inference(obs_embeddings, batch_action, current_obs_embeddings, task_id=task_id)
         else:
             # ================ calculate the target value in Train phase ================
@@ -946,9 +958,13 @@ class WorldModelMT(WorldModel):
                     # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
                     outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings},
                                               past_keys_values=self.keys_values_wm, is_init_infer=True, task_id=task_id)
-
-                    # Copy and store keys_values_wm for a single environment
-                    self.update_cache_context(current_obs_embeddings, is_init_infer=True)
+                    
+                    if self.use_task_embed and self.task_embed_option in ["concat_task_embed", "add_task_embed"]:
+                        # Copy and store keys_values_wm for a single environment
+                        self.update_cache_context(self.latent_state, is_init_infer=True)
+                    else:
+                        # Copy and store keys_values_wm for a single environment
+                        self.update_cache_context(current_obs_embeddings, is_init_infer=True)
                 else:
                     # Assume latest_state is the new latent_state, containing information from ready_env_num environments
                     ready_env_num = current_obs_embeddings.shape[0]
@@ -1001,7 +1017,12 @@ class WorldModelMT(WorldModel):
                                               past_keys_values=self.keys_values_wm, is_init_infer=True, task_id=task_id)
 
                     # Copy and store keys_values_wm for a single environment
-                    self.update_cache_context(current_obs_embeddings, is_init_infer=True)
+                    if self.use_task_embed and self.task_embed_option in ["concat_task_embed", "add_task_embed"]:
+                        # Copy and store keys_values_wm for a single environment
+                        self.update_cache_context(self.latent_state, is_init_infer=True)
+                    else:
+                        # Copy and store keys_values_wm for a single environment
+                        self.update_cache_context(current_obs_embeddings, is_init_infer=True)
 
         elif batch_action is not None and current_obs_embeddings is None:
         # elif n > self.env_num and batch_action is not None and current_obs_embeddings is None:
@@ -1367,6 +1388,7 @@ class WorldModelMT(WorldModel):
 
                 # If not found, try to retrieve from past_kv_cache_recurrent_infer
                 if matched_value is None:
+                    # import ipdb; ipdb.set_trace()
                     matched_value = self.shared_pool_recur_infer[self.past_kv_cache_recurrent_infer.get(cache_key)]
 
             if matched_value is not None:
