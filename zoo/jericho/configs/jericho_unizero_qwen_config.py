@@ -112,9 +112,10 @@ def main(env_id='detective.z5', seed=0):
             replay_ratio=replay_ratio,
             batch_size=batch_size,
             learning_rate=0.0001,
+            latent_recon_loss_weight=0.1,
             num_simulations=num_simulations,
             num_segments=num_segments,
-            train_start_after_envsteps=0, # TODO
+            train_start_after_envsteps=0,  # TODO
             game_segment_length=game_segment_length,
             replay_buffer_size=int(1e6),
             eval_freq=int(5e3),

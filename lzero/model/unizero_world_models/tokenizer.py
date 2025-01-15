@@ -142,5 +142,17 @@ class Tokenizer(nn.Module):
         """
         return torch.mean(self.lpips(original_images, reconstructed_images))
 
+    def lm_reconstruction_loss(self, labels: torch.Tensor, logits: torch.Tensor) -> torch.Tensor:
+        loss = F.cross_entropy(logits, labels)
+        return loss
+
+    def decode_to_language_logits(self, embeddings: torch.Tensor, target_ids: torch.Tensor) -> torch.Tensor:
+        outputs = self.decoder_network(
+            input_ids=target_ids,
+            encoder_hidden_states=embeddings,
+        )
+        logits = self.decoder_network.lm_head(outputs.last_hidden_state)
+        return logits
+
     def __repr__(self) -> str:
         return "Tokenizer"
