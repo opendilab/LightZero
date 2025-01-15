@@ -19,6 +19,7 @@ from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
 from .utils import LossWithIntermediateLosses, init_weights
 from .utils import WorldModelOutput, hash_state
+from .hf_transformer import HuggingfaceLlamaTransformer
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -45,7 +46,10 @@ class WorldModel(nn.Module):
         super().__init__()
         self.tokenizer = tokenizer
         self.config = config
-        self.transformer = Transformer(self.config)
+        if self.config.use_hf:
+            self.transformer = HuggingfaceLlamaTransformer.from_pretrained(self.config, self.config.pretrained_path)
+        else:
+            self.transformer = Transformer(self.config)
 
         if self.config.device == 'cpu':
             self.device = torch.device('cpu')
@@ -61,7 +65,8 @@ class WorldModel(nn.Module):
         # Initialize patterns for block masks
         self._initialize_patterns()
 
-        self.hidden_size = config.embed_dim // config.num_heads
+        self.hidden_size = config['hidden_size'] if "hidden_size" in config else config.embed_dim // config.num_heads
+        config['hidden_size'] = self.hidden_size
 
         # Position embedding
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
@@ -403,15 +408,13 @@ class WorldModel(nn.Module):
          Returns:
          - torch.Tensor: The positional embedding tensor.
          """
-        attn_func = getattr(self.transformer.blocks[layer].attn, attn_type)
+        tmp = self.transformer._get_positional_embedding(layer, attn_type, self.pos_emb).view(
+                1, self.config.max_tokens, -1, self.hidden_size
+            )
         if torch.cuda.is_available():
-            return attn_func(self.pos_emb.weight).view(
-                1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
-            ).transpose(1, 2).to(self.device).detach()
+            return tmp.transpose(1, 2).to(self.device).detach()
         else:
-            return attn_func(self.pos_emb.weight).view(
-                1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
-            ).transpose(1, 2).detach()
+            return tmp.transpose(1, 2).detach()
 
     def forward(self, obs_embeddings_or_act_tokens: Dict[str, Union[torch.Tensor, tuple]],
                 past_keys_values: Optional[torch.Tensor] = None,
@@ -1167,6 +1170,15 @@ class WorldModel(nn.Module):
             # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 25),
             #                                                        reconstructed_images)
             latent_recon_loss = self.latent_recon_loss
+
+        elif self.obs_type == 'text':
+            perceptual_loss = torch.tensor(0., device=batch['observations'].device,
+                                           dtype=torch.float32)
+            # Reconstruct observations from latent state representations
+            reconstructed_logits = self.tokenizer.decode_to_language_logits(obs_embeddings.reshape(-1, 1, self.embed_dim), batch['observations'])
+            # Calculate reconstruction loss
+            latent_recon_loss = self.tokenizer.lm_reconstruction_loss(batch['observations'], reconstructed_logits)
+            # latent_recon_loss = self.latent_recon_loss
 
         elif self.obs_type == 'image_memory':
             # Reconstruct observations from latent state representations

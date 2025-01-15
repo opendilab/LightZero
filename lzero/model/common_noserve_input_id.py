@@ -7,8 +7,7 @@ Overview:
 """
 import math
 from dataclasses import dataclass
-from typing import Callable, List, Optional
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -16,95 +15,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
 from ding.torch_utils import MLP, ResBlock
-from ding.torch_utils.network.normalization import build_normalization
 from ding.utils import SequenceType
 from ditk import logging
 
-
-def MLP_V2(
-        in_channels: int,
-        hidden_channels: List[int],
-        out_channels: int,
-        layer_fn: Callable = None,
-        activation: Optional[nn.Module] = None,
-        norm_type: Optional[str] = None,
-        use_dropout: bool = False,
-        dropout_probability: float = 0.5,
-        output_activation: bool = True,
-        output_norm: bool = True,
-        last_linear_layer_init_zero: bool = False,
-):
-    """
-    Overview:
-        Create a multi-layer perceptron (MLP) using a list of hidden dimensions. Each layer consists of a fully
-        connected block with optional activation, normalization, and dropout. The final layer is configurable
-        to include or exclude activation, normalization, and dropout based on user preferences.
-
-    Arguments:
-        - in_channels (:obj:`int`): Number of input channels (dimensionality of the input tensor).
-        - hidden_channels (:obj:`List[int]`): A list specifying the number of channels for each hidden layer.
-            For example, [512, 256, 128] means the MLP will have three hidden layers with 512, 256, and 128 units, respectively.
-        - out_channels (:obj:`int`): Number of output channels (dimensionality of the output tensor).
-        - layer_fn (:obj:`Callable`, optional): Layer function to construct layers (default is `nn.Linear`).
-        - activation (:obj:`nn.Module`, optional): Activation function to use after each layer
-            (e.g., `nn.ReLU`, `nn.Sigmoid`). Default is None (no activation).
-        - norm_type (:obj:`str`, optional): Type of normalization to apply after each layer.
-            If None, no normalization is applied. Supported values depend on the implementation of `build_normalization`.
-        - use_dropout (:obj:`bool`, optional): Whether to apply dropout after each layer. Default is False.
-        - dropout_probability (:obj:`float`, optional): The probability of setting elements to zero in dropout. Default is 0.5.
-        - output_activation (:obj:`bool`, optional): Whether to apply activation to the output layer. Default is True.
-        - output_norm (:obj:`bool`, optional): Whether to apply normalization to the output layer. Default is True.
-        - last_linear_layer_init_zero (:obj:`bool`, optional): Whether to initialize the weights and biases of the
-            last linear layer to zeros. This is commonly used in reinforcement learning for stable initial outputs.
-
-    Returns:
-        - block (:obj:`nn.Sequential`): A PyTorch `nn.Sequential` object containing the layers of the MLP.
-
-    Notes:
-        - The final layer's normalization, activation, and dropout are controlled by `output_activation`,
-          `output_norm`, and `use_dropout`.
-        - If `last_linear_layer_init_zero` is True, the weights and biases of the last linear layer are initialized to 0.
-    """
-    assert len(hidden_channels) > 0, "The hidden_channels list must contain at least one element."
-    if layer_fn is None:
-        layer_fn = nn.Linear
-
-    # Initialize the MLP block
-    block = []
-    channels = [in_channels] + hidden_channels + [out_channels]
-
-    # Build all layers except the final layer
-    for i, (in_channels, out_channels) in enumerate(zip(channels[:-2], channels[1:-1])):
-        block.append(layer_fn(in_channels, out_channels))
-        if norm_type is not None:
-            block.append(build_normalization(norm_type, dim=1)(out_channels))
-        if activation is not None:
-            block.append(activation)
-        if use_dropout:
-            block.append(nn.Dropout(dropout_probability))
-
-    # Build the final layer
-    in_channels = channels[-2]
-    out_channels = channels[-1]
-    block.append(layer_fn(in_channels, out_channels))
-
-    # Add optional normalization and activation for the final layer
-    if output_norm and norm_type is not None:
-        block.append(build_normalization(norm_type, dim=1)(out_channels))
-    if output_activation and activation is not None:
-        block.append(activation)
-    if use_dropout:
-        block.append(nn.Dropout(dropout_probability))
-
-    # Initialize the weights and biases of the last linear layer to zero if specified
-    if last_linear_layer_init_zero:
-        for layer in reversed(block):
-            if isinstance(layer, nn.Linear):
-                nn.init.zeros_(layer.weight)
-                nn.init.zeros_(layer.bias)
-                break
-
-    return nn.Sequential(*block)
 
 # use dataclass to make the output of network more convenient to use
 @dataclass
@@ -933,11 +846,11 @@ class PredictionNetwork(nn.Module):
             num_channels: int,
             value_head_channels: int,
             policy_head_channels: int,
-            value_head_hidden_channels: int,
-            policy_head_hidden_channels: int,
+            fc_value_layers: int,
+            fc_policy_layers: int,
             output_support_size: int,
-            flatten_input_size_for_value_head: int,
-            flatten_input_size_for_policy_head: int,
+            flatten_output_size_for_value_head: int,
+            flatten_output_size_for_policy_head: int,
             downsample: bool = False,
             last_linear_layer_init_zero: bool = True,
             activation: nn.Module = nn.ReLU(inplace=True),
@@ -954,13 +867,13 @@ class PredictionNetwork(nn.Module):
             - num_channels (:obj:`int`): The channels of hidden states.
             - value_head_channels (:obj:`int`): The channels of value head.
             - policy_head_channels (:obj:`int`): The channels of policy head.
-            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical value output.
             - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \
-            - flatten_input_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+            - flatten_output_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
                 of the value head.
-            - flatten_input_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+            - flatten_output_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
                 of the policy head.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
@@ -1003,15 +916,16 @@ class PredictionNetwork(nn.Module):
                 self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]],
                                                 eps=1e-5)
 
-        self.flatten_input_size_for_value_head = flatten_input_size_for_value_head
-        self.flatten_input_size_for_policy_head = flatten_input_size_for_policy_head
+        self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
+        self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
 
         self.activation = activation
 
-        self.fc_value = MLP_V2(
-            in_channels=self.flatten_input_size_for_value_head,
-            hidden_channels=value_head_hidden_channels,
+        self.fc_value = MLP(
+            in_channels=self.flatten_output_size_for_value_head,
+            hidden_channels=fc_value_layers[0],
             out_channels=output_support_size,
+            layer_num=len(fc_value_layers) + 1,
             activation=self.activation,
             norm_type=norm_type,
             output_activation=False,
@@ -1019,10 +933,11 @@ class PredictionNetwork(nn.Module):
             # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
-        self.fc_policy = MLP_V2(
-            in_channels=self.flatten_input_size_for_policy_head,
-            hidden_channels=policy_head_hidden_channels,
+        self.fc_policy = MLP(
+            in_channels=self.flatten_output_size_for_policy_head,
+            hidden_channels=fc_policy_layers[0],
             out_channels=action_space_size,
+            layer_num=len(fc_policy_layers) + 1,
             activation=self.activation,
             norm_type=norm_type,
             output_activation=False,
@@ -1052,8 +967,8 @@ class PredictionNetwork(nn.Module):
         policy = self.norm_policy(policy)
         policy = self.activation(policy)
 
-        value = value.reshape(-1, self.flatten_input_size_for_value_head)
-        policy = policy.reshape(-1, self.flatten_input_size_for_policy_head)
+        value = value.reshape(-1, self.flatten_output_size_for_value_head)
+        policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
 
         value = self.fc_value(value)
         policy = self.fc_policy(policy)
@@ -1067,8 +982,8 @@ class PredictionNetworkMLP(nn.Module):
             action_space_size,
             num_channels,
             common_layer_num: int = 2,
-            value_head_hidden_channels: SequenceType = [32],
-            policy_head_hidden_channels: SequenceType = [32],
+            fc_value_layers: SequenceType = [32],
+            fc_policy_layers: SequenceType = [32],
             output_support_size: int = 601,
             last_linear_layer_init_zero: bool = True,
             activation: Optional[nn.Module] = nn.ReLU(inplace=True),
@@ -1082,8 +997,8 @@ class PredictionNetworkMLP(nn.Module):
             - action_space_size: (:obj:`int`): Action space size, usually an integer number. For discrete action \
                 space, it is the number of discrete actions.
             - num_channels (:obj:`int`): The channels of latent states.
-            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical value output.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
                 dynamics/prediction mlp, default sets it to True.
@@ -1109,10 +1024,11 @@ class PredictionNetworkMLP(nn.Module):
         )
 
         # ******* value and policy head ******
-        self.fc_value_head = MLP_V2(
+        self.fc_value_head = MLP(
             in_channels=self.num_channels,
-            hidden_channels=value_head_hidden_channels,
+            hidden_channels=fc_value_layers[0],
             out_channels=output_support_size,
+            layer_num=len(fc_value_layers) + 1,
             activation=activation,
             norm_type=norm_type,
             output_activation=False,
@@ -1120,10 +1036,11 @@ class PredictionNetworkMLP(nn.Module):
             # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
-        self.fc_policy_head = MLP_V2(
+        self.fc_policy_head = MLP(
             in_channels=self.num_channels,
-            hidden_channels=policy_head_hidden_channels,
+            hidden_channels=fc_policy_layers[0],
             out_channels=action_space_size,
+            layer_num=len(fc_policy_layers) + 1,
             activation=activation,
             norm_type=norm_type,
             output_activation=False,
@@ -1159,11 +1076,11 @@ class PredictionHiddenNetwork(nn.Module):
             num_channels: int,
             value_head_channels: int,
             policy_head_channels: int,
-            value_head_hidden_channels: int,
-            policy_head_hidden_channels: int,
+            fc_value_layers: int,
+            fc_policy_layers: int,
             output_support_size: int,
-            flatten_input_size_for_value_head: int,
-            flatten_input_size_for_policy_head: int,
+            flatten_output_size_for_value_head: int,
+            flatten_output_size_for_policy_head: int,
             downsample: bool = False,
             last_linear_layer_init_zero: bool = True,
             activation: nn.Module = nn.ReLU(inplace=True),
@@ -1181,13 +1098,13 @@ class PredictionHiddenNetwork(nn.Module):
             - num_channels (:obj:`int`): The channels of hidden states.
             - value_head_channels (:obj:`int`): The channels of value head.
             - policy_head_channels (:obj:`int`): The channels of policy head.
-            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical value output.
             - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \
-            - flatten_input_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+            - flatten_output_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
                 of the value head.
-            - flatten_input_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+            - flatten_output_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
                 of the policy head.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
@@ -1228,16 +1145,16 @@ class PredictionHiddenNetwork(nn.Module):
                 self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]],
                                                 eps=1e-5)
 
-        self.flatten_input_size_for_value_head = flatten_input_size_for_value_head
-        self.flatten_input_size_for_policy_head = flatten_input_size_for_policy_head
+        self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
+        self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
 
         self.activation = activation
 
         self.fc_value = MLP(
-            in_channels=self.flatten_input_size_for_value_head + self.gru_hidden_size,
-            hidden_channels=value_head_hidden_channels[0],
+            in_channels=self.flatten_output_size_for_value_head + self.gru_hidden_size,
+            hidden_channels=fc_value_layers[0],
             out_channels=output_support_size,
-            layer_num=len(value_head_hidden_channels) + 1,
+            layer_num=len(fc_value_layers) + 1,
             activation=self.activation,
             norm_type=norm_type,
             output_activation=False,
@@ -1246,10 +1163,10 @@ class PredictionHiddenNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy = MLP(
-            in_channels=self.flatten_input_size_for_policy_head + self.gru_hidden_size,
-            hidden_channels=policy_head_hidden_channels[0],
+            in_channels=self.flatten_output_size_for_policy_head + self.gru_hidden_size,
+            hidden_channels=fc_policy_layers[0],
             out_channels=action_space_size,
-            layer_num=len(policy_head_hidden_channels) + 1,
+            layer_num=len(fc_policy_layers) + 1,
             activation=self.activation,
             norm_type=norm_type,
             output_activation=False,
@@ -1280,8 +1197,8 @@ class PredictionHiddenNetwork(nn.Module):
         policy = self.norm_policy(policy)
         policy = self.activation(policy)
 
-        latent_state_value = value.reshape(-1, self.flatten_input_size_for_value_head)
-        latent_state_policy = policy.reshape(-1, self.flatten_input_size_for_policy_head)
+        latent_state_value = value.reshape(-1, self.flatten_output_size_for_value_head)
+        latent_state_policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
 
         # TODO: world_model_latent_history.squeeze(0) shape: (num_layers * num_directions, batch_size, hidden_size) ->  ( batch_size, hidden_size)
         latent_history_value = torch.cat([latent_state_value, world_model_latent_history.squeeze(0)], dim=1)

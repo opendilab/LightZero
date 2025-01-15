@@ -69,6 +69,20 @@ class Transformer(nn.Module):
         device = self.ln_f.weight.device  # Assumption: All submodules are on the same device
         return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
 
+    def _get_positional_embedding(self, layer, attn_type, pos_emb) -> torch.Tensor:
+        """
+         Helper function to get positional embedding for a given layer and attention type.
+
+         Arguments:
+         - layer (:obj:`int`): Layer index.
+         - attn_type (:obj:`str`): Attention type, either 'key' or 'value'.
+
+         Returns:
+         - torch.Tensor: The positional embedding tensor.
+         """
+        attn_func = getattr(self.blocks[layer].attn, attn_type)
+        return attn_func(pos_emb.weight)
+
     def forward(self, sequences: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
                 valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
         """

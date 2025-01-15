@@ -64,7 +64,11 @@ class Tokenizer(nn.Module):
         Returns:
             torch.Tensor: Encoded embeddings of shape (B, 1, E).
         """
+        # NOTE: only for Jerico env
+        # x = x.long()  # 确保输入为长整型
         shape = x.shape
+        # print(f"Max index in x: {x.max()}")
+        # print(f"Min index in x: {x.min()}")
         # Process input tensor based on its dimensionality
         if len(shape) == 2:
             # Case when input is 2D (B, E)
@@ -72,7 +76,14 @@ class Tokenizer(nn.Module):
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 3:
             # Case when input is 3D (B, T, E)
-            x = x.contiguous().view(-1, shape[-1])  # Flatten the last two dimensions (B * T, E)
+            # print(f"x:{x}")
+            try:
+                x = x.contiguous().view(-1, shape[-1])  # Flatten the last two dimensions (B * T, E)
+            except Exception as e:
+                print(f"x:{x}")
+                print(' =='*20)
+                print(e)
+
             obs_embeddings = self.encoder(x)
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 4:
@@ -130,6 +141,18 @@ class Tokenizer(nn.Module):
             torch.Tensor: Computed perceptual loss.
         """
         return torch.mean(self.lpips(original_images, reconstructed_images))
+
+    def lm_reconstruction_loss(self, labels: torch.Tensor, logits: torch.Tensor) -> torch.Tensor:
+        loss = F.cross_entropy(logits, labels)
+        return loss
+
+    def decode_to_language_logits(self, embeddings: torch.Tensor, target_ids: torch.Tensor) -> torch.Tensor:
+        outputs = self.decoder_network(
+            input_ids=target_ids,
+            encoder_hidden_states=embeddings,
+        )
+        logits = self.decoder_network.lm_head(outputs.last_hidden_state)
+        return logits
 
     def __repr__(self) -> str:
         return "Tokenizer"

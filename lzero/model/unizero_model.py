@@ -4,9 +4,11 @@ import torch
 import torch.nn as nn
 from ding.utils import MODEL_REGISTRY, SequenceType
 from easydict import EasyDict
+from transformers import T5ForConditionalGeneration
 
 from .common import MZNetworkOutput, RepresentationNetworkUniZero, RepresentationNetworkMLP, LatentDecoder, \
-    VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook
+    VectorDecoderForMemoryEnv, LatentEncoderForMemoryEnv, LatentDecoderForMemoryEnv, FeatureAndGradientHook, \
+    HFLanguageRepresentationNetwork
 from .unizero_world_models.tokenizer import Tokenizer
 from .unizero_world_models.world_model import WorldModel
 
@@ -81,6 +83,17 @@ class UniZeroModel(nn.Module):
             self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
             self.tokenizer = Tokenizer(encoder=self.representation_network,
                                        decoder_network=self.decoder_network, with_lpips=False)
+            self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
+            print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
+            print('==' * 20)
+            print(f'{sum(p.numel() for p in self.world_model.transformer.parameters())} parameters in agent.world_model.transformer')
+            print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
+            print('==' * 20)
+        elif world_model_cfg.obs_type == 'text':
+            self.representation_network = HFLanguageRepresentationNetwork(url=kwargs['encoder_url'], embedding_size=world_model_cfg.embed_dim)
+            self.decoder_network = T5ForConditionalGeneration.from_pretrained("t5-small").decoder
+            self.decoder_network.lm_head = nn.Linear(world_model_cfg.embed_dim, 30522)  # TODO: 输出维度应该是 encoder 的维度，而不是decoder的
+            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=self.decoder_network, with_lpips=False,)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print('==' * 20)
