@@ -3,7 +3,7 @@ import pytest
 import torch
 from ding.config import compile_config
 from ding.policy import create_policy
-from huggingface_hub import hf_hub_url, cached_download
+from huggingface_hub import hf_hub_url, hf_hub_download
 
 from lzero.mcts.buffer.game_buffer_efficientzero import MuZeroGameBuffer
 from lzero.model.muzero_model import MuZeroModel as Model
@@ -44,7 +44,7 @@ replay_buffer = MuZeroGameBuffer(cfg.policy)
 url = hf_hub_url("puyuan1996/pong_muzero_2episodes_gsl400_v0.0.4", "pong_muzero_2episodes_gsl400_v0.0.4.npy",
                  repo_type='dataset')
 # download and cache the file
-local_filepath = cached_download(url)
+local_filepath = hf_hub_download(url)
 # load .npy file
 data = np.load(local_filepath, allow_pickle=True)
 

@@ -30,6 +30,7 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         shell: bash
         run: |
+          sudo apt-get install build-essential
           sudo apt-get update -y
           sudo apt-get install swig -y
           echo "OS_NAME=Linux" >> $GITHUB_ENV
