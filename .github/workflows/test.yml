@@ -32,9 +32,10 @@ jobs:
         run: |
           sudo dpkg --configure -a
           sudo apt-get update -y
-          sudo apt-get install python3-dev clang
+          sudo apt-get install -y build-essential python3-dev clang libboost-python-dev libeigen3-dev
+          python3-config --includes
           sudo ln -fs /usr/share/zoneinfo/UTC /etc/localtime
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential libopencv-dev swig tzdata libboost-python-dev libeigen3-dev
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libopencv-dev swig tzdata
           echo "OS_NAME=Linux" >> $GITHUB_ENV
           echo "IS_WIN=" >> $GITHUB_ENV
           echo "IS_MAC=" >> $GITHUB_ENV
