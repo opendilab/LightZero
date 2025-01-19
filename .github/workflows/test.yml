@@ -36,6 +36,7 @@ jobs:
           python3-config --includes
           sudo ln -fs /usr/share/zoneinfo/UTC /etc/localtime
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libopencv-dev swig tzdata
+          sudo apt-get install -y python3.${{ matrix.python-version }}-dev
           echo "OS_NAME=Linux" >> $GITHUB_ENV
           echo "IS_WIN=" >> $GITHUB_ENV
           echo "IS_MAC=" >> $GITHUB_ENV
@@ -70,6 +71,8 @@ jobs:
       - name: Install PyPI dependencies
         shell: bash
         run: |
+#          python -m venv .venv
+#          source .venv/bin/activate
           python -m pip install --upgrade pip setuptools wheel cython
           pip install --no-cache-dir --upgrade flake8 setuptools wheel twine -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip install -r requirements.txt --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
