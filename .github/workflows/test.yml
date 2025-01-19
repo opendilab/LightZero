@@ -33,7 +33,7 @@ jobs:
           sudo dpkg --configure -a
           sudo apt-get update -y
           sudo ln -fs /usr/share/zoneinfo/UTC /etc/localtime
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential libopencv-dev swig python3-dev tzdata libboost-python-dev libeigen3-dev
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential libopencv-dev swig python3-dev tzdata libboost-python-dev libeigen3-dev clang
           echo "OS_NAME=Linux" >> $GITHUB_ENV
           echo "IS_WIN=" >> $GITHUB_ENV
           echo "IS_MAC=" >> $GITHUB_ENV
