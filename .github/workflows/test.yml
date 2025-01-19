@@ -30,6 +30,7 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         shell: bash
         run: |
+          sudo dpkg --configure -a
           sudo apt-get update -y
           sudo ln -fs /usr/share/zoneinfo/UTC /etc/localtime
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential libopencv-dev swig tzdata
