@@ -71,8 +71,8 @@ jobs:
       - name: Install PyPI dependencies
         shell: bash
         run: |
-#          python -m venv .venv
-#          source .venv/bin/activate
+          python -m venv .venv
+          source .venv/bin/activate
           python -m pip install --upgrade pip setuptools wheel cython
           pip install --no-cache-dir --upgrade flake8 setuptools wheel twine -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip install -r requirements.txt --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
@@ -83,6 +83,13 @@ jobs:
           pip install --no-cache-dir transformers --upgrade -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip install opencv-python --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
 #          pip install box2d-py --only-binary :all: -i https://pypi.tuna.tsinghua.edu.cn/simple
+      - name: Verify Python.h availability
+        shell: bash
+        run: |
+          if [ ! -f "$(python3-config --includes | sed 's/-I//g' | awk '{print $1}')/Python.h" ]; then
+            echo "Error: Python.h not found."
+            exit 1
+          fi
       - name: Run unittest on MacOS or Linux
         if: ${{ env.OS_NAME == 'MacOS' || env.OS_NAME == 'Linux'}}
         env:
