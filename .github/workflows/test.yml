@@ -33,7 +33,7 @@ jobs:
           sudo dpkg --configure -a
           sudo apt-get update -y
           sudo ln -fs /usr/share/zoneinfo/UTC /etc/localtime
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential libopencv-dev swig python3-dev tzdata
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential libopencv-dev swig python3-dev tzdata libboost-python-dev libeigen3-dev
           echo "OS_NAME=Linux" >> $GITHUB_ENV
           echo "IS_WIN=" >> $GITHUB_ENV
           echo "IS_MAC=" >> $GITHUB_ENV
@@ -77,6 +77,7 @@ jobs:
           pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple git+https://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env] --upgrade
           pip install --no-cache-dir transformers --upgrade -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip install opencv-python --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
+#          pip install box2d-py --only-binary :all: -i https://pypi.tuna.tsinghua.edu.cn/simple
       - name: Run unittest on MacOS or Linux
         if: ${{ env.OS_NAME == 'MacOS' || env.OS_NAME == 'Linux'}}
         env:
