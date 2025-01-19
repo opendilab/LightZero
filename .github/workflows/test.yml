@@ -69,7 +69,6 @@ jobs:
         shell: bash
         run: |
           python -m pip install --upgrade pip setuptools wheel cython
-          pip install Box2D==2.3.5 --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip install --no-cache-dir --upgrade flake8 setuptools wheel twine -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip install -r requirements.txt --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip install -r requirements-build.txt --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
