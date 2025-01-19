@@ -30,9 +30,9 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         shell: bash
         run: |
-          sudo apt-get install build-essential
+          sudo apt-get install build-essential -y
           sudo apt-get update -y
-          sudo apt-get install swig -y
+          sudo apt-get install swig libopencv-dev -y
           echo "OS_NAME=Linux" >> $GITHUB_ENV
           echo "IS_WIN=" >> $GITHUB_ENV
           echo "IS_MAC=" >> $GITHUB_ENV
@@ -53,6 +53,7 @@ jobs:
         run: |
           brew install tree cloc wget curl make zip graphviz
           brew install llvm  # Install llvm (which includes clang)
+          brew install opencv  # Install OpenCV
           echo 'export PATH="/usr/local/opt/llvm/bin:$PATH"' >> $GITHUB_ENV  # update PATH
           dot -V
       - name: Set CC and CXX variables
@@ -66,14 +67,15 @@ jobs:
       - name: Install PyPI dependencies
         shell: bash
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools cython
           pip install --no-cache-dir --upgrade flake8 setuptools wheel twine -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip install -r requirements.txt --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip install -r requirements-build.txt --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip install -r requirements-test.txt --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip uninstall DI-engine -y
-          pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple git+https://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env] --upgrade --no-deps
+          pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple git+https://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env] --upgrade
           pip install --no-cache-dir transformers --upgrade -i https://pypi.tuna.tsinghua.edu.cn/simple
+          pip install opencv-python --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
       - name: Run unittest on MacOS or Linux
         if: ${{ env.OS_NAME == 'MacOS' || env.OS_NAME == 'Linux'}}
         env:
