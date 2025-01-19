@@ -40,6 +40,8 @@ jobs:
           echo "OS_NAME=Linux" >> $GITHUB_ENV
           echo "IS_WIN=" >> $GITHUB_ENV
           echo "IS_MAC=" >> $GITHUB_ENV
+          echo "CFLAGS=$(python3-config --includes)" >> $GITHUB_ENV
+          echo "LDFLAGS=$(python3-config --ldflags)" >> $GITHUB_ENV
       - name: Get system version for MacOS
         if: ${{ runner.os == 'macOS' }}
         shell: bash
@@ -64,6 +66,8 @@ jobs:
         run: |
           echo "CC=$(which clang)" >> $GITHUB_ENV
           echo "CXX=$(which clang++)" >> $GITHUB_ENV
+#          echo "CC=$(which gcc)" >> $GITHUB_ENV
+#          echo "CXX=$(which g++)" >> $GITHUB_ENV
       - name: Set up python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
