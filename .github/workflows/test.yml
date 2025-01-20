@@ -32,7 +32,7 @@ jobs:
         run: |
           sudo dpkg --configure -a
           sudo apt update && sudo apt upgrade -y
-          sudo apt-get install -y build-essential python3-dev clang libboost-python-dev libeigen3-dev
+          sudo apt-get install -y build-essential clang libboost-python-dev libeigen3-dev
           sudo ln -fs /usr/share/zoneinfo/UTC /etc/localtime
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libopencv-dev swig tzdata
           sudo apt-get install -y python${{ matrix.python-version }}-dev
@@ -64,10 +64,10 @@ jobs:
           dot -V
       - name: Set CC and CXX variables
         run: |
-          echo "CC=$(which clang)" >> $GITHUB_ENV
-          echo "CXX=$(which clang++)" >> $GITHUB_ENV
-#          echo "CC=$(which gcc)" >> $GITHUB_ENV
-#          echo "CXX=$(which g++)" >> $GITHUB_ENV
+          echo "CC=$(which gcc)" >> $GITHUB_ENV
+          echo "CXX=$(which g++)" >> $GITHUB_ENV
+#          echo "CC=$(which clang)" >> $GITHUB_ENV
+#          echo "CXX=$(which clang++)" >> $GITHUB_ENV
       - name: Set up python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
@@ -84,7 +84,6 @@ jobs:
           pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple git+https://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env] --upgrade
           pip install --no-cache-dir transformers --upgrade -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip install opencv-python --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
-#          pip install box2d-py --only-binary :all: -i https://pypi.tuna.tsinghua.edu.cn/simple
       - name: Verify Python.h availability
         shell: bash
         run: |
