@@ -67,6 +67,9 @@ class WorldModel(nn.Module):
 
         # Position embedding
         self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
+        
+        self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
+
         self.precompute_pos_emb_diff_kv()
         logging.info(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
         self.continuous_action_space = self.config.continuous_action_space

@@ -70,14 +70,51 @@ class Cache:
             - x (:obj:`torch.Tensor`): The new values to update the cache with.
             - tokens (:obj:`int`): The number of tokens to update.
         """
-        # assert (x.ndim == self._cache.ndim) and all([x.size(i) == self._cache.size(i) for i in (0, 1, 3)])
-        # assert self._size + tokens <= self._cache.shape[2]  # TODO
         try:
-            self._cache = AssignWithoutInplaceCheck.apply(self._cache, x, 2, self._size, self._size + tokens)
-            self._size += tokens
+            # Calculate the required capacity after adding the new tokens
+            required_capacity = self._size + tokens
+
+            # Check if the cache has enough space to accommodate the new tokens
+            if required_capacity > self._cache.shape[2]:
+                # Shift existing cache data by removing the oldest entries
+                shift_amount = required_capacity - self._cache.shape[2]
+                # =======TODO: 应该去掉偶数个（z,a）以保证head输出pattern保持不变=======
+                shift_amount = shift_amount+1
+                if shift_amount >= self._size:
+                    # If the shift amount exceeds or equals the current size, just reset the cache
+                    print("Cache too small; resetting the entire cache")
+                    self._cache = torch.zeros_like(self._cache)  # Reset cache to zeros
+                    self._size = 0  # Reset size
+                else:
+                    # Shift the cache to make room for new data
+                    self._cache[:, :, :self._size - shift_amount, :] = self._cache[:, :, shift_amount:self._size, :]
+                    self._size -= shift_amount  # Update the size after shifting
+
+            # Update the cache with new values
+            self._cache = AssignWithoutInplaceCheck.apply(
+                self._cache, x, 2, self._size, self._size + tokens
+            )
+            self._size += tokens  # Update the size after adding new values
+
         except Exception as e:
-            print(e)
-            import ipdb; ipdb.set_trace()
+            print(f"An error occurred during cache update: {e}")
+
+    # def update(self, x: torch.Tensor, tokens: int) -> None:
+    #     """
+    #     Overview:
+    #         Update the cache with new values.
+    #     Arguments:
+    #         - x (:obj:`torch.Tensor`): The new values to update the cache with.
+    #         - tokens (:obj:`int`): The number of tokens to update.
+    #     """
+    #     # assert (x.ndim == self._cache.ndim) and all([x.size(i) == self._cache.size(i) for i in (0, 1, 3)])
+    #     # assert self._size + tokens <= self._cache.shape[2]  # TODO
+    #     try:
+    #         self._cache = AssignWithoutInplaceCheck.apply(self._cache, x, 2, self._size, self._size + tokens)
+    #         self._size += tokens
+    #     except Exception as e:
+    #         print(e)
+    #         # import ipdb; ipdb.set_trace()
 
 
 
@@ -146,14 +183,6 @@ class KVCache:
             Update both key and value caches with new values.
             If `is_register_token` is True, prepend the register tokens to the cache.
         """
-        # if self.register_token_num>0:
-        #     # 去掉尾部的 Register Token 
-        #     self._k_cache.update(k[:, :, :-self.register_token_num, :], k.size(2)-self.register_token_num)
-        #     self._v_cache.update(v[:, :, :-self.register_token_num, :], v.size(2)-self.register_token_num)
-        # else:
-        #     self._k_cache.update(k, k.size(2))
-        #     self._v_cache.update(v, v.size(2))
-        
         self._k_cache.update(k, k.size(2))
         self._v_cache.update(v, v.size(2))
 
@@ -227,14 +256,9 @@ class KeysValues:
             在推理结束后调用，保证外层看到的 KV 不包含 Register Token。
         """
         # import ipdb; ipdb.set_trace()
-
         for kv_cache in self._keys_values:
-            # 移除 KVCache 中后面 register_token_num 个 token
-            # if kv_cache._k_cache._size > register_token_num:
-                # kv_cache._k_cache._cache = kv_cache._k_cache._cache[:, :, :-register_token_num, :]
+            # 移除 KVCache 中后面的 register_token_num 个 token
             kv_cache._k_cache._size -= register_token_num
-            # if kv_cache._v_cache._size > register_token_num:
-                # kv_cache._v_cache._cache = kv_cache._v_cache._cache[:, :, :-register_token_num, :]
             kv_cache._v_cache._size -= register_token_num
 
 

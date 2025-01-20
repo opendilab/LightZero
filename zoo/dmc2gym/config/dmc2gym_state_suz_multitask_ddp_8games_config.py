@@ -54,9 +54,9 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     obs_type='vector',
                     # use_shared_projection=True, # TODO
                     use_shared_projection=False,
-                    task_embed_option='concat_task_embed',   # ==============TODO: none ==============
-                    # task_embed_option='register_task_embed',   # ==============TODO: none ==============
-                    register_token_num=4,
+                    # task_embed_option='concat_task_embed',   # ==============TODO: none ==============
+                    task_embed_option='register_task_embed',   # ==============TODO: none ==============
+                    register_token_num=4, # TODO: 修改kv_caching中的register_token_num
                     use_task_embed=True, # TODO
                     # use_task_embed=False, # ==============TODO==============
                     num_unroll_steps=num_unroll_steps,
@@ -159,7 +159,7 @@ def generate_configs(env_id_list: List[str],
     # TODO: debug
     # exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_no-taskweight-obsloss-temp1_register-task-embed-4_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
 
-    exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_no-taskweight-obsloss-temp1_concat-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_no-taskweight-obsloss-temp1_register-task-embed-4_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
 
     # exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_taskweight-eval1e3-10k-temp10-1_task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
     # exp_name_prefix = f'data_suz_mt_20250113_debug/ddp_8gpu_nlayer8_upc200_taskweight-eval1e3-10k-temp10-1_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
@@ -269,26 +269,26 @@ if __name__ == "__main__":
     ]
 
     # DMC 18games
-    env_id_list = [
-        'acrobot-swingup',
-        'cartpole-balance',
-        'cartpole-balance_sparse',
-        'cartpole-swingup',
-        'cartpole-swingup_sparse',
-        'cheetah-run',
-        "ball_in_cup-catch",
-        "finger-spin",
-        "finger-turn_easy",
-        "finger-turn_hard",
-        'hopper-hop',
-        'hopper-stand',
-        'pendulum-swingup',
-        'reacher-easy',
-        'reacher-hard',
-        'walker-run',
-        'walker-stand',
-        'walker-walk',
-    ]
+    # env_id_list = [
+    #     'acrobot-swingup',
+    #     'cartpole-balance',
+    #     'cartpole-balance_sparse',
+    #     'cartpole-swingup',
+    #     'cartpole-swingup_sparse',
+    #     'cheetah-run',
+    #     "ball_in_cup-catch",
+    #     "finger-spin",
+    #     "finger-turn_easy",
+    #     "finger-turn_hard",
+    #     'hopper-hop',
+    #     'hopper-stand',
+    #     'pendulum-swingup',
+    #     'reacher-easy',
+    #     'reacher-hard',
+    #     'walker-run',
+    #     'walker-stand',
+    #     'walker-walk',
+    # ]
 
     # 获取各环境的 action_space_size 和 observation_shape
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
@@ -299,8 +299,8 @@ if __name__ == "__main__":
     n_episode = 8
     evaluator_env_num = 3
     num_simulations = 50
-    # max_env_step = int(5e5)
-    max_env_step = int(1e6)
+    max_env_step = int(5e5)
+    # max_env_step = int(1e6)
     reanalyze_ratio = 0.0
 
     # nlayer=4
@@ -312,7 +312,7 @@ if __name__ == "__main__":
     batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
 
     num_unroll_steps = 5
-    infer_context_length = 2
+    infer_context_length = 4 # 尾部有4个register token, 相当于infer_context_length还是2
     norm_type = 'LN'
     buffer_reanalyze_freq = 1 / 100000
     reanalyze_batch_size = 160

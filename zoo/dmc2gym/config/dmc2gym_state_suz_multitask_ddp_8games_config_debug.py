@@ -311,7 +311,8 @@ if __name__ == "__main__":
     batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
 
     num_unroll_steps = 5
-    infer_context_length = 3
+    # infer_context_length = 3
+    infer_context_length = 4 # 尾部有4个register token, 相当于infer_context_length还是2
     norm_type = 'LN'
     buffer_reanalyze_freq = 1 / 100000
     reanalyze_batch_size = 160
@@ -322,7 +323,7 @@ if __name__ == "__main__":
     num_segments = 2
     n_episode = 2
     evaluator_env_num = 2
-    num_simulations = 2
+    num_simulations = 1
     batch_size = [2 for _ in range(len(env_id_list))]
     # =======================================
 

@@ -67,7 +67,6 @@ class WorldModelMT(WorldModel):
         print(f"self.device: {self.device}")
         # Position embedding
         self.pos_emb = nn.Embedding(config.max_tokens, self.config.embed_dim, device=self.device)
-        self.precompute_pos_emb_diff_kv()
         print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
         # Task embedding setup
@@ -77,6 +76,8 @@ class WorldModelMT(WorldModel):
         self.task_embed_dim = config.task_embed_dim if hasattr(config, "task_embed_dim") else 96
         self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
         
+        self.precompute_pos_emb_diff_kv()
+
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
         if self.task_embed_option == "concat_task_embed":
             # TODO：目前在 "concat_task_embed"下面，self.pos_emb需要设置为固定的0
@@ -552,7 +553,8 @@ class WorldModelMT(WorldModel):
             layer_pos_emb_diff_v = {}
 
             for start in [2]:
-                for end in [self.context_length - 1]:
+                for end in [self.context_length - 1]: # TODO
+                # for end in [self.context_length + 2*self.register_token_num - 1]:
                     original_pos_emb_k = self.positional_embedding_k[layer][:, :, start:end, :]
                     new_pos_emb_k = self.positional_embedding_k[layer][:, :, :end - start, :]
                     layer_pos_emb_diff_k[(start, end)] = new_pos_emb_k - original_pos_emb_k
@@ -745,8 +747,14 @@ class WorldModelMT(WorldModel):
                 return embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device))
             else:
                 valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)
-                position_embeddings = self.pos_emb(
-                    valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
+
+                try:
+                    position_embeddings = self.pos_emb(
+                        valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
+                except Exception as e:
+                    print(e)
+                    import ipdb; ipdb.set_trace()
+
                 return embeddings + position_embeddings
 
     #@profile
@@ -814,11 +822,6 @@ class WorldModelMT(WorldModel):
 
             obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
 
-        # if self.task_embed_option == "register_task_embed":
-        #     # =====TODO=====
-        #     # Register task embeddings as input tokens
-        #     task_tokens = self.task_embeddings.expand(B, self.register_token_length, -1)
-        #     obs_act_embeddings = torch.cat([task_tokens, obs_act_embeddings], dim=1)
 
         return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
 
@@ -1023,7 +1026,7 @@ class WorldModelMT(WorldModel):
                         # Copy and store keys_values_wm for a single environment
                         self.update_cache_context(self.latent_state, is_init_infer=True)
                     else:
-                        import ipdb; ipdb.set_trace()
+                        # import ipdb; ipdb.set_trace()
                         # Copy and store keys_values_wm for a single environment
                         self.update_cache_context(current_obs_embeddings, is_init_infer=True)
 
@@ -1136,6 +1139,7 @@ class WorldModelMT(WorldModel):
             else:
                 obs_embeddings_or_act_tokens = {'obs_embeddings': token}
 
+            # try:
             # Perform forward pass
             outputs_wm = self.forward(
                 obs_embeddings_or_act_tokens,
@@ -1144,6 +1148,10 @@ class WorldModelMT(WorldModel):
                 is_init_infer=False,
                 task_id = task_id
             )
+            # except Exception as e:
+            #     print(e)
+            #     import ipdb; ipdb.set_trace()
+
 
             self.keys_values_wm_size_list_current = [i + 1 for i in self.keys_values_wm_size_list_current]
 

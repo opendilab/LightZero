@@ -115,9 +115,6 @@ class Transformer(nn.Module):
             - KeysValues: An object containing empty keys and values.
         """
         device = self.ln_f.weight.device  # Assumption: All submodules are on the same device
-        # if self.use_register_token: # ======= TODO ========
-        #     return KeysValues(n, self.config.num_heads, max_tokens+self.register_token_num, self.config.embed_dim, self.config.num_layers, device)
-        # else:
         return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
 
 
@@ -313,7 +310,11 @@ class SelfAttention(nn.Module):
         self.resid_drop = nn.Dropout(config.resid_pdrop)
         self.proj = nn.Linear(config.embed_dim, config.embed_dim)
 
-        causal_mask = torch.tril(torch.ones(config.max_tokens, config.max_tokens))
+        if self.use_register_token: # ======= TODO ========
+            causal_mask = torch.tril(torch.ones(config.max_tokens+self.register_token_num*5, config.max_tokens+self.register_token_num*5))
+        else:
+            causal_mask = torch.tril(torch.ones(config.max_tokens, config.max_tokens))
+
         self.register_buffer('mask', causal_mask)
 
     #@profile
@@ -375,6 +376,15 @@ class SelfAttention(nn.Module):
             register_mask[-self.register_token_num:, :] = 1  # Allow register tokens to see all positions
             register_mask[:, -self.register_token_num:] = 1  # Allow all positions to see register tokens
             mask = register_mask
+
+            if kv_cache is not None:
+                # =============TODO=============
+                # import ipdb; ipdb.set_trace()
+                b, nh, new_L, c = kv_cache.shape # new_L可能小于L + T
+                mask = mask[:,-new_L:]
+            # else:
+            #     import ipdb; ipdb.set_trace()
+
 
         # att.shape: (B, num_heads, T, L + T)
         att = att.masked_fill(mask == 0, float('-inf'))
