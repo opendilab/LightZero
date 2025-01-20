@@ -17,7 +17,7 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             action_space_size_list=action_space_size_list,
             from_pixels=False,
             # ===== TODO: only for debug =====
-            # frame_skip=10, # 10
+            # frame_skip=100, # 10
             frame_skip=2,
             continuous=True,  # Assuming all DMC tasks use continuous action spaces
             collector_env_num=collector_env_num,
@@ -323,7 +323,7 @@ if __name__ == "__main__":
     num_segments = 2
     n_episode = 2
     evaluator_env_num = 2
-    num_simulations = 1
+    num_simulations = 50
     batch_size = [2 for _ in range(len(env_id_list))]
     # =======================================
 

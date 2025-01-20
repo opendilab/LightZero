@@ -748,12 +748,12 @@ class WorldModelMT(WorldModel):
             else:
                 valid_context_lengths = torch.tensor(self.keys_values_wm_size_list_current, device=self.device)
 
-                try:
-                    position_embeddings = self.pos_emb(
-                        valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
-                except Exception as e:
-                    print(e)
-                    import ipdb; ipdb.set_trace()
+                # try:
+                position_embeddings = self.pos_emb(
+                    valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
+                # except Exception as e:
+                #     print(e)
+                #     import ipdb; ipdb.set_trace()
 
                 return embeddings + position_embeddings
 
@@ -1099,6 +1099,8 @@ class WorldModelMT(WorldModel):
         Returns:
             - tuple: A tuple containing output sequence, updated latent state, reward, logits policy, and logits value.
         """
+        # import ipdb; ipdb.set_trace()
+
         latest_state, action = state_action_history[-1]
         ready_env_num = latest_state.shape[0]
 
@@ -1162,6 +1164,8 @@ class WorldModelMT(WorldModel):
                 token = outputs_wm.logits_observations
                 if len(token.shape) != 3:
                     token = token.unsqueeze(1)  # (8,1024) -> (8,1,1024)
+                # print(f'token.shape:{token.shape}')
+
                 latent_state_list.append(token)
 
         del self.latent_state  # Very important to minimize cuda memory usage

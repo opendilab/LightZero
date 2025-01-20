@@ -79,7 +79,8 @@ class Cache:
                 # Shift existing cache data by removing the oldest entries
                 shift_amount = required_capacity - self._cache.shape[2]
                 # =======TODO: 应该去掉偶数个（z,a）以保证head输出pattern保持不变=======
-                shift_amount = shift_amount+1
+                if shift_amount%2 != 0:
+                    shift_amount = shift_amount+1
                 if shift_amount >= self._size:
                     # If the shift amount exceeds or equals the current size, just reset the cache
                     print("Cache too small; resetting the entire cache")
