@@ -27,7 +27,7 @@ jobs:
           - '3.10'
     steps:
       - name: Set up python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Get system version for Linux
@@ -36,11 +36,10 @@ jobs:
         run: |
           sudo dpkg --configure -a
           sudo apt update && sudo apt upgrade -y
-          sudo add-apt-repository -y ppa:deadsnakes/ppa
           sudo apt-get install -y build-essential clang libboost-python-dev libeigen3-dev
           sudo ln -fs /usr/share/zoneinfo/UTC /etc/localtime
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libopencv-dev swig tzdata
-          sudo apt-get install -y python${{ matrix.python-version }} python${{ matrix.python-version }}-dev
+          sudo apt-get install -y python${{ matrix.python-version }}-dev
           python3-config --includes
           echo "OS_NAME=Linux" >> $GITHUB_ENV
           echo "IS_WIN=" >> $GITHUB_ENV
