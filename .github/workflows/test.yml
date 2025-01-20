@@ -26,6 +26,10 @@ jobs:
           - '3.9'
           - '3.10'
     steps:
+      - name: Set up python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
       - name: Get system version for Linux
         if: ${{ runner.os == 'Linux' }}
         shell: bash
@@ -64,14 +68,10 @@ jobs:
           dot -V
       - name: Set CC and CXX variables
         run: |
-          echo "CC=$(which gcc)" >> $GITHUB_ENV
-          echo "CXX=$(which g++)" >> $GITHUB_ENV
-#          echo "CC=$(which clang)" >> $GITHUB_ENV
-#          echo "CXX=$(which clang++)" >> $GITHUB_ENV
-      - name: Set up python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
+          echo "CC=$(which clang)" >> $GITHUB_ENV
+          echo "CXX=$(which clang++)" >> $GITHUB_ENV
+#          echo "CC=$(which gcc)" >> $GITHUB_ENV
+#          echo "CXX=$(which g++)" >> $GITHUB_ENV
       - name: Install PyPI dependencies
         shell: bash
         run: |
