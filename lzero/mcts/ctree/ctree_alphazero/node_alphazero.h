@@ -1,84 +1,94 @@
-// node_alphazero.h
-
 #ifndef NODE_ALPHAZERO_H
 #define NODE_ALPHAZERO_H
 
 #include <map>
 #include <string>
 #include <memory>
+#include <iostream>
 
 class Node : public std::enable_shared_from_this<Node> {
 public:
-    // 父节点和子节点使用 shared_ptr 管理
+    // Parent and child nodes are managed using shared_ptr
     std::shared_ptr<Node> parent;
     std::map<int, std::shared_ptr<Node>> children;
 
-    // 构造函数
+    // Constructor
     Node(std::shared_ptr<Node> parent = nullptr, float prior_p = 1.0)
         : parent(parent), prior_p(prior_p), visit_count(0), value_sum(0.0) {}
 
-    // 默认析构函数
+    // Default destructor
     ~Node() = default;
 
-    // 获取节点平均值
+    // Get the average value of the node
     float get_value() const {
         return visit_count == 0 ? 0.0 : value_sum / visit_count;
     }
 
-    // 更新节点的访问计数和价值总和
+    // Update the node's visit count and value sum
     void update(float value) {
         visit_count++;
         value_sum += value;
     }
 
-    // 递归更新节点和父节点的值
+    // Recursively update the node and its parent node's values
     void update_recursive(float leaf_value, const std::string& battle_mode_in_simulation_env) {
+        // Pass strings as const references to avoid copying, improve efficiency,
+        // and ensure the function cannot modify the original string.
         if (battle_mode_in_simulation_env == "self_play_mode") {
+            // Self-play mode: update the current node and recursively update the parent node
+            // (pass the negative leaf_value).
             update(leaf_value);
-            if (!is_root() && parent) {
+            if (!is_root()) {
                 parent->update_recursive(-leaf_value, battle_mode_in_simulation_env);
             }
         }
         else if (battle_mode_in_simulation_env == "play_with_bot_mode") {
+            // Play-with-bot mode: update the current node and recursively update the parent node
+            // (pass the same leaf_value).
             update(leaf_value);
-            if (!is_root() && parent) {
+            if (!is_root()) {
                 parent->update_recursive(leaf_value, battle_mode_in_simulation_env);
             }
         }
+        else {
+            // Error handling: an invalid battle_mode_in_simulation_env was provided.
+            std::cerr << "Error: Invalid battle mode '" << battle_mode_in_simulation_env
+                      << "' provided to update_recursive()." << std::endl;
+            return;
+        }
     }
 
-    // 判断是否为叶子节点
+    // Check if the node is a leaf node
     bool is_leaf() const {
         return children.empty();
     }
 
-    // 判断是否为根节点
+    // Check if the node is the root node
     bool is_root() const {
         return parent == nullptr;
     }
 
-    // 添加子节点
+    // Add a child node
     void add_child(int action, std::shared_ptr<Node> node) {
         children[action] = node;
     }
 
-    // 获取访问计数
+    // Get the visit count
     int get_visit_count() const { return visit_count; }
 
-    // 获取父节点
+    // Get the parent node
     std::shared_ptr<Node> get_parent() const {
         return parent;
     }
 
-    // 获取子节点
+    // Get the child nodes
     const std::map<int, std::shared_ptr<Node>>& get_children() const {
         return children;
     }
 
-public:
-    float prior_p;        // 节点的 prior probability
-    int visit_count;      // 访问计数
-    float value_sum;      // 价值总和
+    float prior_p;        // The prior probability of the node
+    int visit_count;      // Visit count
+    float value_sum;      // Value sum
 };
 
 #endif // NODE_ALPHAZERO_H

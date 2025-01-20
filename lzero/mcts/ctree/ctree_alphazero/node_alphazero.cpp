@@ -1,5 +1,3 @@
-// node_alphazero.cpp
-
 #include "node_alphazero.h"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -24,7 +22,6 @@ PYBIND11_MODULE(node_alphazero, m) {
         })
         .def("add_child", &Node::add_child)
         .def_property_readonly("visit_count", &Node::get_visit_count)
-        // 添加 prior_p 属性的绑定
         .def_readwrite("prior_p", &Node::prior_p)
         .def("get_child", [](const Node &self, int action) -> std::shared_ptr<Node> {
         auto it = self.children.find(action);
