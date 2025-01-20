@@ -91,7 +91,7 @@ class Transformer(nn.Module):
         register_tokens = task_embedding.unsqueeze(0).expand(self.register_token_num, -1)  # (register_token_num, C)
         register_tokens = register_tokens.unsqueeze(0).expand(B, -1, -1)        # (B, register_token_num, C)
 
-        # 拼接：将 Register Token 拼到最前面
+        # 拼接：将 Register Token 拼到最后面
         new_sequences = torch.cat([sequences, register_tokens], dim=1)  # (B, register_token_num + T, C)
         return new_sequences
 
@@ -115,10 +115,10 @@ class Transformer(nn.Module):
             - KeysValues: An object containing empty keys and values.
         """
         device = self.ln_f.weight.device  # Assumption: All submodules are on the same device
-        if self.use_register_token: # ======= TODO ========
-            return KeysValues(n, self.config.num_heads, max_tokens+self.register_token_num, self.config.embed_dim, self.config.num_layers, device)
-        else:
-            return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
+        # if self.use_register_token: # ======= TODO ========
+        #     return KeysValues(n, self.config.num_heads, max_tokens+self.register_token_num, self.config.embed_dim, self.config.num_layers, device)
+        # else:
+        return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
 
 
     #@profile
@@ -159,15 +159,15 @@ class Transformer(nn.Module):
         x = self.ln_f(x)
 
         # 如果 past_keys_values 不为 None，说明是推理阶段，此时我们需要把 KV 缓存中
-        # 开头多加的 Register Token 移除，以保证外键信息一致，不用修改外部逻辑
-        if self.use_register_token and (past_keys_values is not None):
+        # 尾部多加的 Register Token 移除，以保证外键信息一致，不用修改外部逻辑
+        # if self.use_register_token and (past_keys_values is not None):
+        if self.use_register_token:
             self.remove_register_tokens_from_kv(past_keys_values)
-
-        import ipdb; ipdb.set_trace()
 
         # TODO
         if self.use_register_token:
-            x = x[:,:,-register_token_num,:]
+            # import ipdb; ipdb.set_trace()
+            x = x[:, :-self.register_token_num, :]
 
         return x
 
@@ -294,6 +294,15 @@ class SelfAttention(nn.Module):
         assert config.embed_dim % config.num_heads == 0, "Embedding dimension must be divisible by number of heads."
 
         self.config = config
+
+        self.task_embed_option = self.config.task_embed_option
+        if self.task_embed_option == "register_task_embed":
+            self.use_register_token = True # TODO
+            # Register token setup
+            self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
+        else:
+            self.use_register_token = False # TODO
+
         self.num_heads = config.num_heads
 
         self.key = nn.Linear(config.embed_dim, config.embed_dim)
@@ -338,22 +347,8 @@ class SelfAttention(nn.Module):
 
         if kv_cache is not None:
             # import ipdb; ipdb.set_trace()
-
             kv_cache.update(k, v) # time occupancy 21%
             k, v = kv_cache.get() # time occupancy 5%
-        
-        # # 如果存在缓存，就更新缓存
-        # if kv_cache is not None:
-        #     # 判断是否是 register_token
-        #     # 在这里逻辑简单处理：如果当前 T == register_token_num，
-        #     # 说明这一批只包含 Register Token，就 is_register_token=True
-        #     is_register = (T == kv_cache.register_token_num)
-        #     kv_cache.update(k, v, is_register_token=is_register)
-        #     k, v = kv_cache.get()  # (B, nh, L+T, hs) 等
-
-        #     L_total = k.shape[2]  # L + T
-        # else:
-        #     L_total = T
 
         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
 
@@ -373,11 +368,21 @@ class SelfAttention(nn.Module):
             # mask.shape: (T, L + T)
             mask = self.mask[L:L + T, :L + T]
 
+        # Adjust mask for register tokens if applicable
+        if self.use_register_token and self.register_token_num > 0:
+            # Allow all positions to attend to the last `register_token_num` tokens
+            register_mask = mask.clone()  # (T, L + T)
+            register_mask[-self.register_token_num:, :] = 1  # Allow register tokens to see all positions
+            register_mask[:, -self.register_token_num:] = 1  # Allow all positions to see register tokens
+            mask = register_mask
+
         # att.shape: (B, num_heads, T, L + T)
         att = att.masked_fill(mask == 0, float('-inf'))
 
         att = F.softmax(att, dim=-1)
         att = self.attn_drop(att)
+
+        # import ipdb; ipdb.set_trace()
         y = att @ v  # (B, num_heads, T, L + T) x (B, num_heads, L + T, head_size) -> (B, num_heads, T, head_size)
 
         y = rearrange(y, 'b h t e -> b t (h e)')  # Combine the heads back together (B, T, embed_dim)

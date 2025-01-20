@@ -72,8 +72,13 @@ class Cache:
         """
         # assert (x.ndim == self._cache.ndim) and all([x.size(i) == self._cache.size(i) for i in (0, 1, 3)])
         # assert self._size + tokens <= self._cache.shape[2]  # TODO
-        self._cache = AssignWithoutInplaceCheck.apply(self._cache, x, 2, self._size, self._size + tokens)
-        self._size += tokens
+        try:
+            self._cache = AssignWithoutInplaceCheck.apply(self._cache, x, 2, self._size, self._size + tokens)
+            self._size += tokens
+        except Exception as e:
+            print(e)
+            import ipdb; ipdb.set_trace()
+
 
 
 class KVCache:
@@ -91,7 +96,7 @@ class KVCache:
         self._k_cache = Cache(n, num_heads, max_tokens, embed_dim, device)
         self._v_cache = Cache(n, num_heads, max_tokens, embed_dim, device)
 
-        self.register_token_num = 0  # Number of register tokens
+        self.register_token_num = 4  # Number of register tokens
 
     def set_register_token_num(self, num: int) -> None:
         """Set the number of register tokens."""
@@ -135,25 +140,22 @@ class KVCache:
         """
         return self._k_cache.get(), self._v_cache.get()
 
-    def update(self, k: torch.Tensor, v: torch.Tensor, is_register_token: bool = False):
+    def update(self, k: torch.Tensor, v: torch.Tensor):
         """
         Overview:
             Update both key and value caches with new values.
             If `is_register_token` is True, prepend the register tokens to the cache.
         """
-        if is_register_token:
-            # 将 Register Token 直接写入缓存的最前面
-            assert k.size(2) == self.register_token_num, "k 大小不匹配 register_token_num"
-            self._k_cache._cache[:, :, :self.register_token_num, :] = k
-            self._v_cache._cache[:, :, :self.register_token_num, :] = v
-            # 注意这里并不累加 size，因为要让后续正常 token 接着往后写
-            if self._k_cache._size < self.register_token_num:
-                self._k_cache._size = self.register_token_num
-            if self._v_cache._size < self.register_token_num:
-                self._v_cache._size = self.register_token_num
-        else:
-            self._k_cache.update(k, k.size(2))
-            self._v_cache.update(v, v.size(2))
+        # if self.register_token_num>0:
+        #     # 去掉尾部的 Register Token 
+        #     self._k_cache.update(k[:, :, :-self.register_token_num, :], k.size(2)-self.register_token_num)
+        #     self._v_cache.update(v[:, :, :-self.register_token_num, :], v.size(2)-self.register_token_num)
+        # else:
+        #     self._k_cache.update(k, k.size(2))
+        #     self._v_cache.update(v, v.size(2))
+        
+        self._k_cache.update(k, k.size(2))
+        self._v_cache.update(v, v.size(2))
 
 class KeysValues:
     def __init__(self, n: int, num_heads: int, max_tokens: int, embed_dim: int, num_layers: int, device: torch.device) -> None:
@@ -224,14 +226,17 @@ class KeysValues:
             移除所有层 KV 缓存开头的 Register Token。
             在推理结束后调用，保证外层看到的 KV 不包含 Register Token。
         """
+        # import ipdb; ipdb.set_trace()
+
         for kv_cache in self._keys_values:
-            # 移除 KVCache 中前面 register_token_num 个 token
-            if kv_cache._k_cache._size > register_token_num:
-                kv_cache._k_cache._cache = kv_cache._k_cache._cache[:, :, :-register_token_num, :]
-                kv_cache._k_cache._size -= register_token_num
-            if kv_cache._v_cache._size > register_token_num:
-                kv_cache._v_cache._cache = kv_cache._v_cache._cache[:, :, :-register_token_num, :]
-                kv_cache._v_cache._size -= register_token_num
+            # 移除 KVCache 中后面 register_token_num 个 token
+            # if kv_cache._k_cache._size > register_token_num:
+                # kv_cache._k_cache._cache = kv_cache._k_cache._cache[:, :, :-register_token_num, :]
+            kv_cache._k_cache._size -= register_token_num
+            # if kv_cache._v_cache._size > register_token_num:
+                # kv_cache._v_cache._cache = kv_cache._v_cache._cache[:, :, :-register_token_num, :]
+            kv_cache._v_cache._size -= register_token_num
+
 
 class AssignWithoutInplaceCheck(torch.autograd.Function):
     """

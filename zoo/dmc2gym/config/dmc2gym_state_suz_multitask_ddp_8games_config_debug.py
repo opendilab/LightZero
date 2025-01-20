@@ -54,8 +54,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     obs_type='vector',
                     # use_shared_projection=True, # TODO
                     use_shared_projection=False,
-                    task_embed_option='concat_task_embed',   # ==============TODO: none ==============
-                    # task_embed_option='register_task_embed',   # ==============TODO: none ==============
+                    # task_embed_option='concat_task_embed',   # ==============TODO: none ==============
+                    task_embed_option='register_task_embed',   # ==============TODO: none ==============
                     register_token_num=4,
                     use_task_embed=True, # TODO
                     # use_task_embed=False, # ==============TODO==============
@@ -157,9 +157,7 @@ def generate_configs(env_id_list: List[str],
                     total_batch_size: int):
     configs = []
     # TODO: debug
-    # exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_no-taskweight-obsloss-temp1_register-task-embed-4_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
-
-    exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_no-taskweight-obsloss-temp1_concat-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    exp_name_prefix = f'data_suz_mt_20250113_debug/ddp_4gpu_nlayer8_upc200_no-taskweight-obsloss-temp1_concat-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
 
     # exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_taskweight-eval1e3-10k-temp10-1_task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
     # exp_name_prefix = f'data_suz_mt_20250113_debug/ddp_8gpu_nlayer8_upc200_taskweight-eval1e3-10k-temp10-1_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
@@ -214,9 +212,9 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_config.py
+        python -m torch.distributed.launch --nproc_per_node=7 --master_port=29503 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_config.py
 
-        python -m torch.distributed.launch --nproc_per_node=1 --master_port=29503 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_config.py
+        python -m torch.distributed.launch --nproc_per_node=1 --master_port=29503 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_config_debug.py
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -232,6 +230,7 @@ if __name__ == "__main__":
         # 'acrobot-swingup', # 6 1
         'cartpole-swingup', # 5 1
     ]
+
 
 
     # env_id_list = [
@@ -257,38 +256,38 @@ if __name__ == "__main__":
     # ]
 
     # DMC 8games
-    env_id_list = [
-        'acrobot-swingup',
-        'cartpole-balance',
-        'cartpole-balance_sparse',
-        'cartpole-swingup',
-        'cartpole-swingup_sparse',
-        'cheetah-run',
-        "ball_in_cup-catch",
-        "finger-spin",
-    ]
+    # env_id_list = [
+    #     'acrobot-swingup',
+    #     'cartpole-balance',
+    #     'cartpole-balance_sparse',
+    #     'cartpole-swingup',
+    #     'cartpole-swingup_sparse',
+    #     'cheetah-run',
+    #     "ball_in_cup-catch",
+    #     "finger-spin",
+    # ]
 
     # DMC 18games
-    env_id_list = [
-        'acrobot-swingup',
-        'cartpole-balance',
-        'cartpole-balance_sparse',
-        'cartpole-swingup',
-        'cartpole-swingup_sparse',
-        'cheetah-run',
-        "ball_in_cup-catch",
-        "finger-spin",
-        "finger-turn_easy",
-        "finger-turn_hard",
-        'hopper-hop',
-        'hopper-stand',
-        'pendulum-swingup',
-        'reacher-easy',
-        'reacher-hard',
-        'walker-run',
-        'walker-stand',
-        'walker-walk',
-    ]
+    # env_id_list = [
+    #     'acrobot-swingup',
+    #     'cartpole-balance',
+    #     'cartpole-balance_sparse',
+    #     'cartpole-swingup',
+    #     'cartpole-swingup_sparse',
+    #     'cheetah-run',
+    #     "ball_in_cup-catch",
+    #     "finger-spin",
+    #     "finger-turn_easy",
+    #     "finger-turn_hard",
+    #     'hopper-hop',
+    #     'hopper-stand',
+    #     'pendulum-swingup',
+    #     'reacher-easy',
+    #     'reacher-hard',
+    #     'walker-run',
+    #     'walker-stand',
+    #     'walker-walk',
+    # ]
 
     # 获取各环境的 action_space_size 和 observation_shape
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
@@ -312,19 +311,19 @@ if __name__ == "__main__":
     batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
 
     num_unroll_steps = 5
-    infer_context_length = 2
+    infer_context_length = 3
     norm_type = 'LN'
     buffer_reanalyze_freq = 1 / 100000
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    # collector_env_num = 2
-    # num_segments = 2
-    # n_episode = 2
-    # evaluator_env_num = 2
-    # num_simulations = 5
-    # batch_size = [10 for _ in range(len(env_id_list))]
+    collector_env_num = 2
+    num_segments = 2
+    n_episode = 2
+    evaluator_env_num = 2
+    num_simulations = 2
+    batch_size = [2 for _ in range(len(env_id_list))]
     # =======================================
 
     seed = 0  # You can iterate over multiple seeds if needed

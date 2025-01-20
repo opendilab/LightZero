@@ -907,7 +907,9 @@ class WorldModelMT(WorldModel):
             # Encode current observations to latent embeddings
             current_obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch_current_obs, task_id=task_id)
             # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
-            # self.latent_state = current_obs_embeddings
+
+            if self.use_task_embed and self.task_embed_option == "register_task_embed":
+                self.latent_state = current_obs_embeddings
 
             #  ================ NOTE ================
             # import ipdb; ipdb.set_trace()
@@ -1021,6 +1023,7 @@ class WorldModelMT(WorldModel):
                         # Copy and store keys_values_wm for a single environment
                         self.update_cache_context(self.latent_state, is_init_infer=True)
                     else:
+                        import ipdb; ipdb.set_trace()
                         # Copy and store keys_values_wm for a single environment
                         self.update_cache_context(current_obs_embeddings, is_init_infer=True)
 
@@ -1346,6 +1349,7 @@ class WorldModelMT(WorldModel):
 
             if is_init_infer:
                 # Store the latest key-value cache for initial inference
+                # import ipdb; ipdb.set_trace()
                 cache_index = self.custom_copy_kv_cache_to_shared_init_envs(self.keys_values_wm_single_env, i)
                 self.past_kv_cache_init_infer_envs[i][cache_key] = cache_index
             else:
