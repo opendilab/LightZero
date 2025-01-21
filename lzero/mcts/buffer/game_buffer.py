@@ -401,8 +401,13 @@ class GameBuffer(ABC, object):
                                                                      unroll_steps + 1]
             )
             if len(action_mask_tmp) < unroll_steps + 1:
+                # action_mask_tmp += [
+                #     list(np.ones(self._cfg.model.action_space_size, dtype=np.int8))
+                #     for _ in range(unroll_steps + 1 - len(action_mask_tmp))
+                # ] 
+                # TODO: padded data
                 action_mask_tmp += [
-                    list(np.ones(self._cfg.model.action_space_size, dtype=np.int8))
+                    list(np.zeros(self._cfg.model.action_space_size, dtype=np.int8))
                     for _ in range(unroll_steps + 1 - len(action_mask_tmp))
                 ]
             action_mask.append(action_mask_tmp)
