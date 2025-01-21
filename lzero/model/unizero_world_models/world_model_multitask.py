@@ -83,7 +83,6 @@ class WorldModelMT(WorldModel):
             # TODO：目前在 "concat_task_embed"下面，self.pos_emb需要设置为固定的0
             self.task_emb = nn.Embedding(self.task_num, self.task_embed_dim, max_norm=1)  # TODO
             # self.task_emb.weight = self.sim_norm(self.task_emb.weight)
-
             self.obs_act_embed_dim = config.embed_dim - 96
         elif self.task_embed_option == "register_task_embed":
             self.task_emb = nn.Embedding(self.task_num, config.embed_dim, max_norm=1)  # TODO
@@ -91,6 +90,10 @@ class WorldModelMT(WorldModel):
         elif self.task_embed_option == "add_task_embed":
             self.task_emb = nn.Embedding(self.task_num, config.embed_dim, max_norm=1)  # TODO
             self.obs_act_embed_dim = config.embed_dim
+        else:
+            self.task_emb = None
+            self.obs_act_embed_dim = config.embed_dim
+
 
         self.transformer = Transformer(self.config, self.task_emb)
 
@@ -912,6 +915,8 @@ class WorldModelMT(WorldModel):
             # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
 
             if self.use_task_embed and self.task_embed_option == "register_task_embed":
+                self.latent_state = current_obs_embeddings
+            elif not self.use_task_embed:
                 self.latent_state = current_obs_embeddings
 
             #  ================ NOTE ================

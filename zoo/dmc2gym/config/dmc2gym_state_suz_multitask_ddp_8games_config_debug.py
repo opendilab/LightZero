@@ -55,10 +55,11 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     # use_shared_projection=True, # TODO
                     use_shared_projection=False,
                     # task_embed_option='concat_task_embed',   # ==============TODO: none ==============
-                    task_embed_option='register_task_embed',   # ==============TODO: none ==============
+                    # task_embed_option='register_task_embed',   # ==============TODO: none ==============
+                    task_embed_option=None,   # ==============TODO: none ==============
                     register_token_num=4,
-                    use_task_embed=True, # TODO
-                    # use_task_embed=False, # ==============TODO==============
+                    # use_task_embed=True, # TODO
+                    use_task_embed=False, # ==============TODO==============
                     num_unroll_steps=num_unroll_steps,
                     policy_entropy_weight=5e-2,
                     continuous_action_space=True,
