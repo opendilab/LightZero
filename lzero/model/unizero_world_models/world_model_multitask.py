@@ -514,13 +514,14 @@ class WorldModelMT(WorldModel):
         if self.num_observations_tokens == 16:
             self.projection_input_dim = 128
         elif self.num_observations_tokens == 1:
-            # self.projection_input_dim = self.config.embed_dim
 
             if self.task_embed_option == "concat_task_embed":
                 self.projection_input_dim = self.config.embed_dim - 96
             elif self.task_embed_option == "register_task_embed":
                 self.projection_input_dim = self.config.embed_dim
             elif self.task_embed_option == "add_task_embed":
+                self.projection_input_dim = self.config.embed_dim
+            else:
                 self.projection_input_dim = self.config.embed_dim
 
     def _initialize_statistics(self) -> None:

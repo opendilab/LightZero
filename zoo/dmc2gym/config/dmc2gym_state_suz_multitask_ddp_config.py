@@ -211,24 +211,24 @@ if __name__ == "__main__":
 
     # DMC 18games
     env_id_list = [
-        'acrobot-swingup',
-        'cartpole-balance',
-        'cartpole-balance_sparse',
-        'cartpole-swingup',
-        'cartpole-swingup_sparse',
-        'cheetah-run',
-        "ball_in_cup-catch",
-        "finger-spin",
-        "finger-turn_easy",
-        "finger-turn_hard",
-        'hopper-hop',
-        'hopper-stand',
-        'pendulum-swingup',
-        'reacher-easy',
-        'reacher-hard',
-        'walker-run',
-        'walker-stand',
-        'walker-walk',
+        'acrobot-swingup', # 0
+        'cartpole-balance', # 1
+        'cartpole-balance_sparse', # 2
+        'cartpole-swingup', # 3
+        'cartpole-swingup_sparse', # 4 bad
+        'cheetah-run', # 5 bad
+        "ball_in_cup-catch", # 6
+        "finger-spin", # 7 bad
+        "finger-turn_easy", # 8 波动
+        "finger-turn_hard",  # 9 波动
+        'hopper-hop',  # 10 bad 
+        'hopper-stand', # 11
+        'pendulum-swingup', # 12 bad
+        'reacher-easy', # 13
+        'reacher-hard', # 14 波动
+        'walker-run', # 15 略差
+        'walker-stand', # 16
+        'walker-walk', # 17
     ]
 
     # 获取各环境的 action_space_size 和 observation_shape
