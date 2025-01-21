@@ -55,10 +55,11 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     # use_shared_projection=True, # TODO
                     use_shared_projection=False,
                     # task_embed_option='concat_task_embed',   # ==============TODO: none ==============
-                    task_embed_option='register_task_embed',   # ==============TODO: none ==============
+                    # task_embed_option='register_task_embed',   # ==============TODO: none ==============
+                    task_embed_option=None,   # ==============TODO: none ==============
                     register_token_num=2, # TODO: 修改kv_caching中的register_token_num
-                    use_task_embed=True, # TODO
-                    # use_task_embed=False, # ==============TODO==============
+                    # use_task_embed=True, # TODO
+                    use_task_embed=False, # ==============TODO==============
                     num_unroll_steps=num_unroll_steps,
                     policy_entropy_weight=5e-2,
                     continuous_action_space=True,
@@ -159,7 +160,8 @@ def generate_configs(env_id_list: List[str],
     # TODO: debug
     # exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_no-taskweight-obsloss-temp1_register-task-embed-4_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
 
-    exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_no-taskweight-obsloss-temp1_register-task-embed-2_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    # exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_no-taskweight-obsloss-temp1_register-task-embed-2-pos0_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_no-taskweight-obsloss-temp1_no-task-embed-2-pos0_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
 
     # exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_taskweight-eval1e3-10k-temp10-1_task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
     # exp_name_prefix = f'data_suz_mt_20250113_debug/ddp_8gpu_nlayer8_upc200_taskweight-eval1e3-10k-temp10-1_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
@@ -299,8 +301,8 @@ if __name__ == "__main__":
     n_episode = 8
     evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(5e5)
-    # max_env_step = int(1e6)
+    # max_env_step = int(5e5)
+    max_env_step = int(1e6)
     reanalyze_ratio = 0.0
 
     # nlayer=4

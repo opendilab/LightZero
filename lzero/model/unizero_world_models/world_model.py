@@ -186,6 +186,7 @@ class WorldModel(nn.Module):
         src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
         
         if self.shared_pool_wm[self.shared_pool_index_wm] is None:
+            # import ipdb; ipdb.set_trace()
             self.shared_pool_wm[self.shared_pool_index_wm] = KeysValues(
                 src_kv_shape[0],  # Number of elements (n)
                 src_kv_shape[1],  # Number of attention heads (num_heads)
@@ -199,7 +200,10 @@ class WorldModel(nn.Module):
         
         for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
             # Copy the key and value caches using torch.copy_() for efficient data transfer
+            # try:
             dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
+            # except Exception as e:
+            #     import ipdb; ipdb.set_trace()
             dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
             dst_layer._k_cache._size = src_layer._k_cache._size
             dst_layer._v_cache._size = src_layer._v_cache._size

@@ -69,6 +69,13 @@ class WorldModelMT(WorldModel):
         self.pos_emb = nn.Embedding(config.max_tokens, self.config.embed_dim, device=self.device)
         print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
+        if self.task_embed_option == "register_task_embed":
+            # 由于 "register_task_embed"设定下的位置编码没有矫正
+            # 使用 nn.Embedding，但初始化为全零并禁止学习
+            self.pos_emb = nn.Embedding(config.max_tokens, self.config.embed_dim, device=self.device)
+            nn.init.constant_(self.pos_emb.weight, 0.0)  # 初始化全零
+            self.pos_emb.weight.requires_grad = False  # 禁止更新
+
         # Task embedding setup
         self.use_task_embed = config.use_task_embed
         self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
@@ -84,15 +91,18 @@ class WorldModelMT(WorldModel):
             self.task_emb = nn.Embedding(self.task_num, self.task_embed_dim, max_norm=1)  # TODO
             # self.task_emb.weight = self.sim_norm(self.task_emb.weight)
             self.obs_act_embed_dim = config.embed_dim - 96
+            self.register_token_num = 0
         elif self.task_embed_option == "register_task_embed":
             self.task_emb = nn.Embedding(self.task_num, config.embed_dim, max_norm=1)  # TODO
             self.obs_act_embed_dim = config.embed_dim
         elif self.task_embed_option == "add_task_embed":
             self.task_emb = nn.Embedding(self.task_num, config.embed_dim, max_norm=1)  # TODO
             self.obs_act_embed_dim = config.embed_dim
+            self.register_token_num = 0
         else:
             self.task_emb = None
             self.obs_act_embed_dim = config.embed_dim
+            self.register_token_num = 0
 
 
         self.transformer = Transformer(self.config, self.task_emb)
@@ -557,7 +567,7 @@ class WorldModelMT(WorldModel):
 
             for start in [2]:
                 for end in [self.context_length - 1]: # TODO
-                # for end in [self.context_length + 2*self.register_token_num - 1]:
+                # for end in [self.context_length - self.register_token_num - 1]:
                     original_pos_emb_k = self.positional_embedding_k[layer][:, :, start:end, :]
                     new_pos_emb_k = self.positional_embedding_k[layer][:, :, :end - start, :]
                     layer_pos_emb_diff_k[(start, end)] = new_pos_emb_k - original_pos_emb_k
@@ -746,6 +756,11 @@ class WorldModelMT(WorldModel):
             position_embeddings = self.pos_emb(steps_indices).view(-1, num_steps, embeddings.shape[-1])
             return embeddings + position_embeddings
         else:
+            # 修复前面kv_cache和z/a的位置编码不对, kv_cache, z/a, register_token
+            # if self.use_task_embed and self.task_embed_option == "register_task_embed":
+            #     if prev_steps + num_steps + self.register_token_num > self.context_length:
+            #         prev_steps = self.context_length - self.register_token_num - 1
+            
             if is_init_infer:
                 return embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device))
             else:
@@ -1159,8 +1174,20 @@ class WorldModelMT(WorldModel):
             #     print(e)
             #     import ipdb; ipdb.set_trace()
 
-
             self.keys_values_wm_size_list_current = [i + 1 for i in self.keys_values_wm_size_list_current]
+
+            # if self.task_embed_option == "register_task_embed":
+            #     #  kv_cache, z/a, register_token
+            #     # 这样修复后kv_cache的位置编码不是从0开始的, 那后面按照从零开始矫正也就是错误的,
+            #     # 但是由于self.keys_values_wm._keys_values[layer]._k_cache._size < context_length - 1,所以不会矫正
+            #     # 但是在_add_position_embeddings时，prev_steps是错误的，导致新增的z/a的位置编码索引与前面的kv不连续
+            #     # import ipdb; ipdb.set_trace()
+            #     print(f'self.keys_values_wm_size_list_current:{self.keys_values_wm_size_list_current}')
+            #     print(f'self.keys_values_wm.size:{self.keys_values_wm.size}')
+            #     self.keys_values_wm_size_list_current = [min(self.keys_values_wm.size, i + 1) for i in self.keys_values_wm_size_list_current]
+            # else:
+            #     self.keys_values_wm_size_list_current = [i + 1 for i in self.keys_values_wm_size_list_current]
+
 
             if k == 0:
                 reward = outputs_wm.logits_rewards  # (B,)
@@ -1256,6 +1283,11 @@ class WorldModelMT(WorldModel):
         for i in range(latent_state.size(0)):
             # ============ Iterate over each environment ============
             cache_key = hash_state(latent_state[i].view(-1).cpu().numpy())  # latent_state[i] is torch.Tensor
+            # if self.task_embed_option == "register_task_embed":
+            #     context_length = self.context_length - self.register_token_num
+            # else:
+            #     context_length = self.context_length
+            
             context_length = self.context_length
 
             if not is_init_infer:
@@ -1293,6 +1325,8 @@ class WorldModelMT(WorldModel):
 
                     # ============ NOTE: Very Important ============
                     if self.keys_values_wm_single_env._keys_values[layer]._k_cache._size >= context_length - 1:
+                        # import ipdb; ipdb.set_trace()
+
                         # Keep only the last self.context_length-3 timesteps of context
                         # For memory environments, training is for H steps, recurrent_inference might exceed H steps
                         # Assuming cache dimension is [batch_size, num_heads, sequence_length, features]
@@ -1304,6 +1338,7 @@ class WorldModelMT(WorldModel):
                         v_cache_trimmed = v_cache_current[:, :, 2:context_length - 1, :].squeeze(0)
 
                         # Index pre-computed positional encoding differences
+                        # import ipdb; ipdb.set_trace()
                         pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length - 1)]
                         pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length - 1)]
                         # ============ NOTE: Very Important ============
@@ -1336,6 +1371,8 @@ class WorldModelMT(WorldModel):
                         self.keys_values_wm_single_env._keys_values[layer]._k_cache._size = self.keys_values_wm._keys_values[layer]._k_cache._size
                         self.keys_values_wm_single_env._keys_values[layer]._v_cache._size = self.keys_values_wm._keys_values[layer]._v_cache._size
                     else:
+                        # import ipdb; ipdb.set_trace()
+
                         # Assuming cache dimension is [batch_size, num_heads, sequence_length, features]
                         k_cache_current = self.keys_values_wm._keys_values[layer]._k_cache._cache[i]
                         v_cache_current = self.keys_values_wm._keys_values[layer]._v_cache._cache[i]

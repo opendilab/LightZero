@@ -73,14 +73,20 @@ class Cache:
         try:
             # Calculate the required capacity after adding the new tokens
             required_capacity = self._size + tokens
+            # print(f'self._size:{self._size}, tokens:{tokens}')
 
-            # Check if the cache has enough space to accommodate the new tokens
-            if required_capacity > self._cache.shape[2]:
+            # Check if the cache has enough space to accommodate the new tokens, 
+            #  kv_cache, z/a, register_token
+            # 这样修复后kv_cache的位置编码不是从0开始的, 那后面按照从零开始矫正也就是错误的,
+            # 但是由于self.keys_values_wm._keys_values[layer]._k_cache._size < context_length - 1,所以不会矫正
+            # 但是在_add_position_embeddings时，prev_steps是错误的，导致新增的z/a的位置编码索引与前面的kv不连续
+            if required_capacity > self._cache.shape[2]: 
                 # Shift existing cache data by removing the oldest entries
                 shift_amount = required_capacity - self._cache.shape[2]
-                # =======TODO: 应该去掉偶数个（z,a）以保证head输出pattern保持不变=======
-                if shift_amount%2 != 0:
-                    shift_amount = shift_amount+1
+                # =======TODO: 应该去掉偶数个（z,a）以保证 head 输出pattern保持不变=======
+                if shift_amount % 2 != 0:
+                    shift_amount = shift_amount + 1
+                # print(f'required_capacity:{required_capacity}, self._cache.shape[2]:{self._cache.shape[2]}, shift_amount:{shift_amount}')
                 if shift_amount >= self._size:
                     # If the shift amount exceeds or equals the current size, just reset the cache
                     print("Cache too small; resetting the entire cache")
