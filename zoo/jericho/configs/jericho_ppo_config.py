@@ -8,6 +8,9 @@ env_id = 'detective.z5'
 evaluator_env_num = 2
 
 # proj train
+# collector_env_num = 18
+# batch_size = 320
+
 collector_env_num = 4
 batch_size = 32
 
@@ -20,12 +23,12 @@ batch_size = 32
 # infer_context_length = 2
 jericho_ppo_config = dict(
     # exp_name=f"data_ppo_detective/jericho_ppo_projtrain_bs{batch_size}_seed0",
-    exp_name=f"data_ppo_detective/jericho_add-loc-inv_ppo_projtrain_bs{batch_size}_seed0",
+    exp_name=f"data_ppo_detective_debug/jericho_add-loc-inv_ppo_projtrain_bs{batch_size}_seed0",
     env=dict(
         remove_stuck_actions=False,
         # remove_stuck_actions=True,
-        # add_location_and_inventory=True,
-        add_location_and_inventory=False,
+        add_location_and_inventory=True,
+        # add_location_and_inventory=False,
 
         stop_value=int(1e6),
         observation_shape=512,
