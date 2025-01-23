@@ -122,7 +122,8 @@ def main(env_id, seed):
             reanalyze_ratio=0,
             n_episode=n_episode,
             eval_freq=int(5e3),
-            replay_buffer_size=int(1e6),
+            # replay_buffer_size=int(1e6),
+            replay_buffer_size=int(5e5), # TODO
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             # ============= The key different params for ReZero =============

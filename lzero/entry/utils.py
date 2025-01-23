@@ -63,7 +63,7 @@ def random_collect(
     collector.reset_policy(policy.collect_mode)
 
 
-def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:
+def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter, task_id=0) -> None:
     """
     Overview:
         Log the memory usage of the buffer and the current process to TensorBoard.
@@ -74,9 +74,9 @@ def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: Summa
     """
     # "writer is None" means we are in a slave process in the DDP setup.
     if writer is not None:
-        writer.add_scalar('Buffer/num_of_all_collected_episodes', buffer.num_of_collected_episodes, train_iter)
-        writer.add_scalar('Buffer/num_of_game_segments', len(buffer.game_segment_buffer), train_iter)
-        writer.add_scalar('Buffer/num_of_transitions', len(buffer.game_segment_game_pos_look_up), train_iter)
+        writer.add_scalar(f'Buffer/num_of_all_collected_episodes_{task_id}', buffer.num_of_collected_episodes, train_iter)
+        writer.add_scalar(f'Buffer/num_of_game_segments_{task_id}', len(buffer.game_segment_buffer), train_iter)
+        writer.add_scalar(f'Buffer/num_of_transitions_{task_id}', len(buffer.game_segment_game_pos_look_up), train_iter)
 
         game_segment_buffer = buffer.game_segment_buffer
 
@@ -87,7 +87,7 @@ def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: Summa
         buffer_memory_usage_mb = buffer_memory_usage / (1024 * 1024)
 
         # Record the memory usage of self.game_segment_buffer to TensorBoard.
-        writer.add_scalar('Buffer/memory_usage/game_segment_buffer', buffer_memory_usage_mb, train_iter)
+        writer.add_scalar(f'Buffer/memory_usage/game_segment_buffer_{task_id}', buffer_memory_usage_mb, train_iter)
 
         # Get the amount of memory currently used by the process (in bytes).
         process = psutil.Process(os.getpid())
@@ -97,7 +97,7 @@ def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: Summa
         process_memory_usage_mb = process_memory_usage / (1024 * 1024)
 
         # Record the memory usage of the process to TensorBoard.
-        writer.add_scalar('Buffer/memory_usage/process', process_memory_usage_mb, train_iter)
+        writer.add_scalar(f'Buffer/memory_usage/process_{task_id}', process_memory_usage_mb, train_iter)
 
 
 def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:

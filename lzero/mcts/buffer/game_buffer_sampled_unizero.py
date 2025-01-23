@@ -112,6 +112,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             mask_tmp = [1. for i in range(len(root_sampled_actions_tmp))]
             mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
 
+
             # pad random action
             if self._cfg.model.continuous_action_space:
                 actions_tmp += [
