@@ -32,7 +32,7 @@ def main(env_id, seed):
     # evaluator_env_num = 2
     # num_simulations = 10
     # batch_size = 5
-    # gpu_num = 4
+    # gpu_num = 2
     # collector_env_num = 2
     # num_segments = int(collector_env_num)
     # ==============================================================
@@ -90,7 +90,7 @@ def main(env_id, seed):
             num_simulations=num_simulations,
             num_segments=num_segments,
             td_steps=5,
-            train_start_after_envsteps=2000,
+            train_start_after_envsteps=0,
             game_segment_length=game_segment_length,
             grad_clip_value=5,
             replay_buffer_size=int(1e6),
@@ -138,8 +138,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=2 ./zoo/atari/config/atari_unizero_segment_ddp_config.py
-        torchrun --nproc_per_node=2 ./zoo/atari/config/atari_unizero_ddp_config.py
+        torchrun --nproc_per_node=2 ./zoo/atari/config/atari_unizero_segment_ddp_config.py
     """
     main('PongNoFrameskip-v4', 0)
 
