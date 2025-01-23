@@ -224,8 +224,7 @@ class SampledEfficientZeroModel(nn.Module):
                 # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
                 # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
                 # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
-                self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
-                                                                     ) * math.ceil(observation_shape[2] / 16)
+                self.projection_input_dim = num_channels * latent_size
             else:
                 self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 

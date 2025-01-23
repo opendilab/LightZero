@@ -14,18 +14,29 @@ replay_ratio = 0.25
 batch_size = 256
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
+
+# ======== debug config ======== 
+collector_env_num = 2
+n_episode = 2
+evaluator_env_num = 2
+continuous_action_space = True
+K = 2  # num_of_sampled_actions
+num_simulations = 5
+replay_ratio = 0.05
+update_per_collect =2
+batch_size = 4
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 dmc2gym_pixels_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez/dmc2gym_pixels_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez_debug/dmc2gym_pixels_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id='dmc2gym-v0',
         domain_name="cartpole",
         task_name="swingup",
         from_pixels=True,  # pixel/image obs
-        frame_skip=4,
+        frame_skip=8,
         warp_frame=True,
         scale=True,
         frame_stack_num=3,
@@ -85,7 +96,8 @@ dmc2gym_pixels_sampled_efficientzero_create_config = dict(
         type='dmc2gym_lightzero',
         import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
     ),
-    env_manager=dict(type='subprocess'),
+    # env_manager=dict(type='subprocess'),
+    env_manager=dict(type='base'),
     policy=dict(
         type='sampled_efficientzero',
         import_names=['lzero.policy.sampled_efficientzero'],
