@@ -3,6 +3,15 @@ from easydict import EasyDict
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
+from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
+
+env_id = 'cartpole-balance'  # You can specify any DMC tasks here
+action_space_size = dmc_state_env_action_space_map[env_id]
+obs_space_size = dmc_state_env_obs_space_map[env_id]
+
+domain_name = env_id.split('-')[0]
+task_name = env_id.split('-')[1]
+
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
@@ -10,39 +19,37 @@ continuous_action_space = True
 K = 20  # num_of_sampled_actions
 num_simulations = 50
 update_per_collect = None
-replay_ratio = 0.25
+replay_ratio = 0.1
 batch_size = 256
-max_env_step = int(5e6)
-reanalyze_ratio = 0.
+max_env_step = int(1e6)
 
 # ======== debug config ======== 
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
-continuous_action_space = True
-K = 2  # num_of_sampled_actions
-num_simulations = 5
-replay_ratio = 0.05
-update_per_collect =2
-batch_size = 4
+# collector_env_num = 2
+# n_episode = 2
+# evaluator_env_num = 2
+# continuous_action_space = True
+# K = 5  # num_of_sampled_actions
+# num_simulations = 5
+# replay_ratio = 0.05
+# update_per_collect =2
+# batch_size = 4
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 dmc2gym_pixels_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_debug/dmc2gym_pixels_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez/dmc2gym_pixels_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_seed0',
     env=dict(
         env_id='dmc2gym-v0',
-        domain_name="cartpole",
-        task_name="swingup",
+        continuous=True,
+        domain_name=domain_name,
+        task_name=task_name,
         from_pixels=True,  # pixel/image obs
-        frame_skip=8,
+        frame_skip=2,
+        frame_stack_num=3,
         warp_frame=True,
         scale=True,
-        frame_stack_num=3,
         channels_first=True,
-        stop_value=1e6,
-        continuous=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -71,19 +78,21 @@ dmc2gym_pixels_sampled_efficientzero_config = dict(
         model_path=None,
         cuda=True,
         env_type='not_board_games',
-        game_segment_length=200,
+        game_segment_length=100,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='AdamW',
         learning_rate=0.0001,
-        grad_clip_value=5,
-        policy_entropy_weight=5e-3,
         num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
+        reanalyze_ratio=0,
+        policy_entropy_weight=5e-2,
+        grad_clip_value=5,
+        manual_temperature_decay=True,
+        threshold_training_steps_for_final_temperature=int(2.5e4),
         n_episode=n_episode,
         eval_freq=int(2e3),
         replay_ratio=replay_ratio,
-        replay_buffer_size=int(1e6),  # the size/capacity of replay_buffer, in the terms of transitions.
+        replay_buffer_size=int(1e5),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
     ),
@@ -96,8 +105,7 @@ dmc2gym_pixels_sampled_efficientzero_create_config = dict(
         type='dmc2gym_lightzero',
         import_names=['zoo.dmc2gym.envs.dmc2gym_lightzero_env'],
     ),
-    # env_manager=dict(type='subprocess'),
-    env_manager=dict(type='base'),
+    env_manager=dict(type='subprocess'),
     policy=dict(
         type='sampled_efficientzero',
         import_names=['lzero.policy.sampled_efficientzero'],
