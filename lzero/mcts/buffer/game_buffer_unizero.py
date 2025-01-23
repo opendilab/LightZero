@@ -522,7 +522,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             m_output = model.initial_inference(batch_obs, batch_action)
             # ======================================================================
 
-            # if not model.training:
             # if not in training, obtain the scalars of the value/reward
             [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
                 [

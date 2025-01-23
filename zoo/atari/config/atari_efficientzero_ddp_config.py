@@ -84,7 +84,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        torchrun--nproc_per_node=2 ./LightZero/zoo/atari/config/atari_efficientzero_ddp_config.py
+        torchrun --nproc_per_node=2 ./LightZero/zoo/atari/config/atari_efficientzero_ddp_config.py
     """
     from ding.utils import DDPContext
     from lzero.entry import train_muzero
