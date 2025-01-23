@@ -155,7 +155,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # (bool) Whether to use the pure policy to collect data.
         collect_with_pure_policy=False,
         # (int) The evaluation frequency.
-        eval_freq=int(2e3),
+        eval_freq=int(5e3),
         # (str) The sample type. Options are ['episode', 'transition'].
         sample_type='transition',
         # ****** observation ******
@@ -563,7 +563,8 @@ class UniZeroPolicy(MuZeroPolicy):
             temperature: float = 1,
             to_play: List = [-1],
             epsilon: float = 0.25,
-            ready_env_id: np.array = None
+            ready_env_id: np.array = None,
+            task_id: int = None,
     ) -> Dict:
         """
         Overview:
@@ -575,6 +576,7 @@ class UniZeroPolicy(MuZeroPolicy):
             - temperature (:obj:`float`): The temperature of the policy.
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
+            - task_id (:obj:`int`): The task id. Default is None, which means UniZero is in the single-task mode.
         Shape:
             - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
@@ -697,7 +699,7 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
-                      ready_env_id: np.array = None) -> Dict:
+                      ready_env_id: np.array = None, task_id: int = None,) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -707,6 +709,7 @@ class UniZeroPolicy(MuZeroPolicy):
             - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
+            - task_id (:obj:`int`): The task id. Default is None, which means UniZero is in the single-task mode.
         Shape:
             - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
@@ -725,7 +728,7 @@ class UniZeroPolicy(MuZeroPolicy):
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
+            network_output = self._eval_model.initial_inference(self.last_batch_obs_eval, self.last_batch_action, data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             if not self._eval_model.training:
@@ -775,12 +778,12 @@ class UniZeroPolicy(MuZeroPolicy):
                 }
                 batch_action.append(action)
 
-            self.last_batch_obs = data
+            self.last_batch_obs_eval = data
             self.last_batch_action = batch_action
 
         return output
 
-    def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+    def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
         Overview:
             This method resets the collection process for a specific environment. It clears caches and memory
@@ -824,7 +827,7 @@ class UniZeroPolicy(MuZeroPolicy):
             print('collector: collect_model clear()')
             print(f'eps_steps_lst[{env_id}]: {current_steps}')
 
-    def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+    def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
         Overview:
             This method resets the evaluation process for a specific environment. It clears caches and memory
@@ -837,11 +840,22 @@ class UniZeroPolicy(MuZeroPolicy):
             - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
         if reset_init_data:
-            self.last_batch_obs = initialize_zeros_batch(
-                self._cfg.model.observation_shape,
-                self._cfg.evaluator_env_num,
-                self._cfg.device
-            )
+            if task_id is not None:
+                self.last_batch_obs_eval = initialize_zeros_batch(
+                    self._cfg.model.observation_shape_list[task_id],
+                    self._cfg.evaluator_env_num,
+                    self._cfg.device
+                )
+                print(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+
+            else:
+                self.last_batch_obs_eval = initialize_zeros_batch(
+                    self._cfg.model.observation_shape,
+                    self._cfg.evaluator_env_num,
+                    self._cfg.device
+                )
+                print(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
 
         # Return immediately if env_id is None or a list

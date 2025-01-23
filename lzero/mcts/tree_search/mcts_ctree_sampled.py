@@ -82,7 +82,7 @@ class SampledUniZeroMCTSCtree(object):
     # @profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]]
+            List[Any]], task_id=None
     ) -> None:
         """
         Overview:
@@ -156,8 +156,12 @@ class SampledUniZeroMCTSCtree(object):
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
                 # for Sampled UniZero
-                network_output = model.recurrent_inference(state_action_history, simulation_index,
-                                                           latent_state_index_in_search_path)
+                if task_id is not None:
+                    # multi task setting
+                    network_output = model.recurrent_inference(state_action_history, simulation_index, latent_state_index_in_search_path, task_id=task_id)
+                else:
+                    # single task setting
+                    network_output = model.recurrent_inference(state_action_history, simulation_index, latent_state_index_in_search_path)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)

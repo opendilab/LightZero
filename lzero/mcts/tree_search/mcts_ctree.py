@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from lzero.mcts.ctree.ctree_muzero import mz_tree as mz_ctree
     from lzero.mcts.ctree.ctree_gumbel_muzero import gmz_tree as gmz_ctree
 
+from line_profiler import line_profiler
 
 class UniZeroMCTSCtree(object):
     """
@@ -71,10 +72,10 @@ class UniZeroMCTSCtree(object):
         from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
         return ctree.Roots(active_collect_env_num, legal_actions)
 
-    # @profile
+    #@profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]]
+            List[Any]], task_id=None
     ) -> None:
         """
         Overview:
@@ -144,7 +145,12 @@ class UniZeroMCTSCtree(object):
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
                 # for UniZero
-                network_output = model.recurrent_inference(state_action_history, simulation_index, latent_state_index_in_search_path)
+                if task_id is not None:
+                    # multi task setting
+                    network_output = model.recurrent_inference(state_action_history, simulation_index, latent_state_index_in_search_path, task_id=task_id)
+                else:
+                    # single task setting
+                    network_output = model.recurrent_inference(state_action_history, simulation_index, latent_state_index_in_search_path)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
@@ -225,10 +231,10 @@ class MuZeroMCTSCtree(object):
         from lzero.mcts.ctree.ctree_muzero import mz_tree as ctree
         return ctree.Roots(active_collect_env_num, legal_actions)
 
-    # @profile
+    # #@profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]]
+            List[Any]], task_id=None
     ) -> None:
         """
         Overview:
@@ -297,6 +303,13 @@ class MuZeroMCTSCtree(object):
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
                 network_output = model.recurrent_inference(latent_states, last_actions)  # for classic muzero
+
+                if task_id is not None:
+                    # multi task setting
+                    network_output = model.recurrent_inference(latent_states, last_actions, task_id=task_id)
+                else:
+                    # single task setting
+                    network_output = model.recurrent_inference(latent_states, last_actions)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
@@ -495,7 +508,7 @@ class MuZeroRNNFullObsMCTSCtree(object):
         """
         return tree_muzero.Roots(active_collect_env_num, legal_actions)
 
-    # @profile
+    # #@profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any],
             world_model_latent_history_roots: List[Any], to_play_batch: Union[int, List[Any]], ready_env_id=None,

@@ -61,6 +61,16 @@ class MuZeroGameBuffer(GameBuffer):
         self.sample_times = 0
         self.active_root_num = 0
 
+        if hasattr(self._cfg, 'task_id'):
+            self.task_id = self._cfg.task_id
+            print(f"Task ID is set to {self.task_id}.")
+            self.action_space_size = self._cfg.model.action_space_size_list[self.task_id]
+
+        else:
+            self.task_id = None
+            print("No task_id found in configuration. Task ID is set to None.")
+            self.action_space_size = self._cfg.model.action_space_size
+
     def reset_runtime_metrics(self):
         """
         Overview:
@@ -146,7 +156,7 @@ class MuZeroGameBuffer(GameBuffer):
         self.compute_target_re_time += self._compute_target_timer.value
 
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
-            policy_non_re_context, self._cfg.model.action_space_size
+            policy_non_re_context, self.action_space_size
         )
 
         # fusion of batch_target_policies_re and batch_target_policies_non_re to batch_target_policies
@@ -448,7 +458,11 @@ class MuZeroGameBuffer(GameBuffer):
                 end_index = self._cfg.mini_infer_size * (i + 1)
                 m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device)
                 # calculate the target value
-                m_output = model.initial_inference(m_obs)
+                if self.task_id is not None:
+                    m_output = model.initial_inference(m_obs, task_id=self.task_id)
+                else:
+                    m_output = model.initial_inference(m_obs)
+                
 
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
@@ -573,7 +587,10 @@ class MuZeroGameBuffer(GameBuffer):
                 beg_index = self._cfg.mini_infer_size * i
                 end_index = self._cfg.mini_infer_size * (i + 1)
                 m_obs = torch.from_numpy(policy_obs_list[beg_index:end_index]).to(self._cfg.device)
-                m_output = model.initial_inference(m_obs)
+                if self.task_id is not None:
+                    m_output = model.initial_inference(m_obs, task_id=self.task_id)
+                else:
+                    m_output = model.initial_inference(m_obs)
 
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
@@ -591,7 +608,7 @@ class MuZeroGameBuffer(GameBuffer):
             reward_pool = reward_pool.squeeze().tolist()
             policy_logits_pool = policy_logits_pool.tolist()
             noises = [
-                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self._cfg.model.action_space_size
+                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * self.action_space_size
                                     ).astype(np.float32).tolist() for _ in range(transition_batch_size)
             ]
             if self._cfg.mcts_ctree:
@@ -603,7 +620,11 @@ class MuZeroGameBuffer(GameBuffer):
                     roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
                 with self._origin_search_timer:
-                    MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                    if self.task_id is not None:
+                        MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
+                    else:
+                        MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                
                 self.origin_search_time += self._origin_search_timer.value
             else:
                 # python mcts_tree
@@ -613,7 +634,11 @@ class MuZeroGameBuffer(GameBuffer):
                 else:
                     roots.prepare_no_noise(reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                if self.task_id is not None:
+                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play, task_id=self.task_id)
+                else:
+                    MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+
 
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
@@ -629,7 +654,7 @@ class MuZeroGameBuffer(GameBuffer):
 
                     if policy_mask[policy_index] == 0:
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0
-                        target_policies.append([0 for _ in range(self._cfg.model.action_space_size)])
+                        target_policies.append([0 for _ in range(self.action_space_size)])
                     else:
                         # NOTE: It is very important to use the latest MCTS visit count distribution.
                         sum_visits = sum(distributions)
@@ -638,7 +663,7 @@ class MuZeroGameBuffer(GameBuffer):
                         if distributions is None:
                             # if at some obs, the legal_action is None, add the fake target_policy
                             target_policies.append(
-                                list(np.ones(self._cfg.model.action_space_size) / self._cfg.model.action_space_size)
+                                list(np.ones(self.action_space_size) / self.action_space_size)
                             )
                         else:
                             # Update the data in game segment:
@@ -655,7 +680,7 @@ class MuZeroGameBuffer(GameBuffer):
                                 target_policies.append(policy)
                             else:
                                 # for board games that have two players and legal_actions is dy
-                                policy_tmp = [0 for _ in range(self._cfg.model.action_space_size)]
+                                policy_tmp = [0 for _ in range(self.action_space_size)]
                                 # to make sure target_policies have the same dimension
                                 sum_visits = sum(distributions)
                                 policy = [visit_count / sum_visits for visit_count in distributions]
@@ -684,7 +709,7 @@ class MuZeroGameBuffer(GameBuffer):
                 - game_segment_lens
                 - action_mask_segment
                 - to_play_segment
-            - policy_shape: self._cfg.model.action_space_size
+            - policy_shape: self.action_space_size
         Returns:
             - batch_target_policies_non_re
         """
@@ -707,7 +732,7 @@ class MuZeroGameBuffer(GameBuffer):
             ]
             # NOTE: in continuous action space env: we set all legal_actions as -1
             legal_actions = [
-                [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
+                [-1 for _ in range(self.action_space_size)] for _ in range(transition_batch_size)
             ]
         else:
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
@@ -757,6 +782,7 @@ class MuZeroGameBuffer(GameBuffer):
         NOTE:
             train_data = [current_batch, target_batch]
             current_batch = [obs_list, action_list, improved_policy_list(only in Gumbel MuZero), mask_list, batch_index_list, weights, make_time_list]
+            target_batch = [batch_rewards, batch_target_values, batch_target_policies]
         """
         indices = train_data[0][-3]
         metas = {'make_time': train_data[0][-1], 'batch_priorities': batch_priorities}
