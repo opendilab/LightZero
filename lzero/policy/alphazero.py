@@ -219,8 +219,9 @@ class AlphaZeroPolicy(Policy):
         self._get_simulation_env()
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
-            import sys
-            sys.path.append('/Users/your_user_name/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
+            from lzero.mcts.ctree.ctree_alphazero.test.eval_alphazero_ctree import find_and_add_to_sys_path
+            # Use the function to add the desired path to sys.path
+            find_and_add_to_sys_path("lzero/mcts/ctree/ctree_alphazero/build")
             import mcts_alphazero
             self._collect_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves, self._cfg.mcts.num_simulations,
                                                      self._cfg.mcts.pb_c_base,
@@ -263,7 +264,7 @@ class AlphaZeroPolicy(Policy):
                                                                   init_state=init_state[env_id],
                                                                   katago_policy_init=False,
                                                                   katago_game_state=katago_game_state[env_id]))
-            action, mcts_probs = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self.collect_mcts_temperature, True)
+            action, mcts_probs, root = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self.collect_mcts_temperature, True)
 
             output[env_id] = {
                 'action': action,
@@ -278,9 +279,11 @@ class AlphaZeroPolicy(Policy):
         """
         self._get_simulation_env()
         if self._cfg.mcts_ctree:
-            import sys
-            sys.path.append('/Users/your_user_name/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
+            from lzero.mcts.ctree.ctree_alphazero.test.eval_alphazero_ctree import find_and_add_to_sys_path
+            # Use the function to add the desired path to sys.path
+            find_and_add_to_sys_path("lzero/mcts/ctree/ctree_alphazero/build")
             import mcts_alphazero
+
             # TODO(pu): how to set proper num_simulations for evaluation
             self._eval_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves,
                                                   min(800, self._cfg.mcts.num_simulations * 4),
@@ -324,7 +327,7 @@ class AlphaZeroPolicy(Policy):
                                                                   init_state=init_state[env_id],
                                                                   katago_policy_init=False,
                                                                   katago_game_state=katago_game_state[env_id]))
-            action, mcts_probs = self._eval_mcts.get_next_action(
+            action, mcts_probs, root = self._eval_mcts.get_next_action(
                 state_config_for_simulation_env_reset, self._policy_value_fn, 1.0, False
             )
             output[env_id] = {
