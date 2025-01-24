@@ -26,15 +26,26 @@ jobs:
           - '3.9'
           - '3.10'
     steps:
+      - name: Set up python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
       - name: Get system version for Linux
         if: ${{ runner.os == 'Linux' }}
         shell: bash
         run: |
-          sudo apt-get update -y
-          sudo apt-get install swig -y
+          sudo dpkg --configure -a
+          sudo apt update && sudo apt upgrade -y
+          sudo apt-get install -y build-essential clang libboost-python-dev libeigen3-dev
+          sudo ln -fs /usr/share/zoneinfo/UTC /etc/localtime
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y libopencv-dev swig tzdata
+          sudo apt-get install -y python${{ matrix.python-version }}-dev
+          python3-config --includes
           echo "OS_NAME=Linux" >> $GITHUB_ENV
           echo "IS_WIN=" >> $GITHUB_ENV
           echo "IS_MAC=" >> $GITHUB_ENV
+          echo "CFLAGS=$(python3-config --includes)" >> $GITHUB_ENV
+          echo "LDFLAGS=$(python3-config --ldflags)" >> $GITHUB_ENV
       - name: Get system version for MacOS
         if: ${{ runner.os == 'macOS' }}
         shell: bash
@@ -46,33 +57,40 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 20
-      - name: Set up system dependences on MacOS
+      - name: Set up system dependencies on MacOS
         if: ${{ env.OS_NAME == 'MacOS' }}
         shell: bash
         run: |
           brew install tree cloc wget curl make zip graphviz
           brew install llvm  # Install llvm (which includes clang)
+          brew install opencv  # Install OpenCV
           echo 'export PATH="/usr/local/opt/llvm/bin:$PATH"' >> $GITHUB_ENV  # update PATH
           dot -V
       - name: Set CC and CXX variables
         run: |
           echo "CC=$(which clang)" >> $GITHUB_ENV
           echo "CXX=$(which clang++)" >> $GITHUB_ENV
-      - name: Set up python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
+#          echo "CC=$(which gcc)" >> $GITHUB_ENV
+#          echo "CXX=$(which g++)" >> $GITHUB_ENV
       - name: Install PyPI dependencies
         shell: bash
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip setuptools wheel cython
           pip install --no-cache-dir --upgrade flake8 setuptools wheel twine -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip install -r requirements.txt --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip install -r requirements-build.txt --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip install -r requirements-test.txt --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
           pip uninstall DI-engine -y
-          pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple git+http://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env] --upgrade
+          pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple git+https://github.com/opendilab/DI-engine.git@main#egg=DI-engine[common_env] --upgrade
           pip install --no-cache-dir transformers --upgrade -i https://pypi.tuna.tsinghua.edu.cn/simple
+          pip install opencv-python --upgrade --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple
+      - name: Verify Python.h availability
+        shell: bash
+        run: |
+          if [ ! -f "$(python3-config --includes | sed 's/-I//g' | awk '{print $1}')/Python.h" ]; then
+            echo "Error: Python.h not found."
+            exit 1
+          fi
       - name: Run unittest on MacOS or Linux
         if: ${{ env.OS_NAME == 'MacOS' || env.OS_NAME == 'Linux'}}
         env:
@@ -82,7 +100,7 @@ jobs:
         run: |
             make clean build unittest
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./coverage.xml
