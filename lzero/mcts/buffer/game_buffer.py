@@ -564,14 +564,13 @@ class GameBuffer(ABC, object):
             # print(f'valid_len is {valid_len}')
 
         if meta['priorities'] is None:
-            max_prio = self.game_pos_priorities.max() if self.game_segment_buffer else 1
+            if self.game_segment_buffer:
+                max_prio = self.game_pos_priorities.max() if len(self.game_pos_priorities) > 0 else 1
+            else:
+                max_prio = 1
+            
             # if no 'priorities' provided, set the valid part of the new-added game history the max_prio
-            self.game_pos_priorities = np.concatenate(
-                (
-                    self.game_pos_priorities, [max_prio
-                                               for _ in range(valid_len)] + [0. for _ in range(valid_len, data_length)]
-                )
-            )
+            self.game_pos_priorities = np.concatenate((self.game_pos_priorities, [max_prio for _ in range(valid_len)] + [0. for _ in range(valid_len, data_length)]))
         else:
             assert data_length == len(meta['priorities']), " priorities should be of same length as the game steps"
             priorities = meta['priorities'].copy().reshape(-1)
