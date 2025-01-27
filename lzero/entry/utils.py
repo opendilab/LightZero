@@ -2,11 +2,93 @@ import os
 from typing import Optional, Callable
 
 import psutil
+import torch
+import torch.distributed as dist
 from pympler.asizeof import asizeof
 from tensorboardX import SummaryWriter
-from typing import Optional, Callable
-import torch
 
+
+import torch
+import torch.distributed as dist
+
+def is_ddp_enabled():
+    """
+    Check if Distributed Data Parallel (DDP) is enabled by verifying if
+    PyTorch's distributed package is available and initialized.
+    """
+    return dist.is_available() and dist.is_initialized()
+
+def ddp_synchronize():
+    """
+    Perform a barrier synchronization across all processes in DDP mode.
+    Ensures all processes reach this point before continuing.
+    """
+    if is_ddp_enabled():
+        dist.barrier()
+
+def ddp_all_reduce_sum(tensor):
+    """
+    Perform an all-reduce operation (sum) on the given tensor across
+    all processes in DDP mode. Returns the reduced tensor.
+
+    Arguments:
+        - tensor (:obj:`torch.Tensor`): The input tensor to be reduced.
+
+    Returns:
+        - torch.Tensor: The reduced tensor, summed across all processes.
+    """
+    if is_ddp_enabled():
+        dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+    return tensor
+
+def calculate_update_per_collect(cfg, new_data):
+    """
+    Calculate the number of updates to perform per data collection in a
+    Distributed Data Parallel (DDP) setting. This ensures that all GPUs
+    compute the same `update_per_collect` value, synchronized across processes.
+
+    Arguments:
+        - cfg: Configuration object containing policy settings.
+        - new_data (list): The newly collected data segments.
+
+    Returns:
+        - int: The number of updates to perform per collection.
+    """
+    # Retrieve the update_per_collect setting from the configuration
+    update_per_collect = cfg.policy.update_per_collect
+
+    if update_per_collect is None:
+        # If update_per_collect is not explicitly set, calculate it based on
+        # the number of collected transitions and the replay ratio.
+
+        # The length of game_segment (i.e., len(game_segment.action_segment)) can be smaller than cfg.policy.game_segment_length if it represents the final segment of the game.
+        # On the other hand, its length will be less than cfg.policy.game_segment_length + padding_length when it is not the last game segment. Typically, padding_length is the sum of unroll_steps and td_steps.
+        collected_transitions_num = sum(
+            min(len(game_segment), cfg.policy.game_segment_length)
+            for game_segment in new_data[0]
+        )
+
+        if torch.cuda.is_available():
+            # Convert the collected transitions count to a GPU tensor for DDP operations.
+            collected_transitions_tensor = torch.tensor(
+                collected_transitions_num, dtype=torch.int64, device='cuda'
+            )
+
+            # Synchronize the collected transitions count across all GPUs using all-reduce.
+            total_collected_transitions = ddp_all_reduce_sum(
+                collected_transitions_tensor
+            ).item()
+
+            # Calculate update_per_collect based on the total synchronized transitions count.
+            update_per_collect = int(total_collected_transitions * cfg.policy.replay_ratio)
+
+            # Ensure the computed update_per_collect is positive.
+            assert update_per_collect > 0, "update_per_collect must be positive"
+        else:
+            # If not using DDP, calculate update_per_collect directly from the local count.
+            update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
+
+    return update_per_collect
 
 def initialize_zeros_batch(observation_shape, batch_size, device):
     """
