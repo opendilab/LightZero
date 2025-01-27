@@ -3,14 +3,11 @@ from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
-from ding.model.common import ReparameterizationHead
-from ding.torch_utils import MLP
 from ding.utils import MODEL_REGISTRY, SequenceType
 
 from .common import MZNetworkOutput, RepresentationNetwork
-from .sampled_efficientzero_model import PredictionNetwork
-
 from .muzero_model import DynamicsNetwork
+from .sampled_efficientzero_model import PredictionNetwork
 from .utils import renormalize
 
 

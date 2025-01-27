@@ -562,7 +562,6 @@ class RepresentationNetwork(nn.Module):
             # for atari 64,8,8 = 4096 -> 768
             x = self.sim_norm(x)
 
-
         return x
 
 
