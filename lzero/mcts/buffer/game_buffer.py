@@ -549,7 +549,12 @@ class GameBuffer(ABC, object):
         Returns:
             - buffered_data (:obj:`BufferedData`): The pushed data.
         """
-        data_length = len(data.action_segment) if len(data.action_segment)<self._cfg.game_segment_length else self._cfg.game_segment_length
+        try:
+            data_length = len(data.action_segment) if len(data.action_segment) < self._cfg.game_segment_length else self._cfg.game_segment_length
+        except Exception as e:
+            # to be compatible with unittest
+            print(e)
+            data_length = len(data)
 
         if meta['done']:
             self.num_of_collected_episodes += 1
