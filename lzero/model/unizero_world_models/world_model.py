@@ -1156,7 +1156,7 @@ class WorldModel(nn.Module):
             latent_recon_loss = self.latent_recon_loss
             perceptual_loss = self.perceptual_loss
 
-        elif self.obs_type == 'vector':
+        elif self.obs_type == 'vector' or self.obs_type == 'text':
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=batch['observations'].dtype)
 
