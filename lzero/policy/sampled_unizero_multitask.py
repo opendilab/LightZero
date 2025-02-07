@@ -27,6 +27,8 @@ from lzero.policy import (
 )
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
+import torch.nn.functional as F
+import torch.distributed as dist
 import sys
 sys.path.append('/mnt/afs/niuyazhe/code/LibMTL/')
 from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
@@ -64,7 +66,7 @@ class WrappedModelV2:
             list(self.tokenizer.parameters()) +
             list(self.transformer.parameters()) +
             list(self.pos_emb.parameters()) +
-            list(self.task_emb.parameters()) +
+            # list(self.task_emb.parameters()) +
             list(self.act_embedding_table.parameters())
         )
 
@@ -73,7 +75,7 @@ class WrappedModelV2:
         self.tokenizer.zero_grad(set_to_none=set_to_none)
         self.transformer.zero_grad(set_to_none=set_to_none)
         self.pos_emb.zero_grad(set_to_none=set_to_none)
-        self.task_emb.zero_grad(set_to_none=set_to_none)
+        # self.task_emb.zero_grad(set_to_none=set_to_none)
         self.act_embedding_table.zero_grad(set_to_none=set_to_none)
 
 
@@ -308,7 +310,8 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             # TODO
             # 如果需要，可以在这里初始化梯度校正方法（如 MoCo, CAGrad）
             # self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
-            self.grad_correct = GradCorrect(wrapped_model, self._cfg.task_num, self._cfg.device) # only compatiable with for 1GPU training
+            # self.grad_correct = GradCorrect(wrapped_model, self._cfg.task_num, self._cfg.device, self._cfg.multi_gpu) # only compatiable with for 1GPU training
+            self.grad_correct = GradCorrect(wrapped_model, self._cfg.total_task_num, self._cfg.device, self._cfg.multi_gpu) # only compatiable with for 1GPU training
 
             self.grad_correct.init_param()
             self.grad_correct.rep_grad = False
@@ -463,10 +466,33 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         self._optimizer_world_model.zero_grad()
 
         if self._cfg.use_moco:
-            # 这里可以集成 MoCo 或 CAGrad 等梯度校正方法, 1gpu 需要知道所有task对应的梯度
+            # 如果已经初始化且多 GPU 情况下，只有 rank0 收集其他 GPU 的 loss_list
+            if dist.is_initialized() and dist.get_world_size() > 1:
+                rank = dist.get_rank()
+                world_size = dist.get_world_size()
+                # 利用分布式 gather_object：仅 rank0 指定接收缓冲区
+                if rank == 0:
+                    gathered_losses = [None for _ in range(world_size)]
+                else:
+                    gathered_losses = None  # 其他进程不需要接收
+                # gather_object 要求所有进程参与：每个进程发送自己的 losses_list，rank0 接收
+                dist.gather_object(losses_list, gathered_losses, dst=0)
+                if rank == 0:
+                    # 将各 GPU 上的 losses_list 展平，汇总成全局 losses_list
+                    all_losses_list = []
+                    for loss_list_tmp in gathered_losses:
+                        all_losses_list.extend(loss_list_tmp)
+                    losses_list = all_losses_list
+                else:
+                    # 非 rank0 设置为 None，防止误用
+                    losses_list = None
+
+            # 调用 MoCo 后向，由 grad_correct 中的 backward 实现梯度校正
+            # 注意：在 moco.backward 中会判断当前 rank 是否为 0，只有 rank0 会根据 losses_list 计算梯度，
+            # 其他 rank 直接等待广播校正后共享梯度
             lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
         else:
-            # 不使用梯度校正的情况
+            # 不使用梯度校正的情况，由各 rank 自己执行反向传播
             lambd = torch.tensor([0. for _ in range(self.task_num_for_current_rank)], device=self._cfg.device)
             weighted_total_loss.backward()
 
