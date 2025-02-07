@@ -60,11 +60,29 @@ class Transformer(nn.Module):
 
         self.task_embed = task_embed
         self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
+        self.register_token_shared = True
+
+        # TODO: 共享模式下，所有任务使用同一参数
+
         if self.task_embed_option == "register_task_embed":
             self.use_register_token = True # TODO
             # Register token setup
             self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
-            self.sim_norm = SimNorm(simnorm_dim=config.embed_dim)  # Normalization for task embeddings
+
+            # 判断是否采用共享模式
+            self.register_token_shared = getattr(config, "register_token_shared", True)
+            if self.register_token_shared:
+                # print(f'self.register_token_shared:{self.register_token_shared}')
+                # print(f'='*20)
+                # 共享模式：所有任务使用同一个 register_tokens 参数，形状为 (register_token_num, embed_dim)
+                self.register_tokens = nn.Parameter(torch.empty(self.register_token_num, config.embed_dim))
+                nn.init.xavier_uniform_(self.register_tokens)
+            else:
+                # 非共享模式：依赖外部传入的 task_embed 模块来生成 task embedding，
+                # 并通过 SimNorm 归一化后复制出 register token
+                self.task_embed = task_embed  # 外部传入的模块，如 nn.Embedding
+                self.sim_norm = SimNorm(simnorm_dim=config.embed_dim) # Normalization for task embeddings
+
         else:
             self.use_register_token = False # TODO
    
@@ -83,16 +101,19 @@ class Transformer(nn.Module):
         B = sequences.size(0)
         device = sequences.device
 
-        # 生成一个可学习的 task embedding
-        # 并进行 SimNorm
-        task_embedding = self.task_embed(torch.tensor([task_id], device=device))  # (1, C)
-        task_embedding = self.sim_norm(task_embedding.view(1, -1)).view(-1)     # (C, )
-        # 扩展出 register_token_num
-        register_tokens = task_embedding.unsqueeze(0).expand(self.register_token_num, -1)  # (register_token_num, C)
-        register_tokens = register_tokens.unsqueeze(0).expand(B, -1, -1)        # (B, register_token_num, C)
+        if self.register_token_shared:
+            # 共享模式：直接使用同一组 register_tokens 参数
+            # register_tokens 形状为 (register_token_num, embed_dim)
+            register_tokens = self.register_tokens  
+            register_tokens = register_tokens.unsqueeze(0).expand(B, -1, -1)  # 形状 (B, register_token_num, embed_dim)
+        else:
+            # 非共享模式：依靠 task_embed 动态生成 task embedding，然后复制出 register tokens
+            task_embedding = self.task_embed(torch.tensor([task_id], device=device))  # (1, embed_dim)
+            task_embedding = self.sim_norm(task_embedding.view(1, -1)).view(-1)         # (embed_dim,)
+            register_tokens = task_embedding.unsqueeze(0).expand(self.register_token_num, -1)  # (register_token_num, embed_dim)
+            register_tokens = register_tokens.unsqueeze(0).expand(B, -1, -1)  # (B, register_token_num, embed_dim)
 
-        # 拼接：将 Register Token 拼到最后面
-        new_sequences = torch.cat([sequences, register_tokens], dim=1)  # (B, register_token_num + T, C)
+        new_sequences = torch.cat([sequences, register_tokens], dim=1)  # 在序列末尾拼接 register tokens (B, register_token_num + T, C)
         return new_sequences
 
     def remove_register_tokens_from_kv(self, past_keys_values: KeysValues) -> None:

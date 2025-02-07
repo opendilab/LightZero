@@ -140,11 +140,11 @@ class KVCache:
         self._k_cache = Cache(n, num_heads, max_tokens, embed_dim, device)
         self._v_cache = Cache(n, num_heads, max_tokens, embed_dim, device)
 
-        self.register_token_num = 2  # Number of register tokens TODO======
+    #     self.register_token_num = 2  # Number of register tokens TODO======
 
-    def set_register_token_num(self, num: int) -> None:
-        """Set the number of register tokens."""
-        self.register_token_num = num
+    # def set_register_token_num(self, num: int) -> None:
+    #     """Set the number of register tokens."""
+    #     self.register_token_num = num
 
     @property
     def shape(self) -> Tuple[int, int, int, int]:
