@@ -343,7 +343,7 @@ class UniZeroPolicy(MuZeroPolicy):
             wandb.watch(self._learn_model.representation_network, log="all")
 
         # TODO: ========
-        self.accumulation_steps = 4  # 累积的步数
+        self.accumulation_steps = 1  # 累积的步数
 
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -467,8 +467,11 @@ class UniZeroPolicy(MuZeroPolicy):
         # assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
         # Core learn model update step
-        if train_iter % self.accumulation_steps == 0:  # 每 accumulation_steps 步更新一次参数
-            # print(f'train_iter:{train_iter}')
+        # print(f'train_iter:{train_iter}')
+        # 假设 train_iter 是从 0 开始计数
+        if (train_iter % self.accumulation_steps) == 0:
+            # 每个累计周期的第一个step时清零梯度
+            # print(f'train_iter:{train_iter} self._optimizer_world_model.zero_grad()')
             self._optimizer_world_model.zero_grad()
 
         weighted_total_loss = weighted_total_loss / self.accumulation_steps  # 累积梯度时对 loss 进行缩放
@@ -481,16 +484,30 @@ class UniZeroPolicy(MuZeroPolicy):
         #     if param.requires_grad:
         #         print(name, param.grad.norm())
 
-        if self._cfg.analysis_sim_norm:
-            del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
-            self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
-            self._target_model.encoder_hook.clear_data()
+        # if self._cfg.analysis_sim_norm:
+        #     del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
+        #     self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
+        #     self._target_model.encoder_hook.clear_data()
 
-        total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
-                                                                        self._cfg.grad_clip_value)
+        # total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
+        #                                                                 self._cfg.grad_clip_value)
 
-        if train_iter % self.accumulation_steps == 0:  # 每 accumulation_steps 步更新一次参数
-            # print(f'pos 2 train_iter:{train_iter}')
+        # 判断是否完成了一个累计周期（例如：如果 accumulation_steps=4, 则在 4,8,12,... 次迭代时更新参数）
+        if (train_iter + 1) % self.accumulation_steps == 0:
+            # print(f'train_iter:{train_iter} self._optimizer_world_model.step()')
+
+            # ========== 分析梯度模的代码 ==========
+            if self._cfg.analysis_sim_norm:
+                # 删除上次的分析结果，防止累积过多内存
+                del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
+                self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
+                self._target_model.encoder_hook.clear_data()
+            
+            # 对梯度进行裁剪
+            total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
+                self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
+            )
+
 
             if self._cfg.multi_gpu:
                 self.sync_gradients(self._learn_model)
@@ -503,8 +520,10 @@ class UniZeroPolicy(MuZeroPolicy):
             # Core target model update step
             self._target_model.update(self._learn_model.state_dict())
 
-            if self.accumulation_steps>1:
+            if self.accumulation_steps > 1:
                 torch.cuda.empty_cache()
+        else:
+            total_grad_norm_before_clip_wm = torch.tensor(0.)
 
         if torch.cuda.is_available():
             torch.cuda.synchronize()

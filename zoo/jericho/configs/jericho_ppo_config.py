@@ -4,7 +4,12 @@ import torch.nn as nn
 action_space_size = 10
 max_steps = 50
 model_name = 'BAAI/bge-base-en-v1.5'
-env_id = 'detective.z5'
+# env_id = 'detective.z5'
+
+action_space_size = 10
+max_steps = 400
+env_id = 'zork1.z5'
+
 evaluator_env_num = 2
 
 # proj train
@@ -22,14 +27,13 @@ batch_size = 32
 # num_unroll_steps = 5
 # infer_context_length = 2
 jericho_ppo_config = dict(
-    # exp_name=f"data_ppo_detective/jericho_ppo_projtrain_bs{batch_size}_seed0",
-    exp_name=f"data_ppo_detective_debug/jericho_add-loc-inv_ppo_projtrain_bs{batch_size}_seed0",
+    exp_name=f"data_ppo_detective/jericho_{env_id}_ms{max_steps}_ass{action_space_size}_ppo_projtrain_bs{batch_size}_seed0",
+    # exp_name=f"data_ppo_detective_debug/jericho_add-loc-inv_ppo_projtrain_bs{batch_size}_seed0",
     env=dict(
         remove_stuck_actions=False,
         # remove_stuck_actions=True,
-        add_location_and_inventory=True,
-        # add_location_and_inventory=False,
-
+        # add_location_and_inventory=True,
+        add_location_and_inventory=False,
         stop_value=int(1e6),
         observation_shape=512,
         max_steps=max_steps,
@@ -60,13 +64,11 @@ jericho_ppo_config = dict(
             epoch_per_collect=4,
             batch_size=batch_size, 
             learning_rate=0.0005,
-            # entropy_weight=0.01,
             entropy_weight=0.05,
             value_norm=True,
             grad_clip_value=10,
         ),
         collect=dict(
-            # n_sample=1024,
             n_sample=320, # TODO: DEBUG
             discount_factor=0.99,
             gae_lambda=0.95,

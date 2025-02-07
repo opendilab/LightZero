@@ -96,17 +96,19 @@ class JerichoEnv(BaseEnv):
 
         if len(available_actions) <= self.max_action_num:
             action_mask = [1] * len(available_actions) + [0] * (self.max_action_num - len(available_actions))
-        else:
+        elif len(available_actions) == self.max_action_num:
             action_mask = [1] * len(available_actions)
+        else:
+            action_mask = [1] * self.max_action_num
 
         action_mask = np.array(action_mask, dtype=np.int8)
 
-        if return_str: # TODO===============
-            # return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1}
-            return {'observation': full_obs, 'action_mask': action_mask}
+        if return_str: # TODO: unizero需要加上'to_play'===============
+            return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1}
+            # return {'observation': full_obs, 'action_mask': action_mask}
         else:
-            # return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1}
-            return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask}
+            return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1}
+            # return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask}
              
 
     def reset(self, return_str: bool = False):
@@ -179,8 +181,8 @@ class JerichoEnv(BaseEnv):
         self.timestep += 1
         # print(f'step: {self.timestep}, [OBS]:{observation} self._action_list:{self._action_list}')
 
-        # TODO: for PPO
-        reward = np.array([float(reward)])
+        # TODO: for PPO, 如果是unizero需要注释下面这行
+        # reward = np.array([float(reward)])
 
         self.env_step += 1
         self.episode_return += reward
@@ -234,16 +236,20 @@ if __name__ == '__main__':
     from easydict import EasyDict
     env_cfg = EasyDict(
         dict(
-            max_steps=100,
+            max_steps=400,
             # game_path="z-machine-games-master/jericho-game-suite/zork1.z5",
-            game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/detective.z5",
+            game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/zork1.z5",
+            # game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/detective.z5",
             # game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/905.z5",
-            max_action_num=50,
-            max_env_step=100,
+            # max_action_num=50,
+            max_action_num=10,
+            # max_env_step=100,
             tokenizer_path="google-bert/bert-base-uncased",
             max_seq_len=512,
-            remove_stuck_actions=True,  # 启用移除无效动作的功能
-            add_location_and_inventory=True
+            remove_stuck_actions=False,  # 启用移除无效动作的功能
+            add_location_and_inventory=False
+            # remove_stuck_actions=True,  # 启用移除无效动作的功能
+            # add_location_and_inventory=True
         )
     )
     env = JerichoEnv(env_cfg)
