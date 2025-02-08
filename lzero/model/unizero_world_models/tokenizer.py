@@ -96,8 +96,8 @@ class Tokenizer(nn.Module):
                 obs_embeddings = self.encoder(x, task_id=task_id)  # TODO: for dmc multitask
                 # obs_embeddings = self.encoder[task_id](x)
             except Exception as e:
-                print(e)
-                obs_embeddings = self.encoder(x) # TODO: for memory env
+                # print(e)
+                obs_embeddings = self.encoder[0](x) # TODO: for atari/memory env
 
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 5:
@@ -106,7 +106,7 @@ class Tokenizer(nn.Module):
             try:
                 obs_embeddings = self.encoder[task_id](x)
             except Exception as e:
-                obs_embeddings = self.encoder(x) # TODO: for memory env
+                obs_embeddings = self.encoder[0](x) # TODO: for atari/memory env
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         else:
             raise ValueError(f"Invalid input shape: {shape}")

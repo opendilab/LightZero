@@ -60,12 +60,15 @@ class GameSegment:
                 # image obs input, e.g. atari environments
                 self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape[-2], config.model.observation_shape[-1])
         else:
-            if isinstance(config.model.observation_shape_list[task_id], int) or len(config.model.observation_shape_list[task_id]) == 1:
-                # for vector obs input, e.g. classical control and box2d environments
-                self.zero_obs_shape = config.model.observation_shape_list[task_id]
-            elif len(config.model.observation_shape_list[task_id]) == 3:
-                # image obs input, e.g. atari environments
-                self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape_list[task_id][-2], config.model.observation_shape_list[task_id][-1])
+            if hasattr(config.model, "observation_shape_list"):
+                if isinstance(config.model.observation_shape_list[task_id], int) or len(config.model.observation_shape_list[task_id]) == 1:
+                    # for vector obs input, e.g. classical control and box2d environments
+                    self.zero_obs_shape = config.model.observation_shape_list[task_id]
+                elif len(config.model.observation_shape_list[task_id]) == 3:
+                    # image obs input, e.g. atari environments
+                    self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape_list[task_id][-2], config.model.observation_shape_list[task_id][-1])
+            else:
+                self.zero_obs_shape = (config.model.image_channel, config.model.observation_shape[-2], config.model.observation_shape[-1])
 
         self.obs_segment = []
         self.action_segment = []

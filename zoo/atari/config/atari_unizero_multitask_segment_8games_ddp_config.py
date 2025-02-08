@@ -22,6 +22,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             # eval_max_episode_steps=int(30),
         ),
         policy=dict(
+            use_moco=False,  # ==============TODO==============
             multi_gpu=True,  # Very important for ddp
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000))),
             grad_correct_params=dict(
@@ -37,24 +38,39 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 num_res_blocks=2,
                 num_channels=256,
                 world_model_cfg=dict(
+                                        
+                    task_embed_option=None,   # ==============TODO: none ==============
+                    use_task_embed=False, # ==============TODO==============
+                    use_shared_projection=False,
+                    
+
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,
                     context_length=2 * infer_context_length,
                     device='cuda',
                     action_space_size=action_space_size,
                     # batch_size=64 8games训练时，每张卡大约占 12*3=36G cuda显存
-                    num_layers=12,
-                    num_heads=24,
+                    # num_layers=12,
+                    # num_heads=24,
+
+                    num_layers=8,
+                    num_heads=8,
+
                     embed_dim=768,
                     obs_type='image',
                     env_num=8,
                     task_num=len(env_id_list),
                     use_normal_head=True,
                     use_softmoe_head=False,
+                    use_moe_head=False,
+                    num_experts_in_moe_head=4,
                     moe_in_transformer=False,
+                    multiplication_moe_in_transformer=False,
                     num_experts_of_moe_in_transformer=4,
                 ),
             ),
+            use_task_exploitation_weight=False, # TODO
+            task_complexity_weight=False, # TODO
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
             train_start_after_envsteps=int(0),
@@ -87,7 +103,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
                      num_segments, total_batch_size):
     configs = []
-    exp_name_prefix = f'data_unizero_mt_ddp-8gpu/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_20250212/atari_{len(env_id_list)}games_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -118,7 +134,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=5 --master_port=29501 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
 

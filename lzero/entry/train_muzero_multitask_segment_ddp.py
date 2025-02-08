@@ -380,8 +380,7 @@ def train_muzero_multitask_segment_ddp(
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
             # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-            if learner.train_iter > 0 and evaluator.should_eval(learner.train_iter):
-
+            if learner.train_iter > 1 and evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
                 print(f'Rank {rank} 评估 task_id: {cfg.policy.task_id}...')
 

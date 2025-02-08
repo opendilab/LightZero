@@ -112,6 +112,16 @@ class UniZeroMTModel(nn.Module):
                     embedding_dim=world_model_cfg.embed_dim,
                     group_size=world_model_cfg.group_size,
                 ))
+                # self.representation_network = RepresentationNetworkUniZero(
+                #     observation_shape,
+                #     num_res_blocks,
+                #     num_channels,
+                #     self.downsample,
+                #     activation=self.activation,
+                #     norm_type=norm_type,
+                #     embedding_dim=world_model_cfg.embed_dim,
+                #     group_size=world_model_cfg.group_size,
+                # )
             # TODO: we should change the output_shape to the real observation shape
             # self.decoder_network = LatentDecoder(embedding_dim=world_model_cfg.embed_dim, output_shape=(3, 64, 64))
 
@@ -187,8 +197,8 @@ class UniZeroMTModel(nn.Module):
                 latent state, W_ is the width of latent state.
          """
         batch_size = obs_batch.size(0)
-        print('=here 5='*20)
-        import ipdb; ipdb.set_trace()
+        # print('=here 5='*20)
+        # import ipdb; ipdb.set_trace()
         obs_act_dict = {'obs': obs_batch, 'action': action_batch, 'current_obs': current_obs_batch}
         _, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(obs_act_dict, task_id=task_id)
         latent_state, reward, policy_logits, value = obs_token, logits_rewards, logits_policy, logits_value

@@ -681,7 +681,7 @@ class WorldModelMT(WorldModel):
                 if len(act_tokens.shape) == 3:
                     act_tokens = act_tokens.squeeze(1)
                 num_steps = act_tokens.size(1)
-            if self.task_num >= 1:
+            if self.task_num >= 1 and self.continuous_action_space:
                 act_embeddings = self.act_embedding_table[task_id](act_tokens)
             else:
                 act_embeddings = self.act_embedding_table(act_tokens)
@@ -862,7 +862,8 @@ class WorldModelMT(WorldModel):
                                                  -1)
 
         num_steps = int(obs_embeddings.size(1) * (obs_embeddings.size(2) + 1))
-        act_embeddings = self.act_embedding_table[task_id](act_tokens)
+        # act_embeddings = self.act_embedding_table[task_id](act_tokens)
+        act_embeddings = self.act_embedding_table(act_tokens)
 
         B, L, K, E = obs_embeddings.size()
         obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=self.device)

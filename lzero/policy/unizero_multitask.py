@@ -892,7 +892,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             if active_collect_env_num < self.collector_env_num:
                 print('==========collect_forward============')
                 print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
-                self._reset_collect(reset_init_data=True)
+                self._reset_collect(reset_init_data=True, task_id=task_id)
 
         return output
 
@@ -1001,7 +1001,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
         return output
 
     #@profile
-    def _reset_collect(self, env_id: int = None, current_steps: int = 0, reset_init_data: bool = True) -> None:
+    def _reset_collect(self, env_id: int = None, current_steps: int = 0, reset_init_data: bool = True, task_id: int = None) -> None:
         """
         Overview:
             This method resets the collection process for a specific environment. It clears caches and memory
@@ -1085,21 +1085,21 @@ class UniZeroMTPolicy(UniZeroPolicy):
             - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
         if reset_init_data:
-            if task_id is not None:
-                self.last_batch_obs_eval = initialize_zeros_batch(
-                    self._cfg.model.observation_shape_list[task_id],
-                    self._cfg.evaluator_env_num,
-                    self._cfg.device
-                )
-                print('unizero_multitask.py task_id is not None after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+            # if task_id is not None:
+            #     self.last_batch_obs_eval = initialize_zeros_batch(
+            #         self._cfg.model.observation_shape_list[task_id],
+            #         self._cfg.evaluator_env_num,
+            #         self._cfg.device
+            #     )
+            #     print('unizero_multitask.py task_id is not None after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
 
-            else:
-                self.last_batch_obs_eval = initialize_zeros_batch(
-                    self._cfg.model.observation_shape,
-                    self._cfg.evaluator_env_num,
-                    self._cfg.device
-                )
-                print('unizero_multitask.py task_id is None after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+            # else:
+            self.last_batch_obs_eval = initialize_zeros_batch(
+                self._cfg.model.observation_shape,
+                self._cfg.evaluator_env_num,
+                self._cfg.device
+            )
+            print('unizero_multitask.py task_id is None after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
 
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
 

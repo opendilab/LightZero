@@ -52,8 +52,10 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         if hasattr(self._cfg, 'task_id'):
             self.task_id = self._cfg.task_id
             print(f"Task ID is set to {self.task_id}.")
-            self.action_space_size = self._cfg.model.action_space_size_list[self.task_id]
-
+            try:
+                self.action_space_size = self._cfg.model.action_space_size_list[self.task_id]
+            except Exception as e:
+                self.action_space_size = self._cfg.model.action_space_size
         else:
             self.task_id = None
             print("No task_id found in configuration. Task ID is set to None.")
