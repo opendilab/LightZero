@@ -17,8 +17,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             action_space_size_list=action_space_size_list,
             from_pixels=False,
             # ===== only for debug =====
-            frame_skip=50, # 100
-            # frame_skip=2,
+            # frame_skip=50, # 100
+            frame_skip=2,
             continuous=True,  # Assuming all DMC tasks use continuous action spaces
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -156,7 +156,7 @@ def generate_configs(env_id_list: List[str],
     # TODO: debug
     # exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_taskweight-eval1e3-10k-temp10-1_task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
     
-    exp_name_prefix = f'data_suz_mt_20250207_debug/ddp_2gpu-moco_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    exp_name_prefix = f'data_suz_mt_20250207/ddp_8gpu-moco_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
 
     # exp_name_prefix = f'data_suz_mt_20250113/ddp_3gpu_3games_nlayer8_upc200_notusp_notaskweight-symlog-01-05-eval1e3_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
 
@@ -208,7 +208,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=2 --master_port=29500 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_moco_config.py
+        python -m torch.distributed.launch --nproc_per_node=2 --master_port=29501 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_moco_config.py
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -239,16 +239,16 @@ if __name__ == "__main__":
     # ]
 
     # DMC 8games
-    # env_id_list = [
-    #     'acrobot-swingup',
-    #     'cartpole-balance',
-    #     'cartpole-balance_sparse',
-    #     'cartpole-swingup',
-    #     'cartpole-swingup_sparse',
-    #     'cheetah-run',
-    #     "ball_in_cup-catch",
-    #     "finger-spin",
-    # ]
+    env_id_list = [
+        'acrobot-swingup',
+        'cartpole-balance',
+        'cartpole-balance_sparse',
+        'cartpole-swingup',
+        'cartpole-swingup_sparse',
+        'cheetah-run',
+        "ball_in_cup-catch",
+        "finger-spin",
+    ]
 
     # DMC 18games
     # env_id_list = [
@@ -302,12 +302,12 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    collector_env_num = 2
-    num_segments = 2
-    n_episode = 2
-    evaluator_env_num = 2
-    num_simulations = 1
-    batch_size = [4 for _ in range(len(env_id_list))]
+    # collector_env_num = 2
+    # num_segments = 2
+    # n_episode = 2
+    # evaluator_env_num = 2
+    # num_simulations = 1
+    # batch_size = [4 for _ in range(len(env_id_list))]
     # =======================================
 
     seed = 0  # You can iterate over multiple seeds if needed

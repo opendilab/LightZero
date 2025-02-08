@@ -465,32 +465,11 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
 
+        # 假设每个进程计算出的 losses_list 为可求梯度的 tensor list，比如多个标量 loss 组成的列表
+        # 例如 losses_list = [loss1, loss2, ...]，其中每个 loss_i 都是形如 (1,) 的 tensor 且 requires_grad=True
         if self._cfg.use_moco:
-            # 如果已经初始化且多 GPU 情况下，只有 rank0 收集其他 GPU 的 loss_list
-            if dist.is_initialized() and dist.get_world_size() > 1:
-                rank = dist.get_rank()
-                world_size = dist.get_world_size()
-                # 利用分布式 gather_object：仅 rank0 指定接收缓冲区
-                if rank == 0:
-                    gathered_losses = [None for _ in range(world_size)]
-                else:
-                    gathered_losses = None  # 其他进程不需要接收
-                # gather_object 要求所有进程参与：每个进程发送自己的 losses_list，rank0 接收
-                dist.gather_object(losses_list, gathered_losses, dst=0)
-                if rank == 0:
-                    # 将各 GPU 上的 losses_list 展平，汇总成全局 losses_list
-                    all_losses_list = []
-                    for loss_list_tmp in gathered_losses:
-                        all_losses_list.extend(loss_list_tmp)
-                    losses_list = all_losses_list
-                else:
-                    # 非 rank0 设置为 None，防止误用
-                    losses_list = None
-
-            # 调用 MoCo 后向，由 grad_correct 中的 backward 实现梯度校正
-            # 注意：在 moco.backward 中会判断当前 rank 是否为 0，只有 rank0 会根据 losses_list 计算梯度，
-            # 其他 rank 直接等待广播校正后共享梯度
-            lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+            # 调用 MoCo backward，由 grad_correct 中的 backward 实现梯度校正
+            lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
         else:
             # 不使用梯度校正的情况，由各 rank 自己执行反向传播
             lambd = torch.tensor([0. for _ in range(self.task_num_for_current_rank)], device=self._cfg.device)
@@ -498,7 +477,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(), self._cfg.grad_clip_value)
 
-        if self._cfg.multi_gpu:
+        if self._cfg.multi_gpu and not self._cfg.use_moco:
             self.sync_gradients(self._learn_model)
 
         self._optimizer_world_model.step()
