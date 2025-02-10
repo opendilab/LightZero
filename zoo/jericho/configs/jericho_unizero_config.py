@@ -16,7 +16,7 @@ def main(env_id='detective.z5', seed=0):
 
     evaluator_env_num = 2
     num_simulations = 50
-    max_env_step = int(10e6)
+    max_env_step = int(1e6)
 
     # proj train
     collector_env_num = 4
@@ -24,6 +24,8 @@ def main(env_id='detective.z5', seed=0):
     batch_size = 16 
     num_unroll_steps = 10
     infer_context_length = 4
+    # num_unroll_steps = 5
+    # infer_context_length = 2
 
     # all train
     # collector_env_num = 2
@@ -93,6 +95,7 @@ def main(env_id='detective.z5', seed=0):
             use_wandb=False,
             learn=dict(learner=dict(
                 hook=dict(save_ckpt_after_iter=1000000, ), ), ),
+            accumulation_steps=1, # TODO
             model=dict(
                 observation_shape=512,
                 action_space_size=action_space_size,
@@ -136,7 +139,7 @@ def main(env_id='detective.z5', seed=0):
             # game_segment_length=game_segment_length,
             # replay_buffer_size=int(1e6),
             replay_buffer_size=int(1e5),
-            eval_freq=int(5e3),
+            eval_freq=int(1e4),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             # ============= The key different params for reanalyze =============

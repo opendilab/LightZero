@@ -343,7 +343,7 @@ class UniZeroPolicy(MuZeroPolicy):
             wandb.watch(self._learn_model.representation_network, log="all")
 
         # TODO: ========
-        self.accumulation_steps = 1  # 累积的步数
+        self.accumulation_steps = self._cfg.accumulation_steps  # 累积的步数
 
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:

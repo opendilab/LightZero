@@ -94,12 +94,17 @@ class JerichoEnv(BaseEnv):
             full_obs = np.array(full_obs['input_ids'][0], dtype=np.int32)  # TODO: attn_mask
 
 
-        if len(available_actions) <= self.max_action_num:
+        if len(available_actions) == 0:
+            # 避免action_maks全为0导致mcts报segment fault的错误
+            action_mask = [1] + [0] * (self.max_action_num - 1)
+        elif 0<len(available_actions) <= self.max_action_num:
             action_mask = [1] * len(available_actions) + [0] * (self.max_action_num - len(available_actions))
         elif len(available_actions) == self.max_action_num:
             action_mask = [1] * len(available_actions)
         else:
             action_mask = [1] * self.max_action_num
+
+        # action_mask = [0] * self.max_action_num
 
         action_mask = np.array(action_mask, dtype=np.int8)
 

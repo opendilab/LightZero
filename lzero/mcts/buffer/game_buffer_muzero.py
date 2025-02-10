@@ -737,6 +737,7 @@ class MuZeroGameBuffer(GameBuffer):
                             for index, legal_action in enumerate(legal_actions[policy_index]):
                                 # only the action in ``legal_action`` the policy logits is nonzero
                                 # policy_tmp[legal_action] = distributions[index]
+                                # import ipdb;ipdb.set_trace()
                                 try:
                                     policy_tmp[legal_action] = distributions[index]
                                 except Exception as e:
