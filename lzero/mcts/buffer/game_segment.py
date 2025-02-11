@@ -68,7 +68,7 @@ class GameSegment:
 
         self.action_mask_segment = []
         self.to_play_segment = []
-        self.step_index_segment = []
+        self.timestep_segment = []
 
         self.target_values = []
         self.target_rewards = []
@@ -136,7 +136,7 @@ class GameSegment:
             reward: np.ndarray,
             action_mask: np.ndarray = None,
             to_play: int = -1,
-            step_index: int = 0,
+            timestep: int = 0,
             chance: int = 0,
     ) -> None:
         """
@@ -149,7 +149,7 @@ class GameSegment:
 
         self.action_mask_segment.append(action_mask)
         self.to_play_segment.append(to_play)
-        self.step_index_segment.append(step_index)
+        self.timestep_segment.append(timestep)
 
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment.append(chance)
@@ -300,7 +300,7 @@ class GameSegment:
 
         self.action_mask_segment = np.array(self.action_mask_segment)
         self.to_play_segment = np.array(self.to_play_segment)
-        self.step_index_segment = np.array(self.step_index_segment)
+        self.timestep_segment = np.array(self.timestep_segment)
 
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = np.array(self.chance_segment)
@@ -322,7 +322,7 @@ class GameSegment:
 
         self.action_mask_segment = []
         self.to_play_segment = []
-        self.step_index_segment = []
+        self.timestep_segment = []
 
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = []

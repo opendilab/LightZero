@@ -182,6 +182,7 @@ class UniZeroPolicy(MuZeroPolicy):
         update_per_collect=None,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
         replay_ratio=0.25,
+        reanalyze_ratio=0,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network.

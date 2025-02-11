@@ -360,7 +360,7 @@ class MuZeroCollector(ISerialCollector):
 
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
-        step_index_dict = {i: to_ndarray(init_obs[i]['step_index']) for i in range(env_nums)}
+        timestep_dict = {i: to_ndarray(init_obs[i]['timestep']) for i in range(env_nums)}
         if self.policy_config.use_ture_chance_label_in_chance_encoder:
             chance_dict = {i: to_ndarray(init_obs[i]['chance']) for i in range(env_nums)}
 
@@ -421,11 +421,11 @@ class MuZeroCollector(ISerialCollector):
 
                 action_mask_dict = {env_id: action_mask_dict[env_id] for env_id in ready_env_id}
                 to_play_dict = {env_id: to_play_dict[env_id] for env_id in ready_env_id}
-                step_index_dict = {env_id: step_index_dict[env_id] for env_id in ready_env_id}
+                timestep_dict = {env_id: timestep_dict[env_id] for env_id in ready_env_id}
                 
                 action_mask = [action_mask_dict[env_id] for env_id in ready_env_id]
                 to_play = [to_play_dict[env_id] for env_id in ready_env_id]
-                step_index = [step_index_dict[env_id] for env_id in ready_env_id]
+                timestep = [timestep_dict[env_id] for env_id in ready_env_id]
                 
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
                     chance_dict = {env_id: chance_dict[env_id] for env_id in ready_env_id}
@@ -439,13 +439,13 @@ class MuZeroCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, step_index=step_index)
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
 
                 # Extract relevant policy outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                 value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
                 pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
-                step_index_dict_with_env_id = {k: v['step_index'] for k, v in policy_output.items()}
+                timestep_dict_with_env_id = {k: v['timestep'] for k, v in policy_output.items()}
 
                 if self.policy_config.sampled_algo:
                     root_sampled_actions_dict_with_env_id = {
@@ -467,7 +467,7 @@ class MuZeroCollector(ISerialCollector):
                 actions = {}
                 value_dict = {}
                 pred_value_dict = {}
-                step_index_dict = {}
+                timestep_dict = {}
 
                 if not collect_with_pure_policy:
                     distributions_dict = {}
@@ -485,7 +485,7 @@ class MuZeroCollector(ISerialCollector):
                     actions[env_id] = actions_with_env_id.pop(env_id)
                     value_dict[env_id] = value_dict_with_env_id.pop(env_id)
                     pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
-                    step_index_dict[env_id] = step_index_dict_with_env_id.pop(env_id)
+                    timestep_dict[env_id] = timestep_dict_with_env_id.pop(env_id)
 
                     if not collect_with_pure_policy:
                         distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
@@ -536,19 +536,19 @@ class MuZeroCollector(ISerialCollector):
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                            to_play_dict[env_id], chance_dict[env_id], step_index_dict[env_id]
+                            to_play_dict[env_id], chance_dict[env_id], timestep_dict[env_id]
                         )
                     else:
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, action_mask_dict[env_id],
-                            to_play_dict[env_id], step_index_dict[env_id]
+                            to_play_dict[env_id], timestep_dict[env_id]
                         )
 
                     # NOTE: the position of code snippet is very important.
                     # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
                     action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                     to_play_dict[env_id] = to_ndarray(obs['to_play'])
-                    step_index_dict[env_id] = to_ndarray(obs['step_index'])
+                    timestep_dict[env_id] = to_ndarray(obs['timestep'])
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         chance_dict[env_id] = to_ndarray(obs['chance'])
 
@@ -679,7 +679,7 @@ class MuZeroCollector(ISerialCollector):
 
                         action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                         to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
-                        step_index_dict[env_id] = to_ndarray(init_obs[env_id]['step_index'])
+                        timestep_dict[env_id] = to_ndarray(init_obs[env_id]['timestep'])
                         if self.policy_config.use_ture_chance_label_in_chance_encoder:
                             chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
