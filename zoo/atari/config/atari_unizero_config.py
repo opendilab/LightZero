@@ -66,8 +66,8 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
                     obs_type='image',
                     env_num=max(collector_env_num, evaluator_env_num),
                     # for RoPE
-                    rotary_emb=False,
-                    # rotary_emb=True,
+                    # rotary_emb=False,
+                    rotary_emb=True,
                     rope_theta=10000,
                     max_seq_len=2048,
                 ),
@@ -104,7 +104,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     atari_unizero_create_config = EasyDict(atari_unizero_create_config)
     create_config = atari_unizero_create_config
 
-    main_config.exp_name = f'data_unizero_20250211/{env_id[:-14]}/{env_id[:-14]}_uz_poeembed-mergemain_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_20250211/{env_id[:-14]}/{env_id[:-14]}_uz_rope-mergemain_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
