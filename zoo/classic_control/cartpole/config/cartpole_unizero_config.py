@@ -9,7 +9,6 @@ num_simulations = 25
 update_per_collect = None
 replay_ratio = 0.25
 max_env_step = int(2e5)
-reanalyze_ratio = 0
 batch_size = 256
 num_unroll_steps = 5
 # ==============================================================
@@ -17,7 +16,7 @@ num_unroll_steps = 5
 # ==============================================================
 
 cartpole_unizero_config = dict(
-    exp_name=f'data_unizero/cartpole_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
+    exp_name=f'data_unizero_debug/cartpole_unizero_pos-embed_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -40,16 +39,21 @@ cartpole_unizero_config = dict(
                 max_tokens=2 * 10,
                 context_length=2 * 4,
                 context_length_for_recurrent=2 * 4,
-                device='cpu',
+                device='cuda',
                 action_space_size=2,
                 num_layers=2,
                 num_heads=2,
                 embed_dim=64,
-                env_num=collector_env_num,
+                env_num=max(collector_env_num, evaluator_env_num),
                 collector_env_num=collector_env_num,
                 evaluator_env_num=evaluator_env_num,
                 obs_type='vector',
                 norm_type='BN',
+                # for RoPE
+                rotary_emb=False,
+                # rotary_emb=True,
+                rope_theta=10000,
+                max_seq_len=2048,
             ),
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
@@ -67,7 +71,6 @@ cartpole_unizero_config = dict(
         target_update_freq=100,
         grad_clip_value=5,
         num_simulations=num_simulations,
-        reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(1e3),
         replay_buffer_size=int(1e6),

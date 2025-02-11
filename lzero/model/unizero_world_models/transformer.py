@@ -33,9 +33,46 @@ class TransformerConfig:
     # for RoPE
     rope_theta: float
     max_seq_len: int
+    rotary_emb: bool = False  # 增加配置选项控制是否使用 rotary_emb
+
     @property
     def max_tokens(self):
         return self.tokens_per_block * self.max_blocks
+
+
+
+def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
+    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
+    t = torch.arange(end, device=freqs.device, dtype=torch.float32)
+    freqs = torch.outer(t, freqs)
+    freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64
+    return freqs_cis
+
+
+def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
+    ndim = x.ndim
+    # print(f"freqs_cis shape: {freqs_cis.shape}, x shape: {x.shape}")
+    assert 0 <= 1 < ndim
+    shape = [d if i == 2 or i == ndim - 1 or i == 0 else 1 for i, d in enumerate(x.shape)]
+
+    return freqs_cis.view(*shape)
+
+
+def apply_rotary_emb(
+    xq: torch.Tensor,
+    xk: torch.Tensor,
+    freqs_cis: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
+    xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
+    try:
+        freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
+    except Exception as e:
+        print(e)
+        print('We are at the reset timestep!')
+    xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(-2)
+    xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(-2)
+    return xq_out.type_as(xq), xk_out.type_as(xk)
 
 
 class Transformer(nn.Module):
@@ -59,11 +96,14 @@ class Transformer(nn.Module):
         self.blocks = nn.ModuleList([Block(config) for _ in range(config.num_layers)])
         self.ln_f = nn.LayerNorm(config.embed_dim)
 
-        self.freqs_cis = precompute_freqs_cis(
-            self.config.embed_dim // self.config.num_heads,
-            self.config.max_seq_len * 2,
-            self.config.rope_theta,
-        )
+        # 注册缓存, 自动管理设备转换
+        if self.config.rotary_emb:
+            freqs_cis = precompute_freqs_cis(
+                self.config.embed_dim // self.config.num_heads,
+                self.config.max_seq_len * 2,
+                self.config.rope_theta,
+            )
+            self.register_buffer("freqs_cis", freqs_cis)
 
     def generate_empty_keys_values(self, n: int, max_tokens: int) -> KeysValues:
         """
@@ -93,24 +133,31 @@ class Transformer(nn.Module):
             - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
         seqlen = sequences.shape[1]
-        self.freqs_cis = self.freqs_cis.to(sequences.device)
 
-        # freqs_cis = self.freqs_cis[start_pos: start_pos + seqlen]
-
-        # If the start position is greater than the predefined maximum sequence length, wrap around
-        start_pos = torch.tensor(np.array(start_pos))
-        if len(start_pos.shape) > 1:
-            # TODO: train start pos [0]
-            start_pos = torch.remainder(start_pos, self.config.max_seq_len)[:,0]
+        # 如果使用 RoPE，则对 freqs_cis 进行切片
+        if self.config.rotary_emb:
+            # 修复：如果 start_pos 是标量，则将其扩展为当前 batch 大小的相同数值
+            # *2是由于step_index只是统计了obs，但是序列是obs act
+            if isinstance(start_pos, int) or isinstance(start_pos, float):
+                start_pos_tensor = torch.full((sequences.shape[0],), int(start_pos), device=sequences.device) * 2
+            else:
+                # start_pos_tensor = torch.as_tensor(start_pos, device=sequences.device)
+                try:
+                    start_pos_tensor = torch.as_tensor([x.item() for x in start_pos], device=sequences.device)
+                except Exception as e:
+                    # print(e)
+                    start_pos_tensor = torch.as_tensor(
+                        [x.reshape(-1)[0].item() for x in start_pos],  # 强制展平后取第一个元素
+                        device=sequences.device
+                    ) * 2
+            # 对每个样本根据 start_pos 取对应区间的 freqs_cis
+            start_pos_tensor = torch.remainder(start_pos_tensor, self.config.max_seq_len)
+            # 将各个样本的 start_pos 转换为列表
+            start_pos_list = start_pos_tensor.tolist()
+            freqs_cis_slices = [self.freqs_cis[int(pos): int(pos) + seqlen] for pos in start_pos_list]
+            freqs_cis = torch.stack(freqs_cis_slices)
         else:
-            start_pos = torch.remainder(start_pos, self.config.max_seq_len)
-
-        start_pos_list = torch.unbind(start_pos)
-        try:
-            freqs_cis_slices = [self.freqs_cis[int(pos.item()): int(pos.item()) + seqlen] for pos in start_pos_list]
-        except:
-            print('debug')
-        freqs_cis = torch.stack(freqs_cis_slices).squeeze(1)
+            freqs_cis = None
 
         assert past_keys_values is None or len(past_keys_values) == len(self.blocks)
         x = self.drop(sequences)
@@ -179,42 +226,6 @@ class Block(nn.Module):
             x = x + self.mlp(self.ln2(x))
 
         return x
-
-
-def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
-    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
-    t = torch.arange(end, device=freqs.device, dtype=torch.float32)
-    freqs = torch.outer(t, freqs)
-    freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64
-    return freqs_cis
-
-
-def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
-    ndim = x.ndim
-    # print(f"freqs_cis shape: {freqs_cis.shape}, x shape: {x.shape}")
-    assert 0 <= 1 < ndim
-    # assert freqs_cis.shape == (x.shape[2], x.shape[-1])
-    # shape = [d if i == 2 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
-    # TODO: check
-    shape = [d if i == 2 or i == ndim - 1 or i == 0 else 1 for i, d in enumerate(x.shape)]
-
-    return freqs_cis.view(*shape)
-
-
-def apply_rotary_emb(
-    xq: torch.Tensor,
-    xk: torch.Tensor,
-    freqs_cis: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor]:
-    xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
-    xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
-    try:
-        freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
-    except:
-        print('We are at the reset timestep!')
-    xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(-2)
-    xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(-2)
-    return xq_out.type_as(xq), xk_out.type_as(xk)
 
 
 class SelfAttention(nn.Module):
