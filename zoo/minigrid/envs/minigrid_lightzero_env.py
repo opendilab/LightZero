@@ -194,7 +194,7 @@ class MiniGridEnvLightZero(MiniGridEnv):
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
                 self._save_replay_count += 1
         obs = to_ndarray(obs)
-        rew = to_ndarray([rew])  # wrapped to be transferred to an array with shape (1,)
+        rew = to_ndarray(rew)  # wrapped to be transferred to an array with shape (1,)
 
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}

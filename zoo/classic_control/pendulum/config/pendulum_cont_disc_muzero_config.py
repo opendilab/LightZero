@@ -20,7 +20,7 @@ reanalyze_ratio = 0
 # ==============================================================
 
 pendulum_disc_muzero_config = dict(
-    exp_name=f'data_ez/pendulum_disc_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
+    exp_name=f'data_muzero/pendulum_disc_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id='Pendulum-v1',
         continuous=False,
@@ -48,7 +48,7 @@ pendulum_disc_muzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         learning_rate=0.003,
         ssl_loss_weight=2,  # NOTE: default is 0.
         num_simulations=num_simulations,

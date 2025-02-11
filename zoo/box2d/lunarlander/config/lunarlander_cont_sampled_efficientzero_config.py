@@ -9,16 +9,22 @@ evaluator_env_num = 3
 continuous_action_space = True
 K = 20  # num_of_sampled_actions
 num_simulations = 50
-update_per_collect = 200
-batch_size = 256
-max_env_step = int(5e6)
+update_per_collect = None
+replay_ratio = 0.25
+batch_size = 1024
+max_env_step = int(5e5)
 reanalyze_ratio = 0.
+norm_type = 'LN'
+
+# only for debug
+# num_simulations = 5
+# batch_size = 2
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 lunarlander_cont_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez/lunarlander_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez/lunarlander_cont_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_rer{reanalyze_ratio}_norm-{norm_type}_seed0',
     env=dict(
         env_id='LunarLanderContinuous-v2',
         continuous=True,
@@ -36,10 +42,8 @@ lunarlander_cont_sampled_efficientzero_config = dict(
             num_of_sampled_actions=K,
             sigma_type='conditioned',
             model_type='mlp',
-            lstm_hidden_size=256,
-            latent_state_dim=256,
             res_connection_in_dynamics=True,
-            norm_type='BN', 
+            norm_type=norm_type,
         ),
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
@@ -48,17 +52,15 @@ lunarlander_cont_sampled_efficientzero_config = dict(
         game_segment_length=200,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
-        lr_piecewise_constant_decay=False,
-        learning_rate=0.003,
-        grad_clip_value=0.5,
+        cos_lr_scheduler=True,
+        learning_rate=1e-4,
+        optim_type='AdamW',
+        piecewise_decay_lr_scheduler=False,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
-        random_collect_episode_num=0,
-        # NOTE: for continuous gaussian policy, we use the policy_entropy_loss as in the original Sampled MuZero paper.
-        policy_entropy_loss_weight=5e-3,
         n_episode=n_episode,
-        eval_freq=int(1e3),
+        eval_freq=int(2e3),
+        replay_ratio=replay_ratio,
         replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
@@ -77,11 +79,6 @@ lunarlander_cont_sampled_efficientzero_create_config = dict(
         type='sampled_efficientzero',
         import_names=['lzero.policy.sampled_efficientzero'],
     ),
-    collector=dict(
-        type='episode_muzero',
-        get_train_sample=True,
-        import_names=['lzero.worker.muzero_collector'],
-    )
 )
 lunarlander_cont_sampled_efficientzero_create_config = EasyDict(lunarlander_cont_sampled_efficientzero_create_config)
 create_config = lunarlander_cont_sampled_efficientzero_create_config

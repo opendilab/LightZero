@@ -28,7 +28,7 @@
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 [![discord badge](https://dcbadge.vercel.app/api/server/dkZS2JF56X?style=flat)](https://discord.gg/dkZS2JF56X)
 
-Updated on 2024.07.12 LightZero-v0.1.0
+Updated on 2025.02.08 LightZero-v0.1.0
 
 English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Documentation](https://opendilab.github.io/LightZero) | [LightZero Paper](https://arxiv.org/abs/2310.08348) | [🔥UniZero Paper](https://arxiv.org/abs/2406.10667) | [🔥ReZero Paper](https://arxiv.org/abs/2404.16364)
 
@@ -58,25 +58,37 @@ For further details, please refer to [Features](#features), [Framework Structure
 
 ### Outline
 
-- [Overview](#overview)
-  - [Outline](#outline)
-  - [Features](#features)
-  - [Framework Structure](#framework-structure)
-  - [Integrated Algorithms](#integrated-algorithms)
-- [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Documentation](#documentation)
-- [Benchmark](#benchmark)
-- [Awesome-MCTS Notes](#awesome-mcts-notes)
-  - [Paper Notes](#paper-notes)
-  - [Algo. Overview](#algo-overview)
-- [Awesome-MCTS Papers](#awesome-mcts-papers)
-  - [Key Papers](#key-papers)
-  - [Other Papers](#other-papers)
-- [Feedback and Contribution](#feedback-and-contribution)
-- [Citation](#citation)
-- [Acknowledgments](#acknowledgments)
-- [License](#license)
+- [LightZero](#lightzero)
+  - [🔍 Background](#-background)
+  - [🎨 Overview](#-overview)
+    - [Outline](#outline)
+    - [💥 Features](#-features)
+    - [🧩 Framework Structure](#-framework-structure)
+    - [🎁 Integrated Algorithms](#-integrated-algorithms)
+  - [⚙️ Installation](#️-installation)
+    - [Installation with Docker](#installation-with-docker)
+  - [🚀 Quick Start](#-quick-start)
+  - [📚 Documentation](#-documentation)
+  - [📊 Benchmark](#-benchmark)
+  - [📝 Awesome-MCTS Notes](#-awesome-mcts-notes)
+    - [Paper Notes](#paper-notes)
+    - [Algo. Overview](#algo-overview)
+  - [Awesome-MCTS Papers](#awesome-mcts-papers)
+    - [Key Papers](#key-papers)
+      - [LightZero Implemented series](#lightzero-implemented-series)
+      - [AlphaGo series](#alphago-series)
+      - [MuZero series](#muzero-series)
+      - [MCTS Analysis](#mcts-analysis)
+      - [MCTS Application](#mcts-application)
+    - [Other Papers](#other-papers)
+      - [ICML](#icml)
+      - [ICLR](#iclr)
+      - [NeurIPS](#neurips)
+      - [Other Conference or Journal](#other-conference-or-journal)
+  - [💬 Feedback and Contribution](#-feedback-and-contribution)
+  - [🌏 Citation](#-citation)
+  - [💓 Acknowledgments](#-acknowledgments)
+  - [🏷️ License](#️-license)
 
 ### 💥 Features
 
@@ -127,25 +139,26 @@ LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of 
 The environments and algorithms currently supported by LightZero are shown in the table below:
 
 
-| Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | UniZero |ReZero |
-|---------------| -------- | ------ |-------------| ------------------ | ---------- |----------------|---------------|----------------|
-| TicTacToe     | ✔      | ✔      | 🔒           | 🔒                | ✔          | 🔒             |✔|🔒             |
-| Gomoku        | ✔      | ✔      | 🔒          | 🔒               | ✔          | 🔒             |✔|✔          |
-| Connect4      | ✔      | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |✔|✔          |
-| 2048          | ---       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |✔|🔒             |
-| Chess         | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |🔒|🔒             |
-| Go            | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |🔒|🔒             |
-| CartPole      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|✔             |
-| Pendulum      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |🔒|🔒             |
-| LunarLander   | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|🔒             |
-| BipedalWalker | ---      | ✔      | ✔           | ✔                | ✔          | 🔒              |🔒|🔒             |
-| Atari         | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |✔|✔          |
-| MuJoCo        | ---      | ✔     | ✔          | ✔                | 🔒         | 🔒               |🔒|🔒             |
-| MiniGrid      | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
-| Bsuite        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
-| Memory        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |✔|🔒             |
-| SumToThree (billiards) | ---      | 🔒        | 🔒          | ✔               | 🔒         | 🔒             |🔒|🔒             |
-| MetaDrive     | ---      | 🔒     | 🔒        | ✔               | 🔒         | 🔒             | 🔒 |🔒             |
+| Env./Algo.             | AlphaZero | MuZero | Sampled MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | UniZero | Sampled UniZero | ReZero |
+|------------------------| -------- | ---- |---------------| ---------- | ------------------ | ------------- | ---------------- | ------- | --- | ------ |
+| TicTacToe              | ✔        | ✔    | 🔒            | 🔒         | 🔒                | ✔             | 🔒               | ✔      | 🔒   | 🔒     |
+| Gomoku                 | ✔        | ✔    | 🔒            | 🔒         | 🔒                | ✔             | 🔒               | ✔      | 🔒   | ✔      |
+| Connect4               | ✔        | ✔    | 🔒            | 🔒         | 🔒                | 🔒             | 🔒               | ✔      | 🔒   | ✔      |
+| 2048                   | ---      | ✔    | 🔒            | 🔒         | 🔒                | 🔒             | ✔               | ✔      | 🔒   | 🔒     |
+| Chess                  | 🔒        | 🔒   | 🔒            | 🔒         | 🔒                | 🔒             | 🔒               | 🔒      | 🔒  | 🔒     |
+| Go                     | 🔒        | 🔒   | 🔒            | 🔒         | 🔒                | 🔒             | 🔒               | 🔒      | 🔒  | 🔒     |
+| CartPole               | ---      | ✔    | 🔒            | ✔          | ✔                 | ✔             | ✔               | ✔      | 🔒   | ✔      |
+| Pendulum               | ---      | ✔    | ✔             | ✔          | ✔                 | ✔             | ✔               | 🔒      | ✔  | 🔒     |
+| LunarLander            | ---      | ✔    | ✔             | ✔          | ✔                 | ✔             | ✔               | ✔      | ✔  | 🔒     |
+| BipedalWalker          | ---      | ✔    | ✔             | ✔          | ✔                 | ✔             | 🔒               | 🔒      | ✔  | 🔒     |
+| Atari                  | ---      | ✔    | 🔒            | ✔          | ✔                 | ✔             | ✔               | ✔      | 🔒   | ✔      |
+| DeepMind Control       | ---      | ---     | ✔            | ---            | ✔                 | 🔒             | 🔒               | 🔒      | ✔  | 🔒     |
+| MuJoCo                 | ---      | ✔    | 🔒            | ✔          | ✔                 | 🔒             | 🔒               | 🔒      | 🔒  | 🔒     |
+| MiniGrid               | ---      | ✔    | 🔒            | ✔          | ✔                 | 🔒             | 🔒               | ✔      | 🔒   | 🔒     |
+| Bsuite                 | ---      | ✔    | 🔒            | ✔          | ✔                 | 🔒             | 🔒               | ✔      | 🔒   | 🔒     |
+| Memory                 | ---      | ✔    | 🔒              | ✔          | ✔                 | 🔒             | 🔒               | ✔      | 🔒   | 🔒     |
+| SumToThree (billiards) | ---      | 🔒   | 🔒            | 🔒         | ✔                 | 🔒             | 🔒               | 🔒      | 🔒  | 🔒     |
+| MetaDrive     | ---      | 🔒     | 🔒      | 🔒  | ✔               | 🔒         | 🔒           | 🔒  | 🔒 |🔒             |
 
 
 <sup>(1): "✔" means that the corresponding item is finished and well-tested.</sup>
@@ -208,7 +221,7 @@ Train a MuZero agent to play [Pong](https://gymnasium.farama.org/environments/at
 
 ```bash
 cd LightZero
-python3 -u zoo/atari/config/atari_muzero_config.py
+python3 -u zoo/atari/config/atari_muzero_segment_config.py
 ```
 
 Train a MuZero agent to play [TicTacToe](https://en.wikipedia.org/wiki/Tic-tac-toe):
@@ -218,12 +231,11 @@ cd LightZero
 python3 -u zoo/board_games/tictactoe/config/tictactoe_muzero_bot_mode_config.py
 ```
 
-Train a UniZero agent to play [Pong](http
-g/):
+Train a UniZero agent to play [Pong](https://gymnasium.farama.org/environments/atari/pong/):
 
 ```bash
 cd LightZero
-python3 -u zoo/atari/config/atari_unizero_config.py
+python3 -u zoo/atari/config/atari_unizero_segment_config.py
 ```
 
 ## 📚 Documentation
@@ -349,6 +361,7 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 - [2021 Sampled MuZero: Learning and Planning in Complex Action Spaces](https://arxiv.org/abs/2104.06303)
 - [2022 Stochastic MuZero: Planning in Stochastic Environments with A Learned Model](https://openreview.net/pdf?id=X6D9bAHhBQ1)
 - [2022 Gumbel MuZero: Policy Improvement by Planning with Gumbel](https://openreview.net/pdf?id=bERaNdoegnO&)
+- [2024 UniZero: Generalized and Efficient Planning with Scalable Latent World Models](https://arxiv.org/abs/2406.10667)
 
 #### AlphaGo series
 - [2015 _Nature_ AlphaGo Mastering the game of Go with deep neural networks and tree search](https://www.nature.com/articles/nature16961)
@@ -383,6 +396,22 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 <details><summary>Click to expand</summary>
 
 #### ICML
+- [Language Agent Tree Search Unifies Reasoning, Acting, and Planning in Language Models](https://icml.cc/virtual/2024/poster/33107) 2024  
+  - Andy Zhou, Kai Yan, Michal Shlapentokh-Rothman, Haohan Wang, Yu-Xiong Wang  
+  - Key: language models, decision-making, Monte Carlo Tree Search, reasoning, acting, planning  
+  - ExpEnv: HumanEval, WebShop, interactive QA, programming, math
+- [Efficient Adaptation in Mixed-Motive Environments via Hierarchical Opponent Modeling and Planning](https://proceedings.mlr.press/v235/huang24p.html) 2024  
+  - Yizhe Huang, Anji Liu, Fanqi Kong, Yaodong Yang, Song-Chun Zhu, Xue Feng  
+  - Key: multi-agent reinforcement learning, hierarchical opponent modeling, Monte Carlo Tree Search, few-shot adaptation, mixed-motive environments  
+  - ExpEnv: multi-agent decision-making scenarios, self-play, mixed-motive interactions
+- [Accelerating Look-ahead in Bayesian Optimization: Multilevel Monte Carlo is All you Need](https://openreview.net/forum?id=46vXhZn7lN) 2024  
+  - Shangda Yang, Vitaly Zankin, Maximilian Balandat, Stefan Scherer, Kevin Thomas Carlberg, Neil Walton, Kody J. H. Law  
+  - Key: Bayesian optimization, multilevel Monte Carlo, nested expectations, acquisition functions  
+  - ExpEnv: Benchmark examples
+- [Accelerated Speculative Sampling Based on Tree Monte Carlo](https://openreview.net/forum?id=stMhi1Sn2G) 2024  
+  - Zhengmian Hu, Heng Huang  
+  - Key: speculative sampling, large language models, tree Monte Carlo, inference acceleration  
+  - ExpEnv: Not specified
 - [Scalable Safe Policy Improvement via Monte Carlo Tree Search](https://openreview.net/pdf?id=tevbBSzSfK) 2023
   - Alberto Castellini, Federico Bianchi, Edoardo Zorzi, Thiago D. Simão, Alessandro Farinelli, Matthijs T. J. Spaan
   - Key: safe policy improvement online using a MCTS based strategy, Safe Policy Improvement with Baseline Bootstrapping
@@ -410,6 +439,22 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
   - ExpEnv: USPTO datasets
   - [Code](https://github.com/binghong-ml/retro_star)
 #### ICLR
+- [OptionZero: Planning with Learned Options](https://openreview.net/forum?id=3IFRygQKGL) 2025  
+  - Po-Wei Huang, Pei-Chiun Peng, Hung Guei, Ti-Rong Wu  
+  - Key: Option, Semi-MDP, MuZero, MCTS, Planning, Reinforcement Learning  
+  - ExpEnv: 26 Atari games
+- [Monte Carlo Planning with Large Language Model for Text-Based Games](https://openreview.net/forum?id=r1KcapkzCt) 2025  
+  - Zijing Shi, Meng Fang, Ling Chen  
+  - Key: Large language model, Monte Carlo tree search, Text-based games  
+  - ExpEnv: Jericho benchmark
+- [Epistemic Monte Carlo Tree Search](https://openreview.net/forum?id=Tb8RiXOc3N) 2025  
+  - Yaniv Oren, Viliam Vadocz, Matthijs T. J. Spaan, Wendelin Boehmer  
+  - Key: model based, epistemic uncertainty, exploration, planning, alphazero, muzero  
+  - ExpEnv: SUBLEQ (Assembly language), Deep Sea
+- [Enhancing Software Agents with Monte Carlo Tree Search and Hindsight Feedback](https://openreview.net/forum?id=G7sIFXugTX) 2025  
+  - Antonis Antoniades, Albert Örwall, Kexun Zhang, Yuxi Xie, Anirudh Goyal, William Yang Wang  
+  - Key: agents, LLM, SWE-agents, SWE-bench, search, planning, reasoning, self-improvement, open-ended  
+  - ExpEnv: SWE-bench
 - [The Update Equivalence Framework for Decision-Time Planning](https://openreview.net/forum?id=JXGph215fL) 2024
   - Samuel Sokota, Gabriele Farina, David J Wu, Hengyuan Hu, Kevin A. Wang, J Zico Kolter, Noam Brown
   - Key: imperfect-information games, search, decision-time planning, update equivalence

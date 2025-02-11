@@ -20,9 +20,9 @@ class SampledEfficientZeroModelMLP(nn.Module):
         action_space_size: int = 6,
         latent_state_dim: int = 256,
         lstm_hidden_size: int = 512,
-        fc_reward_layers: SequenceType = [32],
-        fc_value_layers: SequenceType = [32],
-        fc_policy_layers: SequenceType = [32],
+        reward_head_hidden_channels: SequenceType = [256],
+        value_head_hidden_channels: SequenceType = [256],
+        policy_head_hidden_channels: SequenceType = [256],
         reward_support_size: int = 601,
         value_support_size: int = 601,
         proj_hid: int = 1024,
@@ -31,7 +31,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
         pred_out: int = 1024,
         self_supervised_learning_loss: bool = True,
         categorical_distribution: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        activation: Optional[nn.Module] = nn.GELU(approximate='tanh'),
         last_linear_layer_init_zero: bool = True,
         state_norm: bool = False,
         # ==============================================================
@@ -42,9 +42,9 @@ class SampledEfficientZeroModelMLP(nn.Module):
         sigma_type='conditioned',
         fixed_sigma_value: float = 0.3,
         bound_type: str = None,
-        norm_type: str = 'BN',
+        norm_type: str = 'LN',
         discrete_action_encoding_type: str = 'one_hot',
-        res_connection_in_dynamics: bool = False,
+        res_connection_in_dynamics: bool = True,
         *args,
         **kwargs,
     ):
@@ -62,9 +62,9 @@ class SampledEfficientZeroModelMLP(nn.Module):
                 e.g. 4 for Lunarlander. For continuous action space, it is the dimension of the continuous action, e.g. 4 for bipedalwalker.
             - latent_state_dim (:obj:`int`): The dimension of latent state, such as 256.
             - lstm_hidden_size (:obj:`int`): The hidden size of LSTM in dynamics network to predict value_prefix.
-            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
-            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - reward_support_size (:obj:`int`): The size of categorical reward output
             - value_support_size (:obj:`int`): The size of categorical value output.
             - proj_hid (:obj:`int`): The size of projection hidden layer.
@@ -116,9 +116,9 @@ class SampledEfficientZeroModelMLP(nn.Module):
 
         self.lstm_hidden_size = lstm_hidden_size
         self.latent_state_dim = latent_state_dim
-        self.fc_reward_layers = fc_reward_layers
-        self.fc_value_layers = fc_value_layers
-        self.fc_policy_layers = fc_policy_layers
+        self.reward_head_hidden_channels = reward_head_hidden_channels
+        self.value_head_hidden_channels = value_head_hidden_channels
+        self.policy_head_hidden_channels = policy_head_hidden_channels
         self.proj_hid = proj_hid
         self.proj_out = proj_out
         self.pred_hid = pred_hid
@@ -134,9 +134,10 @@ class SampledEfficientZeroModelMLP(nn.Module):
         self.norm_type = norm_type
         self.num_of_sampled_actions = num_of_sampled_actions
         self.res_connection_in_dynamics = res_connection_in_dynamics
+        self.activation = activation
 
         self.representation_network = RepresentationNetworkMLP(
-            observation_shape=self.observation_shape, hidden_channels=self.latent_state_dim, norm_type=norm_type
+            observation_shape=self.observation_shape, hidden_channels=self.latent_state_dim, activation=self.activation, norm_type=norm_type
         )
 
         self.dynamics_network = DynamicsNetworkMLP(
@@ -144,9 +145,10 @@ class SampledEfficientZeroModelMLP(nn.Module):
             num_channels=self.latent_state_dim + self.action_encoding_dim,
             common_layer_num=2,
             lstm_hidden_size=self.lstm_hidden_size,
-            fc_reward_layers=self.fc_reward_layers,
+            reward_head_hidden_channels=self.reward_head_hidden_channels,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            activation=self.activation,
             norm_type=norm_type,
             res_connection_in_dynamics=self.res_connection_in_dynamics,
         )
@@ -155,10 +157,11 @@ class SampledEfficientZeroModelMLP(nn.Module):
             continuous_action_space=self.continuous_action_space,
             action_space_size=self.action_space_size,
             num_channels=self.latent_state_dim,
-            fc_value_layers=self.fc_value_layers,
-            fc_policy_layers=self.fc_policy_layers,
+            value_head_hidden_channels=self.value_head_hidden_channels,
+            policy_head_hidden_channels=self.policy_head_hidden_channels,
             output_support_size=self.value_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+            activation=self.activation, 
             sigma_type=self.sigma_type,
             fixed_sigma_value=self.fixed_sigma_value,
             bound_type=self.bound_type,
@@ -169,14 +172,14 @@ class SampledEfficientZeroModelMLP(nn.Module):
             # self_supervised_learning_loss related network proposed in EfficientZero
             self.projection_input_dim = latent_state_dim
             self.projection = nn.Sequential(
-                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
-                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), activation,
+                nn.Linear(self.projection_input_dim, self.proj_hid), nn.BatchNorm1d(self.proj_hid), self.activation,
+                nn.Linear(self.proj_hid, self.proj_hid), nn.BatchNorm1d(self.proj_hid), self.activation,
                 nn.Linear(self.proj_hid, self.proj_out), nn.BatchNorm1d(self.proj_out)
             )
             self.prediction_head = nn.Sequential(
                 nn.Linear(self.proj_out, self.pred_hid),
                 nn.BatchNorm1d(self.pred_hid),
-                activation,
+                self.activation,
                 nn.Linear(self.pred_hid, self.pred_out),
             )
 
@@ -208,7 +211,7 @@ class SampledEfficientZeroModelMLP(nn.Module):
         batch_size = obs.size(0)
         latent_state = self._representation(obs)
         policy_logits, value = self._prediction(latent_state)
-        # zero initialization for reward hidden states
+        # zero initializations for reward hidden states
         # (hn, cn), each element shape is (layer_num=1, batch_size, lstm_hidden_size)
         reward_hidden_state = (
             torch.zeros(1, batch_size,
@@ -394,18 +397,18 @@ class PredictionNetworkMLP(nn.Module):
         action_space_size,
         num_channels,
         common_layer_num: int = 2,
-        fc_value_layers: SequenceType = [32],
-        fc_policy_layers: SequenceType = [32],
+        value_head_hidden_channels: SequenceType = [32],
+        policy_head_hidden_channels: SequenceType = [32],
         output_support_size: int = 601,
         last_linear_layer_init_zero: bool = True,
-        activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+        activation: Optional[nn.Module] = nn.GELU(approximate='tanh'),
         # ==============================================================
         # specific sampled related config
         # ==============================================================
         sigma_type='conditioned',
         fixed_sigma_value: float = 0.3,
         bound_type: str = None,
-        norm_type: str = 'BN',
+        norm_type: str = 'LN',
     ):
         """
         Overview:
@@ -419,8 +422,8 @@ class PredictionNetworkMLP(nn.Module):
                 continuous action.
             - num_channels (:obj:`int`): The num of channels in latent states.
             - num_res_blocks (:obj:`int`): The number of res blocks.
-            - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
+            - value_head_hidden_channels (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
+            - policy_head_hidden_channels (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
             - output_support_size (:obj:`int`): dim of value output.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of value/policy mlp, default sets it to True.
             # ==============================================================
@@ -462,7 +465,7 @@ class PredictionNetworkMLP(nn.Module):
         # ******* value and policy head ******
         self.fc_value_head = MLP(
             in_channels=self.num_channels,
-            hidden_channels=fc_value_layers[0],
+            hidden_channels=value_head_hidden_channels[0],
             out_channels=output_support_size,
             layer_num=2,
             activation=activation,
@@ -488,7 +491,7 @@ class PredictionNetworkMLP(nn.Module):
         else:
             self.fc_policy_head = MLP(
                 in_channels=self.num_channels,
-                hidden_channels=fc_policy_layers[0],
+                hidden_channels=policy_head_hidden_channels[0],
                 out_channels=action_space_size,
                 layer_num=2,
                 activation=activation,

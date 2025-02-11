@@ -17,7 +17,7 @@ from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
-from .utils import random_collect
+from .utils import random_collect, calculate_update_per_collect
 
 
 def train_rezero(
@@ -29,7 +29,7 @@ def train_rezero(
         max_env_step: Optional[int] = int(1e10),
 ) -> 'Policy':
     """
-    Train entry for ReZero algorithms (ReZero-MuZero, ReZero-EfficientZero).
+    Train entry for ReZero algorithms (ReZero-MuZero, ReZero-EfficientZero). More details can be found in the ReZero paper: https://arxiv.org/pdf/2404.16364.
 
     Args:
         - input_cfg (:obj:`Tuple[dict, dict]`): Configuration dictionaries (user_config, create_cfg).
@@ -152,10 +152,8 @@ def train_rezero(
             collect_with_pure_policy=cfg.policy.collect_with_pure_policy
         )
 
-        # Update collection frequency if not specified
-        if update_per_collect is None:
-            collected_transitions = sum(len(segment) for segment in new_data[0])
-            update_per_collect = int(collected_transitions * cfg.policy.replay_ratio)
+        # Determine updates per collection
+        update_per_collect = calculate_update_per_collect(cfg, new_data)
 
         # Update replay buffer
         replay_buffer.push_game_segments(new_data)

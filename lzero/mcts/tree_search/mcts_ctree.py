@@ -169,6 +169,7 @@ class UniZeroMCTSCtree(object):
                     min_max_stats_lst, results, virtual_to_play_batch
                 )
 
+
 class MuZeroMCTSCtree(object):
     """
     Overview:
@@ -418,6 +419,7 @@ class MuZeroMCTSCtree(object):
 
             average_infer = infer_sum / self._cfg.num_simulations
         return length, average_infer
+
 
 class MuZeroRNNFullObsMCTSCtree(object):
     """

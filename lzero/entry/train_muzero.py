@@ -4,6 +4,7 @@ from functools import partial
 from typing import Optional, Tuple
 
 import torch
+import wandb
 from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
@@ -18,7 +19,7 @@ from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
-from .utils import random_collect, initialize_zeros_batch
+from .utils import random_collect, calculate_update_per_collect
 
 
 def train_muzero(
@@ -47,7 +48,7 @@ def train_muzero(
     """
 
     cfg, create_cfg = input_cfg
-    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'muzero_context', 'muzero_rnn_full_obs', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'], \
+    assert create_cfg.policy.type in ['efficientzero', 'muzero', 'muzero_context', 'muzero_rnn_full_obs', 'sampled_efficientzero', 'sampled_muzero', 'gumbel_muzero', 'stochastic_muzero'], \
         "train_muzero entry now only support the following algo.: 'efficientzero', 'muzero', 'sampled_efficientzero', 'gumbel_muzero', 'stochastic_muzero'"
 
     if create_cfg.policy.type in ['muzero', 'muzero_context', 'muzero_rnn_full_obs']:
@@ -56,6 +57,8 @@ def train_muzero(
         from lzero.mcts import EfficientZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'sampled_efficientzero':
         from lzero.mcts import SampledEfficientZeroGameBuffer as GameBuffer
+    elif create_cfg.policy.type == 'sampled_muzero':
+        from lzero.mcts import SampledMuZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'gumbel_muzero':
         from lzero.mcts import GumbelMuZeroGameBuffer as GameBuffer
     elif create_cfg.policy.type == 'stochastic_muzero':
@@ -79,6 +82,16 @@ def train_muzero(
     if cfg.policy.eval_offline:
         cfg.policy.learn.learner.hook.save_ckpt_after_iter = cfg.policy.eval_freq
 
+    if cfg.policy.use_wandb:
+        # Initialize wandb
+        wandb.init(
+            project="LightZero",
+            config=cfg,
+            sync_tensorboard=False,
+            monitor_gym=False,
+            save_code=True,
+        )
+
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
     # load pretrained model
@@ -101,7 +114,7 @@ def train_muzero(
         policy=policy.collect_mode,
         tb_logger=tb_logger,
         exp_name=cfg.exp_name,
-        policy_config=policy_config
+        policy_config=policy_config,
     )
     evaluator = Evaluator(
         eval_freq=cfg.policy.eval_freq,
@@ -119,6 +132,8 @@ def train_muzero(
     # ==============================================================
     # Learner's before_run hook.
     learner.call_hook('before_run')
+    if policy_config.use_wandb:
+        policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
     if cfg.policy.update_per_collect is not None:
         update_per_collect = cfg.policy.update_per_collect
@@ -171,10 +186,10 @@ def train_muzero(
 
         # Collect data by default config n_sample/n_episode.
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
-        if cfg.policy.update_per_collect is None:
-            # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
-            collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
-            update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
+
+        # Determine updates per collection
+        update_per_collect = calculate_update_per_collect(cfg, new_data)
+
         # save returned new_data collected by the collector
         replay_buffer.push_game_segments(new_data)
         # remove the oldest data if the replay buffer is full.
@@ -193,6 +208,9 @@ def train_muzero(
                     f'continue to collect now ....'
                 )
                 break
+
+            if policy_config.use_wandb:
+                policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
             # The core train steps for MCTS+RL algorithms.
             log_vars = learner.train(train_data, collector.envstep)
@@ -218,4 +236,5 @@ def train_muzero(
 
     # Learner's after_run hook.
     learner.call_hook('after_run')
+    wandb.finish()
     return policy

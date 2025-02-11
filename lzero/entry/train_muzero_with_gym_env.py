@@ -9,6 +9,7 @@ from tensorboardX import SummaryWriter
 from ding.config import compile_config
 from ding.envs import DingEnvWrapper, BaseEnvManager
 from ding.policy import create_policy
+from ding.rl_utils import get_epsilon_greedy_fn
 from ding.utils import set_pkg_seed
 from ding.worker import BaseLearner
 from lzero.envs.get_wrapped_env import get_wrappered_env
@@ -127,6 +128,17 @@ def train_muzero_with_gym_env(
             trained_steps=learner.train_iter
         )
 
+        if policy_config.eps.eps_greedy_exploration_in_collect:
+            epsilon_greedy_fn = get_epsilon_greedy_fn(
+                start=policy_config.eps.start,
+                end=policy_config.eps.end,
+                decay=policy_config.eps.decay,
+                type_=policy_config.eps.type
+            )
+            collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
+        else:
+            collect_kwargs['epsilon'] = 0.0
+
         # Evaluate policy performance.
         if evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
@@ -137,15 +149,18 @@ def train_muzero_with_gym_env(
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
         if cfg.policy.update_per_collect is None:
             # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
-            collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
+            # The length of game_segment (i.e., len(game_segment.action_segment)) can be smaller than cfg.policy.game_segment_length if it represents the final segment of the game.
+            # On the other hand, its length will be less than cfg.policy.game_segment_length + padding_length when it is not the last game segment. Typically, padding_length is the sum of unroll_steps and td_steps.
+            collected_transitions_num = sum(min(len(game_segment), cfg.policy.game_segment_length) for game_segment in new_data[0])
             update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
+
         # save returned new_data collected by the collector
         replay_buffer.push_game_segments(new_data)
         # remove the oldest data if the replay buffer is full.
         replay_buffer.remove_oldest_data_to_fit()
 
         # Learn policy from collected data.
-        for i in range(cfg.policy.update_per_collect):
+        for i in range(update_per_collect):
             # Learner will train ``update_per_collect`` times in one iteration.
             if replay_buffer.get_num_of_transitions() > batch_size:
                 train_data = replay_buffer.sample(batch_size, policy)

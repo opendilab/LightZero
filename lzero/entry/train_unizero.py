@@ -4,6 +4,7 @@ from functools import partial
 from typing import Tuple, Optional
 
 import torch
+import wandb
 from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
@@ -17,9 +18,9 @@ from torch.utils.tensorboard import SummaryWriter
 from lzero.entry.utils import log_buffer_memory_usage
 from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
-from lzero.worker import MuZeroCollector as Collector
 from lzero.worker import MuZeroEvaluator as Evaluator
-from .utils import random_collect
+from lzero.worker import MuZeroCollector as Collector
+from .utils import random_collect, calculate_update_per_collect
 
 
 def train_unizero(
@@ -52,10 +53,10 @@ def train_unizero(
     cfg, create_cfg = input_cfg
 
     # Ensure the specified policy type is supported
-    assert create_cfg.policy.type in ['unizero'], "train_unizero entry now only supports the following algo.: 'unizero'"
+    assert create_cfg.policy.type in ['unizero', 'sampled_unizero'], "train_unizero entry now only supports the following algo.: 'unizero', 'sampled_unizero'"
 
     # Import the correct GameBuffer class based on the policy type
-    game_buffer_classes = {'unizero': 'UniZeroGameBuffer'}
+    game_buffer_classes = {'unizero': 'UniZeroGameBuffer', 'sampled_unizero': 'SampledUniZeroGameBuffer'}
 
     GameBuffer = getattr(__import__('lzero.mcts', fromlist=[game_buffer_classes[create_cfg.policy.type]]),
                          game_buffer_classes[create_cfg.policy.type])
@@ -75,6 +76,16 @@ def train_unizero(
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=torch.cuda.is_available())
+
+    if cfg.policy.use_wandb:
+        # Initialize wandb
+        wandb.init(
+            project="LightZero",
+            config=cfg,
+            sync_tensorboard=False,
+            monitor_gym=False,
+            save_code=True,
+        )
 
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
 
@@ -99,15 +110,14 @@ def train_unizero(
 
     # Learner's before_run hook
     learner.call_hook('before_run')
+    if policy_config.use_wandb:
+        policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
     # Collect random data before training
     if cfg.policy.random_collect_episode_num > 0:
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
 
     batch_size = policy._cfg.batch_size
-
-    # TODO: for visualize
-    stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
 
     while True:
         # Log buffer memory usage
@@ -144,10 +154,7 @@ def train_unizero(
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
         # Determine updates per collection
-        update_per_collect = cfg.policy.update_per_collect
-        if update_per_collect is None:
-            collected_transitions_num = sum(len(game_segment) for game_segment in new_data[0])
-            update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
+        update_per_collect = calculate_update_per_collect(cfg, new_data)
 
         # Update replay buffer
         replay_buffer.push_game_segments(new_data)
@@ -172,6 +179,9 @@ def train_unizero(
                     # Clear caches and precompute positional embedding matrices
                     policy.recompute_pos_emb_diff_and_clear_cache()  # TODO
 
+                if policy_config.use_wandb:
+                    policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
+
                 train_data.append({'train_which_component': 'transformer'})
                 log_vars = learner.train(train_data, collector.envstep)
 
@@ -185,4 +195,5 @@ def train_unizero(
             break
 
     learner.call_hook('after_run')
+    wandb.finish()
     return policy

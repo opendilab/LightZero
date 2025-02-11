@@ -133,6 +133,8 @@ class AtariEnvLightZero(BaseEnv):
 
         self.obs = to_ndarray(obs)
         self._eval_episode_return = 0.
+        self.timestep = 0
+
         obs = self.observe()
         self.step_index = 0
         return obs
@@ -150,6 +152,8 @@ class AtariEnvLightZero(BaseEnv):
         self.obs = to_ndarray(obs)
         self.reward = np.array(reward).astype(np.float32)
         self._eval_episode_return += self.reward
+        self.timestep += 1
+        # print(f'self.timestep: {self.timestep}')
         observation = self.observe()
         self.step_index += 1
         if done:

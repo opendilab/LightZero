@@ -74,7 +74,7 @@ class AlphaZeroPolicy(Policy):
         evaluator_env_num=3,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=True,
+        piecewise_decay_lr_scheduler=True,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e5),
         # (bool) Whether to use manually temperature decay.
@@ -136,7 +136,7 @@ class AlphaZeroPolicy(Policy):
                 device_type=self._cfg.device
             )
 
-        if self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.piecewise_decay_lr_scheduler:
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
             # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
@@ -195,7 +195,7 @@ class AlphaZeroPolicy(Policy):
             max_norm=self._cfg.grad_clip_value,
         )
         self._optimizer.step()
-        if self._cfg.lr_piecewise_constant_decay is True:
+        if self._cfg.piecewise_decay_lr_scheduler is True:
             self.lr_scheduler.step()
 
         # =============
@@ -219,8 +219,9 @@ class AlphaZeroPolicy(Policy):
         self._get_simulation_env()
         self._collect_model = self._model
         if self._cfg.mcts_ctree:
-            import sys
-            sys.path.append('/Users/your_user_name/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
+            from lzero.mcts.ctree.ctree_alphazero.test.eval_alphazero_ctree import find_and_add_to_sys_path
+            # Use the function to add the desired path to sys.path
+            find_and_add_to_sys_path("lzero/mcts/ctree/ctree_alphazero/build")
             import mcts_alphazero
             self._collect_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves, self._cfg.mcts.num_simulations,
                                                      self._cfg.mcts.pb_c_base,
@@ -263,7 +264,7 @@ class AlphaZeroPolicy(Policy):
                                                                   init_state=init_state[env_id],
                                                                   katago_policy_init=False,
                                                                   katago_game_state=katago_game_state[env_id]))
-            action, mcts_probs = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self.collect_mcts_temperature, True)
+            action, mcts_probs, root = self._collect_mcts.get_next_action(state_config_for_simulation_env_reset, self._policy_value_fn, self.collect_mcts_temperature, True)
 
             output[env_id] = {
                 'action': action,
@@ -278,9 +279,11 @@ class AlphaZeroPolicy(Policy):
         """
         self._get_simulation_env()
         if self._cfg.mcts_ctree:
-            import sys
-            sys.path.append('/Users/your_user_name/code/LightZero/lzero/mcts/ctree/ctree_alphazero/build')
+            from lzero.mcts.ctree.ctree_alphazero.test.eval_alphazero_ctree import find_and_add_to_sys_path
+            # Use the function to add the desired path to sys.path
+            find_and_add_to_sys_path("lzero/mcts/ctree/ctree_alphazero/build")
             import mcts_alphazero
+
             # TODO(pu): how to set proper num_simulations for evaluation
             self._eval_mcts = mcts_alphazero.MCTS(self._cfg.mcts.max_moves,
                                                   min(800, self._cfg.mcts.num_simulations * 4),
@@ -324,7 +327,7 @@ class AlphaZeroPolicy(Policy):
                                                                   init_state=init_state[env_id],
                                                                   katago_policy_init=False,
                                                                   katago_game_state=katago_game_state[env_id]))
-            action, mcts_probs = self._eval_mcts.get_next_action(
+            action, mcts_probs, root = self._eval_mcts.get_next_action(
                 state_config_for_simulation_env_reset, self._policy_value_fn, 1.0, False
             )
             output[env_id] = {
@@ -364,6 +367,26 @@ class AlphaZeroPolicy(Policy):
             else:
                 raise NotImplementedError
             self.simulate_env = Connect4Env(connect4_alphazero_config.env)
+        elif self._cfg.simulation_env_id == 'chess':
+            from zoo.board_games.chess.envs.chess_lightzero_env import ChessLightZeroEnv
+            if self._cfg.simulation_env_config_type == 'play_with_bot':
+                from zoo.board_games.chess.config.chess_alphazero_bot_mode_config import chess_alphazero_config
+            elif self._cfg.simulation_env_config_type == 'self_play':
+                from zoo.board_games.chess.config.chess_alphazero_sp_mode_config import chess_alphazero_config
+            else:
+                raise NotImplementedError
+            self.simulate_env = ChessLightZeroEnv(chess_alphazero_config.env)
+        elif self._cfg.simulation_env_id == 'dummy_any_game':
+            from zoo.board_games.tictactoe.envs.dummy_any_game_env import AnyGameEnv
+            if self._cfg.simulation_env_config_type == 'single_player_mode':
+                from zoo.board_games.tictactoe.config.dummy_any_game_alphazero_single_player_mode_config import \
+                    dummy_any_game_alphazero_config
+            elif self._cfg.simulation_env_config_type == 'self_play':
+                from zoo.board_games.tictactoe.config.dummy_any_game_alphazero_self_play_mode_config import \
+                    dummy_any_game_alphazero_config
+            else:
+                raise NotImplementedError
+            self.simulate_env = AnyGameEnv(dummy_any_game_alphazero_config.env)
         else:
             raise NotImplementedError
 

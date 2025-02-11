@@ -56,6 +56,7 @@ cartpole_unizero_config = dict(
                 max_seq_len=2048,
             ),
         ),
+        use_wandb=True,
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
         num_unroll_steps=num_unroll_steps,
@@ -66,7 +67,7 @@ cartpole_unizero_config = dict(
         replay_ratio=replay_ratio,
         batch_size=batch_size,
         optim_type='AdamW',
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         learning_rate=0.0001,
         target_update_freq=100,
         grad_clip_value=5,

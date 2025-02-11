@@ -20,7 +20,11 @@ import curses
 import numpy as np
 from absl import app
 from absl import flags
-from pycolab import human_ui
+
+try:
+    from pycolab import human_ui
+except ImportError:
+    raise ImportError("Please install the pycolab package: pip install pycolab")
 
 import common
 import key_to_door

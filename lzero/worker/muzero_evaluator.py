@@ -5,6 +5,7 @@ from typing import Optional, Callable, Tuple, Dict, Any
 
 import numpy as np
 import torch
+import wandb
 from ding.envs import BaseEnvManager
 from ding.torch_utils import to_ndarray, to_item, to_tensor
 from ding.utils import build_logger, EasyTimer
@@ -331,7 +332,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                         obs, reward, done, info = t.obs, t.reward, t.done, t.info
 
                         eps_steps_lst[env_id] += 1
-                        if self._policy.get_attribute('cfg').type == 'unizero':
+                        if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
                             # only for UniZero now
                             self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
 
@@ -441,6 +442,9 @@ class MuZeroEvaluator(ISerialEvaluator):
                     continue
                 self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
                 self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, envstep)
+                if self.policy_config.use_wandb:
+                    wandb.log({'{}_step/'.format(self._instance_name) + k: v}, step=envstep)
+
             episode_return = np.mean(episode_return)
             if episode_return > self._max_episode_return:
                 if save_ckpt_fn:

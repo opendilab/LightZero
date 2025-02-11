@@ -36,14 +36,14 @@ batch_size = 256
 
 max_env_step = int(5e6)
 reanalyze_ratio = 0.
-policy_entropy_loss_weight = 0.005
+policy_entropy_weight = 0.005
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 mujoco_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez/{env_id[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_bs-{batch_size}_pelw{policy_entropy_loss_weight}_seed{seed}',
+    exp_name=f'data_sez/{env_id[:-3]}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_bs-{batch_size}_pelw{policy_entropy_weight}_seed{seed}',
     env=dict(
         env_id=env_id,
         action_clip=True,
@@ -67,7 +67,7 @@ mujoco_sampled_efficientzero_config = dict(
             res_connection_in_dynamics=True,
         ),
         cuda=True,
-        policy_entropy_loss_weight=policy_entropy_loss_weight,
+        policy_entropy_weight=policy_entropy_weight,
         ignore_done=ignore_done,
         env_type='not_board_games',
         game_segment_length=200,
@@ -75,7 +75,7 @@ mujoco_sampled_efficientzero_config = dict(
         batch_size=batch_size,
         discount_factor=0.997,
         optim_type='AdamW',
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         learning_rate=0.003,
         grad_clip_value=0.5,
         num_simulations=num_simulations,

@@ -4,10 +4,13 @@ from typing import List, Dict, Any, Tuple, Union, Optional
 import numpy as np
 import torch
 import torch.optim as optim
+import wandb
 from ding.model import model_wrap
 from ding.policy.base_policy import Policy
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
+from torch.nn import L1Loss
+
 from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
@@ -16,7 +19,6 @@ from lzero.model.utils import cal_dormant_ratio
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
     prepare_obs, configure_optimizers
-from torch.nn import L1Loss
 
 
 @POLICY_REGISTRY.register('muzero')
@@ -71,10 +73,12 @@ class MuZeroPolicy(Policy):
             # (bool) Whether to analyze dormant ratio.
             analysis_dormant_ratio=False,
             # (bool) Whether to use HarmonyDream to balance weights between different losses. Default to False.
-            # More details can be found in https://arxiv.org/abs/2310.00344
+            # More details can be found in https://arxiv.org/abs/2310.00344.
             harmony_balance=False
         ),
         # ****** common ******
+        # (bool) Whether to use wandb to log the training process.
+        use_wandb=False,
         # (bool) whether to use rnd model.
         use_rnd_model=False,
         # (bool) Whether to use multi-gpu training.
@@ -154,8 +158,10 @@ class MuZeroPolicy(Policy):
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
         grad_clip_value=10,
-        # (int) The number of episodes in each collecting stage.
+        # (int) The number of episodes in each collecting stage when use muzero_collector.
         n_episode=8,
+        # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
+        num_segments=8,
         # (int) the number of simulations in MCTS.
         num_simulations=50,
         # (float) Discount factor (gamma) for returns.
@@ -171,12 +177,12 @@ class MuZeroPolicy(Policy):
         # (float) The weight of policy loss.
         policy_loss_weight=1,
         # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=0,
+        policy_entropy_weight=0,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=True,
+        piecewise_decay_lr_scheduler=True,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e4),
         # (bool) Whether to use manually decayed temperature.
@@ -251,6 +257,17 @@ class MuZeroPolicy(Policy):
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
 
+    def set_train_iter_env_step(self, train_iter, env_step) -> None:
+        """
+        Overview:
+            Set the train_iter and env_step for the policy.
+        Arguments:
+            - train_iter (:obj:`int`): The train_iter for the policy.
+            - env_step (:obj:`int`): The env_step for the policy.
+        """
+        self.train_iter = train_iter
+        self.env_step = env_step
+
     def _init_learn(self) -> None:
         """
         Overview:
@@ -273,7 +290,7 @@ class MuZeroPolicy(Policy):
             self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay,
                                                    learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
 
-        if self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.piecewise_decay_lr_scheduler:
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
             # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
@@ -336,6 +353,10 @@ class MuZeroPolicy(Policy):
         self.dormant_ratio_encoder = 0.
         self.dormant_ratio_dynamics = 0.
 
+        if self._cfg.use_wandb:
+            # TODO: add the model to wandb
+            wandb.watch(self._learn_model.representation_network, log="all")
+
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
         Overview:
@@ -367,12 +388,10 @@ class MuZeroPolicy(Policy):
                 obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
         # shape: (batch_size, num_unroll_steps, action_dim)
-        # NOTE: .long(), in discrete action space.
+        # NOTE: .long() is only  for discrete action space.
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
-        data_list = [
-            mask_batch,
-            target_reward.astype('float32'),
-            target_value.astype('float32'), target_policy, weights
+        data_list = [mask_batch, target_reward,
+            target_value, target_policy, weights
         ]
         [mask_batch, target_reward, target_value, target_policy,
          weights] = to_torch_float_tensor(data_list, self._cfg.device)
@@ -558,7 +577,7 @@ class MuZeroPolicy(Policy):
             loss = (
                     self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
                     self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss +
-                    self._cfg.policy_entropy_loss_weight * policy_entropy_loss
+                    self._cfg.policy_entropy_weight * policy_entropy_loss
             )
             weighted_total_loss = (weights * loss).mean()
 
@@ -582,7 +601,7 @@ class MuZeroPolicy(Policy):
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(self._learn_model.parameters(),
                                                                      self._cfg.grad_clip_value)
         self._optimizer.step()
-        if self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
         # ==============================================================
@@ -596,7 +615,7 @@ class MuZeroPolicy(Policy):
             predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
             predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
 
-        return_dict = {
+        return_log_dict = {
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
@@ -644,8 +663,13 @@ class MuZeroPolicy(Policy):
                 "harmony_entropy": self.harmony_entropy.item(),
                 "harmony_entropy_exp_recip": (1 / torch.exp(self.harmony_entropy)).item(),
             }
-            return_dict.update(harmony_dict)
-        return return_dict
+            return_log_dict.update(harmony_dict)
+
+        if self._cfg.use_wandb:
+            wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
+            wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
+
+        return return_log_dict
     
     def _init_collect(self) -> None:
         """
