@@ -59,7 +59,6 @@ class WorldModel(nn.Module):
         if not self.config.rotary_emb:
             self.pos_emb = nn.Embedding(config.max_tokens, config.embed_dim, device=self.device)
             self.precompute_pos_emb_diff_kv()
-
             print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
         # Initialize action embedding table
@@ -488,7 +487,8 @@ class WorldModel(nn.Module):
                     self.keys_values_wm_size_list_current = self.trim_and_pad_kv_cache(is_init_infer=True)
 
                     buffer_action = buffer_action[:ready_env_num]
-                    # TODO
+                    
+                    # TODO: 顺序可能不对？
                     start_pos = start_pos[:ready_env_num]
 
                     # if ready_env_num < self.env_num:

@@ -51,6 +51,8 @@ class CartPoleEnv(BaseEnv):
         self._action_space = gym.spaces.Discrete(2)
         self._action_space.seed(0)  # default seed
         self._reward_space = gym.spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32)
+        self.step_index = 0
+
 
     def reset(self) -> Dict[str, np.ndarray]:
         """
@@ -86,7 +88,9 @@ class CartPoleEnv(BaseEnv):
         obs = to_ndarray(obs)
 
         action_mask = np.ones(self.action_space.n, 'int8')
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+        self.step_index = 0
+
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'step_index': self.step_index}
 
         return obs
 
@@ -120,7 +124,9 @@ class CartPoleEnv(BaseEnv):
             info['eval_episode_return'] = self._eval_episode_return
 
         action_mask = np.ones(self.action_space.n, 'int8')
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+        self.step_index += 1
+
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'step_index': self.step_index}
 
         return BaseEnvTimestep(obs, rew, done, info)
 

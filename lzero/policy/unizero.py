@@ -723,11 +723,11 @@ class UniZeroPolicy(MuZeroPolicy):
             network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, step_index)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            if not self._eval_model.training:
-                # if not in training, obtain the scalars of the value/reward
-                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
-                latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
+            # if not self._eval_model.training:
+            # if not in training, obtain the scalars of the value/reward
+            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
+            latent_state_roots = latent_state_roots.detach().cpu().numpy()
+            policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
             if self._cfg.mcts_ctree:
