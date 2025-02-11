@@ -1128,7 +1128,7 @@ class WorldModel(nn.Module):
 
     def compute_loss(self, batch, target_tokenizer: Tokenizer = None, inverse_scalar_transform_handle=None,
                      **kwargs: Any) -> LossWithIntermediateLosses:
-        start_pos = batch['step_index']
+        start_pos = batch['timestep']
         # Encode observations into latent state representations
         obs_embeddings = self.tokenizer.encode_to_obs_embeddings(batch['observations'])
 
@@ -1345,9 +1345,9 @@ class WorldModel(nn.Module):
             first_step_losses[loss_name] = loss_tmp[:, 0][first_step_mask].mean()
 
             # Middle step loss
-            middle_step_index = seq_len // 2
-            middle_step_mask = mask_padding[:, middle_step_index]
-            middle_step_losses[loss_name] = loss_tmp[:, middle_step_index][middle_step_mask].mean()
+            middle_timestep = seq_len // 2
+            middle_step_mask = mask_padding[:, middle_timestep]
+            middle_step_losses[loss_name] = loss_tmp[:, middle_timestep][middle_step_mask].mean()
 
             # Last step loss
             last_step_mask = mask_padding[:, -1]

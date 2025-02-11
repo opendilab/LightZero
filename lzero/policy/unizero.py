@@ -353,7 +353,7 @@ class UniZeroPolicy(MuZeroPolicy):
         self._target_model.train()
 
         current_batch, target_batch, _ = data
-        obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, step_index_batch = current_batch
+        obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number
@@ -371,7 +371,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # Prepare action batch and convert to torch tensor
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
             -1).long()  # For discrete action space
-        step_index_batch = torch.from_numpy(step_index_batch).to(self._cfg.device).unsqueeze(
+        timestep_batch = torch.from_numpy(timestep_batch).to(self._cfg.device).unsqueeze(
             -1).long()  # TODO: only for discrete action space
         data_list = [mask_batch, target_reward, target_value, target_policy, weights]
         mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
@@ -397,7 +397,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 self._cfg.batch_size, -1, *self._cfg.model.observation_shape)
 
         batch_for_gpt['actions'] = action_batch.squeeze(-1)
-        batch_for_gpt['step_index'] = step_index_batch.squeeze(-1)
+        batch_for_gpt['timestep'] = timestep_batch.squeeze(-1)
 
 
         batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
@@ -569,7 +569,7 @@ class UniZeroPolicy(MuZeroPolicy):
             to_play: List = [-1],
             epsilon: float = 0.25,
             ready_env_id: np.ndarray = None,
-            step_index: List = [0]
+            timestep: List = [0]
     ) -> Dict:
         """
         Overview:
@@ -581,7 +581,7 @@ class UniZeroPolicy(MuZeroPolicy):
             - temperature (:obj:`float`): The temperature of the policy.
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
-            - step_index (:obj:`list`): The step index of the env in one episode
+            - timestep (:obj:`list`): The step index of the env in one episode
         Shape:
             - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
@@ -591,7 +591,7 @@ class UniZeroPolicy(MuZeroPolicy):
             - temperature: :math:`(1, )`.
             - to_play: :math:`(N, 1)`, where N is the number of collect_env.
             - ready_env_id: None
-            - step_index: :math:`(N, 1)`, where N is the number of collect_env.
+            - timestep: :math:`(N, 1)`, where N is the number of collect_env.
         Returns:
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
@@ -606,7 +606,7 @@ class UniZeroPolicy(MuZeroPolicy):
         output = {i: None for i in ready_env_id}
 
         with torch.no_grad():
-            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, step_index)
+            network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
@@ -627,7 +627,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
 
             roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, step_index)
+            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play, timestep)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
@@ -669,7 +669,7 @@ class UniZeroPolicy(MuZeroPolicy):
                     'searched_value': value,
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
-                    'step_index': step_index[i]
+                    'timestep': timestep[i]
                 }
                 batch_action.append(action)
 
@@ -706,7 +706,7 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
-                      ready_env_id: np.array = None, step_index: int = 0) -> Dict:
+                      ready_env_id: np.array = None, timestep: int = 0) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -734,7 +734,7 @@ class UniZeroPolicy(MuZeroPolicy):
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, step_index)
+            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             # if not in training, obtain the scalars of the value/reward
@@ -750,7 +750,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 # python mcts_tree
                 roots = MCTSPtree.roots(active_eval_env_num, legal_actions)
             roots.prepare_no_noise(reward_roots, policy_logits, to_play)
-            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, step_index)
+            self._mcts_eval.search(roots, self._eval_model, latent_state_roots, to_play, timestep)
 
             # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
             roots_visit_count_distributions = roots.get_distributions()
@@ -780,7 +780,7 @@ class UniZeroPolicy(MuZeroPolicy):
                     'searched_value': value,
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
-                    'step_index': step_index[i]
+                    'timestep': timestep[i]
                 }
                 batch_action.append(action)
 

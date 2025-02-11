@@ -137,7 +137,7 @@ class Transformer(nn.Module):
         # 如果使用 RoPE，则对 freqs_cis 进行切片
         if self.config.rotary_emb:
             # 修复：如果 start_pos 是标量，则将其扩展为当前 batch 大小的相同数值
-            # *2是由于step_index只是统计了obs，但是序列是obs act
+            # *2是由于timestep只是统计了obs，但是序列是obs act
             if isinstance(start_pos, int) or isinstance(start_pos, float):
                 start_pos_tensor = torch.full((sequences.shape[0],), int(start_pos), device=sequences.device) * 2
             else:
