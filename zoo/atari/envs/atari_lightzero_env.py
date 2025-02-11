@@ -99,6 +99,7 @@ class AtariEnvLightZero(BaseEnv):
         self.channel_last = cfg.channel_last
         self.clip_rewards = cfg.clip_rewards
         self.episode_life = cfg.episode_life
+        self.timestep = 0
 
     def reset(self) -> dict:
         """
@@ -133,9 +134,7 @@ class AtariEnvLightZero(BaseEnv):
         self.obs = to_ndarray(obs)
         self._eval_episode_return = 0.
         self.timestep = 0
-
         obs = self.observe()
-
         return obs
 
     def step(self, action: int) -> BaseEnvTimestep:
@@ -155,8 +154,8 @@ class AtariEnvLightZero(BaseEnv):
         # print(f'self.timestep: {self.timestep}')
         observation = self.observe()
         if done:
+            print(f'done in self.timestep: {self.timestep}')
             info['eval_episode_return'] = self._eval_episode_return
-
         return BaseEnvTimestep(observation, self.reward, done, info)
 
     def observe(self) -> dict:

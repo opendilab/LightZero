@@ -4,13 +4,14 @@ Modified from https://github.com/karpathy/nanoGPT
 
 import math
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
 from ding.torch_utils.network import GRUGatingUnit
 from einops import rearrange
 from torch.nn import functional as F
+import numpy as np
 
 from .kv_caching import KeysValues
 
@@ -28,10 +29,50 @@ class TransformerConfig:
     embed_pdrop: float
     resid_pdrop: float
     attn_pdrop: float
+    
+    # for RoPE
+    rope_theta: float
+    max_seq_len: int
+    rotary_emb: bool = False  # 增加配置选项控制是否使用 rotary_emb
 
     @property
     def max_tokens(self):
         return self.tokens_per_block * self.max_blocks
+
+
+
+def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
+    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
+    t = torch.arange(end, device=freqs.device, dtype=torch.float32)
+    freqs = torch.outer(t, freqs)
+    freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64
+    return freqs_cis
+
+
+def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
+    ndim = x.ndim
+    # print(f"freqs_cis shape: {freqs_cis.shape}, x shape: {x.shape}")
+    assert 0 <= 1 < ndim
+    shape = [d if i == 2 or i == ndim - 1 or i == 0 else 1 for i, d in enumerate(x.shape)]
+
+    return freqs_cis.view(*shape)
+
+
+def apply_rotary_emb(
+    xq: torch.Tensor,
+    xk: torch.Tensor,
+    freqs_cis: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
+    xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
+    try:
+        freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
+    except Exception as e:
+        print(e)
+        print('We are at the reset timestep!')
+    xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(-2)
+    xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(-2)
+    return xq_out.type_as(xq), xk_out.type_as(xk)
 
 
 class Transformer(nn.Module):
@@ -55,6 +96,15 @@ class Transformer(nn.Module):
         self.blocks = nn.ModuleList([Block(config) for _ in range(config.num_layers)])
         self.ln_f = nn.LayerNorm(config.embed_dim)
 
+        # 注册缓存, 自动管理设备转换
+        if self.config.rotary_emb:
+            freqs_cis = precompute_freqs_cis(
+                self.config.embed_dim // self.config.num_heads,
+                self.config.max_seq_len * 2,
+                self.config.rope_theta,
+            )
+            self.register_buffer("freqs_cis", freqs_cis)
+
     def generate_empty_keys_values(self, n: int, max_tokens: int) -> KeysValues:
         """
         Generate a placeholder for keys and values.
@@ -70,7 +120,7 @@ class Transformer(nn.Module):
         return KeysValues(n, self.config.num_heads, max_tokens, self.config.embed_dim, self.config.num_layers, device)
 
     def forward(self, sequences: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
-                valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
+                valid_context_lengths: Optional[torch.Tensor] = None, start_pos: int = 0) -> torch.Tensor:
         """
         Forward pass of the Transformer model.
 
@@ -82,11 +132,37 @@ class Transformer(nn.Module):
         Returns:
             - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
+        seqlen = sequences.shape[1]
+
+        # 如果使用 RoPE，则对 freqs_cis 进行切片
+        if self.config.rotary_emb:
+            # 修复：如果 start_pos 是标量，则将其扩展为当前 batch 大小的相同数值
+            # *2是由于timestep只是统计了obs，但是序列是obs act
+            if isinstance(start_pos, int) or isinstance(start_pos, float):
+                start_pos_tensor = torch.full((sequences.shape[0],), int(start_pos), device=sequences.device) * 2
+            else:
+                # start_pos_tensor = torch.as_tensor(start_pos, device=sequences.device)
+                try:
+                    start_pos_tensor = torch.as_tensor([x.item() for x in start_pos], device=sequences.device)
+                except Exception as e:
+                    # print(e)
+                    start_pos_tensor = torch.as_tensor(
+                        [x.reshape(-1)[0].item() for x in start_pos],  # 强制展平后取第一个元素
+                        device=sequences.device
+                    ) * 2
+            # 对每个样本根据 start_pos 取对应区间的 freqs_cis
+            start_pos_tensor = torch.remainder(start_pos_tensor, self.config.max_seq_len)
+            # 将各个样本的 start_pos 转换为列表
+            start_pos_list = start_pos_tensor.tolist()
+            freqs_cis_slices = [self.freqs_cis[int(pos): int(pos) + seqlen] for pos in start_pos_list]
+            freqs_cis = torch.stack(freqs_cis_slices)
+        else:
+            freqs_cis = None
+
         assert past_keys_values is None or len(past_keys_values) == len(self.blocks)
         x = self.drop(sequences)
         for i, block in enumerate(self.blocks):
-            x = block(x, None if past_keys_values is None else past_keys_values[i], valid_context_lengths)
-
+            x = block(x, None if past_keys_values is None else past_keys_values[i], valid_context_lengths, freqs_cis)
         x = self.ln_f(x)
         return x
 
@@ -129,7 +205,7 @@ class Block(nn.Module):
         )
 
     def forward(self, x: torch.Tensor, past_keys_values: Optional[KeysValues] = None,
-                valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
+                valid_context_lengths: Optional[torch.Tensor] = None, freqs_cis: torch.Tensor = None) -> torch.Tensor:
         """
         Forward pass of the Transformer block.
 
@@ -141,7 +217,7 @@ class Block(nn.Module):
         Returns:
             - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
-        x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths)
+        x_attn = self.attn(self.ln1(x), past_keys_values, valid_context_lengths, freqs_cis)
         if self.gru_gating:
             x = self.gate1(x, x_attn)
             x = self.gate2(x, self.mlp(self.ln2(x)))
@@ -189,7 +265,7 @@ class SelfAttention(nn.Module):
         self.register_buffer('mask', causal_mask)
 
     def forward(self, x: torch.Tensor, kv_cache: Optional[KeysValues] = None,
-                valid_context_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:
+                valid_context_lengths: Optional[torch.Tensor] = None,  freqs_cis: torch.Tensor = None) -> torch.Tensor:
         """
         Forward pass for the self-attention mechanism.
 
@@ -212,6 +288,9 @@ class SelfAttention(nn.Module):
         q = self.query(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, num_heads, T, head_size)
         k = self.key(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, num_heads, T, head_size)
         v = self.value(x).view(B, T, self.num_heads, C // self.num_heads).transpose(1, 2)  # (B, num_heads, T, head_size)
+        
+        if self.config.rotary_emb:
+            q, k = apply_rotary_emb(q, k, freqs_cis=freqs_cis)
 
         if kv_cache is not None:
             kv_cache.update(k, v) # time occupancy 21%
