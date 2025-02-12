@@ -452,7 +452,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
 
     #@profile
-    def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
+    def _forward_learn(self, data: Tuple[torch.Tensor], task_weights=None) -> Dict[str, Union[float, int]]:
         """
         Overview:
             The forward function for learning policy in learn mode, which is the core of the learning process.

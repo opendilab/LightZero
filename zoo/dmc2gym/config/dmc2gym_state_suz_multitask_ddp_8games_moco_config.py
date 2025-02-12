@@ -295,8 +295,8 @@ if __name__ == "__main__":
     batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
 
     # # # nlayer=12 18games
-    total_batch_size = 256
-    batch_size = [int(min(16, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+    # total_batch_size = 256
+    # batch_size = [int(min(16, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
 
     num_unroll_steps = 5
     infer_context_length = 2

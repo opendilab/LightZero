@@ -45,7 +45,8 @@ class GameSegment:
         self.td_steps = config.td_steps
         self.frame_stack_num = config.model.frame_stack_num
         self.discount_factor = config.discount_factor
-        # self.action_space_size = config.model.action_space_size
+        if not hasattr(config.model, "action_space_size_list"):
+            self.action_space_size = config.model.action_space_size
         self.gray_scale = config.gray_scale
         self.transform2string = config.transform2string
         self.sampled_algo = config.sampled_algo
