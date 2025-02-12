@@ -50,11 +50,9 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
 
 
 def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
+    # https://github.com/meta-llama/llama3/blob/main/llama/model.py#L61
     ndim = x.ndim
-    # print(f"freqs_cis shape: {freqs_cis.shape}, x shape: {x.shape}")
-    assert 0 <= 1 < ndim
-    shape = [d if i == 2 or i == ndim - 1 or i == 0 else 1 for i, d in enumerate(x.shape)]
-
+    shape = [d if i == ndim - 1 or i == 2 or i == 0 else 1 for i, d in enumerate(x.shape)]
     return freqs_cis.view(*shape)
 
 
@@ -66,7 +64,9 @@ def apply_rotary_emb(
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
     try:
+        # print(f"freqs_cis shape: {freqs_cis.shape}, xq_ shape: {xq_.shape}")
         freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
+        # print(f"new freqs_cis shape: {freqs_cis.shape}")
     except Exception as e:
         print(e)
         print('We are at the reset timestep!')
@@ -137,25 +137,31 @@ class Transformer(nn.Module):
         # 如果使用 RoPE，则对 freqs_cis 进行切片
         if self.config.rotary_emb:
             # 修复：如果 start_pos 是标量，则将其扩展为当前 batch 大小的相同数值
-            # *2是由于timestep只是统计了obs，但是序列是obs act
+            # t==========*2是由于timestep只是统计了obs，但是序列是obs act==========
             if isinstance(start_pos, int) or isinstance(start_pos, float):
                 start_pos_tensor = torch.full((sequences.shape[0],), int(start_pos), device=sequences.device) * 2
             else:
                 # start_pos_tensor = torch.as_tensor(start_pos, device=sequences.device)
                 try:
-                    start_pos_tensor = torch.as_tensor([x.item() for x in start_pos], device=sequences.device)
+                    start_pos_tensor = torch.as_tensor([x.item() for x in start_pos], device=sequences.device) * 2
                 except Exception as e:
                     # print(e)
                     start_pos_tensor = torch.as_tensor(
                         [x.reshape(-1)[0].item() for x in start_pos],  # 强制展平后取第一个元素
                         device=sequences.device
                     ) * 2
+            
             # 对每个样本根据 start_pos 取对应区间的 freqs_cis
             start_pos_tensor = torch.remainder(start_pos_tensor, self.config.max_seq_len)
             # 将各个样本的 start_pos 转换为列表
             start_pos_list = start_pos_tensor.tolist()
             freqs_cis_slices = [self.freqs_cis[int(pos): int(pos) + seqlen] for pos in start_pos_list]
             freqs_cis = torch.stack(freqs_cis_slices)
+
+            if freqs_cis.ndim == 3 and freqs_cis.shape[1] == 1:
+                # 将形状 [seq_len, 1, num_pairs] 转换为 [seq_len, num_pairs]
+                freqs_cis = freqs_cis.squeeze(1)
+            # print(f'165 freqs_cis.shape:{freqs_cis.shape}')
         else:
             freqs_cis = None
 
@@ -307,8 +313,8 @@ class SelfAttention(nn.Module):
             for i in range(B):
                 mask[i] = self.mask[L:L + T, :L + T].clone()
                 mask[i, :, :(L - valid_context_lengths[i])] = 0  # Set invalid parts to 0.
-            # Adjust mask dimensions to match the last two dimensions of att.
-            # (B, T, L + T) -> (B, 1, T, L + T) -> (B, num_heads, T, L + T)
+                # Adjust mask dimensions to match the last two dimensions of att.
+                # (B, T, L + T) -> (B, 1, T, L + T) -> (B, num_heads, T, L + T)
                 mask = mask.unsqueeze(1).expand(-1, att.size(1), -1, -1)
         else:
             # mask.shape: (T, L + T)
