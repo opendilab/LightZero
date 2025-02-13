@@ -514,16 +514,15 @@ class UniZeroPolicy(MuZeroPolicy):
 
             self._optimizer_world_model.step()
 
-            if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
-                self.lr_scheduler.step()
-
-            # Core target model update step
-            self._target_model.update(self._learn_model.state_dict())
-
             if self.accumulation_steps > 1:
                 torch.cuda.empty_cache()
         else:
             total_grad_norm_before_clip_wm = torch.tensor(0.)
+
+        if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
+            self.lr_scheduler.step()
+        # Core target model update step
+        self._target_model.update(self._learn_model.state_dict())
 
         if torch.cuda.is_available():
             torch.cuda.synchronize()

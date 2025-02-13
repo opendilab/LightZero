@@ -108,7 +108,7 @@ class JerichoEnv(BaseEnv):
 
         action_mask = np.array(action_mask, dtype=np.int8)
 
-        if return_str: # TODO: unizero需要加上'to_play'===============
+        if return_str: # TODO: unizero需要加上'to_play', PPO不能加上'to_play'===============
             return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1}
             # return {'observation': full_obs, 'action_mask': action_mask}
         else:
@@ -172,7 +172,7 @@ class JerichoEnv(BaseEnv):
                     action_str = self._action_list[action]
                 else:
                     action_str = 'go'
-                    print(f'rank {self.rank}, len(self._action_list) == 0, self._env.get_valid_actions():{self._env.get_valid_actions()}')
+                    print(f"rank {self.rank}, len(self._action_list) == 0, self._env.get_valid_actions():{self._env.get_valid_actions()}, so we pass action_str='go'")
 
         # 记录上一次的观察
         if self.remove_stuck_actions and self.last_observation is not None:

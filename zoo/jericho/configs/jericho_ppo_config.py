@@ -1,21 +1,22 @@
 from easydict import EasyDict
 import torch.nn as nn
 
+
+model_name = 'BAAI/bge-base-en-v1.5'
+evaluator_env_num = 2
+
+# env_id = 'detective.z5'
 action_space_size = 10
 max_steps = 50
-model_name = 'BAAI/bge-base-en-v1.5'
-# env_id = 'detective.z5'
 
+env_id = 'zork1.z5'
 action_space_size = 10
 max_steps = 400
-env_id = 'zork1.z5'
 
-evaluator_env_num = 2
 
 # proj train
 # collector_env_num = 18
 # batch_size = 320
-
 collector_env_num = 4
 batch_size = 32
 
