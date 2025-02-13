@@ -77,7 +77,26 @@ class WrappedModelV2:
         self.pos_emb.zero_grad(set_to_none=set_to_none)
         # self.task_emb.zero_grad(set_to_none=set_to_none)
         self.act_embedding_table.zero_grad(set_to_none=set_to_none)
+    
+    def get_group_parameters(self):
+        """
+        返回一个字典，其中 key 为模块名或更细粒度的层，
+        value 为对应的参数列表。注意返回顺序应与 parameters()方法中参数的排列顺序一致。
+        """
+        groups = {}
+        groups['tokenizer'] = list(self.tokenizer.parameters())
+        groups['transformer'] = list(self.transformer.parameters())
+        groups['pos_emb'] = list(self.pos_emb.parameters())
+        groups['act_embedding_table'] = list(self.act_embedding_table.parameters())
 
+        # 如 transformer 内部分层（假设 transformer.blocks 是列表）
+        if hasattr(self.transformer, 'blocks'):
+            # 若要单独统计 transformer 内各层，保持原 transformer 参数在 parameters() 中顺序不变，
+            # 可以在这里添加各层的切片，但需保证 parameters() 返回的顺序与此一致，
+            # 此处仅作为示例：
+            for i, layer in enumerate(self.transformer.blocks):
+                groups[f'transformer_layer_{i}'] = list(layer.parameters())
+        return groups
 
 @POLICY_REGISTRY.register('sampled_unizero_multitask')
 class SampledUniZeroMTPolicy(UniZeroPolicy):
@@ -288,7 +307,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         self.task_id = self._cfg.task_id
         self.task_num_for_current_rank = self._cfg.task_num
 
-        if self._cfg.use_moco:
+        if self._cfg.use_moco or self._cfg.only_use_moco_stats:
             # 创建 WrappedModel 实例，仅矫正部分参数，保持可扩展性
             # wrapped_model = WrappedModelV2(
             #     self._learn_model.world_model.tokenizer.encoder[0],  # 假设只有一个编码器
@@ -470,6 +489,8 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         if self._cfg.use_moco:
             # 调用 MoCo backward，由 grad_correct 中的 backward 实现梯度校正
             lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+        elif self._cfg.only_use_moco_stats:
+            lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
         else:
             # 不使用梯度校正的情况，由各 rank 自己执行反向传播
             lambd = torch.tensor([0. for _ in range(self.task_num_for_current_rank)], device=self._cfg.device)
@@ -477,8 +498,12 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(), self._cfg.grad_clip_value)
 
-        if self._cfg.multi_gpu and not self._cfg.use_moco:
-            self.sync_gradients(self._learn_model)
+
+        if self._cfg.multi_gpu:
+            # if not self._cfg.use_moco or self._cfg.only_use_moco_stats:
+            #     self.sync_gradients(self._learn_model)
+            if not self._cfg.use_moco and self._cfg.only_use_moco_stats:
+                self.sync_gradients(self._learn_model)
 
         self._optimizer_world_model.step()
 

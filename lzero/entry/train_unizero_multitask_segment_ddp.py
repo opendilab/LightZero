@@ -466,7 +466,8 @@ def train_unizero_multitask_segment_ddp(
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
             # 判断是否需要进行评估
-            if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            if learner.train_iter > 10 or evaluator.should_eval(learner.train_iter): # only for debug
             # if evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
                 print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')

@@ -18,7 +18,6 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             from_pixels=False,
             # ===== only for debug =====
             # frame_skip=50, # episode_length:20
-            # ===== only for debug =====
             frame_skip=2, # episode_length:500
             continuous=True,  # Assuming all DMC tasks use continuous action spaces
             collector_env_num=collector_env_num,
@@ -28,15 +27,17 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             game_segment_length=100,  # As per single-task config
         ),
         policy=dict(
-            # multi_gpu=False,  # TODO: nable multi-GPU for DDP
-            multi_gpu=True,  # TODO: nable multi-GPU for DDP
+            # multi_gpu=False,  # TODO: enable multi-GPU for DDP
+            multi_gpu=True,  # TODO: enable multi-GPU for DDP
+            only_use_moco_stats=True,
+            use_moco=False,  # ==============TODO==============
+            # use_moco=True,  # ==============TODO==============
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000))),
             grad_correct_params=dict(
                 # Example gradient correction parameters, adjust as needed
                 MoCo_beta=0.5, MoCo_beta_sigma=0.5, MoCo_gamma=0.1, MoCo_gamma_sigma=0.5, MoCo_rho=0,
                 calpha=0.5, rescale=1,
             ),
-            use_moco=True,  # ==============TODO==============
             total_task_num=len(env_id_list),
             task_num=len(env_id_list),
             task_id=0,  # To be set per task
@@ -54,11 +55,11 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     # use_shared_projection=True, # TODO
                     use_shared_projection=False,
 
-                    # task_embed_option='concat_task_embed',   # ==============TODO: none ==============
-                    # use_task_embed=True, # TODO
+                    task_embed_option='concat_task_embed',   # ==============TODO: none ==============
+                    use_task_embed=True, # TODO
                     
-                    task_embed_option=None,   # ==============TODO: none ==============
-                    use_task_embed=False, # ==============TODO==============
+                    # task_embed_option=None,   # ==============TODO: none ==============
+                    # use_task_embed=False, # ==============TODO==============
                     
                     num_unroll_steps=num_unroll_steps,
                     policy_entropy_weight=5e-2,
@@ -157,8 +158,10 @@ def generate_configs(env_id_list: List[str],
                     total_batch_size: int):
     configs = []
     # TODO: debug
-    # exp_name_prefix = f'data_suz_mt_20250207/ddp_moco-fix-paramv2_nlayer8_upc200_notaskweight_concat-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
-    exp_name_prefix = f'data_suz_mt_20250207/ddp_moco-fix-paramv2_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    # exp_name_prefix = f'data_suz_mt_20250207/ddp_moco-paramv0_nlayer8_upc200_notaskweight_concat-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    # exp_name_prefix = f'data_suz_mt_20250207_debug/ddp_moco-paramv0_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    # exp_name_prefix = f'data_suz_mt_20250207/ddp_task-grad-layer_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    exp_name_prefix = f'data_suz_mt_20250207/ddp_task-grad-layer_nlayer8_upc200_concattaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
     
     # exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_taskweight-eval1e3-10k-temp10-1_task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
     # exp_name_prefix = f'data_suz_mt_20250207/ddp_moco-fix-paramv2_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
@@ -213,7 +216,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_moco_config.py
+        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29503 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_moco_config.py
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -255,26 +258,26 @@ if __name__ == "__main__":
     ]
 
     # DMC 18games
-    env_id_list = [
-        'acrobot-swingup',
-        'cartpole-balance',
-        'cartpole-balance_sparse',
-        'cartpole-swingup',
-        'cartpole-swingup_sparse',
-        'cheetah-run',
-        "ball_in_cup-catch",
-        "finger-spin",
-        "finger-turn_easy",
-        "finger-turn_hard",
-        'hopper-hop',
-        'hopper-stand',
-        'pendulum-swingup',
-        'reacher-easy',
-        'reacher-hard',
-        'walker-run',
-        'walker-stand',
-        'walker-walk',
-    ]
+    # env_id_list = [
+    #     'acrobot-swingup',
+    #     'cartpole-balance',
+    #     'cartpole-balance_sparse',
+    #     'cartpole-swingup',
+    #     'cartpole-swingup_sparse',
+    #     'cheetah-run',
+    #     "ball_in_cup-catch",
+    #     "finger-spin",
+    #     "finger-turn_easy",
+    #     "finger-turn_hard",
+    #     'hopper-hop',
+    #     'hopper-stand',
+    #     'pendulum-swingup',
+    #     'reacher-easy',
+    #     'reacher-hard',
+    #     'walker-run',
+    #     'walker-stand',
+    #     'walker-walk',
+    # ]
 
     # 获取各环境的 action_space_size 和 observation_shape
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
@@ -290,13 +293,14 @@ if __name__ == "__main__":
 
     reanalyze_ratio = 0.0
 
-    # nlayer=4/8 8games
-    total_batch_size = 512
-    batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
-
+    if  len(env_id_list)<=8:
+        # nlayer=4/8 8games
+        total_batch_size = 512
+        batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+    elif  len(env_id_list)>8:
     # # # nlayer=12 18games
-    # total_batch_size = 256
-    # batch_size = [int(min(16, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+        total_batch_size = 256
+        batch_size = [int(min(16, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
 
     num_unroll_steps = 5
     infer_context_length = 2
@@ -310,8 +314,8 @@ if __name__ == "__main__":
     # num_segments = 2
     # n_episode = 2
     # evaluator_env_num = 2
-    # num_simulations = 1
-    # batch_size = [4 for _ in range(len(env_id_list))]
+    # num_simulations = 5
+    # batch_size = [10 for _ in range(len(env_id_list))]
     # =======================================
 
     seed = 0  # You can iterate over multiple seeds if needed

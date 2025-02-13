@@ -15,11 +15,11 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False),
             full_action_space=True,
-            collect_max_episode_steps=int(5e3),
-            eval_max_episode_steps=int(5e3),
+            # collect_max_episode_steps=int(5e3),
+            # eval_max_episode_steps=int(5e3),
             # ===== only for debug =====
-            # collect_max_episode_steps=int(30),
-            # eval_max_episode_steps=int(30),
+            collect_max_episode_steps=int(30),
+            eval_max_episode_steps=int(30),
         ),
         policy=dict(
             use_moco=False,  # ==============TODO==============
@@ -37,7 +37,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 norm_type=norm_type,
                 num_res_blocks=2,
                 num_channels=256,
+                continuous_action_space=False,
                 world_model_cfg=dict(
+                    continuous_action_space=False,
                                         
                     task_embed_option=None,   # ==============TODO: none ==============
                     use_task_embed=False, # ==============TODO==============
@@ -103,7 +105,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
                      num_segments, total_batch_size):
     configs = []
-    exp_name_prefix = f'data_unizero_atari_mt_20250212/atari_{len(env_id_list)}games_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_20250212_debug/atari_{len(env_id_list)}games_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -134,7 +136,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=5 --master_port=29501 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
 
@@ -158,7 +160,10 @@ if __name__ == "__main__":
     max_env_step = int(5e5)
     reanalyze_ratio = 0.0
     total_batch_size = 512
+
     batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+    # batch_size = [int(min(32, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+    
     num_unroll_steps = 10
     infer_context_length = 4
     norm_type = 'LN'
@@ -167,12 +172,12 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    # collector_env_num = 2
-    # num_segments = 2
-    # n_episode = 2
-    # evaluator_env_num = 2
-    # num_simulations = 2
-    # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
+    collector_env_num = 2
+    num_segments = 2
+    n_episode = 2
+    evaluator_env_num = 2
+    num_simulations = 2
+    batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
 
 
     for seed in [0]:

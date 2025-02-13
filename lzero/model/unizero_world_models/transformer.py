@@ -390,6 +390,8 @@ class SelfAttention(nn.Module):
             # mask.shape: (T, L + T)
             mask = self.mask[L:L + T, :L + T]
 
+        # import ipdb; ipdb.set_trace()
+
         # Adjust mask for register tokens if applicable
         if self.use_register_token and self.register_token_num > 0:
             # Allow all positions to attend to the last `register_token_num` tokens

@@ -63,6 +63,7 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
 
                     use_task_embed=True, # TODO
                     # use_task_embed=False, # ==============TODO==============
+                    
                     num_unroll_steps=num_unroll_steps,
                     policy_entropy_weight=5e-2,
                     continuous_action_space=True,
