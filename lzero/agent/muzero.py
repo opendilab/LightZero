@@ -110,6 +110,12 @@ class MuZeroAgent:
             elif self.cfg.policy.model.model_type == 'conv':
                 from lzero.model.muzero_model import MuZeroModel
                 model = MuZeroModel(**self.cfg.policy.model)
+            elif self.cfg.policy.model.model_type == 'rgcn':
+                from lzero.model.muzero_model_gcn import MuZeroModelGCN
+                model = MuZeroModelGCN(**self.cfg.policy.model)
+            elif self.cfg.policy.model.model_type == 'mlp_md':
+                from lzero.model.muzero_model_md import MuZeroModelMD
+                model = MuZeroModelMD(**self.cfg.policy.model)
             else:
                 raise NotImplementedError
         if self.cfg.policy.cuda and torch.cuda.is_available():
@@ -124,8 +130,8 @@ class MuZeroAgent:
         self.env_fn, self.collector_env_cfg, self.evaluator_env_cfg = get_vec_env_setting(self.cfg.env)
 
     def train(
-        self,
-        step: int = int(1e7),
+            self,
+            step: int = int(1e7),
     ) -> TrainingReturn:
         """
         Overview:
@@ -356,8 +362,8 @@ class MuZeroAgent:
         return EvalReturn(eval_value=np.mean(reward_list), eval_value_std=np.std(reward_list))
 
     def batch_evaluate(
-        self,
-        n_evaluator_episode: int = None,
+            self,
+            n_evaluator_episode: int = None,
     ) -> EvalReturn:
         """
         Overview:

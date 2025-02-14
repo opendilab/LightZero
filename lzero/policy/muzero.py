@@ -252,6 +252,10 @@ class MuZeroPolicy(Policy):
             return 'MuZeroModel', ['lzero.model.muzero_model']
         elif self._cfg.model.model_type == "mlp":
             return 'MuZeroModelMLP', ['lzero.model.muzero_model_mlp']
+        elif self._cfg.model.model_type == "rgcn":
+            return 'MuZeroModelGCN', ['lzero.model.muzero_model_gcn']
+        elif self._cfg.model.model_type == "mlp_md":
+            return 'MuZeroModelMD', ['lzero.model.muzero_model_md']
         elif self._cfg.model.model_type == "conv_context":
             return 'MuZeroContextModel', ['lzero.model.muzero_context_model']
         else:
@@ -598,8 +602,9 @@ class MuZeroPolicy(Policy):
 
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
-        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(self._learn_model.parameters(),
-                                                                     self._cfg.grad_clip_value)
+        total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
+            self._learn_model.parameters(), self._cfg.grad_clip_value
+        )
         self._optimizer.step()
         if self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
@@ -831,9 +836,11 @@ class MuZeroPolicy(Policy):
         if self._cfg.model.model_type in ['conv', 'conv_context']:
             beg_index = self._cfg.model.image_channel * step
             end_index = self._cfg.model.image_channel * (step + self._cfg.model.frame_stack_num)
-        elif self._cfg.model.model_type in ['mlp', 'mlp_context']:
+
+        elif self._cfg.model.model_type in ['mlp', 'mlp_md', 'rgcn']:
             beg_index = self._cfg.model.observation_shape * step
             end_index = self._cfg.model.observation_shape * (step + self._cfg.model.frame_stack_num)
+
         return beg_index, end_index
 
     def _init_eval(self) -> None:
@@ -877,10 +884,16 @@ class MuZeroPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._eval_model.eval()
-        active_eval_env_num = data.shape[0]
+
+        if type(data) is dict:
+            active_eval_env_num = data['robot_state'].shape[0]
+        else:
+            active_eval_env_num = data.shape[0]
+
         if ready_env_id is None:
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}
+
         with torch.no_grad():
             if self._cfg.model.model_type in ["conv", "mlp"]:
                 network_output = self._eval_model.initial_inference(data)

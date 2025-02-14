@@ -6,8 +6,9 @@ import numpy as np
 from graphviz import Digraph
 
 
-def generate_random_actions_discrete(num_actions: int, action_space_size: int, num_of_sampled_actions: int,
-                                     reshape=False):
+def generate_random_actions_discrete(
+    num_actions: int, action_space_size: int, num_of_sampled_actions: int, reshape=False
+):
     """
     Overview:
         Generate a list of random actions.
@@ -19,10 +20,7 @@ def generate_random_actions_discrete(num_actions: int, action_space_size: int, n
     Returns:
         A list of random actions.
     """
-    actions = [
-        np.random.randint(0, action_space_size, num_of_sampled_actions).reshape(-1)
-        for _ in range(num_actions)
-    ]
+    actions = [np.random.randint(0, action_space_size, num_of_sampled_actions).reshape(-1) for _ in range(num_actions)]
 
     # If num_of_sampled_actions == 1, flatten the actions to a list of numbers
     if num_of_sampled_actions == 1:
@@ -97,7 +95,7 @@ def prepare_observation(observation_list, model_type='conv'):
     Returns:
         - np.ndarray: Reshaped array of observations.
     """
-    assert model_type in ['conv', 'mlp', 'conv_context', 'mlp_context'], "model_type must be either 'conv' or 'mlp'"
+    assert model_type in ['conv', 'mlp', 'conv_context', 'mlp_context', 'rgcn', 'mlp_md'], "model_type must be either 'conv' or 'mlp'"
     observation_array = np.array(observation_list)
     batch_size = observation_array.shape[0]
 
@@ -109,13 +107,25 @@ def prepare_observation(observation_list, model_type='conv'):
             # Reshape to [B, S*C, W, H]
             _, stack_num, channels, width, height = observation_array.shape
             observation_array = observation_array.reshape(batch_size, stack_num * channels, width, height)
-
-    elif model_type in ['mlp', 'mlp_context']:
+    elif model_type in ['mlp', 'mlp_md', 'mlp_context']:
         if observation_array.ndim == 3:
             # Flatten the last two dimensions
             observation_array = observation_array.reshape(batch_size, -1)
         else:
             raise ValueError("For 'mlp' model_type, the observation must have 3 dimensions [B, S, O]")
+    elif model_type == 'rgcn':
+        if observation_array.ndim == 4:
+            # TODO(rjy): strage process
+            # observation_array should be reshaped to [B, S*M, O], where M is the agent number
+            # now observation_array.shape = [B, S, M, O]
+            observation_array = observation_array.reshape(batch_size, -1, observation_array.shape[-1])
+        elif observation_array.ndim == 3:
+            # Flatten the last two dimensions
+            observation_array = observation_array.reshape(batch_size, -1)
+        else:
+            raise ValueError(
+                "For 'rgcn' model_type, the observation must have 3 dimensions [B, S, O] or 4 dimensions [B, S, M, O]"
+            )
 
     return observation_array
 

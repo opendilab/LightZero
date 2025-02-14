@@ -110,6 +110,9 @@ class EfficientZeroAgent:
             elif self.cfg.policy.model.model_type == 'conv':
                 from lzero.model.efficientzero_model import EfficientZeroModel
                 model = EfficientZeroModel(**self.cfg.policy.model)
+            elif self.cfg.policy.model.model_type == 'mlp_md':
+                from lzero.model.efficientzero_model_md import EfficientZeroModelMD
+                model = EfficientZeroModelMD(**self.cfg.policy.model)
             else:
                 raise NotImplementedError
         if self.cfg.policy.cuda and torch.cuda.is_available():
@@ -124,8 +127,8 @@ class EfficientZeroAgent:
         self.env_fn, self.collector_env_cfg, self.evaluator_env_cfg = get_vec_env_setting(self.cfg.env)
 
     def train(
-        self,
-        step: int = int(1e7),
+            self,
+            step: int = int(1e7),
     ) -> TrainingReturn:
         """
         Overview:
@@ -356,8 +359,8 @@ class EfficientZeroAgent:
         return EvalReturn(eval_value=np.mean(reward_list), eval_value_std=np.std(reward_list))
 
     def batch_evaluate(
-        self,
-        n_evaluator_episode: int = None,
+            self,
+            n_evaluator_episode: int = None,
     ) -> EvalReturn:
         """
         Overview:
