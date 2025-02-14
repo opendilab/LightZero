@@ -18,8 +18,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 pendulum_sampled_efficientzero_config = dict(
-    exp_name=
-    f'data_sez_ctree/pendulum_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_sez/pendulum_disc_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id='Pendulum-v1',
         continuous=False,
@@ -37,17 +36,18 @@ pendulum_sampled_efficientzero_config = dict(
             continuous_action_space=continuous_action_space,
             num_of_sampled_actions=K,
             model_type='mlp', 
-            lstm_hidden_size=128,
-            latent_state_dim=128,
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
-        optim_type='Adam',
-        lr_piecewise_constant_decay=False,
-        learning_rate=0.003,
+        optim_type='AdamW',
+        learning_rate=0.0001,
+        cos_lr_scheduler=True,
+        piecewise_decay_lr_scheduler=False,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
@@ -87,4 +87,4 @@ if __name__ == "__main__":
         """
         from lzero.entry import train_muzero_with_gym_env as train_muzero
 
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

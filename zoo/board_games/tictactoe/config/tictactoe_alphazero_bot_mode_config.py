@@ -10,7 +10,8 @@ num_simulations = 25
 update_per_collect = 50
 batch_size = 256
 max_env_step = int(2e5)
-mcts_ctree = False
+mcts_ctree = True
+
 
 # ==============================================================
 # end of the most frequently changed config specified by the user
@@ -51,15 +52,15 @@ tictactoe_alphazero_config = dict(
             # We use the small size model for tictactoe.
             num_res_blocks=1,
             num_channels=16,
-            fc_value_layers=[8],
-            fc_policy_layers=[8],
+            value_head_hidden_channels=[8],
+            policy_head_hidden_channels=[8],
         ),
         cuda=True,
         board_size=3,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         learning_rate=0.003,
         grad_clip_value=0.5,
         value_weight=1.0,

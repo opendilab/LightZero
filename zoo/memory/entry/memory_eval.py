@@ -25,7 +25,6 @@ if __name__ == "__main__":
     """
     # model_path = './ckpt/ckpt_best.pth.tar'
     model_path = None
-
     # Initialize a list with a single seed for the experiment
     seeds = [0]
 

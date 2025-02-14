@@ -80,6 +80,8 @@ class GameSegment:
         if self.use_ture_chance_label_in_chance_encoder:
             self.chance_segment = []
 
+        self.reanalyze_time = 0
+
     def get_unroll_obs(self, timestep: int, num_unroll_steps: int = 0, padding: bool = False) -> np.ndarray:
         """
         Overview:
@@ -149,7 +151,7 @@ class GameSegment:
             self.chance_segment.append(chance)
 
     def pad_over(
-            self, next_segment_observations: List, next_segment_rewards: List, next_segment_root_values: List,
+            self, next_segment_observations: List, next_segment_rewards: List, next_segment_actions: List, next_segment_root_values: List,
             next_segment_child_visits: List, next_segment_improved_policy: List = None, next_chances: List = None,
     ) -> None:
         """
@@ -161,12 +163,13 @@ class GameSegment:
         Arguments:
             - next_segment_observations (:obj:`list`): o_t from the next game_segment
             - next_segment_rewards (:obj:`list`): r_t from the next game_segment
+            - next_segment_actions (:obj:`list`): a_t from the next game_segment
             - next_segment_root_values (:obj:`list`): root values of MCTS from the next game_segment
             - next_segment_child_visits (:obj:`list`): root visit count distributions of MCTS from the next game_segment
             - next_segment_improved_policy (:obj:`list`): root children select policy of MCTS from the next game_segment (Only used in Gumbel MuZero)
         """
-        assert len(next_segment_observations) <= self.num_unroll_steps
-        assert len(next_segment_child_visits) <= self.num_unroll_steps
+        assert len(next_segment_observations) <= self.num_unroll_steps + self.td_steps
+        assert len(next_segment_child_visits) <= self.num_unroll_steps + self.td_steps
         assert len(next_segment_root_values) <= self.num_unroll_steps + self.td_steps
         assert len(next_segment_rewards) <= self.num_unroll_steps + self.td_steps - 1
         # ==============================================================
@@ -181,6 +184,9 @@ class GameSegment:
 
         for reward in next_segment_rewards:
             self.reward_segment.append(reward)
+
+        for action in next_segment_actions:
+            self.action_segment.append(action)
 
         for value in next_segment_root_values:
             self.root_value_segment.append(value)
@@ -210,12 +216,15 @@ class GameSegment:
             store the visit count distributions and value of the root node after MCTS.
         """
         sum_visits = sum(visit_counts)
+        if sum_visits == 0:
+            # if the sum of visit counts is 0, set it to a small value to avoid division by zero
+            sum_visits = 1e-6
         if idx is None:
             self.child_visit_segment.append([visit_count / sum_visits for visit_count in visit_counts])
             self.root_value_segment.append(root_value)
             if self.sampled_algo:
                 self.root_sampled_actions.append(root_sampled_actions)
-            # store the improved policy in Gumbel Muzero: \pi'=softmax(logits + \sigma(CompletedQ))
+            # store the improved policy in Gumbel MuZero: \pi'=softmax(logits + \sigma(CompletedQ))
             if self.gumbel_algo:
                 self.improved_policy_probs.append(improved_policy)
         else:
@@ -329,3 +338,4 @@ class GameSegment:
 
     def __len__(self):
         return len(self.action_segment)
+

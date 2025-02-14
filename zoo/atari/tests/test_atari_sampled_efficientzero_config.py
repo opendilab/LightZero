@@ -32,7 +32,7 @@ reanalyze_ratio = 0.
 
 atari_sampled_efficientzero_config = dict(
     exp_name=
-    f'data_sez_ctree/{env_id[:-14]}_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_sez/{env_id[:-14]}_sampled_efficientzero_k{K}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id=env_id,
         obs_shape=(4, 96, 96),
@@ -59,7 +59,7 @@ atari_sampled_efficientzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='SGD',
-        lr_piecewise_constant_decay=True,
+        piecewise_decay_lr_scheduler=True,
         learning_rate=0.2,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

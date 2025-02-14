@@ -1,15 +1,13 @@
 from easydict import EasyDict
 
-env_id = 'key_to_door'  # The name of the environment, options: 'visual_match', 'key_to_door'
-memory_length = 30
-
-max_env_step = int(1e6)
+env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
+memory_length = 60
+max_env_step = int(3e6)
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 seed = 0
-
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
@@ -20,9 +18,8 @@ update_per_collect = 200
 batch_size = 256
 
 reanalyze_ratio = 0
-random_collect_episode_num = 0
 td_steps = 5
-policy_entropy_loss_weight = 0.
+policy_entropy_weight = 0.
 threshold_training_steps_for_final_temperature = int(5e5)
 eps_greedy_exploration_in_collect = False
 # ==============================================================
@@ -30,12 +27,13 @@ eps_greedy_exploration_in_collect = False
 # ==============================================================
 
 memory_sampled_efficientzero_config = dict(
-    exp_name=f'data_sez_ctree/{env_id}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}',
+    exp_name=f'data_sez/{env_id}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed{seed}',
     env=dict(
         env_id=env_id,
         flate_observation=True,  # Whether to flatten the observation
         max_frames={
-            "explore": 15,
+            # "explore": 15,  # for key_to_door
+            "explore": 1,  # for visual_match
             "distractor": memory_length,
             "reward": 15
         },  # Maximum frames per phase
@@ -56,7 +54,7 @@ memory_sampled_efficientzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN', 
         ),
-        policy_entropy_loss_weight=policy_entropy_loss_weight,
+        policy_entropy_weight=policy_entropy_weight,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
             decay=int(2e5),
@@ -70,7 +68,7 @@ memory_sampled_efficientzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         learning_rate=0.003,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

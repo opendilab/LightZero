@@ -1,4 +1,4 @@
-from zoo.classic_control.mountain_car.config.mtcar_muzero_config import main_config, create_config
+from zoo.classic_control.mountain_car.config.mountain_car_muzero_config import main_config, create_config
 from lzero.entry import eval_muzero
 import numpy as np
 

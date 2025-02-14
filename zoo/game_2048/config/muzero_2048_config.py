@@ -21,7 +21,7 @@ chance_space_size = 16 * num_of_possible_chance_tile
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_mz_ctree/game_2048_npct-{num_of_possible_chance_tile}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_bs{batch_size}_sslw2_seed0',
+    exp_name=f'data_muzero/game_2048_npct-{num_of_possible_chance_tile}_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_bs{batch_size}_sslw2_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -45,8 +45,8 @@ atari_muzero_config = dict(
             # NOTE: whether to use the self_supervised_learning_loss. default is False
             self_supervised_learning_loss=True,
         ),
-        mcts_ctree=True,
-        gumbel_algo=False,
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         game_segment_length=200,
         update_per_collect=update_per_collect,
@@ -56,7 +56,7 @@ atari_muzero_config = dict(
         manual_temperature_decay=True,
         threshold_training_steps_for_final_temperature=int(1e5),
         optim_type='Adam',
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         learning_rate=3e-3,
         # (float) Weight decay for training policy network.
         weight_decay=1e-4,
@@ -89,4 +89,4 @@ create_config = atari_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

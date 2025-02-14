@@ -35,7 +35,7 @@ batch_size = 256
 max_env_step = int(3e6)
 reanalyze_ratio = 0.
 each_dim_disc_size = 5
-policy_entropy_loss_weight = 0.005
+policy_entropy_weight = 0.005
 
 
 # ==============================================================
@@ -43,8 +43,7 @@ policy_entropy_loss_weight = 0.005
 # ==============================================================
 
 mujoco_disc_sampled_efficientzero_config = dict(
-    exp_name=
-    f'data_sez_ctree/{env_id[:-3]}_bin-{each_dim_disc_size}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_pelw{policy_entropy_loss_weight}_seed0',
+    exp_name=f'data_sez/{env_id[:-3]}_bin-{each_dim_disc_size}_sampled_efficientzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_pelw{policy_entropy_weight}_seed0',
     env=dict(
         env_id=env_id,
         action_clip=True,
@@ -68,8 +67,10 @@ mujoco_disc_sampled_efficientzero_config = dict(
             self_supervised_learning_loss=True,
             res_connection_in_dynamics=True,
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
-        policy_entropy_loss_weight=policy_entropy_loss_weight,
+        policy_entropy_weight=policy_entropy_weight,
         ignore_done=ignore_done,
         env_type='not_board_games',
         game_segment_length=200,
@@ -77,7 +78,7 @@ mujoco_disc_sampled_efficientzero_config = dict(
         batch_size=batch_size,
         discount_factor=0.99,
         optim_type='AdamW',
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         learning_rate=0.003,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
@@ -108,4 +109,4 @@ create_config = mujoco_disc_sampled_efficientzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

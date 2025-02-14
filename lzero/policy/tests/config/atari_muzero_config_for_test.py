@@ -31,7 +31,7 @@ eps_greedy_exploration_in_collect = False
 
 atari_muzero_config = dict(
     exp_name=
-    f'data_mz_ctree/{env_id[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    f'data_muzero/{env_id[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -68,7 +68,7 @@ atari_muzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='SGD',
-        lr_piecewise_constant_decay=True,
+        piecewise_decay_lr_scheduler=True,
         learning_rate=0.2,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,

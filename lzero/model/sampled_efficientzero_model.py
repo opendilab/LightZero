@@ -26,9 +26,9 @@ class SampledEfficientZeroModel(nn.Module):
             reward_head_channels: int = 16,
             value_head_channels: int = 16,
             policy_head_channels: int = 16,
-            fc_reward_layers: SequenceType = [32],
-            fc_value_layers: SequenceType = [32],
-            fc_policy_layers: SequenceType = [32],
+            reward_head_hidden_channels: SequenceType = [256],
+            value_head_hidden_channels: SequenceType = [256],
+            policy_head_hidden_channels: SequenceType = [256],
             reward_support_size: int = 601,
             value_support_size: int = 601,
             proj_hid: int = 1024,
@@ -37,7 +37,7 @@ class SampledEfficientZeroModel(nn.Module):
             pred_out: int = 1024,
             self_supervised_learning_loss: bool = True,
             categorical_distribution: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            activation: Optional[nn.Module] = nn.GELU(approximate='tanh'),
             last_linear_layer_init_zero: bool = True,
             state_norm: bool = False,
             downsample: bool = False,
@@ -49,8 +49,9 @@ class SampledEfficientZeroModel(nn.Module):
             sigma_type='conditioned',
             fixed_sigma_value: float = 0.3,
             bound_type: str = None,
-            norm_type: str = 'BN',
+            norm_type: str = 'LN',
             discrete_action_encoding_type: str = 'one_hot',
+            use_sim_norm: bool = False,
             *args,
             **kwargs,
     ):
@@ -72,9 +73,9 @@ class SampledEfficientZeroModel(nn.Module):
             - reward_head_channels (:obj:`int`): The channels of reward head.
             - value_head_channels (:obj:`int`): The channels of value head.
             - policy_head_channels (:obj:`int`): The channels of policy head.
-            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
-            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - reward_support_size (:obj:`int`): The size of categorical reward output
             - value_support_size (:obj:`int`): The size of categorical value output.
             - proj_hid (:obj:`int`): The size of projection hidden layer.
@@ -148,19 +149,25 @@ class SampledEfficientZeroModel(nn.Module):
         self.norm_type = norm_type
         self.num_of_sampled_actions = num_of_sampled_actions
 
-        flatten_output_size_for_reward_head = (
-            (reward_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
+        if observation_shape[1] == 96:
+            latent_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
+        elif observation_shape[1] == 84:
+            latent_size = math.ceil(observation_shape[1] / 14) * math.ceil(observation_shape[2] / 14)
+        elif observation_shape[1] == 64:
+            latent_size = math.ceil(observation_shape[1] / 8) * math.ceil(observation_shape[2] / 8)
+        else:
+            raise ValueError("Invalid observation shape, only support 64, 84, 96 for now.")
+
+        flatten_input_size_for_reward_head = (
+            (reward_head_channels * latent_size) if downsample else
             (reward_head_channels * observation_shape[1] * observation_shape[2])
         )
-        flatten_output_size_for_value_head = (
-            (value_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
+        flatten_input_size_for_value_head = (
+            (value_head_channels * latent_size) if downsample else
             (value_head_channels * observation_shape[1] * observation_shape[2])
         )
-        flatten_output_size_for_policy_head = (
-            (policy_head_channels * math.ceil(observation_shape[1] / 16) *
-             math.ceil(observation_shape[2] / 16)) if downsample else
+        flatten_input_size_for_policy_head = (
+            (policy_head_channels * latent_size) if downsample else
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
 
@@ -170,6 +177,7 @@ class SampledEfficientZeroModel(nn.Module):
             num_channels,
             downsample,
             norm_type=self.norm_type,
+            use_sim_norm=use_sim_norm,
         )
 
         self.dynamics_network = DynamicsNetwork(
@@ -178,9 +186,9 @@ class SampledEfficientZeroModel(nn.Module):
             num_res_blocks,
             num_channels + self.action_encoding_dim,
             reward_head_channels,
-            fc_reward_layers,
+            reward_head_hidden_channels,
             self.reward_support_size,
-            flatten_output_size_for_reward_head,
+            flatten_input_size_for_reward_head,
             downsample,
             lstm_hidden_size=self.lstm_hidden_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
@@ -196,11 +204,11 @@ class SampledEfficientZeroModel(nn.Module):
             num_channels,
             value_head_channels,
             policy_head_channels,
-            fc_value_layers,
-            fc_policy_layers,
+            value_head_hidden_channels,
+            policy_head_hidden_channels,
             self.value_support_size,
-            flatten_output_size_for_value_head,
-            flatten_output_size_for_policy_head,
+            flatten_input_size_for_value_head,
+            flatten_input_size_for_policy_head,
             downsample,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             sigma_type=self.sigma_type,
@@ -216,8 +224,7 @@ class SampledEfficientZeroModel(nn.Module):
                 # (3,96,96), and frame_stack_num is 4. Due to downsample, the encoding of observation (latent_state) is
                 # (64, 96/16, 96/16), where 64 is the number of channels, 96/16 is the size of the latent state. Thus,
                 # self.projection_input_dim = 64 * 96/16 * 96/16 = 64*6*6 = 2304
-                self.projection_input_dim = num_channels * math.ceil(observation_shape[1] / 16
-                                                                     ) * math.ceil(observation_shape[2] / 16)
+                self.projection_input_dim = num_channels * latent_size
             else:
                 self.projection_input_dim = num_channels * observation_shape[1] * observation_shape[2]
 
@@ -490,21 +497,21 @@ class PredictionNetwork(nn.Module):
             num_channels,
             value_head_channels,
             policy_head_channels,
-            fc_value_layers,
-            fc_policy_layers,
+            value_head_hidden_channels,
+            policy_head_hidden_channels,
             output_support_size,
-            flatten_output_size_for_value_head,
-            flatten_output_size_for_policy_head,
+            flatten_input_size_for_value_head,
+            flatten_input_size_for_policy_head,
             downsample: bool = False,
             last_linear_layer_init_zero: bool = True,
-            activation: Optional[nn.Module] = nn.ReLU(inplace=True),
+            activation: Optional[nn.Module] = nn.GELU(approximate='tanh'),
             # ==============================================================
             # specific sampled related config
             # ==============================================================
             sigma_type='conditioned',
             fixed_sigma_value: float = 0.3,
             bound_type: str = None,
-            norm_type: str = 'BN',
+            norm_type: str = 'LN',
     ):
         """
         Overview:
@@ -521,11 +528,11 @@ class PredictionNetwork(nn.Module):
             - num_channels (:obj:`int`): channels of hidden states.
             - value_head_channels (:obj:`int`): channels of value head.
             - policy_head_channels (:obj:`int`): channels of policy head.
-            - fc_value_layers (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
+            - value_head_hidden_channels (:obj:`SequenceType`): hidden layers of the value prediction head (MLP head).
+            - policy_head_hidden_channels (:obj:`SequenceType`): hidden layers of the policy prediction head (MLP head).
             - output_support_size (:obj:`int`): dim of value output.
-            - flatten_output_size_for_value_head (:obj:`int`): dim of flatten hidden states.
-            - flatten_output_size_for_policy_head (:obj:`int`): dim of flatten hidden states.
+            - flatten_input_size_for_value_head (:obj:`int`): dim of flatten hidden states.
+            - flatten_input_size_for_policy_head (:obj:`int`): dim of flatten hidden states.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializationss for the last layer of value/policy mlp, default sets it to True.
             # ==============================================================
@@ -539,8 +546,8 @@ class PredictionNetwork(nn.Module):
         """
         super().__init__()
         self.continuous_action_space = continuous_action_space
-        self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
-        self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
+        self.flatten_input_size_for_value_head = flatten_input_size_for_value_head
+        self.flatten_input_size_for_policy_head = flatten_input_size_for_policy_head
         self.norm_type = norm_type
         self.sigma_type = sigma_type
         self.fixed_sigma_value = fixed_sigma_value
@@ -552,7 +559,7 @@ class PredictionNetwork(nn.Module):
                 ResBlock(
                     in_channels=num_channels,
                     activation=activation,
-                    norm_type='BN',
+                    norm_type=self.norm_type,
                     res_type='basic',
                     bias=False
                 ) for _ in range(num_res_blocks)
@@ -576,10 +583,10 @@ class PredictionNetwork(nn.Module):
                 self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]])
 
         self.fc_value_head = MLP(
-            in_channels=self.flatten_output_size_for_value_head,
-            hidden_channels=fc_value_layers[0],
+            in_channels=self.flatten_input_size_for_value_head,
+            hidden_channels=value_head_hidden_channels[0],
             out_channels=output_support_size,
-            layer_num=len(fc_value_layers) + 1,
+            layer_num=len(value_head_hidden_channels) + 1,
             activation=activation,
             norm_type=self.norm_type,
             output_activation=False,
@@ -591,21 +598,21 @@ class PredictionNetwork(nn.Module):
         # sampled related core code
         if self.continuous_action_space:
             self.fc_policy_head = ReparameterizationHead(
-                input_size=self.flatten_output_size_for_policy_head,
+                input_size=self.flatten_input_size_for_policy_head,
                 output_size=action_space_size,
-                layer_num=len(fc_policy_layers) + 1,
+                layer_num=len(policy_head_hidden_channels) + 1,
                 sigma_type=self.sigma_type,
                 fixed_sigma_value=self.fixed_sigma_value,
-                activation=nn.ReLU(),
+                activation=activation,
                 norm_type=None,
                 bound_type=self.bound_type
             )
         else:
             self.fc_policy_head = MLP(
-                in_channels=self.flatten_output_size_for_policy_head,
-                hidden_channels=fc_policy_layers[0],
+                in_channels=self.flatten_input_size_for_policy_head,
+                hidden_channels=policy_head_hidden_channels[0],
                 out_channels=action_space_size,
-                layer_num=len(fc_policy_layers) + 1,
+                layer_num=len(policy_head_hidden_channels) + 1,
                 activation=activation,
                 norm_type=self.norm_type,
                 output_activation=False,
@@ -636,8 +643,8 @@ class PredictionNetwork(nn.Module):
         policy = self.norm_policy(policy)
         policy = self.activation(policy)
 
-        value = value.reshape(-1, self.flatten_output_size_for_value_head)
-        policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
+        value = value.reshape(-1, self.flatten_input_size_for_value_head)
+        policy = policy.reshape(-1, self.flatten_input_size_for_policy_head)
         value = self.fc_value_head(value)
 
         # sampled related core code

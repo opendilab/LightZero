@@ -1,13 +1,14 @@
-Jinja2~=3.0.0
-sphinx~=3.2.0
-sphinx_rtd_theme~=0.4.3
+Jinja2~=3.0.3
+sphinx<7
+sphinx_rtd_theme~=2.0.0
+sphinx-autodoc-typehints~=1.12.0
 enum_tools
 sphinx-toolbox
 plantumlcli>=0.0.4
 packaging
 sphinx-multiversion~=0.2.4
 where~=1.0.2
-numpy>=1.22.4,<2
+numpy>=1.19,<2
 easydict>=1.7,<2
 scikit-learn>=0.24.2
 nbsphinx>=0.8.8
@@ -15,3 +16,4 @@ ipython>=7.16.3
 psutil>=5.8.0
 ipykernel>=6.15
 py-cpuinfo>=8.0.0
+recommonmark>=0.7.1

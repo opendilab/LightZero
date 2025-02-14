@@ -236,9 +236,9 @@ class SampledEfficientZeroAgent:
             # Collect data by default config n_sample/n_episode.
             new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
             if self.cfg.policy.update_per_collect is None:
-                # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the model_update_ratio.
+                # update_per_collect is None, then update_per_collect is set to the number of collected transitions multiplied by the replay_ratio.
                 collected_transitions_num = sum([len(game_segment) for game_segment in new_data[0]])
-                update_per_collect = int(collected_transitions_num * self.cfg.policy.model_update_ratio)
+                update_per_collect = int(collected_transitions_num * self.cfg.policy.replay_ratio)
             # save returned new_data collected by the collector
             replay_buffer.push_game_segments(new_data)
             # remove the oldest data if the replay buffer is full.

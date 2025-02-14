@@ -16,7 +16,7 @@ reanalyze_ratio = 0
 # ==============================================================
 
 cartpole_gumbel_muzero_config = dict(
-    exp_name=f'data_mz_ctree/cartpole_gumbel_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_muzero/cartpole_gumbel_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         env_id='CartPole-v0',
         continuous=False,
@@ -37,6 +37,8 @@ cartpole_gumbel_muzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN', 
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='not_board_games',
         game_segment_length=50,
@@ -44,7 +46,7 @@ cartpole_gumbel_muzero_config = dict(
         batch_size=batch_size,
         optim_type='Adam',
         max_num_considered_actions=2,
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         learning_rate=0.003,
         ssl_loss_weight=2,  # NOTE: default is 0.
         num_simulations=num_simulations,
@@ -87,4 +89,4 @@ if __name__ == "__main__":
         """
         from lzero.entry import train_muzero_with_gym_env as train_muzero
 
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

@@ -11,13 +11,26 @@
 # limitations under the License.
 import os
 import re
+import sys
 from distutils.core import setup
 
 import numpy as np
+from Cython.Build import cythonize
 from setuptools import find_packages, Extension
-from Cython.Build import cythonize  # this line should be after 'from setuptools import find_packages'
 
 here = os.path.abspath(os.path.dirname(__file__))
+
+from distutils.sysconfig import get_python_inc
+
+python_version = f"{sys.version_info.major}.{sys.version_info.minor}"
+python_include_dir = get_python_inc()
+include_dirs = [np.get_include(), python_include_dir]
+if sys.platform == 'darwin':
+    homebrew_python_path = f'/usr/local/opt/python@{python_version}/Frameworks/Python.framework/Versions/{python_version}/include/python{python_version}'
+    if os.path.exists(homebrew_python_path):
+        include_dirs.append(homebrew_python_path)
+print(f"Python version: {python_version}")
+print(f"Include directories: {include_dirs}")
 
 
 def _load_req(file: str):
@@ -31,6 +44,19 @@ group_requirements = {
     item.group(1): _load_req(item.group(0))
     for item in [_REQ_PATTERN.fullmatch(reqpath) for reqpath in os.listdir()] if item
 }
+
+# Set C++11 compile parameters according to the operating system
+extra_compile_args = []
+extra_link_args = []
+
+if sys.platform == 'win32':
+    # Use the VS compiler on Windows platform
+    extra_compile_args = ["/std:c++11"]
+    extra_link_args = ["/std:c++11"]
+else:
+    # Linux/macOS Platform
+    extra_compile_args = ["-std=c++11"]
+    extra_link_args = ["-std=c++11"]
 
 
 def find_pyx(path=None):
@@ -58,10 +84,11 @@ def find_cython_extensions(path=None):
         extname = '.'.join(rpath.split(os.path.sep))
         extensions.append(Extension(
             extname, [item],
-            include_dirs=[np.get_include()],
+            # include_dirs=[np.get_include()],
+            include_dirs=include_dirs,
             language="c++",
-            # extra_compile_args=["/std:c++latest"],  # only for Windows
-            # extra_link_args=["/std:c++latest"],  # only for Windows
+            extra_compile_args=extra_compile_args,
+            extra_link_args=extra_link_args,
         ))
 
     return extensions
@@ -71,7 +98,7 @@ _LINETRACE = not not os.environ.get('LINETRACE', None)
 
 setup(
     name='LightZero',
-    version='0.0.5',
+    version='0.1.0',
     description='A lightweight and efficient MCTS/AlphaZero/MuZero algorithm toolkits.',
     long_description_content_type='text/markdown',
     author='opendilab',

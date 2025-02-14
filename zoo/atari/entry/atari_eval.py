@@ -44,7 +44,7 @@ if __name__ == "__main__":
     # The path where the recorded video will be saved.
     main_config.env.replay_path = './video'
     # The maximum number of steps for each episode during evaluation. This may need to be adjusted based on the specific characteristics of the environment.
-    main_config.env.eval_max_episode_steps = int(20)
+    main_config.env.eval_max_episode_steps = int(100)
 
     # These lists will store the mean and total rewards for each seed.
     returns_mean_seeds = []

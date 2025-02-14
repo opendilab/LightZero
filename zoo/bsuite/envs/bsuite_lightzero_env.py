@@ -1,14 +1,18 @@
 import copy
 import os
 from datetime import datetime
-from typing import Union, Optional, Dict, List
+from typing import Optional, Dict, List
+
+try:
+    import bsuite
+    from bsuite import sweep
+    from bsuite.utils import gym_wrapper
+except ImportError:
+    raise ImportError("Please install the bsuite package: pip install bsuite")
 
 import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
-import bsuite
-from bsuite import sweep
-from bsuite.utils import gym_wrapper
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
@@ -143,7 +147,7 @@ class BSuiteEnv(BaseEnv):
         if obs.shape[0] == 1:
             obs = obs[0]
         obs = to_ndarray(obs)
-        rew = to_ndarray([rew])  # wrapped to be transfered to an array with shape (1,)
+        rew = to_ndarray(rew)  # wrapped to be transfered to an array with shape (1,)
 
         action_mask = np.ones(self.action_space.n, 'int8')
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}

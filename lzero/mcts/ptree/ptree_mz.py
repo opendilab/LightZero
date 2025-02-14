@@ -3,7 +3,7 @@ The Node, Roots class and related core functions for MuZero.
 """
 import math
 import random
-from typing import List, Dict, Any, Tuple, Union
+from typing import List, Any, Tuple, Union
 
 import numpy as np
 import torch
@@ -19,6 +19,7 @@ class Node:
         ``__init__``, ``expand``, ``add_exploration_noise``, ``compute_mean_q``, ``get_trajectory``, \
         ``get_children_distribution``, ``get_child``, ``expanded``, ``value``.
     """
+
     def __init__(self, prior: float, legal_actions: List = None, action_space_size: int = 9) -> None:
         """
         Overview:
@@ -412,7 +413,7 @@ def compute_ucb_score(
         value_score = 0
     if value_score > 1:
         value_score = 1
-    
+
     ucb_score = prior_score + value_score
 
     return ucb_score

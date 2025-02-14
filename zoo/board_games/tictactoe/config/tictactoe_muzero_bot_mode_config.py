@@ -16,8 +16,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 tictactoe_muzero_config = dict(
-    exp_name=
-    f'data_mz_ctree/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed0',
+    exp_name=f'data_muzero/tictactoe_muzero_bot-mode_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
     env=dict(
         battle_mode='play_with_bot_mode',
         collector_env_num=collector_env_num,
@@ -33,14 +32,16 @@ tictactoe_muzero_config = dict(
             # We use the small size model for tictactoe.
             num_res_blocks=1,
             num_channels=16,
-            fc_reward_layers=[8],
-            fc_value_layers=[8],
-            fc_policy_layers=[8],
+            reward_head_hidden_channels=[8],
+            value_head_hidden_channels=[8],
+            policy_head_hidden_channels=[8],
             support_scale=10,
             reward_support_size=21,
             value_support_size=21,
             norm_type='BN', 
         ),
+        # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
+        model_path=None,
         cuda=True,
         env_type='board_games',
         action_type='varied_action_space',
@@ -48,7 +49,7 @@ tictactoe_muzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         learning_rate=0.003,
         grad_clip_value=0.5,
         num_simulations=num_simulations,
@@ -84,4 +85,4 @@ create_config = tictactoe_muzero_create_config
 
 if __name__ == "__main__":
     from lzero.entry import train_muzero
-    train_muzero([main_config, create_config], seed=0, max_env_step=max_env_step)
+    train_muzero([main_config, create_config], seed=0, model_path=main_config.policy.model_path, max_env_step=max_env_step)

@@ -3,7 +3,7 @@ import pytest
 import torch
 from ding.config import compile_config
 from ding.policy import create_policy
-from huggingface_hub import hf_hub_url, cached_download
+from huggingface_hub import hf_hub_download
 
 from lzero.mcts.buffer.game_buffer_efficientzero import MuZeroGameBuffer
 from lzero.model.muzero_model import MuZeroModel as Model
@@ -40,11 +40,9 @@ policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect'
 # initialize replay buffer
 replay_buffer = MuZeroGameBuffer(cfg.policy)
 
-# get the download link of the test data from Hugging Face
-url = hf_hub_url("puyuan1996/pong_muzero_2episodes_gsl400_v0.0.4", "pong_muzero_2episodes_gsl400_v0.0.4.npy",
-                 repo_type='dataset')
 # download and cache the file
-local_filepath = cached_download(url)
+local_filepath = hf_hub_download("puyuan1996/pong_muzero_2episodes_gsl400_v0.0.4", "pong_muzero_2episodes_gsl400_v0.0.4.npy", repo_type='dataset')
+
 # load .npy file
 data = np.load(local_filepath, allow_pickle=True)
 
@@ -90,10 +88,17 @@ def test_sample_orig_data():
     # List of expected keys in log_vars
     expected_keys = [
         'collect_mcts_temperature', 'collect_epsilon', 'cur_lr', 'weighted_total_loss',
-        'total_loss', 'policy_loss', 'policy_entropy', 'reward_loss', 'value_loss',
+        'total_loss', 'policy_loss', 'policy_entropy', 'target_policy_entropy', 'reward_loss', 'value_loss',
         'consistency_loss', 'target_reward', 'target_value', 'transformed_target_reward',
         'transformed_target_value', 'predicted_rewards', 'predicted_values',
-        'total_grad_norm_before_clip', 'value_priority', 'value_priority_orig'
+        'total_grad_norm_before_clip', 'value_priority', 'value_priority_orig',
+        'analysis/dormant_ratio_encoder',
+        'analysis/dormant_ratio_dynamics',
+        'analysis/latent_state_l2_norms',
+        'analysis/l2_norm_before',
+        'analysis/l2_norm_after',
+        'analysis/grad_norm_before',
+        'analysis/grad_norm_after',
     ]
 
     # Assert that all keys are present in log_vars

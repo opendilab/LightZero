@@ -16,7 +16,7 @@ max_env_step = int(5e5)
 # ==============================================================
 
 connect4_muzero_config = dict(
-    exp_name=f'data_mz_ctree/connect4_self-play-mode_seed0',
+    exp_name=f'data_muzero/connect4_self-play-mode_seed0',
     env=dict(
         battle_mode='self_play_mode',
         bot_action_type='rule',
@@ -44,7 +44,7 @@ connect4_muzero_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         learning_rate=0.003,
         grad_clip_value=0.5,
         num_simulations=num_simulations,

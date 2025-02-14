@@ -1,28 +1,37 @@
 import copy
-from typing import List, Dict, Any, Tuple, Union
+from typing import List, Dict, Any, Tuple, Union, Optional
 
 import numpy as np
 import torch
 import torch.optim as optim
+import wandb
 from ding.model import model_wrap
 from ding.policy.base_policy import Policy
 from ding.torch_utils import to_tensor
 from ding.utils import POLICY_REGISTRY
 from torch.nn import L1Loss
 
+from lzero.entry.utils import initialize_zeros_batch
 from lzero.mcts import MuZeroMCTSCtree as MCTSCtree
 from lzero.mcts import MuZeroMCTSPtree as MCTSPtree
 from lzero.model import ImageTransforms
+from lzero.model.utils import cal_dormant_ratio
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
-    prepare_obs
+    prepare_obs, configure_optimizers
 
 
 @POLICY_REGISTRY.register('muzero')
 class MuZeroPolicy(Policy):
     """
     Overview:
-        The policy class for MuZero.
+        if self._cfg.model.model_type in ["conv", "mlp"]:
+            The policy class for MuZero.
+        if self._cfg.model.model_type == ["conv_context", "mlp_context"]:
+            The policy class for MuZero w/ Context, a variant of MuZero.
+            This variant retains the same training settings as MuZero but diverges during inference
+            by employing a k-step recursively predicted latent representation at the root node,
+            proposed in the UniZero paper https://arxiv.org/abs/2406.10667.
     """
 
     # The default_config for MuZero policy.
@@ -59,8 +68,17 @@ class MuZeroPolicy(Policy):
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
             norm_type='BN',
+            # (bool) Whether to analyze simulation normalization.
+            analysis_sim_norm=False,
+            # (bool) Whether to analyze dormant ratio.
+            analysis_dormant_ratio=False,
+            # (bool) Whether to use HarmonyDream to balance weights between different losses. Default to False.
+            # More details can be found in https://arxiv.org/abs/2310.00344.
+            harmony_balance=False
         ),
         # ****** common ******
+        # (bool) Whether to use wandb to log the training process.
+        use_wandb=False,
         # (bool) whether to use rnd model.
         use_rnd_model=False,
         # (bool) Whether to use multi-gpu training.
@@ -93,6 +111,12 @@ class MuZeroPolicy(Policy):
         # IMPORTANT: Setting eval_offline to True requires configuring the saving of checkpoints to align with the evaluation frequency.
         # This is done by setting the parameter learn.learner.hook.save_ckpt_after_iter to the same value as eval_freq in the train_muzero.py automatically.
         eval_offline=False,
+        # (bool) Whether to calculate the dormant ratio.
+        cal_dormant_ratio=False,
+        # (bool) Whether to analyze simulation normalization.
+        analysis_sim_norm=False,
+        # (bool) Whether to analyze dormant ratio.
+        analysis_dormant_ratio=False,
 
         # ****** observation ******
         # (bool) Whether to transform image to string to save memory.
@@ -114,10 +138,10 @@ class MuZeroPolicy(Policy):
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor.
-        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.
+        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.replay_ratio automatically.
         update_per_collect=None,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
-        model_update_ratio=0.1,
+        replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam']
@@ -134,8 +158,10 @@ class MuZeroPolicy(Policy):
         momentum=0.9,
         # (float) The maximum constraint value of gradient norm clipping.
         grad_clip_value=10,
-        # (int) The number of episodes in each collecting stage.
+        # (int) The number of episodes in each collecting stage when use muzero_collector.
         n_episode=8,
+        # (int) The number of num_segments in each collecting stage when use muzero_segment_collector.
+        num_segments=8,
         # (int) the number of simulations in MCTS.
         num_simulations=50,
         # (float) Discount factor (gamma) for returns.
@@ -151,12 +177,12 @@ class MuZeroPolicy(Policy):
         # (float) The weight of policy loss.
         policy_loss_weight=1,
         # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=0,
+        policy_entropy_weight=0,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=True,
+        piecewise_decay_lr_scheduler=True,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e4),
         # (bool) Whether to use manually decayed temperature.
@@ -169,11 +195,15 @@ class MuZeroPolicy(Policy):
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
         # (bool) Whether to add noise to roots during reanalyze process.
-        reanalyze_noise=False,
+        reanalyze_noise=True,
+        # (bool) Whether to reuse the root value between batch searches.
+        reuse_search=False,
+        # (bool) whether to use the pure policy to collect data. If False, use the MCTS guided with policy.
+        collect_with_pure_policy=False,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
-        use_priority=True,
+        use_priority=False,
         # (float) The degree of prioritization to use. A value of 0 means no prioritization,
         # while a value of 1 means full prioritization.
         priority_prob_alpha=0.6,
@@ -226,15 +256,28 @@ class MuZeroPolicy(Policy):
             return 'MuZeroModelGCN', ['lzero.model.muzero_model_gcn']
         elif self._cfg.model.model_type == "mlp_md":
             return 'MuZeroModelMD', ['lzero.model.muzero_model_md']
+        elif self._cfg.model.model_type == "conv_context":
+            return 'MuZeroContextModel', ['lzero.model.muzero_context_model']
         else:
             raise ValueError("model type {} is not supported".format(self._cfg.model.model_type))
+
+    def set_train_iter_env_step(self, train_iter, env_step) -> None:
+        """
+        Overview:
+            Set the train_iter and env_step for the policy.
+        Arguments:
+            - train_iter (:obj:`int`): The train_iter for the policy.
+            - env_step (:obj:`int`): The env_step for the policy.
+        """
+        self.train_iter = train_iter
+        self.env_step = env_step
 
     def _init_learn(self) -> None:
         """
         Overview:
             Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.
         """
-        assert self._cfg.optim_type in ['SGD', 'Adam'], self._cfg.optim_type
+        assert self._cfg.optim_type in ['SGD', 'Adam', 'AdamW'], self._cfg.optim_type
         # NOTE: in board_games, for fixed lr 0.003, 'Adam' is better than 'SGD'.
         if self._cfg.optim_type == 'SGD':
             self._optimizer = optim.SGD(
@@ -247,8 +290,11 @@ class MuZeroPolicy(Policy):
             self._optimizer = optim.Adam(
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
+        elif self._cfg.optim_type == 'AdamW':
+            self._optimizer = configure_optimizers(model=self._model, weight_decay=self._cfg.weight_decay,
+                                                   learning_rate=self._cfg.learning_rate, device_type=self._cfg.device)
 
-        if self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.piecewise_decay_lr_scheduler:
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
             # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
@@ -275,7 +321,18 @@ class MuZeroPolicy(Policy):
         self.inverse_scalar_transform_handle = InverseScalarTransform(
             self._cfg.model.support_scale, self._cfg.device, self._cfg.model.categorical_distribution
         )
-
+        
+        # ==============================================================
+        # harmonydream (learnable weights for different losses)
+        # ==============================================================
+        if self._cfg.model.harmony_balance:
+            # List of parameter names
+            harmony_names = ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
+            # Initialize and name each parameter
+            for name in harmony_names:
+                param = torch.nn.Parameter(-torch.log(torch.tensor(1.0)))
+                setattr(self, name, param)
+            
         if self._cfg.use_rnd_model:
             if self._cfg.target_model_for_intrinsic_reward_update_type == 'assign':
                 self._target_model_for_intrinsic_reward = model_wrap(
@@ -291,6 +348,18 @@ class MuZeroPolicy(Policy):
                     update_type='momentum',
                     update_kwargs={'theta': self._cfg.target_update_theta_for_intrinsic_reward}
                 )
+
+        # ========= logging for analysis =========
+        self.l2_norm_before = 0.
+        self.l2_norm_after = 0.
+        self.grad_norm_before = 0.
+        self.grad_norm_after = 0.
+        self.dormant_ratio_encoder = 0.
+        self.dormant_ratio_dynamics = 0.
+
+        if self._cfg.use_wandb:
+            # TODO: add the model to wandb
+            wandb.watch(self._learn_model.representation_network, log="all")
 
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -323,12 +392,10 @@ class MuZeroPolicy(Policy):
                 obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
         # shape: (batch_size, num_unroll_steps, action_dim)
-        # NOTE: .long(), in discrete action space.
+        # NOTE: .long() is only  for discrete action space.
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(-1).long()
-        data_list = [
-            mask_batch,
-            target_reward.astype('float32'),
-            target_value.astype('float32'), target_policy, weights
+        data_list = [mask_batch, target_reward,
+            target_value, target_policy, weights
         ]
         [mask_batch, target_reward, target_value, target_policy,
          weights] = to_torch_float_tensor(data_list, self._cfg.device)
@@ -356,6 +423,15 @@ class MuZeroPolicy(Policy):
         # value_prefix shape: (batch_size, 10), the ``value_prefix`` at the first step is zero padding.
         latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
+        # ========= logging for analysis =========
+        # calculate dormant ratio of encoder
+        if self._cfg.cal_dormant_ratio:
+            self.dormant_ratio_encoder = cal_dormant_ratio(self._learn_model.representation_network, obs_batch.detach(),
+                                                           percentage=self._cfg.dormant_threshold)
+        # calculate L2 norm of latent state
+        latent_state_l2_norms = torch.norm(latent_state.view(latent_state.shape[0], -1), p=2, dim=1).mean()
+        # ========= logging for analysis ===============
+
         # transform the scaled value or its categorical representation to its original value,
         # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
         original_value = self.inverse_scalar_transform_handle(value)
@@ -368,7 +444,8 @@ class MuZeroPolicy(Policy):
             ).detach().cpu()
 
         # calculate the new priorities for each transition.
-        value_priority = L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0]) + 1e-6
+        value_priority = L1Loss(reduction='none')(original_value.squeeze(-1), target_value[:, 0])
+        value_priority = value_priority.data.cpu().numpy() + 1e-6
 
         # ==============================================================
         # calculate policy and value loss for the first step.
@@ -382,6 +459,7 @@ class MuZeroPolicy(Policy):
 
         reward_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
         consistency_loss = torch.zeros(self._cfg.batch_size, device=self._cfg.device)
+        target_policy_entropy = 0
 
         # ==============================================================
         # the core recurrent_inference in MuZero policy.
@@ -392,6 +470,28 @@ class MuZeroPolicy(Policy):
             # And then predict policy_logits and value with the prediction function.
             network_output = self._learn_model.recurrent_inference(latent_state, action_batch[:, step_k])
             latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
+
+            # ========= logging for analysis ===============
+            if step_k == self._cfg.num_unroll_steps - 1 and self._cfg.cal_dormant_ratio:
+                # calculate dormant ratio of encoder
+                action_tmp = action_batch[:, step_k]
+                if len(action_tmp.shape) == 1:
+                    action = action.unsqueeze(-1)
+                # transform action to one-hot encoding.
+                # action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)
+                action_one_hot = torch.zeros(action_tmp.shape[0], policy_logits.shape[-1], device=action_tmp.device)
+                # transform action to torch.int64
+                action_tmp = action_tmp.long()
+                action_one_hot.scatter_(1, action_tmp, 1)
+                action_encoding_tmp = action_one_hot.unsqueeze(-1).unsqueeze(-1)
+                action_encoding = action_encoding_tmp.expand(
+                    latent_state.shape[0], policy_logits.shape[-1], latent_state.shape[2], latent_state.shape[3]
+                )
+                state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
+                self.dormant_ratio_dynamics = cal_dormant_ratio(self._learn_model.dynamics_network,
+                                                                state_action_encoding.detach(),
+                                                                percentage=self._cfg.dormant_threshold)
+            # ========= logging for analysis ===============
 
             # transform the scaled value or its categorical representation to its original value,
             # i.e. h^(-1)(.) function in paper https://arxiv.org/pdf/1805.11593.pdf.
@@ -423,9 +523,25 @@ class MuZeroPolicy(Policy):
             # ==============================================================
             policy_loss += cross_entropy_loss(policy_logits, target_policy[:, step_k + 1])
 
+            # Here we take the hypothetical step k = step_k + 1
             prob = torch.softmax(policy_logits, dim=-1)
             entropy = -(prob * prob.log()).sum(-1)
             policy_entropy_loss += -entropy
+
+            target_normalized_visit_count = target_policy[:, step_k + 1]
+
+            # ******* NOTE: target_policy_entropy is only for debug.  ******
+            non_masked_indices = torch.nonzero(mask_batch[:, step_k + 1]).squeeze(-1)
+            # Check if there are any unmasked rows
+            if len(non_masked_indices) > 0:
+                target_normalized_visit_count_masked = torch.index_select(
+                    target_normalized_visit_count, 0, non_masked_indices
+                )
+                target_policy_entropy += -((target_normalized_visit_count_masked + 1e-6) * (
+                        target_normalized_visit_count_masked + 1e-6).log()).sum(-1).mean()
+            else:
+                # Set target_policy_entropy to log(|A|) if all rows are masked
+                target_policy_entropy += torch.log(torch.tensor(target_normalized_visit_count.shape[-1]))
 
             value_loss += cross_entropy_loss(value, target_value_categorical[:, step_k + 1])
             reward_loss += cross_entropy_loss(reward, target_reward_categorical[:, step_k])
@@ -444,24 +560,53 @@ class MuZeroPolicy(Policy):
         # the core learn model update step.
         # ==============================================================
         # weighted loss with masks (some invalid states which are out of trajectory.)
-        loss = (
-            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss +
-            self._cfg.policy_entropy_loss_weight * policy_entropy_loss
-        )
-        weighted_total_loss = (weights * loss).mean()
+        # Nan appear when consistency loss or policy entropy loss uses harmony parameter as coefficient.
+        
+        # Please refer to https://github.com/thuml/HarmonyDream/blob/main/wmlib-torch/wmlib/agents/dreamerv2.py#L161
+        # ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
+        if self._cfg.model.harmony_balance:
+            loss = (
+                  (consistency_loss.mean() * self._cfg.ssl_loss_weight)
+                + (policy_loss.mean() / torch.exp(self.harmony_policy))
+                + (value_loss.mean() / torch.exp(self.harmony_value)) 
+                + (reward_loss.mean() / torch.exp(self.harmony_reward))
+            ) 
+            weighted_total_loss = loss.mean()
+            weighted_total_loss += (
+                torch.log(torch.exp(self.harmony_policy) + 1) +
+                torch.log(torch.exp(self.harmony_value) + 1) + 
+                torch.log(torch.exp(self.harmony_reward) + 1) 
+            )
+        else:  
+            loss = (
+                    self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+                    self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * reward_loss +
+                    self._cfg.policy_entropy_weight * policy_entropy_loss
+            )
+            weighted_total_loss = (weights * loss).mean()
 
         gradient_scale = 1 / self._cfg.num_unroll_steps
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
+
+        # ============= for analysis =============
+        if self._cfg.analysis_sim_norm:
+            del self.l2_norm_before
+            del self.l2_norm_after
+            del self.grad_norm_before
+            del self.grad_norm_after
+            self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
+            self._target_model.encoder_hook.clear_data()
+        # ============= for analysis =============
+
         if self._cfg.multi_gpu:
             self.sync_gradients(self._learn_model)
         total_grad_norm_before_clip = torch.nn.utils.clip_grad_norm_(
             self._learn_model.parameters(), self._cfg.grad_clip_value
         )
         self._optimizer.step()
-        if self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
         # ==============================================================
@@ -475,14 +620,15 @@ class MuZeroPolicy(Policy):
             predicted_rewards = torch.stack(predicted_rewards).transpose(1, 0).squeeze(-1)
             predicted_rewards = predicted_rewards.reshape(-1).unsqueeze(-1)
 
-        return {
+        return_log_dict = {
             'collect_mcts_temperature': self._collect_mcts_temperature,
             'collect_epsilon': self.collect_epsilon,
             'cur_lr': self._optimizer.param_groups[0]['lr'],
             'weighted_total_loss': weighted_total_loss.item(),
             'total_loss': loss.mean().item(),
             'policy_loss': policy_loss.mean().item(),
-            'policy_entropy': -policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),
+            'policy_entropy': - policy_entropy_loss.mean().item() / (self._cfg.num_unroll_steps + 1),
+            'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
             'reward_loss': reward_loss.mean().item(),
             'value_loss': value_loss.mean().item(),
             'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
@@ -498,8 +644,38 @@ class MuZeroPolicy(Policy):
             # ==============================================================
             'value_priority': value_priority.mean().item(),
             'value_priority_orig': value_priority,  # torch.tensor compatible with ddp settings
-        }
 
+            'analysis/dormant_ratio_encoder': self.dormant_ratio_encoder,
+            'analysis/dormant_ratio_dynamics': self.dormant_ratio_dynamics,
+            'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
+            'analysis/l2_norm_before': self.l2_norm_before,
+            'analysis/l2_norm_after': self.l2_norm_after,
+            'analysis/grad_norm_before': self.grad_norm_before,
+            'analysis/grad_norm_after': self.grad_norm_after,
+        }
+        
+        # ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
+        if self._cfg.model.harmony_balance:
+            harmony_dict = {
+                "harmony_dynamics": self.harmony_dynamics.item(), 
+                "harmony_dynamics_exp_recip": (1 / torch.exp(self.harmony_dynamics)).item(),
+                "harmony_policy": self.harmony_policy.item(),
+                "harmony_policy_exp_recip": (1 / torch.exp(self.harmony_policy)).item(),
+                "harmony_value": self.harmony_value.item(),
+                "harmony_value_exp_recip": (1 / torch.exp(self.harmony_value)).item(),
+                "harmony_reward": self.harmony_reward.item(),
+                "harmony_reward_exp_recip": (1 / torch.exp(self.harmony_reward)).item(),
+                "harmony_entropy": self.harmony_entropy.item(),
+                "harmony_entropy_exp_recip": (1 / torch.exp(self.harmony_entropy)).item(),
+            }
+            return_log_dict.update(harmony_dict)
+
+        if self._cfg.use_wandb:
+            wandb.log({'learner_step/' + k: v for k, v in return_log_dict.items()}, step=self.env_step)
+            wandb.log({"learner_iter_vs_env_step": self.train_iter}, step=self.env_step)
+
+        return return_log_dict
+    
     def _init_collect(self) -> None:
         """
         Overview:
@@ -512,6 +688,9 @@ class MuZeroPolicy(Policy):
             self._mcts_collect = MCTSPtree(self._cfg)
         self._collect_mcts_temperature = 1.
         self.collect_epsilon = 0.0
+        if self._cfg.model.model_type == 'conv_context':
+            self.last_batch_obs = torch.zeros([8, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            self.last_batch_action = [-1 for i in range(8)]
 
     def _forward_collect(
             self,
@@ -551,9 +730,16 @@ class MuZeroPolicy(Policy):
         self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_collect_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
-            network_output = self._collect_model.initial_inference(data)
+            if self._cfg.model.model_type in ["conv", "mlp"]:
+                network_output = self._collect_model.initial_inference(data)
+            elif self._cfg.model.model_type == "conv_context":
+                network_output = self._collect_model.initial_inference(self.last_batch_obs, self.last_batch_action,
+                                                                       data)
+
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()
@@ -561,71 +747,75 @@ class MuZeroPolicy(Policy):
             policy_logits = policy_logits.detach().cpu().numpy().tolist()
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_collect_env_num)]
-            # the only difference between collect and eval is the dirichlet noise
-            noises = [
-                np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
-                                    ).astype(np.float32).tolist() for j in range(active_collect_env_num)
-            ]
-            if self._cfg.mcts_ctree:
-                # cpp mcts_tree
-                roots = MCTSCtree.roots(active_collect_env_num, legal_actions)
-            else:
-                # python mcts_tree
-                roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
-
-            roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
-            self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
-
-            # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
-            roots_visit_count_distributions = roots.get_distributions()
-            roots_values = roots.get_values()  # shape: {list: batch_size}
-
-            data_id = [i for i in range(active_collect_env_num)]
-            output = {i: None for i in data_id}
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_collect_env_num)
-
-            for i, env_id in enumerate(ready_env_id):
-                distributions, value = roots_visit_count_distributions[i], roots_values[i]
-                if self._cfg.eps.eps_greedy_exploration_in_collect:
-                    # eps greedy collect
-                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self._collect_mcts_temperature, deterministic=True
-                    )
-                    action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                    if np.random.rand() < self.collect_epsilon:
-                        action = np.random.choice(legal_actions[i])
+            if not self._cfg.collect_with_pure_policy:
+                # the only difference between collect and eval is the dirichlet noise
+                noises = [
+                    np.random.dirichlet([self._cfg.root_dirichlet_alpha] * int(sum(action_mask[j]))
+                                        ).astype(np.float32).tolist() for j in range(active_collect_env_num)
+                ]
+                if self._cfg.mcts_ctree:
+                    # cpp mcts_tree
+                    roots = MCTSCtree.roots(active_collect_env_num, legal_actions)
                 else:
-                    # normal collect
-                    # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
-                    # the index within the legal action set, rather than the index in the entire action set.
-                    action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
-                        distributions, temperature=self._collect_mcts_temperature, deterministic=False
-                    )
-                    # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
+                    # python mcts_tree
+                    roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
+
+                roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
+                self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
+
+                # list of list, shape: ``{list: batch_size} -> {list: action_space_size}``
+                roots_visit_count_distributions = roots.get_distributions()
+                roots_values = roots.get_values()  # shape: {list: batch_size}
+
+                batch_action = []
+                for i, env_id in enumerate(ready_env_id):
+                    distributions, value = roots_visit_count_distributions[i], roots_values[i]
+                    if self._cfg.eps.eps_greedy_exploration_in_collect:
+                        # eps greedy collect
+                        action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                            distributions, temperature=self._collect_mcts_temperature, deterministic=True
+                        )
+                        action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                        if np.random.rand() < self.collect_epsilon:
+                            action = np.random.choice(legal_actions[i])
+                    else:
+                        # normal collect
+                        # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
+                        # the index within the legal action set, rather than the index in the entire action set.
+                        action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(
+                            distributions, temperature=self._collect_mcts_temperature, deterministic=False
+                        )
+                        # NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.
+                        action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
+                    output[env_id] = {
+                        'action': action,
+                        'visit_count_distributions': distributions,
+                        'visit_count_distribution_entropy': visit_count_distribution_entropy,
+                        'searched_value': value,
+                        'predicted_value': pred_values[i],
+                        'predicted_policy_logits': policy_logits[i],
+                    }
+                    if self._cfg.model.model_type in ["conv_context"]:
+                        batch_action.append(action)
+
+                if self._cfg.model.model_type in ["conv_context"]:
+                    self.last_batch_obs = data
+                    self.last_batch_action = batch_action
+            else:
+                for i, env_id in enumerate(ready_env_id):
+                    policy_values = torch.softmax(torch.tensor([policy_logits[i][a] for a in legal_actions[i]]),
+                                                  dim=0).tolist()
+                    policy_values = policy_values / np.sum(policy_values)
+                    action_index_in_legal_action_set = np.random.choice(len(legal_actions[i]), p=policy_values)
                     action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]
-                output[env_id] = {
-                    'action': action,
-                    'visit_count_distributions': distributions,
-                    'visit_count_distribution_entropy': visit_count_distribution_entropy,
-                    'searched_value': value,
-                    'predicted_value': pred_values[i],
-                    'predicted_policy_logits': policy_logits[i],
-                }
+                    output[env_id] = {
+                        'action': action,
+                        'searched_value': pred_values[i],
+                        'predicted_value': pred_values[i],
+                        'predicted_policy_logits': policy_logits[i],
+                    }
 
         return output
-
-    def _init_eval(self) -> None:
-        """
-        Overview:
-            Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
-        """
-        self._eval_model = self._model
-        if self._cfg.mcts_ctree:
-            self._mcts_eval = MCTSCtree(self._cfg)
-        else:
-            self._mcts_eval = MCTSPtree(self._cfg)
 
     def _get_target_obs_index_in_step_k(self, step):
         """
@@ -643,24 +833,35 @@ class MuZeroPolicy(Policy):
             >>> self._get_target_obs_index_in_step_k(0)
             >>> (0, 12)
         """
-        if self._cfg.model.model_type == 'conv':
+        if self._cfg.model.model_type in ['conv', 'conv_context']:
             beg_index = self._cfg.model.image_channel * step
             end_index = self._cfg.model.image_channel * (step + self._cfg.model.frame_stack_num)
-        elif self._cfg.model.model_type == 'mlp' or self._cfg.model.model_type == 'mlp_md':
+
+        elif self._cfg.model.model_type in ['mlp', 'mlp_md', 'rgcn']:
             beg_index = self._cfg.model.observation_shape * step
             end_index = self._cfg.model.observation_shape * (step + self._cfg.model.frame_stack_num)
-        elif self._cfg.model.model_type == 'rgcn':
-            beg_index = self._cfg.model.observation_shape * step
-            end_index = self._cfg.model.observation_shape * (step + self._cfg.model.frame_stack_num)
+
         return beg_index, end_index
 
-    def _forward_eval(
-            self,
-            data: torch.Tensor,
-            action_mask: list,
-            to_play: int = -1,
-            ready_env_id: np.array = None,
-    ) -> Dict:
+    def _init_eval(self) -> None:
+        """
+        Overview:
+            Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.
+        """
+        self._eval_model = self._model
+        if self._cfg.mcts_ctree:
+            self._mcts_eval = MCTSCtree(self._cfg)
+        else:
+            self._mcts_eval = MCTSPtree(self._cfg)
+        if self._cfg.model.model_type == 'conv_context':
+            self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape[0], 64, 64]).to(self._cfg.device)
+            self.last_batch_action = [-1 for _ in range(3)]
+        # elif self._cfg.model.model_type == 'mlp_context':
+        #     self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape]).to(self._cfg.device)
+        #     self.last_batch_action = [-1 for _ in range(3)]
+
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
+                      ready_env_id: np.array = None, ) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -683,13 +884,21 @@ class MuZeroPolicy(Policy):
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
         """
         self._eval_model.eval()
+
         if type(data) is dict:
             active_eval_env_num = data['robot_state'].shape[0]
         else:
             active_eval_env_num = data.shape[0]
+
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_eval_env_num)
+        output = {i: None for i in ready_env_id}
+
         with torch.no_grad():
-            # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
-            network_output = self._collect_model.initial_inference(data)
+            if self._cfg.model.model_type in ["conv", "mlp"]:
+                network_output = self._eval_model.initial_inference(data)
+            elif self._cfg.model.model_type == "conv_context":
+                network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             if not self._eval_model.training:
@@ -712,12 +921,7 @@ class MuZeroPolicy(Policy):
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
 
-            data_id = [i for i in range(active_eval_env_num)]
-            output = {i: None for i in data_id}
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_eval_env_num)
-
+            batch_action = []
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
                 # NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents
@@ -739,22 +943,66 @@ class MuZeroPolicy(Policy):
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
                 }
+                if self._cfg.model.model_type in ["conv_context"]:
+                    batch_action.append(action)
+
+            if self._cfg.model.model_type in ["conv_context"]:
+                self.last_batch_obs = data
+                self.last_batch_action = batch_action
 
         return output
 
+    def _reset_collect(self, data_id: Optional[List[int]] = None) -> None:
+        """
+        Overview:
+            Reset the observation and action for the collector environment.
+        Arguments:
+            - data_id (`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
+        """
+        if self._cfg.model.model_type in ["conv_context"]:
+            self.last_batch_obs = initialize_zeros_batch(
+                self._cfg.model.observation_shape,
+                self._cfg.collector_env_num,
+                self._cfg.device
+            )
+            self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
+
+    def _reset_eval(self, data_id: Optional[List[int]] = None) -> None:
+        """
+        Overview:
+            Reset the observation and action for the evaluator environment.
+        Arguments:
+            - data_id (:obj:`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
+        """
+        if self._cfg.model.model_type in ["conv_context"]:
+            self.last_batch_obs = initialize_zeros_batch(
+                self._cfg.model.observation_shape,
+                self._cfg.evaluator_env_num,
+                self._cfg.device
+            )
+            self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
     def _monitor_vars_learn(self) -> List[str]:
         """
         Overview:
             Register the variables to be monitored in learn mode. The registered variables will be logged in
             tensorboard according to the return value ``_forward_learn``.
         """
-        return [
+        return_list = [
+            'analysis/dormant_ratio_encoder',
+            'analysis/dormant_ratio_dynamics',
+            'analysis/latent_state_l2_norms',
+            'analysis/l2_norm_before',
+            'analysis/l2_norm_after',
+            'analysis/grad_norm_before',
+            'analysis/grad_norm_after',
+
             'collect_mcts_temperature',
             'cur_lr',
             'weighted_total_loss',
             'total_loss',
             'policy_loss',
             'policy_entropy',
+            'target_policy_entropy',
             'reward_loss',
             'value_loss',
             'consistency_loss',
@@ -767,6 +1015,17 @@ class MuZeroPolicy(Policy):
             'transformed_target_value',
             'total_grad_norm_before_clip',
         ]
+        # ["harmony_dynamics", "harmony_policy", "harmony_value", "harmony_reward", "harmony_entropy"]
+        if self._cfg.model.harmony_balance:
+            harmony_list = [
+                'harmony_dynamics', 'harmony_dynamics_exp_recip',
+                'harmony_policy', 'harmony_policy_exp_recip',
+                'harmony_value', 'harmony_value_exp_recip',
+                'harmony_reward', 'harmony_reward_exp_recip',
+                'harmony_entropy', 'harmony_entropy_exp_recip',
+            ]
+            return_list.extend(harmony_list)
+        return return_list
 
     def _state_dict_learn(self) -> Dict[str, Any]:
         """
@@ -792,6 +1051,12 @@ class MuZeroPolicy(Policy):
         self._target_model.load_state_dict(state_dict['target_model'])
         self._optimizer.load_state_dict(state_dict['optimizer'])
 
+    def __del__(self):
+        if self._cfg.model.analysis_sim_norm:
+            # Remove hooks after training.
+            self._collect_model.encoder_hook.remove_hooks()
+            self._target_model.encoder_hook.remove_hooks()
+
     def _process_transition(self, obs, policy_output, timestep):
         # be compatible with DI-engine Policy class
         pass
@@ -799,3 +1064,4 @@ class MuZeroPolicy(Policy):
     def _get_train_sample(self, data):
         # be compatible with DI-engine Policy class
         pass
+

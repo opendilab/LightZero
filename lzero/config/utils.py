@@ -13,6 +13,9 @@ def lz_to_ddp_config(cfg: EasyDict) -> EasyDict:
         - cfg (:obj:`EasyDict`): The converted config
     """
     w = get_world_size()
-    cfg.policy.batch_size = int(np.ceil(cfg.policy.batch_size / w))
-    cfg.policy.n_episode = int(np.ceil(cfg.policy.n_episode) / w)
+    # Generalized handling for multiple keys
+    keys_to_scale = ['batch_size', 'n_episode', 'num_segments']
+    for key in keys_to_scale:
+        if key in cfg.policy:
+            cfg.policy[key] = int(np.ceil(cfg.policy[key] / w))
     return cfg

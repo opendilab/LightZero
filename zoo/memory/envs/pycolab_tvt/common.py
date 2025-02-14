@@ -19,10 +19,13 @@
 import colorsys
 
 import numpy as np
-from pycolab import ascii_art
-from pycolab import cropping
-from pycolab import things as plab_things
-from pycolab.prefab_parts import sprites as prefab_sprites
+try:
+    from pycolab import ascii_art
+    from pycolab import cropping
+    from pycolab import things as plab_things
+    from pycolab.prefab_parts import sprites as prefab_sprites
+except ImportError:
+    raise ImportError("Please install the pycolab package: pip install pycolab")
 
 # Actions.
 # Those with a negative ID are not allowed for the agent.
@@ -196,7 +199,6 @@ def keep_n_characters_in_grid(grid, character, n, backdrop_char=BACKGROUND):
     if num_empty_positions < 0:
         raise ValueError("Not enough characters `{}` in grid.".format(character))
     empty_pos = np.random.permutation(char_positions)[:num_empty_positions]
-
     # Remove characters.
     grid = [list(row) for row in grid]
     for (i, j) in empty_pos:

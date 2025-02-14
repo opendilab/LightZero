@@ -19,6 +19,7 @@ from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy
     prepare_obs, \
     configure_optimizers
 from lzero.policy.muzero import MuZeroPolicy
+from .utils import configure_optimizers_nanogpt
 
 
 @POLICY_REGISTRY.register('sampled_efficientzero')
@@ -52,6 +53,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             # (int) The scale of supports used in categorical distribution.
             # This variable is only effective when ``categorical_distribution=True``.
             support_scale=300,
+            # (int) The number of res blocks in Sampled EfficientZero model.
+            num_res_blocks=1,
             # (int) The hidden size in LSTM.
             lstm_hidden_size=512,
             # (str) The type of sigma. options={'conditioned', 'fixed'}
@@ -65,7 +68,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             # (bool) whether to use res connection in dynamics.
             res_connection_in_dynamics=True,
             # (str) The type of normalization in MuZero model. Options are ['BN', 'LN']. Default to 'LN'.
-            norm_type='BN',
+            norm_type='LN',
         ),
         # ****** common ******
         # (bool) Whether to use multi-gpu training.
@@ -118,18 +121,15 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # collect data -> update policy-> collect data -> ...
         # For different env, we have different episode_length,
         # we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor.
-        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.model_update_ratio automatically.
+        # If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.replay_ratio automatically.
         update_per_collect=None,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
-        model_update_ratio=0.1,
+        replay_ratio=0.25,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network. ['SGD', 'Adam', 'AdamW']
-        optim_type='SGD',
-        learning_rate=0.2,  # init lr for manually decay schedule
-        # optim_type='Adam',
-        # lr_piecewise_constant_decay=False,
-        # learning_rate=0.003,  # lr for Adam optimizer
+        optim_type='AdamW',
+        learning_rate=1e-4,  # init lr for manually decay schedule
         # (float) Weight uniform initialization range in the last output layer
         init_w=3e-3,
         normalize_prob_of_sampled_actions=False,
@@ -159,14 +159,14 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # (float) The weight of policy loss.
         policy_loss_weight=1,
         # (float) The weight of policy entropy loss.
-        policy_entropy_loss_weight=0,
+        policy_entropy_weight=5e-3,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=2,
         # (bool) Whether to use the cosine learning rate decay.
         cos_lr_scheduler=False,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
-        lr_piecewise_constant_decay=True,
+        piecewise_decay_lr_scheduler=False,
         # (int) The number of final training iterations to control lr decay, which is only used for manually decay.
         threshold_training_steps_for_final_lr=int(5e4),
         # (int) The number of final training iterations to control temperature, which is only used for manually decay.
@@ -180,7 +180,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
         # (bool) Whether to add noise to roots during reanalyze process.
-        reanalyze_noise=False,
+        reanalyze_noise=True,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
@@ -250,8 +250,8 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             init_w = self._cfg.init_w
             self._model.prediction_network.fc_policy_head.mu.weight.data.uniform_(-init_w, init_w)
             self._model.prediction_network.fc_policy_head.mu.bias.data.uniform_(-init_w, init_w)
-            self._model.prediction_network.fc_policy_head.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
             try:
+                self._model.prediction_network.fc_policy_head.log_sigma_layer.weight.data.uniform_(-init_w, init_w)
                 self._model.prediction_network.fc_policy_head.log_sigma_layer.bias.data.uniform_(-init_w, init_w)
             except Exception as exception:
                 logging.warning(exception)
@@ -269,18 +269,20 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 self._model.parameters(), lr=self._cfg.learning_rate, weight_decay=self._cfg.weight_decay
             )
         elif self._cfg.optim_type == 'AdamW':
-            self._optimizer = configure_optimizers(
+            # NOTE: nanoGPT optimizer
+            self._optimizer = configure_optimizers_nanogpt(
                 model=self._model,
-                weight_decay=self._cfg.weight_decay,
                 learning_rate=self._cfg.learning_rate,
-                device_type=self._cfg.device
+                weight_decay=self._cfg.weight_decay,
+                device_type=self._cfg.device,
+                betas=(0.9, 0.95),
             )
 
         if self._cfg.cos_lr_scheduler is True:
             from torch.optim.lr_scheduler import CosineAnnealingLR
             self.lr_scheduler = CosineAnnealingLR(self._optimizer, 1e6, eta_min=0, last_epoch=-1)
 
-        if self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.piecewise_decay_lr_scheduler:
             from torch.optim.lr_scheduler import LambdaLR
             max_step = self._cfg.threshold_training_steps_for_final_lr
             # NOTE: the 1, 0.1, 0.01 is the decay rate, not the lr.
@@ -310,17 +312,17 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
 
     def _forward_learn(self, data: torch.Tensor) -> Dict[str, Union[float, int]]:
         """
-         Overview:
-             The forward function for learning policy in learn mode, which is the core of the learning process.
-             The data is sampled from replay buffer.
-             The loss is calculated by the loss function and the loss is backpropagated to update the model.
-         Arguments:
-             - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
-                 The first tensor is the current_batch, the second tensor is the target_batch.
-         Returns:
-             - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
-                 current learning loss and learning statistics.
-         """
+        Overview:
+            The forward function for learning policy in learn mode, which is the core of the learning process.
+            The data is sampled from replay buffer.
+            The loss is calculated by the loss function and the loss is backpropagated to update the model.
+        Arguments:
+            - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.
+                The first tensor is the current_batch, the second tensor is the target_batch.
+        Returns:
+            - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \
+                current learning loss and learning statistics.
+        """
         self._learn_model.train()
         self._target_model.train()
 
@@ -340,12 +342,12 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
                 obs_target_batch = self.image_transforms.transform(obs_target_batch)
 
         # shape: (batch_size, num_unroll_steps, action_dim)
-        # NOTE: .float(), in continuous action space.
-        action_batch = torch.from_numpy(action_batch).to(self._cfg.device).float()
+        # NOTE: .float() in continuous action space.
+        action_batch = torch.from_numpy(action_batch).to(self._cfg.device)
         data_list = [
             mask_batch,
-            target_value_prefix.astype('float32'),
-            target_value.astype('float32'), target_policy, weights
+            target_value_prefix,
+            target_value, target_policy, weights
         ]
         [mask_batch, target_value_prefix, target_value, target_policy,
          weights] = to_torch_float_tensor(data_list, self._cfg.device)
@@ -500,9 +502,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         # ==============================================================
         # weighted loss with masks (some invalid states which are out of trajectory.)
         loss = (
-            self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
-            self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss +
-            self._cfg.policy_entropy_loss_weight * policy_entropy_loss
+                self._cfg.ssl_loss_weight * consistency_loss + self._cfg.policy_loss_weight * policy_loss +
+                self._cfg.value_loss_weight * value_loss + self._cfg.reward_loss_weight * value_prefix_loss +
+                self._cfg.policy_entropy_weight * policy_entropy_loss
         )
         weighted_total_loss = (weights * loss).mean()
 
@@ -516,7 +518,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             self._learn_model.parameters(), self._cfg.grad_clip_value
         )
         self._optimizer.step()
-        if self._cfg.cos_lr_scheduler or self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
         # ==============================================================
@@ -535,7 +537,7 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             'total_loss': loss.mean().item(),
             'policy_loss': policy_loss.mean().item(),
             'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-            'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+            'target_policy_entropy': target_policy_entropy / (self._cfg.num_unroll_steps + 1),
             'value_prefix_loss': value_prefix_loss.mean().item(),
             'value_loss': value_loss.mean().item(),
             'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,
@@ -832,6 +834,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
         self._collect_model.eval()
         self._collect_mcts_temperature = temperature
         active_collect_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_collect_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._collect_model.initial_inference(data)
@@ -885,11 +890,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             roots_visit_count_distributions = roots.get_distributions()
             roots_values = roots.get_values()  # shape: {list: batch_size}
             roots_sampled_actions = roots.get_sampled_actions()  # {list: 1}->{list:6}
-
-            data_id = [i for i in range(active_collect_env_num)]
-            output = {i: None for i in data_id}
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_collect_env_num)
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
@@ -972,6 +972,9 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
          """
         self._eval_model.eval()
         active_eval_env_num = data.shape[0]
+        if ready_env_id is None:
+            ready_env_id = np.arange(active_eval_env_num)
+        output = {i: None for i in ready_env_id}
         with torch.no_grad():
             # data shape [B, S x C, W, H], e.g. {Tensor:(B, 12, 96, 96)}
             network_output = self._eval_model.initial_inference(data)
@@ -1024,12 +1027,6 @@ class SampledEfficientZeroPolicy(MuZeroPolicy):
             # ==============================================================
             roots_sampled_actions = roots.get_sampled_actions(
             )  # shape: ``{list: batch_size} ->{list: action_space_size}``
-
-            data_id = [i for i in range(active_eval_env_num)]
-            output = {i: None for i in data_id}
-
-            if ready_env_id is None:
-                ready_env_id = np.arange(active_eval_env_num)
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]

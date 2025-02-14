@@ -19,7 +19,7 @@ reanalyze_ratio = 0
 td_steps = 5
 
 # key exploration related config
-policy_entropy_loss_weight = 0.
+policy_entropy_weight = 0.
 threshold_training_steps_for_final_temperature = int(5e5)
 eps_greedy_exploration_in_collect = True
 input_type = 'obs'  # options=['obs', 'latent_state', 'obs_latent_state']
@@ -30,8 +30,8 @@ target_model_for_intrinsic_reward_update_type = 'assign'  # 'assign' or 'momentu
 # ==============================================================
 
 minigrid_muzero_rnd_config = dict(
-    exp_name=f'data_mz_rnd_ctree/{env_id}_muzero-rnd_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}'
-             f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}_pelw{policy_entropy_loss_weight}'
+    exp_name=f'data_mz_rnd_ctree/{env_id}_muzero-rnd_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}'
+             f'_collect-eps-{eps_greedy_exploration_in_collect}_temp-final-steps-{threshold_training_steps_for_final_temperature}_pelw{policy_entropy_weight}'
              f'_rnd-rew-{input_type}-{target_model_for_intrinsic_reward_update_type}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
@@ -83,7 +83,7 @@ minigrid_muzero_rnd_config = dict(
         target_update_freq_for_intrinsic_reward=1000,
         target_update_theta_for_intrinsic_reward=0.005,
         # key exploration related config
-        policy_entropy_loss_weight=policy_entropy_loss_weight,
+        policy_entropy_weight=policy_entropy_weight,
         eps=dict(
             eps_greedy_exploration_in_collect=eps_greedy_exploration_in_collect,
             decay=int(2e5),
@@ -97,7 +97,7 @@ minigrid_muzero_rnd_config = dict(
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
-        lr_piecewise_constant_decay=False,
+        piecewise_decay_lr_scheduler=False,
         learning_rate=0.003,
         ssl_loss_weight=2,  # NOTE: default is 0.
         td_steps=td_steps,

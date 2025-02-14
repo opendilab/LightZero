@@ -1,85 +1,94 @@
+#ifndef NODE_ALPHAZERO_H
+#define NODE_ALPHAZERO_H
+
 #include <map>
 #include <string>
-#include <iostream>
 #include <memory>
-#include <mutex>
+#include <iostream>
 
-class Node {
+class Node : public std::enable_shared_from_this<Node> {
 public:
-    // Constructor, initializes a Node with a parent pointer and a prior probability
-    Node(Node* parent = nullptr, float prior_p = 1.0)
+    // Parent and child nodes are managed using shared_ptr
+    std::shared_ptr<Node> parent;
+    std::map<int, std::shared_ptr<Node>> children;
+
+    // Constructor
+    Node(std::shared_ptr<Node> parent = nullptr, float prior_p = 1.0)
         : parent(parent), prior_p(prior_p), visit_count(0), value_sum(0.0) {}
 
-    // Destructor, deletes all child nodes when a node is deleted to prevent memory leaks
-    ~Node() {
-        for (auto& pair : children) {
-            delete pair.second;
-        }
-    }
+    // Default destructor
+    ~Node() = default;
 
-    // Returns the average value of the node
-    float get_value() {
+    // Get the average value of the node
+    float get_value() const {
         return visit_count == 0 ? 0.0 : value_sum / visit_count;
     }
 
-    // Updates the visit count and value sum of the node
+    // Update the node's visit count and value sum
     void update(float value) {
         visit_count++;
         value_sum += value;
     }
 
-    // Recursively updates the value and visit count of the node and its parent nodes
-    void update_recursive(float leaf_value, std::string battle_mode_in_simulation_env) {
-        // If the mode is "self_play_mode", the leaf_value is subtracted from the parent's value
+    // Recursively update the node and its parent node's values
+    void update_recursive(float leaf_value, const std::string& battle_mode_in_simulation_env) {
+        // Pass strings as const references to avoid copying, improve efficiency,
+        // and ensure the function cannot modify the original string.
         if (battle_mode_in_simulation_env == "self_play_mode") {
+            // Self-play mode: update the current node and recursively update the parent node
+            // (pass the negative leaf_value).
             update(leaf_value);
             if (!is_root()) {
                 parent->update_recursive(-leaf_value, battle_mode_in_simulation_env);
             }
         }
-        // If the mode is "play_with_bot_mode", the leaf_value is added to the parent's value
         else if (battle_mode_in_simulation_env == "play_with_bot_mode") {
+            // Play-with-bot mode: update the current node and recursively update the parent node
+            // (pass the same leaf_value).
             update(leaf_value);
             if (!is_root()) {
                 parent->update_recursive(leaf_value, battle_mode_in_simulation_env);
             }
         }
+        else {
+            // Error handling: an invalid battle_mode_in_simulation_env was provided.
+            std::cerr << "Error: Invalid battle mode '" << battle_mode_in_simulation_env
+                      << "' provided to update_recursive()." << std::endl;
+            return;
+        }
     }
 
-    // Returns true if the node has no children
-    bool is_leaf() {
+    // Check if the node is a leaf node
+    bool is_leaf() const {
         return children.empty();
     }
 
-    // Returns true if the node has no parent
-    bool is_root() {
+    // Check if the node is the root node
+    bool is_root() const {
         return parent == nullptr;
     }
 
-    // Returns a pointer to the node's parent
-    Node* get_parent() {
-        return parent;
-    }
-
-    // Returns a map of the node's children
-    std::map<int, Node*> get_children() {
-        return children;
-    }
-
-    // Returns the node's visit count
-    int get_visit_count() {
-        return visit_count;
-    }
-
-    // Adds a child to the node
-    void add_child(int action, Node* node) {
+    // Add a child node
+    void add_child(int action, std::shared_ptr<Node> node) {
         children[action] = node;
     }
 
-public:
-    Node* parent;  // Pointer to the parent node
-    float prior_p;  // Prior probability of the node
-    int visit_count;  // Count of visits to the node
-    float value_sum;  // Sum of values of the node
-    std::map<int, Node*> children;  // Map of child nodes
+    // Get the visit count
+    int get_visit_count() const { return visit_count; }
+
+    // Get the parent node
+    std::shared_ptr<Node> get_parent() const {
+        return parent;
+    }
+
+    // Get the child nodes
+    const std::map<int, std::shared_ptr<Node>>& get_children() const {
+        return children;
+    }
+
+    float prior_p;        // The prior probability of the node
+    int visit_count;      // Visit count
+    float value_sum;      // Value sum
 };
+
+#endif // NODE_ALPHAZERO_H

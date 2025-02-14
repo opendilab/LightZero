@@ -95,13 +95,11 @@ def prepare_observation(observation_list, model_type='conv'):
     Returns:
         - np.ndarray: Reshaped array of observations.
     """
-    assert model_type in [
-        'conv', 'mlp', 'rgcn', 'mlp_md'
-    ], "model_type must be either 'conv', 'mlp', 'rgcn' or 'mlp_md'"
+    assert model_type in ['conv', 'mlp', 'conv_context', 'mlp_context', 'rgcn', 'mlp_md'], "model_type must be either 'conv' or 'mlp'"
     observation_array = np.array(observation_list)
     batch_size = observation_array.shape[0]
 
-    if model_type == 'conv':
+    if model_type in ['conv', 'conv_context']:
         if observation_array.ndim == 3:
             # Add a channel dimension if it's missing
             observation_array = observation_array[..., np.newaxis]
@@ -109,14 +107,12 @@ def prepare_observation(observation_list, model_type='conv'):
             # Reshape to [B, S*C, W, H]
             _, stack_num, channels, width, height = observation_array.shape
             observation_array = observation_array.reshape(batch_size, stack_num * channels, width, height)
-
-    elif model_type == 'mlp' or model_type == 'mlp_md':
+    elif model_type in ['mlp', 'mlp_md', 'mlp_context']:
         if observation_array.ndim == 3:
             # Flatten the last two dimensions
             observation_array = observation_array.reshape(batch_size, -1)
         else:
             raise ValueError("For 'mlp' model_type, the observation must have 3 dimensions [B, S, O]")
-
     elif model_type == 'rgcn':
         if observation_array.ndim == 4:
             # TODO(rjy): strage process

@@ -27,7 +27,8 @@ if __name__ == "__main__":
     create_config.env_manager.type = 'base'  # Visualization requires the 'type' to be set as base
     main_config.env.evaluator_env_num = 1  # Visualization requires the 'env_num' to be set as 1
     main_config.env.n_evaluator_episode = total_test_episodes
-    main_config.env.replay_path = './video'
+    main_config.env.save_replay_gif = True
+    main_config.env.replay_path_gif = './cartpole_gif'
 
     for seed in seeds:
         """
