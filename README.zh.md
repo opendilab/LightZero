@@ -27,11 +27,13 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
-最近更新于 2024.03.15 LightZero-v0.0.4
+最近更新于 2024.04.12 LightZero-v0.0.5
 
 > LightZero 是一个轻量、高效、易懂的 MCTS+RL 开源算法库。
+> 有关 LightZero 的任何疑问，您都可以咨询基于 RAG 技术的问答助手：[ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal)。
 
-[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [论文链接](https://arxiv.org/pdf/2310.08348.pdf)
+[English](https://github.com/opendilab/LightZero/blob/main/README.md) | 简体中文 | [论文链接](https://arxiv.org/pdf/2310.08348.pdf) | 
+
 
 ## 背景
 
@@ -109,21 +111,22 @@ LightZero 是基于 [PyTorch](https://pytorch.org/) 实现的 MCTS 算法库，�
 LightZero 目前支持的环境及算法如下表所示：
 
 | Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | 
-|---------------| --------- | ------ |-------------| ------------------ | ---------- |----------------|
-| TicTacToe     | ✔       | ✔      | 🔒           | 🔒                | ✔          | 🔒             |
-| Gomoku        | ✔       | ✔      | 🔒          | 🔒               | ✔          | 🔒             |
-| Connect4      | ✔       | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |
-| 2048          | ✔       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |
-| Chess         | 🔒       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
-| Go            | 🔒       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
-| CartPole      | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
-| Pendulum      | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
-| LunarLander   | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
-| BipedalWalker | ---       | ✔      | ✔           | ✔                | ✔          | 🔒              |
-| Atari         | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
-| MuJoCo        | ---       | ✔     | ✔          | ✔                | 🔒         | 🔒               |
-| MiniGrid      | ---       | ✔     | ✔          | ✔               | 🔒         | 🔒             |
-| Bsuite        | ---       | ✔     | ✔          | ✔               | 🔒         | 🔒             |
+|---------------| -------- | ------ |-------------| ------------------ | ---------- |----------------|
+| TicTacToe     | ✔      | ✔      | 🔒           | 🔒                | ✔          | 🔒             |
+| Gomoku        | ✔      | ✔      | 🔒          | 🔒               | ✔          | 🔒             |
+| Connect4      | ✔      | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |
+| 2048          | ---       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |
+| Chess         | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
+| Go            | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
+| CartPole      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
+| Pendulum      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
+| LunarLander   | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
+| BipedalWalker | ---      | ✔      | ✔           | ✔                | ✔          | 🔒              |
+| Atari         | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
+| MuJoCo        | ---      | ✔     | ✔          | ✔                | 🔒         | 🔒               |
+| MiniGrid      | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
+| Bsuite        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
+| Memory        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
 
 <sup>(1): "✔" 表示对应的项目已经完成并经过良好的测试。</sup>
 
@@ -513,6 +516,8 @@ and internal state transition dynamics,
 
 ## 反馈意见和贡献
 - 有任何疑问或意见都可以在 github 上直接 [提出 issue](https://github.com/opendilab/LightZero/issues/new/choose)
+- 开启或参加 [GitHub 论坛](https://github.com/opendilab/LightZero/discussions)
+- 在 LightZero [discord server](https://discord.gg/qZTQTycu) 上进行讨论
 - 或者联系我们的邮箱 (opendilab@pjlab.org.cn)
 
 - 感谢所有的反馈意见，包括对算法和系统设计。这些反馈意见和建议都会让 LightZero 变得更好。 

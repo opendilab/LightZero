@@ -27,9 +27,10 @@
 [![Contributors](https://img.shields.io/github/contributors/opendilab/LightZero)](https://github.com/opendilab/LightZero/graphs/contributors)
 [![GitHub license](https://img.shields.io/github/license/opendilab/LightZero)](https://github.com/opendilab/LightZero/blob/master/LICENSE)
 
-Updated on 2024.03.15 LightZero-v0.0.4
+Updated on 2024.04.12 LightZero-v0.0.5
 
-> LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL). 
+> LightZero is a lightweight, efficient, and easy-to-understand open-source algorithm toolkit that combines Monte Carlo Tree Search (MCTS) and Deep Reinforcement Learning (RL).
+> For any questions about LightZero, you can consult the RAG-based Q&A assistant: [ZeroPal](https://huggingface.co/spaces/OpenDILabCommunity/ZeroPal).
 
 English | [简体中文(Simplified Chinese)](https://github.com/opendilab/LightZero/blob/main/README.zh.md) | [Paper](https://arxiv.org/pdf/2310.08348.pdf)
 
@@ -121,21 +122,22 @@ LightZero is a library with a [PyTorch](https://pytorch.org/) implementation of 
 The environments and algorithms currently supported by LightZero are shown in the table below:
 
 | Env./Algo.    | AlphaZero | MuZero | EfficientZero | Sampled EfficientZero | Gumbel MuZero | Stochastic MuZero | 
-|---------------| --------- | ------ |-------------| ------------------ | ---------- |----------------|
-| TicTacToe     | ✔       | ✔      | 🔒           | 🔒                | ✔          | 🔒             |
-| Gomoku        | ✔       | ✔      | 🔒          | 🔒               | ✔          | 🔒             |
-| Connect4      | ✔       | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |
-| 2048          | ✔       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |
-| Chess         | 🔒       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
-| Go            | 🔒       | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
-| CartPole      | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
-| Pendulum      | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
-| LunarLander   | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
-| BipedalWalker | ---       | ✔      | ✔           | ✔                | ✔          | 🔒              |
-| Atari         | ---       | ✔      | ✔           | ✔                | ✔          | ✔              |
-| MuJoCo        | ---       | ✔     | ✔          | ✔                | 🔒         | 🔒               |
-| MiniGrid      | ---       | ✔     | ✔          | ✔               | 🔒         | 🔒             |
-| Bsuite        | ---       | ✔     | ✔          | ✔               | 🔒         | 🔒             |
+|---------------| -------- | ------ |-------------| ------------------ | ---------- |----------------|
+| TicTacToe     | ✔      | ✔      | 🔒           | 🔒                | ✔          | 🔒             |
+| Gomoku        | ✔      | ✔      | 🔒          | 🔒               | ✔          | 🔒             |
+| Connect4      | ✔      | ✔      | 🔒          | 🔒               | 🔒           | 🔒             |
+| 2048          | ---       | ✔      | 🔒            | 🔒                | 🔒           | ✔              |
+| Chess         | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
+| Go            | 🔒      | 🔒     | 🔒          | 🔒               | 🔒         | 🔒             |
+| CartPole      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
+| Pendulum      | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
+| LunarLander   | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
+| BipedalWalker | ---      | ✔      | ✔           | ✔                | ✔          | 🔒              |
+| Atari         | ---      | ✔      | ✔           | ✔                | ✔          | ✔              |
+| MuJoCo        | ---      | ✔     | ✔          | ✔                | 🔒         | 🔒               |
+| MiniGrid      | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
+| Bsuite        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
+| Memory        | ---      | ✔     | ✔          | ✔               | 🔒         | 🔒             |
 
 <sup>(1): "✔" means that the corresponding item is finished and well-tested.</sup>
 
@@ -513,7 +515,10 @@ Here is a collection of research papers about **Monte Carlo Tree Search**.
 
 
 ## Feedback and Contribution
+
 - [File an issue](https://github.com/opendilab/LightZero/issues/new/choose) on Github
+- Open or participate in our [discussion forum](https://github.com/opendilab/LightZero/discussions)
+- Discuss on LightZero [discord server](https://discord.gg/qZTQTycu)
 - Contact our email (opendilab@pjlab.org.cn)
 
 - We appreciate all the feedback and contributions to improve LightZero, both algorithms and system designs. 
