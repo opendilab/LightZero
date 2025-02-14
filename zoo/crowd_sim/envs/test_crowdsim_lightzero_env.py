@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from easydict import EasyDict
-from zoo.CrowdSim.envs.crowdsim_lightzero_env import CrowdSimEnv
+from zoo.crowd_sim.envs.crowdsim_lightzero_env import CrowdSimEnv
 
 mcfg=EasyDict(
         env_name='CrowdSim-v0',
@@ -61,7 +61,7 @@ class TestCrowdSimEnv:
         mcfg['obs_mode'] = '1-dim-array'
         env = CrowdSimEnv(mcfg)
         env.seed(314)
-        env.enable_save_replay('/home/nighoodRen/LightZero/result/test_replay')
+        env.enable_save_replay('./LightZero/result/test_replay')
         assert env._seed == 314
         obs = env.reset()
         assert obs['observation'].shape == (244, )

@@ -40,7 +40,7 @@ dataset_configs = {
             "nlon": 200,
             "nlat": 120,
             "human_num": 59,
-            "dataset_dir": '/home/nighoodRen/CrowdSim/CrowdSim/envs/crowd_sim/dataset/purdue/59 users.csv',
+            "dataset_dir": 'crowd_sim/dataset/purdue/59 users.csv', # TODO
             "sensing_range": 23.2,  # unit 23.2
             "one_uav_action_space": [
                 [0, 0], [30, 0], [-30, 0], [0, 30], [0, -30], [21, 21], [21, -21], [-21, 21], [-21, -21]
@@ -57,7 +57,7 @@ dataset_configs = {
             "nlon": 3600,
             "nlat": 2450,
             "human_num": 33,
-            "dataset_dir": '/home/nighoodRen/CrowdSim/CrowdSim/envs/crowd_sim/dataset/NCSU/33 users.csv',
+            "dataset_dir": 'crowd_sim/dataset/NCSU/33 users.csv', # TODO
             "sensing_range": 220,  # unit 220
             "one_uav_action_space": [
                 [0, 0], [300, 0], [-300, 0], [0, 300], [0, -300], [210, 210], [210, -210], [-210, 210], [-210, -210]
@@ -74,7 +74,7 @@ dataset_configs = {
             "nlon": 2340,
             "nlat": 1960,
             "human_num": 92,
-            "dataset_dir": '/home/nighoodRen/CrowdSim/CrowdSim/envs/crowd_sim/dataset/KAIST/92 users.csv',
+            "dataset_dir": 'crowd_sim/dataset/KAIST/92 users.csv', # TODO
             "sensing_range": 220,  # unit 220
             "one_uav_action_space": [
                 [0, 0], [300, 0], [-300, 0], [0, 300], [0, -300], [210, 210], [210, -210], [-210, 210], [-210, -210]

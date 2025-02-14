@@ -3,15 +3,12 @@ import pandas as pd
 import logging
 import random
 import gym
-# from shapely.geometry import Point
 import numpy as np
 from scipy.stats import entropy
-# import folium
-# from folium.plugins import TimestampedGeoJson, AntPath
 
-from zoo.CrowdSim.envs.Crowdsim.env.model.utils import *
-from zoo.CrowdSim.envs.Crowdsim.env.model.mdp import HumanState, RobotState, JointState
-from LightZero.zoo.CrowdSim.envs.Crowdsim.env.crowd_sim_base_config import get_selected_config
+from .utils import *
+from .mdp import HumanState, RobotState, JointState
+from .crowd_sim_base_config import get_selected_config
 
 
 class CrowdSim(gym.Env):

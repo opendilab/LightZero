@@ -1,7 +1,7 @@
 import abc
 import random
 import logging
-from zoo.CrowdSim.envs.Crowdsim.env.model.mdp import *
+from zoo.crowd_sim.envs.CrowdSim.mdp import *
 
 
 class Agent():
@@ -190,5 +190,4 @@ class InformationQueue:
 # info_queue.update(arrivals=5, departures=0)  # 5 blocks enter the queue, all with aoi of 0
 # info_queue.update(arrivals=3, departures=2)  # 3 new blocks enter, 2 blocks leave
 # total_age = info_queue.total_aoi()  # Calculate the total age of information in the queue
-
-# total_age
+# print(total_age)
