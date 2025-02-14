@@ -2,8 +2,8 @@ import numpy as np
 
 np.seterr(invalid='ignore')
 
-from zoo.CrowdSim.envs.Crowdsim.env.model.agent import *
-from zoo.CrowdSim.envs.Crowdsim.env.model.mdp import JointState
+from .agent import *
+from .mdp import JointState
 from shapely.geometry import *
 
 

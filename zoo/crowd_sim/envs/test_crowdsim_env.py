@@ -1,13 +1,17 @@
 import numpy as np
 from easydict import EasyDict
-from zoo.CrowdSim.envs.CrowdSim_env import CrowdSimEnv
+from zoo.crowd_sim.envs.crowdsim_env import CrowdSimEnv
 
 mcfg = EasyDict(
     env_name='CrowdSim-v0',
     dataset='purdue',
     robot_num=2,
     human_num=59,  # purdue
-    one_uav_action_space=[[0, 0], [30, 0], [-30, 0], [0, 30], [0, -30]]
+    one_uav_action_space=[[0, 0], [30, 0], [-30, 0], [0, 30], [0, -30]],
+    obs_mode = '2-dim-array',
+    env_mode = 'hard',
+    transmit_v=120,
+    collect_v_prob = {'1': 1, '2': 0},
 )
 
 

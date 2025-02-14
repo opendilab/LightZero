@@ -24,7 +24,7 @@ if __name__ == "__main__":
     # # 导入模块中的内容
     # from formatted_total_config import main_config, create_config
     # from result.new_env.new_CrowdSim_vt20_muzero_md_ssl_step300000_uav2__human59_seed0.formatted_total_config import main_config, create_config
-    from zoo.CrowdSim.config.crowdsim_muzero_md_config import main_config, create_config
+    from zoo.crowd_sim.config.crowdsim_muzero_md_config import main_config, create_config
 
     # model_path is the path to the trained MuZero model checkpoint.
     # If no path is provided, the script will use the default model.
