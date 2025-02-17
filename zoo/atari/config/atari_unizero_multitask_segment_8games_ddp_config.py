@@ -70,9 +70,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
                     # NOTE: gato-79M (small) transformer
                     # batch_size=64 8games训练时，每张卡大约占12*2=24G cuda存储
-                    # num_layers=8,  
-                    # num_heads=24,
-                    # embed_dim=768,
+                    num_layers=8,  
+                    num_heads=24,
+                    embed_dim=768,
 
                     # NOTE: gato-medium 修改版 transformer
                     # batch_size=64 8games训练时，每张卡大约占12*3=36G cuda存储
@@ -83,9 +83,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # NOTE: gato-medium 修改版 transformer
                     # batch_size=64 8games训练时，每张卡大约占12*2*4 cuda存储
                     # batch_size=32 8games训练时，每张卡大约占12*2*4/2 cuda存储
-                    num_layers=8,  
-                    num_heads=24,
-                    embed_dim=1536,
+                    # num_layers=8,  
+                    # num_heads=24,
+                    # embed_dim=1536,
 
                     # NOTE: gato-364M (medium) transformer
                     # batch_size=64 8games训练时，每张卡大约占12*3*4 cuda存储
@@ -164,7 +164,8 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
     # exp_name_prefix = f'data_unizero_mt_ddp-8gpu_1124/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer8-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed{seed}/'
     # exp_name_prefix = f'data_unizero_mt_ddp-8gpu_1124/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer12-nhead24_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_lsd768-nlayer12-nh24_mbs-512-bs64_upc80_seed{seed}/'
     
-    exp_name_prefix = f'data_unizero_mt_ddp-8gpu_1127/{len(env_id_list)}games_eval60min_brf{buffer_reanalyze_freq}_nlayer8-nhead24-embed1536_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_nlayer8-nhead24-embed1536_mbs-256-bs32_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_atari_mt_20250217/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer8-nhead24-embed768_seed{seed}/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_{len(env_id_list)}-pred-head_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_20250217/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_nlayer8-nhead24-embed768_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -272,8 +273,8 @@ if __name__ == "__main__":
     os.environ["NCCL_TIMEOUT"] = "3600000000"
 
     # for seed in [2, 3, 0, 1]: # TODO
-    for seed in [0, 1, 2]: # TODO
-    # for seed in [1]: # TODO
+    # for seed in [0, 1, 2]: # TODO
+    for seed in [0]: # TODO
     # for seed in [2,3]: # TODO
     
         collector_env_num = 8
@@ -289,13 +290,13 @@ if __name__ == "__main__":
         # total_batch_size = 2048
 
         #应该根据一个样本sequence的占用显存量，和最大显存来设置
-        total_batch_size = 256
-        batch_size = [int(min(32, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
-        print(f'=========== batch_size: {batch_size} ===========')
-
-        # total_batch_size = 512
-        # batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+        # total_batch_size = 256
+        # batch_size = [int(min(32, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
         # print(f'=========== batch_size: {batch_size} ===========')
+
+        total_batch_size = 512
+        batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+        print(f'=========== batch_size: {batch_size} ===========')
 
         num_unroll_steps = 10
         infer_context_length = 4
