@@ -73,8 +73,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             model_path=None,
             num_unroll_steps=num_unroll_steps,
             game_segment_length=20,
-            # update_per_collect=80,
-            update_per_collect=10, # only for debug
+            update_per_collect=80,
+            # update_per_collect=10, # only for debug
             replay_ratio=0.25,
             batch_size=batch_size,
             num_segments=num_segments,
@@ -96,7 +96,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
                      num_segments, total_batch_size):
     configs = []
-    exp_name_prefix = f'data_unizero_atari_mt_20250216/{len(env_id_list)}games_nlayer8_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_unizero_atari_mt_20250217/{len(env_id_list)}games_nlayer8_bs64_brf{buffer_reanalyze_freq}_seed{seed}_dev-uz-mz/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -164,8 +164,9 @@ if __name__ == "__main__":
     # num_segments = 2
     # n_episode = 2
     # evaluator_env_num = 2
-    # num_simulations = 2
-    # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
+    # num_simulations = 5
+    # # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
+    # batch_size = [4, 4,4,4]
 
 
     for seed in [0]:
@@ -175,5 +176,5 @@ if __name__ == "__main__":
                                    num_segments, total_batch_size)
 
         with DDPContext():
-            # train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
-            train_unizero_multitask_segment_ddp(configs[:4], seed=seed, max_env_step=max_env_step) # train on the first four tasks, only for debug
+            train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
+            # train_unizero_multitask_segment_ddp(configs[:4], seed=seed, max_env_step=max_env_step) # train on the first four tasks, only for debug
