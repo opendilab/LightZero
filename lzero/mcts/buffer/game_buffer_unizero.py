@@ -438,15 +438,15 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             # =======================================================================
 
-            if not model.training:
-                # if not in training, obtain the scalars of the value/reward
-                [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                    [
-                        m_output.latent_state,
-                        inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
-                        m_output.policy_logits
-                    ]
-                )
+            # if not model.training:
+            # if not in training, obtain the scalars of the value/reward
+            [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                [
+                    m_output.latent_state,
+                    inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    m_output.policy_logits
+                ]
+            )
 
             network_output.append(m_output)
 
@@ -556,15 +556,15 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             # ======================================================================
 
-            if not model.training:
-                # if not in training, obtain the scalars of the value/reward
-                [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
-                    [
-                        m_output.latent_state,
-                        inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
-                        m_output.policy_logits
-                    ]
-                )
+            # if not model.training:
+            # if not in training, obtain the scalars of the value/reward
+            [m_output.latent_state, m_output.value, m_output.policy_logits] = to_detach_cpu_numpy(
+                [
+                    m_output.latent_state,
+                    inverse_scalar_transform(m_output.value, self._cfg.model.support_scale),
+                    m_output.policy_logits
+                ]
+            )
 
             network_output.append(m_output)
 

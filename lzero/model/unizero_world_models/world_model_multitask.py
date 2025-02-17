@@ -180,6 +180,11 @@ class WorldModelMT(WorldModel):
             self.act_embedding_table = nn.Embedding(config.action_space_size, self.obs_act_embed_dim, device=self.device)
             print(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
+            print(f'='*20)
+            print(f"self.obs_act_embed_dim:{self.obs_act_embed_dim}")
+            print(f'='*20)
+
+
         # if self.num_experts_in_moe_head == -1:
         assert self.num_experts_in_moe_head > 0
         if self.use_normal_head:
@@ -647,10 +652,12 @@ class WorldModelMT(WorldModel):
             if self.task_embed_option == "add_task_embed":
                 obs_embeddings = obs_embeddings + self.task_embeddings
             elif self.task_embed_option == "concat_task_embed":
+
                 # print(f'=='*20)
                 # print(f'obs_embeddings.shape:{obs_embeddings.shape}')
                 # print(f'self.task_embeddings.shape:{self.task_embeddings.shape}')
                 # print(f'=='*20)
+
                 if is_init_infer:
                     # 注意只有在inference时，只有在is_init_infer时拼接task embeddings，recurr_infer中已经在init_infer中增加了task embeddings的信息了
                     # Expand task embeddings to match the sequence shape
@@ -862,20 +869,72 @@ class WorldModelMT(WorldModel):
                                                  -1)
 
         num_steps = int(obs_embeddings.size(1) * (obs_embeddings.size(2) + 1))
-        # act_embeddings = self.act_embedding_table[task_id](act_tokens)
         act_embeddings = self.act_embedding_table(act_tokens)
 
         B, L, K, E = obs_embeddings.size()
-        obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=self.device)
+        if self.task_embed_option == "concat_task_embed":
+            # B, L*2, E
+            obs_act_embeddings = torch.empty(B, L * (K + 1), self.config.embed_dim, device=self.device)
+        else:
+            # B, L*2, E
+            obs_act_embeddings = torch.empty(B, L * (K + 1), self.config.embed_dim, device=self.device)
+
+        if self.task_embed_option == "concat_task_embed":
+            # Expand task embeddings to match the sequence shape
+            task_emb_expanded = self.task_embeddings.view(1, 1, -1).expand(B, 1, -1)
+
 
         for i in range(L):
-            # obs = obs_embeddings[:, i, :, :]
-            obs = obs_embeddings[:, i, :, :] + self.task_embeddings  # Shape: (B, K, E) TODO: task_embeddings
+            if self.task_embed_option == "add_task_embed":
+                obs = obs_embeddings[:, i, :, :] + self.task_embeddings  # Shape: (B, K, E) TODO: task_embeddings
+            elif self.task_embed_option == "concat_task_embed":
+                obs = torch.cat([obs_embeddings[:, i, :, :], task_emb_expanded], dim=-1)
+            else:
+                obs = obs_embeddings[:, i, :, :]  # Shape: (B, K, E)
+
             act = act_embeddings[:, i, 0, :].unsqueeze(1)
+            if self.task_embed_option == "concat_task_embed":
+                act = torch.cat([act, task_emb_expanded], dim=-1)
+
             obs_act = torch.cat([obs, act], dim=1)
+            # print(f'obs_act.shape:{obs_act.shape}')
+
             obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
 
         return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
+
+
+    #@profile
+    # def _process_obs_act_combined(self, obs_embeddings_or_act_tokens, prev_steps, task_id=0):
+    #     """
+    #     Process combined observation embeddings and action tokens.
+
+    #     Arguments:
+    #         - obs_embeddings_or_act_tokens (:obj:`dict`): Dictionary containing combined observation embeddings and action tokens.
+    #         - prev_steps (:obj:`torch.Tensor`): Previous steps.
+    #     Returns:
+    #         - torch.Tensor: Combined observation and action embeddings with position information added.
+    #     """
+    #     obs_embeddings, act_tokens = obs_embeddings_or_act_tokens['obs_embeddings_and_act_tokens']
+    #     if len(obs_embeddings.shape) == 3:
+    #         obs_embeddings = obs_embeddings.view(act_tokens.shape[0], act_tokens.shape[1], self.num_observations_tokens,
+    #                                              -1)
+
+    #     num_steps = int(obs_embeddings.size(1) * (obs_embeddings.size(2) + 1))
+    #     # act_embeddings = self.act_embedding_table[task_id](act_tokens)
+    #     act_embeddings = self.act_embedding_table(act_tokens)
+
+    #     B, L, K, E = obs_embeddings.size()
+    #     obs_act_embeddings = torch.empty(B, L * (K + 1), E, device=self.device)
+
+    #     for i in range(L):
+    #         # obs = obs_embeddings[:, i, :, :]
+    #         obs = obs_embeddings[:, i, :, :] + self.task_embeddings  # Shape: (B, K, E) TODO: task_embeddings
+    #         act = act_embeddings[:, i, 0, :].unsqueeze(1)
+    #         obs_act = torch.cat([obs, act], dim=1)
+    #         obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
+
+    #     return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
 
     #@profile
     def _transformer_pass(self, sequences, past_keys_values, kvcache_independent, valid_context_lengths, task_id=0):

@@ -80,10 +80,15 @@ class UniZeroMTModel(nn.Module):
         world_model_cfg.norm_type = norm_type
         assert world_model_cfg.max_tokens == 2 * world_model_cfg.max_blocks, 'max_tokens should be 2 * max_blocks, because each timestep has 2 tokens: obs and action'
 
+        if world_model_cfg.task_embed_option == "concat_task_embed":
+            obs_act_embed_dim = world_model_cfg.embed_dim - 96
+        else:
+            obs_act_embed_dim = world_model_cfg.embed_dim
+
         if world_model_cfg.obs_type == 'vector':
             self.representation_network = RepresentationNetworkMLP(
                 observation_shape,
-                hidden_channels=world_model_cfg.embed_dim,
+                hidden_channels=obs_act_embed_dim,
                 layer_num=2,
                 activation=self.activation,
                 group_size=world_model_cfg.group_size,
@@ -109,7 +114,7 @@ class UniZeroMTModel(nn.Module):
                     self.downsample,
                     activation=self.activation,
                     norm_type=norm_type,
-                    embedding_dim=world_model_cfg.embed_dim,
+                    embedding_dim=obs_act_embed_dim,
                     group_size=world_model_cfg.group_size,
                 ))
                 # self.representation_network = RepresentationNetworkUniZero(
@@ -138,6 +143,7 @@ class UniZeroMTModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.encoder.parameters())} parameters in agent.tokenizer.encoder')
             print('==' * 20)
         elif world_model_cfg.obs_type == 'image_memory':
+            # todo for concat_task_embed
             self.representation_network = LatentEncoderForMemoryEnv(
                 image_shape=(3, 5, 5),
                 embedding_size=world_model_cfg.embed_dim,
