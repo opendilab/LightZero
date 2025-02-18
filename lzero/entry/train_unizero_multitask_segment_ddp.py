@@ -505,6 +505,16 @@ def train_unizero_multitask_segment_ddp(
             replay_buffer.push_game_segments(new_data)
             replay_buffer.remove_oldest_data_to_fit()
 
+            # # ===== only for debug =====
+            # if train_epoch > 2:
+            #     with timer:
+            #         replay_buffer.reanalyze_buffer(2, policy)
+            #     buffer_reanalyze_count += 1
+            #     logging.info(f'缓冲区重新分析次数: {buffer_reanalyze_count}')
+            #     logging.info(f'缓冲区重新分析耗时: {timer.value}') 
+            # # ===== only for debug =====
+
+
             # 周期性地重新分析缓冲区
             if cfg.policy.buffer_reanalyze_freq >= 1:
                 reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq

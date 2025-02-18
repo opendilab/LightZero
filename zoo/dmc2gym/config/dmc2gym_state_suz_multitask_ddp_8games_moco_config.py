@@ -55,11 +55,12 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     # use_shared_projection=True, # TODO
                     use_shared_projection=False,
 
-                    task_embed_option='concat_task_embed',   # ==============TODO: none ==============
-                    use_task_embed=True, # TODO
+                    #==== 修改grad 路径====
+                    # task_embed_option='concat_task_embed',   # ==============TODO: none ==============
+                    # use_task_embed=True, # TODO
                     
-                    # task_embed_option=None,   # ==============TODO: none ==============
-                    # use_task_embed=False, # ==============TODO==============
+                    task_embed_option=None,   # ==============TODO: none ==============
+                    use_task_embed=False, # ==============TODO==============
                     
                     num_unroll_steps=num_unroll_steps,
                     policy_entropy_weight=5e-2,
@@ -160,8 +161,9 @@ def generate_configs(env_id_list: List[str],
     # TODO: debug
     # exp_name_prefix = f'data_suz_mt_20250207/ddp_moco-paramv0_nlayer8_upc200_notaskweight_concat-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
     # exp_name_prefix = f'data_suz_mt_20250207_debug/ddp_moco-paramv0_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
-    # exp_name_prefix = f'data_suz_mt_20250207/ddp_task-grad-layer_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
-    exp_name_prefix = f'data_suz_mt_20250207/ddp_task-grad-layer_nlayer8_upc200_concattaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    
+    exp_name_prefix = f'data_suz_mt_20250207/ddp_task-grad-layer_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    # exp_name_prefix = f'data_suz_mt_20250207/ddp_task-grad-layer_nlayer8_upc200_notaskweight_concat-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
     
     # exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_taskweight-eval1e3-10k-temp10-1_task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
     # exp_name_prefix = f'data_suz_mt_20250207/ddp_moco-fix-paramv2_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
@@ -216,7 +218,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29503 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_moco_config.py
+        python -m torch.distributed.launch --nproc_per_node=2 --master_port=29503 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_moco_config.py
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 

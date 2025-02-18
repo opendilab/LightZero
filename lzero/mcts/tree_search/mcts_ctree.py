@@ -130,7 +130,24 @@ class UniZeroMCTSCtree(object):
                 for ix, iy in zip(latent_state_index_in_search_path, latent_state_index_in_batch):
                     latent_states.append(latent_state_batch_in_search_path[ix][iy])
 
-                latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
+                # latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
+                try:
+                    # print ("latent_state_roots.shape:", latent_state_roots.shape)
+                    # print ("latent_states[0].shape:", latent_states[0].shape)
+                    # print ("latent_states[1].shape:", latent_states[1].shape)
+                    # import ipdb; ipdb.set_trace()
+                    latent_states = torch.from_numpy(np.asarray(latent_states)).to(self._cfg.device)
+                except Exception as e:
+                    print("="*20)
+                    print(e)
+                    # print("latent_states raw:", latent_states)
+                    print("roots:", roots, "latent_state_roots:", latent_state_roots)
+                    print ("latent_state_roots.shape:", latent_state_roots.shape)
+                    # if not all(isinstance(x, np.ndarray) and x.shape == latent_states[0].shape for x in latent_states):
+                    #     raise ValueError(f"Inconsistent latent_states shapes: {[x.shape if isinstance(x, np.ndarray) else type(x) for x in latent_states]}")
+                    import ipdb; ipdb.set_trace()
+
+
                 # TODO: .long() is only for discrete action
                 last_actions = torch.from_numpy(np.asarray(last_actions)).to(self._cfg.device).long()
 

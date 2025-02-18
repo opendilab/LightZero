@@ -18,8 +18,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             collect_max_episode_steps=int(5e3),
             eval_max_episode_steps=int(5e3),
             # ===== only for debug =====
-            # collect_max_episode_steps=int(30),
-            # eval_max_episode_steps=int(30),
+            # collect_max_episode_steps=int(50),
+            # eval_max_episode_steps=int(50),
         ),
         policy=dict(
             multi_gpu=True,  # Very important for ddp
@@ -61,6 +61,10 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
                     num_layers=8,
                     num_heads=8,
+
+                    # ===== only for debug =====
+                    # num_layers=1,
+                    # num_heads=8,
 
                     embed_dim=768,
                     obs_type='image',
@@ -141,7 +145,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=1 --master_port=29502 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
 
@@ -182,6 +186,9 @@ if __name__ == "__main__":
     # n_episode = 2
     # evaluator_env_num = 2
     # num_simulations = 1
+    # reanalyze_batch_size = 2
+    # num_unroll_steps = 5
+    # infer_context_length = 2
     # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
 
 
@@ -193,4 +200,5 @@ if __name__ == "__main__":
 
         with DDPContext():
             train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
-            # train_unizero_multitask_segment_ddp(configs[:4], seed=seed, max_env_step=max_env_step) # train on the first four tasks
+            # ======== TODO: only for debug ========
+            # train_unizero_multitask_segment_ddp(configs[:1], seed=seed, max_env_step=max_env_step) # train on the first four tasks

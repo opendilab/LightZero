@@ -306,7 +306,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
         self.task_id = self._cfg.task_id
         self.task_num_for_current_rank = self._cfg.task_num
-
+        print(f'self._cfg.only_use_moco_stats:{self._cfg.only_use_moco_stats}')
         if self._cfg.use_moco or self._cfg.only_use_moco_stats:
             # 创建 WrappedModel 实例，仅矫正部分参数，保持可扩展性
             # wrapped_model = WrappedModelV2(

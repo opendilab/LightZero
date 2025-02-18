@@ -654,11 +654,18 @@ class WorldModelMT(WorldModel):
             elif self.task_embed_option == "concat_task_embed":
 
                 # print(f'=='*20)
+                # print(f"is_init_infer:{is_init_infer}")
                 # print(f'obs_embeddings.shape:{obs_embeddings.shape}')
                 # print(f'self.task_embeddings.shape:{self.task_embeddings.shape}')
                 # print(f'=='*20)
 
-                if is_init_infer:
+                # if is_init_infer:
+                #     # 注意只有在inference时，只有在is_init_infer时拼接task embeddings，recurr_infer中已经在init_infer中增加了task embeddings的信息了
+                #     # Expand task embeddings to match the sequence shape
+                #     task_emb_expanded = self.task_embeddings.view(1, 1, -1).expand(obs_embeddings.shape[0], obs_embeddings.shape[1], -1)
+                #     obs_embeddings = torch.cat([obs_embeddings, task_emb_expanded], dim=-1)
+
+                if is_init_infer and not self.reanalyze_phase:
                     # 注意只有在inference时，只有在is_init_infer时拼接task embeddings，recurr_infer中已经在init_infer中增加了task embeddings的信息了
                     # Expand task embeddings to match the sequence shape
                     task_emb_expanded = self.task_embeddings.view(1, 1, -1).expand(obs_embeddings.shape[0], obs_embeddings.shape[1], -1)
@@ -1008,7 +1015,20 @@ class WorldModelMT(WorldModel):
             outputs_wm = self.wm_forward_for_initial_inference(obs_embeddings, batch_action, current_obs_embeddings, task_id=task_id)
         else:
             # ================ calculate the target value in Train phase ================
-            self.latent_state = obs_embeddings
+
+            # self.latent_state = obs_embeddings
+
+            #  ================ NOTE ================
+            # import ipdb; ipdb.set_trace()
+            # self.latent_state 是原来的obs_embeddings与task_embedding的组合： add或者concat
+            if self.use_task_embed and self.task_embed_option == "add_task_embed":
+                self.latent_state = obs_embeddings + self.task_embeddings
+            if self.use_task_embed and self.task_embed_option == "concat_task_embed":
+                task_emb_expanded = self.task_embeddings.view(1, 1, -1).expand(obs_embeddings.shape[0], obs_embeddings.shape[1], -1)
+                self.latent_state = torch.cat([obs_embeddings, task_emb_expanded], dim=-1)
+            # print(f" Train phase self.latent_state.shape: {self.latent_state.shape}")
+            #  ================ NOTE ================
+
             outputs_wm = self.wm_forward_for_initial_inference(obs_embeddings, batch_action, None, task_id=task_id)
 
         return outputs_wm, self.latent_state
@@ -1120,11 +1140,11 @@ class WorldModelMT(WorldModel):
 
             last_obs_embeddings = last_obs_embeddings[:, :-1, :]
             batch_action = torch.from_numpy(batch_action).to(last_obs_embeddings.device)
+            
             if self.continuous_action_space:
                 act_tokens = batch_action
             else:
                 act_tokens = rearrange(batch_action, 'b l -> b l 1')
-
 
             # select the last timestep for each sample
             # This will select the last column while keeping the dimensions unchanged, and the target policy/value in the final step itself is not used.
@@ -1132,6 +1152,12 @@ class WorldModelMT(WorldModel):
             act_tokens = torch.cat((act_tokens, last_steps_act), dim=1)
 
             outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (last_obs_embeddings, act_tokens)}, task_id=task_id)
+            
+            # if self.reanalyze_phase:
+            #     # TODO
+            #     outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (last_obs_embeddings, act_tokens)}, is_init_infer=False, task_id=task_id)
+            # else:
+            #     outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (last_obs_embeddings, act_tokens)}, is_init_infer=True, task_id=task_id)
 
             # select the last timestep for each sample
             last_steps_value = outputs_wm.logits_value[:, -1:, :]
@@ -1524,7 +1550,17 @@ class WorldModelMT(WorldModel):
                 self.forward(
                     {'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)},
                     past_keys_values=self.keys_values_wm_single_env, is_init_infer=True, task_id=task_id
-                )
+                    )
+                # if self.reanalyze_phase:
+                #     self.forward(
+                #     {'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)},
+                #     past_keys_values=self.keys_values_wm_single_env, is_init_infer=False, task_id=task_id
+                #     )
+                # else:
+                #     self.forward(
+                #     {'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)},
+                #     past_keys_values=self.keys_values_wm_single_env, is_init_infer=True, task_id=task_id
+                #     )
                 self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                 self.keys_values_wm_size_list.append(1)
 
