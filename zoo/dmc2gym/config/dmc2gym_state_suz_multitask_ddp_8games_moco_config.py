@@ -29,7 +29,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
         policy=dict(
             # multi_gpu=False,  # TODO: enable multi-GPU for DDP
             multi_gpu=True,  # TODO: enable multi-GPU for DDP
-            only_use_moco_stats=True,
+            # only_use_moco_stats=True,
+            only_use_moco_stats=False,
             use_moco=False,  # ==============TODO==============
             # use_moco=True,  # ==============TODO==============
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000))),
@@ -56,11 +57,12 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     use_shared_projection=False,
 
                     #==== 修改grad 路径====
-                    # task_embed_option='concat_task_embed',   # ==============TODO: none ==============
-                    # use_task_embed=True, # TODO
+                    task_embed_dim=96,
+                    task_embed_option='concat_task_embed',   # ==============TODO: none ==============
+                    use_task_embed=True, # TODO
                     
-                    task_embed_option=None,   # ==============TODO: none ==============
-                    use_task_embed=False, # ==============TODO==============
+                    # task_embed_option=None,   # ==============TODO: none ==============
+                    # use_task_embed=False, # ==============TODO==============
                     
                     num_unroll_steps=num_unroll_steps,
                     policy_entropy_weight=5e-2,
@@ -79,13 +81,17 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     # num_layers=2,
                     # num_layers=4, # TODO
 
+                    # num_layers=8, # TODO
+                    # num_heads=24,
+                    # embed_dim=768,
+
                     num_layers=8, # TODO
-                    num_heads=8,
+                    num_heads=16,
+                    embed_dim=1024,
 
                     # num_layers=12, # TODO
                     # num_heads=12,
 
-                    embed_dim=768,
                     env_num=max(collector_env_num, evaluator_env_num),
                     task_num=len(env_id_list),
                     use_normal_head=True,
@@ -158,13 +164,14 @@ def generate_configs(env_id_list: List[str],
                     num_segments: int,
                     total_batch_size: int):
     configs = []
+    
+    exp_name_prefix = f'data_suz_mt_20250207_18games/ddp_nlayer8-nh24-embed1024_upc200_concat-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    # exp_name_prefix = f'data_suz_mt_20250207/ddp_task-grad-layer_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    # exp_name_prefix = f'data_suz_mt_20250207/ddp_task-grad-layer_nlayer8_upc200_notaskweight_concat-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
+    
     # TODO: debug
     # exp_name_prefix = f'data_suz_mt_20250207/ddp_moco-paramv0_nlayer8_upc200_notaskweight_concat-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
     # exp_name_prefix = f'data_suz_mt_20250207_debug/ddp_moco-paramv0_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
-    
-    exp_name_prefix = f'data_suz_mt_20250207/ddp_task-grad-layer_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
-    # exp_name_prefix = f'data_suz_mt_20250207/ddp_task-grad-layer_nlayer8_upc200_notaskweight_concat-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
-    
     # exp_name_prefix = f'data_suz_mt_20250113/ddp_8gpu_nlayer8_upc200_taskweight-eval1e3-10k-temp10-1_task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
     # exp_name_prefix = f'data_suz_mt_20250207/ddp_moco-fix-paramv2_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
     # exp_name_prefix = f'data_suz_mt_20250207/ddp_1gpu-moco_multigpu_nlayer8_upc200_notaskweight_no-task-embed_{len(env_id_list)}tasks_brf{buffer_reanalyze_freq}_tbs{total_batch_size}_seed{seed}/'
@@ -218,7 +225,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=2 --master_port=29503 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_moco_config.py
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29503 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_8games_moco_config.py
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -248,18 +255,6 @@ if __name__ == "__main__":
     # ]
 
     # DMC 8games
-    env_id_list = [
-        'acrobot-swingup',
-        'cartpole-balance',
-        'cartpole-balance_sparse',
-        'cartpole-swingup',
-        'cartpole-swingup_sparse',
-        'cheetah-run',
-        "ball_in_cup-catch",
-        "finger-spin",
-    ]
-
-    # DMC 18games
     # env_id_list = [
     #     'acrobot-swingup',
     #     'cartpole-balance',
@@ -269,17 +264,29 @@ if __name__ == "__main__":
     #     'cheetah-run',
     #     "ball_in_cup-catch",
     #     "finger-spin",
-    #     "finger-turn_easy",
-    #     "finger-turn_hard",
-    #     'hopper-hop',
-    #     'hopper-stand',
-    #     'pendulum-swingup',
-    #     'reacher-easy',
-    #     'reacher-hard',
-    #     'walker-run',
-    #     'walker-stand',
-    #     'walker-walk',
     # ]
+
+    # DMC 18games
+    env_id_list = [
+        'acrobot-swingup',
+        'cartpole-balance',
+        'cartpole-balance_sparse',
+        'cartpole-swingup',
+        'cartpole-swingup_sparse',
+        'cheetah-run',
+        "ball_in_cup-catch",
+        "finger-spin",
+        "finger-turn_easy",
+        "finger-turn_hard",
+        'hopper-hop',
+        'hopper-stand',
+        'pendulum-swingup',
+        'reacher-easy',
+        'reacher-hard',
+        'walker-run',
+        'walker-stand',
+        'walker-walk',
+    ]
 
     # 获取各环境的 action_space_size 和 observation_shape
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
@@ -290,8 +297,8 @@ if __name__ == "__main__":
     n_episode = 8
     evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(5e5)
-    # max_env_step = int(1e6)
+    # max_env_step = int(5e5)
+    max_env_step = int(1e6)
 
     reanalyze_ratio = 0.0
 
@@ -299,7 +306,7 @@ if __name__ == "__main__":
         # nlayer=4/8 8games
         total_batch_size = 512
         batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
-    elif  len(env_id_list)>8:
+    elif len(env_id_list)>8:
     # # # nlayer=12 18games
         total_batch_size = 256
         batch_size = [int(min(16, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]

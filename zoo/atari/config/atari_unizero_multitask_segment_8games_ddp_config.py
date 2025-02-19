@@ -60,7 +60,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # num_heads=24,
 
                     num_layers=8,
-                    num_heads=8,
+                    num_heads=24,
 
                     # ===== only for debug =====
                     # num_layers=1,

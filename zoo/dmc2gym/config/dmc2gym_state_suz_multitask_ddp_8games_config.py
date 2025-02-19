@@ -81,13 +81,17 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     # num_layers=2,
                     # num_layers=4, # TODO
 
+                    # num_layers=8, # TODO
+                    # num_heads=8,
+                    # embed_dim=768,
+
                     num_layers=8, # TODO
-                    num_heads=8,
+                    num_heads=24,
+                    embed_dim=1024,
 
                     # num_layers=12, # TODO
                     # num_heads=12,
 
-                    embed_dim=768,
                     env_num=max(collector_env_num, evaluator_env_num),
                     task_num=len(env_id_list),
                     use_normal_head=True,
@@ -277,26 +281,26 @@ if __name__ == "__main__":
     ]
 
     # DMC 18games
-    # env_id_list = [
-    #     'acrobot-swingup',
-    #     'cartpole-balance',
-    #     'cartpole-balance_sparse',
-    #     'cartpole-swingup',
-    #     'cartpole-swingup_sparse',
-    #     'cheetah-run',
-    #     "ball_in_cup-catch",
-    #     "finger-spin",
-    #     "finger-turn_easy",
-    #     "finger-turn_hard",
-    #     'hopper-hop',
-    #     'hopper-stand',
-    #     'pendulum-swingup',
-    #     'reacher-easy',
-    #     'reacher-hard',
-    #     'walker-run',
-    #     'walker-stand',
-    #     'walker-walk',
-    # ]
+    env_id_list = [
+        'acrobot-swingup',
+        'cartpole-balance',
+        'cartpole-balance_sparse',
+        'cartpole-swingup',
+        'cartpole-swingup_sparse',
+        'cheetah-run',
+        "ball_in_cup-catch",
+        "finger-spin",
+        "finger-turn_easy",
+        "finger-turn_hard",
+        'hopper-hop',
+        'hopper-stand',
+        'pendulum-swingup',
+        'reacher-easy',
+        'reacher-hard',
+        'walker-run',
+        'walker-stand',
+        'walker-walk',
+    ]
 
     # 获取各环境的 action_space_size 和 observation_shape
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]

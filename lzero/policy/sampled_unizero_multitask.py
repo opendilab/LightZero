@@ -498,11 +498,10 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(), self._cfg.grad_clip_value)
 
-
         if self._cfg.multi_gpu:
             # if not self._cfg.use_moco or self._cfg.only_use_moco_stats:
             #     self.sync_gradients(self._learn_model)
-            if not self._cfg.use_moco and self._cfg.only_use_moco_stats:
+            if not self._cfg.use_moco:
                 self.sync_gradients(self._learn_model)
 
         self._optimizer_world_model.step()

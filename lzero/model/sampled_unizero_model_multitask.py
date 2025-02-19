@@ -193,7 +193,7 @@ class SampledUniZeroMTModel(nn.Module):
         # self.world_models = nn.ModuleList()
 
         if world_model_cfg.task_embed_option == "concat_task_embed":
-            obs_act_embed_dim = world_model_cfg.embed_dim - 96
+            obs_act_embed_dim = world_model_cfg.embed_dim - world_model_cfg.task_embed_dim if hasattr(world_model_cfg, "task_embed_dim") else 96
         else:
             obs_act_embed_dim = world_model_cfg.embed_dim
             
