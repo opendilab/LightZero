@@ -28,11 +28,12 @@ def main(env_id, seed):
     reanalyze_partition = 0.75
 
     # ====== only for debug =====
-    # collector_env_num = 2
-    # num_segments = 2
-    # evaluator_env_num = 2
-    # num_simulations = 10
-    # batch_size = 5
+    collector_env_num = 2
+    num_segments = 2
+    evaluator_env_num = 2
+    num_simulations = 5
+    batch_size = 5
+    buffer_reanalyze_freq = 1/1000000
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
@@ -48,8 +49,8 @@ def main(env_id, seed):
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False, ),
             # TODO: only for debug
-            # collect_max_episode_steps=int(50),
-            # eval_max_episode_steps=int(50),
+            collect_max_episode_steps=int(50),
+            eval_max_episode_steps=int(50),
         ),
         policy=dict(
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
@@ -58,6 +59,10 @@ def main(env_id, seed):
                 action_space_size=action_space_size,
                 support_scale=300,
                 world_model_cfg=dict(
+                    analysis_dormant_ratio=True, # TODO
+                    task_embed_option=None,   # ==============TODO: none ==============
+                    use_task_embed=False, # ==============TODO==============
+                    use_shared_projection=False,
                     support_size=601,
                     policy_entropy_weight=5e-3,
                     continuous_action_space=False,
@@ -72,6 +77,13 @@ def main(env_id, seed):
                     obs_type='image',
                     env_num=max(collector_env_num, evaluator_env_num),
                     num_simulations=num_simulations,
+                    use_normal_head=True,
+                    use_softmoe_head=False,
+                    use_moe_head=False,
+                    num_experts_in_moe_head=4,
+                    moe_in_transformer=False,
+                    multiplication_moe_in_transformer=False,
+                    num_experts_of_moe_in_transformer=4,
                 ),
             ),
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
@@ -124,7 +136,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_debug/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 

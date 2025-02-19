@@ -345,10 +345,12 @@ class WorldModel(nn.Module):
         elif self.num_observations_tokens == 1:
             # self.projection_input_dim = self.config.embed_dim
             if self.task_embed_option == "concat_task_embed":
-                self.projection_input_dim = self.config.embed_dim - 96
+                self.projection_input_dim = self.config.embed_dim - self.task_embed_dim
             elif self.task_embed_option == "register_task_embed":
                 self.projection_input_dim = self.config.embed_dim
             elif self.task_embed_option == "add_task_embed":
+                self.projection_input_dim = self.config.embed_dim
+            else:
                 self.projection_input_dim = self.config.embed_dim
 
     def _initialize_statistics(self) -> None:
@@ -1151,7 +1153,7 @@ class WorldModel(nn.Module):
             # Calculate dormant ratio of the encoder
             shape = batch['observations'].shape  # (..., C, H, W)
             inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
-            dormant_ratio_encoder = cal_dormant_ratio(self.tokenizer.representation_network, inputs.detach(),
+            dormant_ratio_encoder = cal_dormant_ratio(self.tokenizer.encoder, inputs.detach(),
                                                       percentage=self.dormant_threshold)
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()

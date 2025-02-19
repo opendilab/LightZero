@@ -103,6 +103,7 @@ class UniZeroModel(nn.Module):
             if world_model_cfg.analysis_sim_norm:
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
+                
             self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=None, with_lpips=False,)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
