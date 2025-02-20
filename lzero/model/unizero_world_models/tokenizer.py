@@ -155,9 +155,13 @@ class Tokenizer(nn.Module):
         embeddings = embeddings.reshape(embeddings.shape[0] * embeddings.shape[1], 1, -1)
         # target_ids: [B, T, L] -> [B * T, L]
         target_ids = target_ids.reshape(target_ids.shape[0] * target_ids.shape[1], -1)
+
+        # For each decision transformer token (encoding for one observation),
+        # the embedding serves as the initial hidden state for t5 to decode.
+        # Hence, the sequence dimension can be paralleled, i.e. should be merged to the batch dimension.
         embeddings = self.projection_layer(embeddings)
         outputs = self.decoder_network(
-            input_embeds=target_ids,
+            input_ids=target_ids,
             encoder_hidden_states=embeddings,
         )
         logits = self.decoder_network.lm_head(outputs.last_hidden_state)
