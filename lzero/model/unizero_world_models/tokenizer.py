@@ -96,8 +96,10 @@ class Tokenizer(nn.Module):
             if self.obs_type == 'vector':
                 obs_embeddings = self.encoder(x, task_id=task_id)  # TODO: for dmc multitask
             elif self.obs_type == 'image':
-                obs_embeddings = self.encoder[0](x) # TODO: for atari/memory env
-                # obs_embeddings = self.encoder(x) # TODO: for atari/memory env single-task
+                try:
+                    obs_embeddings = self.encoder[0](x) # TODO: for atari/memory env
+                except:
+                    obs_embeddings = self.encoder(x) # TODO: for atari/memory env single-task
 
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 5:
@@ -106,8 +108,10 @@ class Tokenizer(nn.Module):
             if self.obs_type == 'vector':
                 obs_embeddings = self.encoder[task_id](x)
             elif self.obs_type == 'image':
-                obs_embeddings = self.encoder[0](x) # TODO: for atari/memory env 
-                # obs_embeddings = self.encoder(x) # TODO: for atari/memory env single-task
+                try:
+                    obs_embeddings = self.encoder[0](x) # TODO: for atari/memory env 
+                except:
+                    obs_embeddings = self.encoder(x) # TODO: for atari/memory env single-task
 
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         else:

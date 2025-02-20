@@ -688,6 +688,8 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # ========= TODO: for muzero_segment_collector now =========
             if active_collect_env_num < self.collector_env_num:
+                # 当collect_env中有一个环境先done时，传回的self.last_batch_obs的长度会减少1, transformer在检索kv_cache时需要知道env_id，实现比较复杂
+                # 因此直接《self.collector_env_num》个环境的self.last_batch_action全部重置为-1，让transformer从0开始，避免检索错误
                 print('==========collect_forward============')
                 print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
                 self._reset_collect(reset_init_data=True)

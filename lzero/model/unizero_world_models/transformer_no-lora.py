@@ -1,9 +1,5 @@
 """
 Modified from https://github.com/karpathy/nanoGPT
-
-在原 transformer.py 基础上增加 LoRA 微调相关代码，
-并通过传入配置参数控制 LoRA 微调的模块（默认是 attention 中的 k, q, v, proj 和 feed_forward）
-保持原有代码的可扩展性。
 """
 
 import math
@@ -22,94 +18,6 @@ from line_profiler import line_profiler
 from lzero.model.common import SimNorm
 
 
-#############################################
-# 新增：LoRA 微调相关代码
-#############################################
-class LoRALinear(nn.Module):
-    """
-    LoRA 适配器包装的线性层。
-
-    原理：
-      使用冻结的原始 nn.Linear 层，并添加两个小型低秩矩阵，
-      计算公式为：y = x @ W^T + scaling * ((drop(x) @ A^T) @ B^T)
-      其中 A 和 B 为低秩参数，scaling = lora_alpha / r.
-    """
-    def __init__(
-        self,
-        in_features: int,
-        out_features: int,
-        bias: bool = True,
-        r: int = 0,
-        lora_alpha: int = 1,
-        lora_dropout: float = 0.0
-    ):
-        super().__init__()
-        self.in_features = in_features
-        self.out_features = out_features
-        self.r = r
-        self.lora_alpha = lora_alpha
-        self.scaling = lora_alpha / r if r > 0 else 1.0
-        self.lora_dropout = nn.Dropout(p=lora_dropout) if lora_dropout > 0.0 else nn.Identity()
-
-        # 原始权重（冻结参数，不更新）
-        self.weight = nn.Parameter(torch.empty(out_features, in_features))
-        self.bias = nn.Parameter(torch.empty(out_features)) if bias else None
-        nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
-        if bias:
-            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
-            bound = 1 / math.sqrt(fan_in)
-            nn.init.uniform_(self.bias, -bound, bound)
-
-        # 低秩矩阵参数（仅在 r > 0 时添加）
-        if r > 0:
-            # A 将 in_features 映射到低秩 r；B 从低秩 r 映射回 out_features
-            self.lora_A = nn.Parameter(torch.randn(r, in_features) * 0.01)
-            self.lora_B = nn.Parameter(torch.zeros(out_features, r))
-        else:
-            self.lora_A = None
-            self.lora_B = None
-
-        # 冻结原始权重参数，保证仅更新 LoRA 参数
-        self.weight.requires_grad = False
-        if self.bias is not None:
-            self.bias.requires_grad = False
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # 原始线性输出（冻结部分）
-        result = F.linear(x, self.weight, self.bias)
-        # 如启用了 LoRA，则加上低秩部分
-        if self.r > 0:
-            lora_out = F.linear(self.lora_dropout(x), self.lora_A)  # (…, r)
-            lora_out = F.linear(lora_out, self.lora_B)                # (…, out_features)
-            result = result + self.scaling * lora_out
-        return result
-
-
-def _maybe_wrap_linear(linear: nn.Linear, config, module_label: str) -> nn.Module:
-    """
-    辅助函数：当 config.lora_r > 0 且 module_label 存在于 config.lora_target_modules 时，
-    将传入的线性层替换为 LoRALinear，并复制原始权重数据。
-
-    module_label 的取值含义由上层逻辑定义，例如：
-      - 若 module_label 为 "attn"，表示在 SelfAttention 中替换 k, q, v, proj 等层。
-      - 若 module_label 为 "feed_forward"，表示在 Transformer Block 的 MLP 中替换线性层。
-    """
-    if config.lora_r > 0 and module_label in config.lora_target_modules:
-        new_linear = LoRALinear(
-            in_features=linear.in_features,
-            out_features=linear.out_features,
-            bias=(linear.bias is not None),
-            r=config.lora_r,
-            lora_alpha=config.lora_alpha,
-            lora_dropout=config.lora_dropout
-        )
-        new_linear.weight.data.copy_(linear.weight.data)
-        if linear.bias is not None:
-            new_linear.bias.data.copy_(linear.bias.data)
-        return new_linear
-    else:
-        return linear
-
 @dataclass
 class TransformerConfig:
     tokens_per_block: int
@@ -123,24 +31,6 @@ class TransformerConfig:
     embed_pdrop: float
     resid_pdrop: float
     attn_pdrop: float
-
-    # LoRA 参数：
-    lora_r: int = 0
-    lora_alpha: int = 1
-    lora_dropout: float = 0.0
-    # 指定哪些模块应用 LoRA，默认：attention 中的 k, q, v, proj 和 feed_forward 层（当非 moe 模型时）
-    lora_target_modules: list = None
-
-    # Register Token 相关
-    task_embed_option: str = "none"
-    register_token_num: int = 4
-    register_token_shared: bool = True
-
-    # 其它配置项
-    gru_gating: bool = False
-    moe_in_transformer: bool = False
-    multiplication_moe_in_transformer: bool = False
-    num_experts_of_moe_in_transformer: int = 1
 
     @property
     def max_tokens(self):
@@ -332,7 +222,6 @@ class Block(nn.Module):
         self.ln1 = nn.LayerNorm(config.embed_dim)
         self.ln2 = nn.LayerNorm(config.embed_dim)
         self.attn = SelfAttention(config)
-
         if config.moe_in_transformer:
             # 创Create multiple independent MLP instances
             self.experts = nn.ModuleList([
@@ -343,6 +232,7 @@ class Block(nn.Module):
                     nn.Dropout(config.resid_pdrop),
                 ) for _ in range(config.num_experts_of_moe_in_transformer)
             ])
+            
             self.feed_forward = MoeLayer(
                 experts=self.experts,
                 gate=nn.Linear(config.embed_dim, config.num_experts_of_moe_in_transformer, bias=False),
@@ -368,17 +258,10 @@ class Block(nn.Module):
             print(f'use multiplication moe in feed_forward of transformer, num of expert: {config.num_experts_of_moe_in_transformer}')
             print("="*20)
         else:
-            # self.feed_forward = nn.Sequential(
-            #     nn.Linear(config.embed_dim, 4 * config.embed_dim),
-            #     nn.GELU(approximate='tanh'),
-            #     nn.Linear(4 * config.embed_dim, config.embed_dim),
-            #     nn.Dropout(config.resid_pdrop),
-            # )
-            # 普通的 MLP，若在 feed_forward 上启用 LoRA，则对其中线性层进行包装
             self.feed_forward = nn.Sequential(
-                _maybe_wrap_linear(nn.Linear(config.embed_dim, 4 * config.embed_dim), config, "feed_forward"),
+                nn.Linear(config.embed_dim, 4 * config.embed_dim),
                 nn.GELU(approximate='tanh'),
-                _maybe_wrap_linear(nn.Linear(4 * config.embed_dim, config.embed_dim), config, "feed_forward"),
+                nn.Linear(4 * config.embed_dim, config.embed_dim),
                 nn.Dropout(config.resid_pdrop),
             )
 
@@ -440,19 +323,13 @@ class SelfAttention(nn.Module):
 
         self.num_heads = config.num_heads
 
-        if config.lora_r > 0 and ("attn" in config.lora_target_modules):
-            self.key = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
-            self.query = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
-            self.value = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
-            self.proj = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
-        else:
-            self.key = nn.Linear(config.embed_dim, config.embed_dim)
-            self.query = nn.Linear(config.embed_dim, config.embed_dim)
-            self.value = nn.Linear(config.embed_dim, config.embed_dim)
-            self.proj = nn.Linear(config.embed_dim, config.embed_dim)
+        self.key = nn.Linear(config.embed_dim, config.embed_dim)
+        self.query = nn.Linear(config.embed_dim, config.embed_dim)
+        self.value = nn.Linear(config.embed_dim, config.embed_dim)
 
         self.attn_drop = nn.Dropout(config.attn_pdrop)
         self.resid_drop = nn.Dropout(config.resid_pdrop)
+        self.proj = nn.Linear(config.embed_dim, config.embed_dim)
 
         if self.use_register_token: # ======= TODO ========
             causal_mask = torch.tril(torch.ones(config.max_tokens+self.register_token_num*5, config.max_tokens+self.register_token_num*5))

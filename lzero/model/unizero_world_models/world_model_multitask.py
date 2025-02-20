@@ -1037,9 +1037,12 @@ class WorldModelMT(WorldModel):
             # self.latent_state 是原来的obs_embeddings与task_embedding的组合： add或者concat
             if self.use_task_embed and self.task_embed_option == "add_task_embed":
                 self.latent_state = obs_embeddings + self.task_embeddings
-            if self.use_task_embed and self.task_embed_option == "concat_task_embed":
+            elif self.use_task_embed and self.task_embed_option == "concat_task_embed":
                 task_emb_expanded = self.task_embeddings.view(1, 1, -1).expand(obs_embeddings.shape[0], obs_embeddings.shape[1], -1)
                 self.latent_state = torch.cat([obs_embeddings, task_emb_expanded], dim=-1)
+            else:
+                self.latent_state = obs_embeddings
+
             # print(f" Train phase self.latent_state.shape: {self.latent_state.shape}")
             #  ================ NOTE ================
 
@@ -1888,7 +1891,8 @@ class WorldModelMT(WorldModel):
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
         else:
-            dormant_ratio_world_model = torch.tensor(0.)
+            dormant_ratio_transformer = torch.tensor(0.)
+            dormant_ratio_head = torch.tensor(0.)
             avg_weight_mag_encoder = torch.tensor(0.)
             avg_weight_mag_transformer = torch.tensor(0.)
             avg_weight_mag_head = torch.tensor(0.)

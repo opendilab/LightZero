@@ -944,9 +944,13 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             # ========= TODO: for muzero_segment_collector now =========
             if active_collect_env_num < self.collector_env_num:
+                # 当collect_env中有一个环境先done时，传回的self.last_batch_obs的长度会减少1, transformer在检索kv_cache时需要知道env_id，实现比较复杂
+                # 因此直接《self.collector_env_num》个环境的self.last_batch_action全部重置为-1，让transformer从0开始，避免检索错误
                 print('==========collect_forward============')
                 print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
                 self._reset_collect(reset_init_data=True, task_id=task_id)
+                if getattr(self._cfg, 'sample_type', '') == 'episode':
+                    print('BUG: sample_type is episode, but len(self.last_batch_obs) < self.collector_env_num')
 
         return output
 
@@ -1220,15 +1224,21 @@ class UniZeroMTPolicy(UniZeroPolicy):
     #     self._target_model.load_state_dict(state_dict['target_model'])
     #     self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
 
-    # ========== TODO: pretrain-finetue version: only load encoder and transformer-backbone parameters  ==========
-    def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
+    def _load_state_dict_learn(self, state_dict: Dict[str, Any], finetune_components: List[str] = []) -> None:
         """
         Overview:
             Load the state_dict variable into policy learn mode, excluding multi-task related parameters.
+            根据 finetune_components 参数，决定加载 encoder 和 transformer 后，哪些部分参与后续更新，哪些被冻结。
         Arguments:
             - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved previously.
+            - finetune_components (:obj:`List[str]`, optional): A list of component names that will remain trainable after loading.
+                For example, it can include "encoder", "transformer", or both. The components not in this list will be frozen.
         """
-        # 定义需要排除的参数前缀
+        # finetune_components = [] # load-enc-trans_finetune-head
+        finetune_components = ['transformer'] # load-enc-trans_finetune-trans-head
+        # finetune_components = ["representation_network", "encoder"] # load-enc-trans_finetune-encoder-head
+
+        # 定义需要排除的参数前缀，即不加载这些参数
         exclude_prefixes = [
             '_orig_mod.world_model.head_policy_multi_task.',
             '_orig_mod.world_model.head_value_multi_task.',
@@ -1283,14 +1293,101 @@ class UniZeroMTPolicy(UniZeroPolicy):
         else:
             print("No 'target_model' key found in the state_dict.")
 
-        # 加载优化器的 state_dict，不需要过滤，因为优化器通常不包含模型参数
-        if 'optimizer_world_model' in state_dict:
-            optimizer_state_dict = state_dict['optimizer_world_model']
-            try:
-                self._optimizer_world_model.load_state_dict(optimizer_state_dict)
-            except Exception as e:
-                print(f"Error loading optimizer state_dict: {e}")
-        else:
-            print("No 'optimizer_world_model' key found in the state_dict.")
+        # 对 _learn_model 中的参数进行冻结/解冻的处理
+        # 假设模型中参数的名字如果包含 "encoder" 则属于 encoder 模块，
+        # 包含 "transformer" 则属于 transformer 模块，其它部分可根据需要扩展。
+        for name, param in self._learn_model.named_parameters():
+            # 如果参数属于 encoder 且不在需要微调的组件中，则冻结该参数
+            if "encoder" in name and "encoder" not in finetune_components:
+                param.requires_grad = False
+                print(f"Freezing parameter: {name}")
+            elif "representation_network" in name and "representation_network" not in finetune_components:
+                param.requires_grad = False
+                print(f"Freezing parameter: {name}")
+            # 如果参数属于 transformer 且不在需要微调的组件中，则冻结该参数
+            elif "transformer" in name and "transformer" not in finetune_components:
+                param.requires_grad = False
+                print(f"Freezing parameter: {name}")
+            else:
+                # 如果参数属于其他模块，或者包含在 finetune_components 中，则保持默认（或者根据需要调整）
+                print(f"Parameter remains default: {name}")
 
-        # 如果需要，还可以加载其他部分，例如 scheduler 等
+        # 注意：
+        # 如果你的模型中嵌套模块更为复杂，可以基于 module 的属性而不是仅仅依靠参数名称进行判断，比如：
+        # for module in self._learn_model.modules():
+        #     if isinstance(module, EncoderModule) and "encoder" not in finetune_components:
+        #         for param in module.parameters():
+        #             param.requires_grad = False
+        
+    # # ========== TODO: pretrain-finetue version: only load encoder and transformer-backbone parameters  ==========
+    # def _load_state_dict_learn(self, state_dict: Dict[str, Any]) -> None:
+    #     """
+    #     Overview:
+    #         Load the state_dict variable into policy learn mode, excluding multi-task related parameters.
+    #     Arguments:
+    #         - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved previously.
+    #     """
+    #     # 定义需要排除的参数前缀
+    #     exclude_prefixes = [
+    #         '_orig_mod.world_model.head_policy_multi_task.',
+    #         '_orig_mod.world_model.head_value_multi_task.',
+    #         '_orig_mod.world_model.head_rewards_multi_task.',
+    #         '_orig_mod.world_model.head_observations_multi_task.',
+    #         '_orig_mod.world_model.task_emb.'
+    #     ]
+        
+    #     # 定义需要排除的具体参数（如果有特殊情况）
+    #     exclude_keys = [
+    #         '_orig_mod.world_model.task_emb.weight',
+    #         '_orig_mod.world_model.task_emb.bias',  # 如果存在则添加
+    #         # 添加其他需要排除的具体参数名
+    #     ]
+        
+    #     def filter_state_dict(state_dict_loader: Dict[str, Any], exclude_prefixes: list, exclude_keys: list = []) -> Dict[str, Any]:
+    #         """
+    #         过滤掉需要排除的参数。
+    #         """
+    #         filtered = {}
+    #         for k, v in state_dict_loader.items():
+    #             if any(k.startswith(prefix) for prefix in exclude_prefixes):
+    #                 print(f"Excluding parameter: {k}")  # 调试用，查看哪些参数被排除
+    #                 continue
+    #             if k in exclude_keys:
+    #                 print(f"Excluding specific parameter: {k}")  # 调试用
+    #                 continue
+    #             filtered[k] = v
+    #         return filtered
+
+    #     # 过滤并加载 'model' 部分
+    #     if 'model' in state_dict:
+    #         model_state_dict = state_dict['model']
+    #         filtered_model_state_dict = filter_state_dict(model_state_dict, exclude_prefixes, exclude_keys)
+    #         missing_keys, unexpected_keys = self._learn_model.load_state_dict(filtered_model_state_dict, strict=False)
+    #         if missing_keys:
+    #             print(f"Missing keys when loading _learn_model: {missing_keys}")
+    #         if unexpected_keys:
+    #             print(f"Unexpected keys when loading _learn_model: {unexpected_keys}")
+    #     else:
+    #         print("No 'model' key found in the state_dict.")
+
+    #     # 过滤并加载 'target_model' 部分
+    #     if 'target_model' in state_dict:
+    #         target_model_state_dict = state_dict['target_model']
+    #         filtered_target_model_state_dict = filter_state_dict(target_model_state_dict, exclude_prefixes, exclude_keys)
+    #         missing_keys, unexpected_keys = self._target_model.load_state_dict(filtered_target_model_state_dict, strict=False)
+    #         if missing_keys:
+    #             print(f"Missing keys when loading _target_model: {missing_keys}")
+    #         if unexpected_keys:
+    #             print(f"Unexpected keys when loading _target_model: {unexpected_keys}")
+    #     else:
+    #         print("No 'target_model' key found in the state_dict.")
+
+    #     # 不要加载优化器的 state_dict，因为优化器通常不包含模型参数，加载后性能反而变差
+    #     # if 'optimizer_world_model' in state_dict:
+    #     #     optimizer_state_dict = state_dict['optimizer_world_model']
+    #     #     try:
+    #     #         self._optimizer_world_model.load_state_dict(optimizer_state_dict)
+    #     #     except Exception as e:
+    #     #         print(f"Error loading optimizer state_dict: {e}")
+    #     # else:
+    #     #     print("No 'optimizer_world_model' key found in the state_dict.")

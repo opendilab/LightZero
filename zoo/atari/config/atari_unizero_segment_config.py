@@ -28,12 +28,12 @@ def main(env_id, seed):
     reanalyze_partition = 0.75
 
     # ====== only for debug =====
-    # collector_env_num = 2
-    # num_segments = 2
-    # evaluator_env_num = 2
-    # num_simulations = 5
-    # batch_size = 5
-    # buffer_reanalyze_freq = 1/1000000
+    collector_env_num = 2
+    num_segments = 2
+    evaluator_env_num = 2
+    num_simulations = 5
+    batch_size = 5
+    buffer_reanalyze_freq = 1/1000000
     # ==============================================================
     # end of the most frequently changed config specified by the user
     # ==============================================================
@@ -48,6 +48,8 @@ def main(env_id, seed):
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False, ),
+            # collect_max_episode_steps=int(5e3),
+            # eval_max_episode_steps=int(5e3),
             # TODO: only for debug
             # collect_max_episode_steps=int(20),
             # eval_max_episode_steps=int(20),
@@ -102,8 +104,8 @@ def main(env_id, seed):
             num_simulations=num_simulations,
             num_segments=num_segments,
             td_steps=5,
-            # train_start_after_envsteps=0, # only for debug
-            train_start_after_envsteps=2000,
+            train_start_after_envsteps=0, # only for debug
+            # train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             grad_clip_value=5,
             replay_buffer_size=int(1e6),
@@ -139,7 +141,7 @@ def main(env_id, seed):
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
     # TODO: only for debug
-    main_config.exp_name = f'data_unizero_atari_st_lop/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_atari_st_lop_debug/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 

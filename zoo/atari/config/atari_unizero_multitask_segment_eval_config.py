@@ -32,14 +32,15 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 num_channels=256,
                 world_model_cfg=dict(
                     env_id_list=env_id_list,
-                    analysis_tsne=True,
+                    analysis_tsne=True, # TODO
                     max_blocks=num_unroll_steps,
                     max_tokens=2 * num_unroll_steps,
                     context_length=2 * infer_context_length,
                     device='cuda',
                     action_space_size=action_space_size,
                     num_layers=8,  # Transformer layers
-                    num_heads=24,
+                    num_heads=8,
+                    # num_heads=24,
                     embed_dim=768,
                     obs_type='image',
                     env_num=8,
