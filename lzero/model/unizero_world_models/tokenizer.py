@@ -147,6 +147,11 @@ class Tokenizer(nn.Module):
         return torch.mean(self.lpips(original_images, reconstructed_images))
 
     def lm_reconstruction_loss(self, labels: torch.Tensor, logits: torch.Tensor) -> torch.Tensor:
+        total_dims = 1
+        for i in labels.shape:
+            total_dims *= i
+        logits = logits.reshape(total_dims, -1)
+        labels = labels.reshape(total_dims)
         loss = F.cross_entropy(logits, labels)
         return loss
 
