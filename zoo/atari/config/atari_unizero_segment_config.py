@@ -49,8 +49,8 @@ def main(env_id, seed):
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False, ),
             # TODO: only for debug
-            # collect_max_episode_steps=int(50),
-            # eval_max_episode_steps=int(50),
+            # collect_max_episode_steps=int(20),
+            # eval_max_episode_steps=int(20),
         ),
         policy=dict(
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
@@ -102,6 +102,7 @@ def main(env_id, seed):
             num_simulations=num_simulations,
             num_segments=num_segments,
             td_steps=5,
+            # train_start_after_envsteps=0, # only for debug
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             grad_clip_value=5,
@@ -137,6 +138,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
+    # TODO: only for debug
     main_config.exp_name = f'data_unizero_atari_st_lop/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 

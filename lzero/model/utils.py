@@ -187,18 +187,19 @@ def cal_dormant_ratio(
         parts["transformer"] = model.transformer
     
     # 对于 head 部分，查找所有以 "head_" 开头的子模块
-    # head_modules = {}
+    # head_dict = {}
     # for name, module in model.named_children():
     #     if name.startswith("head_"):
-    #         head_modules[name] = module
-    # if head_modules:
-    #     parts["head"] = nn.ModuleDict(head_modules)
+    #         head_dict[name] = module
+    # if head_dict:
+    #     parts["head"] = nn.ModuleDict(head_dict)
     
-    if hasattr(model, "head_modules"):
-        parts["head"] = model.head_modules
+    if hasattr(model, "head_dict"):
+        parts["head"] = model.head_dict
 
-    # if not hasattr(model, "encoder") and not hasattr(model, "transformer") and not hasattr(model, "head"):
-    #     parts["model"] = model
+    if not hasattr(model, "encoder") and not hasattr(model, "transformer") and not hasattr(model, "head"):
+        # 如果传入的是self.tokenizer.encoder
+        parts["model"] = model
 
     # 定义要捕获的目标模块类型 TODO: 增加更多模块
     target_modules = (nn.Conv2d, nn.Linear)
@@ -235,6 +236,8 @@ def cal_dormant_ratio(
         part_dormant = 0
         for full_name, hook in hooks:
             layer_total, layer_dormant = compute_dormant_stats(hook.outputs, dormant_threshold)
+            # if part == "model":
+            #     print(hook.outputs)
             # 可打印日志，也可记录更详细信息
             # print(f"{full_name}: {layer_dormant}/{layer_total} -> {layer_dormant / layer_total * 100.0 if layer_total > 0 else 0.0}%")
             part_total += layer_total

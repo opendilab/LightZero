@@ -98,12 +98,12 @@ class WorldModel(nn.Module):
         self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
 
         # 对于 head 部分，查找所有以 "head_" 开头的子模块
-        self.head_modules = {}
+        self.head_dict = {}
         for name, module in self.named_children():
             if name.startswith("head_"):
-                self.head_modules[name] = module
-        if self.head_modules:
-            self.head_modules = nn.ModuleDict(self.head_modules)
+                self.head_dict[name] = module
+        if self.head_dict:
+            self.head_dict = nn.ModuleDict(self.head_dict)
 
         # Apply weight initialization, the order is important
         self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
@@ -1171,8 +1171,8 @@ class WorldModel(nn.Module):
             # 计算全局平均权重绝对值
             avg_weight_mag_transformer = compute_average_weight_magnitude(self.transformer)
             # print("Average Weight Magnitude of transformer:", avg_weight_mag_transformer)
-            # print(f"self.head_modules:{self.head_modules}")
-            avg_weight_mag_head = compute_average_weight_magnitude(self.head_modules)
+            # print(f"self.head_dict:{self.head_dict}")
+            avg_weight_mag_head = compute_average_weight_magnitude(self.head_dict)
             # print("Average Weight Magnitude of head:", avg_weight_mag_head)
 
             # 计算 effective rank，对于 representation 层，注意：
