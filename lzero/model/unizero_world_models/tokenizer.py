@@ -36,7 +36,7 @@ class Tokenizer(nn.Module):
     Overview:
         Tokenizer model that encodes and decodes observations.
     """
-    def __init__(self, encoder=None, decoder_network=None, with_lpips: bool = False) -> None:
+    def __init__(self, encoder=None, decoder_network=None, with_lpips: bool = False, projection: list = None) -> None:
         """Initialize the Tokenizer.
 
         Arguments:
@@ -53,6 +53,10 @@ class Tokenizer(nn.Module):
 
         self.encoder = encoder
         self.decoder_network = decoder_network
+        if projection is None:
+            self.projection_layer = nn.Identity()
+        else:
+            self.projection_layer = nn.Linear(projection[0], projection[1])
 
     def encode_to_obs_embeddings(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -147,8 +151,13 @@ class Tokenizer(nn.Module):
         return loss
 
     def decode_to_language_logits(self, embeddings: torch.Tensor, target_ids: torch.Tensor) -> torch.Tensor:
+        # embeddings: [B, T, H] -> [B * T, 1, H]
+        embeddings = embeddings.reshape(embeddings.shape[0] * embeddings.shape[1], 1, -1)
+        # target_ids: [B, T, L] -> [B * T, L]
+        target_ids = target_ids.reshape(target_ids.shape[0] * target_ids.shape[1], -1)
+        embeddings = self.projection_layer(embeddings)
         outputs = self.decoder_network(
-            input_ids=target_ids,
+            input_embeds=target_ids,
             encoder_hidden_states=embeddings,
         )
         logits = self.decoder_network.lm_head(outputs.last_hidden_state)
