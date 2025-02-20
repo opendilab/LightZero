@@ -36,7 +36,7 @@ class Tokenizer(nn.Module):
     Overview:
         Tokenizer model that encodes and decodes observations.
     """
-    def __init__(self, encoder=None, decoder_network=None, with_lpips: bool = False) -> None:
+    def __init__(self, encoder=None, decoder_network=None, with_lpips: bool = False, obs_type=None) -> None:
         """Initialize the Tokenizer.
 
         Arguments:
@@ -53,6 +53,7 @@ class Tokenizer(nn.Module):
 
         self.encoder = encoder
         self.decoder_network = decoder_network
+        self.obs_type = obs_type
 
     def encode_to_obs_embeddings(self, x: torch.Tensor, task_id = None) -> torch.Tensor:
         """
@@ -92,23 +93,21 @@ class Tokenizer(nn.Module):
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 4:
             # Case when input is 4D (B, C, H, W)
-            try:
+            if self.obs_type == 'vector':
                 obs_embeddings = self.encoder(x, task_id=task_id)  # TODO: for dmc multitask
-                # obs_embeddings = self.encoder[task_id](x)
-            except Exception as e:
-                # print(e)
-                # obs_embeddings = self.encoder[0](x) # TODO: for atari/memory env
-                obs_embeddings = self.encoder(x) # TODO: for atari/memory env single-task
+            elif self.obs_type == 'image':
+                obs_embeddings = self.encoder[0](x) # TODO: for atari/memory env
+                # obs_embeddings = self.encoder(x) # TODO: for atari/memory env single-task
 
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 5:
             # Case when input is 5D (B, T, C, H, W)
             x = x.contiguous().view(-1, *shape[-3:])  # Flatten the first two dimensions (B * T, C, H, W)
-            try:
+            if self.obs_type == 'vector':
                 obs_embeddings = self.encoder[task_id](x)
-            except Exception as e:
-                # obs_embeddings = self.encoder[0](x) # TODO: for atari/memory env 
-                obs_embeddings = self.encoder(x) # TODO: for atari/memory env single-task
+            elif self.obs_type == 'image':
+                obs_embeddings = self.encoder[0](x) # TODO: for atari/memory env 
+                # obs_embeddings = self.encoder(x) # TODO: for atari/memory env single-task
 
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         else:

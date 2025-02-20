@@ -57,6 +57,8 @@ class WorldModel(nn.Module):
         logging.info(f"self.device: {self.device}")
         self.to(self.device)
 
+        self.task_embed_dim = config.task_embed_dim if hasattr(config, "task_embed_dim") else 96
+
         # Initialize configuration parameters
         self._initialize_config_parameters()
 
@@ -1269,6 +1271,7 @@ class WorldModel(nn.Module):
                                                           dormant_threshold=self.dormant_threshold)
             dormant_ratio_transformer = dormant_ratio_world_model['transformer']
             dormant_ratio_head = dormant_ratio_world_model['head']
+
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()

@@ -81,7 +81,7 @@ class UniZeroMTModel(nn.Module):
         assert world_model_cfg.max_tokens == 2 * world_model_cfg.max_blocks, 'max_tokens should be 2 * max_blocks, because each timestep has 2 tokens: obs and action'
 
         if world_model_cfg.task_embed_option == "concat_task_embed":
-            obs_act_embed_dim = world_model_cfg.embed_dim - 96
+            obs_act_embed_dim = world_model_cfg.embed_dim - world_model_cfg.task_embed_dim if hasattr(world_model_cfg, "task_embed_dim") else 96
         else:
             obs_act_embed_dim = world_model_cfg.embed_dim
 
@@ -96,7 +96,7 @@ class UniZeroMTModel(nn.Module):
             # TODO: only for MemoryEnv now
             self.decoder_network = VectorDecoderForMemoryEnv(embedding_dim=world_model_cfg.embed_dim, output_shape=25)
             self.tokenizer = Tokenizer(encoder=self.representation_network,
-                                       decoder_network=self.decoder_network, with_lpips=False)
+                                       decoder_network=self.decoder_network, with_lpips=False, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModelMT(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print('==' * 20)
@@ -135,7 +135,7 @@ class UniZeroMTModel(nn.Module):
                 self.encoder_hook = FeatureAndGradientHook()
                 self.encoder_hook.setup_hooks(self.representation_network)
 
-            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=None, with_lpips=False)
+            self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=None, with_lpips=False, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModelMT(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print('==' * 20)
@@ -168,7 +168,7 @@ class UniZeroMTModel(nn.Module):
                 self.encoder_hook.setup_hooks(self.representation_network)
 
             self.tokenizer = Tokenizer(with_lpips=True, encoder=self.representation_network,
-                                       decoder_network=self.decoder_network)
+                                       decoder_network=self.decoder_network, obs_type=world_model_cfg.obs_type)
             self.world_model = WorldModelMT(config=world_model_cfg, tokenizer=self.tokenizer)
             print(f'{sum(p.numel() for p in self.world_model.parameters())} parameters in agent.world_model')
             print(f'{sum(p.numel() for p in self.world_model.parameters()) - sum(p.numel() for p in self.tokenizer.decoder_network.parameters()) - sum(p.numel() for p in self.tokenizer.lpips.parameters())} parameters in agent.world_model - (decoder_network and lpips)')

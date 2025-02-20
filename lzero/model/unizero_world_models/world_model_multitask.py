@@ -10,7 +10,7 @@ from einops import rearrange
 
 from lzero.model.common import SimNorm
 from lzero.model.unizero_world_models.world_model import WorldModel
-from lzero.model.utils import cal_dormant_ratio
+from lzero.model.utils import cal_dormant_ratio, compute_average_weight_magnitude, cal_effective_rank
 from .moe import MoeLayer, MultiplicationFeedForward
 from .slicer import Head
 from .tokenizer import Tokenizer
@@ -236,6 +236,21 @@ class WorldModelMT(WorldModel):
             self.head_rewards_multi_task.append(self.head_rewards)
             self.head_observations_multi_task.append(self.head_observations)
 
+        # 对于 head 部分，查找所有以 "head_" 开头的子模块
+        # self.head_dict = {}
+        # for name, module in self.named_children():
+        #     # TODO: check
+        #     if name.startswith("head_") and name.endswith("_multi_task") :
+        #         self.head_dict[name] = module
+        # if self.head_dict:
+        #     self.head_dict = nn.ModuleDict(self.head_dict)
+
+        self.head_dict = nn.ModuleDict({
+            name: module for name, module in self.named_children()
+            if name.startswith("head_") and name.endswith("_multi_task")
+        })
+        print("="*20)
+        print(f"self.head_dict:{self.head_dict}")
 
         # Apply weight initialization, the order is important
         self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
@@ -314,7 +329,7 @@ class WorldModelMT(WorldModel):
         self.gamma = self.config.gamma
         self.context_length = self.config.context_length
         self.dormant_threshold = self.config.dormant_threshold
-        self.analysis_dormant_ratio = self.config.analysis_dormant_ratio
+        self.analysis_dormant_ratio_weight_rank = self.config.analysis_dormant_ratio_weight_rank
         self.num_observations_tokens = self.config.tokens_per_block - 1
         self.latent_recon_loss_weight = self.config.latent_recon_loss_weight
         self.perceptual_loss_weight = self.config.perceptual_loss_weight
@@ -1749,12 +1764,40 @@ class WorldModelMT(WorldModel):
             self.gather_and_plot(local_embeddings, local_task_ids, local_observations)
             
         # ========= logging for analysis =========
-        if self.analysis_dormant_ratio:
+        if self.analysis_dormant_ratio_weight_rank:
             # Calculate dormant ratio of the encoder
             shape = batch['observations'].shape  # (..., C, H, W)
             inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
-            dormant_ratio_encoder = cal_dormant_ratio(self.tokenizer.encoder, inputs.detach(),
-                                                      percentage=self.dormant_threshold)
+            if self.continuous_action_space:
+                encoder_index = task_id
+            else:
+                encoder_index = 0
+            dormant_ratio_encoder_dict = cal_dormant_ratio(self.tokenizer.encoder[encoder_index], inputs.detach(),
+                                                    dormant_threshold=self.dormant_threshold)
+
+            
+            # print(dormant_ratio_encoder_dict)
+            dormant_ratio_encoder = dormant_ratio_encoder_dict['global']
+
+            # 计算全局平均权重绝对值
+            avg_weight_mag_encoder = compute_average_weight_magnitude(self.tokenizer.encoder[encoder_index])
+            # print("Average Weight Magnitude of encoder:", avg_weight_mag_encoder)
+            # 计算全局平均权重绝对值
+            avg_weight_mag_transformer = compute_average_weight_magnitude(self.transformer)
+            # print("Average Weight Magnitude of transformer:", avg_weight_mag_transformer)
+            # print(f"self.head_dict:{self.head_dict}")
+            avg_weight_mag_head = compute_average_weight_magnitude(self.head_dict)
+            # print("Average Weight Magnitude of head:", avg_weight_mag_head)
+
+            # 计算 effective rank，对于 representation 层，注意：
+            # representation 层在 model.named_modules() 的名称为 "representation"
+            # print(f"self.tokenizer.encoder:{self.tokenizer.encoder}")
+
+            e_rank_last_linear = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="last_linear")
+            # print("Effective Rank of encoder_last_linear:", e_rank_last_linear)
+            e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="sim_norm")
+            # print("Effective Rank of encoder_sim_norm:", e_rank_sim_norm)
+
             self.past_kv_cache_init_infer.clear()
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
@@ -1833,17 +1876,24 @@ class WorldModelMT(WorldModel):
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, task_id=task_id)
 
         # ========= logging for analysis =========
-        if self.analysis_dormant_ratio:
+        if self.analysis_dormant_ratio_weight_rank:
             # Calculate dormant ratio of the world model
             dormant_ratio_world_model = cal_dormant_ratio(self, {
                 'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())},
-                                                          percentage=self.dormant_threshold)
+                                                          dormant_threshold=self.dormant_threshold)
+            dormant_ratio_transformer = dormant_ratio_world_model['transformer']
+            dormant_ratio_head = dormant_ratio_world_model['head']
             self.past_kv_cache_init_infer.clear()
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
         else:
             dormant_ratio_world_model = torch.tensor(0.)
+            avg_weight_mag_encoder = torch.tensor(0.)
+            avg_weight_mag_transformer = torch.tensor(0.)
+            avg_weight_mag_head = torch.tensor(0.)
+            e_rank_last_linear = torch.tensor(0.)
+            e_rank_sim_norm = torch.tensor(0.)
 
         #  ========== for visualization ==========
         # Uncomment the lines below for visualization
@@ -2016,7 +2066,13 @@ class WorldModelMT(WorldModel):
                 middle_step_losses=middle_step_losses,
                 last_step_losses=last_step_losses,
                 dormant_ratio_encoder=dormant_ratio_encoder,
-                dormant_ratio_world_model=dormant_ratio_world_model,
+                dormant_ratio_transformer=dormant_ratio_transformer,
+                dormant_ratio_head=dormant_ratio_head,
+                avg_weight_mag_encoder = avg_weight_mag_encoder,
+                avg_weight_mag_transformer = avg_weight_mag_transformer,
+                avg_weight_mag_head = avg_weight_mag_head,
+                e_rank_last_linear = e_rank_last_linear,
+                e_rank_sim_norm = e_rank_sim_norm,
                 latent_state_l2_norms=latent_state_l2_norms,
                 policy_mu=mu,
                 policy_sigma=sigma,
@@ -2039,7 +2095,13 @@ class WorldModelMT(WorldModel):
                 middle_step_losses=middle_step_losses,
                 last_step_losses=last_step_losses,
                 dormant_ratio_encoder=dormant_ratio_encoder,
-                dormant_ratio_world_model=dormant_ratio_world_model,
+                dormant_ratio_transformer=dormant_ratio_transformer,
+                dormant_ratio_head=dormant_ratio_head,
+                avg_weight_mag_encoder = avg_weight_mag_encoder,
+                avg_weight_mag_transformer = avg_weight_mag_transformer,
+                avg_weight_mag_head = avg_weight_mag_head,
+                e_rank_last_linear = e_rank_last_linear,
+                e_rank_sim_norm = e_rank_sim_norm,
                 latent_state_l2_norms=latent_state_l2_norms,
             )
 

@@ -18,8 +18,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             collect_max_episode_steps=int(5e3),
             eval_max_episode_steps=int(5e3),
             # ===== only for debug =====
-            # collect_max_episode_steps=int(50),
-            # eval_max_episode_steps=int(50),
+            # collect_max_episode_steps=int(20),
+            # eval_max_episode_steps=int(20),
         ),
         policy=dict(
             multi_gpu=True,  # Very important for ddp
@@ -41,6 +41,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 num_channels=256,
                 continuous_action_space=False,
                 world_model_cfg=dict(
+                    analysis_dormant_ratio_weight_rank=True, # TODO
+                    dormant_threshold=0.025,
+
                     continuous_action_space=False,
                                         
                     # task_embed_option=None,   # ==============TODO: none ==============
@@ -48,6 +51,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
                     task_embed_option='concat_task_embed',   # ==============TODO: none ==============
                     use_task_embed=True, # ==============TODO==============
+                    # task_embed_dim=96,
+                    task_embed_dim=128,
 
                     use_shared_projection=False,
                     max_blocks=num_unroll_steps,
@@ -113,7 +118,8 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition,
                      num_segments, total_batch_size):
     configs = []
-    exp_name_prefix = f'data_unizero_atari_mt_20250217/atari_{len(env_id_list)}games_concattaskembed_bs64_brf{buffer_reanalyze_freq}_seed{seed}_dev-uz-mz-mt-cont/'
+    # ===== only for debug =====
+    exp_name_prefix = f'data_unizero_atari_mt_20250217/atari_{len(env_id_list)}games_lop_concattaskembed-128_brf{buffer_reanalyze_freq}_seed{seed}_dev-uz-mz-mt-cont/'
     # exp_name_prefix = f'data_unizero_atari_mt_20250217/atari_{len(env_id_list)}games_notaskembed_bs64_brf{buffer_reanalyze_freq}_seed{seed}_dev-uz-mz-mt-cont/'
 
     for task_id, env_id in enumerate(env_id_list):
@@ -145,7 +151,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=1 --master_port=29502 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=3 --master_port=29502 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
 
@@ -201,4 +207,4 @@ if __name__ == "__main__":
         with DDPContext():
             train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
             # ======== TODO: only for debug ========
-            # train_unizero_multitask_segment_ddp(configs[:1], seed=seed, max_env_step=max_env_step) # train on the first four tasks
+            # train_unizero_multitask_segment_ddp(configs[:2], seed=seed, max_env_step=max_env_step) # train on the first four tasks
