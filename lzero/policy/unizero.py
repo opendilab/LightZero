@@ -416,10 +416,10 @@ class UniZeroPolicy(MuZeroPolicy):
 
         weighted_total_loss = losses.loss_total
         # 合并 intermediate_losses 字典，避免重复赋值
-        self.intermediate_losses.update(losses.intermediate_losses)
+        # self.intermediate_losses.update(losses.intermediate_losses)
 
-        # for loss_name, loss_value in losses.intermediate_losses.items():
-        #     self.intermediate_losses[f"{loss_name}"] = loss_value
+        for loss_name, loss_value in losses.intermediate_losses.items():
+            self.intermediate_losses[f"{loss_name}"] = loss_value
 
         obs_loss = self.intermediate_losses['loss_obs']
         reward_loss = self.intermediate_losses['loss_rewards']
@@ -519,7 +519,7 @@ class UniZeroPolicy(MuZeroPolicy):
             'transformed_target_reward': transformed_target_reward.mean().item(),
             'transformed_target_value': transformed_target_value.mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
-            'analysis/dormant_ratio_encoder': dormant_ratio_encoder,#.item(),
+            'analysis/dormant_ratio_encoder': dormant_ratio_encoder, #.item(),
             'analysis/dormant_ratio_transformer': dormant_ratio_transformer,#.item(),
             'analysis/dormant_ratio_head': dormant_ratio_head,#.item(),
 

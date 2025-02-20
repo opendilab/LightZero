@@ -1161,9 +1161,10 @@ class WorldModel(nn.Module):
             # Calculate dormant ratio of the encoder
             shape = batch['observations'].shape  # (..., C, H, W)
             inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
-            dormant_ratio_encoder = cal_dormant_ratio(self.tokenizer.encoder, inputs.detach(),
+            dormant_ratio_encoder_dict = cal_dormant_ratio(self.tokenizer.encoder, inputs.detach(),
                                                       dormant_threshold=self.dormant_threshold)
-            dormant_ratio_encoder = dormant_ratio_encoder['global']
+            # print(dormant_ratio_encoder_dict)
+            dormant_ratio_encoder = dormant_ratio_encoder_dict['global']
 
             # 计算全局平均权重绝对值
             avg_weight_mag_encoder = compute_average_weight_magnitude(self.tokenizer.encoder)
@@ -1455,6 +1456,7 @@ class WorldModel(nn.Module):
                 first_step_losses=first_step_losses,
                 middle_step_losses=middle_step_losses,
                 last_step_losses=last_step_losses,
+                dormant_ratio_encoder=dormant_ratio_encoder,
                 dormant_ratio_transformer=dormant_ratio_transformer,
                 dormant_ratio_head=dormant_ratio_head,
                 avg_weight_mag_encoder = avg_weight_mag_encoder,
