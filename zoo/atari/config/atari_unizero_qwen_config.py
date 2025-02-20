@@ -63,6 +63,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             model_path=None,
             num_unroll_steps=num_unroll_steps,
             replay_ratio=replay_ratio,
+            reanalyze_ratio=0,
             batch_size=batch_size,
             learning_rate=0.0001,
             num_simulations=num_simulations,
