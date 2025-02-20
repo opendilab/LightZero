@@ -80,8 +80,8 @@ class UniZeroPolicy(MuZeroPolicy):
                 device='cpu',
                 # (bool) Whether to analyze simulation normalization.
                 analysis_sim_norm=False,
-                # (bool) Whether to analyze dormant ratio.
-                analysis_dormant_ratio=False,
+                # (bool) Whether to analyze dormant ratio, average_weight_magnitude of net, effective_rank of latent.
+                analysis_dormant_ratio_weight_rank=False,
                 # (int) The shape of the action space.
                 action_space_size=6,
                 # (int) The size of the group, related to simulation normalization.
@@ -119,7 +119,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 # (float) The discount factor for future rewards.
                 gamma=1,
                 # (float) The threshold for a dormant neuron.
-                dormant_threshold=0.025,
+                dormant_threshold=0.01,
             ),
         ),
         # ****** common ******
@@ -415,8 +415,11 @@ class UniZeroPolicy(MuZeroPolicy):
         )
 
         weighted_total_loss = losses.loss_total
-        for loss_name, loss_value in losses.intermediate_losses.items():
-            self.intermediate_losses[f"{loss_name}"] = loss_value
+        # 合并 intermediate_losses 字典，避免重复赋值
+        self.intermediate_losses.update(losses.intermediate_losses)
+
+        # for loss_name, loss_value in losses.intermediate_losses.items():
+        #     self.intermediate_losses[f"{loss_name}"] = loss_value
 
         obs_loss = self.intermediate_losses['loss_obs']
         reward_loss = self.intermediate_losses['loss_rewards']
@@ -432,6 +435,11 @@ class UniZeroPolicy(MuZeroPolicy):
         dormant_ratio_encoder = self.intermediate_losses['dormant_ratio_encoder']
         dormant_ratio_transformer = self.intermediate_losses['dormant_ratio_transformer']
         dormant_ratio_head = self.intermediate_losses['dormant_ratio_head']
+        avg_weight_mag_encoder = self.intermediate_losses['avg_weight_mag_encoder']
+        avg_weight_mag_transformer = self.intermediate_losses['avg_weight_mag_transformer']
+        avg_weight_mag_head = self.intermediate_losses['avg_weight_mag_head']
+        e_rank_last_linear = self.intermediate_losses['e_rank_last_linear'] 
+        e_rank_sim_norm = self.intermediate_losses['e_rank_sim_norm']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
 
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
@@ -514,6 +522,12 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/dormant_ratio_encoder': dormant_ratio_encoder,#.item(),
             'analysis/dormant_ratio_transformer': dormant_ratio_transformer,#.item(),
             'analysis/dormant_ratio_head': dormant_ratio_head,#.item(),
+
+            'analysis/avg_weight_mag_encoder': avg_weight_mag_encoder,
+            'analysis/avg_weight_mag_transformer': avg_weight_mag_transformer,
+            'analysis/avg_weight_mag_head': avg_weight_mag_head,
+            'analysis/e_rank_last_linear': e_rank_last_linear,
+            'analysis/e_rank_sim_norm':  e_rank_sim_norm,
 
             'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
             'analysis/l2_norm_before': self.l2_norm_before,
@@ -895,6 +909,12 @@ class UniZeroPolicy(MuZeroPolicy):
             'analysis/dormant_ratio_encoder',
             'analysis/dormant_ratio_transformer',
             'analysis/dormant_ratio_head',
+
+            'analysis/avg_weight_mag_encoder',
+            'analysis/avg_weight_mag_transformer',
+            'analysis/avg_weight_mag_head',
+            'analysis/e_rank_last_linear',
+            'analysis/e_rank_sim_norm',
 
             'analysis/latent_state_l2_norms',
             'analysis/l2_norm_before',
