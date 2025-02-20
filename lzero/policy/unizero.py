@@ -430,7 +430,8 @@ class UniZeroPolicy(MuZeroPolicy):
         middle_step_losses = self.intermediate_losses['middle_step_losses']
         last_step_losses = self.intermediate_losses['last_step_losses']
         dormant_ratio_encoder = self.intermediate_losses['dormant_ratio_encoder']
-        dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
+        dormant_ratio_transformer = self.intermediate_losses['dormant_ratio_transformer']
+        dormant_ratio_head = self.intermediate_losses['dormant_ratio_head']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
 
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
@@ -511,7 +512,9 @@ class UniZeroPolicy(MuZeroPolicy):
             'transformed_target_value': transformed_target_value.mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
             'analysis/dormant_ratio_encoder': dormant_ratio_encoder,#.item(),
-            'analysis/dormant_ratio_world_model': dormant_ratio_world_model,#.item(),
+            'analysis/dormant_ratio_transformer': dormant_ratio_transformer,#.item(),
+            'analysis/dormant_ratio_head': dormant_ratio_head,#.item(),
+
             'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
             'analysis/l2_norm_before': self.l2_norm_before,
             'analysis/l2_norm_after': self.l2_norm_after,
@@ -890,7 +893,9 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         return [
             'analysis/dormant_ratio_encoder',
-            'analysis/dormant_ratio_world_model',
+            'analysis/dormant_ratio_transformer',
+            'analysis/dormant_ratio_head',
+
             'analysis/latent_state_l2_norms',
             'analysis/l2_norm_before',
             'analysis/l2_norm_after',

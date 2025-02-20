@@ -1154,7 +1154,8 @@ class WorldModel(nn.Module):
             shape = batch['observations'].shape  # (..., C, H, W)
             inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
             dormant_ratio_encoder = cal_dormant_ratio(self.tokenizer.encoder, inputs.detach(),
-                                                      percentage=self.dormant_threshold)
+                                                      dormant_threshold=self.dormant_threshold)
+            dormant_ratio_encoder = dormant_ratio_encoder['global']
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
@@ -1231,12 +1232,15 @@ class WorldModel(nn.Module):
             # Calculate dormant ratio of the world model
             dormant_ratio_world_model = cal_dormant_ratio(self, {
                 'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())},
-                                                          percentage=self.dormant_threshold)
+                                                          dormant_threshold=self.dormant_threshold)
+            dormant_ratio_transformer = dormant_ratio_world_model['transformer']
+            dormant_ratio_head = dormant_ratio_world_model['head']
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
         else:
-            dormant_ratio_world_model = torch.tensor(0.)
+            dormant_ratio_transformer = torch.tensor(0.)
+            dormant_ratio_head = torch.tensor(0.)
 
         #  ========== for visualization ==========
         # Uncomment the lines below for visualization
@@ -1390,7 +1394,8 @@ class WorldModel(nn.Module):
                 middle_step_losses=middle_step_losses,
                 last_step_losses=last_step_losses,
                 dormant_ratio_encoder=dormant_ratio_encoder,
-                dormant_ratio_world_model=dormant_ratio_world_model,
+                dormant_ratio_transformer=dormant_ratio_transformer,
+                dormant_ratio_head=dormant_ratio_head,
                 latent_state_l2_norms=latent_state_l2_norms,
                 policy_mu=mu,
                 policy_sigma=sigma,
@@ -1412,8 +1417,8 @@ class WorldModel(nn.Module):
                 first_step_losses=first_step_losses,
                 middle_step_losses=middle_step_losses,
                 last_step_losses=last_step_losses,
-                dormant_ratio_encoder=dormant_ratio_encoder,
-                dormant_ratio_world_model=dormant_ratio_world_model,
+                dormant_ratio_transformer=dormant_ratio_transformer,
+                dormant_ratio_head=dormant_ratio_head,
                 latent_state_l2_norms=latent_state_l2_norms,
             )
 
