@@ -491,6 +491,8 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
         elif self._cfg.only_use_moco_stats:
             lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+            # 不使用梯度校正的情况，由各 rank 自己执行反向传播
+            weighted_total_loss.backward()
         else:
             # 不使用梯度校正的情况，由各 rank 自己执行反向传播
             lambd = torch.tensor([0. for _ in range(self.task_num_for_current_rank)], device=self._cfg.device)

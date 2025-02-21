@@ -29,8 +29,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
         policy=dict(
             # multi_gpu=False,  # TODO: enable multi-GPU for DDP
             multi_gpu=True,  # TODO: enable multi-GPU for DDP
-            # only_use_moco_stats=True,
-            only_use_moco_stats=False,
+            only_use_moco_stats=True,
+            # only_use_moco_stats=False,
             use_moco=False,  # ==============TODO==============
             # use_moco=True,  # ==============TODO==============
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000))),
@@ -53,7 +53,6 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     action_space_size_list=action_space_size_list,
                     policy_loss_type='kl',
                     obs_type='vector',
-                    # use_shared_projection=True, # TODO
                     use_shared_projection=False,
 
                     #==== 修改grad 路径====
