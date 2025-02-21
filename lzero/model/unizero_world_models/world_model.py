@@ -1177,8 +1177,7 @@ class WorldModel(nn.Module):
             # Reconstruct observations from latent state representations
             reconstructed_logits = self.tokenizer.decode_to_language_logits(obs_embeddings, batch['observations'])
             # Calculate reconstruction loss
-            latent_recon_loss = self.tokenizer.lm_reconstruction_loss(
-                batch['observations'].reshape(batch['observations'].shape[-1]), reconstructed_logits)
+            latent_recon_loss = self.tokenizer.lm_reconstruction_loss(batch['observations'], reconstructed_logits)
             # latent_recon_loss = self.latent_recon_loss
 
         elif self.obs_type == 'image_memory':
