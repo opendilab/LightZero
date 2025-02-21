@@ -4,12 +4,11 @@ import os
 os.environ["HF_HOME"] = "/mnt/afs/zhangshenghan/.cache/huggingface/hub"
 
 def main(env_id='detective.z5', seed=0):
-    action_space_size = 50
-    max_steps = 51
-
     # ==============================================================
     # begin of the most frequently changed config specified by the user
     # ==============================================================
+    action_space_size = 50
+    max_steps = 51
     collector_env_num = 2
     num_segments = 2
     game_segment_length = 20
@@ -32,20 +31,12 @@ def main(env_id='detective.z5', seed=0):
     reanalyze_partition = 0.75
     # model_name = 'BAAI/bge-base-en-v1.5'
     model_name = 'google-bert/bert-base-uncased'
+
     # =========== TODO: only for debug  =========== 
-    # collector_env_num = 2
-    # num_segments = 2
-    # game_segment_length = 20
-    # evaluator_env_num = 2
-    # max_env_step = int(5e5)
-    # batch_size = 10
-    # num_simulations = 5
-    # num_unroll_steps = 5
-    # infer_context_length = 2
-    # max_steps = 10
-    # num_layers = 1
-    # replay_ratio = 0.05
-    # embed_dim = 768
+    batch_size = 4
+    num_simulations = 50
+    num_unroll_steps = 5
+    infer_context_length = 2
     # TODO: MCTS内部的action_space受限于root节点的legal action
 
     # ==============================================================
@@ -60,7 +51,7 @@ def main(env_id='detective.z5', seed=0):
             tokenizer_path=model_name,
             # tokenizer_path="/mnt/afs/zhangshenghan/.cache/huggingface/hub/models--google-bert--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594",
             max_seq_len=512,
-            game_path="z-machine-games-master/jericho-game-suite/" + env_id,
+            game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/" + env_id,
             # game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/"+ env_id,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -93,7 +84,8 @@ def main(env_id='detective.z5', seed=0):
                     device='cuda',
                     action_space_size=action_space_size,
                     use_hf=True,
-                    pretrained_path='/data/share/Qwen2.5-0.5B',
+                    # pretrained_path='/data/share/Qwen2.5-0.5B',
+                    pretrained_path='/mnt/afs/share//Qwen2.5-0.5B',
                     # These parameters should be the same as the config file of original model.
                     num_layers=num_layers,
                     # Note: qwen uses GQA, and the number of heads should equal to the number of key-value heads.
@@ -149,7 +141,7 @@ def main(env_id='detective.z5', seed=0):
     main_config = jericho_unizero_config
     create_config = jericho_unizero_create_config
 
-    main_config.exp_name = f'data_unizero_detective_20241220/{env_id[:8]}_ms{max_steps}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_detective_decode_debug/{env_id[:8]}_ms{max_steps}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}-upc{update_per_collect}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed,
                   model_path=main_config.policy.model_path, max_env_step=max_env_step)
