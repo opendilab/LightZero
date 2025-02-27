@@ -120,6 +120,14 @@ class UniZeroPolicy(MuZeroPolicy):
                 gamma=1,
                 # (float) The threshold for a dormant neuron.
                 dormant_threshold=0.025,
+                # (bool) Whether to use Rotary Position Embedding (RoPE) for relative position encoding.
+                # If False, nn.Embedding is used for absolute position encoding.
+                # For more details on RoPE, refer to the author's blog: https://spaces.ac.cn/archives/8265/
+                rotary_emb=False,
+                # (int) The base value for calculating RoPE angles. Commonly set to 10000.
+                rope_theta=10000,
+                # (int) The maximum sequence length for position encoding.
+                max_seq_len=8192,
             ),
         ),
         # ****** common ******

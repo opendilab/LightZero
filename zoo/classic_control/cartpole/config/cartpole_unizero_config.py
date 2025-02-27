@@ -16,7 +16,7 @@ num_unroll_steps = 5
 # ==============================================================
 
 cartpole_unizero_config = dict(
-    exp_name=f'data_unizero_debug/cartpole_unizero_pos-embed_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
+    exp_name=f'data_unizero/cartpole_unizero_ns{num_simulations}_upc{update_per_collect}-rr{replay_ratio}_H{num_unroll_steps}_bs{batch_size}_seed0',
     env=dict(
         env_name='CartPole-v0',
         continuous=False,
@@ -49,11 +49,6 @@ cartpole_unizero_config = dict(
                 evaluator_env_num=evaluator_env_num,
                 obs_type='vector',
                 norm_type='BN',
-                # for RoPE
-                rotary_emb=False,
-                # rotary_emb=True,
-                rope_theta=10000,
-                max_seq_len=2048,
             ),
         ),
         use_wandb=True,

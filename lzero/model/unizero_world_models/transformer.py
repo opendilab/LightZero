@@ -33,15 +33,25 @@ class TransformerConfig:
     # for RoPE
     rope_theta: float
     max_seq_len: int
-    rotary_emb: bool = False  # 增加配置选项控制是否使用 rotary_emb
+    rotary_emb: bool = False
 
     @property
     def max_tokens(self):
         return self.tokens_per_block * self.max_blocks
 
 
-
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
+    """
+    Precompute the frequency components for the rotary positional embeddings.
+
+    Arguments:
+        - dim (int): The dimension of the embedding.
+        - end (int): The length of the sequence for which frequencies are computed.
+        - theta (float): A scaling factor for the frequencies, default is 10000.0.
+
+    Returns:
+        - torch.Tensor: A tensor of complex numbers representing the precomputed frequencies.
+    """
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
     t = torch.arange(end, device=freqs.device, dtype=torch.float32)
     freqs = torch.outer(t, freqs)
@@ -50,9 +60,19 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
 
 
 def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
-    # https://github.com/meta-llama/llama3/blob/main/llama/model.py#L61
+    """
+    Reshape the frequency components for broadcasting with the input tensor.
+
+    Arguments:
+        - freqs_cis (torch.Tensor): The frequency components tensor.
+        - x (torch.Tensor): The input tensor to which the frequencies will be applied.
+
+    Returns:
+        - torch.Tensor: The reshaped frequency components tensor.
+    """
+    # Reference: https://github.com/meta-llama/llama3/blob/main/llama/model.py#L61
     ndim = x.ndim
-    shape = [d if i == ndim - 1 or i == 2 or i == 0 else 1 for i, d in enumerate(x.shape)]
+    shape = [d if i == ndim - 1 or i == 0 or i == 2 else 1 for i, d in enumerate(x.shape)]
     return freqs_cis.view(*shape)
 
 
@@ -61,15 +81,34 @@ def apply_rotary_emb(
     xk: torch.Tensor,
     freqs_cis: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Apply rotary positional embeddings to the query and key tensors.
+
+    Arguments:
+        - xq (torch.Tensor): The query tensor.
+        - xk (torch.Tensor): The key tensor.
+        - freqs_cis (torch.Tensor): The precomputed frequency components.
+
+    Returns:
+        - Tuple[torch.Tensor, torch.Tensor]: The transformed query and key tensors.
+    
+    Note:
+        For more information on rotary positional embeddings, refer to the blog post:
+        https://spaces.ac.cn/archives/8265/
+    """
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
     try:
-        # print(f"freqs_cis shape: {freqs_cis.shape}, xq_ shape: {xq_.shape}")
+        # print(f"freqs_cis.shape, xq_.shape:{freqs_cis.shape, xq_.shape}")
         freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
-        # print(f"new freqs_cis shape: {freqs_cis.shape}")
     except Exception as e:
-        print(e)
+        print('='*20)
+        import ipdb;ipdb.set_trace()
+        print(f"freqs_cis.shape, xq_.shape:{freqs_cis.shape, xq_.shape}")
+        print(f"Error in reshaping freqs_cis: {e}")
         print('We are at the reset timestep!')
+        print('='*20)
+
     xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(-2)
     xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(-2)
     return xq_out.type_as(xq), xk_out.type_as(xk)
@@ -80,7 +119,7 @@ class Transformer(nn.Module):
     Transformer model class.
 
     Arguments:
-        config (:obj:`TransformerConfig`): Configuration for the Transformer model.
+        - config (:obj:`TransformerConfig`): Configuration for the Transformer model.
 
     Attributes:
         - config (:obj:`TransformerConfig`): Configuration object.
@@ -96,7 +135,6 @@ class Transformer(nn.Module):
         self.blocks = nn.ModuleList([Block(config) for _ in range(config.num_layers)])
         self.ln_f = nn.LayerNorm(config.embed_dim)
 
-        # 注册缓存, 自动管理设备转换
         if self.config.rotary_emb:
             freqs_cis = precompute_freqs_cis(
                 self.config.embed_dim // self.config.num_heads,
@@ -128,47 +166,71 @@ class Transformer(nn.Module):
             - sequences (:obj:`torch.Tensor`): Input tensor of shape (batch_size, seq_length, embed_dim).
             - past_keys_values (:obj:`Optional[KeysValues]`): Precomputed keys and values for faster generation (default: None).
             - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid lengths of context for masking (default: None).
+            - start_pos (:obj:`int`): Starting position for rotary embeddings (default: 0).
 
         Returns:
             - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
         seqlen = sequences.shape[1]
 
-        # 如果使用 RoPE，则对 freqs_cis 进行切片
+        # If using Rotary Position Embeddings (RoPE), slice the frequency components accordingly
         if self.config.rotary_emb:
-            # 修复：如果 start_pos 是标量，则将其扩展为当前 batch 大小的相同数值
-            # t==========*2是由于timestep只是统计了obs，但是序列是obs act==========
             if isinstance(start_pos, int) or isinstance(start_pos, float):
-                start_pos_tensor = torch.full((sequences.shape[0],), int(start_pos), device=sequences.device) * 2
-            else:
-                # start_pos_tensor = torch.as_tensor(start_pos, device=sequences.device)
-                try:
-                    start_pos_tensor = torch.as_tensor([x.item() for x in start_pos], device=sequences.device) * 2
-                except Exception as e:
-                    # print(e)
+                # Create a tensor filled with start_pos, expanded to match the batch size, and adjust for sequence type
+                start_pos_tensor = torch.full((sequences.shape[0],), int(start_pos), device=sequences.device)
+            elif isinstance(start_pos, (list, np.ndarray, torch.Tensor)):
+                # print(f"start_pos: {start_pos}")
+                # print(f"type(start_pos): {type(start_pos)}")
+                # print(f"type(start_pos[0]): {type(start_pos[0])}")
+                # print(f"start_pos[0].shape:{start_pos[0].shape}")
+                # print(f"len(start_pos[0].shape):{len(start_pos[0].shape)}")
+                if isinstance(start_pos[0], list):
+                    # In the training phase, flatten start_pos, take the first element, convert to tensor, and double it
                     start_pos_tensor = torch.as_tensor(
-                        [x.reshape(-1)[0].item() for x in start_pos],  # 强制展平后取第一个元素
+                        [x.reshape(-1)[0].item() for x in start_pos],  # Force flatten and take the first element
                         device=sequences.device
-                    ) * 2
-            
-            # 对每个样本根据 start_pos 取对应区间的 freqs_cis
+                    )
+                elif isinstance(start_pos[0], (np.ndarray, torch.Tensor)):
+                    if len(start_pos[0].shape) <= 0:
+                        # In the collection/evaluation phase, convert start_pos to a tensor and double it
+                        start_pos_tensor = torch.as_tensor([x.item() for x in start_pos], device=sequences.device)
+                    else:
+                        # In the training phase, flatten start_pos, take the first element, convert to tensor, and double it
+                        start_pos_tensor = torch.as_tensor(
+                        [x.reshape(-1)[0].item() for x in start_pos],  # Force flatten and take the first element
+                            device=sequences.device
+                        )
+                elif isinstance(start_pos[0], (int, float, np.integer)):
+                    # Handle numpy integer types similarly to int and float
+                    start_pos_tensor = torch.as_tensor([int(x) for x in start_pos], device=sequences.device)
+            else:
+                raise ValueError("start_pos must be an int, float, list, numpy array or torch.Tensor.")
+
+            # TODO: Determine how to handle cases when episode length exceeds max_seq_len
+            # Use modulo operation to ensure start_pos does not exceed max_seq_len
             start_pos_tensor = torch.remainder(start_pos_tensor, self.config.max_seq_len)
-            # 将各个样本的 start_pos 转换为列表
+            # Convert each sample's start_pos to a list
             start_pos_list = start_pos_tensor.tolist()
+            # For each sample, slice the corresponding range of freqs_cis based on start_pos
             freqs_cis_slices = [self.freqs_cis[int(pos): int(pos) + seqlen] for pos in start_pos_list]
             freqs_cis = torch.stack(freqs_cis_slices)
 
             if freqs_cis.ndim == 3 and freqs_cis.shape[1] == 1:
-                # 将形状 [seq_len, 1, num_pairs] 转换为 [seq_len, num_pairs]
+                # Convert shape [seq_len, 1, num_pairs] to [seq_len, num_pairs]
                 freqs_cis = freqs_cis.squeeze(1)
-            # print(f'165 freqs_cis.shape:{freqs_cis.shape}')
         else:
             freqs_cis = None
 
+        # print(f"freqs_cis.shape:{freqs_cis.shape}")
+
+        # Ensure past keys and values match the number of transformer blocks
         assert past_keys_values is None or len(past_keys_values) == len(self.blocks)
+        # Apply dropout to the input sequences
         x = self.drop(sequences)
+        # Pass through each transformer block
         for i, block in enumerate(self.blocks):
             x = block(x, None if past_keys_values is None else past_keys_values[i], valid_context_lengths, freqs_cis)
+        # Apply final layer normalization
         x = self.ln_f(x)
         return x
 
@@ -219,6 +281,7 @@ class Block(nn.Module):
             - x (:obj:`torch.Tensor`): Input tensor of shape (batch_size, seq_length, embed_dim).
             - past_keys_values (:obj:`Optional[KeysValues]`): Precomputed keys and values for faster generation (default: None).
             - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid lengths of context for masking (default: None).
+            - freqs_cis (:obj:`torch.Tensor`): Frequency components for rotary position embeddings, used to modulate the attention mechanism (default: None).
 
         Returns:
             - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
@@ -280,6 +343,7 @@ class SelfAttention(nn.Module):
                                         T is sequence length, and C is embedding dimension.
             - kv_cache (:obj:`Optional[KeysValues]`): Optional key-value cache for faster inference.
             - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Optional tensor containing valid context lengths.
+            - freqs_cis (:obj:`torch.Tensor`): Frequency components for rotary position embeddings, used to modulate the attention mechanism (default: None).
 
         Returns:
             - torch.Tensor: Output tensor of shape (B, T, C).

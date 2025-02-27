@@ -130,6 +130,14 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 dormant_threshold=0.025,
                 # (str) The type of policy loss. Options could be ['kl', 'simple'].
                 policy_loss_type='kl',
+                # (bool) Whether to use Rotary Position Embedding (RoPE) for relative position encoding.
+                # If False, nn.Embedding is used for absolute position encoding.
+                # For more details on RoPE, refer to the author's blog: https://spaces.ac.cn/archives/8265/
+                rotary_emb=False,
+                # (int) The base value for calculating RoPE angles. Commonly set to 10000.
+                rope_theta=10000,
+                # (int) The maximum sequence length for position encoding.
+                max_seq_len=8192,
             ),
         ),
         # ****** common ******

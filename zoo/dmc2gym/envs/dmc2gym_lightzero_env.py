@@ -334,11 +334,11 @@ class DMC2GymEnv(BaseEnv):
         obs = to_ndarray(obs).astype(np.float32)
         action_mask = None
 
-        self._current_step = 0
+        self.timestep = 0
         if self._save_replay_gif:
             self._frames = []
 
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self.timestep}
 
         return obs
 
@@ -372,10 +372,10 @@ class DMC2GymEnv(BaseEnv):
         #     action = np.where(action < -0.9500, -0.9999, action)
 
         obs, rew, done, info = self._env.step(action)
-        self._current_step += 1
+        self.timestep += 1
 
         # print(f'action: {action}, obs: {obs}, rew: {rew}, done: {done}, info: {info}')
-        # print(f'step {self._current_step}: action: {action}, rew: {rew}, done: {done}')
+        # print(f'step {self.timestep}: action: {action}, rew: {rew}, done: {done}')
 
         if self._cfg["from_pixels"]:
             obs = obs
@@ -389,6 +389,9 @@ class DMC2GymEnv(BaseEnv):
 
         if self._save_replay_gif:
             self._frames.append(image_obs)
+
+        if self.timestep > self._cfg.max_episode_steps:
+            done = True
 
         if done:
             info['eval_episode_return'] = self._eval_episode_return
@@ -406,7 +409,7 @@ class DMC2GymEnv(BaseEnv):
                 self._save_replay_count += 1
 
         action_mask = None
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self.timestep}
 
         return BaseEnvTimestep(obs, rew, done, info)
 

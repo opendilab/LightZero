@@ -454,6 +454,9 @@ class WorldModel(nn.Module):
                                                       is_init_infer, valid_context_lengths)
             else:
                 sequences = obs_embeddings
+                # ==========*2 is because timestep only counts obs, but the sequence is obs, act actually==========
+                # import ipdb;ipdb.set_trace()
+                start_pos =[pos*2 for pos in start_pos]
 
         # Process action tokens
         elif 'act_tokens' in obs_embeddings_or_act_tokens:
@@ -473,6 +476,12 @@ class WorldModel(nn.Module):
                                                       is_init_infer, valid_context_lengths)
             else:
                 sequences = act_embeddings
+                # ==========*2 is because timestep only counts obs, but the sequence is obs, act actually==========
+                # NOTE: act_tokens is last timestep, thus we minus 1 here 
+                # TODO: check the effect
+                # import ipdb;ipdb.set_trace()
+                start_pos =[pos*2-1 for pos in start_pos]
+
 
         # Process combined observation embeddings and action tokens
         else:
@@ -705,32 +714,38 @@ class WorldModel(nn.Module):
                             self.keys_values_wm_size_list.append(matched_value.size)
                         else:
                             # Reset using zero values
-                            # TODO: This is a temporary solution. We need to handle this case properly.
-                            # start_pos = [start_pos[0]]
-                            start_pos = [np.array(0)]
                             self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
                             outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
                                                       past_keys_values=self.keys_values_wm_single_env,
-                                                      is_init_infer=True, start_pos=start_pos)
+                                                      is_init_infer=True, start_pos=[start_pos[i]])
                             self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                             self.keys_values_wm_size_list.append(1)
 
                     # Input self.keys_values_wm_list, output self.keys_values_wm
                     self.keys_values_wm_size_list_current = self.trim_and_pad_kv_cache(is_init_infer=True)
 
-                    # TODO: 顺序可能不对？
                     start_pos = start_pos[:ready_env_num]
+                    # TODO: len(last_obs_embeddings) may smaller than len(current_obs_embeddings), because some environments may have done
+                    # TODO: the order may be not correct?  len(batch_action) may smaller than len(current_obs_embeddings), because some environments may have done
                     batch_action = batch_action[:ready_env_num]
-                    # # only for debug
+                    
+                    # TODO: only for debug
                     # if ready_env_num < self.env_num:
                     #     print(f'init inference ready_env_num: {ready_env_num} < env_num: {self.env_num}')
+                    #     print(f"ready_env_num: {ready_env_num}")
+                    #     print(f"start_pos: {start_pos}")
+                    #     print(f"batch_action: {batch_action}")
+                    #     print(f"len(last_obs_embeddings): {len(last_obs_embeddings)}")
+                    #     print(f"len(batch_action): {len(batch_action)}")
+                    #     print(f"len(current_obs_embeddings): {len(current_obs_embeddings)}")
+
                     if self.continuous_action_space:
                         act_tokens = torch.from_numpy(np.array(batch_action)).to(last_obs_embeddings.device).unsqueeze(1)
                     else:
                         act_tokens = torch.from_numpy(np.array(batch_action)).to(last_obs_embeddings.device).unsqueeze(-1)
+                    
                     outputs_wm = self.forward({'act_tokens': act_tokens}, past_keys_values=self.keys_values_wm,
                                               is_init_infer=True, start_pos=start_pos)
-
                     outputs_wm = self.forward({'obs_embeddings': current_obs_embeddings},
                                               past_keys_values=self.keys_values_wm, is_init_infer=True, start_pos=start_pos)
 
@@ -991,8 +1006,8 @@ class WorldModel(nn.Module):
                         k_cache_trimmed = k_cache_current[:, :, 2:context_length - 1, :].squeeze(0)
                         v_cache_trimmed = v_cache_current[:, :, 2:context_length - 1, :].squeeze(0)
 
-                        # Index pre-computed positional encoding differences
                         if not self.config.rotary_emb:
+                            # Index pre-computed positional encoding differences
                             pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length - 1)]
                             pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length - 1)]
                             # ============ NOTE: Very Important ============
@@ -1038,8 +1053,8 @@ class WorldModel(nn.Module):
                         k_cache_trimmed = k_cache_current[:, 2:context_length - 1, :]
                         v_cache_trimmed = v_cache_current[:, 2:context_length - 1, :]
 
-                        # Index pre-computed positional encoding differences
                         if not self.config.rotary_emb:
+                            # Index pre-computed positional encoding differences
                             pos_emb_diff_k = self.pos_emb_diff_k[layer][(2, context_length - 1)]
                             pos_emb_diff_v = self.pos_emb_diff_v[layer][(2, context_length - 1)]
                             # ============ NOTE: Very Important ============
