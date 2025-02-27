@@ -381,7 +381,7 @@ class UniZeroPolicy(MuZeroPolicy):
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
             -1).long()  # For discrete action space
         timestep_batch = torch.from_numpy(timestep_batch).to(self._cfg.device).unsqueeze(
-            -1).long()  # TODO: only for discrete action space
+            -1).long()
         data_list = [mask_batch, target_reward, target_value, target_policy, weights]
         mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
                                                                                                 self._cfg.device)
@@ -407,7 +407,6 @@ class UniZeroPolicy(MuZeroPolicy):
 
         batch_for_gpt['actions'] = action_batch.squeeze(-1)
         batch_for_gpt['timestep'] = timestep_batch.squeeze(-1)
-
 
         batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
         batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data

@@ -128,7 +128,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
-
             timestep_tmp = game.timestep_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
@@ -145,7 +144,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 np.random.randint(0, game.action_space_size)
                 for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
             ]
-            # TODO
+            # TODO: check the effect
             timestep_tmp += [
                 0
                 for _ in range(self._cfg.num_unroll_steps - len(timestep_tmp))
@@ -354,7 +353,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 action_mask_segment.append(game_segment.action_mask_segment)
                 to_play_segment.append(game_segment.to_play_segment)
                 timestep_segment.append(game_segment.timestep_segment)
-
                 child_visits.append(game_segment.child_visit_segment)
                 # prepare the corresponding observations
                 game_obs = game_segment.get_unroll_obs(state_index, self._cfg.num_unroll_steps)

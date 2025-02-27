@@ -456,7 +456,7 @@ class WorldModel(nn.Module):
                 sequences = obs_embeddings
                 # ==========*2 is because timestep only counts obs, but the sequence is obs, act actually==========
                 # import ipdb;ipdb.set_trace()
-                start_pos =[pos*2 for pos in start_pos]
+                start_pos = [pos*2-1 for pos in start_pos] 
 
         # Process action tokens
         elif 'act_tokens' in obs_embeddings_or_act_tokens:
@@ -480,7 +480,7 @@ class WorldModel(nn.Module):
                 # NOTE: act_tokens is last timestep, thus we minus 1 here 
                 # TODO: check the effect
                 # import ipdb;ipdb.set_trace()
-                start_pos =[pos*2-1 for pos in start_pos]
+                start_pos = [pos*2-1 for pos in start_pos] 
 
 
         # Process combined observation embeddings and action tokens
@@ -564,7 +564,10 @@ class WorldModel(nn.Module):
             obs_act = torch.cat([obs, act], dim=1)
             obs_act_embeddings[:, i * (K + 1):(i + 1) * (K + 1), :] = obs_act
 
-        return obs_act_embeddings + self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device)), num_steps
+        return_result = obs_act_embeddings
+        if not self.config.rotary_emb:
+            return_result += self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device))
+        return return_result, num_steps
 
     def _process_obs_act_combined(self, obs_embeddings_or_act_tokens, prev_steps):
         """

@@ -103,7 +103,7 @@ def apply_rotary_emb(
         freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
     except Exception as e:
         print('='*20)
-        import ipdb;ipdb.set_trace()
+        # import ipdb;ipdb.set_trace()
         print(f"freqs_cis.shape, xq_.shape:{freqs_cis.shape, xq_.shape}")
         print(f"Error in reshaping freqs_cis: {e}")
         print('We are at the reset timestep!')

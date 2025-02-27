@@ -82,7 +82,7 @@ class SampledUniZeroMCTSCtree(object):
     # @profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]]
+            List[Any]], timestep
     ) -> None:
         """
         Overview:
@@ -157,7 +157,7 @@ class SampledUniZeroMCTSCtree(object):
                 """
                 # for Sampled UniZero
                 network_output = model.recurrent_inference(state_action_history, simulation_index,
-                                                           latent_state_index_in_search_path)
+                                                           latent_state_index_in_search_path, timestep)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
