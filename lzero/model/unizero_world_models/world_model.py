@@ -456,7 +456,7 @@ class WorldModel(nn.Module):
                 sequences = obs_embeddings
                 # ==========*2 is because timestep only counts obs, but the sequence is obs, act actually==========
                 # import ipdb;ipdb.set_trace()
-                start_pos = [pos*2-1 for pos in start_pos] 
+                start_pos_tmp = [pos*2 for pos in start_pos] 
 
         # Process action tokens
         elif 'act_tokens' in obs_embeddings_or_act_tokens:
@@ -480,7 +480,7 @@ class WorldModel(nn.Module):
                 # NOTE: act_tokens is last timestep, thus we minus 1 here 
                 # TODO: check the effect
                 # import ipdb;ipdb.set_trace()
-                start_pos = [pos*2-1 for pos in start_pos] 
+                start_pos_tmp = [pos*2-1 for pos in start_pos] 
 
 
         # Process combined observation embeddings and action tokens
@@ -489,9 +489,10 @@ class WorldModel(nn.Module):
                 sequences, num_steps = self._process_obs_act_combined_cont(obs_embeddings_or_act_tokens, prev_steps)
             else:
                 sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
+            start_pos_tmp = start_pos
 
         # Pass sequences through transformer
-        x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths, start_pos=start_pos)
+        x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths, start_pos=start_pos_tmp)
 
         # Generate logits
         logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
