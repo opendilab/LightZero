@@ -62,7 +62,7 @@ def initialize_zeros_batch(observation_shape, batch_size, device):
     Returns:
         - zeros (:obj:`torch.Tensor`): The zeros tensor.
     """
-    if isinstance(observation_shape, list):
+    if isinstance(observation_shape, (list,tuple)):
         shape = [batch_size, *observation_shape]
     elif isinstance(observation_shape, int):
         shape = [batch_size, observation_shape]

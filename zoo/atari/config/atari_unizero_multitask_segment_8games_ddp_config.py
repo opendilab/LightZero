@@ -41,18 +41,29 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 num_channels=256,
                 continuous_action_space=False,
                 world_model_cfg=dict(
-                    analysis_dormant_ratio_weight_rank=True, # TODO
+                    share_head=True, # TODO
+                    final_norm_option_in_obs_head='SimNorm',
+                    final_norm_option_in_encoder='SimNorm',
+                    predict_latent_loss_type='group_kl', # TODO: for latent state layer_norm
+                    # LoRA 参数：
+                    lora_r= 0,
+                    lora_alpha =1,
+                    lora_dropout= 0.0,
+
+                    # analysis_dormant_ratio_weight_rank=True, # TODO
+                    analysis_dormant_ratio_weight_rank=False, # TODO
+
                     dormant_threshold=0.025,
 
                     continuous_action_space=False,
                                         
-                    # task_embed_option=None,   # ==============TODO: none ==============
-                    # use_task_embed=False, # ==============TODO==============
+                    task_embed_option=None,   # ==============TODO: none ==============
+                    use_task_embed=False, # ==============TODO==============
 
-                    task_embed_option='concat_task_embed',   # ==============TODO: none ==============
-                    use_task_embed=True, # ==============TODO==============
-                    # task_embed_dim=96,
-                    task_embed_dim=128,
+                    # task_embed_option='concat_task_embed',   # ==============TODO: none ==============
+                    # use_task_embed=True, # ==============TODO==============
+                    # # task_embed_dim=96,
+                    # task_embed_dim=128,
 
                     use_shared_projection=False,
                     max_blocks=num_unroll_steps,
@@ -119,7 +130,8 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_unizero_atari_mt_20250217/atari_{len(env_id_list)}games_lop_concattaskembed-128_brf{buffer_reanalyze_freq}_seed{seed}_dev-uz-mz-mt-cont/'
+    exp_name_prefix = f'data_unizero_atari_mt_20250228/atari_{len(env_id_list)}games_brf{buffer_reanalyze_freq}_share-head_seed{seed}/'
+    # exp_name_prefix = f'data_unizero_atari_mt_20250228/atari_{len(env_id_list)}games_lop_concattaskembed-128_brf{buffer_reanalyze_freq}_seed{seed}_dev-uz-mz-mt-cont/'
     # exp_name_prefix = f'data_unizero_atari_mt_20250217/atari_{len(env_id_list)}games_notaskembed_bs64_brf{buffer_reanalyze_freq}_seed{seed}_dev-uz-mz-mt-cont/'
 
     for task_id, env_id in enumerate(env_id_list):
@@ -151,7 +163,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=3 --master_port=29502 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=2 --master_port=29502 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
 
@@ -177,7 +189,7 @@ if __name__ == "__main__":
     total_batch_size = 512
 
     # batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
-    batch_size = [int(min(32, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+    batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
     
     num_unroll_steps = 10
     infer_context_length = 4

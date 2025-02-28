@@ -968,6 +968,7 @@ class MuZeroPolicy(Policy):
                 self._cfg.device
             )
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
+    
     def _monitor_vars_learn(self) -> List[str]:
         """
         Overview:

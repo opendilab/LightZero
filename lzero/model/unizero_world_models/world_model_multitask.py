@@ -42,7 +42,7 @@ class WorldModelMT(WorldModel):
     """
 
     #@profile
-    def __init__(self, config: TransformerConfig, tokenizer) -> None:
+    def __init__(self, config: TransformerConfig, tokenizer, share_head: bool = False) -> None:
         """
         Overview:
             Initialize the WorldModel class.
@@ -58,6 +58,7 @@ class WorldModelMT(WorldModel):
         super().__init__(config, tokenizer)
         self.tokenizer = tokenizer
         self.config = config
+        self.share_head = config.share_head  # 新增参数
 
         if self.config.device == 'cpu':
             self.device = torch.device('cpu')
@@ -98,7 +99,6 @@ class WorldModelMT(WorldModel):
         elif self.task_embed_option == "add_task_embed":
             self.task_emb = nn.Embedding(self.task_num, config.embed_dim, max_norm=1)  # TODO
             self.obs_act_embed_dim = config.embed_dim
-            self.register_token_num = 0
         else:
             self.task_emb = None
             self.obs_act_embed_dim = config.embed_dim
@@ -199,18 +199,22 @@ class WorldModelMT(WorldModel):
                 else:
                     self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
 
-                self.head_policy_multi_task.append(self.head_policy)
+                if not self.share_head or task_id == 0:
+                    self.head_policy_multi_task.append(self.head_policy)
 
                 self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
-                self.head_value_multi_task.append(self.head_value)
+                if not self.share_head or task_id == 0:
+                    self.head_value_multi_task.append(self.head_value)
 
                 self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
-                self.head_rewards_multi_task.append(self.head_rewards)
+                if not self.share_head or task_id == 0:
+                    self.head_rewards_multi_task.append(self.head_rewards)
 
                 self.head_observations = self._create_head(self.all_but_last_latent_state_pattern,
                                                         self.config.embed_dim,
                                                         self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
-                self.head_observations_multi_task.append(self.head_observations)
+                if not self.share_head or task_id == 0:
+                    self.head_observations_multi_task.append(self.head_observations)
         elif self.use_softmoe_head:
             print(f'We use softmoe head, self.num_experts_in_moe_head is {self.num_experts_in_moe_head}')
             # Dictionary to store SoftMoE instances
@@ -754,11 +758,12 @@ class WorldModelMT(WorldModel):
             logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
             logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
         else:
-            # TODO: in total N head, one head per task
-            logits_observations = self.head_observations_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-            logits_rewards = self.head_rewards_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-            logits_policy = self.head_policy_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
-            logits_value = self.head_value_multi_task[task_id](x, num_steps=num_steps, prev_steps=prev_steps)
+            # 使用共享head或任务特定的head
+            head_index = 0 if self.share_head else task_id
+            logits_observations = self.head_observations_multi_task[head_index](x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_rewards = self.head_rewards_multi_task[head_index](x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_policy = self.head_policy_multi_task[head_index](x, num_steps=num_steps, prev_steps=prev_steps)
+            logits_value = self.head_value_multi_task[head_index](x, num_steps=num_steps, prev_steps=prev_steps)
 
         # logits_ends is None
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)

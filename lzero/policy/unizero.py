@@ -120,6 +120,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 gamma=1,
                 # (float) The threshold for a dormant neuron.
                 dormant_threshold=0.01,
+                lora_r= 0,
             ),
         ),
         # ****** common ******

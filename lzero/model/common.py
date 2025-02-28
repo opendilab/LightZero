@@ -288,6 +288,8 @@ class RepresentationNetworkUniZero(nn.Module):
             norm_type: str = 'BN',
             embedding_dim: int = 256,
             group_size: int = 8,
+            # final_norm_option_in_encoder: str = 'SimNorm',
+            final_norm_option_in_encoder: str = 'LayerNorm', # TODO
     ) -> None:
         """
         Overview:
@@ -306,6 +308,8 @@ class RepresentationNetworkUniZero(nn.Module):
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
             - embedding_dim (:obj:`int`): The dimension of the latent state.
             - group_size (:obj:`int`): The dimension for simplicial normalization.
+            - final_norm_option_in_encoder (:obj:`str`): The normalization option for the final layer, defaults to 'SimNorm'. \
+                Options are 'SimNorm' and 'LayerNorm'.
         """
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
@@ -351,7 +355,13 @@ class RepresentationNetworkUniZero(nn.Module):
         elif self.observation_shape[1] in [84, 96]:
             self.last_linear = nn.Linear(num_channels * 6 * 6, self.embedding_dim, bias=False)
 
-        self.sim_norm = SimNorm(simnorm_dim=group_size)
+        self.final_norm_option_in_encoder = final_norm_option_in_encoder
+        if self.final_norm_option_in_encoder == 'LayerNorm':
+            self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
+        elif self.final_norm_option_in_encoder == 'SimNorm':
+            self.final_norm = SimNorm(simnorm_dim=group_size)
+        else:
+            raise ValueError(f"Unsupported final_norm_option_in_encoder: {self.final_norm_option_in_encoder}")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -378,7 +388,7 @@ class RepresentationNetworkUniZero(nn.Module):
         x = x.view(-1, self.embedding_dim)
 
         # NOTE: very important for training stability.
-        x = self.sim_norm(x)
+        x = self.final_norm(x)
 
         return x
 

@@ -1,5 +1,5 @@
 import copy
-from typing import List, Dict, Tuple, Union
+from typing import List, Dict, Tuple, Union, Optional
 
 import numpy as np
 import torch
@@ -124,6 +124,7 @@ class MuZeroMTPolicy(MuZeroPolicy):
         augmentation=['shift', 'intensity'],
 
         # ******* learn ******
+        use_wandb=False,
         ignore_done=False,
         update_per_collect=None,
         replay_ratio=0.25,
@@ -543,6 +544,36 @@ class MuZeroMTPolicy(MuZeroPolicy):
         # 返回最终的损失字典
         return return_loss_dict
 
+    def _reset_collect(self, data_id: Optional[List[int]] = None, task_id: int = None) -> None:
+        """
+        Overview:
+            Reset the observation and action for the collector environment.
+        Arguments:
+            - data_id (`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
+        """
+        if self._cfg.model.model_type in ["conv_context"]:
+            self.last_batch_obs = initialize_zeros_batch(
+                self._cfg.model.observation_shape,
+                self._cfg.collector_env_num,
+                self._cfg.device
+            )
+            self.last_batch_action = [-1 for _ in range(self._cfg.collector_env_num)]
+
+    def _reset_eval(self, data_id: Optional[List[int]] = None, task_id: int = None) -> None:
+        """
+        Overview:
+            Reset the observation and action for the evaluator environment.
+        Arguments:
+            - data_id (:obj:`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
+        """
+        if self._cfg.model.model_type in ["conv_context"]:
+            self.last_batch_obs = initialize_zeros_batch(
+                self._cfg.model.observation_shape,
+                self._cfg.evaluator_env_num,
+                self._cfg.device
+            )
+            self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
+    
  
     def _monitor_vars_learn(self, num_tasks: int = None) -> List[str]:
         """

@@ -87,10 +87,16 @@ class WorldModel(nn.Module):
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
             logging.info(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
+        # self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'SimNorm')
+        self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'LayerNorm') # TODO
+
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
-        self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.config.embed_dim,
-                                                   self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
+        self.head_observations = self._create_head(
+            self.all_but_last_latent_state_pattern,
+            self.config.embed_dim,
+            self._get_final_norm(self.final_norm_option_in_obs_head)  # 使用指定的归一化方法
+        )
         if self.continuous_action_space:
             self.sigma_type = self.config.sigma_type
             self.bound_type = self.config.bound_type
@@ -147,6 +153,18 @@ class WorldModel(nn.Module):
         self.shared_pool_index_wm = 0
 
         self.reanalyze_phase = False
+
+
+    def _get_final_norm(self, norm_option: str) -> nn.Module:
+        """
+        根据指定的归一化选项返回相应的归一化模块。
+        """
+        if norm_option == 'LayerNorm':
+            return nn.LayerNorm(self.config.embed_dim, eps=1e-5)
+        elif norm_option == 'SimNorm':
+            return SimNorm(simnorm_dim=self.config.group_size)
+        else:
+            raise ValueError(f"Unsupported final_norm_option_in_obs_head: {norm_option}")
 
     def custom_copy_kv_cache_to_shared_init_envs(self, src_kv: KeysValues, env_id) -> int:
         """
@@ -1673,7 +1691,6 @@ class WorldModel(nn.Module):
 
         # return labels_observations, labels_rewards.reshape(-1, self.support_size), labels_ends.reshape(-1)
         return labels_observations, labels_rewards.view(-1, self.support_size), None
-
 
 
     #@profile

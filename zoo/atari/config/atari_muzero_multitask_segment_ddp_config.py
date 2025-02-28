@@ -1,5 +1,3 @@
-# zoo/atari/config/atari_muzero_multitask_segment_8games_config.py
-
 from easydict import EasyDict
 from copy import deepcopy
 from atari_env_action_space_map import atari_env_action_space_map
@@ -34,6 +32,8 @@ def create_config(
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False, ),
             full_action_space=True,
+            collect_max_episode_steps=int(5e3),
+            eval_max_episode_steps=int(5e3),
             # ===== only for debug =====
             # collect_max_episode_steps=int(50),
             # eval_max_episode_steps=int(50),
@@ -74,12 +74,10 @@ def create_config(
                 task_num=len(env_id_list),
             ),
             allocated_batch_sizes=False,
-            # max_batch_size=max_batch_size,
-            max_batch_size=512,# TODO
             cuda=True,
             env_type='not_board_games',
-            # train_start_after_envsteps=2000,
-            train_start_after_envsteps=0,
+            train_start_after_envsteps=2000, 
+            # train_start_after_envsteps=0, # TODO: debug
             game_segment_length=20,  # Fixed segment length as per user config
             random_collect_episode_num=0,
             use_augmentation=True,
@@ -129,8 +127,9 @@ def generate_configs(
     num_segments
 ):
     configs = []
+    # TODO: debug name
     exp_name_prefix = (
-        f'data_muzero_mt_8games_ddp_8gpu_1129/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/'
+        f'data_lz/data_muzero_mt_atari_20250228/{len(env_id_list)}games_brf{buffer_reanalyze_freq}/'
         f'{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_'
         f'{len(env_id_list)}-pred-head_mbs-512_upc80_H{num_unroll_steps}_seed{seed}/'
     )
@@ -170,7 +169,6 @@ def create_env_manager():
             import_names=['zoo.atari.envs.atari_lightzero_env'],
         ),
         env_manager=dict(type='subprocess'),
-        # env_manager=dict(type='base'),
         policy=dict(
             type='muzero_multitask',
             import_names=['lzero.policy.muzero_multitask'],
@@ -178,10 +176,10 @@ def create_env_manager():
     ))
 
 if __name__ == "__main__":
-    import sys
-    sys.path.insert(0, "/mnt/afs/niuyazhe/code/LightZero")
-    import lzero
-    print("lzero path:", lzero.__file__)
+    # import sys
+    # sys.path.insert(0, "/mnt/afs/niuyazhe/code/LightZero")
+    # import lzero
+    # print("lzero path:", lzero.__file__)
 
     # parser = argparse.ArgumentParser(description='Train MuZero Multitask on Atari')
     # parser.add_argument('--seed', type=int, default=0, help='Random seed')
@@ -193,19 +191,41 @@ if __name__ == "__main__":
         'MsPacmanNoFrameskip-v4',
         'SeaquestNoFrameskip-v4',
         'BoxingNoFrameskip-v4',
+        # 'AlienNoFrameskip-v4',
+        # 'ChopperCommandNoFrameskip-v4',
+        # 'HeroNoFrameskip-v4',
+        # 'RoadRunnerNoFrameskip-v4',
+    ]
+    env_id_list = [
+        'PongNoFrameskip-v4',
+        'MsPacmanNoFrameskip-v4',
+        'SeaquestNoFrameskip-v4',
+        'BoxingNoFrameskip-v4',
         'AlienNoFrameskip-v4',
         'ChopperCommandNoFrameskip-v4',
         'HeroNoFrameskip-v4',
         'RoadRunnerNoFrameskip-v4',
+        'AmidarNoFrameskip-v4',
+        'AssaultNoFrameskip-v4',
+        'AsterixNoFrameskip-v4',
+        'BankHeistNoFrameskip-v4',
+        'BattleZoneNoFrameskip-v4',
+        'CrazyClimberNoFrameskip-v4',
+        'DemonAttackNoFrameskip-v4',
+        'FreewayNoFrameskip-v4',
+        'FrostbiteNoFrameskip-v4',
+        'GopherNoFrameskip-v4',
+        'JamesbondNoFrameskip-v4',
+        'KangarooNoFrameskip-v4',
+        'KrullNoFrameskip-v4',
+        'KungFuMasterNoFrameskip-v4',
+        'PrivateEyeNoFrameskip-v4',
+        'UpNDownNoFrameskip-v4',
+        'QbertNoFrameskip-v4',
+        'BreakoutNoFrameskip-v4',
     ]
-    # env_id_list = [
-    #     'PongNoFrameskip-v4',
-    #     'MsPacmanNoFrameskip-v4',
-    # ]
 
     action_space_size = 18  # Full action space, adjust if different per env
-    
-    # seed = args.seed
     seed = 0
 
     collector_env_num = 8
@@ -217,8 +237,8 @@ if __name__ == "__main__":
     max_env_step = 5e5
 
     max_batch_size = 512
+    # max_batch_size = 1024
     batch_size = [int(min(64, max_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
-    print(f'=========== batch_size: {batch_size} ===========')
 
     num_unroll_steps = 5
     infer_context_length = 4
@@ -229,17 +249,16 @@ if __name__ == "__main__":
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
 
-    num_segments = 8
 
     # =========== TODO: debug ===========
     # collector_env_num = 2
     # evaluator_env_num = 2
     # num_segments = 2
     # n_episode = 2
-    # num_simulations = 5
+    # num_simulations = 3
     # batch_size = [int(min(2, max_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
 
-
+    print(f'=========== batch_size: {batch_size} ===========')
     # Generate configurations
     configs = generate_configs(
         env_id_list=env_id_list,
@@ -265,9 +284,9 @@ if __name__ == "__main__":
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
         export NCCL_TIMEOUT=3600000
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29501 ./zoo/atari/config/atari_muzero_multitask_segment_8games_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29501 ./zoo/atari/config/atari_muzero_multitask_segment_8games_ddp_config.py
         或者使用 torchrun:
-        torchrun --nproc_per_node=8 ./zoo/atari/config/atari_muzero_multitask_segment_8games_ddp_config.py
+        torchrun --nproc_per_node=4 ./zoo/atari/config/atari_muzero_multitask_segment_8games_ddp_config.py
     """
     from lzero.entry import train_muzero_multitask_segment_ddp
     from ding.utils import DDPContext

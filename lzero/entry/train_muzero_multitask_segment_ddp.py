@@ -379,8 +379,8 @@ def train_muzero_multitask_segment_ddp(
                 )
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
-            # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-            if learner.train_iter > 1 and evaluator.should_eval(learner.train_iter):
+            if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            # if learner.train_iter > 1 and evaluator.should_eval(learner.train_iter): # TODO: debug
                 print('=' * 20)
                 print(f'Rank {rank} 评估 task_id: {cfg.policy.task_id}...')
 
@@ -434,9 +434,10 @@ def train_muzero_multitask_segment_ddp(
 
         # 检查是否有足够的数据进行训练
         not_enough_data = any(
-            replay_buffer.get_num_of_transitions() < cfgs[0].policy.max_batch_size / world_size
-            for replay_buffer in game_buffers
+            replay_buffer.get_num_of_transitions() < cfg.policy.batch_size[cfg.policy.task_id]
+            for cfg, replay_buffer in zip(cfgs, game_buffers)
         )
+        assert not not_enough_data, f"Rank {rank}: 某些任务的数据量不足以进行训练。请确保所有任务的 replay buffer 中有足够的数据。"
 
         # 同步训练前所有 rank 的准备状态
         try:
