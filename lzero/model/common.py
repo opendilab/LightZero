@@ -288,8 +288,8 @@ class RepresentationNetworkUniZero(nn.Module):
             norm_type: str = 'BN',
             embedding_dim: int = 256,
             group_size: int = 8,
-            # final_norm_option_in_encoder: str = 'SimNorm',
-            final_norm_option_in_encoder: str = 'LayerNorm', # TODO
+            final_norm_option_in_encoder: str = 'SimNorm',
+            # final_norm_option_in_encoder: str = 'LayerNorm', # TODO
     ) -> None:
         """
         Overview:

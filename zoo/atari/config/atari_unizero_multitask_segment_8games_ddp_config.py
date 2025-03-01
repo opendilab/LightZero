@@ -41,9 +41,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 num_channels=256,
                 continuous_action_space=False,
                 world_model_cfg=dict(
-                    share_head=True, # TODO
-                    final_norm_option_in_obs_head='SimNorm',
-                    final_norm_option_in_encoder='SimNorm',
+                    # share_head=True, # TODO
+                    share_head=False, # TODO
                     predict_latent_loss_type='group_kl', # TODO: for latent state layer_norm
                     # LoRA 参数：
                     lora_r= 0,
@@ -52,7 +51,6 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
                     # analysis_dormant_ratio_weight_rank=True, # TODO
                     analysis_dormant_ratio_weight_rank=False, # TODO
-
                     dormant_threshold=0.025,
 
                     continuous_action_space=False,
@@ -99,7 +97,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             task_complexity_weight=False, # TODO
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
-            train_start_after_envsteps=int(0),
+            # train_start_after_envsteps=int(0),
+            train_start_after_envsteps=int(2000),
             use_priority=False,
             print_task_priority_logs=False,
             cuda=True,
@@ -110,6 +109,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
+            cos_lr_scheduler=True,
             num_segments=num_segments,
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
@@ -130,7 +130,8 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_unizero_atari_mt_20250228/atari_{len(env_id_list)}games_brf{buffer_reanalyze_freq}_share-head_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250304/atari_{len(env_id_list)}games_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
+    # exp_name_prefix = f'data_lz_debug/data_unizero_atari_mt_20250228/atari_{len(env_id_list)}games_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
     # exp_name_prefix = f'data_unizero_atari_mt_20250228/atari_{len(env_id_list)}games_lop_concattaskembed-128_brf{buffer_reanalyze_freq}_seed{seed}_dev-uz-mz-mt-cont/'
     # exp_name_prefix = f'data_unizero_atari_mt_20250217/atari_{len(env_id_list)}games_notaskembed_bs64_brf{buffer_reanalyze_freq}_seed{seed}_dev-uz-mz-mt-cont/'
 
@@ -163,7 +164,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=2 --master_port=29502 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
 

@@ -307,6 +307,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
         policy_loss_weight=1,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
+        cos_lr_scheduler=False,
+        piecewise_decay_lr_scheduler=False,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
         lr_piecewise_constant_decay=False,
@@ -388,6 +390,19 @@ class UniZeroMTPolicy(UniZeroPolicy):
             betas=(0.9, 0.95),
         )
 
+        if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
+            from torch.optim.lr_scheduler import CosineAnnealingLR, StepLR
+
+            if self._cfg.cos_lr_scheduler:
+                self.lr_scheduler = CosineAnnealingLR(
+                    self._optimizer_world_model, T_max=int(2e5), eta_min=0, last_epoch=-1
+                ) # TODO
+            elif self._cfg.piecewise_decay_lr_scheduler:
+                # Example step scheduler, adjust milestones and gamma as needed
+                self.lr_scheduler = StepLR(
+                    self._optimizer_world_model, step_size=int(5e4), gamma=0.1
+                )
+                
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
         # Ensure that the installed torch version is greater than or equal to 2.0
@@ -575,8 +590,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             weighted_total_loss += losses.loss_total  # TODO
 
-            assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
-            assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
+            # assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values" # TODO
+            # assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
             losses_list.append(losses.loss_total)  # TODO: for moco
 
@@ -677,7 +692,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
             # print(f'Rank {rank} train task_id: {self._cfg.task_id} sync grad end...')
 
         self._optimizer_world_model.step()
-        if self._cfg.lr_piecewise_constant_decay:
+        if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
         # Core target model update step

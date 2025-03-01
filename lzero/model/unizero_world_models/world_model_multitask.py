@@ -42,7 +42,7 @@ class WorldModelMT(WorldModel):
     """
 
     #@profile
-    def __init__(self, config: TransformerConfig, tokenizer, share_head: bool = False) -> None:
+    def __init__(self, config: TransformerConfig, tokenizer) -> None:
         """
         Overview:
             Initialize the WorldModel class.
