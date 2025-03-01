@@ -489,7 +489,8 @@ class WorldModel(nn.Module):
                 sequences, num_steps = self._process_obs_act_combined_cont(obs_embeddings_or_act_tokens, prev_steps)
             else:
                 sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
-            start_pos_tmp = start_pos
+            # ==========*2 is because timestep only counts obs, but the sequence is obs, act actually==========
+            start_pos_tmp = [pos*2 for pos in start_pos] 
 
         # Pass sequences through transformer
         x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths, start_pos=start_pos_tmp)

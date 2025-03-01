@@ -13,7 +13,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     game_segment_length = 20
     evaluator_env_num = 3
     num_simulations = 50
-    max_env_step = int(4e5)
+    max_env_step = int(5e5)
     batch_size = 64
     num_unroll_steps = 10
     infer_context_length = 4

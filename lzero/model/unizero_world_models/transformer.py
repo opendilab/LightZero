@@ -94,7 +94,7 @@ def apply_rotary_emb(
     
     Note:
         For more information on rotary positional embeddings, refer to the blog post:
-        https://spaces.ac.cn/archives/8265/
+        https://spaces.ac.cn/archives/8265/ or paper https://arxiv.org/abs/2104.09864.
     """
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
