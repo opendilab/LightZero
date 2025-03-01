@@ -19,42 +19,6 @@ from lzero.model.utils import cal_dormant_ratio
 from lzero.policy import scalar_transform, InverseScalarTransform, cross_entropy_loss, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, negative_cosine_similarity, \
     prepare_obs, configure_optimizers
-import torch.nn.functional as F
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.feature_selection import mutual_info_regression  # 用于互信息估计
-from scipy.stats import pearsonr
-# 定义计算余弦相似度矩阵的内部函数
-def compute_cosine_similarity_matrix(latent_states: torch.Tensor) -> np.ndarray:
-    # latent_states: [num_steps, batch_size, latent_dim]
-    num_steps = latent_states.shape[0]
-    sim_matrix = np.zeros((num_steps, num_steps))
-    for t in range(num_steps):
-        lt = latent_states[t]
-        lt_norm = F.normalize(lt, p=2, dim=1)
-        for u in range(num_steps):
-            lu = latent_states[u]
-            lu_norm = F.normalize(lu, p=2, dim=1)
-            sim = (lt_norm * lu_norm).sum(dim=1)
-            sim_matrix[t, u] = sim.mean().item()
-    return sim_matrix
-
-# 定义绘制热力图的内部函数
-def plot_similarity_heatmap(sim_matrix: np.ndarray, title: str):
-    # 根据矩阵数值范围设置 colorbar 的数值范围
-    if np.all((sim_matrix >= 0) & (sim_matrix <= 1)):
-        vmin, vmax = 0, 1
-    else:
-        vmin, vmax = -1, 1
-    
-    # 绘图：这里采用 viridis 配色，该色系在学术论文中比较常见
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sns.heatmap(sim_matrix, annot=True, fmt=".2f", cmap="viridis", vmin=vmin, vmax=vmax, ax=ax)
-    ax.set_title(title)
-    ax.set_xlabel("Unroll Step")
-    ax.set_ylabel("Unroll Step")
-    plt.tight_layout()
-    return fig
 
 
 @POLICY_REGISTRY.register('muzero')
@@ -392,8 +356,6 @@ class MuZeroPolicy(Policy):
         if self._cfg.use_wandb:
             # TODO: add the model to wandb
             wandb.watch(self._learn_model.representation_network, log="all")
-        
-        self.train_iter_muzero = 0
 
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -623,126 +585,6 @@ class MuZeroPolicy(Policy):
         weighted_total_loss.register_hook(lambda grad: grad * gradient_scale)
         self._optimizer.zero_grad()
         weighted_total_loss.backward()
-
-        # ============= 内部分析：采集当前 batch 的 latent states 并计算余弦相似度矩阵 ======================
-        batch_size = self._cfg.batch_size
-        if self.train_iter_muzero % 1000 == 0:
-            # 采集当前 batch 的 latent state 序列（注意：这里不使用梯度，且不影响主训练通路）
-            with torch.no_grad():
-                analysis_latent_states = []
-                # 重新使用当前 batch 的 obs_batch（未经 augmentation 的可能更直观）
-                current_latent, reward, value, policy_logits = mz_network_output_unpack(network_output)
-                analysis_latent_states.append(current_latent.detach().cpu())
-                for step in range(self._cfg.num_unroll_steps):
-                    network_output = self._learn_model.recurrent_inference(current_latent, action_batch[:, step])
-                    current_latent, reward, value, policy_logits = mz_network_output_unpack(network_output)
-                    analysis_latent_states.append(current_latent.detach().cpu())
-                analysis_latent_states = torch.stack(analysis_latent_states, dim=0)  # shape: [num_steps+1, batch_size, latent_dim]
-                sim_matrix = compute_cosine_similarity_matrix(analysis_latent_states)
-
-                analysis_title = "Latent Cosine Similarity (SSL: {})".format(self._cfg.model.self_supervised_learning_loss)
-                print(analysis_title)
-                print(sim_matrix)
-
-                # 绘制热力图
-                fig = plot_similarity_heatmap(sim_matrix, title=analysis_title)
-                # 若配置了 wandb，则记录图像
-                if self._cfg.use_wandb:
-                    wandb.log({"latent_similarity": wandb.Image(fig)}, step=self.train_iter_muzero)
-                # 同时保存图片到本地（可选）
-                if self._cfg.model.self_supervised_learning_loss:
-                    fig.savefig("/mnt/afs/niuyazhe/code/LightZero/data_lz/data_muzero/latent_similarity_ssl/latent_similarity_iter_{}_withssl.png".format(self.train_iter_muzero))
-                else:
-                    fig.savefig("/mnt/afs/niuyazhe/code/LightZero/data_lz/data_muzero/latent_similarity_nossl/latent_similarity_iter_{}_nossl.png".format(self.train_iter_muzero))
-                plt.close(fig)
-
-                # --------------------------
-                # 皮尔逊相关系数计算：对连续时间步 t 和 t+1 之间进行估计
-                # --------------------------
-                corr_values = []  # 记录每个时间步均值的皮尔逊相关系数
-
-                for t in range(analysis_latent_states.shape[0] - 1):
-                    # 将 latent state 展平为二维 [batch_size, feature_dim]
-                    X = analysis_latent_states[t].view(batch_size, -1).numpy()   # shape: (batch_size, feature_dim)
-                    Y = analysis_latent_states[t + 1].view(batch_size, -1).numpy() # shape: (batch_size, feature_dim)
-                
-                    # --- 2. 计算皮尔逊相关系数 ---
-                    # 对于每个维度，先检测是否为常数（标准差接近0），若常数则跳过，否则计算皮尔逊相关系数
-                    valid_correlations = []
-                    for d in range(X.shape[1]):
-                        # 如果该维度数据为常数，则跳过计算
-                        if np.std(X[:, d]) < 1e-8 or np.std(Y[:, d]) < 1e-8:
-                            continue
-                        r, _ = pearsonr(X[:, d], Y[:, d])
-                        valid_correlations.append(r)
-                    # 如果所有维度均为常数，避免除以0，可以赋予默认值（例如0或np.nan）
-                    if valid_correlations:
-                        avg_corr = np.mean(valid_correlations)
-                    else:
-                        avg_corr = 0.0  # 或者 avg_corr = np.nan
-                    corr_values.append(avg_corr)
-
-                corr_values = np.array(corr_values)
-                print("Average Pearson Correlation between consecutive steps:", corr_values)
-
-                # 绘制皮尔逊相关系数曲线
-                plt.figure(figsize=(6, 4))
-                plt.plot(corr_values, marker='o', color='red')
-                plt.title("Average Pearson Correlation between Consecutive Unroll Steps")
-                plt.xlabel("Unroll Step (t vs. t+1)")
-                plt.ylabel("Average Pearson Correlation")
-                plt.xticks(range(len(corr_values)))  # 设置横轴为整数刻度
-                plt.tight_layout()
-                fig_corr = plt.gcf()
-                if self._cfg.model.self_supervised_learning_loss:
-                    fig_corr.savefig("/mnt/afs/niuyazhe/code/LightZero/data_lz/data_muzero/pearson_correlation_ssl/pearson_correlation_iter_{}_withssl.png".format(self.train_iter_muzero))
-                else:
-                    fig_corr.savefig("/mnt/afs/niuyazhe/code/LightZero/data_lz/data_muzero/pearson_correlation_nossl/pearson_correlation_iter_{}_nossl.png".format(self.train_iter_muzero))
-                plt.close(fig_corr)
-
-                if self.train_iter_muzero > 0 and self.train_iter_muzero % 50000 == 0: # TODO
-                    # --------------------------
-                    # 互信息计算：对连续时间步 t 和 t+1 之间进行估计
-                    # --------------------------
-                    mi_values = []
-
-                    for t in range(analysis_latent_states.shape[0] - 1):
-                        # 将 latent state 展平为二维 [batch_size, feature_dim]
-                        X = analysis_latent_states[t].view(batch_size, -1).numpy()   # shape: (batch_size, feature_dim)
-                        Y = analysis_latent_states[t + 1].view(batch_size, -1).numpy() # shape: (batch_size, feature_dim)
-                        
-                        # --- 1. 计算互信息 ---
-                        # 针对 Y 中每一维分别计算互信息，并取均值
-                        mi_array_full = []
-                        for d in range(Y.shape[1]):
-                            mi_array_d = mutual_info_regression(X, Y[:, d], random_state=0)
-                            # mi_array_d 是个数组，表示 X 各特征与 Y[:, d] 的互信息，再取均值
-                            mi_array_full.append(np.mean(mi_array_d))
-                        avg_mi = np.mean(mi_array_full)
-                        mi_values.append(avg_mi)
-                        
-                    mi_values = np.array(mi_values)
-                    print("Mutual Information between consecutive steps:", mi_values)
-
-                    # 绘制互信息曲线
-                    plt.figure(figsize=(6, 4))
-                    plt.plot(mi_values, marker='s')
-                    plt.title("Average Mutual Information between Consecutive Unroll Steps")
-                    plt.xlabel("Unroll Step (t vs. t+1)")
-                    plt.ylabel("Average MI")
-                    plt.xticks(range(len(mi_values)))  # 设置横轴为整数刻度
-                    plt.tight_layout()
-                    fig_mi = plt.gcf()
-                    # 如果高效日志存储系统（例如 wandb）处于激活状态，则可以记录，否则保存到本地指定路径
-                    if self._cfg.model.self_supervised_learning_loss:
-                        fig_mi.savefig("/mnt/afs/niuyazhe/code/LightZero/data_lz/data_muzero/mutual_information_ssl/mutual_information_iter_{}_withssl.png".format(self.train_iter_muzero))
-                    else:
-                        fig_mi.savefig("/mnt/afs/niuyazhe/code/LightZero/data_lz/data_muzero/mutual_information_nossl/mutual_information_iter_{}_nossl.png".format(self.train_iter_muzero))
-                    plt.close(fig_mi)
-
-
-        self.train_iter_muzero+=1
-        # ====================================================================================================
 
         # ============= for analysis =============
         if self._cfg.analysis_sim_norm:

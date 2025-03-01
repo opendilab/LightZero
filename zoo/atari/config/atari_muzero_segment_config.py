@@ -18,15 +18,16 @@ def main(env_id, seed):
 
     num_unroll_steps = 5
     batch_size = 256
+    # batch_size = 512 # TODO
     max_env_step = int(5e5)
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    # buffer_reanalyze_freq = 1/10
-    buffer_reanalyze_freq = 1/10000
+    buffer_reanalyze_freq = 1/10
+    # buffer_reanalyze_freq = 1/10000
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
-    reanalyze_partition=1
+    reanalyze_partition = 0.75
 
     # =========== for debug ===========
     # collector_env_num = 2
@@ -66,6 +67,7 @@ def main(env_id, seed):
                 action_space_size=action_space_size,
                 downsample=True,
                 self_supervised_learning_loss=True,  # default is False
+                # self_supervised_learning_loss=False,  # default is False
                 discrete_action_encoding_type='one_hot',
                 norm_type='BN',
                 use_sim_norm=True, # NOTE
@@ -78,7 +80,8 @@ def main(env_id, seed):
             train_start_after_envsteps=2000,
             game_segment_length=game_segment_length,
             random_collect_episode_num=0,
-            use_augmentation=True,
+            # use_augmentation=True,
+            use_augmentation=False,
             use_priority=False,
             replay_ratio=replay_ratio,
             update_per_collect=update_per_collect,
@@ -123,7 +126,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_muzero_segment
-    main_config.exp_name = f'data_muzero/{env_id[:-14]}/{env_id[:-14]}_mz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_lz/data_muzero/{env_id[:-14]}/{env_id[:-14]}_mz_ssl_measure_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}_bs{batch_size}_seed{seed}'
     train_muzero_segment([main_config, create_config], seed=seed, max_env_step=max_env_step)
 
 if __name__ == "__main__":
