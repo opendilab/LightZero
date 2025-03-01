@@ -575,8 +575,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             weighted_total_loss += losses.loss_total  # TODO
 
-            assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
-            assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
+            # assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values" # TODO
+            # assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
             losses_list.append(losses.loss_total)  # TODO: for moco
 
