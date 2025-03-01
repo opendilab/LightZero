@@ -26,6 +26,7 @@ import concurrent.futures
 # ========== 超时时间设置 ==========
 TIMEOUT = 3600  # 例如，60分钟
 
+timer = EasyTimer()
 
 def safe_eval(
         evaluator: Evaluator,
