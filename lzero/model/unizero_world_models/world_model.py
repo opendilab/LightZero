@@ -419,7 +419,7 @@ class WorldModel(nn.Module):
     def forward(self, obs_embeddings_or_act_tokens: Dict[str, Union[torch.Tensor, tuple]],
                 past_keys_values: Optional[torch.Tensor] = None,
                 kvcache_independent: bool = False, is_init_infer: bool = True,
-                valid_context_lengths: Optional[torch.Tensor] = None, start_pos: int = 0) -> WorldModelOutput:
+                valid_context_lengths: Optional[torch.Tensor] = None, start_pos: int = 0, latent_state_index_in_search_path=None) -> WorldModelOutput:
         """
         Forward pass for the model.
 
@@ -455,15 +455,25 @@ class WorldModel(nn.Module):
             else:
                 sequences = obs_embeddings
 
-                # ==========*2 is because timestep only counts obs, but the sequence is obs, act actually==========
-                if self.reanalyze_phase:
-                    start_pos_tmp = start_pos*2
-                    if not isinstance(start_pos_tmp, int):
-                        padding = np.zeros((start_pos_tmp.shape[0], 1), dtype=start_pos_tmp.dtype)
-                        start_pos_padded = np.concatenate([start_pos_tmp, padding], axis=1)
-                        start_pos_tmp = start_pos_padded.reshape(-1)
-                else:
-                    start_pos_tmp = [pos*2 for pos in start_pos] 
+                if is_init_infer:
+                    # ==========*2 is because timestep only counts obs, but the sequence is obs, act actually==========
+                    if self.reanalyze_phase:
+                        start_pos_tmp = start_pos*2
+                        if not isinstance(start_pos_tmp, int):
+                            padding = np.zeros((start_pos_tmp.shape[0], 1), dtype=start_pos_tmp.dtype)
+                            start_pos_padded = np.concatenate([start_pos_tmp, padding], axis=1)
+                            start_pos_tmp = start_pos_padded.reshape(-1)
+                    else:
+                        if isinstance(start_pos, int):
+                            start_pos_tmp = start_pos*2
+                        else:
+                            start_pos_tmp = [pos*2 for pos in start_pos] 
+                else: # ========= TODO: rope pos index in recurrent_inference =======
+                    # import ipdb;ipdb.set_trace()
+                    start_pos_tmp = [(latent_state_index_in_search_path[index] + pos)*2 for index, pos in enumerate(start_pos) ] 
+                    # print("obs phase:")
+                    # print(f'latent_state_index_in_search_path:{latent_state_index_in_search_path}')
+                    # print(f'start_pos:{start_pos}')
 
 
         # Process action tokens
@@ -484,21 +494,36 @@ class WorldModel(nn.Module):
                                                       is_init_infer, valid_context_lengths)
             else:
                 sequences = act_embeddings
-                if self.reanalyze_phase:
-                    # NOTE: in reanalyze_phase act_tokens is current timestep, thus we add 1 here 
-                    start_pos_tmp = start_pos*2 + 1
-                    if not isinstance(start_pos_tmp, int): # int为single_env_forward, array为batch forward
-                        # 创建一个形状为 (2, 1) 的填充0数组
-                        padding = np.zeros((start_pos_tmp.shape[0], 1), dtype=start_pos_tmp.dtype)
-                        # 沿着第二个维度（列方向）拼接
-                        start_pos_padded = np.concatenate([start_pos_tmp, padding], axis=1)
-                        # 将结果 reshape 成一维数组
-                        start_pos_tmp = start_pos_padded.reshape(-1)
+
+                if is_init_infer:
+                    # 下面只是对于init_infer正确
+                    if self.reanalyze_phase:
+                        # NOTE: in reanalyze_phase act_tokens is current timestep, thus we add 1 here 
+                        start_pos_tmp = start_pos*2 + 1
+                        if not isinstance(start_pos_tmp, int): # int为single_env_forward, array为batch forward
+                            # 创建一个形状为 (2, 1) 的填充0数组
+                            padding = np.zeros((start_pos_tmp.shape[0], 1), dtype=start_pos_tmp.dtype)
+                            # 沿着第二个维度（列方向）拼接
+                            start_pos_padded = np.concatenate([start_pos_tmp, padding], axis=1)
+                            # 将结果 reshape 成一维数组
+                            start_pos_tmp = start_pos_padded.reshape(-1)
+                    else:
+                        # ==========*2 is because timestep only counts obs, but the sequence is obs, act actually==========
+                        # NOTE: act_tokens is last timestep, thus we minus 1 here 
+                        # TODO: check the effect
+                        if isinstance(start_pos, int):
+                            start_pos_tmp = start_pos*2 - 1
+                        else:
+                            start_pos_tmp = [pos*2-1 for pos in start_pos] 
                 else:
-                    # ==========*2 is because timestep only counts obs, but the sequence is obs, act actually==========
-                    # NOTE: act_tokens is last timestep, thus we minus 1 here 
-                    # TODO: check the effect
-                    start_pos_tmp = [pos*2-1 for pos in start_pos] 
+                    # ========= TODO: rope pos index in recurrent_inference =======
+                    # if not is_init_infer:
+                    #     prev_steps + num_steps
+                    # import ipdb;ipdb.set_trace()
+                    start_pos_tmp = [(latent_state_index_in_search_path[index] + pos)*2+1 for index, pos in enumerate(start_pos)] 
+                    # print("act phase:")
+                    # print(f'atent_state_index_in_search_path:{latent_state_index_in_search_path}')
+                    # print(f'start_pos:{start_pos}')
 
         # Process combined observation embeddings and action tokens
         else:
@@ -737,9 +762,12 @@ class WorldModel(nn.Module):
                         else:
                             # Reset using zero values
                             self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
+                            # outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
+                            #                           past_keys_values=self.keys_values_wm_single_env,
+                            #                           is_init_infer=True, start_pos=[start_pos[i]])
                             outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
-                                                      past_keys_values=self.keys_values_wm_single_env,
-                                                      is_init_infer=True, start_pos=[start_pos[i]])
+                                                past_keys_values=self.keys_values_wm_single_env,
+                                                is_init_infer=True, start_pos=0)
                             self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                             self.keys_values_wm_size_list.append(1)
 
@@ -884,7 +912,8 @@ class WorldModel(nn.Module):
                 past_keys_values=self.keys_values_wm,
                 kvcache_independent=False,
                 is_init_infer=False,
-                start_pos = start_pos
+                start_pos=start_pos,
+                latent_state_index_in_search_path=latent_state_index_in_search_path
             )
 
             self.keys_values_wm_size_list_current = [i + 1 for i in self.keys_values_wm_size_list_current]
@@ -1153,18 +1182,21 @@ class WorldModel(nn.Module):
                 self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(
                     n=1, max_tokens=self.context_length
                 )
-                if self.reanalyze_phase:
-                    nrow, ncols = start_pos.shape  # 原start_pos shape为 (batch, ncols)
-                    total_cols = ncols + 1         # 逻辑上扩充后每行的列数
-                    row_idx = i // total_cols
-                    col_idx = i % total_cols
-                    # 如果列索引等于原来的列数，说明是扩充的那一列，填充0
-                    if col_idx == ncols:
-                        start_pos_tmp = 0
-                    else:
-                        start_pos_tmp = int(start_pos[row_idx, col_idx])
-                else:
-                    start_pos_tmp = start_pos
+
+                # if self.reanalyze_phase:
+                #     nrow, ncols = start_pos.shape  # 原start_pos shape为 (batch, ncols)
+                #     total_cols = ncols + 1         # 逻辑上扩充后每行的列数
+                #     row_idx = i // total_cols
+                #     col_idx = i % total_cols
+                #     # 如果列索引等于原来的列数，说明是扩充的那一列，填充0
+                #     if col_idx == ncols:
+                #         start_pos_tmp = 0
+                #     else:
+                #         start_pos_tmp = int(start_pos[row_idx, col_idx])
+                # else:
+                #     start_pos_tmp = start_pos
+                
+                start_pos_tmp = 0
 
                 self.forward(
                     {'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)},
