@@ -150,9 +150,10 @@ class MuZeroSegmentCollector(ISerialCollector):
         # Initialize action_mask_dict, to_play_dict, and chance_dict here to ensure they contain values for all env_id
         self.action_mask_dict = {i: None for i in range(self._env_num)}
         self.to_play_dict = {i: None for i in range(self._env_num)}
-        self.timestep_dict = {i: None for i in range(self._env_num)}
         if self.policy_config.use_ture_chance_label_in_chance_encoder:
             self.chance_dict = {i: None for i in range(self._env_num)}
+        
+        self.timestep_dict = {i: None for i in range(self._env_num)}
 
         self.dones = np.array([False for _ in range(self._env_num)])
         self.last_game_segments = [None for _ in range(self._env_num)]
@@ -450,11 +451,11 @@ class MuZeroSegmentCollector(ISerialCollector):
 
                 self.action_mask_dict_tmp = {env_id: self.action_mask_dict[env_id] for env_id in ready_env_id}
                 self.to_play_dict_tmp = {env_id: self.to_play_dict[env_id] for env_id in ready_env_id}
-                self.timestep_dict_tmp = {env_id: self.timestep_dict[env_id] for env_id in ready_env_id}
                 
                 action_mask = [self.action_mask_dict_tmp[env_id] for env_id in ready_env_id]
                 to_play = [self.to_play_dict_tmp[env_id] for env_id in ready_env_id]
-                timestep = [self.timestep_dict_tmp[env_id] for env_id in ready_env_id]
+                
+                timestep = [self.timestep_dict[env_id] for env_id in ready_env_id]
 
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
                     self.chance_dict_tmp = {env_id: self.chance_dict[env_id] for env_id in ready_env_id}
@@ -468,6 +469,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # logging.info(f'ready_env_id:{ready_env_id}')
+                # print(f'timestep:{timestep}')
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
 
                 # Extract relevant policy outputs
@@ -496,7 +498,6 @@ class MuZeroSegmentCollector(ISerialCollector):
                 actions = {}
                 value_dict = {}
                 pred_value_dict = {}
-                timestep_dict = {}
 
                 if not collect_with_pure_policy:
                     distributions_dict = {}
@@ -514,7 +515,6 @@ class MuZeroSegmentCollector(ISerialCollector):
                     actions[env_id] = actions_with_env_id.pop(env_id)
                     value_dict[env_id] = value_dict_with_env_id.pop(env_id)
                     pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
-                    timestep_dict[env_id] = timestep_dict_with_env_id.pop(env_id)
 
                     if not collect_with_pure_policy:
                         distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
@@ -565,19 +565,20 @@ class MuZeroSegmentCollector(ISerialCollector):
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, self.action_mask_dict_tmp[env_id],
-                            self.to_play_dict_tmp[env_id], self.chance_dict_tmp[env_id], self.timestep_dict_tmp[env_id]
+                            self.to_play_dict_tmp[env_id], timestep=to_ndarray(obs['timestep']), chance=self.chance_dict_tmp[env_id]
                         )
                     else:
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, self.action_mask_dict_tmp[env_id],
-                            self.to_play_dict_tmp[env_id], self.timestep_dict_tmp[env_id]
+                            self.to_play_dict_tmp[env_id], timestep=to_ndarray(obs['timestep'])
                         )
 
                     # NOTE: the position of code snippet is very important.
                     # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
                     self.action_mask_dict_tmp[env_id] = to_ndarray(obs['action_mask'])
                     self.to_play_dict_tmp[env_id] = to_ndarray(obs['to_play'])
-                    self.timestep_dict_tmp[env_id] = to_ndarray(obs['timestep'])
+
+                    self.timestep_dict[env_id] = to_ndarray(obs['timestep'])
 
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         self.chance_dict_tmp[env_id] = to_ndarray(obs['chance'])

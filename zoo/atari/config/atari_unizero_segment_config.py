@@ -14,7 +14,6 @@ def main(env_id, seed):
     evaluator_env_num = 10
     num_simulations = 50
     max_env_step = int(5e5)
-    # max_env_step = int(1e6)
     batch_size = 64
     num_layers = 2
     replay_ratio = 0.25
@@ -22,8 +21,8 @@ def main(env_id, seed):
     infer_context_length = 4
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    # buffer_reanalyze_freq = 1/10
-    buffer_reanalyze_freq = 1/1000000 # rope option not support reanalyze now
+    buffer_reanalyze_freq = 1/10
+    # buffer_reanalyze_freq = 1/1000000 # rope option not support reanalyze now
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -92,7 +91,8 @@ def main(env_id, seed):
             num_simulations=num_simulations,
             num_segments=num_segments,
             td_steps=5,
-            train_start_after_envsteps=2000,
+            # train_start_after_envsteps=2000,
+            train_start_after_envsteps=0, # TODO
             game_segment_length=game_segment_length,
             grad_clip_value=5,
             replay_buffer_size=int(1e6),
@@ -127,7 +127,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name = f'data_unizero_fix-act-pos/{env_id[:-14]}/{env_id[:-14]}_uz_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_unizero_fix-act-pos/{env_id[:-14]}/{env_id[:-14]}_uz_fix-segcollectortimestep_brf{buffer_reanalyze_freq}-rbs{reanalyze_batch_size}-rp{reanalyze_partition}_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     train_unizero_segment([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 
 

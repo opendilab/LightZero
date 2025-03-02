@@ -432,6 +432,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # To obtain the target policy from MCTS guided by the recent target model
             # TODO: batch_obs (policy_obs_list) is at timestep t, batch_action is at timestep t
+            # TODO: debug
+            # import ipdb;ipdb.set_trace()
             m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], start_pos=timestep_batch)  # NOTE: :self.reanalyze_num
             # =======================================================================
 
@@ -458,6 +460,8 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(transition_batch_size, legal_actions)
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
+                # TODO: debug
+                # import ipdb;ipdb.set_trace()
                 # do MCTS for a new policy with the recent target model
                 MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, timestep_batch)
             else:
@@ -465,7 +469,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play)
+                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play, timestep_batch)
 
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()

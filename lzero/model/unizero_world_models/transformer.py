@@ -72,7 +72,7 @@ def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
     """
     # Reference: https://github.com/meta-llama/llama3/blob/main/llama/model.py#L61
     ndim = x.ndim
-    shape = [d if i == ndim - 1 or i == 0 or i == 2 else 1 for i, d in enumerate(x.shape)]
+    shape = [d if i in (0, 2, ndim - 1) else 1 for i, d in enumerate(x.shape)]
     return freqs_cis.view(*shape)
 
 
@@ -94,21 +94,11 @@ def apply_rotary_emb(
     
     Note:
         For more information on rotary positional embeddings, refer to the blog post:
-        https://spaces.ac.cn/archives/8265/ or paper https://arxiv.org/abs/2104.09864.
+        https://spaces.ac.cn/archives/8265/ or paper https://arxiv.org/abs/2104.09864
     """
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
-    try:
-        # print(f"freqs_cis.shape, xq_.shape:{freqs_cis.shape, xq_.shape}")
-        freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
-    except Exception as e:
-        print('='*20)
-        # import ipdb;ipdb.set_trace()
-        print(f"freqs_cis.shape, xq_.shape:{freqs_cis.shape, xq_.shape}")
-        print(f"Error in reshaping freqs_cis: {e}")
-        print('We are at the reset timestep!')
-        print('='*20)
-
+    freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
     xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(-2)
     xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(-2)
     return xq_out.type_as(xq), xk_out.type_as(xk)
@@ -185,17 +175,17 @@ class Transformer(nn.Module):
                 # print(f"start_pos[0].shape:{start_pos[0].shape}")
                 # print(f"len(start_pos[0].shape):{len(start_pos[0].shape)}")
                 if isinstance(start_pos[0], list):
-                    # In the training phase, flatten start_pos, take the first element, convert to tensor, and double it
+                    # In the training phase, flatten start_pos, take the first element, convert to tensor
                     start_pos_tensor = torch.as_tensor(
                         [x.reshape(-1)[0].item() for x in start_pos],  # Force flatten and take the first element
                         device=sequences.device
                     )
                 elif isinstance(start_pos[0], (np.ndarray, torch.Tensor)):
                     if len(start_pos[0].shape) <= 0:
-                        # In the collection/evaluation phase, convert start_pos to a tensor and double it
+                        # In the collection/evaluation phase, convert start_pos to a tensor
                         start_pos_tensor = torch.as_tensor([x.item() for x in start_pos], device=sequences.device)
                     else:
-                        # In the training phase, flatten start_pos, take the first element, convert to tensor, and double it
+                        # In the training phase, flatten start_pos, take the first element, convert to tensor
                         start_pos_tensor = torch.as_tensor(
                         [x.reshape(-1)[0].item() for x in start_pos],  # Force flatten and take the first element
                             device=sequences.device
