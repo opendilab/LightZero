@@ -21,8 +21,8 @@ def main(env_id, seed):
     infer_context_length = 4
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    # buffer_reanalyze_freq = 1/10
-    buffer_reanalyze_freq = 1/1000000 # rope option not support reanalyze now
+    buffer_reanalyze_freq = 1/10
+    # buffer_reanalyze_freq = 1/1000000 # rope option not support reanalyze now
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -42,7 +42,7 @@ def main(env_id, seed):
         env=dict(
             stop_value=int(1e6),
             env_id=env_id,
-            observation_shape=(3, 96, 96),
+            observation_shape=(3, 64, 64),
             gray_scale=False,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -55,7 +55,7 @@ def main(env_id, seed):
         policy=dict(
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
             model=dict(
-                observation_shape=(3, 96, 96),
+                observation_shape=(3, 64, 64),
                 action_space_size=action_space_size,
                 support_scale=300,
                 world_model_cfg=dict(
@@ -91,8 +91,8 @@ def main(env_id, seed):
             num_simulations=num_simulations,
             num_segments=num_segments,
             td_steps=5,
-            # train_start_after_envsteps=2000,
-            train_start_after_envsteps=0, # TODO
+            train_start_after_envsteps=2000,
+            # train_start_after_envsteps=0, # TODO
             game_segment_length=game_segment_length,
             grad_clip_value=5,
             replay_buffer_size=int(1e6),

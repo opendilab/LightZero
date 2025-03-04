@@ -38,7 +38,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
         env=dict(
             stop_value=int(1e6),
             env_id=env_id,
-            observation_shape=(3, 96, 96),
+            observation_shape=(3, 64, 64),
             gray_scale=False,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -51,7 +51,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
         policy=dict(
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
             model=dict(
-                observation_shape=(3, 96, 96),
+                observation_shape=(3, 64, 64),
                 action_space_size=action_space_size,
                 world_model_cfg=dict(
                     policy_entropy_weight=1e-4,

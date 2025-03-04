@@ -461,12 +461,12 @@ class WorldModel(nn.Module):
                         # is_init_infer+reanalyze_phase 只是用于reset时
                         # import ipdb;ipdb.set_trace()
                         start_pos_tmp = start_pos*2
-                        if not isinstance(start_pos_tmp, int):
+                        if not isinstance(start_pos_tmp, (int,float)):
                             padding = np.zeros((start_pos_tmp.shape[0], 1), dtype=start_pos_tmp.dtype)
                             start_pos_padded = np.concatenate([start_pos_tmp, padding], axis=1)
                             start_pos_tmp = start_pos_padded.reshape(-1)
                     else:
-                        if isinstance(start_pos, int):
+                        if isinstance(start_pos, (int,float)):
                             start_pos_tmp = start_pos*2
                         else:
                             start_pos_tmp = [pos*2 for pos in start_pos] 
@@ -474,7 +474,7 @@ class WorldModel(nn.Module):
                     # import ipdb;ipdb.set_trace()
                     # TODO: search_depth记录从root node开始，位于树中的深度，以判断rope的位置编码索引
                     if self.reanalyze_phase:
-                        if not isinstance(start_pos, int): # int为single_env_forward, array为batch forward
+                        if not isinstance(start_pos, (int,float)): # int为single_env_forward, array为batch forward
                             # 创建一个形状为 (2, 1) 的填充0数组
                             padding = np.zeros((start_pos.shape[0], 1), dtype=start_pos.dtype)
                             # 沿着第二个维度（列方向）拼接
@@ -517,7 +517,7 @@ class WorldModel(nn.Module):
                         # import ipdb;ipdb.set_trace()
                         # NOTE: in reanalyze_phase act_tokens is current timestep, thus we add 1 here 
                         start_pos_tmp = start_pos*2 + 1
-                        if not isinstance(start_pos_tmp, int): # int为single_env_forward, array为batch forward
+                        if not isinstance(start_pos_tmp, (int,float)): # int为single_env_forward, array为batch forward
                             # 创建一个形状为 (2, 1) 的填充0数组
                             padding = np.zeros((start_pos_tmp.shape[0], 1), dtype=start_pos_tmp.dtype)
                             # 沿着第二个维度（列方向）拼接
@@ -528,7 +528,7 @@ class WorldModel(nn.Module):
                         # ==========*2 is because timestep only counts obs, but the sequence is obs, act actually==========
                         # NOTE: act_tokens is last timestep, thus we minus 1 here 
                         # TODO: check the effect
-                        if isinstance(start_pos, int):
+                        if isinstance(start_pos, (int,float)):
                             start_pos_tmp = start_pos*2 - 1
                         else:
                             start_pos_tmp = [pos*2-1 for pos in start_pos] 
@@ -541,7 +541,7 @@ class WorldModel(nn.Module):
                     if self.reanalyze_phase:
                         # 在self.reanalyze_phase, start_pos是根节点上一步的pos
                         # import ipdb;ipdb.set_trace()
-                        if not isinstance(start_pos, int): # int为single_env_forward, array为batch forward
+                        if not isinstance(start_pos, (int,float)): # int为single_env_forward, array为batch forward
                             # 创建一个形状为 (2, 1) 的填充0数组
                             padding = np.zeros((start_pos.shape[0], 1), dtype=start_pos.dtype)
                             # 沿着第二个维度（列方向）拼接
