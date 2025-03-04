@@ -419,7 +419,7 @@ class WorldModel(nn.Module):
     def forward(self, obs_embeddings_or_act_tokens: Dict[str, Union[torch.Tensor, tuple]],
                 past_keys_values: Optional[torch.Tensor] = None,
                 kvcache_independent: bool = False, is_init_infer: bool = True,
-                valid_context_lengths: Optional[torch.Tensor] = None, start_pos: int = 0, latent_state_index_in_search_path=None) -> WorldModelOutput:
+                valid_context_lengths: Optional[torch.Tensor] = None, start_pos: int = 0, search_depth=None) -> WorldModelOutput:
         """
         Forward pass for the model.
 
@@ -458,6 +458,8 @@ class WorldModel(nn.Module):
                 if is_init_infer:
                     # ==========*2 is because timestep only counts obs, but the sequence is obs, act actually==========
                     if self.reanalyze_phase:
+                        # is_init_infer+reanalyze_phase 只是用于reset时
+                        # import ipdb;ipdb.set_trace()
                         start_pos_tmp = start_pos*2
                         if not isinstance(start_pos_tmp, int):
                             padding = np.zeros((start_pos_tmp.shape[0], 1), dtype=start_pos_tmp.dtype)
@@ -470,10 +472,23 @@ class WorldModel(nn.Module):
                             start_pos_tmp = [pos*2 for pos in start_pos] 
                 else: # ========= TODO: rope pos index in recurrent_inference =======
                     # import ipdb;ipdb.set_trace()
-                    start_pos_tmp = [(latent_state_index_in_search_path[index] + pos)*2 for index, pos in enumerate(start_pos) ] 
+                    # TODO: search_depth记录从root node开始，位于树中的深度，以判断rope的位置编码索引
+                    if self.reanalyze_phase:
+                        if not isinstance(start_pos, int): # int为single_env_forward, array为batch forward
+                            # 创建一个形状为 (2, 1) 的填充0数组
+                            padding = np.zeros((start_pos.shape[0], 1), dtype=start_pos.dtype)
+                            # 沿着第二个维度（列方向）拼接
+                            start_pos_padded = np.concatenate([start_pos, padding], axis=1)
+                            # 将结果 reshape 成一维数组
+                            start_pos_tmp = start_pos_padded.reshape(-1)
+                        assert len(search_depth) == len(start_pos_tmp)
+                        start_pos_tmp = [(search_depth[index] + pos+1)*2+1 for index, pos in enumerate(start_pos_tmp)] 
+                    else:
+                        start_pos_tmp = [(search_depth[index] + pos)*2+2 for index, pos in enumerate(start_pos) ] 
                     # print("obs phase:")
-                    # print(f'latent_state_index_in_search_path:{latent_state_index_in_search_path}')
+                    # print(f'search_depth:{search_depth}')
                     # print(f'start_pos:{start_pos}')
+                    # print(f'start_pos_tmp:{start_pos_tmp}')
 
 
         # Process action tokens
@@ -498,6 +513,8 @@ class WorldModel(nn.Module):
                 if is_init_infer:
                     # 下面只是对于init_infer正确
                     if self.reanalyze_phase:
+                        # is_init_infer+reanalyze_phase 只是用于reset时
+                        # import ipdb;ipdb.set_trace()
                         # NOTE: in reanalyze_phase act_tokens is current timestep, thus we add 1 here 
                         start_pos_tmp = start_pos*2 + 1
                         if not isinstance(start_pos_tmp, int): # int为single_env_forward, array为batch forward
@@ -520,13 +537,32 @@ class WorldModel(nn.Module):
                     # if not is_init_infer:
                     #     prev_steps + num_steps
                     # import ipdb;ipdb.set_trace()
-                    start_pos_tmp = [(latent_state_index_in_search_path[index] + pos)*2+1 for index, pos in enumerate(start_pos)] 
+                    # TODO: search_depth记录从root node开始，位于树中的深度，以判断rope的位置编码索引
+                    if self.reanalyze_phase:
+                        # 在self.reanalyze_phase, start_pos是根节点上一步的pos
+                        # import ipdb;ipdb.set_trace()
+                        if not isinstance(start_pos, int): # int为single_env_forward, array为batch forward
+                            # 创建一个形状为 (2, 1) 的填充0数组
+                            padding = np.zeros((start_pos.shape[0], 1), dtype=start_pos.dtype)
+                            # 沿着第二个维度（列方向）拼接
+                            start_pos_padded = np.concatenate([start_pos, padding], axis=1)
+                            # 将结果 reshape 成一维数组
+                            start_pos_tmp = start_pos_padded.reshape(-1)
+                        assert len(search_depth) == len(start_pos_tmp)
+                        start_pos_tmp = [(search_depth[index] + pos+1)*2+1 for index, pos in enumerate(start_pos_tmp)] 
+                    else:
+                        start_pos_tmp = [(search_depth[index] + pos)*2+1 for index, pos in enumerate(start_pos)] 
+                    
                     # print("act phase:")
-                    # print(f'atent_state_index_in_search_path:{latent_state_index_in_search_path}')
+                    # print(f'search_depth:{search_depth}')
                     # print(f'start_pos:{start_pos}')
+                    # print(f'start_pos_tmp:{start_pos_tmp}')
+
 
         # Process combined observation embeddings and action tokens
-        else:
+        elif 'obs_embeddings_and_act_tokens' in obs_embeddings_or_act_tokens:
+            # ================ calculate the target value in Train phase or calculate the target policy in reanalyze phase ================
+
             if self.continuous_action_space:
                 sequences, num_steps = self._process_obs_act_combined_cont(obs_embeddings_or_act_tokens, prev_steps)
             else:
@@ -693,7 +729,7 @@ class WorldModel(nn.Module):
             outputs_wm = self.wm_forward_for_initial_infererence(obs_embeddings, batch_action,
                                                                                    current_obs_embeddings, start_pos)
         else:
-            # ================ calculate the target value in Train phase ================
+            # ================ calculate the target value in Train phase or calculate the target policy in reanalyze phase ================
             self.latent_state = obs_embeddings
             outputs_wm = self.wm_forward_for_initial_infererence(obs_embeddings, batch_action, None, start_pos)
 
@@ -762,12 +798,13 @@ class WorldModel(nn.Module):
                         else:
                             # Reset using zero values
                             self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
-                            # outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
-                            #                           past_keys_values=self.keys_values_wm_single_env,
-                            #                           is_init_infer=True, start_pos=[start_pos[i]])
+                            # import ipdb;ipdb.set_trace()
                             outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
-                                                past_keys_values=self.keys_values_wm_single_env,
-                                                is_init_infer=True, start_pos=0)
+                                                      past_keys_values=self.keys_values_wm_single_env,
+                                                      is_init_infer=True, start_pos=start_pos[i].item()) # 如果使用rope在reset时，pos_embed中应该使用绝对位置
+                            # outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
+                            #                     past_keys_values=self.keys_values_wm_single_env,
+                            #                     is_init_infer=True, start_pos=0)
                             self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                             self.keys_values_wm_size_list.append(1)
 
@@ -803,7 +840,7 @@ class WorldModel(nn.Module):
                     self.update_cache_context(current_obs_embeddings, is_init_infer=True)
 
         elif batch_action is not None and current_obs_embeddings is None:
-            # ================ calculate the target value in Train phase ================
+            # ================ calculate the target value in Train phase or calculate the target policy in reanalyze phase ================
             # [192, 16, 64] -> [32, 6, 16, 64]
             last_obs_embeddings = last_obs_embeddings.contiguous().view(batch_action.shape[0], -1, num_observations_tokens,
                                                           self.obs_per_embdding_dim)  # (BL, K) for unroll_step=1
@@ -820,6 +857,7 @@ class WorldModel(nn.Module):
             last_steps_act = act_tokens[:, -1:, :]
             act_tokens = torch.cat((act_tokens, last_steps_act), dim=1)
 
+            # batch中的每个样本 (last_obs_embeddings, act_tokens) 是在相同的时刻t, start_pos也对应每个样本各自的t
             outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (last_obs_embeddings, act_tokens)}, start_pos=start_pos)
 
             # select the last timestep for each sample
@@ -855,14 +893,14 @@ class WorldModel(nn.Module):
 
     @torch.no_grad()
     def forward_recurrent_inference(self, state_action_history, simulation_index=0,
-                                    latent_state_index_in_search_path=[], start_pos: int = 0):
+                                    search_depth=[], start_pos: int = 0):
         """
         Perform recurrent inference based on the state-action history.
 
         Arguments:
             - state_action_history (:obj:`list`): List containing tuples of state and action history.
             - simulation_index (:obj:`int`, optional): Index of the current simulation. Defaults to 0.
-            - latent_state_index_in_search_path (:obj:`list`, optional): List containing indices of latent states in the search path. Defaults to [].
+            - search_depth (:obj:`list`, optional): List containing depth of latent states in the search tree. 
         Returns:
             - tuple: A tuple containing output sequence, updated latent state, reward, logits policy, and logits value.
         """
@@ -913,7 +951,8 @@ class WorldModel(nn.Module):
                 kvcache_independent=False,
                 is_init_infer=False,
                 start_pos=start_pos,
-                latent_state_index_in_search_path=latent_state_index_in_search_path
+                search_depth=search_depth 
+                # TODO: 记录从root node开始，位于树中的深度，以判断rope的位置编码索引
             )
 
             self.keys_values_wm_size_list_current = [i + 1 for i in self.keys_values_wm_size_list_current]
@@ -934,7 +973,7 @@ class WorldModel(nn.Module):
             self.latent_state,
             is_init_infer=False,
             simulation_index=simulation_index,
-            latent_state_index_in_search_path=latent_state_index_in_search_path
+            search_depth=[]
         )
 
         return (outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value)
@@ -993,7 +1032,7 @@ class WorldModel(nn.Module):
         return self.keys_values_wm_size_list
 
     def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0,
-                             latent_state_index_in_search_path=[], valid_context_lengths=None):
+                             search_depth=[], valid_context_lengths=None):
         """
         Update the cache context with the given latent state.
 
@@ -1001,7 +1040,7 @@ class WorldModel(nn.Module):
             - latent_state (:obj:`torch.Tensor`): The latent state tensor.
             - is_init_infer (:obj:`bool`): Flag to indicate if this is the initial inference.
             - simulation_index (:obj:`int`): Index of the simulation.
-            - latent_state_index_in_search_path (:obj:`list`): List of indices in the search path.
+            - search_depth (:obj:`list`): List of depth indices in the search tree.
             - valid_context_lengths (:obj:`list`): List of valid context lengths.
         """
         if self.context_length <= 2:
@@ -1183,20 +1222,21 @@ class WorldModel(nn.Module):
                     n=1, max_tokens=self.context_length
                 )
 
-                # if self.reanalyze_phase:
-                #     nrow, ncols = start_pos.shape  # 原start_pos shape为 (batch, ncols)
-                #     total_cols = ncols + 1         # 逻辑上扩充后每行的列数
-                #     row_idx = i // total_cols
-                #     col_idx = i % total_cols
-                #     # 如果列索引等于原来的列数，说明是扩充的那一列，填充0
-                #     if col_idx == ncols:
-                #         start_pos_tmp = 0
-                #     else:
-                #         start_pos_tmp = int(start_pos[row_idx, col_idx])
-                # else:
-                #     start_pos_tmp = start_pos
+                if self.reanalyze_phase:
+                    nrow, ncols = start_pos.shape  # 原start_pos shape为 (batch, ncols)
+                    total_cols = ncols + 1         # 逻辑上扩充后每行的列数
+                    row_idx = i // total_cols
+                    col_idx = i % total_cols
+                    # 如果列索引等于原来的列数，说明是扩充的那一列，填充0
+                    if col_idx == ncols:
+                        start_pos_tmp = 0
+                    else:
+                        start_pos_tmp = int(start_pos[row_idx, col_idx])
+                else:
+                    start_pos_tmp = start_pos[i].item()
                 
-                start_pos_tmp = 0
+                # 如果是rope reset的位置索引应该使用绝对位置
+                # start_pos_tmp = 0
 
                 self.forward(
                     {'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)},

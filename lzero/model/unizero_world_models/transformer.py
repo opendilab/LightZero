@@ -98,7 +98,13 @@ def apply_rotary_emb(
     """
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
+
+    # try:
     freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
+    # except Exception as e:
+    #     print(f"freqs_cis.shape:{freqs_cis.shape},  xq_.shape:{ xq_.shape}")
+    #     print(e)
+
     xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(-2)
     xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(-2)
     return xq_out.type_as(xq), xk_out.type_as(xk)
@@ -162,7 +168,7 @@ class Transformer(nn.Module):
             - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
         seqlen = sequences.shape[1]
-
+        reanalyze_phase = False
         # If using Rotary Position Embeddings (RoPE), slice the frequency components accordingly
         if self.config.rotary_emb:
             if isinstance(start_pos, int) or isinstance(start_pos, float):
@@ -185,11 +191,18 @@ class Transformer(nn.Module):
                         # In the collection/evaluation phase, convert start_pos to a tensor
                         start_pos_tensor = torch.as_tensor([x.item() for x in start_pos], device=sequences.device)
                     else:
-                        # In the training phase, flatten start_pos, take the first element, convert to tensor
-                        start_pos_tensor = torch.as_tensor(
-                        [x.reshape(-1)[0].item() for x in start_pos],  # Force flatten and take the first element
-                            device=sequences.device
-                        )
+                        if reanalyze_phase:
+                            # In the training phase, flatten start_pos, take the first element, convert to tensor
+                            start_pos_tensor = torch.as_tensor(
+                            [x.reshape(-1)[0].item() for x in start_pos],  # Force flatten and take the first element
+                                device=sequences.device
+                            )
+                        else:
+                            # In the training phase, flatten start_pos, take the first element, convert to tensor
+                            start_pos_tensor = torch.as_tensor(
+                            [x.reshape(-1)[0].item() for x in start_pos],  # Force flatten and take the first element
+                                device=sequences.device
+                            )
                 elif isinstance(start_pos[0], (int, float, np.integer)):
                     # Handle numpy integer types similarly to int and float
                     start_pos_tensor = torch.as_tensor([int(x) for x in start_pos], device=sequences.device)

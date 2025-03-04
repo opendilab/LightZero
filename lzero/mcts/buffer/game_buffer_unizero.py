@@ -235,6 +235,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         # obtain the current_batch and prepare target context
         policy_re_context, current_batch = self._make_batch_for_reanalyze(batch_size)
         # target policy
+        # import ipdb;ipdb.set_trace()
         self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1], current_batch[-1] )
 
     def _make_batch_for_reanalyze(self, batch_size: int) -> Tuple[Any]:

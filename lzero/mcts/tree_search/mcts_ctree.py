@@ -144,7 +144,10 @@ class UniZeroMCTSCtree(object):
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
                 # for UniZero
-                network_output = model.recurrent_inference(state_action_history, simulation_index, latent_state_index_in_search_path, timestep)
+                # import ipdb;ipdb.set_trace()
+                search_depth = results.get_search_len()
+                # print(f'simulation_index:{simulation_index}, search_depth:{search_depth}, latent_state_index_in_search_path:{latent_state_index_in_search_path}')
+                network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)
