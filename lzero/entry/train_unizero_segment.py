@@ -162,8 +162,11 @@ def train_unizero_segment(
             # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
             reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
         else:
+            # TODO: debug
+            # replay_buffer.reanalyze_buffer(2, policy)
+                
             # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch
-            if train_epoch % int(1/cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
+            if train_epoch > 0 and train_epoch % int(1/cfg.policy.buffer_reanalyze_freq) == 0 and replay_buffer.get_num_of_transitions()//cfg.policy.num_unroll_steps > int(reanalyze_batch_size/cfg.policy.reanalyze_partition):
                 with timer:
                     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
                     replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)

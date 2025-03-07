@@ -154,7 +154,7 @@ class SampledUniZeroModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
             print('==' * 20)
 
-    def initial_inference(self, obs_batch: torch.Tensor, action_batch=None, current_obs_batch=None) -> MZNetworkOutput:
+    def initial_inference(self, obs_batch: torch.Tensor, action_batch=None, current_obs_batch=None, start_pos: int = 0) -> MZNetworkOutput:
         """
         Overview:
             Initial inference of UniZero model, which is the first step of the UniZero model.
@@ -178,7 +178,7 @@ class SampledUniZeroModel(nn.Module):
          """
         batch_size = obs_batch.size(0)
         obs_act_dict = {'obs': obs_batch, 'action': action_batch, 'current_obs': current_obs_batch}
-        _, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(obs_act_dict)
+        _, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(obs_act_dict, start_pos)
         latent_state, reward, policy_logits, value = obs_token, logits_rewards, logits_policy, logits_value
         policy_logits = policy_logits.squeeze(1)
         value = value.squeeze(1)
@@ -191,7 +191,7 @@ class SampledUniZeroModel(nn.Module):
         )
 
     def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index=0,
-                            latent_state_index_in_search_path=[]) -> MZNetworkOutput:
+                            latent_state_index_in_search_path=[], start_pos: int = 0) -> MZNetworkOutput:
         """
         Overview:
             Recurrent inference of UniZero model.To perform the recurrent inference, we concurrently predict the latent dynamics (reward/next_latent_state)
@@ -217,7 +217,7 @@ class SampledUniZeroModel(nn.Module):
                 latent state, W_ is the width of latent state.
          """
         _, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
-            state_action_history, simulation_index, latent_state_index_in_search_path)
+            state_action_history, simulation_index, latent_state_index_in_search_path, start_pos)
         next_latent_state, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
         policy_logits = policy_logits.squeeze(1)
         value = value.squeeze(1)
