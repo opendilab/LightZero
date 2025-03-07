@@ -188,6 +188,9 @@ class WorldModelMT(WorldModel):
         # if self.num_experts_in_moe_head == -1:
         assert self.num_experts_in_moe_head > 0
         if self.use_normal_head:
+            self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'SimNorm')
+            # self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'LayerNorm') # TODO
+
             print('We use normal head')
             # TODO: Normal Head
             for task_id in range(self.task_num):
@@ -212,7 +215,9 @@ class WorldModelMT(WorldModel):
 
                 self.head_observations = self._create_head(self.all_but_last_latent_state_pattern,
                                                         self.config.embed_dim,
-                                                        self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
+                                                        # self.sim_norm
+                                                        self._get_final_norm(self.final_norm_option_in_obs_head)  # 使用指定的归一化方法
+                                                        )  # NOTE: we add a sim_norm to the head for observations
                 if not self.share_head or task_id == 0:
                     self.head_observations_multi_task.append(self.head_observations)
         elif self.use_softmoe_head:
@@ -353,6 +358,17 @@ class WorldModelMT(WorldModel):
         self.act_tokens_pattern[-1] = 1
         self.value_policy_tokens_pattern = torch.zeros(self.config.tokens_per_block)
         self.value_policy_tokens_pattern[-2] = 1
+
+    def _get_final_norm(self, norm_option: str) -> nn.Module:
+        """
+        根据指定的归一化选项返回相应的归一化模块。
+        """
+        if norm_option == 'LayerNorm':
+            return nn.LayerNorm(self.config.embed_dim, eps=1e-5)
+        elif norm_option == 'SimNorm':
+            return SimNorm(simnorm_dim=self.config.group_size)
+        else:
+            raise ValueError(f"Unsupported final_norm_option_in_obs_head: {norm_option}")
 
     def _create_head(self, block_mask: torch.Tensor, output_dim: int, norm_layer=None) -> Head:
         """Create head modules for the transformer."""
@@ -760,6 +776,9 @@ class WorldModelMT(WorldModel):
         else:
             # 使用共享head或任务特定的head
             head_index = 0 if self.share_head else task_id
+            # print(f"="*20)
+            # print(f"head_index:{head_index}")
+            # print(f"="*20)
             logits_observations = self.head_observations_multi_task[head_index](x, num_steps=num_steps, prev_steps=prev_steps)
             logits_rewards = self.head_rewards_multi_task[head_index](x, num_steps=num_steps, prev_steps=prev_steps)
             logits_policy = self.head_policy_multi_task[head_index](x, num_steps=num_steps, prev_steps=prev_steps)

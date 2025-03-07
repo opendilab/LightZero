@@ -87,8 +87,8 @@ class WorldModel(nn.Module):
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
             logging.info(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
-        # self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'SimNorm')
-        self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'LayerNorm') # TODO
+        self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'SimNorm')
+        # self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'LayerNorm') # TODO
 
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
