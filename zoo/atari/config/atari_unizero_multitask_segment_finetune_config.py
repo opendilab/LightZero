@@ -42,13 +42,15 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 num_res_blocks=2,
                 num_channels=256,
                 world_model_cfg=dict(
-                    # LoRA 参数（启用LoRA）
-                    lora_r=8,
-                    lora_alpha=32,
-                    lora_dropout=0.1,
-                    # 默认目标模块：attn和feed_forward
-                    lora_target_modules=["attn", "feed_forward"],
+                    final_norm_option_in_obs_head='LayerNorm',
+                    final_norm_option_in_encoder='LayerNorm',
+                    predict_latent_loss_type='mse', # TODO: for latent state layer_norm
+                     
+                    # final_norm_option_in_obs_head='SimNorm',
+                    # final_norm_option_in_encoder='SimNorm',
+                    # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
 
+                    share_head=False, # TODO
                     analysis_dormant_ratio_weight_rank=False, # TODO
                     dormant_threshold=0.025,
 
@@ -70,8 +72,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     device='cuda',
                     action_space_size=action_space_size,
                     num_layers=8,
-                    num_heads=8, # todo
-                    # num_heads=24,
+                    num_heads=24,
                     embed_dim=768,
                     obs_type='image',
                     env_num=8,
@@ -83,6 +84,15 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     moe_in_transformer=False,
                     multiplication_moe_in_transformer=False,
                     num_experts_of_moe_in_transformer=4,
+
+                   # LoRA 参数（启用LoRA）
+                    lora_r=0,
+                    # lora_r=8,
+                    lora_alpha=32,
+                    lora_dropout=0.1,
+                    # 默认目标模块：attn和feed_forward
+                    lora_target_modules=["attn", "feed_forward"],
+                    # 调整finetune_components
                 ),
             ),
             use_task_exploitation_weight=False, # TODO
@@ -100,6 +110,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
+            cos_lr_scheduler=True,
             num_segments=num_segments,
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
@@ -116,12 +127,14 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
 
 def generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size):
     configs = []
-    # exp_name_prefix = f'data_unizero_atari_mt_finetune_20250221/amidar_load-enc-trans_finetune-head/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_lsd768-nlayer8-nh8_upc80_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_atari_mt_finetune_20250221/amidar_load-enc-trans_finetune-trans-head/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_lsd768-nlayer8-nh8_upc80_seed{seed}/'
-    # exp_name_prefix = f'data_unizero_atari_mt_finetune_20250221/amidar_load-enc-trans_finetune-encoder-head/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_lsd768-nlayer8-nh8_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_finetune_20250308/amidar_load-enc-trans_finetune-head/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_lsd768-nlayer8-nh8_upc80_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_finetune_20250308/amidar_load-enc-trans_finetune-head-encoder/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_lsd768-nlayer8-nh8_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_finetune_20250308/amidar_load-enc-trans_finetune-head-trans/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_lsd768-nlayer8-nh8_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_finetune_20250308/amidar_load-enc-trans_finetune-head-trans-lora/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_lsd768-nlayer8-nh24_upc80_seed{seed}/'
    
-    # exp_name_prefix = f'data_unizero_atari_mt_finetune_20250221/pong_load-enc-trans_finetune-trans-lora-head/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_lsd768-nlayer8-nh8_upc80_seed{seed}/'
-    exp_name_prefix = f'data_unizero_atari_mt_finetune_20250221/amidar_load-enc-trans_finetune-trans-lora-head/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_lsd768-nlayer8-nh8_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_finetune_20250308/pong_load-enc-trans_finetune-head-trans-lora/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_lsd768-nlayer8-nh24_upc80_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_finetune_20250308/pong_load-enc-trans_finetune-head/{len(env_id_list)}games_brf{buffer_reanalyze_freq}_1-encoder-{norm_type}-res2-channel256_gsl20_lsd768-nlayer8-nh24_upc80_seed{seed}/'
+    
 
 
     for task_id, env_id in enumerate(env_id_list):
@@ -166,7 +179,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=1 --master_port=29506 ./zoo/atari/config/atari_unizero_multitask_segment_finetune_config.py
+        python -m torch.distributed.launch --nproc_per_node=1 --master_port=29507 ./zoo/atari/config/atari_unizero_multitask_segment_finetune_config.py
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_finetune_config.py
     """
 
@@ -199,7 +212,8 @@ if __name__ == "__main__":
         num_unroll_steps = 10
         infer_context_length = 4
         norm_type = 'LN'
-        buffer_reanalyze_freq = 1 / 50
+        # buffer_reanalyze_freq = 1 / 50
+        buffer_reanalyze_freq = 1 / 10000000
         reanalyze_batch_size = 160
         reanalyze_partition = 0.75
 
@@ -215,7 +229,8 @@ if __name__ == "__main__":
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num, num_simulations, reanalyze_ratio, batch_size, num_unroll_steps, infer_context_length, norm_type, seed, buffer_reanalyze_freq, reanalyze_batch_size, reanalyze_partition, num_segments, total_batch_size)
 
         # pretrained_model_path = '/mnt/afs/niuyazhe/code/LightZero/data_unizero_mt_ddp-8gpu_1127/8games_brf0.02_nlayer8-nhead24_seed1/8games_brf0.02_1-encoder-LN-res2-channel256_gsl20_8-pred-head_lsd768-nlayer8-nh24_mbs-512-bs64_upc80_seed1/Pong_unizero-mt_seed1/ckpt/iteration_200000.pth.tar'
-        pretrained_model_path = '/mnt/afs/niuyazhe/code/LightZero/data_unizero_atari_mt_20250217/atari_8games_notaskembed_bs64_brf0.02_seed0_dev-uz-mz-mt-cont/Pong_seed0_250218_124624/ckpt/ckpt_best.pth.tar'
+        # pretrained_model_path = '/mnt/afs/niuyazhe/code/LightZero/data_unizero_atari_mt_20250217/atari_8games_notaskembed_bs64_brf0.02_seed0_dev-uz-mz-mt-cont/Pong_seed0_250218_124624/ckpt/ckpt_best.pth.tar'
 
+        pretrained_model_path = '/fs-computility/ai-shen/puyuan/code/LightZero/data_lz/data_unizero_atari_mt_20250307/atari_8games_brf0.02_not-share-head_final-ln_seed0/Pong_seed0/ckpt/ckpt_best.pth.tar'
         with DDPContext():
             train_unizero_multitask_segment_ddp(configs, seed=seed, model_path=pretrained_model_path, max_env_step=max_env_step)

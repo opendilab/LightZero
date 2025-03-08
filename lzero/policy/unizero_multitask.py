@@ -1239,6 +1239,7 @@ class UniZeroMTPolicy(UniZeroPolicy):
     #     self._target_model.load_state_dict(state_dict['target_model'])
     #     self._optimizer_world_model.load_state_dict(state_dict['optimizer_world_model'])
 
+    # ========== TODO: pretrain-finetue version: only load encoder and transformer-backbone parameters  ==========
     def _load_state_dict_learn(self, state_dict: Dict[str, Any], finetune_components: List[str] = []) -> None:
         """
         Overview:
@@ -1250,8 +1251,8 @@ class UniZeroMTPolicy(UniZeroPolicy):
                 For example, it can include "encoder", "transformer", or both. The components not in this list will be frozen.
         """
         # finetune_components = [] # load-enc-trans_finetune-head
-        finetune_components = ['transformer'] # load-enc-trans_finetune-trans-head
-        # finetune_components = ["representation_network", "encoder"] # load-enc-trans_finetune-encoder-head
+        # finetune_components = ['transformer'] # load-enc-trans_finetune-trans-head
+        finetune_components = ["representation_network", "encoder"] # load-enc-trans_finetune-encoder-head
 
         # 定义需要排除的参数前缀，即不加载这些参数
         exclude_prefixes = [

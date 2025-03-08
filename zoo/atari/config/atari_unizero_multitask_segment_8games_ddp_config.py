@@ -41,15 +41,20 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 num_channels=256,
                 continuous_action_space=False,
                 world_model_cfg=dict(
-                    final_norm_option_in_obs_head='LayerNorm',
-                    final_norm_option_in_encoder='LayerNorm',
-                    predict_latent_loss_type='mse', # TODO: for latent state layer_norm
+                    # final_norm_option_in_obs_head='LayerNorm',
+                    # final_norm_option_in_encoder='LayerNorm',
+                    # predict_latent_loss_type='mse', # TODO: for latent state layer_norm
+                                        
+                    final_norm_option_in_obs_head='SimNorm',
+                    final_norm_option_in_encoder='SimNorm',
+                    predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
+                   
                     # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                     # share_head=True, # TODO
                     share_head=False, # TODO
 
-                    # analysis_dormant_ratio_weight_rank=True, # TODO
-                    analysis_dormant_ratio_weight_rank=False, # TODO
+                    analysis_dormant_ratio_weight_rank=True, # TODO
+                    # analysis_dormant_ratio_weight_rank=False, # TODO
                     dormant_threshold=0.025,
 
                     continuous_action_space=False,
@@ -134,7 +139,8 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250307/atari_{len(env_id_list)}games_brf{buffer_reanalyze_freq}_not-share-head_final-ln_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250308/atari_{len(env_id_list)}games_brf{buffer_reanalyze_freq}_not-share-head_final-simnorm_bs64*8_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250307/atari_{len(env_id_list)}games_brf{buffer_reanalyze_freq}_not-share-head_final-ln_seed{seed}/'
     # exp_name_prefix = f'data_lz_debug/data_unizero_atari_mt_20250228/atari_{len(env_id_list)}games_brf{buffer_reanalyze_freq}_not-share-head_seed{seed}/'
     # exp_name_prefix = f'data_unizero_atari_mt_20250228/atari_{len(env_id_list)}games_lop_concattaskembed-128_brf{buffer_reanalyze_freq}_seed{seed}_dev-uz-mz-mt-cont/'
     # exp_name_prefix = f'data_unizero_atari_mt_20250217/atari_{len(env_id_list)}games_notaskembed_bs64_brf{buffer_reanalyze_freq}_seed{seed}_dev-uz-mz-mt-cont/'
@@ -191,15 +197,18 @@ if __name__ == "__main__":
     num_simulations = 50
     max_env_step = int(5e5)
     reanalyze_ratio = 0.0
-    total_batch_size = 512
 
-    # batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+    total_batch_size = 512
     batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+
+    # total_batch_size = int(512*4)
+    # batch_size = [int(min(int(64*4), total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
     
     num_unroll_steps = 10
     infer_context_length = 4
     norm_type = 'LN'
-    buffer_reanalyze_freq = 1 / 50
+    # buffer_reanalyze_freq = 1 / 50
+    buffer_reanalyze_freq = 1 / 1000000
     reanalyze_batch_size = 160
     reanalyze_partition = 0.75
 

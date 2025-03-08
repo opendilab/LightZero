@@ -1822,7 +1822,7 @@ class WorldModelMT(WorldModel):
 
             e_rank_last_linear = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="last_linear")
             # print("Effective Rank of encoder_last_linear:", e_rank_last_linear)
-            e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="sim_norm")
+            e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder[encoder_index], inputs, representation_layer_name="final_norm")
             # print("Effective Rank of encoder_sim_norm:", e_rank_sim_norm)
 
             self.past_kv_cache_init_infer.clear()
