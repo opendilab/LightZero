@@ -15,10 +15,10 @@ from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
+import sys
 
-
-# sys.path.append('/Users/puyuan/code/LibMTL/')
-# from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
+sys.path.append('/fs-computility/ai-shen/puyuan/code/LibMTL')
+from LibMTL.weighting.MoCo_unizero import MoCo as GradCorrect
 # from LibMTL.weighting.CAGrad_unizero import CAGrad as GradCorrect
 
 # from LibMTL.weighting.abstract_weighting import AbsWeighting
@@ -68,7 +68,7 @@ class WrappedModelV2:
         return (list(self.tokenizer.parameters()) +
                 list(self.transformer.parameters()) +
                 list(self.pos_emb.parameters()) +
-                list(self.task_emb.parameters()) +
+                # list(self.task_emb.parameters()) + # TODO
                 list(self.act_embedding_table.parameters()))
 
     def zero_grad(self, set_to_none=False):
@@ -76,7 +76,7 @@ class WrappedModelV2:
         self.tokenizer.zero_grad(set_to_none=set_to_none)
         self.transformer.zero_grad(set_to_none=set_to_none)
         self.pos_emb.zero_grad(set_to_none=set_to_none)
-        self.task_emb.zero_grad(set_to_none=set_to_none)
+        # self.task_emb.zero_grad(set_to_none=set_to_none)  # TODO
         self.act_embedding_table.zero_grad(set_to_none=set_to_none)
 
 
@@ -440,32 +440,36 @@ class UniZeroMTPolicy(UniZeroPolicy):
         #     self._learn_model.world_model,
         # )
 
-        # head 没有矫正梯度
-        wrapped_model = WrappedModelV2(
-            # self._learn_model.world_model.tokenizer, # TODO:
-            self._learn_model.world_model.tokenizer.encoder[0],  # TODO: one encoder
-            self._learn_model.world_model.transformer,
-            self._learn_model.world_model.pos_emb,
-            self._learn_model.world_model.task_emb,
-            self._learn_model.world_model.act_embedding_table,
-        )
-
-        # head 和 tokenizer.encoder 没有矫正梯度
-        # wrapped_model = WrappedModelV3(
-        #     self._learn_model.world_model.transformer,
-        #     self._learn_model.world_model.pos_emb,
-        #     self._learn_model.world_model.task_emb,
-        #     self._learn_model.world_model.act_embedding_table,
-        # )
-
-        # 将 wrapped_model 作为 share_model 传递给 GradCorrect
-        # ========= 初始化 MoCo CAGrad 参数 =========
-        # self.grad_correct = GradCorrect(wrapped_model, self.task_num, self._cfg.device)
-        # self.grad_correct.init_param()  
-        # self.grad_correct.rep_grad = False
-
         self.task_id = self._cfg.task_id
         self.task_num_for_current_rank = self._cfg.task_num
+
+        print(f'self._cfg.only_use_moco_stats:{self._cfg.only_use_moco_stats}')
+        if self._cfg.use_moco or self._cfg.only_use_moco_stats:
+            # head 没有矫正梯度
+            self.wrapped_model = WrappedModelV2(
+                # self._learn_model.world_model.tokenizer, # TODO:
+                self._learn_model.world_model.tokenizer.encoder[0],  # TODO: one encoder
+                self._learn_model.world_model.transformer,
+                self._learn_model.world_model.pos_emb,
+                self._learn_model.world_model.task_emb,
+                self._learn_model.world_model.act_embedding_table,
+            )
+
+            # head 和 tokenizer.encoder 没有矫正梯度
+            # wrapped_model = WrappedModelV3(
+            #     self._learn_model.world_model.transformer,
+            #     self._learn_model.world_model.pos_emb,
+            #     self._learn_model.world_model.task_emb,
+            #     self._learn_model.world_model.act_embedding_table,
+            # )
+
+            # 将 wrapped_model 作为 share_model 传递给 GradCorrect
+            # ========= 初始化 MoCo CAGrad 参数 =========
+            self.grad_correct = GradCorrect(self.wrapped_model, self.task_num_for_current_rank, self._cfg.device)
+            self.grad_correct.init_param()  
+            self.grad_correct.rep_grad = False
+
+
 
 
     #@profile
@@ -662,13 +666,27 @@ class UniZeroMTPolicy(UniZeroPolicy):
         # Core learn model update step
         self._optimizer_world_model.zero_grad()
 
+        # 假设每个进程计算出的 losses_list 为可求梯度的 tensor list，比如多个标量 loss 组成的列表
+        # 例如 losses_list = [loss1, loss2, ...]，其中每个 loss_i 都是形如 (1,) 的 tensor 且 requires_grad=True
+        if self._cfg.use_moco:
+            # 调用 MoCo backward，由 grad_correct 中的 backward 实现梯度校正
+            lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+        elif self._cfg.only_use_moco_stats:
+            lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+            # 不使用梯度校正的情况，由各 rank 自己执行反向传播
+            weighted_total_loss.backward()
+        else:
+            # 不使用梯度校正的情况，由各 rank 自己执行反向传播
+            lambd = torch.tensor([0. for _ in range(self.task_num_for_current_rank)], device=self._cfg.device)
+            weighted_total_loss.backward()
+
         # TODO: 使用 MoCo 或 CAGrad 来计算梯度和权重
         #  ============= for CAGrad and MoCo =============
         # lambd = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
 
         #  ============= TODO: 不使用梯度矫正的情况  =============
-        lambd = torch.tensor([0. for i in range(self.task_num_for_current_rank)], device=self._cfg.device)
-        weighted_total_loss.backward()
+        # lambd = torch.tensor([0. for i in range(self.task_num_for_current_rank)], device=self._cfg.device)
+        # weighted_total_loss.backward()
 
         #  ========== for debugging ==========
         # for name, param in self._learn_model.world_model.tokenizer.encoder.named_parameters():
@@ -684,14 +702,29 @@ class UniZeroMTPolicy(UniZeroPolicy):
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
                                                                         self._cfg.grad_clip_value)
         
+        # if self._cfg.multi_gpu:
+        #     # Very important to sync gradients before updating the model
+        #     # rank = get_rank()
+        #     # print(f'Rank {rank} train task_id: {self._cfg.task_id} sync grad begin...')
+        #     self.sync_gradients(self._learn_model)
+        #     # print(f'Rank {rank} train task_id: {self._cfg.task_id} sync grad end...')
+
         if self._cfg.multi_gpu:
-            # Very important to sync gradients before updating the model
-            # rank = get_rank()
-            # print(f'Rank {rank} train task_id: {self._cfg.task_id} sync grad begin...')
-            self.sync_gradients(self._learn_model)
-            # print(f'Rank {rank} train task_id: {self._cfg.task_id} sync grad end...')
+            # if not self._cfg.use_moco or self._cfg.only_use_moco_stats:
+            #     self.sync_gradients(self._learn_model)
+            if not self._cfg.use_moco:
+                self.sync_gradients(self._learn_model)
+
+        # print("=== Step 前，参数梯度详细信息 ===")
+        # for idx, param in enumerate(self.grad_correct.share_model.parameters()):
+        #     if param.grad is not None:
+        #         print(f"Param[{idx}] - device: {param.device}, dtype: {param.dtype}, "
+        #             f"grad device: {param.grad.device}, grad dtype: {param.grad.dtype}")
+        #     else:
+        #         print(f"Param[{idx}] 没有梯度！")
 
         self._optimizer_world_model.step()
+
         if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 

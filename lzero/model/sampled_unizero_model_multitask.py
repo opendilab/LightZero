@@ -19,9 +19,11 @@ class RepresentationNetworkMLPMT(nn.Module):
             layer_num: int = 2,
             activation: nn.Module = nn.GELU(approximate='tanh'),
             norm_type: Optional[str] = 'BN',
+            embedding_dim: int = 256,
             group_size: int = 8,
             use_shared_projection: bool = False,  # 控制是否启用共享投影层
             shared_projection_dim: Optional[int] = None,  # 共享投影层的维度
+            final_norm_option_in_encoder: str = 'LayerNorm', # TODO
     ) -> torch.Tensor:
         """
         Overview:
@@ -68,8 +70,17 @@ class RepresentationNetworkMLPMT(nn.Module):
             # self.projection_norm = nn.LayerNorm(self.shared_projection_dim)  # Optional normalization for shared space
             self.projection_norm = SimNorm(simnorm_dim=group_size)  # Optional normalization for shared space
 
+        self.embedding_dim = embedding_dim
         # SimNorm for task-specific outputs
-        self.sim_norm = SimNorm(simnorm_dim=group_size)
+        # self.sim_norm = SimNorm(simnorm_dim=group_size)
+        self.final_norm_option_in_encoder = final_norm_option_in_encoder
+        if self.final_norm_option_in_encoder == 'LayerNorm':
+            self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
+        elif self.final_norm_option_in_encoder == 'SimNorm':
+            self.final_norm = SimNorm(simnorm_dim=group_size)
+        else:
+            raise ValueError(f"Unsupported final_norm_option_in_encoder: {self.final_norm_option_in_encoder}")
+
 
     def forward(self, x: torch.Tensor, task_id: int) -> torch.Tensor:
         """
@@ -81,7 +92,8 @@ class RepresentationNetworkMLPMT(nn.Module):
         """
         # Task-specific representation
         x = self.fc_representation[task_id](x)
-        x = self.sim_norm(x)
+        x = self.final_norm(x)
+        # x = self.sim_norm(x)
 
         # Shared projection layer (if enabled)
         if self.use_shared_projection:
@@ -209,8 +221,10 @@ class SampledUniZeroMTModel(nn.Module):
                     layer_num=2,
                     activation=self.activation,
                     norm_type=norm_type,
+                    embedding_dim=obs_act_embed_dim,
                     group_size=world_model_cfg.group_size,
                     use_shared_projection=world_model_cfg.use_shared_projection,
+                    final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
                 )
                 self.tokenizer = Tokenizer(encoder=self.representation_network,
                                       decoder_network=None, with_lpips=False)
@@ -228,6 +242,7 @@ class SampledUniZeroMTModel(nn.Module):
                         norm_type=norm_type,
                         embedding_dim=obs_act_embed_dim,
                         group_size=world_model_cfg.group_size,
+                        final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
                     ))
                 # TODO: we should change the output_shape to the real observation shape
                 # self.decoder_network = LatentDecoder(embedding_dim=world_model_cfg.embed_dim, output_shape=(3, 64, 64))
