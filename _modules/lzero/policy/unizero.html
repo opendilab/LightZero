@@ -104,7 +104,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">ImageTransforms</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">scalar_transform</span><span class="p">,</span> <span class="n">InverseScalarTransform</span><span class="p">,</span> <span class="n">phi_transform</span><span class="p">,</span> \
     <span class="n">DiscreteSupport</span><span class="p">,</span> <span class="n">to_torch_float_tensor</span><span class="p">,</span> <span class="n">mz_network_output_unpack</span><span class="p">,</span> <span class="n">select_action</span><span class="p">,</span> <span class="n">prepare_obs</span><span class="p">,</span> \
-    <span class="n">prepare_obs_stack4_for_unizero</span>
+    <span class="n">prepare_obs_stack_for_unizero</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy.muzero</span><span class="w"> </span><span class="kn">import</span> <span class="n">MuZeroPolicy</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">configure_optimizers_nanogpt</span>
 
@@ -448,8 +448,8 @@
         <span class="n">target_reward</span><span class="p">,</span> <span class="n">target_value</span><span class="p">,</span> <span class="n">target_policy</span> <span class="o">=</span> <span class="n">target_batch</span>
 
         <span class="c1"># Prepare observations based on frame stack number</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span> <span class="o">==</span> <span class="mi">4</span><span class="p">:</span>
-            <span class="n">obs_batch</span><span class="p">,</span> <span class="n">obs_target_batch</span> <span class="o">=</span> <span class="n">prepare_obs_stack4_for_unizero</span><span class="p">(</span><span class="n">obs_batch_ori</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">obs_batch</span><span class="p">,</span> <span class="n">obs_target_batch</span> <span class="o">=</span> <span class="n">prepare_obs_stack_for_unizero</span><span class="p">(</span><span class="n">obs_batch_ori</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">obs_batch</span><span class="p">,</span> <span class="n">obs_target_batch</span> <span class="o">=</span> <span class="n">prepare_obs</span><span class="p">(</span><span class="n">obs_batch_ori</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span>  <span class="c1"># TODO: optimize</span>
 
