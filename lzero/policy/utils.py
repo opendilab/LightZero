@@ -317,7 +317,7 @@ def configure_optimizers(
     return optimizer
 
 
-def prepare_obs_stack4_for_unizero(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
+def prepare_obs_stack_for_unizero(obs_batch_ori: np.ndarray, cfg: EasyDict) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Overview:
         Prepare the observation stack for UniZero model. This function processes the original batch of observations
