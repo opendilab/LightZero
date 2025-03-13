@@ -1,5 +1,5 @@
 import os
-from typing import Optional, Callable
+from typing import Optional, Callable, Union, List, Tuple
 
 import psutil
 import torch
@@ -90,18 +90,18 @@ def calculate_update_per_collect(cfg, new_data):
 
     return update_per_collect
 
-def initialize_zeros_batch(observation_shape, batch_size, device):
+def initialize_zeros_batch(observation_shape: Union[int, List[int], Tuple[int]], batch_size: int, device: str) -> torch.Tensor:
     """
     Overview:
         Initialize a zeros tensor for batch observations based on the shape. This function is used to initialize the UniZero model input.
     Arguments:
-        - observation_shape (:obj:`Union[int, List[int]]`): The shape of the observation tensor.
+        - observation_shape (:obj:`Union[int, List[int], Tuple[int]]`): The shape of the observation tensor.
         - batch_size (:obj:`int`): The batch size.
         - device (:obj:`str`): The device to store the tensor.
     Returns:
         - zeros (:obj:`torch.Tensor`): The zeros tensor.
     """
-    if isinstance(observation_shape, list):
+    if isinstance(observation_shape, (list, tuple)):
         shape = [batch_size, *observation_shape]
     elif isinstance(observation_shape, int):
         shape = [batch_size, observation_shape]
