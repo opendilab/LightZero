@@ -40,7 +40,6 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 num_res_blocks=2,
                 # num_channels=256,
                 num_channels=512, # TODO
-
                 continuous_action_space=False,
                 world_model_cfg=dict(
                     final_norm_option_in_obs_head='LayerNorm',
@@ -122,7 +121,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
-            cos_lr_scheduler=True,
+            # cos_lr_scheduler=True,
+            cos_lr_scheduler=False,
             num_segments=num_segments,
             num_simulations=num_simulations,
             reanalyze_ratio=reanalyze_ratio,
@@ -143,7 +143,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250310/atari_{len(env_id_list)}games_encoderchannel512-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs64*8_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250324/atari_{len(env_id_list)}games_encoderchannel512-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs32*8_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250310/atari_{len(env_id_list)}games_concat-taskembed128_encoderchannel256-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs64*8_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250310/atari_{len(env_id_list)}games_encoderchannel512-nlayer12_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs64*8_seed{seed}/'
 
@@ -198,15 +198,15 @@ if __name__ == "__main__":
         'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
     ]
     # List of Atari games used for multi-task learning
-    # env_id_list = [
-    #     'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
-    #     'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
-    #     'AmidarNoFrameskip-v4', 'AssaultNoFrameskip-v4', 'AsterixNoFrameskip-v4', 'BankHeistNoFrameskip-v4',
-    #     'BattleZoneNoFrameskip-v4', 'CrazyClimberNoFrameskip-v4', 'DemonAttackNoFrameskip-v4', 'FreewayNoFrameskip-v4',
-    #     'FrostbiteNoFrameskip-v4', 'GopherNoFrameskip-v4', 'JamesbondNoFrameskip-v4', 'KangarooNoFrameskip-v4',
-    #     'KrullNoFrameskip-v4', 'KungFuMasterNoFrameskip-v4', 'PrivateEyeNoFrameskip-v4', 'UpNDownNoFrameskip-v4',
-    #     'QbertNoFrameskip-v4', 'BreakoutNoFrameskip-v4',
-    # ]
+    env_id_list = [
+        'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
+        'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
+        'AmidarNoFrameskip-v4', 'AssaultNoFrameskip-v4', 'AsterixNoFrameskip-v4', 'BankHeistNoFrameskip-v4',
+        'BattleZoneNoFrameskip-v4', 'CrazyClimberNoFrameskip-v4', 'DemonAttackNoFrameskip-v4', 'FreewayNoFrameskip-v4',
+        'FrostbiteNoFrameskip-v4', 'GopherNoFrameskip-v4', 'JamesbondNoFrameskip-v4', 'KangarooNoFrameskip-v4',
+        'KrullNoFrameskip-v4', 'KungFuMasterNoFrameskip-v4', 'PrivateEyeNoFrameskip-v4', 'UpNDownNoFrameskip-v4',
+        'QbertNoFrameskip-v4', 'BreakoutNoFrameskip-v4',
+    ]
 
     action_space_size = 18
     collector_env_num = 8
@@ -218,7 +218,8 @@ if __name__ == "__main__":
     reanalyze_ratio = 0.0
 
     total_batch_size = 512
-    batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+    # batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+    batch_size = [int(min(32, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
 
     # total_batch_size = int(512*4)
     # batch_size = [int(min(int(64*4), total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]

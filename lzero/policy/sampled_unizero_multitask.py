@@ -535,6 +535,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             'weighted_total_loss': weighted_total_loss.item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
         }
+
         # if task_weights is None:
         #     task_weights = {self.task_id+i: 1 for i in range(self.task_num_for_current_rank)}
         # else:
