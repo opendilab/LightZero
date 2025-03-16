@@ -54,25 +54,6 @@ The `main_config` dictionary contains the main parameter settings for running th
     - `use_sim_norm`: Whether to use SimNorm.
     - `use_sim_norm_kl_loss`: Whether to use SimNorm KL divergence loss.
     - `res_connection_in_dynamics`: Whether to use the residual connection in the dynamics model.
-    - `world_model_cfg`: Configuration for the world model used in UniZero.
-      - `continuous_action_space`: Whether the action space is continuous.
-      - `tokens_per_block`: The number of tokens per block (default is 2, for observation and action).
-      - `max_blocks`: The maximum number of blocks, equivalent to `num_unroll_steps`.
-      - `max_tokens`: The maximum number of tokens, which is the product of `max_blocks` and `tokens_per_block`.
-      - `context_length`: The context length for the Transformer.
-      - `gru_gating`: Whether to use GRU gating.
-      - `attention`: The type of attention mechanism.
-      - `num_layers`: The number of Transformer layers.
-      - `num_heads`: The number of attention heads in the Transformer.
-      - `embed_dim`: The embedding dimension.
-      - `support_size`: The size of the value function support set.
-      - `latent_recon_loss_weight`: The weight of the latent state reconstruction loss.
-      - `perceptual_loss_weight`: The weight of the perceptual loss.
-      - `policy_entropy_weight`: The weight of the policy entropy.
-      - `obs_type`: The type of observation data.
-      - `dormant_threshold`: The threshold for dormant neurons.
-      - `latent_recon_loss_weight`: The weight of the latent state reconstruction loss. 
-      - `max_cache_size`: The maximum cache size.
 - `learn`: Configuration for the learning process.
     - `learner`: Configuration for the learner (dictionary type), including train iterations and checkpoint saving.
     - `resume_training`: Whether to resume training.
@@ -91,12 +72,12 @@ The `main_config` dictionary contains the main parameter settings for running th
 - `collector_env_num`: The number of collection environments.
 - `evaluator_env_num`: The number of evaluation environments.
 - `env_type`: The type of environment (board game or non-board game).
-- `action_type`:  The type of action space (fixed or other).
+- `action_type`: The type of action space (fixed or other).
 - `game_segment_length`: The length of game segments used for self-play.
 - `cal_dormant_ratio`: Whether to calculate the ratio of dormant neurons.
 - `use_augmentation`: Whether to use data augmentation.
 - `augmentation`: The data augmentation methods to use.
-- `update_per_collect`:  The number of model updates after each data collection phase.
+- `update_per_collect`: The number of model updates after each data collection phase.
 - `batch_size`: The batch size used for training updates.
 - `optim_type`: The type of optimizer.
 - `reanalyze_ratio`: The reanalyze ratio, which controls the probability to conduct reanalyze.
@@ -105,7 +86,7 @@ The `main_config` dictionary contains the main parameter settings for running th
 - `reanalyze_partition`: The ratio of reanalysis.
 -`random_collect_episode_num`: Number of episodes of random collection, to provide initial exploration data.
 - `eps`: Parameters for exploration control, including whether to use epsilon-greedy, update schedules, start/end values, and decay rate.
-- `piecewise_decay_lr_scheduler`:Whether to use piecewise constant learning rate decay.
+- `piecewise_decay_lr_scheduler`: Whether to use piecewise constant learning rate decay.
 - `learning_rate`: The initial learning rate.
 - `num_simulations`: The number of simulations used in the MCTS algorithm.
 - `reward_loss_weight`: Weight for the reward loss.
@@ -113,7 +94,7 @@ The `main_config` dictionary contains the main parameter settings for running th
 - `value_loss_weight`: Weight for the value loss.
 - `ssl_loss_weight`: The weight of the self-supervised learning loss.
 - `n_episode`: The number of episodes in parallel collector.
-- `eval_freq`:  The frequency of policy evaluation (in terms of training steps).
+- `eval_freq`: The frequency of policy evaluation (in terms of training steps).
 - `replay_buffer_size`: The capacity of the replay buffer.
 - `target_update_freq`: How often to update the target network.
 - `grad_clip_value`: Value to clip gradient.

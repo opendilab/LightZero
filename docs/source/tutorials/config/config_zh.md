@@ -16,9 +16,9 @@
 - `observation_shape`: 环境观测的维度。
 - `collector_env_num`: 经验回放采集器(collector)中并行用于收集数据的环境数目。
 - `evaluator_env_num`: 评估器(evaluator)中并行用于评估策略性能的环境数目。 
-- `n_evaluator_episode`: 评估器中所有环境运行的总的episode数目。
-- `collect_max_episode_steps`: 收集数据时单个episode 允许的最大步数。
-- `eval_max_episode_steps`: 评估时单个episode允许的最大步数。
+- `n_evaluator_episode`: 评估器中所有环境运行的总的 episode 数目。
+- `collect_max_episode_steps`: 收集数据时单个 episode 允许的最大步数。
+- `eval_max_episode_steps`: 评估时单个 episode 允许的最大步数。
 - `frame_stack_num`: 叠帧数。
 - `gray_scale`: 是否使用灰度图像。
 - `scale`: 是否缩放输入数据。
@@ -29,7 +29,7 @@
 - `stop_value`: 训练停止的目标分数。
 - `replay_path`: 经验回放的存储路径。
 - `save_replay`: 是否存储回放视频。
-- `channel_last`: 是否将channel维度放在输入数据的最后一维。
+- `channel_last`: 是否将 channel 维度放在输入数据的最后一维。
 - `warp_frame`: 是否裁剪每一帧的图片。
 - `manager`: 指定环境管理器的类型，主要用于控制环境的并行化方式。
 
@@ -53,25 +53,6 @@
     - `use_sim_norm`: 是否使用 SimNorm。
     - `use_sim_norm_kl_loss`: 是否使用 SimNorm 的 KL 散度损失。
     - `res_connection_in_dynamics`: 动力学模型中是否使用残差连接。
-    - `world_model_cfg`: unizero中使用的世界模型配置。
-      - `continuous_action_space`: 动作空间是否连续。
-      - `tokens_per_block`: 每个block包含的token数量（默认为2，观察状态和动作）。
-      - `max_blocks`: 最大块数量，等同于num_unroll_steps。
-      - `max_tokens`: 最大token数量，结果是max_blocks与tokens_per_block的乘积。
-      - `context_length`: Transformer 的上下文长度 (处理多少个时间步的信息)。
-      - `gru_gating`: 是否使用 GRU 门控机制。
-      - `attention`: 注意力机制类型。
-      - `num_layers`: Transformer 层数。
-      - `num_heads`: Transformer 注意力头数。
-      - `embed_dim`: 嵌入维度。
-      - `support_size`: 价值函数支持集大小。
-      - `latent_recon_loss_weight`: 潜在状态重建损失权重。
-      - `perceptual_loss_weight`: 感知损失权重。
-      - `policy_entropy_weight`: 策略熵权重。
-      - `obs_type`: 观测数据类型 (图像)。
-      - `dormant_threshold`: 休眠神经元阈值。
-      - `latent_recon_loss_weight`: 潜在状态重建损失权重。
-      - `max_cache_size`: 最大缓存大小。
 - `learn`: 学习过程配置
     - `learner`: 学习器配置（字典类型），包括训练迭代次数，检查点保存策略等信息。
     - `resume_training`: 是否恢复训练。
@@ -81,17 +62,17 @@
     - `evaluator`: 评估器配置（字典类型），包括评估频率、评估的episode数量和图片保存路径等。
 - `other`: 其它配置
     - `replay_buffer`: 经验回放器配置（字典类型），包括存储大小，经验的最大使用次数和最大陈旧度以及吞吐量控制和监控配置相关的参数。
-- `cuda`: 指定是否将模型迁移到GPU上进行训练。
-- `on_policy`: 是否为on-policy 算法 。
-- `multi_gpu`: 是否开启多GPU训练。
-- `bp_update_sync`: 是否开启bp同步更新。
-- `use_wandb`: 是否使用 wandb 。
+- `cuda`: 指定是否将模型迁移到 GPU 上进行训练。
+- `on_policy`: 是否为 on-policy 算法 。
+- `multi_gpu`: 是否开启多 GPU 训练。
+- `bp_update_sync`: 是否开启 bp 同步更新。
+- `use_wandb`: 是否使用 wandb。
 - `mcts_ctree`: 是否使用蒙特卡洛树搜索。
 - `collector_env_num`: 收集环境的数量。
 - `evaluator_env_num`: 评估环境的数量。
 - `env_type`: 环境类型（棋盘游戏或非棋盘游戏）。
 - `action_type`: 动作类型 (固定动作空间或其他)。
-- `game_segment_length`: 用于自我博弈的序列(game segment)长度。
+- `game_segment_length`: 用于自我博弈的序列（game segment）长度。
 - `cal_dormant_ratio`: 是否计算休眠神经元比率。
 - `use_augmentation`: 是否使用数据增强。
 - `augmentation`:  数据增强方法。
@@ -99,26 +80,26 @@
 - `batch_size`: 更新时采样的批量大小。
 - `optim_type`: 优化器类型。
 - `reanalyze_ratio`: 重分析系数，控制进行重分析的概率。
-- `reanalyze_noise`: 是否在MCTS重分析时引入噪声，可以增加探索。
+- `reanalyze_noise`: 是否在 MCTS 重分析时引入噪声，可以增加探索。
 - `reanalyze_batch_size`: 重分析批量大小。
 - `reanalyze_partition`: 重分析的比例。
-- `random_collect_episode_num`: 随机采集的episode数量，为探索提供初始数据。 
-- `eps`: 探索控制参数，包括是否使用epsilon-greedy方法进行控制，控制参数的更新方式、起始值、终止值、衰减速度等。
+- `random_collect_episode_num`: 随机采集的 episode 数量，为探索提供初始数据。 
+- `eps`: 探索控制参数，包括是否使用 epsilon-greedy 方法进行控制，控制参数的更新方式、起始值、终止值、衰减速度等。
 - `piecewise_decay_lr_scheduler`: 是否使用分段常数学习率衰减。
 - `learning_rate`: 初始学习率。
-- `num_simulations`: MCTS算法中使用的模拟次数。
+- `num_simulations`: MCTS 算法中使用的模拟次数。
 - `reward_loss_weight`: 奖励损失函数的权重。
 - `policy_loss_weight`: 策略损失函数的权重。
 - `value_loss_weight`: 价值损失函数的权重。
 - `ssl_loss_weight`: 自监督学习损失函数的权重。
-- `n_episode`: 并行采集器中所有环境运行的总episode数量。
+- `n_episode`: 并行采集器中所有环境运行的总 episode 数量。
 - `eval_freq`: 策略评估频率(按照训练步数计)。
 - `replay_buffer_size`: 经验回放器的容量。
 - `target_update_freq`: 目标网络更新频率。
 - `grad_clip_value`: 梯度裁剪值。
 - `discount_factor`: 折扣因子。
 - `td_steps`: TD 步数。
-- `num_unroll_steps`: muzero展开的步数。
+- `num_unroll_steps`: muzero 展开的步数。
 
 
 
