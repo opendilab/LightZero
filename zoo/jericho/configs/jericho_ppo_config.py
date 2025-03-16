@@ -16,7 +16,9 @@ env_configurations = {
 # Set action_space_size and max_steps based on env_id
 action_space_size, max_steps = env_configurations.get(env_id, (10, 50))  # Default values if env_id not found
 
-model_name = 'BAAI/bge-base-en-v1.5'
+# model_name = 'BAAI/bge-base-en-v1.5'
+model_name: str = '/fs-computility/ai-shen/puyuan/model/huggingface/hub/models--BAAI--bge-base-en-v1.5/snapshots/a5beb1e3e68b9ab74eb54cfd186867f64f240e1a'
+
 evaluator_env_num = 2
 
 # proj train
@@ -24,7 +26,7 @@ collector_env_num = 4
 batch_size = 32
 
 jericho_ppo_config = dict(
-    exp_name=f"data_ppo/jericho_{env_id}_ms{max_steps}_ass{action_space_size}_ppo_bs{batch_size}_seed0",
+    exp_name=f"data_lz/data_ppo_jericho/ppo_{env_id}_ms{max_steps}_ass{action_space_size}_bs{batch_size}_seed0",
     env=dict(
         remove_stuck_actions=False,
         add_location_and_inventory=False,
@@ -34,7 +36,8 @@ jericho_ppo_config = dict(
         max_action_num=action_space_size,
         tokenizer_path=model_name,
         max_seq_len=512,
-        game_path="../envs/z-machine-games-master/jericho-game-suite/"+ env_id,
+        game_path=f"./zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
+        for_unizero=False,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -45,6 +48,7 @@ jericho_ppo_config = dict(
         multi_agent=True,
         action_space='discrete',
         model=dict(
+            obs_shape=None,
             action_shape=action_space_size,
             action_space='discrete',
             encoder_hidden_size_list = [512], # encoder_hidden_size_list[-1]是head的输入维度

@@ -81,6 +81,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
             tokenizer_path=model_name,
             max_seq_len=512,
             game_path=f"../envs/z-machine-games-master/jericho-game-suite/{env_id}",
+            for_unizero=True,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,

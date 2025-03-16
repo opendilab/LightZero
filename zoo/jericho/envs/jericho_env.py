@@ -108,12 +108,15 @@ class JerichoEnv(BaseEnv):
 
         # TODO: unizero需要加上'to_play', PPO不能加上'to_play'
         if return_str: 
-            return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1}
-            # return {'observation': full_obs, 'action_mask': action_mask}
+            if self.cfg.for_unizero:
+                return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1}
+            else:
+                return {'observation': full_obs, 'action_mask': action_mask}
         else:
-            return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1}
-            # return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask}
-             
+            if self.cfg.for_unizero:
+                return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1}
+            else:
+                return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask}
 
     def reset(self, return_str: bool = False):
         initial_observation, info = self._env.reset()
@@ -186,7 +189,8 @@ class JerichoEnv(BaseEnv):
         # print(f'step: {self.timestep}, [OBS]:{observation} self._action_list:{self._action_list}')
 
         # TODO: only for PPO, 如果是unizero需要注释下面这行
-        # reward = np.array([float(reward)])
+        if not self.cfg.for_unizero:
+            reward = np.array([float(reward)])
 
         self.env_step += 1
         self.episode_return += reward
