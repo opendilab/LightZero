@@ -342,7 +342,7 @@ class UniZeroPolicy(MuZeroPolicy):
             # TODO: add the model to wandb
             wandb.watch(self._learn_model.representation_network, log="all")
 
-        # TODO: ========
+        # TODO:
         self.accumulation_steps = self._cfg.accumulation_steps  # 累积的步数
 
     # @profile
@@ -362,7 +362,6 @@ class UniZeroPolicy(MuZeroPolicy):
         self._learn_model.train()
         self._target_model.train()
 
-        # current_batch, target_batch, _ = data
         current_batch, target_batch, train_iter = data
 
         obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time = current_batch
@@ -395,19 +394,7 @@ class UniZeroPolicy(MuZeroPolicy):
 
         # Convert to categorical distributions
         target_reward_categorical = phi_transform(self.reward_support, transformed_target_reward)
-        # print(f'transformed_target_value:{transformed_target_value}')
-        # print("self.value_support:", self.value_support)
-        
-        # try:
         target_value_categorical = phi_transform(self.value_support, transformed_target_value)
-        # except Exception as e:
-        #     print('='*20)
-        #     print(e)
-        #     # print(f'transformed_target_value:{transformed_target_value}')
-        #     # print("self.value_support:", self.value_support)
-        #     print('='*20)
-            # target_value_categorical = phi_transform(self.value_support, transformed_target_value)
-
 
         # Prepare batch for GPT model
         batch_for_gpt = {}
@@ -429,15 +416,9 @@ class UniZeroPolicy(MuZeroPolicy):
         batch_for_gpt['target_policy'] = target_policy[:, :-1]
 
         # Extract valid target policy data and compute entropy
-        try:
-            valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
-            target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
-            average_target_policy_entropy = target_policy_entropy.mean()
-        except Exception as e:
-            print('='*20)
-            print(e)
-            average_target_policy_entropy = 0.
-
+        valid_target_policy = batch_for_gpt['target_policy'][batch_for_gpt['mask_padding']]
+        target_policy_entropy = -torch.sum(valid_target_policy * torch.log(valid_target_policy + 1e-9), dim=-1)
+        average_target_policy_entropy = target_policy_entropy.mean()
 
         # Update world model
         losses = self._learn_model.world_model.compute_loss(
@@ -463,65 +444,50 @@ class UniZeroPolicy(MuZeroPolicy):
         dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
 
-        # assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
-        # assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
+        assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
+        assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
-        # Core learn model update step
-        # print(f'train_iter:{train_iter}')
-        # 假设 train_iter 是从 0 开始计数
+        # Core learning model update step
+        # Reset gradients at the start of each accumulation cycle
         if (train_iter % self.accumulation_steps) == 0:
-            # 每个累计周期的第一个step时清零梯度
-            # print(f'train_iter:{train_iter} self._optimizer_world_model.zero_grad()')
             self._optimizer_world_model.zero_grad()
 
-        weighted_total_loss = weighted_total_loss / self.accumulation_steps  # 累积梯度时对 loss 进行缩放
-
+        # Scale the loss by the number of accumulation steps
+        weighted_total_loss = weighted_total_loss / self.accumulation_steps
         weighted_total_loss.backward()
 
-        #  ========== for debugging ==========
-        # for name, param in self._learn_model.world_model.tokenizer.encoder.named_parameters():
-        #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
-        #     if param.requires_grad:
-        #         print(name, param.grad.norm())
-
-        # if self._cfg.analysis_sim_norm:
-        #     del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
-        #     self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
-        #     self._target_model.encoder_hook.clear_data()
-
-        # total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
-        #                                                                 self._cfg.grad_clip_value)
-
-        # 判断是否完成了一个累计周期（例如：如果 accumulation_steps=4, 则在 4,8,12,... 次迭代时更新参数）
+        # Check if the current iteration completes an accumulation cycle
         if (train_iter + 1) % self.accumulation_steps == 0:
-            # print(f'train_iter:{train_iter} self._optimizer_world_model.step()')
-
-            # ========== 分析梯度模的代码 ==========
+            # Analyze gradient norms if simulation normalization analysis is enabled
             if self._cfg.analysis_sim_norm:
-                # 删除上次的分析结果，防止累积过多内存
+                # Clear previous analysis results to prevent memory overflow
                 del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
                 self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
                 self._target_model.encoder_hook.clear_data()
             
-            # 对梯度进行裁剪
+            # Clip gradients to prevent exploding gradients
             total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
                 self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
             )
 
-
+            # Synchronize gradients across multiple GPUs if enabled
             if self._cfg.multi_gpu:
                 self.sync_gradients(self._learn_model)
 
+            # Update model parameters
             self._optimizer_world_model.step()
 
+            # Clear CUDA cache if using gradient accumulation
             if self.accumulation_steps > 1:
                 torch.cuda.empty_cache()
         else:
             total_grad_norm_before_clip_wm = torch.tensor(0.)
 
+        # Update learning rate scheduler if applicable
         if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
-        # Core target model update step
+
+        # Update the target model with the current model's parameters
         self._target_model.update(self._learn_model.state_dict())
 
         if torch.cuda.is_available():

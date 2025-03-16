@@ -71,9 +71,7 @@ class JerichoEnv(BaseEnv):
         if self.remove_stuck_actions:
             available_actions = [a for a in self._action_list if a not in self.blocked_actions]
             if len(available_actions) < 1 and len(self._action_list)>0:
-                # TODO=========
-                # import ipdb;ipdb.set_trace()
-                # if self._action_list is None
+                # TODO
                 available_actions = [self._action_list[0]]
             self._action_list = available_actions
         else:
@@ -108,7 +106,8 @@ class JerichoEnv(BaseEnv):
 
         action_mask = np.array(action_mask, dtype=np.int8)
 
-        if return_str: # TODO: unizero需要加上'to_play', PPO不能加上'to_play'===============
+        # TODO: unizero需要加上'to_play', PPO不能加上'to_play'
+        if return_str: 
             return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1}
             # return {'observation': full_obs, 'action_mask': action_mask}
         else:
@@ -186,7 +185,7 @@ class JerichoEnv(BaseEnv):
         self.timestep += 1
         # print(f'step: {self.timestep}, [OBS]:{observation} self._action_list:{self._action_list}')
 
-        # TODO: for PPO, 如果是unizero需要注释下面这行
+        # TODO: only for PPO, 如果是unizero需要注释下面这行
         # reward = np.array([float(reward)])
 
         self.env_step += 1
@@ -242,19 +241,12 @@ if __name__ == '__main__':
     env_cfg = EasyDict(
         dict(
             max_steps=400,
-            # game_path="z-machine-games-master/jericho-game-suite/zork1.z5",
-            game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/zork1.z5",
-            # game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/detective.z5",
-            # game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/905.z5",
-            # max_action_num=50,
+            game_path="../envs/z-machine-games-master/jericho-game-suite/"+ "zork1.z5",
             max_action_num=10,
-            # max_env_step=100,
             tokenizer_path="google-bert/bert-base-uncased",
             max_seq_len=512,
-            remove_stuck_actions=False,  # 启用移除无效动作的功能
+            remove_stuck_actions=False,
             add_location_and_inventory=False
-            # remove_stuck_actions=True,  # 启用移除无效动作的功能
-            # add_location_and_inventory=True
         )
     )
     env = JerichoEnv(env_cfg)

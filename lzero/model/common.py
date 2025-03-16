@@ -275,112 +275,97 @@ class DownSample(nn.Module):
         return output
 
 
-"""
-使用 google-bert/bert-base-uncased , 模型的输入为id
-"""
 class HFLanguageRepresentationNetwork(nn.Module):
-    def __init__(self, url: str = 'google-bert/bert-base-uncased', embedding_size: int = 768, group_size: int = 8, tokenizer=None):
+    def __init__(self,
+                 model_path: str = 'google-bert/bert-base-uncased',
+                 embedding_size: int = 768,
+                 group_size: int = 8,
+                 norm_type: str = "simnorm",
+                 tokenizer=None):
         """
-        初始化语言表示网络
-
-        参数:
-        - url (str): 预训练 Hugging Face 模型的地址，默认为 'google-bert/bert-base-uncased'。
-        - embedding_size (int): 输出嵌入的维度大小，默认为 768。
+        Overview:
+            This class defines a language representation network that utilizes a pretrained Hugging Face model.
+            The network outputs embeddings with the specified dimension and can optionally use SimNorm or LayerNorm
+            for normalization at the final stage to ensure training stability.
+        Arguments:
+            - model_path (str): The path to the pretrained Hugging Face model. Default is 'google-bert/bert-base-uncased'.
+            - embedding_size (int): The dimension of the output embeddings. Default is 768.
+            - group_size (int): The group size for SimNorm when using normalization.
+            - norm_type (str): The type of normalization to use ("simnorm" or "layernorm"). Default is "simnorm".
+            - tokenizer (Optional): An instance of a tokenizer. If None, the tokenizer will be loaded from the pretrained model.
         """
         super().__init__()
+
         from transformers import AutoModel, AutoTokenizer
+        logging.info(f"Loading model from: {model_path}")
 
-        print(f"="*20)
-        print(f"url:{url}")
-        print(f"="*20)
-
-        # 加载 Hugging Face 预训练模型
-
-        # 只让 rank 0 下载模型
-        if  get_rank() == 0:
-            self.model = AutoModel.from_pretrained(url)
-        if get_world_size() > 1: 
-            # 等待 rank 0 完成模型加载
+        # In distributed training, only the rank 0 process downloads the model, and other processes load from cache to speed up startup.
+        if get_rank() == 0:
+            self.model = AutoModel.from_pretrained(model_path)
+        if get_world_size() > 1:
+            # Wait for rank 0 to finish loading the model.
             torch.distributed.barrier()
-        if get_rank() != 0:  # 非 rank 0 的进程从本地缓存加载
-            self.model = AutoModel.from_pretrained(url)
-
+        if get_rank() != 0:
+            self.model = AutoModel.from_pretrained(model_path)
 
         if tokenizer is None:
-            # 只让 rank 0 下载模型
+            # Only rank 0 downloads the tokenizer, and then other processes load it from cache.
             if get_rank() == 0:
-                self.tokenizer = AutoTokenizer.from_pretrained(url) 
-            if get_world_size() > 1: 
-                # 等待 rank 0 完成模型加载
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+            if get_world_size() > 1:
                 torch.distributed.barrier()
-            if get_rank() != 0:  # 非 rank 0 的进程从本地缓存加载
-                self.tokenizer = AutoTokenizer.from_pretrained(url) 
-
-        # 设置嵌入维度，如果目标维度不是 768，则添加一个线性变换层用于降维或升维
-        self.embedding_size = embedding_size
-        if self.embedding_size != 768:
-            self.embed_head = nn.Linear(768, self.embedding_size)
-
-        self.sim_norm = SimNorm(simnorm_dim=group_size)
-
-    def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor: # TODO: train projection ======
-    # def forward(self, x: torch.Tensor, no_grad: bool = False) -> torch.Tensor: # TODO: train encoder ======
-    
-        """
-        前向传播，获取输入序列的语言表示。
-
-        参数:
-        - x (torch.Tensor): 输入的张量，通常是序列的 token 索引，形状为 [batch_size, seq_len]。
-        - no_grad (bool): 是否在无梯度模式下运行，默认为 True。
-
-        返回:
-        - torch.Tensor: 经过处理的语言嵌入向量，形状为 [batch_size, embedding_size]。
-        """
-        attention_mask =  x!= self.tokenizer.pad_token_id
-        if no_grad:
-            # 在 no_grad 模式下禁用梯度计算以节省显存
-            with torch.no_grad():
-                x = x.long()  # 确保输入张量为长整型
-                outputs = self.model(x,  attention_mask= attention_mask)  # 获取模型的输出
-                
-                # 模型输出的 last_hidden_state 形状为 [batch_size, seq_len, hidden_size]
-                # 我们通常取 [CLS] 标记对应的向量，即 outputs.last_hidden_state[:, 0, :]
-                cls_embedding = outputs.last_hidden_state[:, 0, :]
-                
-            # 如果目标的 embedding_size 不是 768，则应用线性变换
-            # if self.embedding_size == 768:
-            #     # NOTE: very important for training stability.
-            #     cls_embedding = self.sim_norm(cls_embedding)
-
-            #     return cls_embedding
-            # else:
-            cls_embedding = self.embed_head(cls_embedding)
-
-            # NOTE: very important for training stability.
-            cls_embedding = self.sim_norm(cls_embedding)
-
-            return cls_embedding
+            if get_rank() != 0:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         else:
-            # 非 no_grad 模式下，启用梯度计算
-            x = x.long()  # 确保输入张量为长整型
-            outputs = self.model(x,  attention_mask= attention_mask)  # 获取模型的输出
+            self.tokenizer = tokenizer
 
+        # Set the embedding dimension. A linear projection is added (the dimension remains unchanged here but can be extended for other mappings).
+        self.embedding_size = embedding_size
+        self.embed_proj_head = nn.Linear(self.model.config.hidden_size, self.embedding_size)
+
+        # Select the normalization method based on the norm_type parameter.
+        if norm_type.lower() == "simnorm":
+            self.norm = SimNorm(simnorm_dim=group_size)
+        elif norm_type.lower() == "layernorm":
+            self.norm = nn.LayerNorm(embedding_size)
+        else:
+            raise NotImplementedError(f"Normalization type '{norm_type}' is not implemented. "
+                                      f"Choose 'simnorm' or 'layernorm'.")
+
+    def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
+        """
+        Forward Propagation:
+            Compute the language representation based on the input token sequence.
+            The [CLS] token’s representation is extracted from the output of the pretrained model,
+            then passed through a linear projection and final normalization layer (SimNorm or LayerNorm).
+
+        Arguments:
+            - x (torch.Tensor): Input token sequence of shape [batch_size, seq_len].
+            - no_grad (bool): Whether to run in no-gradient mode for memory efficiency. Default is True.
+        Returns:
+        - torch.Tensor: The processed language embedding with shape [batch_size, embedding_size].
+        """
+        # Construct the attention mask to exclude padding tokens.
+        attention_mask = x != self.tokenizer.pad_token_id
+
+        # Use no_grad context if specified to disable gradient computation.
+        if no_grad:
+            with torch.no_grad():
+                x = x.long()  # Ensure the input tensor is of type long.
+                outputs = self.model(x, attention_mask=attention_mask)
+                # Get the hidden state from the last layer and select the output corresponding to the [CLS] token.
+                cls_embedding = outputs.last_hidden_state[:, 0, :]
+        else:
+            x = x.long()
+            outputs = self.model(x, attention_mask=attention_mask)
             cls_embedding = outputs.last_hidden_state[:, 0, :]
-            
-            # 如果目标的 embedding_size 不是 768，则应用线性变换
-            # if self.embedding_size == 768:
-            #     # NOTE: very important for training stability.
-            #     cls_embedding = self.sim_norm(cls_embedding)
 
-            #     return cls_embedding
-            # else:
-            cls_embedding = self.embed_head(cls_embedding)
+        # Apply linear projection to obtain the desired output dimension.
+        cls_embedding = self.embed_proj_head(cls_embedding)
+        # Normalize the embeddings using the selected normalization layer (SimNorm or LayerNorm) to ensure training stability.
+        cls_embedding = self.norm(cls_embedding)
 
-            # NOTE: very important for training stability.
-            cls_embedding = self.sim_norm(cls_embedding)
-
-            return cls_embedding
-
+        return cls_embedding
 
 
 class RepresentationNetworkUniZero(nn.Module):
@@ -1011,8 +996,8 @@ class PredictionNetworkMLP(nn.Module):
             action_space_size,
             num_channels,
             common_layer_num: int = 2,
-            fc_value_layers: SequenceType = [32],
-            fc_policy_layers: SequenceType = [32],
+            value_head_hidden_channels: SequenceType = [32],
+            policy_head_hidden_channels: SequenceType = [32],
             output_support_size: int = 601,
             last_linear_layer_init_zero: bool = True,
             activation: Optional[nn.Module] = nn.ReLU(inplace=True),
@@ -1026,8 +1011,8 @@ class PredictionNetworkMLP(nn.Module):
             - action_space_size: (:obj:`int`): Action space size, usually an integer number. For discrete action \
                 space, it is the number of discrete actions.
             - num_channels (:obj:`int`): The channels of latent states.
-            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical value output.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
                 dynamics/prediction mlp, default sets it to True.
@@ -1053,11 +1038,10 @@ class PredictionNetworkMLP(nn.Module):
         )
 
         # ******* value and policy head ******
-        self.fc_value_head = MLP(
+        self.fc_value_head = MLP_V2(
             in_channels=self.num_channels,
-            hidden_channels=fc_value_layers[0],
+            hidden_channels=value_head_hidden_channels,
             out_channels=output_support_size,
-            layer_num=len(fc_value_layers) + 1,
             activation=activation,
             norm_type=norm_type,
             output_activation=False,
@@ -1065,11 +1049,10 @@ class PredictionNetworkMLP(nn.Module):
             # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
-        self.fc_policy_head = MLP(
+        self.fc_policy_head = MLP_V2(
             in_channels=self.num_channels,
-            hidden_channels=fc_policy_layers[0],
+            hidden_channels=policy_head_hidden_channels,
             out_channels=action_space_size,
-            layer_num=len(fc_policy_layers) + 1,
             activation=activation,
             norm_type=norm_type,
             output_activation=False,
@@ -1105,11 +1088,11 @@ class PredictionHiddenNetwork(nn.Module):
             num_channels: int,
             value_head_channels: int,
             policy_head_channels: int,
-            fc_value_layers: int,
-            fc_policy_layers: int,
+            value_head_hidden_channels: int,
+            policy_head_hidden_channels: int,
             output_support_size: int,
-            flatten_output_size_for_value_head: int,
-            flatten_output_size_for_policy_head: int,
+            flatten_input_size_for_value_head: int,
+            flatten_input_size_for_policy_head: int,
             downsample: bool = False,
             last_linear_layer_init_zero: bool = True,
             activation: nn.Module = nn.ReLU(inplace=True),
@@ -1127,13 +1110,13 @@ class PredictionHiddenNetwork(nn.Module):
             - num_channels (:obj:`int`): The channels of hidden states.
             - value_head_channels (:obj:`int`): The channels of value head.
             - policy_head_channels (:obj:`int`): The channels of policy head.
-            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical value output.
             - self_supervised_learning_loss (:obj:`bool`): Whether to use self_supervised_learning related networks \
-            - flatten_output_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+            - flatten_input_size_for_value_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
                 of the value head.
-            - flatten_output_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
+            - flatten_input_size_for_policy_head (:obj:`int`): The size of flatten hidden states, i.e. the input size \
                 of the policy head.
             - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
@@ -1174,16 +1157,16 @@ class PredictionHiddenNetwork(nn.Module):
                 self.norm_policy = nn.LayerNorm([policy_head_channels, observation_shape[-2], observation_shape[-1]],
                                                 eps=1e-5)
 
-        self.flatten_output_size_for_value_head = flatten_output_size_for_value_head
-        self.flatten_output_size_for_policy_head = flatten_output_size_for_policy_head
+        self.flatten_input_size_for_value_head = flatten_input_size_for_value_head
+        self.flatten_input_size_for_policy_head = flatten_input_size_for_policy_head
 
         self.activation = activation
 
         self.fc_value = MLP(
-            in_channels=self.flatten_output_size_for_value_head + self.gru_hidden_size,
-            hidden_channels=fc_value_layers[0],
+            in_channels=self.flatten_input_size_for_value_head + self.gru_hidden_size,
+            hidden_channels=value_head_hidden_channels[0],
             out_channels=output_support_size,
-            layer_num=len(fc_value_layers) + 1,
+            layer_num=len(value_head_hidden_channels) + 1,
             activation=self.activation,
             norm_type=norm_type,
             output_activation=False,
@@ -1192,10 +1175,10 @@ class PredictionHiddenNetwork(nn.Module):
             last_linear_layer_init_zero=last_linear_layer_init_zero
         )
         self.fc_policy = MLP(
-            in_channels=self.flatten_output_size_for_policy_head + self.gru_hidden_size,
-            hidden_channels=fc_policy_layers[0],
+            in_channels=self.flatten_input_size_for_policy_head + self.gru_hidden_size,
+            hidden_channels=policy_head_hidden_channels[0],
             out_channels=action_space_size,
-            layer_num=len(fc_policy_layers) + 1,
+            layer_num=len(policy_head_hidden_channels) + 1,
             activation=self.activation,
             norm_type=norm_type,
             output_activation=False,
@@ -1226,8 +1209,8 @@ class PredictionHiddenNetwork(nn.Module):
         policy = self.norm_policy(policy)
         policy = self.activation(policy)
 
-        latent_state_value = value.reshape(-1, self.flatten_output_size_for_value_head)
-        latent_state_policy = policy.reshape(-1, self.flatten_output_size_for_policy_head)
+        latent_state_value = value.reshape(-1, self.flatten_input_size_for_value_head)
+        latent_state_policy = policy.reshape(-1, self.flatten_input_size_for_policy_head)
 
         # TODO: world_model_latent_history.squeeze(0) shape: (num_layers * num_directions, batch_size, hidden_size) ->  ( batch_size, hidden_size)
         latent_history_value = torch.cat([latent_state_value, world_model_latent_history.squeeze(0)], dim=1)
@@ -1236,5 +1219,3 @@ class PredictionHiddenNetwork(nn.Module):
         value = self.fc_value(latent_history_value)
         policy = self.fc_policy(latent_history_policy)
         return policy, value
-
-

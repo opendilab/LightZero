@@ -328,9 +328,6 @@ class MuZeroCollector(ISerialCollector):
         Returns:
             - return_data (:obj:`List[Any]`): Collected data in the form of a list.
         """
-        # Before starting collection
-        # self._logger.info(f"Rank {self._rank} starting collection for {n_episode} episodes.")
-
         # TODO: collect_with_pure_policy as a separate collector
         if n_episode is None:
             if self._default_n_episode is None:
@@ -726,13 +723,9 @@ class MuZeroCollector(ISerialCollector):
         if self._world_size > 1:
             # Before allreduce
             self._logger.info(f"Rank {self._rank} before allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
-        
-            dist.barrier()
-            # print(f"Rank {dist.get_rank()} collected_step: {collected_step}, collected_episode: {collected_episode}, collected_duration: {collected_duration}")
             collected_step = allreduce_data(collected_step, 'sum')
             collected_episode = allreduce_data(collected_episode, 'sum')
             collected_duration = allreduce_data(collected_duration, 'sum')
-        
             # After allreduce
             self._logger.info(f"Rank {self._rank} after allreduce: collected_step={collected_step}, collected_episode={collected_episode}")
 

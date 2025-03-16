@@ -736,14 +736,7 @@ class MuZeroGameBuffer(GameBuffer):
                             policy_tmp = [0 for _ in range(policy_shape)]
                             for index, legal_action in enumerate(legal_actions[policy_index]):
                                 # only the action in ``legal_action`` the policy logits is nonzero
-                                # policy_tmp[legal_action] = distributions[index]
-                                # import ipdb;ipdb.set_trace()
-                                try:
-                                    policy_tmp[legal_action] = distributions[index]
-                                except Exception as e:
-                                    print('='*20)
-                                    print(f'Exception:{e}, distributions:{distributions}, legal_action:{legal_actions[policy_index]}')
-                                    # TODO: 出现这个问题的原因在于采样的序列末尾可能是padding的action_mask是以np.zeros(self._cfg.model.action_space_size, dtype=np.int8)进行pad的
+                                policy_tmp[legal_action] = distributions[index]
                             target_policies.append(policy_tmp)
                     else:
                         # NOTE: the invalid padding target policy, O is to make sure the corresponding cross_entropy_loss=0

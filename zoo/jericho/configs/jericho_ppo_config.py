@@ -1,49 +1,40 @@
 from easydict import EasyDict
 import torch.nn as nn
 
+# ------------------------------------------------------------------
+# Base environment parameters (Note: these values might be adjusted for different env_id)
+# ------------------------------------------------------------------
+env_id = 'detective.z5'
+# Define environment configurations
+env_configurations = {
+    'detective.z5': (10, 50),
+    'omniquest.z5': (10, 100),
+    'acorncourt.z5': (10, 50),
+    'zork1.z5': (10, 400),
+}
+
+# Set action_space_size and max_steps based on env_id
+action_space_size, max_steps = env_configurations.get(env_id, (10, 50))  # Default values if env_id not found
 
 model_name = 'BAAI/bge-base-en-v1.5'
 evaluator_env_num = 2
 
-# env_id = 'detective.z5'
-action_space_size = 10
-max_steps = 50
-
-env_id = 'zork1.z5'
-action_space_size = 10
-max_steps = 400
-
-
 # proj train
-# collector_env_num = 18
-# batch_size = 320
 collector_env_num = 4
 batch_size = 32
 
-# all train
-# collector_env_num = 2
-# n_episode = 2
-# evaluator_env_num = 2
-# batch_size = 4 
-# num_unroll_steps = 5
-# infer_context_length = 2
 jericho_ppo_config = dict(
-    exp_name=f"data_ppo_detective/jericho_{env_id}_ms{max_steps}_ass{action_space_size}_ppo_projtrain_bs{batch_size}_seed0",
-    # exp_name=f"data_ppo_detective_debug/jericho_add-loc-inv_ppo_projtrain_bs{batch_size}_seed0",
+    exp_name=f"data_ppo/jericho_{env_id}_ms{max_steps}_ass{action_space_size}_ppo_bs{batch_size}_seed0",
     env=dict(
         remove_stuck_actions=False,
-        # remove_stuck_actions=True,
-        # add_location_and_inventory=True,
         add_location_and_inventory=False,
         stop_value=int(1e6),
         observation_shape=512,
         max_steps=max_steps,
         max_action_num=action_space_size,
         tokenizer_path=model_name,
-        # tokenizer_path="/mnt/afs/zhangshenghan/.cache/huggingface/hub/models--google-bert--bert-base-uncased/snapshots/86b5e0934494bd15c9632b12f734a8a67f723594",
         max_seq_len=512,
-        # game_path="z-machine-games-master/jericho-game-suite/" + env_id,
-        game_path="/mnt/afs/niuyazhe/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/" + env_id,
+        game_path="../envs/z-machine-games-master/jericho-game-suite/"+ env_id,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -54,7 +45,6 @@ jericho_ppo_config = dict(
         multi_agent=True,
         action_space='discrete',
         model=dict(
-            obs_shape=(26, 5, 4), # 没有起作用
             action_shape=action_space_size,
             action_space='discrete',
             encoder_hidden_size_list = [512], # encoder_hidden_size_list[-1]是head的输入维度
@@ -100,7 +90,7 @@ if __name__ == "__main__":
     os.environ['TOKENIZERS_PARALLELISM'] = 'false'
     
     from lzero.model.common import HFLanguageRepresentationNetwork
-    encoder = HFLanguageRepresentationNetwork(url=model_name, embedding_size=512)
+    encoder = HFLanguageRepresentationNetwork(model_path=model_name, embedding_size=512)
 
     model = VAC(obs_shape=m.obs_shape, action_shape=m.action_shape, action_space=m.action_space, encoder_hidden_size_list=m.encoder_hidden_size_list,
             actor_head_hidden_size=m.actor_head_hidden_size,

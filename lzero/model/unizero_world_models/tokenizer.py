@@ -76,14 +76,7 @@ class Tokenizer(nn.Module):
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 3:
             # Case when input is 3D (B, T, E)
-            # print(f"x:{x}")
-            try:
-                x = x.contiguous().view(-1, shape[-1])  # Flatten the last two dimensions (B * T, E)
-            except Exception as e:
-                print(f"x:{x}")
-                print(' =='*20)
-                print(e)
-
+            x = x.contiguous().view(-1, shape[-1])  # Flatten the last two dimensions (B * T, E)
             obs_embeddings = self.encoder(x)
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 4:
