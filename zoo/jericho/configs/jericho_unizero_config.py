@@ -40,6 +40,11 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
         'zork1.z5': (10, 400),
     }
 
+    # env_id = 'detective.z5'
+    # env_id = 'omniquest.z5'
+    # env_id = 'acorncourt.z5'
+    env_id = 'zork1.z5'
+
     # Set action_space_size and max_steps based on env_id
     action_space_size, max_steps = env_configurations.get(env_id, (10, 50))  # Default values if env_id not found
 
@@ -53,13 +58,13 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
     # Project training parameters
     collector_env_num: int = 4       # Number of collector environments
     n_episode: int = 4               # Number of episodes per training batch
-    batch_size: int = 16             # Batch size in training
+    batch_size: int = 64             # Batch size in training
     num_unroll_steps: int = 10       # Number of unroll steps (for rollout sequence expansion)
     infer_context_length: int = 4    # Inference context length
 
     num_layers: int = 2              # Number of layers in the model
     replay_ratio: float = 0.25       # Replay ratio for experience replay
-    embed_dim: int = 512             # Embedding dimension
+    embed_dim: int = 768             # Embedding dimension
 
     # Reanalysis (reanalyze) parameters:
     # buffer_reanalyze_freq: Frequency of reanalysis (e.g., 1 means reanalyze once per epoch)
@@ -70,19 +75,20 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
     reanalyze_partition: float = 0.75
 
     # Model name or path - configurable according to the predefined model paths or names
-    model_name: str = 'BAAI/bge-base-en-v1.5'
+    # model_name: str = 'BAAI/bge-base-en-v1.5'
+    model_name: str = '/fs-computility/ai-shen/puyuan/model/huggingface/hub/models--BAAI--bge-base-en-v1.5/snapshots/a5beb1e3e68b9ab74eb54cfd186867f64f240e1a'
 
     # ------------------------------------------------------------------
     # TODO: Debug configuration - override some parameters for debugging purposes
     # ------------------------------------------------------------------
-    max_env_step = int(5e5) 
-    batch_size = 10  
-    num_simulations = 2 
-    num_unroll_steps = 5
-    infer_context_length = 2
-    max_steps = 10
-    num_layers = 1
-    replay_ratio = 0.05             
+    # max_env_step = int(5e5) 
+    # batch_size = 10  
+    # num_simulations = 2 
+    # num_unroll_steps = 5
+    # infer_context_length = 2
+    # max_steps = 10
+    # num_layers = 1
+    # replay_ratio = 0.05             
 
     # ------------------------------------------------------------------
     # Configuration dictionary for the Jericho Unizero environment and policy
@@ -96,7 +102,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
             max_action_num=action_space_size,
             tokenizer_path=model_name,
             max_seq_len=512,
-            game_path=f"../envs/z-machine-games-master/jericho-game-suite/{env_id}",
+            game_path=f"./zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
@@ -129,13 +135,14 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
                     device="cuda",
                     action_space_size=action_space_size,
                     num_layers=num_layers,
-                    num_heads=8,
+                    num_heads=24,
                     embed_dim=embed_dim,
                     obs_type="text",  # TODO: Modify as needed.
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),
             ),
-            update_per_collect=None,  # Important for DDP
+            # update_per_collect=None,  # Important for DDP
+            update_per_collect=int(collector_env_num*max_steps*replay_ratio),  # Important for DDP
             action_type="varied_action_space",
             model_path=None,
             num_unroll_steps=num_unroll_steps,
@@ -149,7 +156,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
             num_simulations=num_simulations,
             n_episode=n_episode,
             train_start_after_envsteps=0,  # TODO: Adjust training start trigger if needed.
-            replay_buffer_size=int(1e5),
+            # train_start_after_envsteps=2000,  # TODO: Adjust training start trigger if needed.
+            replay_buffer_size=int(5e5),
             eval_freq=int(1e4),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -188,13 +196,13 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
 
     # Construct experiment name containing key parameters
     main_config.exp_name = (
-        f"data_unizero/{model_name}/{env_id[:8]}_ms{max_steps}_action-space-{action_space_size}_uz_"
-        f"nlayer{num_layers}_embed512_Htrain{num_unroll_steps}-"
+        f"data_lz/data_unizero_jericho_20250316/bge-base-en-v1.5/uz_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+        f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
         f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
     )
 
     # Insert the project dependency path (adjust according to your project structure)
-    sys.path.insert(0, "/Users/puyuan/code/LightZero/")
+    # sys.path.insert(0, "/Users/puyuan/code/LightZero/")
 
     # Delay the import of train_unizero to ensure sys.path is updated
     from lzero.entry import train_unizero

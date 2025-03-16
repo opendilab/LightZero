@@ -281,6 +281,7 @@ class HFLanguageRepresentationNetwork(nn.Module):
                  embedding_size: int = 768,
                  group_size: int = 8,
                  norm_type: str = "simnorm",
+                #  norm_type: str = "layernorm", # why nan first
                  tokenizer=None):
         """
         Overview:
@@ -291,7 +292,7 @@ class HFLanguageRepresentationNetwork(nn.Module):
             - model_path (str): The path to the pretrained Hugging Face model. Default is 'google-bert/bert-base-uncased'.
             - embedding_size (int): The dimension of the output embeddings. Default is 768.
             - group_size (int): The group size for SimNorm when using normalization.
-            - norm_type (str): The type of normalization to use ("simnorm" or "layernorm"). Default is "simnorm".
+            - norm_type (str): The type of normalization to use ("simnorm" or "layernorm"). Default is "layernorm".
             - tokenizer (Optional): An instance of a tokenizer. If None, the tokenizer will be loaded from the pretrained model.
         """
         super().__init__()
