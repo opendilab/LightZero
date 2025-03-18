@@ -78,7 +78,7 @@ class singleEqn(BaseEnv):
 
         # Initial state vector
         obs, _ = self.to_vec(self.lhs, self.rhs)
-        self.obs = obs
+        self.obs = np.array(obs, dtype=np.float32)  #to work with muzero
         self.current_steps = 0
 
         # Define action and observation spaces (LightZero expects these as properties)
@@ -86,14 +86,14 @@ class singleEqn(BaseEnv):
         self._reward_space = spaces.Box(low=self.reward_invalid_equation, high=self.reward_solved, shape=(1,), dtype=np.float32)
         if state_rep == 'integer_1d':
             self._observation_space = spaces.Box(low=-np.inf, high=np.inf, 
-                                                  shape=(self.observation_dim,), dtype=np.float64)
+                                                  shape=(self.observation_dim,), dtype=np.float32)
         elif state_rep == 'integer_2d':
             self._observation_space = spaces.Box(low=-np.inf, high=np.inf, 
-                                                  shape=(self.observation_dim, 2), dtype=np.float64)
+                                                  shape=(self.observation_dim, 2), dtype=np.float32)
         elif state_rep in ['graph_integer_1d', 'graph_integer_2d']:
             self._observation_space = spaces.Dict({
                 "node_features": spaces.Box(low=-np.inf, high=np.inf, 
-                                            shape=(self.observation_dim, 2), dtype=np.float64),
+                                            shape=(self.observation_dim, 2), dtype=np.float32),
                 "edge_index": spaces.Box(low=0, high=self.observation_dim, 
                                          shape=(2, 2*self.observation_dim), dtype=np.int32),
                 "node_mask": spaces.Box(low=0, high=1, 
@@ -161,7 +161,7 @@ class singleEqn(BaseEnv):
         truncated = False
 
         # Update state and step counter
-        self.lhs, self.rhs, self.obs = lhs_new, rhs_new, obs_new
+        self.lhs, self.rhs, self.obs = lhs_new, rhs_new, np.array(obs_new, dtype=np.float32)
         self.current_steps += 1
 
         # Update actions
@@ -182,9 +182,9 @@ class singleEqn(BaseEnv):
     
 
         lightzero_obs_dict = {
-            'observation': obs_new,
+            'observation': np.array(obs_new, dtype=np.float32),
             'action_mask': self.action_mask,
-            'board': obs_new,  
+            'board': np.array(obs_new, dtype=np.float32),  
             'current_player_index': 0,  #
             'to_play': -1
         }
@@ -198,7 +198,7 @@ class singleEqn(BaseEnv):
         self.lhs, self.rhs = self.main_eqn, 0
         self.actions, self.action_mask  = make_actions(self.lhs, self.rhs, self.actions_fixed, self.action_dim)
         obs, _ = self.to_vec(self.lhs, self.rhs)
-        self.obs = obs
+        self.obs = np.array(obs, dtype=np.float32)
         self.episode_return = 0
         lightzero_obs_dict = {
             'observation': obs,
