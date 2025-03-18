@@ -236,6 +236,8 @@ class UniZeroPolicy(MuZeroPolicy):
         fixed_temperature_value=0.25,
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
+        # (int) The number of steps to accumulate gradients before performing an optimization step.
+        accumulation_steps=1,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.

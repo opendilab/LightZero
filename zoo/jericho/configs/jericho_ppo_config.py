@@ -19,7 +19,7 @@ evaluator_env_num = 2
 
 # proj train
 collector_env_num = 4
-batch_size = 32
+batch_size = 64
 
 jericho_ppo_config = dict(
     exp_name=f"data_lz/data_ppo_jericho/ppo_{env_id}_ms{max_steps}_ass{action_space_size}_bs{batch_size}_seed0",

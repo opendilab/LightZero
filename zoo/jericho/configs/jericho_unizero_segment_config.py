@@ -43,19 +43,19 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
     reanalyze_partition = 0.75
 
     # =========== Debug configurations ===========
-    collector_env_num = 2
-    num_segments = 2
-    max_steps = 20
-    game_segment_length = 20
-    evaluator_env_num = 2
-    num_simulations = 5
-    max_env_step = int(5e5)
-    batch_size = 10
-    num_unroll_steps = 5
-    infer_context_length = 2
-    num_layers = 1
-    replay_ratio = 0.05
-    embed_dim = 32
+    # collector_env_num = 2
+    # num_segments = 2
+    # max_steps = 20
+    # game_segment_length = 20
+    # evaluator_env_num = 2
+    # num_simulations = 5
+    # max_env_step = int(5e5)
+    # batch_size = 10
+    # num_unroll_steps = 5
+    # infer_context_length = 2
+    # num_layers = 1
+    # replay_ratio = 0.05
+    # embed_dim = 24
 
     # ------------------------------------------------------------------
     # Construct Jericho Unizero Segment configuration dictionary
@@ -68,7 +68,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
             max_action_num=action_space_size,
             tokenizer_path=model_name,
             max_seq_len=512,
-            game_path=f"../envs/z-machine-games-master/jericho-game-suite/{env_id}",
+            game_path=f"./zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
             for_unizero=True,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -97,7 +97,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
                     device="cuda",
                     action_space_size=action_space_size,
                     num_layers=num_layers,
-                    num_heads=8,
+                    num_heads=24,
                     embed_dim=embed_dim,
                     obs_type="text",
                     env_num=max(collector_env_num, evaluator_env_num),

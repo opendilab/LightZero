@@ -27,7 +27,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
         'zork1.z5': (10, 400),
     }
 
-    env_id = 'detective.z5'
+    # env_id = 'detective.z5'
     # env_id = 'omniquest.z5'
     # env_id = 'acorncourt.z5'
     # env_id = 'zork1.z5'
@@ -81,7 +81,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
     # ------------------------------------------------------------------
     jericho_unizero_config: Dict[str, Any] = dict(
         env=dict(
-            remove_stuck_actions=False,
             stop_value=int(1e6),
             observation_shape=512,
             max_steps=max_steps,
