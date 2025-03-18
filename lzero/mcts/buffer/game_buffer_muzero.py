@@ -734,6 +734,10 @@ class MuZeroGameBuffer(GameBuffer):
                             policy_tmp = [0 for _ in range(policy_shape)]
                             for index, legal_action in enumerate(legal_actions[policy_index]):
                                 # only the action in ``legal_action`` the policy logits is nonzero
+                                #breakpoint()
+                                print(f"len(distributions)={len(distributions)}, len(legal_actions[policy_index])={len(legal_actions[policy_index])}")                
+                                if len(distributions) != len(legal_actions[policy_index]):
+                                    breakpoint()
                                 policy_tmp[legal_action] = distributions[index]
                             target_policies.append(policy_tmp)
                     else:
