@@ -61,6 +61,13 @@ class MuZeroGameBuffer(GameBuffer):
         self.sample_times = 0
         self.active_root_num = 0
 
+        self.history_length = self._cfg.history_length
+        if self.history_length > 1:
+            self.num_unroll_steps = self._cfg.num_unroll_steps + self.history_length
+        else:
+            self.num_unroll_steps = self._cfg.num_unroll_steps
+        
+
     def reset_runtime_metrics(self):
         """
         Overview:
@@ -138,6 +145,7 @@ class MuZeroGameBuffer(GameBuffer):
             batch_size, self._cfg.reanalyze_ratio
         )
         # target reward, target value
+        # import ipdb;ipdb.set_trace()
         batch_rewards, batch_target_values = self._compute_target_reward_value(
             reward_value_context, policy._target_model
         )
@@ -191,21 +199,21 @@ class MuZeroGameBuffer(GameBuffer):
             pos_in_game_segment = pos_in_game_segment_list[i]
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
-                                              self._cfg.num_unroll_steps].tolist()
+                                              self.num_unroll_steps].tolist()
 
             # add mask for invalid actions (out of trajectory), 1 for valid, 0 for invalid
             # mask_tmp = [1. for i in range(len(actions_tmp))]
-            # mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
+            # mask_tmp += [0. for _ in range(self.num_unroll_steps + 1 - len(mask_tmp))]
 
             # TODO: the child_visits after position <self._cfg.game_segment_length> in the segment (with padded part) may not be updated
             # So the corresponding position should not be used in the training
             mask_tmp = [1. for i in range(min(len(actions_tmp), self._cfg.game_segment_length - pos_in_game_segment))]
-            mask_tmp += [0. for _ in range(self._cfg.num_unroll_steps + 1 - len(mask_tmp))]
+            mask_tmp += [0. for _ in range(self.num_unroll_steps + 1 - len(mask_tmp))]
 
             # pad random action
             actions_tmp += [
                 np.random.randint(0, game.action_space_size)
-                for _ in range(self._cfg.num_unroll_steps - len(actions_tmp))
+                for _ in range(self.num_unroll_steps - len(actions_tmp))
             ]
 
             # obtain the input observations
@@ -213,7 +221,7 @@ class MuZeroGameBuffer(GameBuffer):
             # e.g. stack+num_unroll_steps = 4+5
             obs_list.append(
                 game_segment_list[i].get_unroll_obs(
-                    pos_in_game_segment_list[i], num_unroll_steps=self._cfg.num_unroll_steps, padding=True
+                    pos_in_game_segment_list[i], num_unroll_steps=self.num_unroll_steps, padding=True
                 )
             )
             action_list.append(actions_tmp)
@@ -299,7 +307,7 @@ class MuZeroGameBuffer(GameBuffer):
             # prepare the corresponding observations for bootstrapped values o_{t+k}
             # o[t+ td_steps, t + td_steps + stack frames + num_unroll_steps]
             # t=2+3 -> o[2+3, 2+3+4+5] -> o[5, 14]
-            game_obs = game_segment.get_unroll_obs(state_index + td_steps, self._cfg.num_unroll_steps)
+            game_obs = game_segment.get_unroll_obs(state_index + td_steps, self.num_unroll_steps)
 
             rewards_list.append(game_segment.reward_segment)
             
@@ -309,7 +317,7 @@ class MuZeroGameBuffer(GameBuffer):
 
             truncation_length = game_segment_len
 
-            for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
+            for current_index in range(state_index, state_index + self.num_unroll_steps + 1):
                 # get the <num_unroll_steps+1>  bootstrapped target obs
                 td_steps_list.append(td_steps)
                 # index of bootstrapped obs o_{t+td_steps}
@@ -400,9 +408,9 @@ class MuZeroGameBuffer(GameBuffer):
                 child_visits.append(game_segment.child_visit_segment)
                 root_values.append(game_segment.root_value_segment)
                 # prepare the corresponding observations
-                game_obs = game_segment.get_unroll_obs(state_index, self._cfg.num_unroll_steps)
+                game_obs = game_segment.get_unroll_obs(state_index, self.num_unroll_steps)
 
-                for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
+                for current_index in range(state_index, state_index + self.num_unroll_steps + 1):
 
                     if current_index < game_segment_len: # original
                         policy_mask.append(1)
@@ -436,6 +444,10 @@ class MuZeroGameBuffer(GameBuffer):
         # transition_batch_size = game_segment_batch_size * (num_unroll_steps+1)
         transition_batch_size = len(value_obs_list)
 
+        # if self.history_length>1:
+        #     game_segment_batch_size = len(pos_in_game_segment_list)
+        #     transition_batch_size = transition_batch_size - (self.history_length-1)*game_segment_batch_size
+
         batch_target_values, batch_rewards = [], []
         with torch.no_grad():
             value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
@@ -448,6 +460,8 @@ class MuZeroGameBuffer(GameBuffer):
                 end_index = self._cfg.mini_infer_size * (i + 1)
                 m_obs = torch.from_numpy(value_obs_list[beg_index:end_index]).to(self._cfg.device)
                 # calculate the target value
+                # import ipdb;ipdb.set_trace()
+                # print(f"m_obs.shape: {m_obs.shape}")
                 m_output = model.initial_inference(m_obs)
 
                 if not model.training:
@@ -468,6 +482,8 @@ class MuZeroGameBuffer(GameBuffer):
             else:
                 # use the predicted values
                 value_list = concat_output_value(network_output)
+
+            # print(f"value_list.shape: {value_list.shape}")
 
             # get last state value
             if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
@@ -498,7 +514,7 @@ class MuZeroGameBuffer(GameBuffer):
 
                 truncation_length = game_segment_len_non_re
 
-                for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
+                for current_index in range(state_index, state_index + self.num_unroll_steps + 1):
                     bootstrap_index = current_index + td_steps_list[value_index]
                     for i, reward in enumerate(reward_list[current_index:bootstrap_index]):
                         if self._cfg.env_type == 'board_games' and to_play_segment[0][0] in [1, 2]:
@@ -544,7 +560,7 @@ class MuZeroGameBuffer(GameBuffer):
         # for board games
         policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, root_values, game_segment_lens, action_mask_segment, \
         to_play_segment = policy_re_context
-        # transition_batch_size = game_segment_batch_size * (self._cfg.num_unroll_steps + 1)
+        # transition_batch_size = game_segment_batch_size * (self.num_unroll_steps + 1)
         transition_batch_size = len(policy_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)
 
@@ -623,7 +639,7 @@ class MuZeroGameBuffer(GameBuffer):
             for state_index, child_visit, game_index in zip(pos_in_game_segment_list, child_visits, batch_index_list):
                 target_policies = []
 
-                for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
+                for current_index in range(state_index, state_index + self.num_unroll_steps + 1):
                     distributions = roots_distributions[policy_index]
                     searched_value = roots_values[policy_index]
 
@@ -694,10 +710,10 @@ class MuZeroGameBuffer(GameBuffer):
 
         pos_in_game_segment_list, child_visits, game_segment_lens, action_mask_segment, to_play_segment = policy_non_re_context
         game_segment_batch_size = len(pos_in_game_segment_list)
-        transition_batch_size = game_segment_batch_size * (self._cfg.num_unroll_steps + 1)
+        transition_batch_size = game_segment_batch_size * (self.num_unroll_steps + 1)
 
         to_play, action_mask = self._preprocess_to_play_and_action_mask(
-            game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list
+            game_segment_batch_size, to_play_segment, action_mask_segment, pos_in_game_segment_list, self.num_unroll_steps
         )
 
         if self._cfg.model.continuous_action_space is True:
@@ -710,7 +726,9 @@ class MuZeroGameBuffer(GameBuffer):
                 [-1 for _ in range(self._cfg.model.action_space_size)] for _ in range(transition_batch_size)
             ]
         else:
+            # import ipdb;ipdb.set_trace()
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
+            # legal_actions = None
             
         with torch.no_grad():
             policy_index = 0
@@ -721,7 +739,7 @@ class MuZeroGameBuffer(GameBuffer):
                                                                   pos_in_game_segment_list):
                 target_policies = []
 
-                for current_index in range(state_index, state_index + self._cfg.num_unroll_steps + 1):
+                for current_index in range(state_index, state_index + self.num_unroll_steps + 1):
                     if current_index < game_segment_len:
                         policy_mask.append(1)
                         # NOTE: child_visit is already a distribution
