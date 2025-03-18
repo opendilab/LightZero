@@ -331,7 +331,10 @@ class AlphaZeroPolicy(Policy):
                                                                   init_state=init_state[env_id],
                                                                   katago_policy_init=False,
                                                                   katago_game_state=katago_game_state[env_id]))
-            action, mcts_probs, root = self._eval_mcts.get_next_action(
+            # action, mcts_probs, root = self._eval_mcts.get_next_action(
+            #     state_config_for_simulation_env_reset, self._policy_value_fn, 1.0, False
+            # )
+            action, mcts_probs = self._eval_mcts.get_next_action(
                 state_config_for_simulation_env_reset, self._policy_value_fn, 1.0, False
             )
             output[env_id] = {
