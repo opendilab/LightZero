@@ -22,8 +22,8 @@
 - `frame_stack_num`: 叠帧数。
 - `gray_scale`: 是否使用灰度图像。
 - `scale`: 是否缩放输入数据。
-- `clip_rewards`:  是否裁剪奖励值。
-- `episode_life`: 是否在游戏失败时重置生命值。
+- `clip_rewards`: 是否裁剪奖励值。
+- `episode_life`: 如果为 True，代理丢失一条生命时游戏结束；否则，游戏将在所有生命丢失时结束。
 - `env_type`: 环境类型。
 - `frame_skip`: 动作重复的帧数。
 - `stop_value`: 训练停止的目标分数。
@@ -46,12 +46,12 @@
     - `support_scale`: 价值支持集的范围 (-support_scale, support_scale)。
     - `bias`: 是否使用偏置。
     - `discrete_action_encoding_type`: 离散化动作空间使用的编码类型。
-    - `self_supervised_learning_loss`: 是否使用自监督学习损失（efficient muzero）。
+    - `self_supervised_learning_loss`: 是否使用自监督学习损失（参照EfficientZero的实现）。
     - `image_channel`: 输入图像通道数。
     - `frame_stack_num`: 堆叠帧数。
     - `gray_scale`: 是否使用灰度图像。
-    - `use_sim_norm`: 是否使用 SimNorm。
-    - `use_sim_norm_kl_loss`: 是否使用 SimNorm 的 KL 散度损失。
+    - `use_sim_norm`: Latent State 后面是否使用 SimNorm。
+    - `use_sim_norm_kl_loss`: Latent State 经过 SimNorm 后，对应的 obs_loss 是否使用 KL 散度损失，往往与 SimNorm 配合使用。
     - `res_connection_in_dynamics`: 动力学模型中是否使用残差连接。
 - `learn`: 学习过程配置
     - `learner`: 学习器配置（字典类型），包括训练迭代次数，检查点保存策略等信息。
@@ -63,16 +63,14 @@
 - `other`: 其它配置
     - `replay_buffer`: 经验回放器配置（字典类型），包括存储大小，经验的最大使用次数和最大陈旧度以及吞吐量控制和监控配置相关的参数。
 - `cuda`: 指定是否将模型迁移到 GPU 上进行训练。
-- `on_policy`: 是否为 on-policy 算法 。
 - `multi_gpu`: 是否开启多 GPU 训练。
-- `bp_update_sync`: 是否开启 bp 同步更新。
 - `use_wandb`: 是否使用 wandb。
-- `mcts_ctree`: 是否使用蒙特卡洛树搜索。
+- `mcts_ctree`: 是否使用蒙特卡洛树搜索的cpp版本。
 - `collector_env_num`: 收集环境的数量。
 - `evaluator_env_num`: 评估环境的数量。
 - `env_type`: 环境类型（棋盘游戏或非棋盘游戏）。
 - `action_type`: 动作类型 (固定动作空间或其他)。
-- `game_segment_length`: 用于自我博弈的序列（game segment）长度。
+- `game_segment_length`: 收集时的基本单元 game segment 对应的长度。
 - `cal_dormant_ratio`: 是否计算休眠神经元比率。
 - `use_augmentation`: 是否使用数据增强。
 - `augmentation`:  数据增强方法。
@@ -82,7 +80,7 @@
 - `reanalyze_ratio`: 重分析系数，控制进行重分析的概率。
 - `reanalyze_noise`: 是否在 MCTS 重分析时引入噪声，可以增加探索。
 - `reanalyze_batch_size`: 重分析批量大小。
-- `reanalyze_partition`: 重分析的比例。
+- `reanalyze_partition`: 重分析的比例。例如，1 表示从整个缓冲区重新分析批次样本，0.5 表示从缓冲区的前一半采样。
 - `random_collect_episode_num`: 随机采集的 episode 数量，为探索提供初始数据。 
 - `eps`: 探索控制参数，包括是否使用 epsilon-greedy 方法进行控制，控制参数的更新方式、起始值、终止值、衰减速度等。
 - `piecewise_decay_lr_scheduler`: 是否使用分段常数学习率衰减。
@@ -99,7 +97,7 @@
 - `grad_clip_value`: 梯度裁剪值。
 - `discount_factor`: 折扣因子。
 - `td_steps`: TD 步数。
-- `num_unroll_steps`: muzero 展开的步数。
+- `num_unroll_steps`: MuZero 训练时展开的步数。
 
 
 

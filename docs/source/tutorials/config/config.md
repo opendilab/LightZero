@@ -23,7 +23,7 @@ The `main_config` dictionary contains the main parameter settings for running th
 - `gray_scale`: Whether to use grayscale images.
 - `scale`: Whether to scale the input data.
 - `clip_rewards`: Whether to clip reward values.
-- `episode_life`: Whether to reset the agent's life at the end of a game life (relevant in some Atari games).
+- `episode_life`: If True, the game ends when the agent loses a life, otherwise, the game only ends when all lives are lost.
 - `env_type`: The type of environment.
 - `frame_skip`: The number of frames to repeat the same action.
 - `stop_value`: The target score that stops the training.
@@ -51,8 +51,8 @@ The `main_config` dictionary contains the main parameter settings for running th
     - `image_channel`: The number of channels in the input image.
     - `frame_stack_num`: Number of frames stacked.
     - `gray_scale`: Whether to use gray images.
-    - `use_sim_norm`: Whether to use SimNorm.
-    - `use_sim_norm_kl_loss`: Whether to use SimNorm KL divergence loss.
+    - `use_sim_norm`: Whether to use SimNorm after the Latent State.
+    - `use_sim_norm_kl_loss`: Whether the obs_loss corresponding to the Latent State after SimNorm uses KL divergence loss, which is often used together with SimNorm.
     - `res_connection_in_dynamics`: Whether to use the residual connection in the dynamics model.
 - `learn`: Configuration for the learning process.
     - `learner`: Configuration for the learner (dictionary type), including train iterations and checkpoint saving.
@@ -64,16 +64,14 @@ The `main_config` dictionary contains the main parameter settings for running th
 - `other`: Other configurations.
     - `replay_buffer`: Replay buffer configuration (dictionary type), including buffer size, maximum usage and staleness of experiences, and parameters for throughput control and monitoring.
 - `cuda`: Whether to use CUDA (GPU) for training.
-- `on_policy`: Whether the algorithm is on-policy (MuZero is off-policy).
 - `multi_gpu`: Whether to enable multi-GPU training.
-- `bp_update_sync`: Whether to enable synchronous backpropagation updates.
 - `use_wandb`: Whether to use Weights & Biases (wandb) for logging.
-- `mcts_ctree`: Whether or not it is a Monte Carlo tree.
+- `mcts_ctree`: Whether to use the C++ version of Monte Carlo Tree Search.
 - `collector_env_num`: The number of collection environments.
 - `evaluator_env_num`: The number of evaluation environments.
 - `env_type`: The type of environment (board game or non-board game).
 - `action_type`: The type of action space (fixed or other).
-- `game_segment_length`: The length of game segments used for self-play.
+- `game_segment_length`: The length corresponding to the basic unit game segment during collection.
 - `cal_dormant_ratio`: Whether to calculate the ratio of dormant neurons.
 - `use_augmentation`: Whether to use data augmentation.
 - `augmentation`: The data augmentation methods to use.
@@ -83,7 +81,7 @@ The `main_config` dictionary contains the main parameter settings for running th
 - `reanalyze_ratio`: The reanalyze ratio, which controls the probability to conduct reanalyze.
 - `reanalyze_noise`: Whether to introduce noise during MCTS reanalysis (for exploration).
 - `reanalyze_batch_size`: Reanalyze batch size.
-- `reanalyze_partition`: The ratio of reanalysis.
+- `reanalyze_partition`: The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
 -`random_collect_episode_num`: Number of episodes of random collection, to provide initial exploration data.
 - `eps`: Parameters for exploration control, including whether to use epsilon-greedy, update schedules, start/end values, and decay rate.
 - `piecewise_decay_lr_scheduler`: Whether to use piecewise constant learning rate decay.
@@ -100,7 +98,7 @@ The `main_config` dictionary contains the main parameter settings for running th
 - `grad_clip_value`: Value to clip gradient.
 - `discount_factor`: Discount factor.
 - `td_steps`: TD steps.
-- `num_unroll_steps`: Number of steps to unroll in MuZero.
+- `num_unroll_steps`: The number of rollout steps during MuZero training.
 
 Two frequently changed parameter setting areas are also specially mentioned here, annotated by comments:
 
