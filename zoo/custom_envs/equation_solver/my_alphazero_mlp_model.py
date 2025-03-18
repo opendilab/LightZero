@@ -12,6 +12,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from ding.torch_utils import MLP  # DI-engine's MLP utility
+from lzero.model.common import MLP_V2
 from ding.utils import MODEL_REGISTRY, SequenceType
 
 @MODEL_REGISTRY.register('AlphaZeroMLPModel')
@@ -52,31 +53,37 @@ class AlphaZeroMLPModel(nn.Module):
         self.action_space_size = action_space_size
 
         # Shared representation network: a simple MLP.
-        self.representation_network = MLP(
+        self.representation_network = MLP_V2(
             in_channels=self.input_dim,
-            hidden_channels=hidden_sizes[0],
+            hidden_channels=hidden_sizes,
             out_channels=hidden_sizes[-1],
-            layer_num=len(hidden_sizes),
             activation=activation,
+            norm_type='LN',
+            output_activation=False,
+            output_norm=True,
         )
 
         # Policy head: maps shared representation to action logits.
-        self.policy_head = MLP(
+        self.policy_head = MLP_V2(
             in_channels=hidden_sizes[-1],
-            hidden_channels=hidden_sizes[0],
+            hidden_channels=hidden_sizes,
             out_channels=action_space_size,
-            layer_num=len(hidden_sizes),
             activation=activation,
+            norm_type='LN',
+            output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero,
         )
 
         # Value head: maps shared representation to a scalar value.
-        self.value_head = MLP(
+        self.value_head = MLP_V2(
             in_channels=hidden_sizes[-1],
-            hidden_channels=hidden_sizes[0],
+            hidden_channels=hidden_sizes,
             out_channels=self.value_support_size,
-            layer_num=len(hidden_sizes),
             activation=activation,
+            norm_type='LN',
+            output_activation=False,
+            output_norm=False,
             last_linear_layer_init_zero=last_linear_layer_init_zero,
         )
 

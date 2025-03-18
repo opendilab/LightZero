@@ -6,11 +6,11 @@ from easydict import EasyDict
 # ==============================================================
 collector_env_num = 4         # Number of parallel environments for data collection
 n_episode = 4                 # Number of episodes per training iteration
-evaluator_env_num = 1         # Number of evaluator environments
+evaluator_env_num = 2         # Number of evaluator environments
 num_simulations = 50          # MCTS simulations per move (try increasing if needed)
 update_per_collect = 100      # Number of gradient updates per data collection cycle
-batch_size = 32               # Mini-batch size for training
-max_env_step = int(1e3)       # Maximum total environment steps for a quick run
+batch_size = 64               # Mini-batch size for training
+max_env_step = int(1e4)       # Maximum total environment steps for a quick run
 model_path = None
 mcts_ctree = False
 
@@ -44,7 +44,7 @@ singleEqn_alphazero_config = dict(
             import_names=['zoo.custom_envs.equation_solver.my_alphazero_mlp_model'],
             observation_shape=(41,),        # Flat vector of length 41
             action_space_size=50,             # Matches your environment's action_dim
-            hidden_sizes=[64, 64],          # MLP hidden layer sizes
+            hidden_sizes=[128, 128],          # MLP hidden layer sizes
         ),
         cuda=True,
         env_type='not_board_games',
@@ -53,13 +53,12 @@ singleEqn_alphazero_config = dict(
         batch_size=batch_size,
         optim_type='Adam',
         lr_piecewise_constant_decay=False,
-        # learning_rate=0.003,
-        learning_rate=3e-4,
+        learning_rate=1e-4,
         grad_clip_value=0.5,
         value_weight=1.0,
-        entropy_weight=0.0,
+        entropy_weight=0.05,
         n_episode=n_episode,
-        eval_freq=int(2e3),
+        eval_freq=int(5e3),
         mcts=dict(num_simulations=num_simulations),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
