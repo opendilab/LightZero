@@ -64,11 +64,7 @@ class Tokenizer(nn.Module):
         Returns:
             torch.Tensor: Encoded embeddings of shape (B, 1, E).
         """
-        # NOTE: only for Jerico env
-        # x = x.long()  # 确保输入为长整型
         shape = x.shape
-        # print(f"Max index in x: {x.max()}")
-        # print(f"Min index in x: {x.min()}")
         # Process input tensor based on its dimensionality
         if len(shape) == 2:
             # Case when input is 2D (B, E)

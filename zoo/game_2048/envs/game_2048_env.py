@@ -341,9 +341,9 @@ class Game2048Env(gym.Env):
 
         # Convert the reward to ndarray
         if self.reward_type == 'merged_tiles_plus_log_max_tile_num':
-            reward = to_ndarray([reward_merged_tiles_plus_log_max_tile_num]).astype(np.float32)
+            reward = to_ndarray(reward_merged_tiles_plus_log_max_tile_num).astype(np.float32)
         elif self.reward_type == 'raw':
-            reward = to_ndarray([reward]).astype(np.float32)
+            reward = to_ndarray(reward).astype(np.float32)
 
         # Prepare information to return
         info = {"raw_reward": raw_reward, "current_max_tile_num": self.highest()}

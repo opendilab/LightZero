@@ -711,8 +711,6 @@ class MuZeroGameBuffer(GameBuffer):
             ]
         else:
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
-            # print(f'='*20)
-            # print(f'buffer_muzero: action_mask:{action_mask}')
             
         with torch.no_grad():
             policy_index = 0

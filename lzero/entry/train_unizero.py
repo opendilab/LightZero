@@ -20,9 +20,13 @@ from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroCollector as Collector
+<<<<<<< HEAD
 from .utils import random_collect
 import torch.distributed as dist
 from ding.utils import set_pkg_seed, get_rank, get_world_size
+=======
+from .utils import random_collect, calculate_update_per_collect
+>>>>>>> origin/main
 
 
 def train_unizero(
@@ -178,8 +182,7 @@ def train_unizero(
         # Determine updates per collection
         update_per_collect = cfg.policy.update_per_collect
         if update_per_collect is None:
-            collected_transitions_num = sum(min(len(game_segment), cfg.policy.game_segment_length) for game_segment in new_data[0])
-            update_per_collect = int(collected_transitions_num * cfg.policy.replay_ratio)
+            update_per_collect = calculate_update_per_collect(cfg, new_data, world_size)
 
         # Update replay buffer
         replay_buffer.push_game_segments(new_data)
@@ -201,10 +204,11 @@ def train_unizero(
                 data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
             
             if not data_sufficient:
-                logging.warning(f"Rank {rank}: Training iteration {learner.train_iter}: Insufficient data in replay buffer, continuing data collection...")
+                logging.warning(
+                    f'Rank {rank}: The data in replay_buffer is not sufficient to sample a mini-batch: '
+                    f'batch_size: {batch_size}, replay_buffer: {replay_buffer}. Continue to collect now ....'
+                )
                 continue
-
-            logging.info(f"Rank {rank}, Training iteration {learner.train_iter}: Starting training!")
 
             # Execute multiple training rounds
             for i in range(update_per_collect):
@@ -220,8 +224,6 @@ def train_unizero(
                 log_vars = learner.train(train_data, collector.envstep)
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
-            
-            logging.info(f"Rank {rank}, Training iteration {learner.train_iter}")
 
         policy.recompute_pos_emb_diff_and_clear_cache()
 

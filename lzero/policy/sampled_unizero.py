@@ -13,7 +13,7 @@ from lzero.mcts import SampledUniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
-    prepare_obs_stack4_for_unizero
+    prepare_obs_stack_for_unizero
 from lzero.policy.unizero import UniZeroPolicy
 from .utils import configure_optimizers_nanogpt
 from lzero.entry.utils import initialize_zeros_batch
@@ -385,8 +385,8 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number
-        if self._cfg.model.frame_stack_num == 4:
-            obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
+        if self._cfg.model.frame_stack_num > 1:
+            obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
         else:
             obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)
 

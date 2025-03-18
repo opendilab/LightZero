@@ -14,13 +14,14 @@ max_env_step = int(2e5)
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
+
 tictactoe_alphazero_config = dict(
-    exp_name=f'data_az_ptree/tictactoe_alphazero_sp-mode_ns{num_simulations}_upc{update_per_collect}_ddp_{gpu_num}gpu_seed0',
+    exp_name=f'data_az_ptree/tictactoe_alphazero_bot-mode_ns{num_simulations}_upc{update_per_collect}_ddp_{gpu_num}gpu_seed0',
     env=dict(
         board_size=3,
-        battle_mode='self_play_mode',
+        battle_mode='play_with_bot_mode',
         bot_action_type='v0',  # {'v0', 'alpha_beta_pruning'}
-        channel_last=False,
+        channel_last=False,  # NOTE
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
@@ -37,7 +38,7 @@ tictactoe_alphazero_config = dict(
         # ==============================================================
         # for the creation of simulation env
         simulation_env_id='tictactoe',
-        simulation_env_config_type='self_play',
+        simulation_env_config_type='play_with_bot',
         # ==============================================================
         model=dict(
             observation_shape=(3, 3, 3),
@@ -45,8 +46,8 @@ tictactoe_alphazero_config = dict(
             # We use the small size model for tictactoe.
             num_res_blocks=1,
             num_channels=16,
-            fc_value_layers=[8],
-            fc_policy_layers=[8],
+            value_head_hidden_channels=[8],
+            policy_head_hidden_channels=[8],
         ),
         cuda=True,
         multi_gpu=True,
@@ -97,7 +98,7 @@ if __name__ == '__main__':
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=2 ./LightZero/zoo/board_games/tictactoe/config/tictactoe_alphazero_sp_mode_multigpu_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=2 ./LightZero/zoo/board_games/tictactoe/config/tictactoe_alphazero_bot_mode_ddp_config.py
     """
     from ding.utils import DDPContext
     from lzero.entry import train_alphazero

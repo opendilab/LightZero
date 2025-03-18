@@ -19,9 +19,9 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
             action_space_size: int = 6,
             chance_space_size: int = 2,
             latent_state_dim: int = 256,
-            fc_reward_layers: SequenceType = [32],
-            fc_value_layers: SequenceType = [32],
-            fc_policy_layers: SequenceType = [32],
+            reward_head_hidden_channels: SequenceType = [32],
+            value_head_hidden_channels: SequenceType = [32],
+            policy_head_hidden_channels: SequenceType = [32],
             reward_support_size: int = 601,
             value_support_size: int = 601,
             proj_hid: int = 1024,
@@ -51,9 +51,9 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
             - action_space_size: (:obj:`int`): Action space size, usually an integer number for discrete action space.
             - action_space_size: (:obj:`int`): Action space size, e.g. 4 for Lunarlander.
             - latent_state_dim (:obj:`int`): The dimension of latent state, such as 256.
-            - fc_reward_layers (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
-            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - reward_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers of the reward head (MLP head).
+            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - reward_support_size (:obj:`int`): The size of categorical reward output
             - value_support_size (:obj:`int`): The size of categorical value output.
             - proj_hid (:obj:`int`): The size of projection hidden layer.
@@ -116,7 +116,7 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
             action_encoding_dim=self.chance_space_size,
             num_channels=self.latent_state_dim + self.chance_space_size,
             common_layer_num=2,
-            fc_reward_layers=fc_reward_layers,
+            reward_head_hidden_channels=reward_head_hidden_channels,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             norm_type=norm_type,
@@ -126,8 +126,8 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
         self.prediction_network = PredictionNetworkMLP(
             action_space_size=action_space_size,
             num_channels=latent_state_dim,
-            fc_value_layers=fc_value_layers,
-            fc_policy_layers=fc_policy_layers,
+            value_head_hidden_channels=value_head_hidden_channels,
+            policy_head_hidden_channels=policy_head_hidden_channels,
             output_support_size=self.value_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             norm_type=norm_type
@@ -137,7 +137,7 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
             action_encoding_dim=self.action_encoding_dim,
             num_channels=self.latent_state_dim + self.action_encoding_dim,
             common_layer_num=2,
-            fc_reward_layers=fc_reward_layers,
+            reward_head_hidden_channels=reward_head_hidden_channels,
             output_support_size=self.reward_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             norm_type=norm_type,
@@ -146,8 +146,8 @@ class StochasticMuZeroModelMLP(StochasticMuZeroModel):
         self.afterstate_prediction_network = AfterstatePredictionNetworkMLP(
             chance_space_size=chance_space_size,
             num_channels=latent_state_dim,
-            fc_value_layers=fc_value_layers,
-            fc_policy_layers=fc_policy_layers,
+            value_head_hidden_channels=value_head_hidden_channels,
+            policy_head_hidden_channels=policy_head_hidden_channels,
             output_support_size=self.value_support_size,
             last_linear_layer_init_zero=self.last_linear_layer_init_zero,
             norm_type=norm_type
@@ -312,8 +312,8 @@ class AfterstatePredictionNetworkMLP(PredictionNetworkMLP):
             chance_space_size,
             num_channels,
             common_layer_num: int = 2,
-            fc_value_layers: SequenceType = [32],
-            fc_policy_layers: SequenceType = [32],
+            value_head_hidden_channels: SequenceType = [32],
+            policy_head_hidden_channels: SequenceType = [32],
             output_support_size: int = 601,
             last_linear_layer_init_zero: bool = True,
             activation: Optional[nn.Module] = nn.ReLU(inplace=True),
@@ -327,8 +327,8 @@ class AfterstatePredictionNetworkMLP(PredictionNetworkMLP):
             - chance_space_size: (:obj:`int`): Chance space size, usually an integer number. For discrete action \
                 space, it is the number of discrete chance outcomes.
             - num_channels (:obj:`int`): The channels of latent states.
-            - fc_value_layers (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
-            - fc_policy_layers (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
+            - value_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in value head (MLP head).
+            - policy_head_hidden_channels (:obj:`SequenceType`): The number of hidden layers used in policy head (MLP head).
             - output_support_size (:obj:`int`): The size of categorical value output.
             - last_linear_layer_init_zero (:obj:`bool`): Whether to use zero initializations for the last layer of \
                 dynamics/prediction mlp, default sets it to True.
@@ -337,6 +337,6 @@ class AfterstatePredictionNetworkMLP(PredictionNetworkMLP):
             - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
         """
         super(AfterstatePredictionNetworkMLP, self).__init__(chance_space_size, num_channels, common_layer_num,
-                                                             fc_value_layers, fc_policy_layers, output_support_size,
+                                                             value_head_hidden_channels, policy_head_hidden_channels, output_support_size,
                                                              last_linear_layer_init_zero
                                                              , activation, norm_type)

@@ -1,17 +1,19 @@
 import copy
+import os
 import random
 from datetime import datetime
-from typing import Union, Optional, Dict
+from typing import Union, Dict
 
 import gymnasium as gym
+import matplotlib.pyplot as plt
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
 from ding.envs import ObsPlusPrevActRewWrapper
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
 from easydict import EasyDict
-import matplotlib.pyplot as plt
 from matplotlib import animation
+from matplotlib.animation import PillowWriter
 
 
 @ENV_REGISTRY.register('cartpole_lightzero')
@@ -180,7 +182,7 @@ class CartPoleEnv(BaseEnv):
             patch.set_data(frames[i])
 
         anim = animation.FuncAnimation(plt.gcf(), animate, frames=len(frames), interval=50)
-        anim.save(path, writer='imagemagick', fps=20)
+        anim.save(path, writer=PillowWriter(fps=20))
 
     def close(self) -> None:
         """

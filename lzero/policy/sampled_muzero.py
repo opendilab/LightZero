@@ -528,7 +528,7 @@ class SampledMuZeroPolicy(MuZeroPolicy):
             'total_loss': loss.mean().item(),
             'policy_loss': policy_loss.mean().item(),
             'policy_entropy': policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
-            'target_policy_entropy': target_policy_entropy.item() / (self._cfg.num_unroll_steps + 1),
+            'target_policy_entropy': target_policy_entropy / (self._cfg.num_unroll_steps + 1),
             'reward_loss': reward_loss.mean().item(),
             'value_loss': value_loss.mean().item(),
             'consistency_loss': consistency_loss.mean().item() / self._cfg.num_unroll_steps,

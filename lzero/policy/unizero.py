@@ -13,7 +13,7 @@ from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
-    prepare_obs_stack4_for_unizero
+    prepare_obs_stack_for_unizero
 from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
 
@@ -342,8 +342,7 @@ class UniZeroPolicy(MuZeroPolicy):
             # TODO: add the model to wandb
             wandb.watch(self._learn_model.representation_network, log="all")
 
-        # TODO:
-        self.accumulation_steps = self._cfg.accumulation_steps  # 累积的步数
+        self.accumulation_steps = self._cfg.accumulation_steps
 
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
@@ -368,8 +367,8 @@ class UniZeroPolicy(MuZeroPolicy):
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number
-        if self._cfg.model.frame_stack_num == 4:
-            obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
+        if self._cfg.model.frame_stack_num > 1:
+            obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
         else:
             obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)  # TODO: optimize
 
@@ -755,11 +754,10 @@ class UniZeroPolicy(MuZeroPolicy):
             network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
-            if not self._eval_model.training:
-                # if not in training, obtain the scalars of the value/reward
-                pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
-                latent_state_roots = latent_state_roots.detach().cpu().numpy()
-                policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
+            # if not in training, obtain the scalars of the value/reward
+            pred_values = self.inverse_scalar_transform_handle(pred_values).detach().cpu().numpy()  # shape（B, 1）
+            latent_state_roots = latent_state_roots.detach().cpu().numpy()
+            policy_logits = policy_logits.detach().cpu().numpy().tolist()  # list shape（B, A）
 
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(active_eval_env_num)]
             if self._cfg.mcts_ctree:
