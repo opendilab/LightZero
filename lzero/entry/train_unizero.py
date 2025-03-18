@@ -20,13 +20,9 @@ from lzero.policy import visit_count_temperature
 from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroCollector as Collector
-<<<<<<< HEAD
-from .utils import random_collect
+from .utils import random_collect, calculate_update_per_collect
 import torch.distributed as dist
 from ding.utils import set_pkg_seed, get_rank, get_world_size
-=======
-from .utils import random_collect, calculate_update_per_collect
->>>>>>> origin/main
 
 
 def train_unizero(

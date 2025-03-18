@@ -368,7 +368,7 @@ class HFLanguageRepresentationNetwork(nn.Module):
                  embedding_size: int = 768,
                  group_size: int = 8,
                  norm_type: str = "simnorm",
-                #  norm_type: str = "layernorm", # why nan first
+                #  norm_type: str = "layernorm", # TODO: Why does nan appear in the first step of training?
                  tokenizer=None):
         """
         Overview:

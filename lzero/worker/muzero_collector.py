@@ -718,7 +718,6 @@ class MuZeroCollector(ISerialCollector):
 
         collected_duration = sum([d['time'] for d in self._episode_info])
 
-
         # reduce data when enables DDP
         if self._world_size > 1:
             # Before allreduce
