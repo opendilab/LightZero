@@ -117,35 +117,109 @@
 <h3>1.1 Main Parameters in the <code class="docutils literal notranslate"><span class="pre">env</span></code> Part<a class="headerlink" href="#main-parameters-in-the-env-part" title="Permalink to this heading"></a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">env_id</span></code>: Specifies the environment to be used.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">obs_shape</span></code>: The dimension of the environment observation.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">observation_shape</span></code>: The dimension of the environment’s observations.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">collector_env_num</span></code>: The number of parallel environments used to collect data in the experience replay collector.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">evaluator_env_num</span></code>: The number of parallel environments used to evaluate policy performance in the evaluator.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">n_evaluator_episode</span></code>: The number of episodes run by each environment in the evaluator.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">n_evaluator_episode</span></code>: The total number of episodes run across all environments in the evaluator.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">collect_max_episode_steps</span></code>: The maximum number of steps allowed per episode during data collection.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eval_max_episode_steps</span></code>: The maximum number of steps allowed per episode during evaluation.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">frame_stack_num</span></code>: The number of consecutive frames stacked together as input.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gray_scale</span></code>: Whether to use grayscale images.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">scale</span></code>: Whether to scale the input data.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">clip_rewards</span></code>: Whether to clip reward values.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">episode_life</span></code>: If True, the game ends when the agent loses a life, otherwise, the game only ends when all lives are lost.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">env_type</span></code>: The type of environment.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">frame_skip</span></code>: The number of frames to repeat the same action.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stop_value</span></code>: The target score that stops the training.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">replay_path</span></code>: Path to store the replay.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">save_replay</span></code>: Whether to save the replay video.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">channel_last</span></code>: Whether to put the channel dimension in the last dimension of the input data.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">warp_frame</span></code>: Whether to crop each frame of the picture.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">manager</span></code>: Specifies the type of environment manager, mainly used to control the parallelization mode of the environment.</p></li>
 </ul>
 </section>
 <section id="main-parameters-in-the-policy-part">
 <h3>1.2 Main Parameters in the <code class="docutils literal notranslate"><span class="pre">policy</span></code> Part<a class="headerlink" href="#main-parameters-in-the-policy-part" title="Permalink to this heading"></a></h3>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">model</span></code>: Specifies the neural network model used by the policy, including the input dimension of the model, the number of frame stacking, the action space dimension of the model output, whether the model needs to use downsampling, whether to use self-supervised learning auxiliary loss, the action encoding type, the Normalization mode used in the network, etc.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">cuda</span></code>: Specifies whether to migrate the model to the GPU for training.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_noise</span></code>: Whether to introduce noise during MCTS reanalysis, which can increase exploration.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">env_type</span></code>: Marks the environment type faced by the MuZero algorithm. According to different environment types, the MuZero algorithm will have some differences in detail processing.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">game_segment_length</span></code>: The length of the sequence (game segment) used for self-play.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">random_collect_episode_num</span></code>: The number of randomly collected episodes, providing initial data for exploration.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">eps</span></code>: Exploration control parameters, including whether to use the epsilon-greedy method for control, the update method of control parameters, the starting value, the termination value, the decay rate, etc.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">model</span></code>: Specifies the neural network model used by the policy.</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">model_type</span></code>: The type of model to use.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">observation_shape</span></code>: The dimensions of the observation space.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">action_space_size</span></code>: The size of the action space.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">continuous_action_space</span></code>: Whether the action space is continuous.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_res_blocks</span></code>: The number of residual blocks in the model.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">downsample</span></code>: Whether to downsample the input.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">norm_type</span></code>: The type of normalization used.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_channels</span></code>: The number of channels in the convolutional layers (number of features extracted).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">support_scale</span></code>: The range of the value support set (<code class="docutils literal notranslate"><span class="pre">-support_scale</span></code> to <code class="docutils literal notranslate"><span class="pre">support_scale</span></code>).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bias</span></code>: Whether to use bias terms in the layers.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">discrete_action_encoding_type</span></code>: How discrete actions are encoded.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">self_supervised_learning_loss</span></code>: Whether to use a self-supervised learning loss (as in EfficientZero).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">image_channel</span></code>: The number of channels in the input image.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">frame_stack_num</span></code>: Number of frames stacked.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gray_scale</span></code>: Whether to use gray images.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">use_sim_norm</span></code>: Whether to use SimNorm after the Latent State.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">use_sim_norm_kl_loss</span></code>: Whether the obs_loss corresponding to the Latent State after SimNorm uses KL divergence loss, which is often used together with SimNorm.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">res_connection_in_dynamics</span></code>: Whether to use the residual connection in the dynamics model.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">learn</span></code>: Configuration for the learning process.</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">learner</span></code>: Configuration for the learner (dictionary type), including train iterations and checkpoint saving.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">resume_training</span></code>: Whether to resume training.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">collect</span></code>: Configuration for the collect process.</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">collector</span></code>: Collector configuration (dictionary type), including type and print frequency.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eval</span></code>: Configuration for the evaluation process</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">evaluator</span></code>: Evaluator configuration (dictionary type), including evaluation frequency, number of episodes to evaluate, and path to save images.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">other</span></code>: Other configurations.</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">replay_buffer</span></code>: Replay buffer configuration (dictionary type), including buffer size, maximum usage and staleness of experiences, and parameters for throughput control and monitoring.</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cuda</span></code>: Whether to use CUDA (GPU) for training.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">multi_gpu</span></code>: Whether to enable multi-GPU training.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">use_wandb</span></code>: Whether to use Weights &amp; Biases (wandb) for logging.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">mcts_ctree</span></code>: Whether to use the C++ version of Monte Carlo Tree Search.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">collector_env_num</span></code>: The number of collection environments.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">evaluator_env_num</span></code>: The number of evaluation environments.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">env_type</span></code>: The type of environment (board game or non-board game).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">action_type</span></code>: The type of action space (fixed or other).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">game_segment_length</span></code>: The length corresponding to the basic unit game segment during collection.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cal_dormant_ratio</span></code>: Whether to calculate the ratio of dormant neurons.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">use_augmentation</span></code>: Whether to use data augmentation.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">update_per_collect</span></code>: The number of updates after each data collection.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">batch_size</span></code>: The batch size sampled during the update.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">optim_type</span></code>: Optimizer type.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">augmentation</span></code>: The data augmentation methods to use.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">update_per_collect</span></code>: The number of model updates after each data collection phase.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">batch_size</span></code>: The batch size used for training updates.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">optim_type</span></code>: The type of optimizer.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_ratio</span></code>: The reanalyze ratio, which controls the probability to conduct reanalyze.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_noise</span></code>: Whether to introduce noise during MCTS reanalysis (for exploration).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_batch_size</span></code>: Reanalyze batch size.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_partition</span></code>: The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
+-<code class="docutils literal notranslate"><span class="pre">random_collect_episode_num</span></code>: Number of episodes of random collection, to provide initial exploration data.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eps</span></code>: Parameters for exploration control, including whether to use epsilon-greedy, update schedules, start/end values, and decay rate.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">piecewise_decay_lr_scheduler</span></code>: Whether to use piecewise constant learning rate decay.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">learning_rate</span></code>: Initial learning rate.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">learning_rate</span></code>: The initial learning rate.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">num_simulations</span></code>: The number of simulations used in the MCTS algorithm.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_ratio</span></code>: Reanalysis coefficient, controlling the probability of reanalysis.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">ssl_loss_weight</span></code>: The weight of the self-supervised learning loss function.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">n_episode</span></code>: The number of episodes run by each environment in the parallel collector.</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">eval_freq</span></code>: Policy evaluation frequency (measured by training steps).</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">replay_buffer_size</span></code>: The capacity of the experience replay buffer.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reward_loss_weight</span></code>: Weight for the reward loss.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">policy_loss_weight</span></code>: Weight for the policy loss.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">value_loss_weight</span></code>: Weight for the value loss.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ssl_loss_weight</span></code>: The weight of the self-supervised learning loss.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">n_episode</span></code>: The number of episodes in parallel collector.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eval_freq</span></code>: The frequency of policy evaluation (in terms of training steps).</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">replay_buffer_size</span></code>: The capacity of the replay buffer.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">target_update_freq</span></code>: How often to update the target network.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">grad_clip_value</span></code>: Value to clip gradient.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">discount_factor</span></code>: Discount factor.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">td_steps</span></code>: TD steps.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_unroll_steps</span></code>: The number of rollout steps during MuZero training.</p></li>
 </ul>
 <p>Two frequently changed parameter setting areas are also specially mentioned here, annotated by comments:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># ==============================================================</span>

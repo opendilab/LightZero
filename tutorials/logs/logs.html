@@ -139,22 +139,18 @@
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">episode_count</span></code>: The number of episodes collected in this stage</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">envstep_count</span></code>: The number of environment interaction steps collected in this stage</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">train_sample_count</span></code>: The number of training samples collected in this stage</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">avg_envstep_per_episode</span></code>: The average number of environment interaction steps per episode</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">avg_sample_per_episode</span></code>: The average number of samples per episode</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">avg_envstep_per_sec</span></code>: The average number of environment interaction steps collected per second</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">avg_train_sample_per_sec</span></code>: The average number of training samples collected per second</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">avg_episode_per_sec</span></code>: The average number of episodes collected per second</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">collect_time</span></code>: The total time spent on data collection in this stage</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">reward_mean</span></code>: The average reward obtained during the collection process in this stage</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">reward_std</span></code>: The standard deviation of rewards collected in this stage</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">each_reward</span></code>: The reward value of each episode’s interaction with the environment</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">reward_max</span></code>: The maximum single reward collected in this stage</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">reward_min</span></code>: The minimum single reward collected in this stage</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">total_envstep_count</span></code>: The cumulative total number of environment interaction steps collected by the collector</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">total_train_sample_count</span></code>: The cumulative total number of samples collected by the collector</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">total_episode_count</span></code>: The cumulative total number of episodes collected by the collector</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">total_duration</span></code>: The total running time of the collector</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">visit_entropy</span></code>: The entropy of the visit distribution at the root node in MCTS, measuring the uniformity of node visits</p></li>
 </ul>
 </section>
 <section id="evaluator-logs">
@@ -172,9 +168,10 @@
 <li><p><code class="docutils literal notranslate"><span class="pre">avg_time_per_episode</span></code>: The average time per episode in this evaluation</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">reward_mean</span></code>: The average reward obtained in this evaluation</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">reward_std</span></code>: The standard deviation of rewards in this evaluation</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">each_reward</span></code>: The reward value of each episode’s interaction with the environment by the evaluator</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eval_episode_return</span></code>: The reward value of each episode’s interaction with the environment by the evaluator</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">reward_max</span></code>: The maximum reward obtained in this evaluation</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">reward_min</span></code>: The minimum reward obtained in this evaluation</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eval_episode_return_mean</span></code>: The average reward obtained in this evaluation</p></li>
 </ul>
 </section>
 <section id="learner-logs">
@@ -182,7 +179,31 @@
 <p>The <code class="docutils literal notranslate"><span class="pre">log/learner/learner_logger.txt</span></code> file records various information about the learner during the model training process, including:</p>
 <ul class="simple">
 <li><p>Neural network structure: Describes the overall architecture of the MuZero model, including the representation network, dynamics network, prediction network, etc.</p></li>
-<li><p>Learner status: Displays the current learning rate, loss function values, optimizer monitoring metrics, etc., in a tabular format</p></li>
+<li><p>Learner status: Displays the current learning rate, loss function values, optimizer monitoring metrics, etc., in a tabular format:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">analysis/dormant_ratio_encoder_avg</span></code>: The average dormant ratio in the encoder, indicating inactive neurons</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">analysis/dormant_ratio_dynamics_avg</span></code>: The average dormant ratio in the dynamics model</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">analysis/latent_state_l2_norms_avg</span></code>: The average L2 norm of the latent state</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">collect_mcts_temperature_avg</span></code>: The average temperature parameter of MCTS during data collection, affecting exploration</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cur_lr_avg</span></code>: The current learning rate</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">weighted_total_loss_avg</span></code>: The weighted average total loss</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">total_loss_avg</span></code>: The average total loss</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">policy_loss_avg</span></code>: The average policy loss</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">policy_entropy_avg</span></code>: The average policy entropy</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">target_policy_entropy_avg</span></code>: The average target policy entropy</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reward_loss_avg</span></code>: The average reward loss</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">value_loss_avg</span></code>: The average value loss</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">consistency_loss_avg</span></code>: The average consistency loss</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">value_priority_avg</span></code>: The average priority based on value in experience replay</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">target_reward_avg</span></code>: The average target reward</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">target_value_avg</span></code>: The average target value</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">predicted_rewards_avg</span></code>: The average predicted rewards</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">predicted_values_avg</span></code>: The average predicted values</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">transformed_target_reward_avg</span></code>: The transformed average target reward</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">transformed_target_value_avg</span></code>: The transformed average target value</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">total_grad_norm_before_clip_avg</span></code>: The total gradient norm before clipping</p></li>
+</ul>
+</li>
 </ul>
 </section>
 <section id="tensorboard-log-files">

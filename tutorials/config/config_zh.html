@@ -103,35 +103,109 @@
 <h3>1.1 <code class="docutils literal notranslate"><span class="pre">env</span></code>部分的主要参数<a class="headerlink" href="#env" title="Permalink to this heading"></a></h3>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">env_id</span></code>: 指定要使用的环境。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">obs_shape</span></code>: 环境观测的维度。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">observation_shape</span></code>: 环境观测的维度。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">collector_env_num</span></code>: 经验回放采集器(collector)中并行用于收集数据的环境数目。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">evaluator_env_num</span></code>: 评估器(evaluator)中并行用于评估策略性能的环境数目。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">n_evaluator_episode</span></code>: 评估器中每个环境运行的episode数目。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">n_evaluator_episode</span></code>: 评估器中所有环境运行的总的 episode 数目。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">collect_max_episode_steps</span></code>: 收集数据时单个 episode 允许的最大步数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eval_max_episode_steps</span></code>: 评估时单个 episode 允许的最大步数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">frame_stack_num</span></code>: 叠帧数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gray_scale</span></code>: 是否使用灰度图像。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">scale</span></code>: 是否缩放输入数据。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">clip_rewards</span></code>: 是否裁剪奖励值。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">episode_life</span></code>: 如果为 True，代理丢失一条生命时游戏结束；否则，游戏将在所有生命丢失时结束。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">env_type</span></code>: 环境类型。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">frame_skip</span></code>: 动作重复的帧数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">stop_value</span></code>: 训练停止的目标分数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">replay_path</span></code>: 经验回放的存储路径。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">save_replay</span></code>: 是否存储回放视频。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">channel_last</span></code>: 是否将 channel 维度放在输入数据的最后一维。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">warp_frame</span></code>: 是否裁剪每一帧的图片。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">manager</span></code>: 指定环境管理器的类型，主要用于控制环境的并行化方式。</p></li>
 </ul>
 </section>
 <section id="policy">
 <h3>1.2 <code class="docutils literal notranslate"><span class="pre">policy</span></code>部分的主要参数<a class="headerlink" href="#policy" title="Permalink to this heading"></a></h3>
 <ul class="simple">
-<li><p><code class="docutils literal notranslate"><span class="pre">model</span></code>: 指定策略所使用的神经网络模型，包含模型的输入维度、叠帧数、模型输出的动作空间维度、模型是否需要使用降采样、是否使用自监督学习辅助损失、动作编码类型、网络中使用的Normalization模式等。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">cuda</span></code>: 指定是否将模型迁移到GPU上进行训练。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_noise</span></code>: 是否在MCTS重分析时引入噪声，可以增加探索。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">env_type</span></code>: 标记MuZero算法所面对的环境类型，根据不同的环境类型，MuZero算法会在细节处理上有所不同。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">game_segment_length</span></code>: 用于自我博弈的序列(game segment)长度。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">random_collect_episode_num</span></code>: 随机采集的episode数量，为探索提供初始数据。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">eps</span></code>: 探索控制参数，包括是否使用epsilon-greedy方法进行控制，控制参数的更新方式、起始值、终止值、衰减速度等。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">model</span></code>: 指定策略所使用的神经网络模型。</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">model_type</span></code>: 选择使用的模型类型。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">observation_shape</span></code>: 观测空间的维度。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">action_space_size</span></code>: 动作空间大小。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">continuous_action_space</span></code>: 动作空间是否是连续的。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_res_blocks</span></code>: 残差块的数量。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">downsample</span></code>: 是否进行降采样。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">norm_type</span></code>: 归一化使用的方法。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_channels</span></code>: 卷积层提取的特征个数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">support_scale</span></code>: 价值支持集的范围 (-support_scale, support_scale)。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">bias</span></code>: 是否使用偏置。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">discrete_action_encoding_type</span></code>: 离散化动作空间使用的编码类型。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">self_supervised_learning_loss</span></code>: 是否使用自监督学习损失（参照EfficientZero的实现）。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">image_channel</span></code>: 输入图像通道数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">frame_stack_num</span></code>: 堆叠帧数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gray_scale</span></code>: 是否使用灰度图像。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">use_sim_norm</span></code>: Latent State 后面是否使用 SimNorm。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">use_sim_norm_kl_loss</span></code>: Latent State 经过 SimNorm 后，对应的 obs_loss 是否使用 KL 散度损失，往往与 SimNorm 配合使用。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">res_connection_in_dynamics</span></code>: 动力学模型中是否使用残差连接。</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">learn</span></code>: 学习过程配置</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">learner</span></code>: 学习器配置（字典类型），包括训练迭代次数，检查点保存策略等信息。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">resume_training</span></code>: 是否恢复训练。</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">collect</span></code>: 收集过程配置</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">collector</span></code>: 收集器配置（字典类型），包括类型和输出频率等信息。</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eval</span></code>: 收集过程配置</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">evaluator</span></code>: 评估器配置（字典类型），包括评估频率、评估的episode数量和图片保存路径等。</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">other</span></code>: 其它配置</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">replay_buffer</span></code>: 经验回放器配置（字典类型），包括存储大小，经验的最大使用次数和最大陈旧度以及吞吐量控制和监控配置相关的参数。</p></li>
+</ul>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cuda</span></code>: 指定是否将模型迁移到 GPU 上进行训练。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">multi_gpu</span></code>: 是否开启多 GPU 训练。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">use_wandb</span></code>: 是否使用 wandb。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">mcts_ctree</span></code>: 是否使用蒙特卡洛树搜索的cpp版本。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">collector_env_num</span></code>: 收集环境的数量。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">evaluator_env_num</span></code>: 评估环境的数量。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">env_type</span></code>: 环境类型（棋盘游戏或非棋盘游戏）。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">action_type</span></code>: 动作类型 (固定动作空间或其他)。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">game_segment_length</span></code>: 收集时的基本单元 game segment 对应的长度。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">cal_dormant_ratio</span></code>: 是否计算休眠神经元比率。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">use_augmentation</span></code>: 是否使用数据增强。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">update_per_collect</span></code>: 每次数据收集后更新的次数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">augmentation</span></code>:  数据增强方法。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">update_per_collect</span></code>: 每次数据收集完以后模型更新的次数。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">batch_size</span></code>: 更新时采样的批量大小。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">optim_type</span></code>: 优化器类型。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_ratio</span></code>: 重分析系数，控制进行重分析的概率。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_noise</span></code>: 是否在 MCTS 重分析时引入噪声，可以增加探索。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_batch_size</span></code>: 重分析批量大小。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_partition</span></code>: 重分析的比例。例如，1 表示从整个缓冲区重新分析批次样本，0.5 表示从缓冲区的前一半采样。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">random_collect_episode_num</span></code>: 随机采集的 episode 数量，为探索提供初始数据。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">eps</span></code>: 探索控制参数，包括是否使用 epsilon-greedy 方法进行控制，控制参数的更新方式、起始值、终止值、衰减速度等。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">piecewise_decay_lr_scheduler</span></code>: 是否使用分段常数学习率衰减。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">learning_rate</span></code>: 初始学习率。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">num_simulations</span></code>: MCTS算法中使用的模拟次数。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">reanalyze_ratio</span></code>: 重分析系数，控制进行重分析的概率。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_simulations</span></code>: MCTS 算法中使用的模拟次数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">reward_loss_weight</span></code>: 奖励损失函数的权重。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">policy_loss_weight</span></code>: 策略损失函数的权重。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">value_loss_weight</span></code>: 价值损失函数的权重。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">ssl_loss_weight</span></code>: 自监督学习损失函数的权重。</p></li>
-<li><p><code class="docutils literal notranslate"><span class="pre">n_episode</span></code>: 并行采集器中每个环境运行的episode数量。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">n_episode</span></code>: 并行采集器中所有环境运行的总 episode 数量。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">eval_freq</span></code>: 策略评估频率(按照训练步数计)。</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">replay_buffer_size</span></code>: 经验回放器的容量。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">target_update_freq</span></code>: 目标网络更新频率。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">grad_clip_value</span></code>: 梯度裁剪值。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">discount_factor</span></code>: 折扣因子。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">td_steps</span></code>: TD 步数。</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_unroll_steps</span></code>: MuZero 训练时展开的步数。</p></li>
 </ul>
 <p>这里还特别提到了两个易变参数设定区域，通过注释</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># ==============================================================</span>
@@ -154,7 +228,7 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">env</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
     <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;atari_lightzero&#39;</span><span class="p">,</span>
     <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;zoo.atari.envs.atari_lightzero_env&#39;</span><span class="p">],</span>
-<span class="p">),</span>
+<span class="p">)</span>
 </pre></div>
 </div>
 <p>其中<code class="docutils literal notranslate"><span class="pre">type</span></code>指定了要使用的环境名，<code class="docutils literal notranslate"><span class="pre">env_name</span></code>则指定了该环境类所在的引用路径。这里使用的是预定义的<code class="docutils literal notranslate"><span class="pre">atari_lightzero_env</span></code>。如果要使用自定义的环境类，则需要将<code class="docutils literal notranslate"><span class="pre">type</span></code>改为自定义环境类名，并相应修改<code class="docutils literal notranslate"><span class="pre">import_names</span></code>参数。</p>
@@ -164,7 +238,7 @@
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">policy</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
     <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;muzero&#39;</span><span class="p">,</span>
     <span class="n">import_names</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;lzero.policy.muzero&#39;</span><span class="p">],</span>
-<span class="p">),</span>
+<span class="p">)</span>
 </pre></div>
 </div>
 <p>其中<code class="docutils literal notranslate"><span class="pre">type</span></code>指定了要使用的策略名，<code class="docutils literal notranslate"><span class="pre">import_names</span></code>则指定了该策略类所在的引用路径。这里使用的是LightZero中预定义的MuZero算法。如果要使用自定义的策略类，则需要将<code class="docutils literal notranslate"><span class="pre">type</span></code>改为自定义策略类，并修改<code class="docutils literal notranslate"><span class="pre">import_names</span></code>参数为自定义策略所在的引用路径。</p>

@@ -13,33 +13,93 @@
 ### 1.1 `env`部分的主要参数
 
 - `env_id`: 指定要使用的环境。
-- `obs_shape`: 环境观测的维度。
+- `observation_shape`: 环境观测的维度。
 - `collector_env_num`: 经验回放采集器(collector)中并行用于收集数据的环境数目。
 - `evaluator_env_num`: 评估器(evaluator)中并行用于评估策略性能的环境数目。 
-- `n_evaluator_episode`: 评估器中每个环境运行的episode数目。
+- `n_evaluator_episode`: 评估器中所有环境运行的总的 episode 数目。
+- `collect_max_episode_steps`: 收集数据时单个 episode 允许的最大步数。
+- `eval_max_episode_steps`: 评估时单个 episode 允许的最大步数。
+- `frame_stack_num`: 叠帧数。
+- `gray_scale`: 是否使用灰度图像。
+- `scale`: 是否缩放输入数据。
+- `clip_rewards`: 是否裁剪奖励值。
+- `episode_life`: 如果为 True，代理丢失一条生命时游戏结束；否则，游戏将在所有生命丢失时结束。
+- `env_type`: 环境类型。
+- `frame_skip`: 动作重复的帧数。
+- `stop_value`: 训练停止的目标分数。
+- `replay_path`: 经验回放的存储路径。
+- `save_replay`: 是否存储回放视频。
+- `channel_last`: 是否将 channel 维度放在输入数据的最后一维。
+- `warp_frame`: 是否裁剪每一帧的图片。
 - `manager`: 指定环境管理器的类型，主要用于控制环境的并行化方式。
 
 ### 1.2 `policy`部分的主要参数
-
-- `model`: 指定策略所使用的神经网络模型，包含模型的输入维度、叠帧数、模型输出的动作空间维度、模型是否需要使用降采样、是否使用自监督学习辅助损失、动作编码类型、网络中使用的Normalization模式等。
-- `cuda`: 指定是否将模型迁移到GPU上进行训练。
-- `reanalyze_noise`: 是否在MCTS重分析时引入噪声，可以增加探索。
-- `env_type`: 标记MuZero算法所面对的环境类型，根据不同的环境类型，MuZero算法会在细节处理上有所不同。
-- `game_segment_length`: 用于自我博弈的序列(game segment)长度。
-- `random_collect_episode_num`: 随机采集的episode数量，为探索提供初始数据。 
-- `eps`: 探索控制参数，包括是否使用epsilon-greedy方法进行控制，控制参数的更新方式、起始值、终止值、衰减速度等。
+- `model`: 指定策略所使用的神经网络模型。
+    - `model_type`: 选择使用的模型类型。
+    - `observation_shape`: 观测空间的维度。
+    - `action_space_size`: 动作空间大小。
+    - `continuous_action_space`: 动作空间是否是连续的。
+    - `num_res_blocks`: 残差块的数量。
+    - `downsample`: 是否进行降采样。
+    - `norm_type`: 归一化使用的方法。
+    - `num_channels`: 卷积层提取的特征个数。
+    - `support_scale`: 价值支持集的范围 (-support_scale, support_scale)。
+    - `bias`: 是否使用偏置。
+    - `discrete_action_encoding_type`: 离散化动作空间使用的编码类型。
+    - `self_supervised_learning_loss`: 是否使用自监督学习损失（参照EfficientZero的实现）。
+    - `image_channel`: 输入图像通道数。
+    - `frame_stack_num`: 堆叠帧数。
+    - `gray_scale`: 是否使用灰度图像。
+    - `use_sim_norm`: Latent State 后面是否使用 SimNorm。
+    - `use_sim_norm_kl_loss`: Latent State 经过 SimNorm 后，对应的 obs_loss 是否使用 KL 散度损失，往往与 SimNorm 配合使用。
+    - `res_connection_in_dynamics`: 动力学模型中是否使用残差连接。
+- `learn`: 学习过程配置
+    - `learner`: 学习器配置（字典类型），包括训练迭代次数，检查点保存策略等信息。
+    - `resume_training`: 是否恢复训练。
+- `collect`: 收集过程配置
+    - `collector`: 收集器配置（字典类型），包括类型和输出频率等信息。
+- `eval`: 收集过程配置
+    - `evaluator`: 评估器配置（字典类型），包括评估频率、评估的episode数量和图片保存路径等。
+- `other`: 其它配置
+    - `replay_buffer`: 经验回放器配置（字典类型），包括存储大小，经验的最大使用次数和最大陈旧度以及吞吐量控制和监控配置相关的参数。
+- `cuda`: 指定是否将模型迁移到 GPU 上进行训练。
+- `multi_gpu`: 是否开启多 GPU 训练。
+- `use_wandb`: 是否使用 wandb。
+- `mcts_ctree`: 是否使用蒙特卡洛树搜索的cpp版本。
+- `collector_env_num`: 收集环境的数量。
+- `evaluator_env_num`: 评估环境的数量。
+- `env_type`: 环境类型（棋盘游戏或非棋盘游戏）。
+- `action_type`: 动作类型 (固定动作空间或其他)。
+- `game_segment_length`: 收集时的基本单元 game segment 对应的长度。
+- `cal_dormant_ratio`: 是否计算休眠神经元比率。
 - `use_augmentation`: 是否使用数据增强。
-- `update_per_collect`: 每次数据收集后更新的次数。
+- `augmentation`:  数据增强方法。
+- `update_per_collect`: 每次数据收集完以后模型更新的次数。
 - `batch_size`: 更新时采样的批量大小。
 - `optim_type`: 优化器类型。
+- `reanalyze_ratio`: 重分析系数，控制进行重分析的概率。
+- `reanalyze_noise`: 是否在 MCTS 重分析时引入噪声，可以增加探索。
+- `reanalyze_batch_size`: 重分析批量大小。
+- `reanalyze_partition`: 重分析的比例。例如，1 表示从整个缓冲区重新分析批次样本，0.5 表示从缓冲区的前一半采样。
+- `random_collect_episode_num`: 随机采集的 episode 数量，为探索提供初始数据。 
+- `eps`: 探索控制参数，包括是否使用 epsilon-greedy 方法进行控制，控制参数的更新方式、起始值、终止值、衰减速度等。
 - `piecewise_decay_lr_scheduler`: 是否使用分段常数学习率衰减。
 - `learning_rate`: 初始学习率。
-- `num_simulations`: MCTS算法中使用的模拟次数。
-- `reanalyze_ratio`: 重分析系数，控制进行重分析的概率。
+- `num_simulations`: MCTS 算法中使用的模拟次数。
+- `reward_loss_weight`: 奖励损失函数的权重。
+- `policy_loss_weight`: 策略损失函数的权重。
+- `value_loss_weight`: 价值损失函数的权重。
 - `ssl_loss_weight`: 自监督学习损失函数的权重。
-- `n_episode`: 并行采集器中每个环境运行的episode数量。
+- `n_episode`: 并行采集器中所有环境运行的总 episode 数量。
 - `eval_freq`: 策略评估频率(按照训练步数计)。
 - `replay_buffer_size`: 经验回放器的容量。
+- `target_update_freq`: 目标网络更新频率。
+- `grad_clip_value`: 梯度裁剪值。
+- `discount_factor`: 折扣因子。
+- `td_steps`: TD 步数。
+- `num_unroll_steps`: MuZero 训练时展开的步数。
+
+
 
 这里还特别提到了两个易变参数设定区域，通过注释
 
@@ -66,7 +126,7 @@
 env=dict(
     type='atari_lightzero',
     import_names=['zoo.atari.envs.atari_lightzero_env'],
-),
+)
 ```
 
 其中`type`指定了要使用的环境名，`env_name`则指定了该环境类所在的引用路径。这里使用的是预定义的`atari_lightzero_env`。如果要使用自定义的环境类，则需要将`type`改为自定义环境类名，并相应修改`import_names`参数。
@@ -77,7 +137,7 @@ env=dict(
 policy=dict(
     type='muzero',
     import_names=['lzero.policy.muzero'],
-),
+)
 ```
 
 其中`type`指定了要使用的策略名，`import_names`则指定了该策略类所在的引用路径。这里使用的是LightZero中预定义的MuZero算法。如果要使用自定义的策略类，则需要将`type`改为自定义策略类，并修改`import_names`参数为自定义策略所在的引用路径。
