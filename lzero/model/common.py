@@ -19,7 +19,8 @@ from ding.torch_utils import MLP, ResBlock
 from ding.torch_utils.network.normalization import build_normalization
 from ding.utils import SequenceType
 from ditk import logging
-
+from ding.utils import set_pkg_seed, get_rank, get_world_size
+import torch
 
 def MLP_V2(
         in_channels: int,
@@ -359,6 +360,100 @@ class DownSample(nn.Module):
                                       f"You should transform the observation shape to 64 or 96 in the env.")
 
         return output
+
+
+class HFLanguageRepresentationNetwork(nn.Module):
+    def __init__(self,
+                 model_path: str = 'google-bert/bert-base-uncased',
+                 embedding_size: int = 768,
+                 group_size: int = 8,
+                 norm_type: str = "simnorm",
+                #  norm_type: str = "layernorm", # TODO: Why does nan appear in the first step of training?
+                 tokenizer=None):
+        """
+        Overview:
+            This class defines a language representation network that utilizes a pretrained Hugging Face model.
+            The network outputs embeddings with the specified dimension and can optionally use SimNorm or LayerNorm
+            for normalization at the final stage to ensure training stability.
+        Arguments:
+            - model_path (str): The path to the pretrained Hugging Face model. Default is 'google-bert/bert-base-uncased'.
+            - embedding_size (int): The dimension of the output embeddings. Default is 768.
+            - group_size (int): The group size for SimNorm when using normalization.
+            - norm_type (str): The type of normalization to use ("simnorm" or "layernorm"). Default is "layernorm".
+            - tokenizer (Optional): An instance of a tokenizer. If None, the tokenizer will be loaded from the pretrained model.
+        """
+        super().__init__()
+
+        from transformers import AutoModel, AutoTokenizer
+        logging.info(f"Loading model from: {model_path}")
+
+        # In distributed training, only the rank 0 process downloads the model, and other processes load from cache to speed up startup.
+        if get_rank() == 0:
+            self.model = AutoModel.from_pretrained(model_path)
+        if get_world_size() > 1:
+            # Wait for rank 0 to finish loading the model.
+            torch.distributed.barrier()
+        if get_rank() != 0:
+            self.model = AutoModel.from_pretrained(model_path)
+
+        if tokenizer is None:
+            # Only rank 0 downloads the tokenizer, and then other processes load it from cache.
+            if get_rank() == 0:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+            if get_world_size() > 1:
+                torch.distributed.barrier()
+            if get_rank() != 0:
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        else:
+            self.tokenizer = tokenizer
+
+        # Set the embedding dimension. A linear projection is added (the dimension remains unchanged here but can be extended for other mappings).
+        self.embedding_size = embedding_size
+        self.embed_proj_head = nn.Linear(self.model.config.hidden_size, self.embedding_size)
+
+        # Select the normalization method based on the norm_type parameter.
+        if norm_type.lower() == "simnorm":
+            self.norm = SimNorm(simnorm_dim=group_size)
+        elif norm_type.lower() == "layernorm":
+            self.norm = nn.LayerNorm(embedding_size)
+        else:
+            raise NotImplementedError(f"Normalization type '{norm_type}' is not implemented. "
+                                      f"Choose 'simnorm' or 'layernorm'.")
+
+    def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
+        """
+        Forward Propagation:
+            Compute the language representation based on the input token sequence.
+            The [CLS] token’s representation is extracted from the output of the pretrained model,
+            then passed through a linear projection and final normalization layer (SimNorm or LayerNorm).
+
+        Arguments:
+            - x (torch.Tensor): Input token sequence of shape [batch_size, seq_len].
+            - no_grad (bool): Whether to run in no-gradient mode for memory efficiency. Default is True.
+        Returns:
+        - torch.Tensor: The processed language embedding with shape [batch_size, embedding_size].
+        """
+        # Construct the attention mask to exclude padding tokens.
+        attention_mask = x != self.tokenizer.pad_token_id
+
+        # Use no_grad context if specified to disable gradient computation.
+        if no_grad:
+            with torch.no_grad():
+                x = x.long()  # Ensure the input tensor is of type long.
+                outputs = self.model(x, attention_mask=attention_mask)
+                # Get the hidden state from the last layer and select the output corresponding to the [CLS] token.
+                cls_embedding = outputs.last_hidden_state[:, 0, :]
+        else:
+            x = x.long()
+            outputs = self.model(x, attention_mask=attention_mask)
+            cls_embedding = outputs.last_hidden_state[:, 0, :]
+
+        # Apply linear projection to obtain the desired output dimension.
+        cls_embedding = self.embed_proj_head(cls_embedding)
+        # Normalize the embeddings using the selected normalization layer (SimNorm or LayerNorm) to ensure training stability.
+        cls_embedding = self.norm(cls_embedding)
+
+        return cls_embedding
 
 
 class RepresentationNetworkUniZero(nn.Module):
@@ -1210,5 +1305,3 @@ class PredictionHiddenNetwork(nn.Module):
         value = self.fc_value(latent_history_value)
         policy = self.fc_policy(latent_history_policy)
         return policy, value
-
-

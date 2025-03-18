@@ -21,6 +21,8 @@ from lzero.policy.random_policy import LightZeroRandomPolicy
 from lzero.worker import MuZeroEvaluator as Evaluator
 from lzero.worker import MuZeroCollector as Collector
 from .utils import random_collect, calculate_update_per_collect
+import torch.distributed as dist
+from ding.utils import set_pkg_seed, get_rank, get_world_size
 
 
 def train_unizero(
@@ -33,52 +35,56 @@ def train_unizero(
 ) -> 'Policy':
     """
     Overview:
-        The train entry for UniZero, proposed in our paper UniZero: Generalized and Efficient Planning with Scalable Latent World Models.
+        This function serves as the training entry point for UniZero, as proposed in our paper "UniZero: Generalized and Efficient Planning with Scalable Latent World Models".
         UniZero aims to enhance the planning capabilities of reinforcement learning agents by addressing the limitations found in MuZero-style algorithms,
-        particularly in environments requiring the capture of long-term dependencies. More details can be found in https://arxiv.org/abs/2406.10667.
+        particularly in environments that require capturing long-term dependencies. More details can be found in https://arxiv.org/abs/2406.10667.
+    
     Arguments:
-        - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.
-            ``Tuple[dict, dict]`` type means [user_config, create_cfg].
-        - seed (:obj:`int`): Random seed.
-        - model (:obj:`Optional[torch.nn.Module]`): Instance of torch.nn.Module.
-        - model_path (:obj:`Optional[str]`): The pretrained model path, which should
-            point to the ckpt file of the pretrained model, and an absolute path is recommended.
-            In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.
-        - max_train_iter (:obj:`Optional[int]`): Maximum policy update iterations in training.
-        - max_env_step (:obj:`Optional[int]`): Maximum collected environment interaction steps.
+        - input_cfg (:obj:`Tuple[dict, dict]`): Configuration in dictionary format.
+            ``Tuple[dict, dict]`` indicates [user_config, create_cfg].
+        - seed (:obj:`int`): Random seed for reproducibility.
+        - model (:obj:`Optional[torch.nn.Module]`): Instance of a PyTorch model.
+        - model_path (:obj:`Optional[str]`): Path to the pretrained model, which should
+            point to the checkpoint file of the pretrained model. An absolute path is recommended.
+            In LightZero, the path typically resembles ``exp_name/ckpt/ckpt_best.pth.tar``.
+        - max_train_iter (:obj:`Optional[int]`): Maximum number of policy update iterations during training.
+        - max_env_step (:obj:`Optional[int]`): Maximum number of environment interaction steps to collect.
+    
     Returns:
-        - policy (:obj:`Policy`): Converged policy.
+        - policy (:obj:`Policy`): The converged policy after training.
     """
 
     cfg, create_cfg = input_cfg
 
     # Ensure the specified policy type is supported
-    assert create_cfg.policy.type in ['unizero', 'sampled_unizero'], "train_unizero entry now only supports the following algo.: 'unizero', 'sampled_unizero'"
+    assert create_cfg.policy.type in ['unizero', 'sampled_unizero'], "train_unizero only supports the following algorithms: 'unizero', 'sampled_unizero'"
+    logging.info(f"Using policy type: {create_cfg.policy.type}")
 
-    # Import the correct GameBuffer class based on the policy type
+    # Import the appropriate GameBuffer class based on the policy type
     game_buffer_classes = {'unizero': 'UniZeroGameBuffer', 'sampled_unizero': 'SampledUniZeroGameBuffer'}
-
     GameBuffer = getattr(__import__('lzero.mcts', fromlist=[game_buffer_classes[create_cfg.policy.type]]),
                          game_buffer_classes[create_cfg.policy.type])
 
-    # Set device based on CUDA availability
+    # Check for GPU availability and set the device accordingly
     cfg.policy.device = cfg.policy.model.world_model_cfg.device if torch.cuda.is_available() else 'cpu'
-    logging.info(f'cfg.policy.device: {cfg.policy.device}')
+    logging.info(f"Device set to: {cfg.policy.device}")
 
-    # Compile the configuration
+    # Compile the configuration file
     cfg = compile_config(cfg, seed=seed, env=None, auto=True, create_cfg=create_cfg, save_cfg=True)
 
-    # Create main components: env, policy
+    # Create environment manager
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
     collector_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in collector_env_cfg])
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
 
+    # Initialize environment and random seed
     collector_env.seed(cfg.seed)
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=torch.cuda.is_available())
 
+    # Initialize wandb if specified
     if cfg.policy.use_wandb:
-        # Initialize wandb
+        logging.info("Initializing wandb...")
         wandb.init(
             project="LightZero",
             config=cfg,
@@ -86,105 +92,132 @@ def train_unizero(
             monitor_gym=False,
             save_code=True,
         )
+        logging.info("wandb initialization completed!")
 
+    # Create policy
+    logging.info("Creating policy...")
     policy = create_policy(cfg.policy, model=model, enable_field=['learn', 'collect', 'eval'])
+    logging.info("Policy created successfully!")
 
     # Load pretrained model if specified
     if model_path is not None:
-        logging.info(f'Loading model from {model_path} begin...')
+        logging.info(f"Loading pretrained model from {model_path}...")
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
-        logging.info(f'Loading model from {model_path} end!')
+        logging.info("Pretrained model loaded successfully!")
 
-    # Create worker components: learner, collector, evaluator, replay buffer, commander
+    # Create core components for training
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial')) if get_rank() == 0 else None
     learner = BaseLearner(cfg.policy.learn.learner, policy.learn_mode, tb_logger, exp_name=cfg.exp_name)
-
-    # MCTS+RL algorithms related core code
-    policy_config = cfg.policy
-    replay_buffer = GameBuffer(policy_config)
+    replay_buffer = GameBuffer(cfg.policy)
     collector = Collector(env=collector_env, policy=policy.collect_mode, tb_logger=tb_logger, exp_name=cfg.exp_name,
-                          policy_config=policy_config)
+                          policy_config=cfg.policy)
     evaluator = Evaluator(eval_freq=cfg.policy.eval_freq, n_evaluator_episode=cfg.env.n_evaluator_episode,
                           stop_value=cfg.env.stop_value, env=evaluator_env, policy=policy.eval_mode,
-                          tb_logger=tb_logger, exp_name=cfg.exp_name, policy_config=policy_config)
+                          tb_logger=tb_logger, exp_name=cfg.exp_name, policy_config=cfg.policy)
 
-    # Learner's before_run hook
+    # Execute the learner's before_run hook
     learner.call_hook('before_run')
-    if policy_config.use_wandb:
+
+    if cfg.policy.use_wandb:
         policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
-    # Collect random data before training
+    # Randomly collect data if specified
     if cfg.policy.random_collect_episode_num > 0:
+        logging.info("Collecting random data...")
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
+        logging.info("Random data collection completed!")
 
     batch_size = policy._cfg.batch_size
 
+    if cfg.policy.multi_gpu:
+        # Get current world size and rank
+        world_size = get_world_size()
+        rank = get_rank()
+    else:
+        world_size = 1
+        rank = 0
+
     while True:
-        # Log buffer memory usage
+        # Log memory usage of the replay buffer
         log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger)
 
-        # Set temperature for visit count distributions
+        # Set temperature parameter for data collection
         collect_kwargs = {
             'temperature': visit_count_temperature(
-                policy_config.manual_temperature_decay,
-                policy_config.fixed_temperature_value,
-                policy_config.threshold_training_steps_for_final_temperature,
+                cfg.policy.manual_temperature_decay,
+                cfg.policy.fixed_temperature_value,
+                cfg.policy.threshold_training_steps_for_final_temperature,
                 trained_steps=learner.train_iter
             ),
             'epsilon': 0.0  # Default epsilon value
         }
 
-        # Configure epsilon for epsilon-greedy exploration
-        if policy_config.eps.eps_greedy_exploration_in_collect:
+        # Configure epsilon-greedy exploration
+        if cfg.policy.eps.eps_greedy_exploration_in_collect:
             epsilon_greedy_fn = get_epsilon_greedy_fn(
-                start=policy_config.eps.start,
-                end=policy_config.eps.end,
-                decay=policy_config.eps.decay,
-                type_=policy_config.eps.type
+                start=cfg.policy.eps.start,
+                end=cfg.policy.eps.end,
+                decay=cfg.policy.eps.decay,
+                type_=cfg.policy.eps.type
             )
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
         # Evaluate policy performance
         if evaluator.should_eval(learner.train_iter):
+            logging.info(f"Training iteration {learner.train_iter}: Starting evaluation...")
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
+            logging.info(f"Training iteration {learner.train_iter}: Evaluation completed, stop condition: {stop}, current reward: {reward}")
             if stop:
+                logging.info("Stopping condition met, training ends!")
                 break
 
         # Collect new data
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
+        logging.info(f"Rank {rank}, Training iteration {learner.train_iter}: New data collection completed!")
 
         # Determine updates per collection
-        update_per_collect = calculate_update_per_collect(cfg, new_data)
+        update_per_collect = cfg.policy.update_per_collect
+        if update_per_collect is None:
+            update_per_collect = calculate_update_per_collect(cfg, new_data, world_size)
 
         # Update replay buffer
         replay_buffer.push_game_segments(new_data)
         replay_buffer.remove_oldest_data_to_fit()
 
-        # Train the policy if sufficient data is available
+        if world_size > 1:
+            # Synchronize all ranks before training
+            try:
+                dist.barrier()
+            except Exception as e:
+                logging.error(f'Rank {rank}: Synchronization barrier failed, error: {e}')
+                break
+
+        # Check if there is sufficient data for training
         if collector.envstep > cfg.policy.train_start_after_envsteps:
             if cfg.policy.sample_type == 'episode':
                 data_sufficient = replay_buffer.get_num_of_game_segments() > batch_size
             else:
                 data_sufficient = replay_buffer.get_num_of_transitions() > batch_size
+            
             if not data_sufficient:
                 logging.warning(
-                    f'The data in replay_buffer is not sufficient to sample a mini-batch: '
+                    f'Rank {rank}: The data in replay_buffer is not sufficient to sample a mini-batch: '
                     f'batch_size: {batch_size}, replay_buffer: {replay_buffer}. Continue to collect now ....'
                 )
                 continue
 
+            # Execute multiple training rounds
             for i in range(update_per_collect):
                 train_data = replay_buffer.sample(batch_size, policy)
                 if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
-                    # Clear caches and precompute positional embedding matrices
-                    policy.recompute_pos_emb_diff_and_clear_cache()  # TODO
-
-                if policy_config.use_wandb:
+                    policy.recompute_pos_emb_diff_and_clear_cache()
+                
+                if cfg.policy.use_wandb:
                     policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
-                train_data.append({'train_which_component': 'transformer'})
-                log_vars = learner.train(train_data, collector.envstep)
+                train_data.append(learner.train_iter)
 
+                log_vars = learner.train(train_data, collector.envstep)
                 if cfg.policy.use_priority:
                     replay_buffer.update_priority(train_data, log_vars[0]['value_priority_orig'])
 
@@ -192,8 +225,11 @@ def train_unizero(
 
         # Check stopping criteria
         if collector.envstep >= max_env_step or learner.train_iter >= max_train_iter:
+            logging.info("Stopping condition met, training ends!")
             break
 
     learner.call_hook('after_run')
-    wandb.finish()
+    if cfg.policy.use_wandb:
+        wandb.finish()
+    logging.info("===== Training Completed =====")
     return policy
