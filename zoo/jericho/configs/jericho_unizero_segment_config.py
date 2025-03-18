@@ -1,15 +1,3 @@
-#!/usr/bin/env python3
-"""
-Configuration script for the Jericho Unizero Segment training.
-
-This script sets up configurations for environment and policy parameters
-tailored for the segmentation variant of the Jericho Unizero environment, then launches
-the training process.
-
-Usage:
-    python jericho_unizero_segment_config.py --env detective.z5 --seed 0
-"""
-
 import os
 import argparse
 
@@ -111,7 +99,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
                     num_layers=num_layers,
                     num_heads=8,
                     embed_dim=embed_dim,
-                    obs_type="text",  # Modify as needed.
+                    obs_type="text",
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),
             ),
@@ -124,7 +112,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
             learning_rate=0.0001,
             num_simulations=num_simulations,
             num_segments=num_segments,
-            train_start_after_envsteps=0,  # For debug
+            train_start_after_envsteps=0,
             game_segment_length=game_segment_length,
             replay_buffer_size=int(1e6),
             eval_freq=int(5e3),
@@ -158,7 +146,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
 
     # Construct experiment name using key parameters
     main_config.exp_name = (
-        f"data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_gsl{game_segment_length}_"
+        f"data_lz/data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_gsl{game_segment_length}_"
         f"rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
     )
 

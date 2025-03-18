@@ -1,5 +1,4 @@
 from easydict import EasyDict
-import torch.nn as nn
 
 # ------------------------------------------------------------------
 # Base environment parameters (Note: these values might be adjusted for different env_id)
@@ -12,13 +11,10 @@ env_configurations = {
     'acorncourt.z5': (10, 50),
     'zork1.z5': (10, 400),
 }
-
 # Set action_space_size and max_steps based on env_id
 action_space_size, max_steps = env_configurations.get(env_id, (10, 50))  # Default values if env_id not found
 
-# model_name = 'BAAI/bge-base-en-v1.5'
-model_name: str = '/fs-computility/ai-shen/puyuan/model/huggingface/hub/models--BAAI--bge-base-en-v1.5/snapshots/a5beb1e3e68b9ab74eb54cfd186867f64f240e1a'
-
+model_name = 'BAAI/bge-base-en-v1.5'
 evaluator_env_num = 2
 
 # proj train
@@ -51,7 +47,7 @@ jericho_ppo_config = dict(
             obs_shape=None,
             action_shape=action_space_size,
             action_space='discrete',
-            encoder_hidden_size_list = [512], # encoder_hidden_size_list[-1]是head的输入维度
+            encoder_hidden_size_list = [512],
             actor_head_hidden_size= 512,
             critic_head_hidden_size = 512,
         ),
@@ -64,7 +60,7 @@ jericho_ppo_config = dict(
             grad_clip_value=10,
         ),
         collect=dict(
-            n_sample=320, # TODO: DEBUG
+            n_sample=320,
             discount_factor=0.99,
             gae_lambda=0.95,
         ),
@@ -89,14 +85,14 @@ create_config = cartpole_ppo_create_config
 if __name__ == "__main__":
     from ding.entry import serial_pipeline_onpolicy
     from ding.model.template import VAC
-    m = main_config.policy.model
+    from lzero.model.common import HFLanguageRepresentationNetwork
     import os
     os.environ['TOKENIZERS_PARALLELISM'] = 'false'
-    
-    from lzero.model.common import HFLanguageRepresentationNetwork
-    encoder = HFLanguageRepresentationNetwork(model_path=model_name, embedding_size=512)
 
-    model = VAC(obs_shape=m.obs_shape, action_shape=m.action_shape, action_space=m.action_space, encoder_hidden_size_list=m.encoder_hidden_size_list,
-            actor_head_hidden_size=m.actor_head_hidden_size,
-            critic_head_hidden_size =m.critic_head_hidden_size, encoder=encoder)
+    encoder = HFLanguageRepresentationNetwork(model_path=model_name, embedding_size=512)
+    policy_model = main_config.policy.model
+    model = VAC(obs_shape=policy_model.obs_shape, action_shape=policy_model.action_shape, action_space=policy_model.action_space, encoder_hidden_size_list=policy_model.encoder_hidden_size_list,
+            actor_head_hidden_size=policy_model.actor_head_hidden_size,
+            critic_head_hidden_size =policy_model.critic_head_hidden_size, encoder=encoder)
+    
     serial_pipeline_onpolicy([main_config, create_config], seed=0, model=model)
