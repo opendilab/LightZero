@@ -20,7 +20,9 @@
         <script src="../../../_static/sphinx_highlight.js"></script>
     <script src="../../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../../genindex.html" />
-    <link rel="search" title="Search" href="../../../search.html" /> 
+    <link rel="search" title="Search" href="../../../search.html" />
+    <link href="../../../_static/css/style.css" rel="stylesheet" type="text/css">
+
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -311,6 +313,8 @@
         <span class="n">policy_loss_weight</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
         <span class="c1"># (float) The weight of ssl (self-supervised learning) loss.</span>
         <span class="n">ssl_loss_weight</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to use the cosine learning rate decay.</span>
+        <span class="n">cos_lr_scheduler</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
         <span class="c1"># (bool) Whether to use piecewise constant learning rate decay.</span>
         <span class="c1"># i.e. lr: 0.2 -&gt; 0.02 -&gt; 0.002</span>
         <span class="n">piecewise_decay_lr_scheduler</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
@@ -325,6 +329,8 @@
         <span class="n">fixed_temperature_value</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
         <span class="c1"># (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.</span>
         <span class="n">use_ture_chance_label_in_chance_encoder</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (int) The number of steps to accumulate gradients before performing an optimization step.</span>
+        <span class="n">accumulation_steps</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
 
         <span class="c1"># ****** Priority ******</span>
         <span class="c1"># (bool) Whether to use priority when sampling training data from the buffer.</span>
@@ -391,6 +397,11 @@
             <span class="n">betas</span><span class="o">=</span><span class="p">(</span><span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
         <span class="p">)</span>
 
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">cos_lr_scheduler</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">torch.optim.lr_scheduler</span><span class="w"> </span><span class="kn">import</span> <span class="n">CosineAnnealingLR</span>
+            <span class="c1"># TODO: check the total training steps</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lr_scheduler</span> <span class="o">=</span> <span class="n">CosineAnnealingLR</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="p">,</span> <span class="mf">1e5</span><span class="p">,</span> <span class="n">eta_min</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">last_epoch</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
         <span class="c1"># use model_wrapper for specialized demands of different modes</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="p">)</span>
         <span class="c1"># Ensure that the installed torch version is greater than or equal to 2.0</span>
@@ -424,7 +435,9 @@
         
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">use_wandb</span><span class="p">:</span>
             <span class="c1"># TODO: add the model to wandb</span>
-            <span class="n">wandb</span><span class="o">.</span><span class="n">watch</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">representation_network</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">)</span></div>
+            <span class="n">wandb</span><span class="o">.</span><span class="n">watch</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">representation_network</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">accumulation_steps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">accumulation_steps</span></div>
 
     <span class="c1"># @profile</span>
 <div class="viewcode-block" id="UniZeroPolicy._forward_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._forward_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
@@ -443,7 +456,8 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
 
-        <span class="n">current_batch</span><span class="p">,</span> <span class="n">target_batch</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">data</span>
+        <span class="n">current_batch</span><span class="p">,</span> <span class="n">target_batch</span><span class="p">,</span> <span class="n">train_iter</span> <span class="o">=</span> <span class="n">data</span>
+
         <span class="n">obs_batch_ori</span><span class="p">,</span> <span class="n">action_batch</span><span class="p">,</span>  <span class="n">target_action_batch</span><span class="p">,</span> <span class="n">mask_batch</span><span class="p">,</span> <span class="n">indices</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">make_time</span> <span class="o">=</span> <span class="n">current_batch</span>
         <span class="n">target_reward</span><span class="p">,</span> <span class="n">target_value</span><span class="p">,</span> <span class="n">target_policy</span> <span class="o">=</span> <span class="n">target_batch</span>
 
@@ -527,31 +541,47 @@
         <span class="k">assert</span> <span class="ow">not</span> <span class="n">torch</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">losses</span><span class="o">.</span><span class="n">loss_total</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">(),</span> <span class="s2">&quot;Loss contains NaN values&quot;</span>
         <span class="k">assert</span> <span class="ow">not</span> <span class="n">torch</span><span class="o">.</span><span class="n">isinf</span><span class="p">(</span><span class="n">losses</span><span class="o">.</span><span class="n">loss_total</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">(),</span> <span class="s2">&quot;Loss contains Inf values&quot;</span>
 
-        <span class="c1"># Core learn model update step</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+        <span class="c1"># Core learning model update step</span>
+        <span class="c1"># Reset gradients at the start of each accumulation cycle</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">train_iter</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">accumulation_steps</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+
+        <span class="c1"># Scale the loss by the number of accumulation steps</span>
+        <span class="n">weighted_total_loss</span> <span class="o">=</span> <span class="n">weighted_total_loss</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">accumulation_steps</span>
         <span class="n">weighted_total_loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
 
-        <span class="c1">#  ========== for debugging ==========</span>
-        <span class="c1"># for name, param in self._learn_model.world_model.tokenizer.encoder.named_parameters():</span>
-        <span class="c1">#     print(&#39;name, param.mean(), param.std():&#39;, name, param.mean(), param.std())</span>
-        <span class="c1">#     if param.requires_grad:</span>
-        <span class="c1">#         print(name, param.grad.norm())</span>
+        <span class="c1"># Check if the current iteration completes an accumulation cycle</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">train_iter</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">accumulation_steps</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="c1"># Analyze gradient norms if simulation normalization analysis is enabled</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">analysis_sim_norm</span><span class="p">:</span>
+                <span class="c1"># Clear previous analysis results to prevent memory overflow</span>
+                <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_after</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_after</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_after</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_after</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">encoder_hook</span><span class="o">.</span><span class="n">analyze</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">encoder_hook</span><span class="o">.</span><span class="n">clear_data</span><span class="p">()</span>
+            
+            <span class="c1"># Clip gradients to prevent exploding gradients</span>
+            <span class="n">total_grad_norm_before_clip_wm</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">clip_grad_norm_</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">grad_clip_value</span>
+            <span class="p">)</span>
 
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">analysis_sim_norm</span><span class="p">:</span>
-            <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_after</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_after</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_after</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_after</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">encoder_hook</span><span class="o">.</span><span class="n">analyze</span><span class="p">()</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">encoder_hook</span><span class="o">.</span><span class="n">clear_data</span><span class="p">()</span>
+            <span class="c1"># Synchronize gradients across multiple GPUs if enabled</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">multi_gpu</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sync_gradients</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="p">)</span>
 
-        <span class="n">total_grad_norm_before_clip_wm</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">clip_grad_norm_</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span>
-                                                                        <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">grad_clip_value</span><span class="p">)</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">multi_gpu</span><span class="p">:</span>
-            <span class="bp">self</span><span class="o">.</span><span class="n">sync_gradients</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="p">)</span>
+            <span class="c1"># Update model parameters</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
 
-        <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
-        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">piecewise_decay_lr_scheduler</span><span class="p">:</span>
+            <span class="c1"># Clear CUDA cache if using gradient accumulation</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">accumulation_steps</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">total_grad_norm_before_clip_wm</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="mf">0.</span><span class="p">)</span>
+
+        <span class="c1"># Update learning rate scheduler if applicable</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">cos_lr_scheduler</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">piecewise_decay_lr_scheduler</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">lr_scheduler</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
 
-        <span class="c1"># Core target model update step</span>
+        <span class="c1"># Update the target model with the current model&#39;s parameters</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">state_dict</span><span class="p">())</span>
 
         <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>

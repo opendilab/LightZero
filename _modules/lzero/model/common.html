@@ -20,7 +20,9 @@
         <script src="../../../_static/sphinx_highlight.js"></script>
     <script src="../../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../../genindex.html" />
-    <link rel="search" title="Search" href="../../../search.html" /> 
+    <link rel="search" title="Search" href="../../../search.html" />
+    <link href="../../../_static/css/style.css" rel="stylesheet" type="text/css">
+
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -110,7 +112,8 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">ding.torch_utils.network.normalization</span><span class="w"> </span><span class="kn">import</span> <span class="n">build_normalization</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">SequenceType</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">ditk</span><span class="w"> </span><span class="kn">import</span> <span class="n">logging</span>
-
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_pkg_seed</span><span class="p">,</span> <span class="n">get_rank</span><span class="p">,</span> <span class="n">get_world_size</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
 
 <span class="k">def</span><span class="w"> </span><span class="nf">MLP_V2</span><span class="p">(</span>
         <span class="n">in_channels</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
@@ -450,6 +453,100 @@
                                       <span class="sa">f</span><span class="s2">&quot;You should transform the observation shape to 64 or 96 in the env.&quot;</span><span class="p">)</span>
 
         <span class="k">return</span> <span class="n">output</span></div></div>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">HFLanguageRepresentationNetwork</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                 <span class="n">model_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;google-bert/bert-base-uncased&#39;</span><span class="p">,</span>
+                 <span class="n">embedding_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">768</span><span class="p">,</span>
+                 <span class="n">group_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span><span class="p">,</span>
+                 <span class="n">norm_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;simnorm&quot;</span><span class="p">,</span>
+                <span class="c1">#  norm_type: str = &quot;layernorm&quot;, # TODO: Why does nan appear in the first step of training?</span>
+                 <span class="n">tokenizer</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            This class defines a language representation network that utilizes a pretrained Hugging Face model.</span>
+<span class="sd">            The network outputs embeddings with the specified dimension and can optionally use SimNorm or LayerNorm</span>
+<span class="sd">            for normalization at the final stage to ensure training stability.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - model_path (str): The path to the pretrained Hugging Face model. Default is &#39;google-bert/bert-base-uncased&#39;.</span>
+<span class="sd">            - embedding_size (int): The dimension of the output embeddings. Default is 768.</span>
+<span class="sd">            - group_size (int): The group size for SimNorm when using normalization.</span>
+<span class="sd">            - norm_type (str): The type of normalization to use (&quot;simnorm&quot; or &quot;layernorm&quot;). Default is &quot;layernorm&quot;.</span>
+<span class="sd">            - tokenizer (Optional): An instance of a tokenizer. If None, the tokenizer will be loaded from the pretrained model.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModel</span><span class="p">,</span> <span class="n">AutoTokenizer</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Loading model from: </span><span class="si">{</span><span class="n">model_path</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="c1"># In distributed training, only the rank 0 process downloads the model, and other processes load from cache to speed up startup.</span>
+        <span class="k">if</span> <span class="n">get_rank</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">AutoModel</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_path</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">get_world_size</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="c1"># Wait for rank 0 to finish loading the model.</span>
+            <span class="n">torch</span><span class="o">.</span><span class="n">distributed</span><span class="o">.</span><span class="n">barrier</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">get_rank</span><span class="p">()</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">AutoModel</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_path</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">tokenizer</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="c1"># Only rank 0 downloads the tokenizer, and then other processes load it from cache.</span>
+            <span class="k">if</span> <span class="n">get_rank</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_path</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">get_world_size</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">torch</span><span class="o">.</span><span class="n">distributed</span><span class="o">.</span><span class="n">barrier</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">get_rank</span><span class="p">()</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model_path</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span> <span class="o">=</span> <span class="n">tokenizer</span>
+
+        <span class="c1"># Set the embedding dimension. A linear projection is added (the dimension remains unchanged here but can be extended for other mappings).</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">embedding_size</span> <span class="o">=</span> <span class="n">embedding_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">embed_proj_head</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">hidden_size</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">embedding_size</span><span class="p">)</span>
+
+        <span class="c1"># Select the normalization method based on the norm_type parameter.</span>
+        <span class="k">if</span> <span class="n">norm_type</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;simnorm&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">norm</span> <span class="o">=</span> <span class="n">SimNorm</span><span class="p">(</span><span class="n">simnorm_dim</span><span class="o">=</span><span class="n">group_size</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">norm_type</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">==</span> <span class="s2">&quot;layernorm&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">norm</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">(</span><span class="n">embedding_size</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Normalization type &#39;</span><span class="si">{</span><span class="n">norm_type</span><span class="si">}</span><span class="s2">&#39; is not implemented. &quot;</span>
+                                      <span class="sa">f</span><span class="s2">&quot;Choose &#39;simnorm&#39; or &#39;layernorm&#39;.&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">no_grad</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Forward Propagation:</span>
+<span class="sd">            Compute the language representation based on the input token sequence.</span>
+<span class="sd">            The [CLS] token’s representation is extracted from the output of the pretrained model,</span>
+<span class="sd">            then passed through a linear projection and final normalization layer (SimNorm or LayerNorm).</span>
+
+<span class="sd">        Arguments:</span>
+<span class="sd">            - x (torch.Tensor): Input token sequence of shape [batch_size, seq_len].</span>
+<span class="sd">            - no_grad (bool): Whether to run in no-gradient mode for memory efficiency. Default is True.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">        - torch.Tensor: The processed language embedding with shape [batch_size, embedding_size].</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Construct the attention mask to exclude padding tokens.</span>
+        <span class="n">attention_mask</span> <span class="o">=</span> <span class="n">x</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">pad_token_id</span>
+
+        <span class="c1"># Use no_grad context if specified to disable gradient computation.</span>
+        <span class="k">if</span> <span class="n">no_grad</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+                <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>  <span class="c1"># Ensure the input tensor is of type long.</span>
+                <span class="n">outputs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">attention_mask</span><span class="o">=</span><span class="n">attention_mask</span><span class="p">)</span>
+                <span class="c1"># Get the hidden state from the last layer and select the output corresponding to the [CLS] token.</span>
+                <span class="n">cls_embedding</span> <span class="o">=</span> <span class="n">outputs</span><span class="o">.</span><span class="n">last_hidden_state</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>
+            <span class="n">outputs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">attention_mask</span><span class="o">=</span><span class="n">attention_mask</span><span class="p">)</span>
+            <span class="n">cls_embedding</span> <span class="o">=</span> <span class="n">outputs</span><span class="o">.</span><span class="n">last_hidden_state</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">,</span> <span class="p">:]</span>
+
+        <span class="c1"># Apply linear projection to obtain the desired output dimension.</span>
+        <span class="n">cls_embedding</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">embed_proj_head</span><span class="p">(</span><span class="n">cls_embedding</span><span class="p">)</span>
+        <span class="c1"># Normalize the embeddings using the selected normalization layer (SimNorm or LayerNorm) to ensure training stability.</span>
+        <span class="n">cls_embedding</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">norm</span><span class="p">(</span><span class="n">cls_embedding</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">cls_embedding</span>
 
 
 <div class="viewcode-block" id="RepresentationNetworkUniZero"><a class="viewcode-back" href="../../../api_doc/model/common.html#lzero.model.common.RepresentationNetworkUniZero">[docs]</a><span class="k">class</span><span class="w"> </span><span class="nc">RepresentationNetworkUniZero</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
@@ -1301,8 +1398,6 @@
         <span class="n">value</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc_value</span><span class="p">(</span><span class="n">latent_history_value</span><span class="p">)</span>
         <span class="n">policy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">fc_policy</span><span class="p">(</span><span class="n">latent_history_policy</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">policy</span><span class="p">,</span> <span class="n">value</span></div></div>
-
-
 </pre></div>
 
 

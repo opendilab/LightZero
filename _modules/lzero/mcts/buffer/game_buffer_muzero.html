@@ -20,7 +20,9 @@
         <script src="../../../../_static/sphinx_highlight.js"></script>
     <script src="../../../../_static/js/theme.js"></script>
     <link rel="index" title="Index" href="../../../../genindex.html" />
-    <link rel="search" title="Search" href="../../../../search.html" /> 
+    <link rel="search" title="Search" href="../../../../search.html" />
+    <link href="../../../../_static/css/style.css" rel="stylesheet" type="text/css">
+
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -802,7 +804,7 @@
             <span class="p">]</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="n">legal_actions</span> <span class="o">=</span> <span class="p">[[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">j</span><span class="p">])</span> <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">transition_batch_size</span><span class="p">)]</span>
-
+            
         <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
             <span class="n">policy_index</span> <span class="o">=</span> <span class="mi">0</span>
             <span class="c1"># 0 -&gt; Invalid target policy for padding outside of game segments,</span>
@@ -821,7 +823,7 @@
                             <span class="c1"># for atari/classic_control/box2d environments that only have one player.</span>
                             <span class="n">target_policies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">distributions</span><span class="p">)</span>
                         <span class="k">else</span><span class="p">:</span>
-                            <span class="c1"># for board games that have two players.</span>
+                            <span class="c1"># for board games that have two players or envs that have varied action space.</span>
                             <span class="n">policy_tmp</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">policy_shape</span><span class="p">)]</span>
                             <span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">legal_action</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">legal_actions</span><span class="p">[</span><span class="n">policy_index</span><span class="p">]):</span>
                                 <span class="c1"># only the action in ``legal_action`` the policy logits is nonzero</span>
