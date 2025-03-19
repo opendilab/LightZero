@@ -110,14 +110,14 @@ class singleEqn(BaseEnv):
 
         # Define fixed actions (operations paired with a term)
         self.actions_fixed = [
-            (custom_expand, None),
-            (custom_factor, None),
-            (custom_collect, self.x), 
-            (custom_together, None),
-            (custom_ratsimp, None),
-            (custom_square, None),
-            (custom_sqrt, None),
-            (mul, -1)
+            # (custom_expand, None),
+            # (custom_factor, None),
+            # (custom_collect, self.x), 
+            # (custom_together, None),
+            # (custom_ratsimp, None),
+            # (custom_square, None),
+            # (custom_sqrt, None),
+            (sub, -1)
         ]
         # Generate dynamic actions based on the current equation
         if self.cache:
@@ -151,6 +151,8 @@ class singleEqn(BaseEnv):
         is_valid_eqn, lhs_new, rhs_new = check_valid_eqn(lhs_new, rhs_new)
         is_solved = check_eqn_solved(lhs_new, rhs_new, self.main_eqn)
 
+
+
         # Compute reward based on equation complexity changes
         reward = self.find_reward(lhs_old, rhs_old, lhs_new, rhs_new, is_valid_eqn, is_solved)
         self.episode_return += reward
@@ -177,9 +179,13 @@ class singleEqn(BaseEnv):
         if done:
             info['eval_episode_return'] = self.episode_return
 
-        if self.verbose:
-            print(f'{self.lhs} = {self.rhs}. (Operation, term): {operation_names.get(operation, operation)}, {term} | reward = {reward:.2f}')
-    
+        verbose = True
+        if verbose:
+            #print(f'{self.lhs} = {self.rhs}. (Operation, term): {operation_names.get(operation, operation)}, {term} | reward = {reward:.2f}')
+            print(f'(Operation, term): {operation_names.get(operation, operation)}, {term}')
+
+            if is_solved:
+                print(f'\nSOLVED: {self.lhs} = {self.rhs}\n')
 
         lightzero_obs_dict = {
             'observation': np.array(obs_new, dtype=np.float32),

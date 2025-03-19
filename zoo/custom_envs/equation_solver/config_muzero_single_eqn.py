@@ -1,26 +1,30 @@
 # ==============================================================
-# Adapted from lunarlander_disc_muzero_config
+# Kev: Adapted from lunarlander_disc_muzero_config
 # ==============================================================
 
 
 from easydict import EasyDict
+from lzero.entry import train_muzero
+
+
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-num_simulations = 50
-update_per_collect = 200
-batch_size = 256
-max_env_step = int(1e3)
-reanalyze_ratio = 0.
+num_simulations = 25
+update_per_collect = 25
+batch_size = 128
+max_env_step = int(1e5)
+reanalyze_ratio = 0.0
+
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 single_eqn_muzero_config = dict(
-    exp_name=f'data_muzero/single_eqn_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_seed0',
+    exp_name=f'data_muzero/x+b',
     env=dict(
         env_name='singleEqn_env',  # Changed from LunarLander-v2
         continuous=False,
@@ -35,8 +39,8 @@ single_eqn_muzero_config = dict(
             observation_shape=41,  # Changed from 8
             action_space_size=50,  # Changed from 4
             model_type='mlp',
-            lstm_hidden_size=256,
-            latent_state_dim=256,
+            lstm_hidden_size=128,
+            latent_state_dim=128,
             self_supervised_learning_loss=True,
             discrete_action_encoding_type='not_one_hot',
             res_connection_in_dynamics=True,
@@ -51,7 +55,7 @@ single_eqn_muzero_config = dict(
         batch_size=batch_size,
         optim_type='Adam',
         piecewise_decay_lr_scheduler=False,
-        learning_rate=0.003,
+        learning_rate=0.001,
         ssl_loss_weight=2,
         grad_clip_value=0.5,
         num_simulations=num_simulations,
@@ -81,8 +85,5 @@ single_eqn_muzero_create_config = EasyDict(single_eqn_muzero_create_config)
 create_config = single_eqn_muzero_create_config
 
 if __name__ == "__main__":
-    seeds = [0]
-    for seed in seeds:
-        main_config.exp_name = f'data_muzero/single_eqn_muzero_ns{num_simulations}_upc{update_per_collect}_rr{reanalyze_ratio}_seed{seed}'
-        from lzero.entry import train_muzero
-        train_muzero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
+    seed = 14850
+    train_muzero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
