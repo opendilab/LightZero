@@ -41,7 +41,7 @@ def ddp_all_reduce_sum(tensor: torch.Tensor) -> torch.Tensor:
         dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
     return tensor
 
-def calculate_update_per_collect(cfg: 'EasyDict', new_data: List[List[torch.Tensor]], world_size: int) -> int:
+def calculate_update_per_collect(cfg: 'EasyDict', new_data: List[List[torch.Tensor]], world_size: int = 1) -> int:
     """
     Calculate the number of updates to perform per data collection in a
     Distributed Data Parallel (DDP) setting. This ensures that all GPUs

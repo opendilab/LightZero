@@ -1,17 +1,4 @@
-#!/usr/bin/env python3
-"""
-Optimized configuration and training script for Jericho Unizero environment.
-
-This script sets up configuration for the Jericho environment and its corresponding policy,
-then launches the training process. The configuration parameters are organized into several
-sections including environment settings, policy parameters, and debug options.
-
-Usage:
-    python script_name.py --env detective.z5 --seed 0
-"""
-
 import os
-import sys
 import argparse
 from typing import Any, Dict
 
@@ -43,7 +30,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
     # env_id = 'detective.z5'
     # env_id = 'omniquest.z5'
     # env_id = 'acorncourt.z5'
-    env_id = 'zork1.z5'
+    # env_id = 'zork1.z5'
 
     # Set action_space_size and max_steps based on env_id
     action_space_size, max_steps = env_configurations.get(env_id, (10, 50))  # Default values if env_id not found
@@ -75,8 +62,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
     reanalyze_partition: float = 0.75
 
     # Model name or path - configurable according to the predefined model paths or names
-    # model_name: str = 'BAAI/bge-base-en-v1.5'
-    model_name: str = '/fs-computility/ai-shen/puyuan/model/huggingface/hub/models--BAAI--bge-base-en-v1.5/snapshots/a5beb1e3e68b9ab74eb54cfd186867f64f240e1a'
+    model_name: str = 'BAAI/bge-base-en-v1.5'
 
     # ------------------------------------------------------------------
     # TODO: Debug configuration - override some parameters for debugging purposes
@@ -95,7 +81,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
     # ------------------------------------------------------------------
     jericho_unizero_config: Dict[str, Any] = dict(
         env=dict(
-            remove_stuck_actions=False,
             stop_value=int(1e6),
             observation_shape=512,
             max_steps=max_steps,
@@ -197,17 +182,11 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
 
     # Construct experiment name containing key parameters
     main_config.exp_name = (
-        f"data_lz/data_unizero_jericho_20250316/bge-base-en-v1.5/uz_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+        f"data_lz/data_unizero_jericho/bge-base-en-v1.5/uz_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
         f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
         f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
     )
-
-    # Insert the project dependency path (adjust according to your project structure)
-    # sys.path.insert(0, "/Users/puyuan/code/LightZero/")
-
-    # Delay the import of train_unizero to ensure sys.path is updated
     from lzero.entry import train_unizero
-
     # Launch the training process
     train_unizero(
         [main_config, create_config],

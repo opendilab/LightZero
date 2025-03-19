@@ -4,13 +4,14 @@ from functools import partial
 from typing import Tuple, Optional
 
 import torch
+import wandb
 from ding.config import compile_config
 from ding.envs import create_env_manager
 from ding.envs import get_vec_env_setting
 from ding.policy import create_policy
 from ding.rl_utils import get_epsilon_greedy_fn
 from ding.utils import EasyTimer
-from ding.utils import set_pkg_seed, get_rank
+from ding.utils import set_pkg_seed, get_rank, get_world_size
 from ding.worker import BaseLearner
 from tensorboardX import SummaryWriter
 from torch.utils.tensorboard import SummaryWriter
@@ -103,6 +104,9 @@ def train_unizero_segment(
     # Learner's before_run hook
     learner.call_hook('before_run')
 
+    if cfg.policy.use_wandb:
+        policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
+
     # Collect random data before training
     if cfg.policy.random_collect_episode_num > 0:
         random_collect(cfg.policy, policy, LightZeroRandomPolicy, collector, collector_env, replay_buffer)
@@ -115,6 +119,14 @@ def train_unizero_segment(
     buffer_reanalyze_count = 0
     train_epoch = 0
     reanalyze_batch_size = cfg.policy.reanalyze_batch_size
+
+    if cfg.policy.multi_gpu:
+        # Get current world size and rank
+        world_size = get_world_size()
+        rank = get_rank()
+    else:
+        world_size = 1
+        rank = 0
 
     while True:
         # Log buffer memory usage
@@ -151,7 +163,7 @@ def train_unizero_segment(
         new_data = collector.collect(train_iter=learner.train_iter, policy_kwargs=collect_kwargs)
 
         # Determine updates per collection
-        update_per_collect = calculate_update_per_collect(cfg, new_data)
+        update_per_collect = calculate_update_per_collect(cfg, new_data, world_size)
 
         # Update replay buffer
         replay_buffer.push_game_segments(new_data)
@@ -196,8 +208,10 @@ def train_unizero_segment(
                         logging.info(f'Buffer reanalyze time: {timer.value}')
 
                 train_data = replay_buffer.sample(batch_size, policy)
+                if cfg.policy.use_wandb:
+                    policy.set_train_iter_env_step(learner.train_iter, collector.envstep)
 
-                train_data.append({'train_which_component': 'transformer'})
+                train_data.append(learner.train_iter)
                 log_vars = learner.train(train_data, collector.envstep)
 
                 if cfg.policy.use_priority:
@@ -211,4 +225,6 @@ def train_unizero_segment(
             break
 
     learner.call_hook('after_run')
+    if cfg.policy.use_wandb:
+        wandb.finish()
     return policy
