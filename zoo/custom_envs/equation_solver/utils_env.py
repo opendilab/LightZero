@@ -274,8 +274,8 @@ def get_ordered_sub_expressions(expr):
     while queue:
         e = queue.pop(0)  # BFS: Process oldest element
         
-#        if e not in sub_expressions and 1/e not in sub_expressions and e not in [-1,0,1]:
-        if e not in sub_expressions and 1/e not in sub_expressions and not e.is_Integer and e not in [-1, 0, 1]:
+        if e not in sub_expressions and 1/e not in sub_expressions and e not in [-1,0,1]:
+        #if e not in sub_expressions and 1/e not in sub_expressions and not e.is_Integer and e not in [-1, 0, 1]:
 
             sub_expressions.add(e)
 
