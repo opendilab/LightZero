@@ -9,6 +9,8 @@ from transformers import AutoTokenizer
 from ding.utils import ENV_REGISTRY, set_pkg_seed, get_rank, get_world_size
 from ding.envs import BaseEnv, BaseEnvTimestep
 from jericho import FrotzEnv
+import os
+from datetime import datetime
 
 
 @ENV_REGISTRY.register('jericho')
@@ -43,6 +45,8 @@ class JerichoEnv(BaseEnv):
         'remove_stuck_actions': False,
         'add_location_and_inventory': False,
         'for_unizero': False,
+        'save_replay': False,
+        'save_replay_path': None
     }
 
     def __init__(self, cfg: Dict[str, Any]) -> None:
@@ -61,6 +65,8 @@ class JerichoEnv(BaseEnv):
         self.game_path: str = self.cfg['game_path']
         self.max_action_num: int = self.cfg['max_action_num']
         self.max_seq_len: int = self.cfg['max_seq_len']
+        self.save_replay: bool = self.cfg['save_replay']
+        self.save_replay_path: str = self.cfg['save_replay_path']
 
         # Record the last observation and action for detecting stuck actions.
         self.last_observation: Optional[str] = None
@@ -75,7 +81,6 @@ class JerichoEnv(BaseEnv):
         self.remove_stuck_actions: bool = self.cfg['remove_stuck_actions']
         self.add_location_and_inventory: bool = self.cfg['add_location_and_inventory']
         self.for_unizero: bool = self.cfg['for_unizero']
-
         # Initialize the tokenizer once (only in rank 0 process if distributed)
         if JerichoEnv.tokenizer is None:
             if self.rank == 0:
@@ -94,6 +99,7 @@ class JerichoEnv(BaseEnv):
         self.episode_return: float = 0.0
         self.env_step: int = 0
         self.timestep: int = 0
+        self.episode_history = []
 
         # Define observation, action, and reward spaces.
         self.observation_space: gym.spaces.Dict = gym.spaces.Dict()
@@ -116,6 +122,7 @@ class JerichoEnv(BaseEnv):
         """
         if self._action_list is None:
             self._action_list = self._env.get_valid_actions()
+            print(self._action_list)
 
         # Filter available actions based on whether stuck actions are removed.
         if self.remove_stuck_actions:
@@ -183,6 +190,8 @@ class JerichoEnv(BaseEnv):
         self.episode_return = 0.0
         self.env_step = 0
         self.timestep = 0
+        # print(f'initial_observation={initial_observation}, info={info}')
+        self.episode_history = [{'observation': initial_observation, 'info':info, 'done': False}]
 
         if self.remove_stuck_actions:
             self.last_observation = initial_observation
@@ -287,11 +296,22 @@ class JerichoEnv(BaseEnv):
         if self.env_step >= self.max_steps:
             done = True
 
+        self.episode_history.append({
+            "step": self.env_step,
+            "observation": observation,
+            "action": action_str,
+            "reward": reward.item() if isinstance(reward, np.ndarray) else reward,
+            "done": done,
+            "info": info
+        })
+
         if done:
             print('=' * 20)
             print(f'rank {self.rank} one episode done!')
             self.finished = True
             info['eval_episode_return'] = self.episode_return
+            if self.save_replay:
+                self.save_episode_data()
 
         return BaseEnvTimestep(processed_obs, reward, done, info)
 
@@ -329,6 +349,31 @@ class JerichoEnv(BaseEnv):
         cfg['reward_normalize'] = False
         cfg['is_collect'] = False
         return [cfg for _ in range(evaluator_env_num)]
+    def save_episode_data(self):
+        """
+        Save the full episode history to a JSON file.
+        """
+        if self.save_replay_path is None:
+            self.save_replay_path = './log'  
+        os.makedirs(self.save_replay_path, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%m%d_%H%M")
+        filename = os.path.join(self.save_replay_path, f"episode_interaction_record_{timestamp}.txt")
+        try:
+            with open(filename, mode="w", encoding="utf-8") as f:
+                for i, item in enumerate(self.episode_history):
+                    item['observation'] = item['observation'].strip('\n')
+                    if i == 0:  # Starting Status
+                        f.write(f"[ENV]\tmoves: {item['info']['moves']}\t\tscore: {item['info']['score']}\n{item['observation']}\n\n")
+                    else:
+                        f.write(f"[PLAYER]\tstep: {item['step']}\naction: {item['action']}\nreward: {item['reward']}\n\n")
+                        f.write(f"[ENV]\tmoves: {item['info']['moves']}\t\tscore: {item['info']['score']}\n{item['observation']}\n\n")
+                    if item['done']:
+                        f.write(f"[SYSTEM]\tThe game is over, and the reward for this game is {self.episode_return}.\n")
+                        
+            print(f"[INFO] Episode saved to {filename}")
+        except Exception as e:
+            print(f"[ERROR] Failed to save episode: {e}")
 
 
 if __name__ == '__main__':
@@ -337,7 +382,7 @@ if __name__ == '__main__':
     # Configuration dictionary for the environment.
     env_cfg = EasyDict(
         dict(
-            max_steps=400,
+            max_steps=3,
             game_path="./zoo/jericho/envs/z-machine-games-master/jericho-game-suite/" + "zork1.z5",
             max_action_num=10,
             tokenizer_path="google-bert/bert-base-uncased",
@@ -347,6 +392,9 @@ if __name__ == '__main__':
             for_unizero=False,
             collector_env_num=1,
             evaluator_env_num=1,
+            save_replay=True,
+            save_replay_path=None,
+            collect_policy_mode='random'
         )
     )
     env = JerichoEnv(env_cfg)
@@ -362,4 +410,5 @@ if __name__ == '__main__':
         print(f'[OBS]:\n{obs["observation"]}')
         if done:
             user_choice = input('Would you like to RESTART, RESTORE a saved game, give the FULL score for that game or QUIT? ')
+            del env  
             break
