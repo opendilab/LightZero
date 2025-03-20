@@ -19,12 +19,12 @@ from easydict import EasyDict
 
 logger = logging.getLogger(__name__)
 
-@ENV_REGISTRY.register('singleEqn_env')
-class singleEqn(BaseEnv):
+@ENV_REGISTRY.register('singleEqnEasy_env')
+class singleEqnEasy(BaseEnv):
     """Environment for solving simple algebraic equations using RL in a LightZero‐compatible format."""
 
     config = dict(
-        env_id="singleEqn-v0",
+        env_id="singleEqnEasy-v0",
         battle_mode='self_play_mode',
         battle_mode_in_simulation_env='self_play_mode',
         render_mode=None,
@@ -49,8 +49,8 @@ class singleEqn(BaseEnv):
         
         # Parameters from configuration
         self.max_expr_length = 20
-        self.max_steps = 10
-        self.action_dim = 50
+        self.max_steps = 2
+        self.action_dim = 4
         self.observation_dim = 2 * self.max_expr_length + 1
 
         # Reward settings
@@ -108,38 +108,19 @@ class singleEqn(BaseEnv):
         # Build feature dictionary (e.g., {'add': -1, 'x': 1, 'a':2, ...})
         self.feature_dict = make_feature_dict(self.main_eqn, self.state_rep)
 
-        # Define fixed actions (operations paired with a term)
-        self.actions_fixed = [
-            # (custom_expand, None),
-            # (custom_factor, None),
-            # (custom_collect, self.x), 
-            # (custom_together, None),
-            # (custom_ratsimp, None),
-            # (custom_square, None),
-            # (custom_sqrt, None),
-            (mul, -1)
-        ]
-        # Generate dynamic actions based on the current equation
-        if self.cache:
-            self.actions, self.action_mask = make_actions_cache(self.lhs, self.rhs,
-                                                                  self.actions_fixed,
-                                                                  self.action_dim,
-                                                                  self.action_cache)
-        else:
-            self.actions, self.action_mask = make_actions(self.lhs, self.rhs,
-                                                           self.actions_fixed,
-                                                           self.action_dim)
+        a, b = symbols('a b')
+        operations = [add, sub, mul, truediv]
+        terms = [b]
+        self.actions_fixed = []
+        self.actions = list(product(operations, terms))
+        self.action_mask = [True for i in self.actions]
+        #print(f'actions = {self.actions}')
+
 
     def step(self, action_index: int) -> BaseEnvTimestep:
+
         # Recompute dynamic actions since they depend on the current state
         lhs_old, rhs_old = self.lhs, self.rhs
-
-        # Double check mask
-        if action_index not in self.legal_actions:
-            print(f'\nIllegal action taken: action_index = {action_index}')
-            #print(f'\nIllegal action taken: action_index = {self.action_mask}\n')
-            legal_actions_temp = [i for i, valid in enumerate(self.action_mask) if valid]
-            action_index = np.random.choice(legal_actions_temp)
 
         # Apply the selected action
         action = self.actions[action_index]
@@ -151,15 +132,9 @@ class singleEqn(BaseEnv):
         is_valid_eqn, lhs_new, rhs_new = check_valid_eqn(lhs_new, rhs_new)
         is_solved = check_eqn_solved(lhs_new, rhs_new, self.main_eqn)
 
-
-
         # Compute reward based on equation complexity changes
         reward = self.find_reward(lhs_old, rhs_old, lhs_new, rhs_new, is_valid_eqn, is_solved)
         self.episode_return += reward
-
-        # Temp: remove soon.
-        if term == -1 and not is_solved:
-            reward = 0
 
         # Termination conditions: solved, exceeded max steps, or invalid equation
         too_many_steps = self.current_steps >= self.max_steps
@@ -169,9 +144,6 @@ class singleEqn(BaseEnv):
         # Update state and step counter
         self.lhs, self.rhs, self.obs = lhs_new, rhs_new, np.array(obs_new, dtype=np.float32)
         self.current_steps += 1
-
-        # Update actions
-        self.actions, self.action_mask  = make_actions(lhs_new, rhs_new, self.actions_fixed, self.action_dim)
 
         info = {
             'is_solved': is_solved,
@@ -185,10 +157,8 @@ class singleEqn(BaseEnv):
 
         verbose = True
         if verbose:
-            #print(f'{self.lhs} = {self.rhs}. (Operation, term): {operation_names.get(operation, operation)}, {term} | reward = {reward:.2f}')
-            print(f'(Operation, term): {operation_names.get(operation, operation)}, {term} | reward = {reward:.2f}')
-            if operation_names.get(operation, operation) == 'multiply' and reward > 0:
-                print(f'\n\n{lhs_old} = {rhs_old} => {lhs_new} = {rhs_new}\n\n' )
+            #print(f'\nStep: {self.current_steps}: {lhs_old} = {rhs_old} => {lhs_new} = {rhs_new}')
+            print(f'(Operation, term): {operation_names.get(operation, operation)}, {term} | reward = {reward:.2f}\n')
 
             if is_solved:
                 print(f'\nSOLVED: {self.lhs} = {self.rhs}\n')
@@ -208,7 +178,7 @@ class singleEqn(BaseEnv):
         # Then proceed with the reset
         self.current_steps = 0
         self.lhs, self.rhs = self.main_eqn, 0
-        self.actions, self.action_mask  = make_actions(self.lhs, self.rhs, self.actions_fixed, self.action_dim)
+        #self.actions, self.action_mask  = make_actions(self.lhs, self.rhs, self.actions_fixed, self.action_dim)
         obs, _ = self.to_vec(self.lhs, self.rhs)
         self.obs = np.array(obs, dtype=np.float32)
         self.episode_return = 0

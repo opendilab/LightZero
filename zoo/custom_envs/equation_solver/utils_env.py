@@ -57,14 +57,14 @@ def make_feature_dict_integer_1d(main_eqn):
     ctr = 2
     for symbol in all_symbols:
         if symbol not in feature_dict:
-            feature_dict[symbol] = ctr
+            feature_dict[symbol] = 1.0*ctr
             ctr += 1
 
     # Encode operations as negative numbers
     ctr = -1
     operations = ['add', 'pow', 'mul', 'sqrt']
     for operation in operations:
-        feature_dict[operation] = ctr
+        feature_dict[operation] = 1.0*ctr
         ctr -= 1
 
     return feature_dict
@@ -95,7 +95,7 @@ def integer_encoding_1d(lhs, rhs, feature_dict, max_length):
     L = max_length
     PAD_ID = len(feature_dict) + 1  # Padding token
 
-    vector = np.full(2 * L + 1, PAD_ID, dtype=np.int32)  # Preallocate with padding
+    vector = np.full(2 * L + 1, PAD_ID, dtype=np.float32)  # Preallocate with padding
 
     lhs_as_list, complexity_lhs = sympy_expression_to_list(lhs, feature_dict, L)
     rhs_as_list, complexity_rhs = sympy_expression_to_list(rhs, feature_dict, L)
@@ -275,6 +275,8 @@ def get_ordered_sub_expressions(expr):
         e = queue.pop(0)  # BFS: Process oldest element
         
         if e not in sub_expressions and 1/e not in sub_expressions and e not in [-1,0,1]:
+        #if e not in sub_expressions and 1/e not in sub_expressions and not e.is_Integer and e not in [-1, 0, 1]:
+
             sub_expressions.add(e)
 
             # Only expand non-atomic expressions
