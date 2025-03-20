@@ -30,14 +30,14 @@ history_length = 20
 
 # debug
 # num_simulations = 1
-# history_length=40
+# history_length=20
 # batch_size = 3
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 memory_muzero_config = dict(
-    exp_name=f'data_lz/data_muzero_history/{env_id}_memlen-{memory_length}_muzero_HL{history_length}_ns{num_simulations}_upc{update_per_collect}_seed{seed}',
+    exp_name=f'data_lz/data_muzero_history/{env_id}_memlen-{memory_length}_muzero_HL{history_length}_transformer_ns{num_simulations}_upc{update_per_collect}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -80,6 +80,7 @@ memory_muzero_config = dict(
             downsample=False,
             model_type='conv_history',
             history_length=history_length,
+            fusion_mode= 'transformer',  # 可选: 'mean', 'transformer', 其它未来方式
             num_unroll_steps=num_unroll_steps,
         ),
         eps=dict(
