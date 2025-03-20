@@ -2,7 +2,7 @@ from easydict import EasyDict
 
 env_id = 'visual_match'  # The name of the environment, options: 'visual_match', 'key_to_door'
 memory_length = 60
-max_env_step = int(3e6)
+max_env_step = int(5e5)
 
 # ==============================================================
 # begin of the most frequently changed config specified by the user
@@ -26,18 +26,20 @@ num_unroll_steps = 5
 policy_entropy_weight = 1e-4
 threshold_training_steps_for_final_temperature = int(1e5)
 eps_greedy_exploration_in_collect = True
-history_length = 20
+# history_length = 20
+# history_length = 40
+# history_length = 60
+history_length = 70
 
 # debug
-# num_simulations = 1
-# history_length=20
+# num_simulations = 3
 # batch_size = 3
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 memory_muzero_config = dict(
-    exp_name=f'data_lz/data_muzero_history/{env_id}_memlen-{memory_length}_muzero_HL{history_length}_transformer_ns{num_simulations}_upc{update_per_collect}_seed{seed}',
+    exp_name=f'data_lz/data_muzero_history_20250324/{env_id}_memlen-{memory_length}_muzero_HL{history_length}_transformer_ns{num_simulations}_upc{update_per_collect}_seed{seed}',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -62,6 +64,7 @@ memory_muzero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        sample_type='episode',  # NOTE: very important for memory env
         num_unroll_steps=num_unroll_steps,
         history_length=history_length,
         model=dict(
@@ -74,8 +77,8 @@ memory_muzero_config = dict(
             # model_type='mlp',
             latent_state_dim=128,
             discrete_action_encoding_type='one_hot',
-            # norm_type='BN',
-            norm_type='LN',
+            norm_type='BN',
+            # norm_type='LN',
             # self_supervised_learning_loss=True,  # NOTE: default is False.
             self_supervised_learning_loss=False,
             downsample=False,

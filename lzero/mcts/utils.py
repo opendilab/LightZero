@@ -98,11 +98,13 @@ def prepare_observation(observation_list, model_type='conv'):
         - np.ndarray: Reshaped array of observations.
     """
     assert model_type in ['conv', 'conv_history', 'mlp', 'conv_context', 'mlp_context'], "model_type must be either 'conv' or 'mlp'"
-    try:
-        observation_array = np.array(observation_list)
-    except Exception as e:
-        print(e)
-        import ipdb;ipdb.set_trace()
+    observation_array = np.array(observation_list)
+    
+    # try:
+    #     observation_array = np.array(observation_list)
+    # except Exception as e:
+    #     print(e)
+    #     import ipdb;ipdb.set_trace()
 
     batch_size = observation_array.shape[0]
 

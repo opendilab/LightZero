@@ -747,7 +747,7 @@ class MuZeroHistoryPolicy(Policy):
             ready_env_id = np.arange(active_collect_env_num)
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            if self._cfg.model.model_type in ["conv_context"]:
+            if self._cfg.model.model_type in ["conv_context", "conv_history"]:
 
                 ready_env_ids = sorted(ready_env_id)
                 # 假设 data 的顺序与 ready_env_ids 对应，即 data[i] 为环境 ready_env_ids[i] 最新的观测。
@@ -827,10 +827,10 @@ class MuZeroHistoryPolicy(Policy):
                         'predicted_value': pred_values[i],
                         'predicted_policy_logits': policy_logits[i],
                     }
-                    if self._cfg.model.model_type in ["conv_context"]:
+                    if self._cfg.model.model_type in ["conv_context", "conv_history"]:
                         batch_action.append(action)
 
-                if self._cfg.model.model_type in ["conv_context"]:
+                if self._cfg.model.model_type in ["conv_context", "conv_history"]:
                     self.last_batch_action_collect = batch_action
 
             else:
@@ -909,7 +909,7 @@ class MuZeroHistoryPolicy(Policy):
 
         with torch.no_grad():
 
-            if self._cfg.model.model_type in ["conv_history"]:
+            if self._cfg.model.model_type in ["conv_context", "conv_history"]:
                 # 先更新全局的 self.last_batch_obs：
                 # 对于 ready_env_id 中的每个环境，将最新的观测 data 拼接到之前的历史观测上，然后仅保留最后的 history 个时间步对应的通道。
                 # 为了确保不同环境的顺序一致，先对 ready_env_id 排序（如果 ready_env_id 不是顺序递增的）
@@ -928,7 +928,7 @@ class MuZeroHistoryPolicy(Policy):
 
             if self._cfg.model.model_type in ["conv", "mlp"]:
                 network_output = self._eval_model.initial_inference(data)
-            elif self._cfg.model.model_type in ["conv_history"]:
+            elif self._cfg.model.model_type in ["conv_context", "conv_history"]:
                 # 调用 initial_inference 时，传入更新后的 ready 环境观测；
                 # 注意：这里假定 self.last_batch_action 在对应模型中已经维护好（例如前一次记录的动作历史）。
                 network_output = self._eval_model.initial_inference(self.last_batch_obs_ready_eval, self.last_batch_action_eval, data)
@@ -977,10 +977,10 @@ class MuZeroHistoryPolicy(Policy):
                     'predicted_value': pred_values[i],
                     'predicted_policy_logits': policy_logits[i],
                 }
-                if self._cfg.model.model_type in ["conv_history"]:
+                if self._cfg.model.model_type in ["conv_context", "conv_history"]:
                     batch_action.append(action)
 
-            if self._cfg.model.model_type in ["conv_history"]:
+            if self._cfg.model.model_type in ["conv_context", "conv_history"]:
                 self.last_batch_action_eval = batch_action
 
 

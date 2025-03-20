@@ -14,14 +14,13 @@ import math
 from typing import Sequence, Tuple, List
 import torch.nn.init as init
 
-import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from .common import MZNetworkOutput, PredictionNetwork, FeatureAndGradientHook, MLP_V2, DownSample, SimNorm
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 from lzero.model.muzero_model import MuZeroModel
 from lzero.model.muzero_model_mlp import DynamicsNetworkVector, PredictionNetworkMLP
 from lzero.model.unizero_world_models.transformer import Transformer, TransformerConfig
+import numpy as np
 
 class RepresentationNetworkMemoryEnv(nn.Module):
     def __init__(
@@ -216,7 +215,6 @@ class RepresentationNetwork(nn.Module):
         )
         self.activation = activation
         self.embedding_dim = embedding_dim
-
 
         # self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
         # group=1 等价于 layer normalization 每个 sample 内部归一化
@@ -559,9 +557,35 @@ class MuZeroHistoryModel(MuZeroModel):
         obs = obs.view(seq_batch_size, self.num_unroll_steps + self.history_length + 1, 3, H, W)
         # 此时 obs.shape = [3, 7, 3, 64, 64]
 
+        # import torch
+        # import torchvision.utils as vutils
+        # import matplotlib.pyplot as plt
+        # import numpy as np
+        # from PIL import Image
+        # # 假设 obs 是一个形状为 [2, 10, 3, 64, 64] 的tensor，且像素值范围为 [0, 1]
+        # # 示例：随机数据（实际使用时请替换为你的 obs）
+        # # 将 [2, 10, 3, 64, 64] 转换成 [20, 3, 64, 64] 保持序列顺序，这样每10个图片为一行
+        # obs_flat = obs.reshape(-1, *obs.shape[2:])
+        # # 使用 torchvision.utils.make_grid 拼接图像，设置 nrow=10 表示每行10个
+        # grid = vutils.make_grid(obs_flat, nrow=10, padding=2)
+        # # 将 tensor 转为 numpy 数组，并调整维度顺序以适应 PIL 显示要求（H, W, C）
+        # np_grid = grid.permute(1, 2, 0).cpu().numpy()
+        # # 如果 tensor 的像素值已经在 [0, 1]，可以乘以 255 并转为 uint8 类型
+        # np_grid = (np_grid * 255).astype(np.uint8)
+        # # 保存图像到文件
+        # Image.fromarray(np_grid).save('sequence_grid.png')
+        # # 显示图像
+        # plt.figure(figsize=(8, 4))
+        # plt.imshow(np_grid)
+        # plt.axis('off')
+        # plt.title("2行，每行10个timestep的序列图像")
+        # plt.show()
+
         # Step 2: 对时间维度应用 sliding window 操作（unfold）；
         # unfolding 参数: 在 dim=1 上，窗口大小为 history_length，步长为 1.
         # unfolding 后形状：[seq_batch_size, (7 - history_length + 1), history_length, 3, 64, 64]
+        # observation_array = np.array(observation_list)
+        
         windows = obs.unfold(dimension=1, size=self.history_length, step=1)  # 形状：[3, 6, 3, 64, 64, 2]
         # print("Step 2 windows.shape:", windows.shape)
 

@@ -452,7 +452,8 @@ class MuZeroGameBuffer(GameBuffer):
         with torch.no_grad():
             # import ipdb;ipdb.set_trace()
             value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
-
+            if transition_batch_size > self._cfg.mini_infer_size:
+                print(f"transition_batch_size > mini_infer_size:{transition_batch_size > self._cfg.mini_infer_size}")
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors
             slices = int(np.ceil(transition_batch_size / self._cfg.mini_infer_size))
             network_output = []
@@ -463,7 +464,10 @@ class MuZeroGameBuffer(GameBuffer):
                 # calculate the target value
                 # import ipdb;ipdb.set_trace()
                 # print(f"m_obs.shape: {m_obs.shape}")
-                m_output = model.initial_inference(m_obs)
+                try:
+                    m_output = model.initial_inference(m_obs)
+                except Exception as e:
+                    print(e)
 
                 if not model.training:
                     # if not in training, obtain the scalars of the value/reward
