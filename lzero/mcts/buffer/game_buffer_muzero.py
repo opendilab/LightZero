@@ -450,6 +450,7 @@ class MuZeroGameBuffer(GameBuffer):
 
         batch_target_values, batch_rewards = [], []
         with torch.no_grad():
+            # import ipdb;ipdb.set_trace()
             value_obs_list = prepare_observation(value_obs_list, self._cfg.model.model_type)
 
             # split a full batch into slices of mini_infer_size: to save the GPU memory for more GPU actors

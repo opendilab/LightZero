@@ -10,16 +10,135 @@ import torch.nn as nn
 from ding.torch_utils import MLP, ResBlock
 from ding.utils import MODEL_REGISTRY, SequenceType
 from numpy import ndarray
+import math
+from typing import Sequence, Tuple, List
+import torch.nn.init as init
 
-from .common import MZNetworkOutput, PredictionNetwork, FeatureAndGradientHook, MLP_V2, DownSample
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from .common import MZNetworkOutput, PredictionNetwork, FeatureAndGradientHook, MLP_V2, DownSample, SimNorm
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 from lzero.model.muzero_model import MuZeroModel
+from lzero.model.muzero_model_mlp import DynamicsNetworkVector, PredictionNetworkMLP
 
+
+class RepresentationNetworkMemoryEnv(nn.Module):
+    def __init__(
+        self,
+        image_shape: Sequence = (3, 5, 5),  # 单步输入 shape，每一步的 channel 为 image_shape[0]
+        embedding_size: int = 100,
+        channels: List[int] = [16, 32, 64],
+        kernel_sizes: List[int] = [3, 3, 3],
+        strides: List[int] = [1, 1, 1],
+        activation: nn.Module = nn.GELU(approximate='tanh'),
+        normalize_pixel: bool = False,
+        group_size: int = 8,
+        fusion_mode: str = 'mean',  # 当前仅支持均值融合，后续可扩展为其它融合方式
+        **kwargs,
+    ):
+        """
+        表征网络，用于 MemoryEnv，将2D图像 obs 编码为 latent state，并支持对多历史步进行融合。
+        除了对单步图像进行编码（如 image_shape 为 (3, 5, 5)），本网络扩展为：
+          1. 根据输入通道数（total_channels）与单步输入通道数（image_shape[0]）的比值，划分为多个历史步，
+             即输入 x 的 shape 为 [B, total_channels, W, H]，其中 total_channels 应为 (history_length * image_shape[0])。
+          2. 分别编码每一步，输出 latent series，形状为 [B, history_length, embedding_size]。
+          3. 根据 fusion_mode 对 history_length 个 latent 进行融合，得到最终 latent state，形状为 [B, embedding_size]。
+        """
+        super(RepresentationNetworkMemoryEnv, self).__init__()
+        self.image_shape = image_shape
+        self.single_step_in_channels = image_shape[0]
+        self.embedding_size = embedding_size
+        self.normalize_pixel = normalize_pixel
+        self.fusion_mode = fusion_mode
+
+        # 构建单步 CNN encoder 网络（和 LatentEncoderForMemoryEnv 保持一致的基本结构）
+        self.channels = [image_shape[0]] + list(channels)
+        layers = []
+        for i in range(len(self.channels) - 1):
+            layers.append(
+                nn.Conv2d(
+                    in_channels=self.channels[i],
+                    out_channels=self.channels[i + 1],
+                    kernel_size=kernel_sizes[i],
+                    stride=strides[i],
+                    padding=kernel_sizes[i] // 2,  # 保持 feature map 大小不变
+                )
+            )
+            layers.append(nn.BatchNorm2d(self.channels[i + 1]))
+            layers.append(activation)
+        # 自适应池化，输出形状固定为 1x1
+        layers.append(nn.AdaptiveAvgPool2d(1))
+        self.cnn = nn.Sequential(*layers)
+
+        # 全连接层将 CNN 输出转为 embedding 表征
+        self.linear = nn.Linear(self.channels[-1], embedding_size, bias=False)
+        init.kaiming_normal_(self.linear.weight, mode='fan_out', nonlinearity='relu')
+
+        self.sim_norm = SimNorm(simnorm_dim=group_size)
+
+    def forward_single(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        对单步输入进行编码：
+          x: [B, single_step_in_channels, W, H]
+          返回: [B, embedding_size]
+        """
+        if self.normalize_pixel:
+            x = x / 255.0
+        x = self.cnn(x.float())  # 输出形状 (B, C, 1, 1)
+        # import ipdb;ipdb.set_trace()
+
+        x = torch.flatten(x, start_dim=1)  # 转换为形状 (B, C)
+        x = self.linear(x)  # (B, embedding_size)
+        x = self.sim_norm(x)  # 归一化处理
+        return x
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Args:
+            x: 输入 tensor，形状 [B, total_channels, W, H]，其中 total_channels 应为 (history_length * single_step_in_channels)
+               例如输入 shape 可为: [8, 12, 5, 5]，其中 12 = 4 * 3，表示 4 个历史步，每步 3 个 channel。
+        Returns:
+            latent_series: 各步的 latent 表征，形状为 [B, history_length, embedding_size]
+            latent_fused: 融合后的 latent 表征，形状为 [B, embedding_size]
+        """
+        B, total_channels, W, H = x.shape
+        if total_channels % self.single_step_in_channels != 0:
+            raise ValueError(
+                f"总通道数 {total_channels} 不能整除单步通道数 {self.single_step_in_channels}"
+            )
+        history_length = total_channels // self.single_step_in_channels
+
+        latent_series = []
+        for t in range(history_length):
+            # 取第 t 个历史步的数据
+            x_t = x[:, t * self.single_step_in_channels:(t + 1) * self.single_step_in_channels, :, :]
+            latent_t = self.forward_single(x_t)  # [B, embedding_size]
+            latent_series.append(latent_t.unsqueeze(1))  # 在时间维度上扩展
+
+        latent_series = torch.cat(latent_series, dim=1)  # [B, history_length, embedding_size]
+
+        # import ipdb;ipdb.set_trace()
+
+        # 根据 fusion_mode 对所有历史步进行融合
+        if self.fusion_mode == 'mean':
+            latent_fused = latent_series.mean(dim=1)
+        else:
+            # 其它融合方式：例如先拼接后通过全连接层融合
+            B, T, E = latent_series.shape
+            latent_concat = latent_series.view(B, -1)  # [B, T * E]
+            fusion_fc = nn.Linear(T * E, E).to(x.device)
+            latent_fused = fusion_fc(latent_concat)
+
+        # return latent_series, latent_fused
+        return latent_fused
+
+
+# 修改后的扩展版本的 RepresentationNetwork
 class RepresentationNetwork(nn.Module):
-
     def __init__(
             self,
-            observation_shape: SequenceType = (4, 96, 96),
+            observation_shape: Sequence = (3, 64, 64),  # 单步输入 shape, 每一步3个channel
             num_res_blocks: int = 1,
             num_channels: int = 64,
             downsample: bool = True,
@@ -28,29 +147,21 @@ class RepresentationNetwork(nn.Module):
             embedding_dim: int = 256,
             group_size: int = 8,
             use_sim_norm: bool = False,
+            fusion_mode: str = 'mean',  # 可以扩展为其它融合方式
     ) -> None:
         """
-        Overview:
-            Representation network used in MuZero and derived algorithms. Encode the 2D image obs into latent state.
-            Currently, the network only supports obs images with both a width and height of 96.
-        Arguments:
-            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[4, 96, 96]
-                for video games like atari, 1 gray channel times stack 4 frames.
-            - num_res_blocks (:obj:`int`): The number of residual blocks.
-            - num_channels (:obj:`int`): The channel of output hidden state.
-            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
-                defaults to True. This option is often used in video games like Atari. In board games like go, \
-                we don't need this module.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(inplace=True). \
-                Use the inplace operation to speed up.
-            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
-            - embedding_dim (:obj:`int`): The dimension of the output hidden state.
-            - group_size (:obj:`int`): The size of group in the SimNorm layer.
-            - use_sim_norm (:obj:`bool`): Whether to use SimNorm layer, defaults to False.
+        表征网络，将2D图像 obs 编码为 latent state。
+
+        除了本来的单步编码（例如 obs_with_history[:,:3,:,:]），该网络扩展为：
+         1. 根据输入的第二维（通道维度）划分为多个历史步（每步3个 channel）。
+         2. 分别计算每一步的 latent state，输出 shape 为 [B, T, num_channels, H_out, W_out]。
+         3. 将 T 步的信息融合（例如均值融合）得到最终 latent state，其 shape 为 [B, num_channels, H_out, W_out]。
         """
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
 
+        # 这里单步输入channels为 observation_shape[0]，一般设置为 3
+        self.single_step_in_channels = observation_shape[0]
         self.downsample = downsample
         if self.downsample:
             self.downsample_net = DownSample(
@@ -60,17 +171,11 @@ class RepresentationNetwork(nn.Module):
                 norm_type=norm_type,
             )
         else:
-            self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
-
+            self.conv = nn.Conv2d(self.single_step_in_channels, num_channels, kernel_size=3, stride=1, padding=1, bias=False)
             if norm_type == 'BN':
                 self.norm = nn.BatchNorm2d(num_channels)
             elif norm_type == 'LN':
-                if downsample:
-                    self.norm = nn.LayerNorm(
-                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
-                        eps=1e-5)
-                else:
-                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-5)
+                self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-5)
 
         self.resblocks = nn.ModuleList(
             [
@@ -80,20 +185,20 @@ class RepresentationNetwork(nn.Module):
             ]
         )
         self.activation = activation
-
         self.use_sim_norm = use_sim_norm
 
         if self.use_sim_norm:
             self.embedding_dim = embedding_dim
             self.sim_norm = SimNorm(simnorm_dim=group_size)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # 融合模式，当前仅支持均值融合；可以扩展为其它方式，例如使用 1D 卷积融合时间步信息
+        self.fusion_mode = fusion_mode
+
+    def forward_single(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Shapes:
-            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \
-                H is height.
-            - output (:obj:`torch.Tensor`): :math:`(B, C_out, W_, H_)`, where B is batch size, C_out is channel, W_ is \
-                output width, H_ is output height.
+        处理单步输入：
+          x: [B, single_step_in_channels, W, H]
+          返回: [B, num_channels, W_out, H_out]
         """
         if self.downsample:
             x = self.downsample_net(x)
@@ -106,11 +211,50 @@ class RepresentationNetwork(nn.Module):
             x = block(x)
 
         if self.use_sim_norm:
-            # NOTE: very important. 
-            # for atari 64,8,8 = 4096 -> 768
             x = self.sim_norm(x)
 
         return x
+
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Args:
+            x: 输入 tensor，shape 为 [B, total_channels, W, H]，其中 total_channels 应为 (history_length * single_step_in_channels)。
+               例如 collect/eval 阶段的输入 shape: [8, 12, 64, 64]，其中 12 = 4 * 3，表示 4 个历史步，每步 3 个 channel。
+
+        Returns:
+            latent_series: 各步的 latent state，shape 为 [B, history_length, num_channels, W_out, H_out]
+            latent_fused: 融合后的 latent state，shape 为 [B, num_channels, W_out, H_out]
+        """
+        B, total_channels, W, H = x.shape
+        assert total_channels % self.single_step_in_channels == 0, (
+            f"Total channels {total_channels} 不能整除单步通道数 {self.single_step_in_channels}"
+        )
+        history_length = total_channels // self.single_step_in_channels
+
+        latent_series = []
+        for t in range(history_length):
+            # 对应第 t 步的数据：取第 t*channel 到 (t+1)*channel
+            x_t = x[:, t * self.single_step_in_channels:(t + 1) * self.single_step_in_channels, :, :]
+            latent_t = self.forward_single(x_t)  # [B, num_channels, W_out, H_out]
+            latent_series.append(latent_t.unsqueeze(1))  # 在时间维度上扩展
+
+        latent_series = torch.cat(latent_series, dim=1)  # [B, history_length, num_channels, W_out, W_out]
+
+        # import ipdb;ipdb.set_trace()
+
+        # 根据 fusion_mode 融合历史步信息
+        if self.fusion_mode == 'mean':
+            latent_fused = latent_series.mean(dim=1)  # 均值融合, [B, num_channels, W_out, H_out]
+        else:
+            # 可增加其它融合方式，比如拼接后通过1x1卷积
+            B, T, C, H_out, W_out = latent_series.shape
+            latent_concat = latent_series.view(B, -1, H_out, W_out)  # [B, T * C, H_out, W_out]
+            fusion_conv = nn.Conv2d(T * C, C, kernel_size=1)
+            latent_fused = fusion_conv(latent_concat)
+
+        # return latent_series, latent_fused
+        return latent_fused
+
 
 
 # use ModelRegistry to register the model, for more details about ModelRegistry, please refer to DI-engine's document.
@@ -229,6 +373,9 @@ class MuZeroHistoryModel(MuZeroModel):
             latent_size = math.ceil(observation_shape[1] / 16) * math.ceil(observation_shape[2] / 16)
         elif observation_shape[1] == 64:
             latent_size = math.ceil(observation_shape[1] / 8) * math.ceil(observation_shape[2] / 8)
+        elif observation_shape[1] == 5:
+            latent_size = 64
+
 
         flatten_input_size_for_reward_head = (
             (reward_head_channels * latent_size) if downsample else
@@ -243,57 +390,92 @@ class MuZeroHistoryModel(MuZeroModel):
             (policy_head_channels * observation_shape[1] * observation_shape[2])
         )
 
-        self.representation_network = RepresentationNetwork(
-            observation_shape,
-            num_res_blocks,
-            num_channels,
-            downsample,
-            activation=activation,
-            norm_type=norm_type,
-            embedding_dim=768,
-            group_size=8,
-            use_sim_norm=use_sim_norm,  # NOTE
-        )
+        if observation_shape[1] == 5:
+            # MemoryEnv
+            embedding_size = 768
+            self.representation_network = RepresentationNetworkMemoryEnv(
+                observation_shape,
+                embedding_size=embedding_size,
+                channels= [16, 32, 64],
+                group_size= 8,
+            )
+            self.num_channels = num_channels
+            self.latent_state_dim = self.num_channels - self.action_encoding_dim
 
-        # ====== for analysis ======
-        if self.analysis_sim_norm:
-            self.encoder_hook = FeatureAndGradientHook()
-            self.encoder_hook.setup_hooks(self.representation_network)
+            self.dynamics_network = DynamicsNetworkVector(
+                action_encoding_dim=self.action_encoding_dim,
+                num_channels=embedding_size + self.action_encoding_dim,
+                common_layer_num=2,
+                reward_head_hidden_channels=reward_head_hidden_channels,
+                output_support_size=self.reward_support_size,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                norm_type=norm_type,
+                res_connection_in_dynamics=True,
+            )
+            self.vector_ynamics_network = True
+            self.prediction_network = PredictionNetworkMLP(
+                action_space_size=action_space_size,
+                num_channels=embedding_size,
+                value_head_hidden_channels=value_head_hidden_channels,
+                policy_head_hidden_channels=policy_head_hidden_channels,
+                output_support_size=self.value_support_size,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                norm_type=norm_type
+            )
+        else:
+            # atari
+            self.representation_network = RepresentationNetwork(
+                observation_shape,
+                num_res_blocks,
+                num_channels,
+                downsample,
+                activation=activation,
+                norm_type=norm_type,
+                embedding_dim=768,
+                group_size=8,
+                use_sim_norm=use_sim_norm,  # NOTE
+            )
+                    # ====== for analysis ======
+            if self.analysis_sim_norm:
+                self.encoder_hook = FeatureAndGradientHook()
+                self.encoder_hook.setup_hooks(self.representation_network)
 
-        self.dynamics_network = DynamicsNetwork(
-            observation_shape,
-            self.action_encoding_dim,
-            num_res_blocks,
-            num_channels + self.action_encoding_dim,
-            reward_head_channels,
-            reward_head_hidden_channels,
-            self.reward_support_size,
-            flatten_input_size_for_reward_head,
-            downsample,
-            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            activation=activation,
-            norm_type=norm_type,
-            embedding_dim=768,
-            group_size=8,
-            use_sim_norm=use_sim_norm,  # NOTE
-        )
-        self.prediction_network = PredictionNetwork(
-            observation_shape,
-            action_space_size,
-            num_res_blocks,
-            num_channels,
-            value_head_channels,
-            policy_head_channels,
-            value_head_hidden_channels,
-            policy_head_hidden_channels,
-            self.value_support_size,
-            flatten_input_size_for_value_head,
-            flatten_input_size_for_policy_head,
-            downsample,
-            last_linear_layer_init_zero=self.last_linear_layer_init_zero,
-            activation=activation,
-            norm_type=norm_type
-        )
+            self.dynamics_network = DynamicsNetwork(
+                observation_shape,
+                self.action_encoding_dim,
+                num_res_blocks,
+                num_channels + self.action_encoding_dim,
+                reward_head_channels,
+                reward_head_hidden_channels,
+                self.reward_support_size,
+                flatten_input_size_for_reward_head,
+                downsample,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                activation=activation,
+                norm_type=norm_type,
+                embedding_dim=768,
+                group_size=8,
+                use_sim_norm=use_sim_norm,  # NOTE
+            )
+            self.vector_ynamics_network = False
+
+            self.prediction_network = PredictionNetwork(
+                observation_shape,
+                action_space_size,
+                num_res_blocks,
+                num_channels,
+                value_head_channels,
+                policy_head_channels,
+                value_head_hidden_channels,
+                policy_head_hidden_channels,
+                self.value_support_size,
+                flatten_input_size_for_value_head,
+                flatten_input_size_for_policy_head,
+                downsample,
+                last_linear_layer_init_zero=self.last_linear_layer_init_zero,
+                activation=activation,
+                norm_type=norm_type
+            )
 
         if self.self_supervised_learning_loss:
             # projection used in EfficientZero
@@ -340,7 +522,7 @@ class MuZeroHistoryModel(MuZeroModel):
         # import ipdb;ipdb.set_trace()
 
         # Step 1: 重构 shape 为 [seq_batch_size, (num_unroll_steps+history_length), 3, 64, 64]
-        obs = obs.view(seq_batch_size, self.num_unroll_steps + self.history_length + 1, 3, 64, 64)
+        obs = obs.view(seq_batch_size, self.num_unroll_steps + self.history_length + 1, 3, H, W)
         # 此时 obs.shape = [3, 7, 3, 64, 64]
 
         # Step 2: 对时间维度应用 sliding window 操作（unfold）；
@@ -364,9 +546,9 @@ class MuZeroHistoryModel(MuZeroModel):
         # Step 4: 将窗口中的观测在通道维度上进行拼接
         # 原本每个窗口形状为 [2, 3, 64, 64]，将 2 (history_length) 个通道拼接后变为 [6, 64, 64]
         # 整体结果 shape 最终为 [seq_batch_size, num_unroll_steps, history_length*3, 64, 64] = [3, 5, 6, 64, 64]
-        windows_padded = windows_padded.reshape(seq_batch_size, self.num_unroll_steps+self.history_length + 1, history_length * 3, 64, 64)
+        windows_padded = windows_padded.reshape(seq_batch_size, self.num_unroll_steps+self.history_length + 1, history_length * 3, H, W)
 
-        obs_with_history = windows_padded.view(-1, self.history_length * 3, 64, 64)
+        obs_with_history = windows_padded.view(-1, self.history_length * 3, H, W)
 
 
         return obs_with_history
@@ -401,7 +583,7 @@ class MuZeroHistoryModel(MuZeroModel):
             # train phase
             # import ipdb;ipdb.set_trace()
             if action_batch is None and obs.shape[1] != 3*self.history_length:
-                # compute target value
+                # ======train phase: compute target value =======
                 # 已知seq_batch_size=3， self.num_unroll_steps=5， self.history_length=2，
                 # 已知目前obs.shape == [seq_batch_size,(self.num_unroll_steps+self.history_length),3,64,64]  请先变换为 -> [seq_batch_size,(self.num_unroll_steps+self.history_length),3,64,64]  
                 # 例如[21, 3, 64, 64] ->  [3, 7, 3, 64, 64]
@@ -410,28 +592,31 @@ class MuZeroHistoryModel(MuZeroModel):
                 # 即变为[i,7-self.history_length, 3*self.history_length,64,64] = [i,5,6,64,64]
                 # 总的数据变换过程为 [21, 3, 64, 64] -> [3*7, 3, 64, 64] -> [3, 7, 3, 64, 64]-> [3, 6, 6, 64, 64]
                 obs_with_history = self.stack_history_torch(obs, self.history_length)
+                # print(f"train phase (compute target value) obs_with_history.shape:{obs_with_history.shape}")
 
             else:
-                # train phase
+                # ======= train phase: init_infer =======
                 obs_with_history = obs
+                # print(f"train phase (init inference) obs_with_history.shape:{obs_with_history.shape}")
 
             assert obs_with_history.shape[1] == 3*self.history_length
-
-
-            # self.latent_state = self.representation_network(obs)
-            
             # TODO(pu)
-            latent_state_first = self.representation_network(obs_with_history[:,:3,:,:])
-            latent_state_second = self.representation_network(obs_with_history[:,-3:,:,:])
-            self.latent_state = latent_state_second
+            self.latent_state = self.representation_network(obs_with_history)
+
             self.timestep = 0
         else:
-            # collect/eval phase
-            assert obs.shape[1] == 3*self.history_length
+            # print(f"collect/eval phase obs_with_history.shape:{obs.shape}")
+            # ======== collect/eval phase ========
+            obs_with_history = obs
+
+            # ===== obs: torch.Tensor, action_batch=None, current_obs_batch=None
+            assert obs_with_history.shape[1] == 3*self.history_length
             # TODO(pu)
-            latent_state_first = self.representation_network(obs[:,:3,:,:])
-            latent_state_second = self.representation_network(obs[:,-3:,:,:])
-            self.latent_state = latent_state_second
+            self.latent_state = self.representation_network(obs_with_history)
+            # print(f"collect/eval phase latent_state.shape:{self.latent_state.shape}")
+
+
+        # import ipdb;ipdb.set_trace()
 
         policy_logits, value = self.prediction_network(self.latent_state)
         self.timestep += 1
@@ -470,10 +655,70 @@ class MuZeroHistoryModel(MuZeroModel):
             - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
                 latent state, W_ is the width of latent state.
          """
-        next_latent_state, reward = self._dynamics(latent_state, action)
+        if self.vector_ynamics_network:
+            next_latent_state, reward = self._dynamics_vector(latent_state, action)
+        else:
+            next_latent_state, reward = self._dynamics(latent_state, action)
+
         policy_logits, value = self.prediction_network(next_latent_state)
         self.latent_state = next_latent_state  # NOTE: update latent_state
         return MZNetworkOutput(value, reward, policy_logits, next_latent_state)
+
+    def _dynamics_vector(self, latent_state: torch.Tensor, action: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Overview:
+            Concatenate ``latent_state`` and ``action`` and use the dynamics network to predict ``next_latent_state``
+            ``reward`` and ``next_reward_hidden_state``.
+        Arguments:
+            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
+            - reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The input hidden state of LSTM about reward.
+            - action (:obj:`torch.Tensor`): The predicted action to rollout.
+        Returns:
+            - next_latent_state (:obj:`torch.Tensor`): The predicted latent state of the next timestep.
+            - next_reward_hidden_state (:obj:`Tuple[torch.Tensor]`): The output hidden state of LSTM about reward.
+            - reward (:obj:`torch.Tensor`): The predicted reward for input state.
+        Shapes:
+            - latent_state (:obj:`torch.Tensor`): :math:`(B, H)`, where B is batch_size, H is the dimension of latent state.
+            - action (:obj:`torch.Tensor`): :math:`(B, )`, where B is batch_size.
+            - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H)`, where B is batch_size, H is the dimension of latent state.
+            - reward (:obj:`torch.Tensor`): :math:`(B, reward_support_size)`, where B is batch_size.
+        """
+        # NOTE: the discrete action encoding type is important for some environments
+
+        # discrete action space
+        if self.discrete_action_encoding_type == 'one_hot':
+            # Stack latent_state with the one hot encoded action
+            if len(action.shape) == 1:
+                # (batch_size, ) -> (batch_size, 1)
+                # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
+                action = action.unsqueeze(-1)
+
+            # transform action to one-hot encoding.
+            # action_one_hot shape: (batch_size, action_space_size), e.g., (8, 4)
+            action_one_hot = torch.zeros(action.shape[0], self.action_space_size, device=action.device)
+            # transform action to torch.int64
+            action = action.long()
+            action_one_hot.scatter_(1, action, 1)
+            action_encoding = action_one_hot
+        elif self.discrete_action_encoding_type == 'not_one_hot':
+            action_encoding = action / self.action_space_size
+            if len(action_encoding.shape) == 1:
+                # (batch_size, ) -> (batch_size, 1)
+                # e.g.,  torch.Size([8]) ->  torch.Size([8, 1])
+                action_encoding = action_encoding.unsqueeze(-1)
+
+        action_encoding = action_encoding.to(latent_state.device).float()
+        # state_action_encoding shape: (batch_size, latent_state[1] + action_dim]) or
+        # (batch_size, latent_state[1] + action_space_size]) depending on the discrete_action_encoding_type.
+        state_action_encoding = torch.cat((latent_state, action_encoding), dim=1)
+
+        next_latent_state, reward = self.dynamics_network(state_action_encoding)
+
+        if not self.state_norm:
+            return next_latent_state, reward
+        else:
+            next_latent_state_normalized = renormalize(next_latent_state)
+            return next_latent_state_normalized, reward
 
 
 class DynamicsNetwork(nn.Module):

@@ -6,24 +6,25 @@ action_space_size = atari_env_action_space_map[env_id]
 # ==============================================================
 # begin of the most frequently changed config specified by the user
 # ==============================================================
-collector_env_num = 2
-n_episode = 2
-evaluator_env_num = 2
+collector_env_num = 8
+n_episode = 8
+evaluator_env_num = 3
 num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
 batch_size = 256
 max_env_step = int(5e5)
 reanalyze_ratio = 0.
+history_length=4
+# history_length=2
 
-# num_simulations = 3
-# collector_env_num = 2
-# n_episode = 2
+# collector_env_num = 4
+# n_episode = 4
 # evaluator_env_num = 3
-# num_simulations = 1
-# update_per_collect = 2
+# num_simulations = 3
+# update_per_collect = 200
 # replay_ratio = 0.
-# batch_size = 3
+# batch_size = 2
 # max_env_step = int(5e5)
 # reanalyze_ratio = 0.
 # ==============================================================
@@ -31,7 +32,7 @@ reanalyze_ratio = 0.
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_muzero_history/{env_id[:-14]}_muzero_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_stack1_seed0',
+    exp_name=f'data_lz/data_muzero_history/{env_id[:-14]}_muzero_HL{history_length}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_stack1_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -42,11 +43,13 @@ atari_muzero_config = dict(
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
         manager=dict(shared_memory=False, ),
-        # collect_max_episode_steps=int(2e4),
-        # eval_max_episode_steps=int(1e4),
+        collect_max_episode_steps=int(2e4),
+        eval_max_episode_steps=int(1e4),
         # debug
-        collect_max_episode_steps=int(20),
-        eval_max_episode_steps=int(20),
+        # collect_max_episode_steps=int(1200),
+        # eval_max_episode_steps=int(1200),
+        # collect_max_episode_steps=int(50),
+        # eval_max_episode_steps=int(50),
     ),
     policy=dict(
         model=dict(
@@ -61,10 +64,10 @@ atari_muzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
             model_type='conv_history',
-            history_length=4,
+            history_length=history_length,
             num_unroll_steps=5,
         ),
-        history_length=4,
+        history_length=history_length,
         num_unroll_steps=5,
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
@@ -85,7 +88,8 @@ atari_muzero_config = dict(
         reanalyze_ratio=reanalyze_ratio,
         ssl_loss_weight=2,
         n_episode=n_episode,
-        eval_freq=int(2e3),
+        eval_freq=int(1e3),
+        # eval_freq=int(1e2), # TODO
         replay_buffer_size=int(1e6),
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,

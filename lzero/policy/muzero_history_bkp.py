@@ -380,7 +380,7 @@ class MuZeroHistoryPolicy(Policy):
         target_reward, target_value, target_policy = target_batch
 
         # import ipdb;ipdb.set_trace()
-        # TODO: check SSL=False obs_target_batch = None
+        # TODO
         obs_batch, obs_target_batch = prepare_obs_history(obs_batch_ori, self._cfg)
 
         # do augmentations
@@ -400,12 +400,6 @@ class MuZeroHistoryPolicy(Policy):
 
         target_reward = target_reward.view(self._cfg.batch_size, -1)
         target_value = target_value.view(self._cfg.batch_size, -1)
-
-        # TODO: check
-        # 第一步的latent state 对应采样的序列中的第self.history_length-1=2-1=步（序列从1开始计算），例如采样长度为5+2+1=8，第一步的latent state对应第2步（序列从1开始计算）
-        target_policy = target_policy[:,self.history_length-1:,:]
-        target_reward = target_reward[:,self.history_length:]
-        target_value = target_value[:,self.history_length-1:]
 
         assert obs_batch.size(0) == self._cfg.batch_size == target_reward.size(0)
 
@@ -472,7 +466,6 @@ class MuZeroHistoryPolicy(Policy):
             # unroll with the dynamics function: predict the next ``latent_state``, ``reward``,
             # given current ``latent_state`` and ``action``.
             # And then predict policy_logits and value with the prediction function.
-            # import ipdb;ipdb.set_trace()
             network_output = self._learn_model.recurrent_inference(latent_state, action_batch[:, step_k+self.history_length-1])
             latent_state, reward, value, policy_logits = mz_network_output_unpack(network_output)
 
@@ -694,11 +687,11 @@ class MuZeroHistoryPolicy(Policy):
         self.collect_epsilon = 0.0
         self.collector_env_num = self._cfg.collector_env_num
         if self._cfg.model.model_type in ["conv_context"]:
-            self.batch_obs_history_collect = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], self._cfg.model.observation_shape[1],self._cfg.model.observation_shape[2]]).to(self._cfg.device)
+            self.last_batch_obs_collect = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0], self._cfg.model.observation_shape[1],self._cfg.model.observation_shape[2]]).to(self._cfg.device)
             self.last_batch_action_collect = [-1 for i in range(self.collector_env_num)]
         if self._cfg.model.model_type in [ "conv_history"]:
-            self.batch_obs_history_collect = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0]*self._cfg.model.history_length, self._cfg.model.observation_shape[1],self._cfg.model.observation_shape[2]]).to(self._cfg.device)
-            self.batch_obs_with_history_ready_collect = self.batch_obs_history_collect
+            self.last_batch_obs_collect = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0]*self._cfg.model.history_length, self._cfg.model.observation_shape[1],self._cfg.model.observation_shape[2]]).to(self._cfg.device)
+            self.last_batch_obs_ready_collect = self.last_batch_obs_collect
             self.last_batch_action_collect = [-1 for i in range(self.collector_env_num)]
 
     def _forward_collect(
@@ -739,32 +732,18 @@ class MuZeroHistoryPolicy(Policy):
         self._collect_mcts_temperature = temperature
         self.collect_epsilon = epsilon
         active_collect_env_num = data.shape[0]
-        # if active_collect_env_num < self.collector_env_num:
-        #     print(f"active_collect_env_num:{active_collect_env_num}")
+        if active_collect_env_num < self.collector_env_num:
+            print(f"active_collect_env_num:{active_collect_env_num}")
             # import ipdb;ipdb.set_trace()
 
         if ready_env_id is None:
             ready_env_id = np.arange(active_collect_env_num)
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            if self._cfg.model.model_type in ["conv_context"]:
-
-                ready_env_ids = sorted(ready_env_id)
-                # 假设 data 的顺序与 ready_env_ids 对应，即 data[i] 为环境 ready_env_ids[i] 最新的观测。
-                for idx, env_id in enumerate(ready_env_ids):
-                    # self.last_batch_obs[env_id]: shape [total_channels, H, W]
-                    # data[idx]: shape [num_obs_channels, H, W]
-                    # 拼接后通道数为 total_channels + num_obs_channels
-                    combined_obs = torch.cat([self.batch_obs_history_collect[env_id], data[idx]], dim=0)
-                    # 仅保留最新的 total_channels 个通道
-                    self.batch_obs_history_collect[env_id] = combined_obs[-self.history_channels:]
-                # 从全局历史张量中取出当前 ready 环境对应的更新后的观测
-                self.batch_obs_with_history_ready_collect = self.batch_obs_history_collect[ready_env_ids]
-
             if self._cfg.model.model_type in ["conv", "mlp"]:
                 network_output = self._collect_model.initial_inference(data)
             elif self._cfg.model.model_type in ["conv_context", "conv_history"]:
-                network_output = self._collect_model.initial_inference(self.batch_obs_with_history_ready_collect, self.last_batch_action_collect,
+                network_output = self._collect_model.initial_inference(self.last_batch_obs_ready_collect, self.last_batch_action_collect,
                                                                        data)
 
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
@@ -787,10 +766,11 @@ class MuZeroHistoryPolicy(Policy):
                     # python mcts_tree
                     roots = MCTSPtree.roots(active_collect_env_num, legal_actions)
                 
-                # if len(reward_roots) != len(policy_logits):
-                #     import ipdb;ipdb.set_trace()
-                # if len(reward_roots) != len(noises):
-                #     import ipdb;ipdb.set_trace()
+                if len(reward_roots) != len(policy_logits):
+                    import ipdb;ipdb.set_trace()
+                if len(reward_roots) != len(noises):
+                    import ipdb;ipdb.set_trace()
+                
 
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_roots, policy_logits, to_play)
                 self._mcts_collect.search(roots, self._collect_model, latent_state_roots, to_play)
@@ -833,6 +813,23 @@ class MuZeroHistoryPolicy(Policy):
                 if self._cfg.model.model_type in ["conv_context"]:
                     self.last_batch_action_collect = batch_action
 
+                    # import ipdb;ipdb.set_trace()
+                    # 先更新全局的 self.last_batch_obs：
+                    # 对于 ready_env_id 中的每个环境，将最新的观测 data 拼接到之前的历史观测上，然后仅保留最后的 history 个时间步对应的通道。
+                    # 为了确保不同环境的顺序一致，先对 ready_env_id 排序（如果 ready_env_id 不是顺序递增的）
+                    ready_env_ids = sorted(ready_env_id)
+
+                    # 假设 data 的顺序与 ready_env_ids 对应，即 data[i] 为环境 ready_env_ids[i] 最新的观测。
+                    for idx, env_id in enumerate(ready_env_ids):
+                        # self.last_batch_obs[env_id]: shape [total_channels, H, W]
+                        # data[idx]: shape [num_obs_channels, H, W]
+                        # 拼接后通道数为 total_channels + num_obs_channels
+                        combined_obs = torch.cat([self.last_batch_obs_collect[env_id], data[idx]], dim=0)
+                        # 仅保留最新的 total_channels 个通道
+                        self.last_batch_obs_collect[env_id] = combined_obs[-self.history_channels:]
+                    
+                    # 从全局历史张量中取出当前 ready 环境对应的更新后的观测
+                    self.last_batch_obs_ready_collect = self.last_batch_obs_collect[ready_env_ids]
             else:
                 for i, env_id in enumerate(ready_env_id):
                     policy_values = torch.softmax(torch.tensor([policy_logits[i][a] for a in legal_actions[i]]),
@@ -863,17 +860,20 @@ class MuZeroHistoryPolicy(Policy):
         self.evaluator_env_num = self._cfg.evaluator_env_num
 
         if self._cfg.model.model_type in ["conv_context"]:
-            self.batch_obs_history_eval = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0], self._cfg.model.observation_shape[1],self._cfg.model.observation_shape[2]]).to(self._cfg.device)
+            self.last_batch_obs_eval = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0], self._cfg.model.observation_shape[1],self._cfg.model.observation_shape[2]]).to(self._cfg.device)
             self.last_batch_action_eval = [-1 for _ in range(self.evaluator_env_num)]
         if self._cfg.model.model_type in [ "conv_history"]:
-            self.batch_obs_history_eval = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0]*self._cfg.model.history_length, self._cfg.model.observation_shape[1],self._cfg.model.observation_shape[2]]).to(self._cfg.device)
-            self.last_batch_obs_ready_eval = self.batch_obs_history_eval
+            self.last_batch_obs_eval = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0]*self._cfg.model.history_length, self._cfg.model.observation_shape[1],self._cfg.model.observation_shape[2]]).to(self._cfg.device)
+            self.last_batch_obs_ready_eval = self.last_batch_obs_eval
             self.last_batch_action_eval = [-1 for i in range(self.evaluator_env_num)]
         
         num_obs_channels = self._cfg.model.observation_shape[0]
         self.history_length = self._cfg.model.history_length
         self.history_channels = num_obs_channels * self.history_length
 
+        # elif self._cfg.model.model_type == 'mlp_context':
+        #     self.last_batch_obs = torch.zeros([3, self._cfg.model.observation_shape]).to(self._cfg.device)
+        #     self.last_batch_action = [-1 for _ in range(3)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
                       ready_env_id: np.array = None, ) -> Dict:
@@ -903,29 +903,11 @@ class MuZeroHistoryPolicy(Policy):
         if ready_env_id is None:
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}
-        # if active_eval_env_num < self.evaluator_env_num:
-        #     print(f"active_eval_env_num:{active_eval_env_num}")
+        if active_eval_env_num < self.evaluator_env_num:
+            print(f"active_eval_env_num:{active_eval_env_num}")
             # import ipdb;ipdb.set_trace()
 
         with torch.no_grad():
-
-            if self._cfg.model.model_type in ["conv_history"]:
-                # 先更新全局的 self.last_batch_obs：
-                # 对于 ready_env_id 中的每个环境，将最新的观测 data 拼接到之前的历史观测上，然后仅保留最后的 history 个时间步对应的通道。
-                # 为了确保不同环境的顺序一致，先对 ready_env_id 排序（如果 ready_env_id 不是顺序递增的）
-                ready_env_ids = sorted(ready_env_id)
-                # 假设 data 的顺序与 ready_env_ids 对应，即 data[i] 为环境 ready_env_ids[i] 最新的观测。
-                for idx, env_id in enumerate(ready_env_ids):
-                    # self.last_batch_obs[env_id]: shape [total_channels, H, W]
-                    # data[idx]: shape [num_obs_channels, H, W]
-                    # 拼接后通道数为 total_channels + num_obs_channels
-                    combined_obs = torch.cat([self.batch_obs_history_eval[env_id], data[idx]], dim=0)
-                    
-                    # 仅保留最新的 total_channels 个通道
-                    self.batch_obs_history_eval[env_id] = combined_obs[-self.history_channels:]
-                # 从全局历史张量中取出当前 ready 环境对应的更新后的观测
-                self.last_batch_obs_ready_eval = self.batch_obs_history_eval[ready_env_ids]
-
             if self._cfg.model.model_type in ["conv", "mlp"]:
                 network_output = self._eval_model.initial_inference(data)
             elif self._cfg.model.model_type in ["conv_history"]:
@@ -983,6 +965,22 @@ class MuZeroHistoryPolicy(Policy):
             if self._cfg.model.model_type in ["conv_history"]:
                 self.last_batch_action_eval = batch_action
 
+                # 先更新全局的 self.last_batch_obs：
+                # 对于 ready_env_id 中的每个环境，将最新的观测 data 拼接到之前的历史观测上，然后仅保留最后的 history 个时间步对应的通道。
+                # 为了确保不同环境的顺序一致，先对 ready_env_id 排序（如果 ready_env_id 不是顺序递增的）
+                ready_env_ids = sorted(ready_env_id)
+                # 假设 data 的顺序与 ready_env_ids 对应，即 data[i] 为环境 ready_env_ids[i] 最新的观测。
+                for idx, env_id in enumerate(ready_env_ids):
+                    # self.last_batch_obs[env_id]: shape [total_channels, H, W]
+                    # data[idx]: shape [num_obs_channels, H, W]
+                    # 拼接后通道数为 total_channels + num_obs_channels
+                    combined_obs = torch.cat([self.last_batch_obs_eval[env_id], data[idx]], dim=0)
+                    
+                    # 仅保留最新的 total_channels 个通道
+                    self.last_batch_obs_eval[env_id] = combined_obs[-self.history_channels:]
+                # 从全局历史张量中取出当前 ready 环境对应的更新后的观测
+                self.last_batch_obs_ready_eval = self.last_batch_obs_eval[ready_env_ids]
+
 
         return output
 
@@ -994,12 +992,12 @@ class MuZeroHistoryPolicy(Policy):
             - data_id (`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
         """
         if self._cfg.model.model_type in ["conv_context", "conv_history"]:
-            # self.batch_obs_history_collect = initialize_zeros_batch(
+            # self.last_batch_obs_collect = initialize_zeros_batch(
             #     self._cfg.model.observation_shape,
             #     self._cfg.collector_env_num,
             #     self._cfg.device
             # )
-            self.batch_obs_history_collect = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0]*self._cfg.model.history_length, self._cfg.model.observation_shape[1],self._cfg.model.observation_shape[2]]).to(self._cfg.device)
+            self.last_batch_obs_collect = torch.zeros([self.collector_env_num, self._cfg.model.observation_shape[0]*self._cfg.model.history_length, self._cfg.model.observation_shape[1],self._cfg.model.observation_shape[2]]).to(self._cfg.device)
 
             self.last_batch_action_collect = [-1 for _ in range(self._cfg.collector_env_num)]
         else:
@@ -1013,12 +1011,12 @@ class MuZeroHistoryPolicy(Policy):
             - data_id (:obj:`Optional[List[int]]`): List of data ids to reset (not used in this implementation).
         """
         if self._cfg.model.model_type in ["conv_context", "conv_history"]:
-            # self.batch_obs_history_eval = initialize_zeros_batch(
+            # self.last_batch_obs_eval = initialize_zeros_batch(
             #     self._cfg.model.observation_shape,
             #     self._cfg.evaluator_env_num,
             #     self._cfg.device
             # )
-            self.batch_obs_history_eval = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0]*self._cfg.model.history_length, self._cfg.model.observation_shape[1],self._cfg.model.observation_shape[2]]).to(self._cfg.device)
+            self.last_batch_obs_eval = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape[0]*self._cfg.model.history_length, self._cfg.model.observation_shape[1],self._cfg.model.observation_shape[2]]).to(self._cfg.device)
             self.last_batch_action_eval = [-1 for _ in range(self._cfg.evaluator_env_num)]
         else:
             raise ValueError(f"Unsupported model type in eval: {self._cfg.model.model_type}")
