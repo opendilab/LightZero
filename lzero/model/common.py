@@ -605,7 +605,7 @@ class RepresentationNetworkMLP(nn.Module):
             # last_linear_layer_init_zero=True is beneficial for convergence speed.
             last_linear_layer_init_zero=True,
         )
-        self.sim_norm = SimNorm(simnorm_dim=group_size)
+        self.final_norm = nn.LayerNorm(hidden_channels, eps=1e-5)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -614,8 +614,8 @@ class RepresentationNetworkMLP(nn.Module):
             - output (:obj:`torch.Tensor`): :math:`(B, hidden_channels)`, where B is batch size.
         """
         x = self.fc_representation(x)
-        # TODO
-        x = self.sim_norm(x)
+        # NOTE: very important for training stability.
+        x = self.final_norm(x)
         return x
 
 

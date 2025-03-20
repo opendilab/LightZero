@@ -49,7 +49,7 @@ class singleEqn(BaseEnv):
         
         # Parameters from configuration
         self.max_expr_length = 20
-        self.max_steps = 10
+        self.max_steps = self.cfg.max_steps
         self.action_dim = 50
         self.observation_dim = 2 * self.max_expr_length + 1
 
@@ -150,8 +150,6 @@ class singleEqn(BaseEnv):
         # Validate the new equation and check for a solved state
         is_valid_eqn, lhs_new, rhs_new = check_valid_eqn(lhs_new, rhs_new)
         is_solved = check_eqn_solved(lhs_new, rhs_new, self.main_eqn)
-
-
 
         # Compute reward based on equation complexity changes
         reward = self.find_reward(lhs_old, rhs_old, lhs_new, rhs_new, is_valid_eqn, is_solved)

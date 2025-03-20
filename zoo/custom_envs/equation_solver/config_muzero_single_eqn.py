@@ -13,20 +13,22 @@ from lzero.entry import train_muzero
 collector_env_num = 8
 n_episode = 8
 evaluator_env_num = 3
-num_simulations = 100
-update_per_collect = 200
-batch_size = 256
+num_simulations = 25
+max_steps = 20
+replay_ratio = 0.25
+update_per_collect = int(collector_env_num*max_steps*replay_ratio)
+batch_size = 128
 max_env_step = int(1e5)
-reanalyze_ratio = 0.0
-
+reanalyze_ratio = 0
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
 
 single_eqn_muzero_config = dict(
-    exp_name=f'data_muzero/x+b',
+    exp_name=f'data_muzero/x+b_action-space-50',
     env=dict(
         env_name='singleEqn_env',  # Changed from LunarLander-v2
+        max_steps=max_steps,
         continuous=False,
         manually_discretization=False,
         collector_env_num=collector_env_num,
@@ -36,28 +38,29 @@ single_eqn_muzero_config = dict(
     ),
     policy=dict(
         model=dict(
-            observation_shape=41,  # Changed from 8
-            action_space_size=50,  # Changed from 4
+            observation_shape=41,
+            action_space_size=50,
             model_type='mlp',
-            lstm_hidden_size=128,
             latent_state_dim=128,
             self_supervised_learning_loss=True,
             discrete_action_encoding_type='not_one_hot',
             res_connection_in_dynamics=True,
-            norm_type='BN',
+            norm_type='LN',
         ),
+        td_steps=5,
+        num_unroll_steps=5,
         model_path=None,
         cuda=True,
         env_type='not_board_games',
         action_type= "varied_action_space",
-        game_segment_length=10,
+        game_segment_length=max_steps,
         update_per_collect=update_per_collect,
         batch_size=batch_size,
         optim_type='Adam',
         piecewise_decay_lr_scheduler=False,
-        learning_rate=0.001,
+        learning_rate=0.0001,
         ssl_loss_weight=2,
-        grad_clip_value=0.5,
+        grad_clip_value=1.0,
         num_simulations=num_simulations,
         reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,

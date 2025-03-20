@@ -49,7 +49,7 @@ class singleEqnEasy(BaseEnv):
         
         # Parameters from configuration
         self.max_expr_length = 20
-        self.max_steps = 2
+        self.max_steps = self.cfg.max_steps
         self.action_dim = 4
         self.observation_dim = 2 * self.max_expr_length + 1
 
