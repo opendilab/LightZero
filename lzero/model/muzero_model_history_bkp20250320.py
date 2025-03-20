@@ -21,7 +21,7 @@ from .common import MZNetworkOutput, PredictionNetwork, FeatureAndGradientHook, 
 from .utils import renormalize, get_params_mean, get_dynamic_mean, get_reward_mean
 from lzero.model.muzero_model import MuZeroModel
 from lzero.model.muzero_model_mlp import DynamicsNetworkVector, PredictionNetworkMLP
-from lzero.model.unizero_world_models.transformer import Transformer, TransformerConfig
+
 
 class RepresentationNetworkMemoryEnv(nn.Module):
     def __init__(
@@ -34,8 +34,7 @@ class RepresentationNetworkMemoryEnv(nn.Module):
         activation: nn.Module = nn.GELU(approximate='tanh'),
         normalize_pixel: bool = False,
         group_size: int = 8,
-        history_length: int = 20,
-        fusion_mode: str = 'mean',  # 可选: 'mean', 'transformer', 其它未来方式
+        fusion_mode: str = 'mean',  # 当前仅支持均值融合，后续可扩展为其它融合方式
         **kwargs,
     ):
         """
@@ -76,26 +75,7 @@ class RepresentationNetworkMemoryEnv(nn.Module):
         self.linear = nn.Linear(self.channels[-1], embedding_size, bias=False)
         init.kaiming_normal_(self.linear.weight, mode='fan_out', nonlinearity='relu')
 
-        self.final_norm = nn.LayerNorm(self.embedding_size, eps=1e-5)
-        # 如果使用 transformer 聚合，则初始化 transformer 模块
-        if self.fusion_mode == 'transformer':
-            # 假设 history_length 在训练时可变，初始化时无法确定，
-            # 这里采用一个默认的 tokens_per_block 值，后续也可以根据需要对 transformer 配置进行扩展
-            transformer_config = TransformerConfig(
-                tokens_per_block=history_length,  # 每个 block 的 token 数量
-                max_blocks=1,                           # 此处只融合一次
-                attention="causal",
-                num_layers=2,                           # 可根据需求调整 transformer 层数
-                num_heads=8,                            # 可根据需求调整
-                embed_dim=self.embedding_size,          # 输入的 embed 维度，与 CNN 输出保持一致
-                embed_pdrop=0.1,
-                resid_pdrop=0.1,
-                attn_pdrop=0.1,
-                gru_gating=False,
-            )
-            self.transformer = Transformer(transformer_config)
-        else:
-            self.transformer = None
+        self.sim_norm = SimNorm(simnorm_dim=group_size)
 
     def forward_single(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -106,21 +86,21 @@ class RepresentationNetworkMemoryEnv(nn.Module):
         if self.normalize_pixel:
             x = x / 255.0
         x = self.cnn(x.float())  # 输出形状 (B, C, 1, 1)
+        # import ipdb;ipdb.set_trace()
+
         x = torch.flatten(x, start_dim=1)  # 转换为形状 (B, C)
         x = self.linear(x)  # (B, embedding_size)
-        x = self.final_norm(x)  # 归一化处理
+        x = self.sim_norm(x)  # 归一化处理
         return x
 
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Args:
-            x: 输入 tensor，形状 [B, total_channels, W, H]，
-               其中 total_channels 应为 (history_length * single_step_in_channels)
+            x: 输入 tensor，形状 [B, total_channels, W, H]，其中 total_channels 应为 (history_length * single_step_in_channels)
                例如输入 shape 可为: [8, 12, 5, 5]，其中 12 = 4 * 3，表示 4 个历史步，每步 3 个 channel。
         Returns:
             latent_series: 各步的 latent 表征，形状为 [B, history_length, embedding_size]
             latent_fused: 融合后的 latent 表征，形状为 [B, embedding_size]
-              当 fusion_mode 为 "transformer" 时，latent_fused 为 transformer 输出序列中最后一个 timestep 的 latent。
         """
         B, total_channels, W, H = x.shape
         if total_channels % self.single_step_in_channels != 0:
@@ -138,19 +118,11 @@ class RepresentationNetworkMemoryEnv(nn.Module):
 
         latent_series = torch.cat(latent_series, dim=1)  # [B, history_length, embedding_size]
 
-        # 根据 fusion_mode 进行融合
+
+        # 根据 fusion_mode 对所有历史步进行融合
         if self.fusion_mode == 'mean':
             latent_fused = latent_series.mean(dim=1)
-        elif self.fusion_mode == 'transformer':
-            # 如果 latent_series 的历史长度与 transformer 配置不匹配，
-            # 可通过 padding 或截断保证输入 transformer 的序列长度与其配置一致
-            # 这里假设 latent_series.shape[1] 即 history_length 与 tokens_per_block 一致，
-            # 否则需要进行相关预处理。
-            transformer_out = self.transformer(latent_series)  # 输出形状 (B, history_length, embedding_size)
             # import ipdb;ipdb.set_trace()
-
-            # 取最后一步 latent state 作为聚合结果
-            latent_fused = transformer_out[:, -1, :]
         else:
             # 其它融合方式：例如先拼接后通过全连接层融合
             B, T, E = latent_series.shape
@@ -158,10 +130,8 @@ class RepresentationNetworkMemoryEnv(nn.Module):
             fusion_fc = nn.Linear(T * E, E).to(x.device)
             latent_fused = fusion_fc(latent_concat)
 
-        # 返回两种结果，本例中也可以只返回融合后的结果
         # return latent_series, latent_fused
         return latent_fused
-
 
 
 # 修改后的扩展版本的 RepresentationNetwork
@@ -215,12 +185,11 @@ class RepresentationNetwork(nn.Module):
             ]
         )
         self.activation = activation
-        self.embedding_dim = embedding_dim
+        self.use_sim_norm = use_sim_norm
 
-
-        # self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
-        # group=1 等价于 layer normalization 每个 sample 内部归一化
-        self.final_norm = nn.GroupNorm(1, num_channels)
+        if self.use_sim_norm:
+            self.embedding_dim = embedding_dim
+            self.sim_norm = SimNorm(simnorm_dim=group_size)
 
         # 融合模式，当前仅支持均值融合；可以扩展为其它方式，例如使用 1D 卷积融合时间步信息
         self.fusion_mode = fusion_mode
@@ -240,7 +209,9 @@ class RepresentationNetwork(nn.Module):
 
         for block in self.resblocks:
             x = block(x)
-        x = self.final_norm(x)
+
+        if self.use_sim_norm:
+            x = self.sim_norm(x)
 
         return x
 
@@ -317,7 +288,6 @@ class MuZeroHistoryModel(MuZeroModel):
         norm_type: Optional[str] = 'BN',
         discrete_action_encoding_type: str = 'one_hot',
         history_length: int = 5,
-        fusion_mode= 'mean',  # 可选: 'mean', 'transformer', 其它未来方式
         num_unroll_steps: int = 5,
         use_sim_norm: bool = False,
         analysis_sim_norm: bool = False,
@@ -428,8 +398,6 @@ class MuZeroHistoryModel(MuZeroModel):
                 embedding_size=embedding_size,
                 channels= [16, 32, 64],
                 group_size= 8,
-                history_length=self.history_length,
-                fusion_mode=fusion_mode,  # 可选: 'mean', 'transformer', 其它未来方式
             )
             self.num_channels = num_channels
             self.latent_state_dim = self.num_channels - self.action_encoding_dim
@@ -490,8 +458,6 @@ class MuZeroHistoryModel(MuZeroModel):
                 use_sim_norm=use_sim_norm,  # NOTE
             )
             self.vector_ynamics_network = False
-            
-            # import ipdb;ipdb.set_trace()
 
             self.prediction_network = PredictionNetwork(
                 observation_shape,

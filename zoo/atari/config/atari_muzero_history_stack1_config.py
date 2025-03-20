@@ -32,7 +32,7 @@ history_length=4
 # ==============================================================
 
 atari_muzero_config = dict(
-    exp_name=f'data_lz/data_muzero_history/{env_id[:-14]}_muzero_HL{history_length}_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_stack1_seed0',
+    exp_name=f'data_lz/data_muzero_history/{env_id[:-14]}_muzero_HL{history_length}_final-LN_ns{num_simulations}_upc{update_per_collect}_rer{reanalyze_ratio}_stack1_seed0',
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
@@ -63,6 +63,7 @@ atari_muzero_config = dict(
             self_supervised_learning_loss=False,
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
+            # norm_type='LN',
             model_type='conv_history',
             history_length=history_length,
             num_unroll_steps=5,
