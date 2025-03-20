@@ -30,7 +30,11 @@ class JerichoEnv(BaseEnv):
         - remove_stuck_actions (:obj:`bool`): Whether to remove actions that do not change the observation.
         - add_location_and_inventory (:obj:`bool`): Whether to include player location and inventory in the observation.
         - for_unizero (:obj:`bool`): If True, specify additional keys for unizero compatibility.
-
+        - save_replay (:obj:`bool`): If True, the interaction log of the entire episode will be saved. 
+        - save_replay_path (:obj:`str`): Path where interaction logs are saved.
+        - collect_policy_mode (:obj:`str`): Data collection strategies, including "human" and "random".
+        - n_collector_episodes (:obj:`int`): The total number of episodes of data collected by the data collectors.
+        - env_type (:obj:`str`): Type of environment.
     Attributes:
         - tokenizer (Optional[AutoTokenizer]): The tokenizer loaded from the pretrained model.
     """
@@ -46,7 +50,10 @@ class JerichoEnv(BaseEnv):
         'add_location_and_inventory': False,
         'for_unizero': False,
         'save_replay': False,
-        'save_replay_path': None
+        'save_replay_path': None,
+        'env_type': "zork1",
+        'collect_policy_mode': "random",
+        'n_collector_episodes': 1
     }
 
     def __init__(self, cfg: Dict[str, Any]) -> None:
@@ -67,6 +74,9 @@ class JerichoEnv(BaseEnv):
         self.max_seq_len: int = self.cfg['max_seq_len']
         self.save_replay: bool = self.cfg['save_replay']
         self.save_replay_path: str = self.cfg['save_replay_path']
+        self.collect_policy_mode: str = self.cfg['collect_policy_mode']
+        self.n_collector_episodes: int = self.cfg['n_collector_episodes']
+        self.env_type: str = self.cfg['env_type']
 
         # Record the last observation and action for detecting stuck actions.
         self.last_observation: Optional[str] = None
@@ -99,7 +109,9 @@ class JerichoEnv(BaseEnv):
         self.episode_return: float = 0.0
         self.env_step: int = 0
         self.timestep: int = 0
-        self.episode_history = []
+        self.episode_history: List[Dict[str, Any]] = []
+        self.collected_episodes_experiences: List[List[Dict[str, Any]]] = []
+
 
         # Define observation, action, and reward spaces.
         self.observation_space: gym.spaces.Dict = gym.spaces.Dict()
@@ -122,7 +134,6 @@ class JerichoEnv(BaseEnv):
         """
         if self._action_list is None:
             self._action_list = self._env.get_valid_actions()
-            print(self._action_list)
 
         # Filter available actions based on whether stuck actions are removed.
         if self.remove_stuck_actions:
@@ -190,8 +201,7 @@ class JerichoEnv(BaseEnv):
         self.episode_return = 0.0
         self.env_step = 0
         self.timestep = 0
-        # print(f'initial_observation={initial_observation}, info={info}')
-        self.episode_history = [{'observation': initial_observation, 'info':info, 'done': False}]
+        self.episode_history = []
 
         if self.remove_stuck_actions:
             self.last_observation = initial_observation
@@ -201,7 +211,10 @@ class JerichoEnv(BaseEnv):
         self.world_size = get_world_size()
         self.rank = get_rank()
 
-        return self.prepare_obs(initial_observation, return_str)
+        processed_obs = self.prepare_obs(initial_observation, return_str)
+        self.episode_history.append({'observation': processed_obs['observation'], 'info': info, 'done': False})
+
+        return processed_obs
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
         """
@@ -298,7 +311,7 @@ class JerichoEnv(BaseEnv):
 
         self.episode_history.append({
             "step": self.env_step,
-            "observation": observation,
+            "observation": processed_obs['observation'],
             "action": action_str,
             "reward": reward.item() if isinstance(reward, np.ndarray) else reward,
             "done": done,
@@ -349,6 +362,7 @@ class JerichoEnv(BaseEnv):
         cfg['reward_normalize'] = False
         cfg['is_collect'] = False
         return [cfg for _ in range(evaluator_env_num)]
+
     def save_episode_data(self):
         """
         Save the full episode history to a JSON file.
@@ -358,7 +372,7 @@ class JerichoEnv(BaseEnv):
         os.makedirs(self.save_replay_path, exist_ok=True)
 
         timestamp = datetime.now().strftime("%m%d_%H%M")
-        filename = os.path.join(self.save_replay_path, f"episode_interaction_record_{timestamp}.txt")
+        filename = os.path.join(self.save_replay_path, f"episode_record_{self.env_type}_{timestamp}.txt")
         try:
             with open(filename, mode="w", encoding="utf-8") as f:
                 for i, item in enumerate(self.episode_history):
@@ -375,6 +389,70 @@ class JerichoEnv(BaseEnv):
         except Exception as e:
             print(f"[ERROR] Failed to save episode: {e}")
 
+    def human_step(self, observation:str) -> str:
+        """
+        Get action input from human player.
+        """
+        print(f"[OBS]\n{observation}")
+        while True:
+            try:
+                action_id = int(input('Please input the action id (the id starts from zero): '))
+                return action_id
+            except ValueError:  
+                print("Invalid input. Please enter an integer action id.")
+    
+    def random_step(self) -> str:
+        """
+        Get a random valid action.
+        """
+        if self._action_list is not None and len(self._action_list)>0:
+            return np.random.choice(self._action_list)
+        else:
+            print(
+                f"rank {self.rank}, available actions list empty. Using default action 'go'."
+            )
+            return 'go'
+
+    def collect_episode_data(self):
+        """
+        Collects episode data for the specified number of episodes.
+        """
+
+        for _ in range(self.n_collector_episodes):
+            obs = self.reset(return_str=True)
+                
+            done = False
+            state = obs['observation']
+            episode_experiences = []
+
+            while not done:
+                if self.collect_policy_mode == 'human':
+                    action = self.human_step(state)
+                elif self.collect_policy_mode == 'random':
+                    action = self.random_step()
+                else:
+                    raise ValueError(f"Invalid collect_policy_mode: {self.collect_policy_mode}")
+
+                next_obs, reward, done, info = self.step(action, return_str=True)
+                next_state = next_obs['observation']
+
+                experience = {
+                    'state': state,
+                    'action': action,
+                    'reward': reward.item() if isinstance(reward, np.ndarray) else reward,
+                    'next_state': next_state,
+                    'done': done
+                }
+                episode_experiences.append(experience)
+
+                state = next_state
+                
+                if done:
+                    self.collected_episodes_experiences.append(episode_experiences)
+                    print(f'The game is over, and the reward for this game is {self.episode_return}.\n')
+                    break
+                    
+        # print(f'collected_episodes_experiences={self.collected_episodes_experiences}')
 
 if __name__ == '__main__':
     from easydict import EasyDict
@@ -382,7 +460,7 @@ if __name__ == '__main__':
     # Configuration dictionary for the environment.
     env_cfg = EasyDict(
         dict(
-            max_steps=3,
+            max_steps=400,
             game_path="./zoo/jericho/envs/z-machine-games-master/jericho-game-suite/" + "zork1.z5",
             max_action_num=10,
             tokenizer_path="google-bert/bert-base-uncased",
@@ -394,15 +472,19 @@ if __name__ == '__main__':
             evaluator_env_num=1,
             save_replay=True,
             save_replay_path=None,
-            collect_policy_mode='random'
+            env_type='zork1',        # zork1, acorncourt, detective, omniquest
+            collect_policy_mode='random',
+            n_collector_episodes=1
         )
     )
     env = JerichoEnv(env_cfg)
+    env.collect_episode_data()  
+
     obs = env.reset(return_str=True)
     print(f'[OBS]:\n{obs["observation"]}')
     while True:
         try:
-            action_id = int(input('Please input the action id: '))
+            action_id = int(input('Please input the action id (the id starts from zero): '))
         except ValueError:
             print("Invalid input. Please enter an integer action id.")
             continue
