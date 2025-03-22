@@ -199,10 +199,9 @@ class LightZeroRandomPolicy(Policy):
             if self._cfg.type in ['sampled_efficientzero']:
                 roots_sampled_actions = roots.get_sampled_actions()
 
-            data_id = [i for i in range(active_collect_env_num)]
-            output = {i: None for i in data_id}
             if ready_env_id is None:
                 ready_env_id = np.arange(active_collect_env_num)
+            output = {i: None for i in ready_env_id}
 
             for i, env_id in enumerate(ready_env_id):
                 distributions, value = roots_visit_count_distributions[i], roots_values[i]
@@ -238,7 +237,7 @@ class LightZeroRandomPolicy(Policy):
                     }
                 else:
                     # ****** sample a random action from the legal action set ********
-                    random_action = int(np.random.choice(legal_actions[env_id], 1))
+                    random_action = int(np.random.choice(legal_actions[i], 1))
                     # all items except action are formally obtained from MCTS
                     output[env_id] = {
                         'action': random_action,
