@@ -35,50 +35,69 @@ cartpole_muzero
 
 `log/collector/collector_logger.txt` 文件记录了采集器在【本次采集阶段】与环境交互的各项指标，主要包括:
 
-- `episode_count`: 本阶段采集的episode数量 
-- `envstep_count`: 本阶段采集的环境交互步数
-- `train_sample_count`: 本阶段采集的训练样本数
-- `avg_envstep_per_episode`: 平均每个episode包含的环境交互步数
-- `avg_sample_per_episode`: 平均每个episode包含的样本数
-- `avg_envstep_per_sec`: 平均每秒钟采集的环境交互步数
-- `avg_train_sample_per_sec`: 平均每秒钟采集的训练样本数  
-- `avg_episode_per_sec`: 平均每秒钟采集的episode数
-- `collect_time`: 本阶段数据采集总耗时
-- `reward_mean`: 本阶段采集过程中获得的平均奖励
-- `reward_std`: 本阶段采集奖励的标准差
-- `each_reward`: 采集器每个episode与环境交互的奖励值
-- `reward_max`: 本阶段采集的最大单个奖励
-- `reward_min`: 本阶段采集的最小单个奖励
-- `total_envstep_count`: 采集器累计采集的环境交互总步数 
-- `total_train_sample_count`: 采集器累计采集的样本总数
-- `total_episode_count`: 采集器累计采集的episode总数
-- `total_duration`: 采集器运行的总时长
+- `episode_count`: 本阶段采集的 episode 数量。 
+- `envstep_count`: 本阶段采集的环境交互步数。
+- `avg_envstep_per_episode`: 平均每个 episode 包含的环境交互步数。
+- `avg_envstep_per_sec`: 平均每秒钟采集的环境交互步数。
+- `avg_episode_per_sec`: 平均每秒钟采集的 episode 数。
+- `collect_time`: 本阶段数据采集总耗时。
+- `reward_mean`: 本阶段采集过程中获得的平均奖励。
+- `reward_std`: 本阶段采集奖励的标准差。
+- `reward_max`: 本阶段采集的最大单个奖励。
+- `reward_min`: 本阶段采集的最小单个奖励。
+- `total_envstep_count`: 采集器累计采集的环境交互总步数。 
+- `total_episode_count`: 采集器累计采集的 episode 总数。
+- `total_duration`: 采集器运行的总时长。
+- `visit_entropy`: 访问熵，衡量 MCTS 过程中根节点的访问分布的均匀程度。
 
 ### 评估器日志
 
 `log/evaluator/evaluator_logger.txt` 文件记录了评估器在【本次评估阶段】与环境交互的各项指标，主要包括:
 
-- `[INFO]`: 评估器每完成一个episode的提示日志，包含最终奖励和当前的episode计数
-- `train_iter`: 模型完成的训练迭代次数  
-- `ckpt_name`: 本次评估所使用的模型检查点路径
-- `episode_count`: 本次评估的episode数量
-- `envstep_count`: 本次评估与环境交互的总步数
-- `evaluate_time`: 本次评估的总耗时
-- `avg_envstep_per_episode`: 平均每个评估episode包含的环境交互步数
-- `avg_envstep_per_sec`: 本次评估平均每秒钟与环境交互的步数  
-- `avg_time_per_episode`: 本次评估每个episode的平均耗时
-- `reward_mean`: 本次评估获得的平均奖励
-- `reward_std`: 本次评估奖励的标准差 
-- `each_reward`: 评估器每个episode与环境交互的奖励值
-- `reward_max`: 本次评估获得的最大奖励
-- `reward_min`: 本次评估获得的最小奖励
+- `[INFO]`: 评估器每完成一个 episode 的提示日志，包含最终奖励和当前的 episode 计数。
+- `train_iter`: 模型完成的训练迭代次数。 
+- `ckpt_name`: 本次评估所使用的模型检查点路径。
+- `episode_count`: 本次评估的 episode 数量。
+- `envstep_count`: 本次评估与环境交互的总步数。
+- `evaluate_time`: 本次评估的总耗时。
+- `avg_envstep_per_episode`: 平均每个评估 episode 包含的环境交互步数。
+- `avg_envstep_per_sec`: 本次评估平均每秒钟与环境交互的步数。 
+- `avg_time_per_episode`: 本次评估每个 episode 的平均耗时。
+- `reward_mean`: 本次评估获得的平均奖励。
+- `reward_std`: 本次评估奖励的标准差。
+- `eval_episode_return`: 评估器每个 episode 与环境交互的奖励值。
+- `reward_max`: 本次评估获得的最大奖励。
+- `reward_min`: 本次评估获得的最小奖励。
+- `eval_episode_return_mean`: 本次评估获得的平均奖励。
 
 ### 学习器日志
 
 `log/learner/learner_logger.txt` 文件记录了模型训练过程中学习器的各项信息，主要包括:
 
-- 神经网络结构:描述了MuZero模型的整体架构，包括表示网络、动力学网络、预测网络等
-- 学习器状态:以表格形式展示了当前的学习率、各项损失函数值、优化器监控指标等
+- 神经网络结构: 描述了 MuZero 模型的整体架构，包括表示网络、动力学网络、预测网络等
+- 学习器状态: 以表格形式展示了当前的学习率、各项损失函数值、优化器监控指标等，具体如下所示：
+    - `analysis/dormant_ratio_encoder_avg`: 分析过程的指标，衡量编码器的休眠比率平均值。
+    - `analysis/dormant_ratio_dynamics_avg`: 分析过程的指标，衡量动力网络的休眠比率平均值。
+    - `analysis/latent_state_l2_norms_avg`: 分析过程的指标，衡量隐藏状态的 L2 范数平均值。
+    - `collect_mcts_temperature_avg`: 采集过程中 MCTS 的温度参数平均值，影响策略的探索性。
+    - `cur_lr_avg`: 当前学习率的平均值。
+    - `weighted_total_loss_avg`: 加权后的总损失平均值。
+    - `total_loss_avg`: 总损失平均值。
+    - `policy_loss_avg`: 策略损失的平均值。
+    - `policy_entropy_avg`:  策略的熵值平均值。
+    - `target_policy_entropy_avg`: 目标策略的熵值平均值。
+    - `reward_loss_avg`: 奖励损失的平均值。
+    - `value_loss_avg`: 价值损失的平均值。
+    - `consistency_loss_avg`: 一致性损失的平均值。
+    - `value_priority_avg`: 经验回放中基于价值的优先级平均值。
+    - `target_reward_avg`: 目标奖励的平均值。
+    - `target_value_avg`: 目标价值的平均值。
+    - `predicted_rewards_avg`: 预测奖励的平均值。
+    - `predicted_values_avg`: 预测价值的平均值。
+    - `transformed_target_reward_avg`: 变换后的目标奖励的平均值。
+    - `transformed_target_value_avg`: 变换后的目标价值的平均值。
+    - `total_grad_norm_before_clip_avg`: 梯度裁剪前的总梯度范数平均值。
+
 
 ### Tensorboard日志文件
 

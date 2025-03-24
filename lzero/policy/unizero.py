@@ -13,7 +13,7 @@ from lzero.mcts import UniZeroMCTSCtree as MCTSCtree
 from lzero.model import ImageTransforms
 from lzero.policy import scalar_transform, InverseScalarTransform, phi_transform, \
     DiscreteSupport, to_torch_float_tensor, mz_network_output_unpack, select_action, prepare_obs, \
-    prepare_obs_stack4_for_unizero
+    prepare_obs_stack_for_unizero
 from lzero.policy.muzero import MuZeroPolicy
 from .utils import configure_optimizers_nanogpt
 
@@ -229,6 +229,8 @@ class UniZeroPolicy(MuZeroPolicy):
         policy_loss_weight=1,
         # (float) The weight of ssl (self-supervised learning) loss.
         ssl_loss_weight=0,
+        # (bool) Whether to use the cosine learning rate decay.
+        cos_lr_scheduler=False,
         # (bool) Whether to use piecewise constant learning rate decay.
         # i.e. lr: 0.2 -> 0.02 -> 0.002
         piecewise_decay_lr_scheduler=False,
@@ -243,6 +245,8 @@ class UniZeroPolicy(MuZeroPolicy):
         fixed_temperature_value=0.25,
         # (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.
         use_ture_chance_label_in_chance_encoder=False,
+        # (int) The number of steps to accumulate gradients before performing an optimization step.
+        accumulation_steps=1,
 
         # ****** Priority ******
         # (bool) Whether to use priority when sampling training data from the buffer.
@@ -309,6 +313,11 @@ class UniZeroPolicy(MuZeroPolicy):
             betas=(0.9, 0.95),
         )
 
+        if self._cfg.cos_lr_scheduler:
+            from torch.optim.lr_scheduler import CosineAnnealingLR
+            # TODO: check the total training steps
+            self.lr_scheduler = CosineAnnealingLR(self._optimizer_world_model, 1e5, eta_min=0, last_epoch=-1)
+
         # use model_wrapper for specialized demands of different modes
         self._target_model = copy.deepcopy(self._model)
         # Ensure that the installed torch version is greater than or equal to 2.0
@@ -344,6 +353,8 @@ class UniZeroPolicy(MuZeroPolicy):
             # TODO: add the model to wandb
             wandb.watch(self._learn_model.representation_network, log="all")
 
+        self.accumulation_steps = self._cfg.accumulation_steps
+
     # @profile
     def _forward_learn(self, data: Tuple[torch.Tensor]) -> Dict[str, Union[float, int]]:
         """
@@ -361,13 +372,13 @@ class UniZeroPolicy(MuZeroPolicy):
         self._learn_model.train()
         self._target_model.train()
 
-        current_batch, target_batch, _ = data
+        current_batch, target_batch, train_iter = data
         obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, batch_timestep = current_batch
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number
-        if self._cfg.model.frame_stack_num == 4:
-            obs_batch, obs_target_batch = prepare_obs_stack4_for_unizero(obs_batch_ori, self._cfg)
+        if self._cfg.model.frame_stack_num > 1:
+            obs_batch, obs_target_batch = prepare_obs_stack_for_unizero(obs_batch_ori, self._cfg)
         else:
             obs_batch, obs_target_batch = prepare_obs(obs_batch_ori, self._cfg)  # TODO: optimize
 
@@ -449,31 +460,47 @@ class UniZeroPolicy(MuZeroPolicy):
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
         assert not torch.isinf(losses.loss_total).any(), "Loss contains Inf values"
 
-        # Core learn model update step
-        self._optimizer_world_model.zero_grad()
+        # Core learning model update step
+        # Reset gradients at the start of each accumulation cycle
+        if (train_iter % self.accumulation_steps) == 0:
+            self._optimizer_world_model.zero_grad()
+
+        # Scale the loss by the number of accumulation steps
+        weighted_total_loss = weighted_total_loss / self.accumulation_steps
         weighted_total_loss.backward()
 
-        #  ========== for debugging ==========
-        # for name, param in self._learn_model.world_model.tokenizer.encoder.named_parameters():
-        #     print('name, param.mean(), param.std():', name, param.mean(), param.std())
-        #     if param.requires_grad:
-        #         print(name, param.grad.norm())
+        # Check if the current iteration completes an accumulation cycle
+        if (train_iter + 1) % self.accumulation_steps == 0:
+            # Analyze gradient norms if simulation normalization analysis is enabled
+            if self._cfg.analysis_sim_norm:
+                # Clear previous analysis results to prevent memory overflow
+                del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
+                self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
+                self._target_model.encoder_hook.clear_data()
+            
+            # Clip gradients to prevent exploding gradients
+            total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(
+                self._learn_model.world_model.parameters(), self._cfg.grad_clip_value
+            )
 
-        if self._cfg.analysis_sim_norm:
-            del self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after
-            self.l2_norm_before, self.l2_norm_after, self.grad_norm_before, self.grad_norm_after = self._learn_model.encoder_hook.analyze()
-            self._target_model.encoder_hook.clear_data()
+            # Synchronize gradients across multiple GPUs if enabled
+            if self._cfg.multi_gpu:
+                self.sync_gradients(self._learn_model)
 
-        total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(),
-                                                                        self._cfg.grad_clip_value)
-        if self._cfg.multi_gpu:
-            self.sync_gradients(self._learn_model)
+            # Update model parameters
+            self._optimizer_world_model.step()
 
-        self._optimizer_world_model.step()
-        if self._cfg.piecewise_decay_lr_scheduler:
+            # Clear CUDA cache if using gradient accumulation
+            if self.accumulation_steps > 1:
+                torch.cuda.empty_cache()
+        else:
+            total_grad_norm_before_clip_wm = torch.tensor(0.)
+
+        # Update learning rate scheduler if applicable
+        if self._cfg.cos_lr_scheduler or self._cfg.piecewise_decay_lr_scheduler:
             self.lr_scheduler.step()
 
-        # Core target model update step
+        # Update the target model with the current model's parameters
         self._target_model.update(self._learn_model.state_dict())
 
         if torch.cuda.is_available():
