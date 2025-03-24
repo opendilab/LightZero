@@ -1,4 +1,7 @@
 import copy
+import os
+import json
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 import gym
@@ -28,7 +31,10 @@ class JerichoEnv(BaseEnv):
         - remove_stuck_actions (:obj:`bool`): Whether to remove actions that do not change the observation.
         - add_location_and_inventory (:obj:`bool`): Whether to include player location and inventory in the observation.
         - for_unizero (:obj:`bool`): If True, specify additional keys for unizero compatibility.
-
+        - save_replay (:obj:`bool`): If True, the interaction log of the entire episode will be saved. 
+        - save_replay_path (:obj:`str`): Path where interaction logs are saved.
+        - collect_policy_mode (:obj:`str`): The strategy pattern used in data collection in the collect_episode_data method, including "human", "random" and "expert".
+        - env_type (:obj:`str`): Type of environment.
     Attributes:
         - tokenizer (Optional[AutoTokenizer]): The tokenizer loaded from the pretrained model.
     """
@@ -43,6 +49,10 @@ class JerichoEnv(BaseEnv):
         'remove_stuck_actions': False,
         'add_location_and_inventory': False,
         'for_unizero': False,
+        'save_replay': False,
+        'save_replay_path': None,
+        'env_type': "zork1",
+        'collect_policy_mode': "random"
     }
 
     def __init__(self, cfg: Dict[str, Any]) -> None:
@@ -61,6 +71,10 @@ class JerichoEnv(BaseEnv):
         self.game_path: str = self.cfg['game_path']
         self.max_action_num: int = self.cfg['max_action_num']
         self.max_seq_len: int = self.cfg['max_seq_len']
+        self.save_replay: bool = self.cfg['save_replay']
+        self.save_replay_path: str = self.cfg['save_replay_path']
+        self.collect_policy_mode: str = self.cfg['collect_policy_mode']
+        self.env_type: str = self.cfg['env_type']
 
         # Record the last observation and action for detecting stuck actions.
         self.last_observation: Optional[str] = None
@@ -75,7 +89,6 @@ class JerichoEnv(BaseEnv):
         self.remove_stuck_actions: bool = self.cfg['remove_stuck_actions']
         self.add_location_and_inventory: bool = self.cfg['add_location_and_inventory']
         self.for_unizero: bool = self.cfg['for_unizero']
-
         # Initialize the tokenizer once (only in rank 0 process if distributed)
         if JerichoEnv.tokenizer is None:
             if self.rank == 0:
@@ -94,6 +107,9 @@ class JerichoEnv(BaseEnv):
         self.episode_return: float = 0.0
         self.env_step: int = 0
         self.timestep: int = 0
+        self.episode_history: Optional[List[Dict[str, Any]]] = None
+        self.walkthrough_actions: Optional[List[str]] = None
+
 
         # Define observation, action, and reward spaces.
         self.observation_space: gym.spaces.Dict = gym.spaces.Dict()
@@ -183,6 +199,8 @@ class JerichoEnv(BaseEnv):
         self.episode_return = 0.0
         self.env_step = 0
         self.timestep = 0
+        self.episode_history = []
+        self.walkthrough_actions = self._env.get_walkthrough()
 
         if self.remove_stuck_actions:
             self.last_observation = initial_observation
@@ -192,7 +210,17 @@ class JerichoEnv(BaseEnv):
         self.world_size = get_world_size()
         self.rank = get_rank()
 
-        return self.prepare_obs(initial_observation, return_str)
+        processed_obs = self.prepare_obs(initial_observation, return_str)
+
+        self.episode_history.append({
+            'timestep': 0,
+            'obs': processed_obs['observation'],
+            'act': None,
+            'done': False,
+            'info': info
+        })
+       
+        return processed_obs
 
     def seed(self, seed: int, dynamic_seed: bool = True) -> None:
         """
@@ -287,11 +315,24 @@ class JerichoEnv(BaseEnv):
         if self.env_step >= self.max_steps:
             done = True
 
+        if self.save_replay:
+            self.episode_history.append({
+                'timestep': self.timestep,
+                'obs': processed_obs['observation'],
+                'act': action_str,
+                'reward': reward.item() if isinstance(reward, np.ndarray) else reward,
+                'done': done,
+                'info': info
+            })
+
         if done:
             print('=' * 20)
             print(f'rank {self.rank} one episode done!')
             self.finished = True
             info['eval_episode_return'] = self.episode_return
+
+            if self.save_replay:
+                self.save_episode_data()
 
         return BaseEnvTimestep(processed_obs, reward, done, info)
 
@@ -330,7 +371,91 @@ class JerichoEnv(BaseEnv):
         cfg['is_collect'] = False
         return [cfg for _ in range(evaluator_env_num)]
 
+    def save_episode_data(self):
+        """
+        Overview:
+            Save the full episode interaction history (self.episode_history) to a JSON file.
+        """
+        if self.save_replay_path is None:
+            self.save_replay_path = './log'  
+        os.makedirs(self.save_replay_path, exist_ok=True)
 
+        timestamp = datetime.now().strftime("%m%d_%H%M")
+        filename = os.path.join(self.save_replay_path, f"episode_record_{self.env_type}_{self.collect_policy_mode}_{timestamp}.json")
+        
+        info = self.episode_history[-1]['info']
+        if 'eval_episode_return' in info and isinstance(info['eval_episode_return'], np.ndarray):
+            info['eval_episode_return'] = info['eval_episode_return'].item()
+
+        with open(filename, mode="w", encoding="utf-8") as f:
+            json.dump(self.episode_history, f, ensure_ascii=False)
+         
+    def human_step(self, observation:str) -> str:
+        """
+        Overview:
+            Interactively receive an action from a human player via command line input.
+
+        Arguments:
+            - observation (:obj:`str`): The current observation shown to the human.
+
+        Returns:
+            - (:obj:`int`): The action index input by the user, converted to int.
+        """
+        print(f"[OBS]\n{observation}")
+        while True:
+            try:
+                action_id = int(input('Please input the action id (the id starts from zero): '))
+                return action_id
+            except ValueError:  
+                print("Invalid input. Please enter an integer action id.")
+    
+    def random_step(self) -> str:
+        """
+        Overview:
+            Randomly select a valid action from the current valid action list.
+
+        Returns:
+            - (:obj:`str`): A randomly selected action string from the available actions. If no actions are available, returns 'go' as a fallback.
+        """
+        if self._action_list is not None and len(self._action_list)>0:
+            return np.random.choice(self._action_list)
+        else:
+            print(
+                f"rank {self.rank}, available actions list empty. Using default action 'go'."
+            )
+            return 'go'
+
+    def collect_episode_data(self):
+        """
+        Overview:
+            Run a single episode using the specified policy mode, and store the trajectory in self.episode_history.
+        """
+
+        obs = self.reset(return_str=True)
+
+        done = False
+        expert_step_count = 0
+
+        while not done:
+            if self.collect_policy_mode == 'human':
+                action = self.human_step(obs['observation'])
+            elif self.collect_policy_mode == 'random':
+                action = self.random_step()
+            elif self.collect_policy_mode == 'expert':
+                action = self.walkthrough_actions[expert_step_count]
+                expert_step_count += 1
+            else:
+                raise ValueError(f"Invalid collect_policy_mode: {self.collect_policy_mode}")
+
+            obs, reward, done, info = self.step(action, return_str=True)
+
+            if self.collect_policy_mode == 'expert' and expert_step_count >= len(self.walkthrough_actions):
+                done = True
+
+            if done:
+                info['eval_episode_return'] = self.episode_return
+                break
+     
 if __name__ == '__main__':
     from easydict import EasyDict
 
@@ -347,19 +472,13 @@ if __name__ == '__main__':
             for_unizero=False,
             collector_env_num=1,
             evaluator_env_num=1,
+            save_replay=True,
+            save_replay_path=None,
+            env_type='zork1',               # zork1, acorncourt, detective, omniquest
+            collect_policy_mode='expert'    # random, human, expert
         )
     )
     env = JerichoEnv(env_cfg)
-    obs = env.reset(return_str=True)
-    print(f'[OBS]:\n{obs["observation"]}')
-    while True:
-        try:
-            action_id = int(input('Please input the action id: '))
-        except ValueError:
-            print("Invalid input. Please enter an integer action id.")
-            continue
-        obs, reward, done, info = env.step(action_id, return_str=True)
-        print(f'[OBS]:\n{obs["observation"]}')
-        if done:
-            user_choice = input('Would you like to RESTART, RESTORE a saved game, give the FULL score for that game or QUIT? ')
-            break
+    # Collect data for an episode according to collect_policy_mode
+    env.collect_episode_data()  
+    del env  
