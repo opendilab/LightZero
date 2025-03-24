@@ -1,5 +1,5 @@
 """
-Modified from https://github.com/karpathy/nanoGPT
+The following code is modified from https://github.com/karpathy/nanoGPT.
 """
 
 import math
@@ -98,13 +98,7 @@ def apply_rotary_emb(
     """
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
-
-    # try:
     freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
-    # except Exception as e:
-    #     print(f"freqs_cis.shape:{freqs_cis.shape},  xq_.shape:{ xq_.shape}")
-    #     print(e)
-
     xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(-2)
     xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(-2)
     return xq_out.type_as(xq), xk_out.type_as(xk)
@@ -168,18 +162,12 @@ class Transformer(nn.Module):
             - torch.Tensor: Output tensor of shape (batch_size, seq_length, embed_dim).
         """
         seqlen = sequences.shape[1]
-        reanalyze_phase = False
         # If using Rotary Position Embeddings (RoPE), slice the frequency components accordingly
         if self.config.rotary_emb:
             if isinstance(start_pos, int) or isinstance(start_pos, float):
                 # Create a tensor filled with start_pos, expanded to match the batch size, and adjust for sequence type
                 start_pos_tensor = torch.full((sequences.shape[0],), int(start_pos), device=sequences.device)
             elif isinstance(start_pos, (list, np.ndarray, torch.Tensor)):
-                # print(f"start_pos: {start_pos}")
-                # print(f"type(start_pos): {type(start_pos)}")
-                # print(f"type(start_pos[0]): {type(start_pos[0])}")
-                # print(f"start_pos[0].shape:{start_pos[0].shape}")
-                # print(f"len(start_pos[0].shape):{len(start_pos[0].shape)}")
                 if isinstance(start_pos[0], list):
                     # In the training phase, flatten start_pos, take the first element, convert to tensor
                     start_pos_tensor = torch.as_tensor(
@@ -191,18 +179,11 @@ class Transformer(nn.Module):
                         # In the collection/evaluation phase, convert start_pos to a tensor
                         start_pos_tensor = torch.as_tensor([x.item() for x in start_pos], device=sequences.device)
                     else:
-                        if reanalyze_phase:
-                            # In the training phase, flatten start_pos, take the first element, convert to tensor
-                            start_pos_tensor = torch.as_tensor(
-                            [x.reshape(-1)[0].item() for x in start_pos],  # Force flatten and take the first element
-                                device=sequences.device
-                            )
-                        else:
-                            # In the training phase, flatten start_pos, take the first element, convert to tensor
-                            start_pos_tensor = torch.as_tensor(
-                            [x.reshape(-1)[0].item() for x in start_pos],  # Force flatten and take the first element
-                                device=sequences.device
-                            )
+                        # In the training phase, flatten start_pos, take the first element, convert to tensor
+                        start_pos_tensor = torch.as_tensor(
+                        [x.reshape(-1)[0].item() for x in start_pos],  # Force flatten and take the first element
+                            device=sequences.device
+                        )
                 elif isinstance(start_pos[0], (int, float, np.integer)):
                     # Handle numpy integer types similarly to int and float
                     start_pos_tensor = torch.as_tensor([int(x) for x in start_pos], device=sequences.device)

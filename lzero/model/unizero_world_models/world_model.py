@@ -1,7 +1,5 @@
 import logging
-from typing import Any, Tuple
-from typing import Optional
-from typing import Union, Dict
+from typing import Dict, Union, Optional, List, Tuple, Any
 
 import numpy as np
 import torch
@@ -416,84 +414,121 @@ class WorldModel(nn.Module):
                 1, self.config.max_tokens, self.num_heads, self.embed_dim // self.num_heads
             ).transpose(1, 2).detach()
 
-    def forward(self, obs_embeddings_or_act_tokens: Dict[str, Union[torch.Tensor, tuple]],
-                past_keys_values: Optional[torch.Tensor] = None,
-                kvcache_independent: bool = False, is_init_infer: bool = True,
-                valid_context_lengths: Optional[torch.Tensor] = None, start_pos: int = 0, search_depth=None) -> WorldModelOutput:
+    def forward(
+        self,
+        obs_embeddings_or_act_tokens: Dict[str, Union[torch.Tensor, Tuple]],
+        past_keys_values: Optional[torch.Tensor] = None,
+        kvcache_independent: bool = False,
+        is_init_infer: bool = True,
+        valid_context_lengths: Optional[torch.Tensor] = None,
+        start_pos: Union[int, List[int]] = 0,
+        search_depth: Optional[List[int]] = None
+    ) -> "WorldModelOutput":
         """
-        Forward pass for the model.
-
+        Overview:
+            Forward pass for the world model. This method processes observation embeddings and/or action tokens,
+            optionally adds position encodings (with or without rotary position embeddings), passes the resulting
+            sequences through the transformer, and finally generates logits for observations, rewards, policy, and value.
+        
         Arguments:
-            - obs_embeddings_or_act_tokens (:obj:`dict`): Dictionary containing observation embeddings or action tokens.
-            - past_keys_values (:obj:`Optional[torch.Tensor]`): Previous keys and values for transformer.
-            - kvcache_independent (:obj:`bool`): Whether to use independent key-value caching.
-            - is_init_infer (:obj:`bool`): Initialize inference.
-            - valid_context_lengths (:obj:`Optional[torch.Tensor]`): Valid context lengths.
+            - obs_embeddings_or_act_tokens (dict): Dictionary containing one or more of the following keys:
+                - 'obs_embeddings': torch.Tensor representing observation embeddings.
+                - 'act_tokens': torch.Tensor representing action tokens.
+                - 'obs_embeddings_and_act_tokens': Combined data for both observations and actions.
+            - past_keys_values (Optional[torch.Tensor]): Cached key-value pairs for the transformer. Defaults to None.
+            - kvcache_independent (bool): Flag to indicate whether key-value caching is independent. Defaults to False.
+            - is_init_infer (bool): Flag to indicate if this is the initial inference step. Defaults to True.
+            - valid_context_lengths (Optional[torch.Tensor]): Valid lengths for the context. Defaults to None.
+            - start_pos (int or List[int]): Starting positional index for the current sequence (or batch). Defaults to 0.
+            - search_depth (Optional[List[int]]): List representing the search depth for each batch element, used for
+                position encoding adjustment. Defaults to None.
+        
         Returns:
-            - WorldModelOutput: Model output containing logits for observations, rewards, policy, and value.
+            WorldModelOutput: An output instance containing:
+                - x: Output features from the transformer.
+                - logits for observations.
+                - logits for rewards.
+                - logits_ends (None).
+                - logits for policy.
+                - logits for value.
         """
-        # Determine previous steps based on key-value caching method
+
+        # Calculate previous steps based on key-value caching configuration
         if kvcache_independent:
-            prev_steps = torch.tensor([0 if past_keys_values is None else past_kv.size for past_kv in past_keys_values],
-                                      device=self.device)
+            # If kv caching is independent, compute previous steps for each past key-value pair.
+            prev_steps = torch.tensor(
+                [0 if past_keys_values is None else past_kv.size for past_kv in past_keys_values],
+                device=self.device
+            )
         else:
+            # Otherwise, use a single value for previous steps.
             prev_steps = 0 if past_keys_values is None else past_keys_values.size
 
-        # Reset valid_context_lengths during initial inference
+        # Reset valid context lengths during initial inference phase.
         if is_init_infer:
             valid_context_lengths = None
 
-        # Process observation embeddings
-        if 'obs_embeddings' in obs_embeddings_or_act_tokens:
-            obs_embeddings = obs_embeddings_or_act_tokens['obs_embeddings']
+        # sequences: torch.Tensor  # Output sequence to feed into transformer
+        # num_steps: int           # Number of timesteps in the sequence
+        # start_pos_adjusted: Union[int, List[int]]  # Adjusted starting position index for positional encoding
+
+        if not self.config.rotary_emb:
+            start_pos_adjusted = None
+
+        # Process observation embeddings if available.
+        if "obs_embeddings" in obs_embeddings_or_act_tokens:
+            obs_embeddings = obs_embeddings_or_act_tokens["obs_embeddings"]
+            # If the observation embeddings have 2 dimensions, expand them to include a time dimension.
             if len(obs_embeddings.shape) == 2:
                 obs_embeddings = obs_embeddings.unsqueeze(1)
             num_steps = obs_embeddings.size(1)
+            
             if not self.config.rotary_emb:
-                sequences = self._add_position_embeddings(obs_embeddings, prev_steps, num_steps, kvcache_independent,
-                                                      is_init_infer, valid_context_lengths)
+                # Add traditional position embeddings if not using rotary embeddings.
+                sequences = self._add_position_embeddings(
+                    obs_embeddings, prev_steps, num_steps, kvcache_independent,
+                    is_init_infer, valid_context_lengths
+                )
             else:
+                # Keep the observation embeddings unchanged when using rotary embeddings.
                 sequences = obs_embeddings
 
                 if is_init_infer:
-                    # ==========*2 is because timestep only counts obs, but the sequence is obs, act actually==========
                     if self.reanalyze_phase:
-                        # is_init_infer+reanalyze_phase 只是用于reset时
-                        # import ipdb;ipdb.set_trace()
-                        start_pos_tmp = start_pos*2
-                        if not isinstance(start_pos_tmp, (int,float)):
-                            padding = np.zeros((start_pos_tmp.shape[0], 1), dtype=start_pos_tmp.dtype)
-                            start_pos_padded = np.concatenate([start_pos_tmp, padding], axis=1)
-                            start_pos_tmp = start_pos_padded.reshape(-1)
+                        # During reanalyze phase in initial inference, adjust start_pos:
+                        # Multiply by 2 because timestep only counts observations,
+                        # but the sequence contains both observations and actions.
+                        start_pos_adjusted = start_pos * 2
+                        if not isinstance(start_pos_adjusted, (int, float)):
+                            # Pad zero if start_pos_adjusted is not a scalar.
+                            padding = np.zeros((start_pos_adjusted.shape[0], 1), dtype=start_pos_adjusted.dtype)
+                            start_pos_adjusted = np.concatenate([start_pos_adjusted, padding], axis=1).reshape(-1)
                     else:
-                        if isinstance(start_pos, (int,float)):
-                            start_pos_tmp = start_pos*2
+                        # For regular initial inference, adjust start_pos accordingly.
+                        if isinstance(start_pos, (int, float)):
+                            start_pos_adjusted = start_pos * 2
                         else:
-                            start_pos_tmp = [pos*2 for pos in start_pos] 
-                else: # ========= TODO: rope pos index in recurrent_inference =======
-                    # import ipdb;ipdb.set_trace()
-                    # TODO: search_depth记录从root node开始，位于树中的深度，以判断rope的位置编码索引
+                            start_pos_adjusted = [pos * 2 for pos in start_pos]
+                else:
+                    # For recurrent inference (non-init), calculate the correct positional index.
                     if self.reanalyze_phase:
-                        if not isinstance(start_pos, (int,float)): # int为single_env_forward, array为batch forward
-                            # 创建一个形状为 (2, 1) 的填充0数组
+                        # In reanalyze phase, start_pos for batch mode might be an array that needs padding.
+                        if not isinstance(start_pos, (int, float)):
                             padding = np.zeros((start_pos.shape[0], 1), dtype=start_pos.dtype)
-                            # 沿着第二个维度（列方向）拼接
-                            start_pos_padded = np.concatenate([start_pos, padding], axis=1)
-                            # 将结果 reshape 成一维数组
-                            start_pos_tmp = start_pos_padded.reshape(-1)
-                        assert len(search_depth) == len(start_pos_tmp)
-                        start_pos_tmp = [(search_depth[index] + pos+1)*2+1 for index, pos in enumerate(start_pos_tmp)] 
+                            start_pos_adjusted = np.concatenate([start_pos, padding], axis=1).reshape(-1)
+                        # Ensure search_depth length matches adjusted start_pos.
+                        assert len(search_depth) == len(start_pos_adjusted)
+                        start_pos_adjusted = [
+                            (search_depth[i] + pos + 1) * 2 + 1 for i, pos in enumerate(start_pos_adjusted)
+                        ]
                     else:
-                        start_pos_tmp = [(search_depth[index] + pos)*2+2 for index, pos in enumerate(start_pos) ] 
-                    # print("obs phase:")
-                    # print(f'search_depth:{search_depth}')
-                    # print(f'start_pos:{start_pos}')
-                    # print(f'start_pos_tmp:{start_pos_tmp}')
+                        start_pos_adjusted = [
+                            (search_depth[i] + pos) * 2 + 2 for i, pos in enumerate(start_pos)
+                        ]
 
-
-        # Process action tokens
-        elif 'act_tokens' in obs_embeddings_or_act_tokens:
-            act_tokens = obs_embeddings_or_act_tokens['act_tokens']
+        # Process action tokens if available.
+        elif "act_tokens" in obs_embeddings_or_act_tokens:
+            act_tokens = obs_embeddings_or_act_tokens["act_tokens"]
             if self.continuous_action_space:
                 num_steps = 1
                 act_tokens = act_tokens.float()
@@ -503,83 +538,69 @@ class WorldModel(nn.Module):
                 if len(act_tokens.shape) == 3:
                     act_tokens = act_tokens.squeeze(1)
                 num_steps = act_tokens.size(1)
+            # Convert action tokens to embeddings using the action embedding table.
             act_embeddings = self.act_embedding_table(act_tokens)
             if not self.config.rotary_emb:
-                sequences = self._add_position_embeddings(act_embeddings, prev_steps, num_steps, kvcache_independent,
-                                                      is_init_infer, valid_context_lengths)
+                sequences = self._add_position_embeddings(
+                    act_embeddings, prev_steps, num_steps, kvcache_independent,
+                    is_init_infer, valid_context_lengths
+                )
             else:
                 sequences = act_embeddings
 
                 if is_init_infer:
-                    # 下面只是对于init_infer正确
                     if self.reanalyze_phase:
-                        # is_init_infer+reanalyze_phase 只是用于reset时
-                        # import ipdb;ipdb.set_trace()
-                        # NOTE: in reanalyze_phase act_tokens is current timestep, thus we add 1 here 
-                        start_pos_tmp = start_pos*2 + 1
-                        if not isinstance(start_pos_tmp, (int,float)): # int为single_env_forward, array为batch forward
-                            # 创建一个形状为 (2, 1) 的填充0数组
-                            padding = np.zeros((start_pos_tmp.shape[0], 1), dtype=start_pos_tmp.dtype)
-                            # 沿着第二个维度（列方向）拼接
-                            start_pos_padded = np.concatenate([start_pos_tmp, padding], axis=1)
-                            # 将结果 reshape 成一维数组
-                            start_pos_tmp = start_pos_padded.reshape(-1)
+                        # In reanalyze phase during initial inference, the action tokens represent the current timestep.
+                        start_pos_adjusted = start_pos * 2 + 1
+                        if not isinstance(start_pos_adjusted, (int, float)):
+                            padding = np.zeros((start_pos_adjusted.shape[0], 1), dtype=start_pos_adjusted.dtype)
+                            start_pos_adjusted = np.concatenate([start_pos_adjusted, padding], axis=1).reshape(-1)
                     else:
-                        # ==========*2 is because timestep only counts obs, but the sequence is obs, act actually==========
-                        # NOTE: act_tokens is last timestep, thus we minus 1 here 
-                        # TODO: check the effect
-                        if isinstance(start_pos, (int,float)):
-                            start_pos_tmp = start_pos*2 - 1
+                        # For regular initial inference using action tokens, adjust start_pos by subtracting 1.
+                        if isinstance(start_pos, (int, float)):
+                            start_pos_adjusted = start_pos * 2 - 1
                         else:
-                            start_pos_tmp = [pos*2-1 for pos in start_pos] 
+                            start_pos_adjusted = [pos * 2 - 1 for pos in start_pos]
                 else:
-                    # ========= TODO: rope pos index in recurrent_inference =======
-                    # if not is_init_infer:
-                    #     prev_steps + num_steps
-                    # import ipdb;ipdb.set_trace()
-                    # TODO: search_depth记录从root node开始，位于树中的深度，以判断rope的位置编码索引
+                    # During recurrent inference for action tokens.
                     if self.reanalyze_phase:
-                        # 在self.reanalyze_phase, start_pos是根节点上一步的pos
-                        # import ipdb;ipdb.set_trace()
-                        if not isinstance(start_pos, (int,float)): # int为single_env_forward, array为batch forward
-                            # 创建一个形状为 (2, 1) 的填充0数组
+                        if not isinstance(start_pos, (int, float)):
                             padding = np.zeros((start_pos.shape[0], 1), dtype=start_pos.dtype)
-                            # 沿着第二个维度（列方向）拼接
-                            start_pos_padded = np.concatenate([start_pos, padding], axis=1)
-                            # 将结果 reshape 成一维数组
-                            start_pos_tmp = start_pos_padded.reshape(-1)
-                        assert len(search_depth) == len(start_pos_tmp)
-                        start_pos_tmp = [(search_depth[index] + pos+1)*2+1 for index, pos in enumerate(start_pos_tmp)] 
+                            start_pos_adjusted = np.concatenate([start_pos, padding], axis=1).reshape(-1)
+                        assert len(search_depth) == len(start_pos_adjusted)
+                        start_pos_adjusted = [
+                            (search_depth[i] + pos + 1) * 2 + 1 for i, pos in enumerate(start_pos_adjusted)
+                        ]
                     else:
-                        start_pos_tmp = [(search_depth[index] + pos)*2+1 for index, pos in enumerate(start_pos)] 
-                    
-                    # print("act phase:")
-                    # print(f'search_depth:{search_depth}')
-                    # print(f'start_pos:{start_pos}')
-                    # print(f'start_pos_tmp:{start_pos_tmp}')
+                        start_pos_adjusted = [
+                            (search_depth[i] + pos) * 2 + 1 for i, pos in enumerate(start_pos)
+                        ]
 
-
-        # Process combined observation embeddings and action tokens
-        elif 'obs_embeddings_and_act_tokens' in obs_embeddings_or_act_tokens:
-            # ================ calculate the target value in Train phase or calculate the target policy in reanalyze phase ================
-
+        # Process combined observation embeddings and action tokens.
+        elif "obs_embeddings_and_act_tokens" in obs_embeddings_or_act_tokens:
+            # Process combined inputs to calculate either the target value (for training)
+            # or target policy (for reanalyze phase).
             if self.continuous_action_space:
                 sequences, num_steps = self._process_obs_act_combined_cont(obs_embeddings_or_act_tokens, prev_steps)
             else:
                 sequences, num_steps = self._process_obs_act_combined(obs_embeddings_or_act_tokens, prev_steps)
-            # ==========*2 is because timestep only counts obs, but the sequence is obs, act actually==========
-            start_pos_tmp = [pos*2 for pos in start_pos] 
+            # Adjust start positions: multiply by 2 as the sequence has both obs and act.
+            start_pos_adjusted = [pos * 2 for pos in start_pos]
+        else:
+            raise ValueError("Input dictionary must contain one of 'obs_embeddings', 'act_tokens', or 'obs_embeddings_and_act_tokens'.")
 
-        # Pass sequences through transformer
-        x = self._transformer_pass(sequences, past_keys_values, kvcache_independent, valid_context_lengths, start_pos=start_pos_tmp)
+        # Pass the sequence through the transformer.
+        x = self._transformer_pass(
+            sequences, past_keys_values, kvcache_independent, valid_context_lengths, start_pos=start_pos_adjusted
+        )
 
-        # Generate logits
+        # Generate logits for various components.
         logits_observations = self.head_observations(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_rewards = self.head_rewards(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_policy = self.head_policy(x, num_steps=num_steps, prev_steps=prev_steps)
         logits_value = self.head_value(x, num_steps=num_steps, prev_steps=prev_steps)
 
-        # logits_ends is None
+        # The 'logits_ends' is intentionally set to None.
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)
 
     def _add_position_embeddings(self, embeddings, prev_steps, num_steps, kvcache_independent, is_init_infer,
@@ -753,12 +774,13 @@ class WorldModel(nn.Module):
         if n <= self.env_num and current_obs_embeddings is not None:
             # ================ Collect and Evaluation Phase ================
             if current_obs_embeddings is not None:
+                 # Determine whether it is the first step in an episode.
                 if self.continuous_action_space:
                     first_step_flag = not isinstance(batch_action[0], np.ndarray)
                 else:
                     first_step_flag = max(batch_action) == -1
                 if first_step_flag:
-                    # First step in an episode
+                    # ------------------------- First Step of an Episode -------------------------
                     self.keys_values_wm = self.transformer.generate_empty_keys_values(n=current_obs_embeddings.shape[0],
                                                                                       max_tokens=self.context_length)
                     # print(f"current_obs_embeddings.device: {current_obs_embeddings.device}")
@@ -768,6 +790,7 @@ class WorldModel(nn.Module):
                     # Copy and store keys_values_wm for a single environment
                     self.update_cache_context(current_obs_embeddings, is_init_infer=True)
                 else:
+                    # --------------------- Continuing an Episode (Multi-environment) ---------------------
                     # current_obs_embeddings is the new latent_state, containing information from ready_env_num environments
                     ready_env_num = current_obs_embeddings.shape[0]
                     self.keys_values_wm_list = []
@@ -798,13 +821,10 @@ class WorldModel(nn.Module):
                         else:
                             # Reset using zero values
                             self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(n=1, max_tokens=self.context_length)
-                            # import ipdb;ipdb.set_trace()
+                            # If using RoPE positional encoding, then at reset, the pos_embed should use the absolute position start_pos[i].
                             outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
                                                       past_keys_values=self.keys_values_wm_single_env,
-                                                      is_init_infer=True, start_pos=start_pos[i].item()) # 如果使用rope在reset时，pos_embed中应该使用绝对位置
-                            # outputs_wm = self.forward({'obs_embeddings': state_single_env.unsqueeze(0)},
-                            #                     past_keys_values=self.keys_values_wm_single_env,
-                            #                     is_init_infer=True, start_pos=0)
+                                                      is_init_infer=True, start_pos=start_pos[i].item())
                             self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                             self.keys_values_wm_size_list.append(1)
 
@@ -857,7 +877,7 @@ class WorldModel(nn.Module):
             last_steps_act = act_tokens[:, -1:, :]
             act_tokens = torch.cat((act_tokens, last_steps_act), dim=1)
 
-            # batch中的每个样本 (last_obs_embeddings, act_tokens) 是在相同的时刻t, start_pos也对应每个样本各自的t
+            # Each sample in the batch (last_obs_embeddings, act_tokens) corresponds to the same time step, and start_pos also corresponds to each sample's respective t.
             outputs_wm = self.forward({'obs_embeddings_and_act_tokens': (last_obs_embeddings, act_tokens)}, start_pos=start_pos)
 
             # select the last timestep for each sample
@@ -1190,9 +1210,9 @@ class WorldModel(nn.Module):
         Returns:
             - list: Sizes of the key-value caches for each environment.
         """
-        for i in range(ready_env_num):
+        for index in range(ready_env_num):
             self.total_query_count += 1
-            state_single_env = latent_state[i]  # latent_state[i] is np.array
+            state_single_env = latent_state[index]  # latent_state[i] is np.array
             cache_key = hash_state(state_single_env)
 
             if self.reanalyze_phase:
@@ -1200,9 +1220,9 @@ class WorldModel(nn.Module):
                 matched_value = None
             else:
                 # Try to retrieve the cached value from past_kv_cache_init_infer_envs
-                cache_index = self.past_kv_cache_init_infer_envs[i].get(cache_key)
+                cache_index = self.past_kv_cache_init_infer_envs[index].get(cache_key)
                 if cache_index is not None:
-                    matched_value = self.shared_pool_init_infer[i][cache_index]
+                    matched_value = self.shared_pool_init_infer[index][cache_index]
                 else:
                     matched_value = None
 
@@ -1221,26 +1241,21 @@ class WorldModel(nn.Module):
                 self.keys_values_wm_single_env = self.transformer.generate_empty_keys_values(
                     n=1, max_tokens=self.context_length
                 )
-
-                if self.reanalyze_phase:
-                    nrow, ncols = start_pos.shape  # 原start_pos shape为 (batch, ncols)
-                    total_cols = ncols + 1         # 逻辑上扩充后每行的列数
-                    row_idx = i // total_cols
-                    col_idx = i % total_cols
-                    # 如果列索引等于原来的列数，说明是扩充的那一列，填充0
-                    if col_idx == ncols:
-                        start_pos_tmp = 0
-                    else:
-                        start_pos_tmp = int(start_pos[row_idx, col_idx])
-                else:
-                    start_pos_tmp = start_pos[i].item()
                 
-                # 如果是rope reset的位置索引应该使用绝对位置
-                # start_pos_tmp = 0
+                # Determine the absolute start position based on the reanalyze phase flag.
+                if self.reanalyze_phase:
+                    num_rows, num_cols = start_pos.shape  # Original start_pos shape is (batch, num_columns)
+                    total_cols = num_cols + 1             # Each logical row is extended by one column.
+                    row_idx = index // total_cols
+                    col_idx = index % total_cols
+                    # If the column index equals the original number of columns, this indicates the added column; set to 0.
+                    start_pos_adjusted: int = 0 if col_idx == num_cols else int(start_pos[row_idx, col_idx])
+                else:
+                    start_pos_adjusted = int(start_pos[index].item())
 
                 self.forward(
                     {'obs_embeddings': torch.from_numpy(state_single_env).unsqueeze(0).to(self.device)},
-                    past_keys_values=self.keys_values_wm_single_env, is_init_infer=True, start_pos=start_pos_tmp
+                    past_keys_values=self.keys_values_wm_single_env, is_init_infer=True, start_pos=start_pos_adjusted
                 )
                 self.keys_values_wm_list.append(self.keys_values_wm_single_env)
                 self.keys_values_wm_size_list.append(1)

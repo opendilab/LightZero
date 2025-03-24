@@ -143,8 +143,7 @@ class UniZeroMCTSCtree(object):
                 MCTS stage 3: Backup
                     At the end of the simulation, the statistics along the trajectory are updated.
                 """
-                # for UniZero
-                # import ipdb;ipdb.set_trace()
+                # search_depth is used for rope in UniZero
                 search_depth = results.get_search_len()
                 # print(f'simulation_index:{simulation_index}, search_depth:{search_depth}, latent_state_index_in_search_path:{latent_state_index_in_search_path}')
                 network_output = model.recurrent_inference(state_action_history, simulation_index, search_depth, timestep)

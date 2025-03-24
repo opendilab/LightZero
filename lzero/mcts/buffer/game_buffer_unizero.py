@@ -235,7 +235,6 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         # obtain the current_batch and prepare target context
         policy_re_context, current_batch = self._make_batch_for_reanalyze(batch_size)
         # target policy
-        # import ipdb;ipdb.set_trace()
         self._compute_target_policy_reanalyzed(policy_re_context, policy._target_model, current_batch[1], current_batch[-1] )
 
     def _make_batch_for_reanalyze(self, batch_size: int) -> Tuple[Any]:
@@ -386,7 +385,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         ]
         return policy_re_context
 
-    def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any, batch_action, timestep_batch = None) -> np.ndarray:
+    def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any, batch_action, batch_timestep = None) -> np.ndarray:
         """
         Overview:
             prepare policy targets from the reanalyzed context of policies
@@ -422,7 +421,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
         else:
             legal_actions = [[i for i, x in enumerate(action_mask[j]) if x == 1] for j in range(transition_batch_size)]
 
-        # NOTE: TODO
+        # NOTE: check the effect of reanalyze_phase
         model.world_model.reanalyze_phase = True
 
         with torch.no_grad():
@@ -433,9 +432,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # To obtain the target policy from MCTS guided by the recent target model
             # TODO: batch_obs (policy_obs_list) is at timestep t, batch_action is at timestep t
-            # TODO: debug
-            # import ipdb;ipdb.set_trace()
-            m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], start_pos=timestep_batch)  # NOTE: :self.reanalyze_num
+            m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num], start_pos=batch_timestep)  # NOTE: :self.reanalyze_num
             # =======================================================================
 
             if not model.training:
@@ -461,16 +458,14 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
                 # cpp mcts_tree
                 roots = MCTSCtree.roots(transition_batch_size, legal_actions)
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
-                # TODO: debug
-                # import ipdb;ipdb.set_trace()
                 # do MCTS for a new policy with the recent target model
-                MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, timestep_batch)
+                MCTSCtree(self._cfg).search(roots, model, latent_state_roots, to_play, batch_timestep)
             else:
                 # python mcts_tree
                 roots = MCTSPtree.roots(transition_batch_size, legal_actions)
                 roots.prepare(self._cfg.root_noise_weight, noises, reward_pool, policy_logits_pool, to_play)
                 # do MCTS for a new policy with the recent target model
-                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play, timestep_batch)
+                MCTSPtree(self._cfg).search(roots, model, latent_state_roots, to_play, batch_timestep)
 
             roots_legal_actions_list = legal_actions
             roots_distributions = roots.get_distributions()
@@ -519,7 +514,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
 
         return batch_target_policies_re
 
-    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, batch_action, timestep_batch) -> Tuple[
+    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, batch_action, batch_timestep) -> Tuple[
         Any, Any]:
         """
         Overview:
@@ -545,7 +540,7 @@ class UniZeroGameBuffer(MuZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # calculate the bootstrapped value and target value
             # NOTE: batch_obs(value_obs_list) is at t+td_steps, batch_action is at timestep t+td_steps
-            m_output = model.initial_inference(batch_obs, batch_action, start_pos=timestep_batch)  # TODO: timestep
+            m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep)
             # ======================================================================
 
             # if not in training, obtain the scalars of the value/reward

@@ -162,7 +162,7 @@ def train_unizero_segment(
             # Reanalyze buffer <buffer_reanalyze_freq> times in one train_epoch
             reanalyze_interval = update_per_collect // cfg.policy.buffer_reanalyze_freq
         else:
-            # TODO: debug
+            # TODO: only for debug
             # replay_buffer.reanalyze_buffer(2, policy)
                 
             # Reanalyze buffer each <1/buffer_reanalyze_freq> train_epoch

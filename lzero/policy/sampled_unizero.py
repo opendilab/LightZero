@@ -389,7 +389,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         # ==============================================================
         # sampled related core code
         # ==============================================================
-        obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
+        obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time, batch_timestep = current_batch
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number
@@ -411,7 +411,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
         else:
             action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
                 -1).long()  # For discrete action space
-        timestep_batch = torch.from_numpy(timestep_batch).to(self._cfg.device).unsqueeze(
+        batch_timestep = torch.from_numpy(batch_timestep).to(self._cfg.device).unsqueeze(
             -1).long() 
         data_list = [mask_batch, target_reward.astype('float32'), target_value.astype('float32'), target_policy,
                      weights]
@@ -447,7 +447,7 @@ class SampledUniZeroPolicy(UniZeroPolicy):
                 self._cfg.batch_size, -1, *self._cfg.model.observation_shape)
 
         batch_for_gpt['actions'] = action_batch.squeeze(-1)
-        batch_for_gpt['timestep'] = timestep_batch.squeeze(-1)
+        batch_for_gpt['timestep'] = batch_timestep.squeeze(-1)
 
         batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
         batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data

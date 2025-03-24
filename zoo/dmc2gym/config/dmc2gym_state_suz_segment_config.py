@@ -95,7 +95,7 @@ def main(env_id, seed):
                     num_heads=8,
                     embed_dim=768,
                     env_num=max(collector_env_num, evaluator_env_num),
-                    rotary_emb=True,
+                    rotary_emb=False,
                 ),
             ),
             # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
@@ -153,7 +153,7 @@ def main(env_id, seed):
 
     # ============ use muzero_segment_collector instead of muzero_collector =============
     from lzero.entry import train_unizero_segment
-    main_config.exp_name=f'data_sampled_unizero/dmc2gym_{env_id}_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}'
+    main_config.exp_name=f'data_lz/data_sampled_unizero/dmc2gym_{env_id}_brf{buffer_reanalyze_freq}_state_cont_suz_nlayer{num_layers}_numsegments-{num_segments}_gsl{game_segment_length}_K{K}_ns{num_simulations}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_{norm_type}_seed{seed}'
     train_unizero_segment([main_config, create_config], model_path=main_config.policy.model_path, seed=seed, max_env_step=max_env_step)
 
 

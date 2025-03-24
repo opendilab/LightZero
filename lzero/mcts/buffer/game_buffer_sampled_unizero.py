@@ -602,7 +602,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         return batch_target_policies_re, root_sampled_actions
 
 
-    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, batch_action, timestep_batch) -> Tuple[
+    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, batch_action, batch_timestep) -> Tuple[
         Any, Any]:
         """
         Overview:
@@ -644,7 +644,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # calculate the target value
             # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11 = 352
-            m_output = model.initial_inference(batch_obs, batch_action, start_pos=timestep_batch)
+            m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep)
             # ======================================================================
 
             # if not in training, obtain the scalars of the value/reward

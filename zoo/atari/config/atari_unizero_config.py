@@ -66,7 +66,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
                     embed_dim=768,
                     obs_type='image',
                     env_num=max(collector_env_num, evaluator_env_num),
-                    rotary_emb=True,
+                    rotary_emb=False,
                 ),
             ),
             model_path=None,
@@ -75,8 +75,8 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
             batch_size=batch_size,
             learning_rate=0.0001,
             num_simulations=num_simulations,
-            # train_start_after_envsteps=2000,
-            train_start_after_envsteps=0, # TODO: only for debug
+            train_start_after_envsteps=2000,
+            # train_start_after_envsteps=0, # TODO: only for debug
             game_segment_length=game_segment_length,
             replay_buffer_size=int(1e6),
             eval_freq=int(5e3),
@@ -101,7 +101,7 @@ def main(env_id='PongNoFrameskip-v4', seed=0):
     atari_unizero_create_config = EasyDict(atari_unizero_create_config)
     create_config = atari_unizero_create_config
 
-    main_config.exp_name = f'data_lz/data_unizero_rope_origcollect/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
+    main_config.exp_name = f'data_lz/data_unizero/{env_id[:-14]}/{env_id[:-14]}_uz_nlayer{num_layers}_gsl{game_segment_length}_rr{replay_ratio}_Htrain{num_unroll_steps}-Hinfer{infer_context_length}_bs{batch_size}_seed{seed}'
     from lzero.entry import train_unizero
     train_unizero([main_config, create_config], seed=seed, model_path=main_config.policy.model_path, max_env_step=max_env_step)
 

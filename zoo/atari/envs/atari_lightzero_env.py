@@ -1,4 +1,5 @@
 import copy
+import logging
 from typing import List
 
 # import gymnasium as gym
@@ -151,10 +152,10 @@ class AtariEnvLightZero(BaseEnv):
         self.reward = np.array(reward).astype(np.float32)
         self._eval_episode_return += self.reward
         self.timestep += 1
-        # print(f'self.timestep: {self.timestep}')
+        # logging.info(f'self.timestep: {self.timestep}')
         observation = self.observe()
         if done:
-            print(f'done in self.timestep: {self.timestep}')
+            logging.info(f'one episode done! total episode length is: {self.timestep}')
             info['eval_episode_return'] = self._eval_episode_return
         return BaseEnvTimestep(observation, self.reward, done, info)
 

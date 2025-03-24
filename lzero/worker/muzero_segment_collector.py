@@ -469,7 +469,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # logging.info(f'ready_env_id:{ready_env_id}')
-                # print(f'timestep:{timestep}')
+                # logging.info(f'timestep:{timestep}')
                 policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
 
                 # Extract relevant policy outputs

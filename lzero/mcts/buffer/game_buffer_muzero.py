@@ -286,7 +286,6 @@ class MuZeroGameBuffer(GameBuffer):
         game_segment_lens = []
         # for board games
         action_mask_segment, to_play_segment = [], []
-        # timestep_segment = []
 
         root_values = []
 
