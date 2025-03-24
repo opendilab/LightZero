@@ -1,4 +1,7 @@
 import copy
+import os
+import json
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
 import gym
@@ -9,9 +12,6 @@ from transformers import AutoTokenizer
 from ding.utils import ENV_REGISTRY, set_pkg_seed, get_rank, get_world_size
 from ding.envs import BaseEnv, BaseEnvTimestep
 from jericho import FrotzEnv
-import os
-import json
-from datetime import datetime
 
 
 @ENV_REGISTRY.register('jericho')
@@ -33,7 +33,7 @@ class JerichoEnv(BaseEnv):
         - for_unizero (:obj:`bool`): If True, specify additional keys for unizero compatibility.
         - save_replay (:obj:`bool`): If True, the interaction log of the entire episode will be saved. 
         - save_replay_path (:obj:`str`): Path where interaction logs are saved.
-        - collect_policy_mode (:obj:`str`): Data collection strategies, including "human", "random" and "expert".
+        - collect_policy_mode (:obj:`str`): The strategy pattern used in data collection in the collect_episode_data method, including "human", "random" and "expert".
         - env_type (:obj:`str`): Type of environment.
     Attributes:
         - tokenizer (Optional[AutoTokenizer]): The tokenizer loaded from the pretrained model.
@@ -315,14 +315,15 @@ class JerichoEnv(BaseEnv):
         if self.env_step >= self.max_steps:
             done = True
 
-        self.episode_history.append({
-            'timestep': self.timestep,
-            'obs': processed_obs['observation'],
-            'act': action_str,
-            'reward': reward.item() if isinstance(reward, np.ndarray) else reward,
-            'done': done,
-            'info': info
-        })
+        if self.save_replay:
+            self.episode_history.append({
+                'timestep': self.timestep,
+                'obs': processed_obs['observation'],
+                'act': action_str,
+                'reward': reward.item() if isinstance(reward, np.ndarray) else reward,
+                'done': done,
+                'info': info
+            })
 
         if done:
             print('=' * 20)
@@ -372,7 +373,8 @@ class JerichoEnv(BaseEnv):
 
     def save_episode_data(self):
         """
-        Save the full episode history to a JSON file.
+        Overview:
+            Save the full episode interaction history (self.episode_history) to a JSON file.
         """
         if self.save_replay_path is None:
             self.save_replay_path = './log'  
@@ -390,7 +392,14 @@ class JerichoEnv(BaseEnv):
          
     def human_step(self, observation:str) -> str:
         """
-        Get action input from human player.
+        Overview:
+            Interactively receive an action from a human player via command line input.
+
+        Arguments:
+            - observation (:obj:`str`): The current observation shown to the human.
+
+        Returns:
+            - (:obj:`int`): The action index input by the user, converted to int.
         """
         print(f"[OBS]\n{observation}")
         while True:
@@ -402,7 +411,11 @@ class JerichoEnv(BaseEnv):
     
     def random_step(self) -> str:
         """
-        Get a random valid action.
+        Overview:
+            Randomly select a valid action from the current valid action list.
+
+        Returns:
+            - (:obj:`str`): A randomly selected action string from the available actions. If no actions are available, returns 'go' as a fallback.
         """
         if self._action_list is not None and len(self._action_list)>0:
             return np.random.choice(self._action_list)
@@ -414,7 +427,8 @@ class JerichoEnv(BaseEnv):
 
     def collect_episode_data(self):
         """
-        Collect data for an episode
+        Overview:
+            Run a single episode using the specified policy mode, and store the trajectory in self.episode_history.
         """
 
         obs = self.reset(return_str=True)
