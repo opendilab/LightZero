@@ -397,7 +397,7 @@ class HFLanguageRepresentationNetwork(nn.Module):
             self.model = AutoModel.from_pretrained(model_path)
 
         if tokenizer is None:
-            # Only rank 0 downloads the tokenizer, and then other processes load it from cache.
+            # # Only rank 0 downloads the tokenizer, and then other processes load it from cache.
             if get_rank() == 0:
                 self.tokenizer = AutoTokenizer.from_pretrained(model_path)
             if get_world_size() > 1:

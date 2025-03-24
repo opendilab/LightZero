@@ -5,7 +5,7 @@ from typing import Any, Dict
 from easydict import EasyDict
 
 
-def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e6)) -> None:
+def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(2e5)) -> None:
     """
     Main entry point for setting up environment configurations and launching training.
 
@@ -16,6 +16,11 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     Returns:
         None
     """
+    gpu_num = 4
+    collector_env_num: int = 4       # Number of collector environments
+    n_episode = int(collector_env_num*gpu_num)
+    batch_size = int(64*gpu_num)
+
     # ------------------------------------------------------------------
     # Base environment parameters (Note: these values might be adjusted for different env_id)
     # ------------------------------------------------------------------
@@ -42,9 +47,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     num_simulations: int = 50        # Number of simulations
 
     # Project training parameters
-    collector_env_num: int = 4       # Number of collector environments
-    n_episode: int = 4               # Number of episodes per training batch
-    batch_size: int = 64             # Batch size in training
     num_unroll_steps: int = 10       # Number of unroll steps (for rollout sequence expansion)
     infer_context_length: int = 4    # Inference context length
 
@@ -66,7 +68,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     # ------------------------------------------------------------------
     # TODO: Debug configuration - override some parameters for debugging purposes
     # ------------------------------------------------------------------
-    # max_env_step = int(5e5) 
+    # max_env_step = int(2e5) 
     # batch_size = 10  
     # num_simulations = 2 
     # num_unroll_steps = 5
@@ -94,7 +96,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             manager=dict(shared_memory=False),
         ),
         policy=dict(
-            multi_gpu=False,  # Important for distributed data parallel (DDP)
+            multi_gpu=True,  # Important for distributed data parallel (DDP)
             use_wandb=False,
             learn=dict(
                 learner=dict(
@@ -179,23 +181,34 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     main_config: EasyDict = jericho_unizero_config
     create_config: EasyDict = jericho_unizero_create_config
 
-    # Construct experiment name containing key parameters
-    main_config.exp_name = (
-        f"data_lz/data_unizero_jericho/bge-base-en-v1.5/uz_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
-        f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
-        f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
-    )
-    from lzero.entry import train_unizero
-    # Launch the training process
-    train_unizero(
-        [main_config, create_config],
-        seed=seed,
-        model_path=main_config.policy.model_path,
-        max_env_step=max_env_step,
-    )
+    from ding.utils import DDPContext
+    from lzero.config.utils import lz_to_ddp_config
+    with DDPContext():
+        main_config = lz_to_ddp_config(main_config)
+        # Construct experiment name containing key parameters
+        main_config.exp_name = (
+            f"data_lz/data_unizero_jericho/bge-base-en-v1.5/uz_ddp-{gpu_num}gpu_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+            f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
+            f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
+        )
+        from lzero.entry import train_unizero
+        # Launch the training process
+        train_unizero(
+            [main_config, create_config],
+            seed=seed,
+            model_path=main_config.policy.model_path,
+            max_env_step=max_env_step,
+        )
 
 
 if __name__ == "__main__":
+    """
+    Overview:
+        This script should be executed with <nproc_per_node> GPUs.
+        Run the following command to launch the script:
+        torchrun --nproc_per_node=4 ./zoo/jericho/configs/jericho_unizero_ddp_config.py
+    """
+
     parser = argparse.ArgumentParser(description='Process environment configuration and launch training.')
     parser.add_argument(
         '--env',
@@ -215,9 +228,4 @@ if __name__ == "__main__":
     os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
     # Start the main process with the provided arguments
-    # main(args.env, args.seed)
-
-    def run(max_env_step: int):
-        main(args.env, args.seed, max_env_step=max_env_step)
-    import cProfile
-    cProfile.run(f"run({10000})", filename="./zoo/jericho/detective_unizero_cprofile_10k_envstep", sort="cumulative")
+    main(args.env, args.seed)
