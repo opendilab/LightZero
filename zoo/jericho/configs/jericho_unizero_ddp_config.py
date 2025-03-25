@@ -17,7 +17,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
         None
     """
     gpu_num = 4
-    collector_env_num: int = 1       # Number of collector environments
+    collector_env_num: int = 4       # Number of collector environments
     n_episode = int(collector_env_num*gpu_num)
     batch_size = int(64*gpu_num)
 
@@ -75,7 +75,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     # max_steps = 10
     # num_layers = 1
     # replay_ratio = 0.05             
-
     # ------------------------------------------------------------------
     # Configuration dictionary for the Jericho Unizero environment and policy
     # ------------------------------------------------------------------
@@ -127,7 +126,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),
             ),
-            # update_per_collect=None,  # Important for DDP
             update_per_collect=int(collector_env_num*max_steps*replay_ratio),  # Important for DDP
             action_type="varied_action_space",
             model_path=None,
@@ -139,11 +137,9 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             cos_lr_scheduler=True,
             fixed_temperature_value=0.25,
             manual_temperature_decay=False,
-            threshold_training_steps_for_final_temperature=int(2.5e4),
             num_simulations=num_simulations,
             n_episode=n_episode,
             train_start_after_envsteps=0,  # TODO: Adjust training start trigger if needed.
-            # train_start_after_envsteps=2000,  # TODO: Adjust training start trigger if needed.
             replay_buffer_size=int(5e5),
             eval_freq=int(1e4),
             collector_env_num=collector_env_num,
@@ -187,7 +183,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
         main_config = lz_to_ddp_config(main_config)
         # Construct experiment name containing key parameters
         main_config.exp_name = (
-            f"data_lz/data_unizero_jericho_20250325/bge-base-en-v1.5/uz_ddp-{gpu_num}gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+            f"data_lz/data_unizero_jericho/bge-base-en-v1.5/uz_ddp-{gpu_num}gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
             f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
             f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
         )

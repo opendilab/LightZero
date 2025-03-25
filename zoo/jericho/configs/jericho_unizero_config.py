@@ -5,7 +5,7 @@ from typing import Any, Dict
 from easydict import EasyDict
 
 
-def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e6)) -> None:
+def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e5)) -> None:
     """
     Main entry point for setting up environment configurations and launching training.
 
@@ -136,8 +136,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             batch_size=batch_size,
             learning_rate=0.0001,
             cos_lr_scheduler=True,
-            manual_temperature_decay=True,
-            threshold_training_steps_for_final_temperature=int(2.5e4),
+            fixed_temperature_value=0.25,
+            manual_temperature_decay=False,
             num_simulations=num_simulations,
             n_episode=n_episode,
             train_start_after_envsteps=0,  # TODO: Adjust training start trigger if needed.
@@ -215,9 +215,10 @@ if __name__ == "__main__":
     os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
     # Start the main process with the provided arguments
-    # main(args.env, args.seed)
+    main(args.env, args.seed)
 
-    def run(max_env_step: int):
-        main(args.env, args.seed, max_env_step=max_env_step)
-    import cProfile
-    cProfile.run(f"run({10000})", filename="./zoo/jericho/detective_unizero_cprofile_10k_envstep", sort="cumulative")
+    # ====== the following is only for cprofile ======
+    # def run(max_env_step: int):
+    #     main(args.env, args.seed, max_env_step=max_env_step)
+    # import cProfile
+    # cProfile.run(f"run({10000})", filename="./zoo/jericho/detective_unizero_cprofile_10k_envstep", sort="cumulative")

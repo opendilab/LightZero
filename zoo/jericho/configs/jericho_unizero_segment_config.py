@@ -110,6 +110,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0) -> None:
             replay_ratio=replay_ratio,
             batch_size=batch_size,
             learning_rate=0.0001,
+            fixed_temperature_value=0.25,
+            manual_temperature_decay=False,
             num_simulations=num_simulations,
             num_segments=num_segments,
             train_start_after_envsteps=0,
