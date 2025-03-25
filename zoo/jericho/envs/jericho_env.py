@@ -1,3 +1,4 @@
+import logging
 import copy
 import os
 import json
@@ -390,6 +391,11 @@ class JerichoEnv(BaseEnv):
 
         with open(filename, mode="w", encoding="utf-8") as f:
             json.dump(self.episode_history, f, ensure_ascii=False)
+            logging.info(
+                f"Episode data successfully saved to '{filename}'. "
+                f"Episode length: {len(self.episode_history)} interactions, "
+                f"Environment type: {self.env_type}, Policy mode: {self.collect_policy_mode}."
+            )
          
     def human_step(self, observation:str) -> str:
         """

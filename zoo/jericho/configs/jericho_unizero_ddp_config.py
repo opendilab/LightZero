@@ -5,7 +5,7 @@ from typing import Any, Dict
 from easydict import EasyDict
 
 
-def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(2e5)) -> None:
+def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e5)) -> None:
     """
     Main entry point for setting up environment configurations and launching training.
 
@@ -17,7 +17,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(2e
         None
     """
     gpu_num = 4
-    collector_env_num: int = 4       # Number of collector environments
+    collector_env_num: int = 1       # Number of collector environments
     n_episode = int(collector_env_num*gpu_num)
     batch_size = int(64*gpu_num)
 
@@ -49,7 +49,6 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(2e
     # Project training parameters
     num_unroll_steps: int = 10       # Number of unroll steps (for rollout sequence expansion)
     infer_context_length: int = 4    # Inference context length
-
     num_layers: int = 2              # Number of layers in the model
     replay_ratio: float = 0.25       # Replay ratio for experience replay
     embed_dim: int = 768             # Embedding dimension
@@ -138,7 +137,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(2e
             batch_size=batch_size,
             learning_rate=0.0001,
             cos_lr_scheduler=True,
-            manual_temperature_decay=True,
+            fixed_temperature_value=0.25,
+            manual_temperature_decay=False,
             threshold_training_steps_for_final_temperature=int(2.5e4),
             num_simulations=num_simulations,
             n_episode=n_episode,
@@ -187,7 +187,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(2e
         main_config = lz_to_ddp_config(main_config)
         # Construct experiment name containing key parameters
         main_config.exp_name = (
-            f"data_lz/data_unizero_jericho/bge-base-en-v1.5/uz_ddp-{gpu_num}gpu_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+            f"data_lz/data_unizero_jericho_20250325/bge-base-en-v1.5/uz_ddp-{gpu_num}gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
             f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
             f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
         )
