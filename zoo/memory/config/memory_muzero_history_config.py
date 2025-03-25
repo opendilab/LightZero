@@ -14,7 +14,7 @@ evaluator_env_num = 8
 num_simulations = 50
 update_per_collect = None # for others
 replay_ratio = 0.25 
-batch_size = 256
+# batch_size = 256
 reanalyze_ratio = 0
 td_steps = 5
 game_segment_length = 30+memory_length
@@ -30,6 +30,7 @@ eps_greedy_exploration_in_collect = True
 # history_length = 40
 # history_length = 60
 history_length = 70
+batch_size = 128
 
 # debug
 # num_simulations = 3
