@@ -197,11 +197,11 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         )
 
         # current_batch = [
-        #     obs_list, action_list, root_sampled_actions_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list
+        #     obs_list, action_list, root_sampled_actions_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list
         # ]
         # target reward, target value
         batch_rewards, batch_target_values = self._compute_target_reward_value(
-            reward_value_context, policy._target_model, current_batch[3]  # current_batch[3] is batch_target_action
+            reward_value_context, policy._target_model, current_batch[3], current_batch[-1]  # current_batch[3] is batch_target_action
         )
 
         batch_target_policies_non_re = self._compute_target_policy_non_reanalyzed(
@@ -250,6 +250,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         batch_size = len(batch_index_list)
         obs_list, action_list, mask_list = [], [], []
         root_sampled_actions_list = []
+        timestep_list = []
         bootstrap_action_list = []
 
         # prepare the inputs of a batch
@@ -259,7 +260,8 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
             actions_tmp = game.action_segment[pos_in_game_segment:pos_in_game_segment +
                                                                   self._cfg.num_unroll_steps].tolist()
-
+            timestep_tmp = game.timestep_segment[pos_in_game_segment:pos_in_game_segment +
+                                                                  self._cfg.num_unroll_steps].tolist()
             # NOTE: self._cfg.num_unroll_steps + 1
             root_sampled_actions_tmp = game.root_sampled_actions[pos_in_game_segment:pos_in_game_segment +
                                                                  self._cfg.num_unroll_steps + 1]
@@ -297,6 +299,10 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                     reshape=reshape
                 )
 
+            # TODO: check the effect
+            timestep_tmp += [
+                0 for _ in range(self._cfg.num_unroll_steps - len(timestep_tmp))
+            ]
             # obtain the input observations
             # pad if length of obs in game_segment is less than stack+num_unroll_steps
             # e.g. stack+num_unroll_steps = 4+5
@@ -309,6 +315,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             root_sampled_actions_list.append(root_sampled_actions_tmp)
 
             mask_list.append(mask_tmp)
+            timestep_list.append(timestep_tmp)
 
             # NOTE: for unizero
             bootstrap_action_tmp = game.action_segment[pos_in_game_segment+self._cfg.td_steps:pos_in_game_segment +
@@ -329,7 +336,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         # ==============================================================
         # formalize the inputs of a batch
         current_batch = [
-            obs_list, action_list, root_sampled_actions_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list
+            obs_list, action_list, root_sampled_actions_list, bootstrap_action_list, mask_list, batch_index_list, weights_list, make_time_list, timestep_list
         ]
         for i in range(len(current_batch)):
             current_batch[i] = np.asarray(current_batch[i])
@@ -397,6 +404,8 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
             # for board games
             action_mask_segment, to_play_segment = [], []
+            timestep_segment = []
+
             for game_segment, state_index in zip(game_segment_list, pos_in_game_segment_list):
                 game_segment_len = len(game_segment)
                 game_segment_lens.append(game_segment_len)
@@ -404,6 +413,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
                 # for board games
                 action_mask_segment.append(game_segment.action_mask_segment)
                 to_play_segment.append(game_segment.to_play_segment)
+                timestep_segment.append(game_segment.timestep_segment)
                 child_visits.append(game_segment.child_visit_segment)
                 root_sampled_actions.append(game_segment.root_sampled_actions)
 
@@ -425,11 +435,11 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
         policy_re_context = [
             policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, root_sampled_actions, root_values, game_segment_lens,
-            action_mask_segment, to_play_segment
+            action_mask_segment, to_play_segment, timestep_segment
         ]
         return policy_re_context
 
-    def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any, action_batch) -> np.ndarray:
+    def _compute_target_policy_reanalyzed(self, policy_re_context: List[Any], model: Any, batch_action) -> np.ndarray:
         """
         Overview:
             prepare policy targets from the reanalyzed context of policies
@@ -444,7 +454,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
         # for board games
         policy_obs_list, policy_mask, pos_in_game_segment_list, batch_index_list, child_visits, root_sampled_actions, root_values, game_segment_lens, action_mask_segment, \
-            to_play_segment = policy_re_context  # noqa
+            to_play_segment, timestep_segment = policy_re_context  # noqa
         transition_batch_size = len(policy_obs_list)
         game_segment_batch_size = len(pos_in_game_segment_list)
 
@@ -474,9 +484,9 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
 
             # =============== NOTE: The key difference with MuZero =================
             # calculate the target value
-            # action_batch.shape (32, 10)
+            # batch_action.shape (32, 10)
             # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11=352
-            m_output = model.initial_inference(batch_obs, action_batch[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
+            m_output = model.initial_inference(batch_obs, batch_action[:self.reanalyze_num])  # NOTE: :self.reanalyze_num
             # =======================================================================
 
             # if not in training, obtain the scalars of the value/reward
@@ -592,7 +602,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
         return batch_target_policies_re, root_sampled_actions
 
 
-    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, action_batch) -> Tuple[
+    def _compute_target_reward_value(self, reward_value_context: List[Any], model: Any, batch_action, batch_timestep) -> Tuple[
         Any, Any]:
         """
         Overview:
@@ -634,7 +644,7 @@ class SampledUniZeroGameBuffer(UniZeroGameBuffer):
             # =============== NOTE: The key difference with MuZero =================
             # calculate the target value
             # batch_obs.shape torch.Size([352, 3, 64, 64]) 32*11 = 352
-            m_output = model.initial_inference(batch_obs, action_batch)
+            m_output = model.initial_inference(batch_obs, batch_action, start_pos=batch_timestep)
             # ======================================================================
 
             # if not in training, obtain the scalars of the value/reward

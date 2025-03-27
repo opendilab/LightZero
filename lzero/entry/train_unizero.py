@@ -163,8 +163,7 @@ def train_unizero(
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
         # Evaluate policy performance
-        if evaluator.should_eval(learner.train_iter):
-            logging.info(f"Training iteration {learner.train_iter}: Starting evaluation...")
+        if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             logging.info(f"Training iteration {learner.train_iter}: Evaluation completed, stop condition: {stop}, current reward: {reward}")
             if stop:
