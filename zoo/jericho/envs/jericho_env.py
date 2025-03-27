@@ -1,3 +1,4 @@
+import logging
 import copy
 import os
 import json
@@ -89,6 +90,7 @@ class JerichoEnv(BaseEnv):
         self.remove_stuck_actions: bool = self.cfg['remove_stuck_actions']
         self.add_location_and_inventory: bool = self.cfg['add_location_and_inventory']
         self.for_unizero: bool = self.cfg['for_unizero']
+        
         # Initialize the tokenizer once (only in rank 0 process if distributed)
         if JerichoEnv.tokenizer is None:
             if self.rank == 0:
@@ -389,6 +391,11 @@ class JerichoEnv(BaseEnv):
 
         with open(filename, mode="w", encoding="utf-8") as f:
             json.dump(self.episode_history, f, ensure_ascii=False)
+            logging.info(
+                f"Episode data successfully saved to '{filename}'. "
+                f"Episode length: {len(self.episode_history)} interactions, "
+                f"Environment type: {self.env_type}, Policy mode: {self.collect_policy_mode}."
+            )
          
     def human_step(self, observation:str) -> str:
         """
