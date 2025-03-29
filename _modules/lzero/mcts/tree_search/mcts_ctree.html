@@ -167,16 +167,19 @@
     <span class="c1"># @profile</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">search</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span> <span class="n">roots</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">model</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">],</span> <span class="n">to_play_batch</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span>
-            <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span>
+            <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]],</span> <span class="n">timestep</span><span class="p">:</span> <span class="n">Union</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">Any</span><span class="p">]]</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Overview:</span>
-<span class="sd">            Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.</span>
-<span class="sd">            Use the cpp ctree.</span>
+<span class="sd">            Perform Monte Carlo Tree Search (MCTS) for a batch of root nodes in parallel. </span>
+<span class="sd">            This method utilizes the C++ implementation of the tree search for efficiency.</span>
+
 <span class="sd">        Arguments:</span>
-<span class="sd">            - roots (:obj:`Any`): a batch of expanded root nodes</span>
-<span class="sd">            - latent_state_roots (:obj:`list`): the hidden states of the roots</span>
-<span class="sd">            - to_play_batch (:obj:`list`): the to_play_batch list used in in self-play-mode board games</span>
+<span class="sd">            - roots (:obj:`Any`): A batch of expanded root nodes.</span>
+<span class="sd">            - model (:obj:`torch.nn.Module`): The neural network model used for inference.</span>
+<span class="sd">            - latent_state_roots (:obj:`List[Any]`): The hidden states of the root nodes.</span>
+<span class="sd">            - to_play_batch (:obj:`Union[int, List[Any]]`): The list of players in self-play mode.</span>
+<span class="sd">            - timestep (:obj:`Union[int, List[Any]]`): The step index of the environment in one episode.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
             <span class="n">model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
@@ -236,8 +239,10 @@
 <span class="sd">                MCTS stage 3: Backup</span>
 <span class="sd">                    At the end of the simulation, the statistics along the trajectory are updated.</span>
 <span class="sd">                &quot;&quot;&quot;</span>
-                <span class="c1"># for UniZero</span>
-                <span class="n">network_output</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">recurrent_inference</span><span class="p">(</span><span class="n">state_action_history</span><span class="p">,</span> <span class="n">simulation_index</span><span class="p">,</span> <span class="n">latent_state_index_in_search_path</span><span class="p">)</span>
+                <span class="c1"># search_depth is used for rope in UniZero</span>
+                <span class="n">search_depth</span> <span class="o">=</span> <span class="n">results</span><span class="o">.</span><span class="n">get_search_len</span><span class="p">()</span>
+                <span class="c1"># print(f&#39;simulation_index:{simulation_index}, search_depth:{search_depth}, latent_state_index_in_search_path:{latent_state_index_in_search_path}&#39;)</span>
+                <span class="n">network_output</span> <span class="o">=</span> <span class="n">model</span><span class="o">.</span><span class="n">recurrent_inference</span><span class="p">(</span><span class="n">state_action_history</span><span class="p">,</span> <span class="n">simulation_index</span><span class="p">,</span> <span class="n">search_depth</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
 
                 <span class="n">network_output</span><span class="o">.</span><span class="n">latent_state</span> <span class="o">=</span> <span class="n">to_detach_cpu_numpy</span><span class="p">(</span><span class="n">network_output</span><span class="o">.</span><span class="n">latent_state</span><span class="p">)</span>
                 <span class="n">network_output</span><span class="o">.</span><span class="n">policy_logits</span> <span class="o">=</span> <span class="n">to_detach_cpu_numpy</span><span class="p">(</span><span class="n">network_output</span><span class="o">.</span><span class="n">policy_logits</span><span class="p">)</span>
