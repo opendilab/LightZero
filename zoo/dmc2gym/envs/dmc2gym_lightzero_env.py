@@ -5,13 +5,11 @@ from typing import Callable, Union, Dict, List
 from typing import Optional
 
 import dmc2gym
-import gym
 import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
-from ding.envs import BaseEnv, BaseEnvTimestep
-from ding.envs import WarpFrameWrapper, ScaledFloatFrameWrapper, ClipRewardWrapper, ActionRepeatWrapper, \
-    FrameStackWrapper
+from ding.envs import BaseEnv, BaseEnvTimestep, WarpFrameWrapper, ScaledFloatFrameWrapper, \
+    ClipRewardWrapper, ActionRepeatWrapper, FrameStackWrapper
 from ding.envs.common.common_function import affine_transform
 from ding.torch_utils import to_ndarray
 from ding.utils import ENV_REGISTRY
@@ -334,11 +332,11 @@ class DMC2GymEnv(BaseEnv):
         obs = to_ndarray(obs).astype(np.float32)
         action_mask = None
 
-        self.timestep = 0
+        self._timestep = 0
         if self._save_replay_gif:
             self._frames = []
 
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self.timestep}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
 
         return obs
 
@@ -372,10 +370,10 @@ class DMC2GymEnv(BaseEnv):
         #     action = np.where(action < -0.9500, -0.9999, action)
 
         obs, rew, done, info = self._env.step(action)
-        self.timestep += 1
+        self._timestep += 1
 
         # print(f'action: {action}, obs: {obs}, rew: {rew}, done: {done}, info: {info}')
-        # print(f'step {self.timestep}: action: {action}, rew: {rew}, done: {done}')
+        # print(f'step {self._timestep}: action: {action}, rew: {rew}, done: {done}')
 
         if self._cfg["from_pixels"]:
             obs = obs
@@ -390,7 +388,7 @@ class DMC2GymEnv(BaseEnv):
         if self._save_replay_gif:
             self._frames.append(image_obs)
 
-        if self.timestep > self._cfg.max_episode_steps:
+        if self._timestep > self._cfg.max_episode_steps:
             done = True
 
         if done:
@@ -409,7 +407,7 @@ class DMC2GymEnv(BaseEnv):
                 self._save_replay_count += 1
 
         action_mask = None
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self.timestep}
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
 
         return BaseEnvTimestep(obs, rew, done, info)
 

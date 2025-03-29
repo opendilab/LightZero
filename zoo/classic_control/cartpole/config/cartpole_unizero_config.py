@@ -49,6 +49,7 @@ cartpole_unizero_config = dict(
                 evaluator_env_num=evaluator_env_num,
                 obs_type='vector',
                 norm_type='BN',
+                rotary_emb=True,
             ),
         ),
         use_wandb=True,

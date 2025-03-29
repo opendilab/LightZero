@@ -2,16 +2,17 @@
 The following code is modified from https://github.com/karpathy/nanoGPT.
 """
 
+import numpy as np
 import math
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
+import torch.nn as nn
+from torch.nn import functional as F
 from ding.torch_utils.network import GRUGatingUnit
 from einops import rearrange
-from torch.nn import functional as F
-import numpy as np
 
 from .kv_caching import KeysValues
 
@@ -50,7 +51,7 @@ def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
         - theta (float): A scaling factor for the frequencies, default is 10000.0.
 
     Returns:
-        - torch.Tensor: A tensor of complex numbers representing the precomputed frequencies.
+        - freqs_cis (torch.Tensor): A tensor of complex numbers representing the precomputed frequencies.
     """
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
     t = torch.arange(end, device=freqs.device, dtype=torch.float32)
@@ -164,28 +165,18 @@ class Transformer(nn.Module):
         seqlen = sequences.shape[1]
         # If using Rotary Position Embeddings (RoPE), slice the frequency components accordingly
         if self.config.rotary_emb:
-            if isinstance(start_pos, int) or isinstance(start_pos, float):
-                # Create a tensor filled with start_pos, expanded to match the batch size, and adjust for sequence type
+            if isinstance(start_pos, (int, float, np.integer)):
+                # In the reanalyze_phase or reset stage in collection/evaluation phase, create a tensor filled with start_pos, expanded to match the batch size, and adjust for sequence type,  e.g., start_pos=2.
                 start_pos_tensor = torch.full((sequences.shape[0],), int(start_pos), device=sequences.device)
             elif isinstance(start_pos, (list, np.ndarray, torch.Tensor)):
-                if isinstance(start_pos[0], list):
-                    # In the training phase, flatten start_pos, take the first element, convert to tensor
+                if isinstance(start_pos[0], (np.ndarray, torch.Tensor, list)):
+                    # In the training phase, flatten start_pos, take the first element, convert to tensor, e.g., start_pos=[array([ 8, 10, 12, 14, 16]), array([12, 14, 16, 18, 20])]
                     start_pos_tensor = torch.as_tensor(
-                        [x.reshape(-1)[0].item() for x in start_pos],  # Force flatten and take the first element
+                    [x.reshape(-1)[0].item() for x in start_pos],  # Force flatten and take the first element
                         device=sequences.device
                     )
-                elif isinstance(start_pos[0], (np.ndarray, torch.Tensor)):
-                    if len(start_pos[0].shape) <= 0:
-                        # In the collection/evaluation phase, convert start_pos to a tensor
-                        start_pos_tensor = torch.as_tensor([x.item() for x in start_pos], device=sequences.device)
-                    else:
-                        # In the training phase, flatten start_pos, take the first element, convert to tensor
-                        start_pos_tensor = torch.as_tensor(
-                        [x.reshape(-1)[0].item() for x in start_pos],  # Force flatten and take the first element
-                            device=sequences.device
-                        )
                 elif isinstance(start_pos[0], (int, float, np.integer)):
-                    # Handle numpy integer types similarly to int and float
+                    # In the collection/evaluation phase, e.g., start_pos = [0, 0, 0, 0, 0, 0, 0, 0]
                     start_pos_tensor = torch.as_tensor([int(x) for x in start_pos], device=sequences.device)
             else:
                 raise ValueError("start_pos must be an int, float, list, numpy array or torch.Tensor.")

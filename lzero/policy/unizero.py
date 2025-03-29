@@ -123,6 +123,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 # (bool) Whether to use Rotary Position Embedding (RoPE) for relative position encoding.
                 # If False, nn.Embedding is used for absolute position encoding.
                 # For more details on RoPE, refer to the author's blog: https://spaces.ac.cn/archives/8265/
+                # TODO: If you want to use rotary_emb in an environment, you need to include the timestep as a return key from the environment.
                 rotary_emb=False,
                 # (int) The base value for calculating RoPE angles. Commonly set to 10000.
                 rope_theta=10000,
@@ -190,7 +191,6 @@ class UniZeroPolicy(MuZeroPolicy):
         update_per_collect=None,
         # (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.
         replay_ratio=0.25,
-        reanalyze_ratio=0,
         # (int) Minibatch size for one gradient descent.
         batch_size=256,
         # (str) Optimizer for training policy network.
@@ -373,7 +373,7 @@ class UniZeroPolicy(MuZeroPolicy):
         self._target_model.train()
 
         current_batch, target_batch, train_iter = data
-        obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, batch_timestep = current_batch
+        obs_batch_ori, action_batch,  target_action_batch, mask_batch, indices, weights, make_time, timestep_batch = current_batch
         target_reward, target_value, target_policy = target_batch
 
         # Prepare observations based on frame stack number
@@ -391,7 +391,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # Prepare action batch and convert to torch tensor
         action_batch = torch.from_numpy(action_batch).to(self._cfg.device).unsqueeze(
             -1).long()  # For discrete action space
-        batch_timestep = torch.from_numpy(batch_timestep).to(self._cfg.device).unsqueeze(
+        timestep_batch = torch.from_numpy(timestep_batch).to(self._cfg.device).unsqueeze(
             -1).long()
         data_list = [mask_batch, target_reward, target_value, target_policy, weights]
         mask_batch, target_reward, target_value, target_policy, weights = to_torch_float_tensor(data_list,
@@ -417,7 +417,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 self._cfg.batch_size, -1, *self._cfg.model.observation_shape)
 
         batch_for_gpt['actions'] = action_batch.squeeze(-1)
-        batch_for_gpt['timestep'] = batch_timestep.squeeze(-1)
+        batch_for_gpt['timestep'] = timestep_batch.squeeze(-1)
 
         batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
         batch_for_gpt['mask_padding'] = mask_batch == 1.0  # 0 means invalid padding data
@@ -616,7 +616,7 @@ class UniZeroPolicy(MuZeroPolicy):
             - temperature (:obj:`float`): The temperature of the policy.
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
-            - timestep (:obj:`list`): The step index of the env in one episode
+            - timestep (:obj:`list`): The step index of the env in one episode.
         Shape:
             - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
@@ -741,7 +741,7 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
     def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
-                      ready_env_id: np.array = None, timestep: int = 0) -> Dict:
+                      ready_env_id: np.array = None, timestep: List = [0]) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -750,15 +750,18 @@ class UniZeroPolicy(MuZeroPolicy):
             - data (:obj:`torch.Tensor`): The input data, i.e. the observation.
             - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.
             - to_play (:obj:`int`): The player to play.
-            - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
+            - ready_env_id (:obj:`list`): The id of the env that is ready to eval.
+            - timestep (:obj:`list`): The step index of the env in one episode.
         Shape:
             - data (:obj:`torch.Tensor`):
-                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
+                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of eval_env, C is the number of channels, \
                     S is the number of stacked frames, H is the height of the image, W is the width of the image.
-                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.
-            - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.
-            - to_play: :math:`(N, 1)`, where N is the number of collect_env.
+                - For lunarlander, :math:`(N, O)`, where N is the number of eval_env, O is the observation space size.
+            - action_mask: :math:`(N, action_space_size)`, where N is the number of eval_env.
+            - to_play: :math:`(N, 1)`, where N is the number of eval_env.
             - ready_env_id: None
+            - timestep: :math:`(N, 1)`, where N is the number of eval_env.
+
         Returns:
             - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \
                 ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.
@@ -999,6 +1002,8 @@ class UniZeroPolicy(MuZeroPolicy):
             Clear the caches and precompute positional embedding matrices in the model.
         """
         for model in [self._collect_model, self._target_model]:
-            model.world_model.precompute_pos_emb_diff_kv()
+            if not self._cfg.model.world_model_cfg.rotary_emb:
+                # If rotary_emb is False, nn.Embedding is used for absolute position encoding.
+                model.world_model.precompute_pos_emb_diff_kv()
             model.world_model.clear_caches()
         torch.cuda.empty_cache()

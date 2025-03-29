@@ -6,8 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-from torch.distributions import Categorical, Independent, Normal
-from torch.distributions import TransformedDistribution, TanhTransform
+from torch.distributions import Categorical, Independent, Normal, TransformedDistribution, TanhTransform
 
 from lzero.model.common import SimNorm
 from lzero.model.utils import cal_dormant_ratio
@@ -15,8 +14,7 @@ from .kv_caching import KeysValues
 from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
 from .transformer import Transformer, TransformerConfig
-from .utils import LossWithIntermediateLosses, init_weights
-from .utils import WorldModelOutput, hash_state
+from .utils import LossWithIntermediateLosses, init_weights, WorldModelOutput, hash_state
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -360,8 +358,6 @@ class WorldModel(nn.Module):
         if self.context_length <= 2:
             # If context length is 2 or less, no context is present
             return
-        if self.config.rotary_emb:
-            return 
         # Precompute positional embedding matrices for inference in collect/eval stages, not for training
         self.positional_embedding_k = [
             self._get_positional_embedding(layer, 'key')
@@ -971,8 +967,7 @@ class WorldModel(nn.Module):
                 kvcache_independent=False,
                 is_init_infer=False,
                 start_pos=start_pos,
-                search_depth=search_depth 
-                # TODO: 记录从root node开始，位于树中的深度，以判断rope的位置编码索引
+                search_depth=search_depth # List containing depth of latent states in the search tree. 
             )
 
             self.keys_values_wm_size_list_current = [i + 1 for i in self.keys_values_wm_size_list_current]
@@ -993,7 +988,6 @@ class WorldModel(nn.Module):
             self.latent_state,
             is_init_infer=False,
             simulation_index=simulation_index,
-            search_depth=[]
         )
 
         return (outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value)

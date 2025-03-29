@@ -328,8 +328,8 @@ class MuZeroEvaluator(ISerialEvaluator):
                     # ==============================================================
                     timesteps = self._env.step(actions)
                     timesteps = to_tensor(timesteps, dtype=torch.float32)
-                    for env_id, t in timesteps.items():
-                        obs, reward, done, info = t.obs, t.reward, t.done, t.info
+                    for env_id, episode_timestep in timesteps.items():
+                        obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
 
                         eps_steps_lst[env_id] += 1
                         if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
@@ -348,13 +348,13 @@ class MuZeroEvaluator(ISerialEvaluator):
                         timestep_dict[env_id] = to_ndarray(obs['timestep'])
 
                         dones[env_id] = done
-                        if t.done:
+                        if episode_timestep.done:
                             # Env reset is done by env_manager automatically.
                             self._policy.reset([env_id])
-                            reward = t.info['eval_episode_return']
-                            saved_info = {'eval_episode_return': t.info['eval_episode_return']}
-                            if 'episode_info' in t.info:
-                                saved_info.update(t.info['episode_info'])
+                            reward = episode_timestep.info['eval_episode_return']
+                            saved_info = {'eval_episode_return': episode_timestep.info['eval_episode_return']}
+                            if 'episode_info' in episode_timestep.info:
+                                saved_info.update(episode_timestep.info['episode_info'])
                             eval_monitor.update_info(env_id, saved_info)
                             eval_monitor.update_reward(env_id, reward)
                             self._logger.info(

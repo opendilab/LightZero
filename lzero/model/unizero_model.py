@@ -198,7 +198,7 @@ class UniZeroModel(nn.Module):
 
         return MZNetworkOutput(
             value=value,
-            reward=[0.0] * batch_size,  # Initialize reward to zero vector
+            reward=[0. for _ in range(batch_size)],  # Initialize reward to zero vector
             policy_logits=policy_logits,
             latent_state=latent_state,
         )

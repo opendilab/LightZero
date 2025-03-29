@@ -21,8 +21,7 @@ def main(env_id, seed):
     infer_context_length = 4
 
     # Defines the frequency of reanalysis. E.g., 1 means reanalyze once per epoch, 2 means reanalyze once every two epochs.
-    buffer_reanalyze_freq = 1/10
-    # buffer_reanalyze_freq = 1/1000000 # rope option not support reanalyze now
+    buffer_reanalyze_freq = 1/50
     # Each reanalyze process will reanalyze <reanalyze_batch_size> sequences (<cfg.policy.num_unroll_steps> transitions per sequence)
     reanalyze_batch_size = 160
     # The partition of reanalyze. E.g., 1 means reanalyze_batch samples from the whole buffer, 0.5 means samples from the first half of the buffer.
@@ -73,7 +72,6 @@ def main(env_id, seed):
                     obs_type='image',
                     env_num=max(collector_env_num, evaluator_env_num),
                     num_simulations=num_simulations,
-                    # rotary_emb=True,
                     rotary_emb=False,
                 ),
             ),

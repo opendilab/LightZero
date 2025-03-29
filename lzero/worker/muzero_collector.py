@@ -507,17 +507,17 @@ class MuZeroCollector(ISerialCollector):
 
             interaction_duration = self._timer.value / len(timesteps)
 
-            for env_id, timestep in timesteps.items():
+            for env_id, episode_timestep in timesteps.items():
                 with self._timer:
-                    if timestep.info.get('abnormal', False):
-                        # If there is an abnormal timestep, reset all the related variables(including this env).
+                    if episode_timestep.info.get('abnormal', False):
+                        # If there is an abnormal episode_timestep, reset all the related variables(including this env).
                         # suppose there is no reset param, reset this env
                         self._env.reset({env_id: None})
                         self._policy.reset([env_id])
                         self._reset_stat(env_id)
-                        self._logger.info('Env{} returns a abnormal step, its info is {}'.format(env_id, timestep.info))
+                        self._logger.info('Env{} returns a abnormal step, its info is {}'.format(env_id, episode_timestep.info))
                         continue
-                    obs, reward, done, info = timestep.obs, timestep.reward, timestep.done, timestep.info
+                    obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
 
                     if collect_with_pure_policy:
                         game_segments[env_id].store_search_stats(temp_visit_list, 0)
@@ -615,8 +615,8 @@ class MuZeroCollector(ISerialCollector):
                     collected_step += 1
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
-                if timestep.done:
-                    reward = timestep.info['eval_episode_return']
+                if episode_timestep.done:
+                    reward = episode_timestep.info['eval_episode_return']
                     info = {
                         'reward': reward,
                         'time': self._env_info[env_id]['time'],
