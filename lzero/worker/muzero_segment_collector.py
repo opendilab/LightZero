@@ -152,6 +152,8 @@ class MuZeroSegmentCollector(ISerialCollector):
         self.to_play_dict = {i: None for i in range(self._env_num)}
         if self.policy_config.use_ture_chance_label_in_chance_encoder:
             self.chance_dict = {i: None for i in range(self._env_num)}
+        
+        self.timestep_dict = {i: None for i in range(self._env_num)}
 
         self.dones = np.array([False for _ in range(self._env_num)])
         self.last_game_segments = [None for _ in range(self._env_num)]
@@ -377,6 +379,9 @@ class MuZeroSegmentCollector(ISerialCollector):
             if env_id in init_obs.keys():
                 self.action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                 self.to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
+
+                self.timestep_dict[env_id] = to_ndarray(init_obs[env_id]['timestep'])
+
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
                     self.chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 
@@ -449,6 +454,9 @@ class MuZeroSegmentCollector(ISerialCollector):
                 
                 action_mask = [self.action_mask_dict_tmp[env_id] for env_id in ready_env_id]
                 to_play = [self.to_play_dict_tmp[env_id] for env_id in ready_env_id]
+                
+                timestep = [self.timestep_dict[env_id] for env_id in ready_env_id]
+
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
                     self.chance_dict_tmp = {env_id: self.chance_dict[env_id] for env_id in ready_env_id}
 
@@ -461,12 +469,14 @@ class MuZeroSegmentCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # logging.info(f'ready_env_id:{ready_env_id}')
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
+                # logging.info(f'timestep:{timestep}')
+                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
 
                 # Extract relevant policy outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                 value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
                 pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
+                timestep_dict_with_env_id = {k: v['timestep'] for k, v in policy_output.items()}
 
                 if self.policy_config.sampled_algo:
                     root_sampled_actions_dict_with_env_id = {
@@ -525,17 +535,17 @@ class MuZeroSegmentCollector(ISerialCollector):
 
             interaction_duration = self._timer.value / len(timesteps)
 
-            for env_id, timestep in timesteps.items():
+            for env_id, episode_timestep in timesteps.items():
                 with self._timer:
-                    if timestep.info.get('abnormal', False):
-                        # If there is an abnormal timestep, reset all the related variables(including this env).
+                    if episode_timestep.info.get('abnormal', False):
+                        # If there is an abnormal episode_timestep, reset all the related variables(including this env).
                         # suppose there is no reset param, reset this env
                         self._env.reset({env_id: None})
                         self._policy.reset([env_id])
                         self._reset_stat(env_id)
-                        self._logger.info('Env{} returns a abnormal step, its info is {}'.format(env_id, timestep.info))
+                        self._logger.info('Env{} returns a abnormal step, its info is {}'.format(env_id, episode_timestep.info))
                         continue
-                    obs, reward, done, info = timestep.obs, timestep.reward, timestep.done, timestep.info
+                    obs, reward, done, info = episode_timestep.obs, episode_timestep.reward, episode_timestep.done, episode_timestep.info
 
                     if collect_with_pure_policy:
                         game_segments[env_id].store_search_stats(temp_visit_list, 0)
@@ -555,18 +565,21 @@ class MuZeroSegmentCollector(ISerialCollector):
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, self.action_mask_dict_tmp[env_id],
-                            self.to_play_dict_tmp[env_id], self.chance_dict_tmp[env_id]
+                            self.to_play_dict_tmp[env_id], timestep=to_ndarray(obs['timestep']), chance=self.chance_dict_tmp[env_id]
                         )
                     else:
                         game_segments[env_id].append(
                             actions[env_id], to_ndarray(obs['observation']), reward, self.action_mask_dict_tmp[env_id],
-                            self.to_play_dict_tmp[env_id]
+                            self.to_play_dict_tmp[env_id], timestep=to_ndarray(obs['timestep'])
                         )
 
                     # NOTE: the position of code snippet is very important.
                     # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
                     self.action_mask_dict_tmp[env_id] = to_ndarray(obs['action_mask'])
                     self.to_play_dict_tmp[env_id] = to_ndarray(obs['to_play'])
+
+                    self.timestep_dict[env_id] = to_ndarray(obs['timestep'])
+
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         self.chance_dict_tmp[env_id] = to_ndarray(obs['chance'])
 
@@ -632,11 +645,11 @@ class MuZeroSegmentCollector(ISerialCollector):
                     collected_step += 1
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
-                if timestep.done:
+                if episode_timestep.done:
                     logging.info(f'========env {env_id} done!========')
                     self._total_episode_count += 1
 
-                    reward = timestep.info['eval_episode_return']
+                    reward = episode_timestep.info['eval_episode_return']
                     info = {
                         'reward': reward,
                         'time': self._env_info[env_id]['time'],

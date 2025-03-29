@@ -82,16 +82,19 @@ class SampledUniZeroMCTSCtree(object):
     # @profile
     def search(
             self, roots: Any, model: torch.nn.Module, latent_state_roots: List[Any], to_play_batch: Union[int,
-            List[Any]]
+            List[Any]], timestep: Union[int, List[Any]]
     ) -> None:
         """
         Overview:
-            Do MCTS for the roots (a batch of root nodes in parallel). Parallel in model inference.
-            Use the cpp ctree.
+            Perform Monte Carlo Tree Search (MCTS) for a batch of root nodes in parallel. 
+            This method utilizes the C++ implementation of the tree search for efficiency.
+
         Arguments:
-            - roots (:obj:`Any`): a batch of expanded root nodes
-            - latent_state_roots (:obj:`list`): the hidden states of the roots
-            - to_play_batch (:obj:`list`): the to_play_batch list used in in self-play-mode board games
+            - roots (:obj:`Any`): A batch of expanded root nodes.
+            - model (:obj:`torch.nn.Module`): The neural network model used for inference.
+            - latent_state_roots (:obj:`List[Any]`): The hidden states of the root nodes.
+            - to_play_batch (:obj:`Union[int, List[Any]]`): The list of players in self-play mode.
+            - timestep (:obj:`Union[int, List[Any]]`): The step index of the environment in one episode.
         """
         with torch.no_grad():
             model.eval()
@@ -157,7 +160,7 @@ class SampledUniZeroMCTSCtree(object):
                 """
                 # for Sampled UniZero
                 network_output = model.recurrent_inference(state_action_history, simulation_index,
-                                                           latent_state_index_in_search_path)
+                                                           latent_state_index_in_search_path, timestep)
 
                 network_output.latent_state = to_detach_cpu_numpy(network_output.latent_state)
                 network_output.policy_logits = to_detach_cpu_numpy(network_output.policy_logits)

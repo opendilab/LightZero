@@ -9,4 +9,3 @@ line_profiler
 xxhash
 einops
 openai
-jericho

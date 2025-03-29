@@ -154,14 +154,20 @@ class SampledUniZeroModel(nn.Module):
             print(f'{sum(p.numel() for p in self.tokenizer.decoder_network.parameters())} parameters in agent.tokenizer.decoder_network')
             print('==' * 20)
 
-    def initial_inference(self, obs_batch: torch.Tensor, action_batch=None, current_obs_batch=None) -> MZNetworkOutput:
+    def initial_inference(self, obs_batch: torch.Tensor, action_batch: Optional[torch.Tensor] = None, 
+                          current_obs_batch: Optional[torch.Tensor] = None, start_pos: int = 0) -> MZNetworkOutput:
         """
         Overview:
-            Initial inference of UniZero model, which is the first step of the UniZero model.
-            To perform the initial inference, we first use the representation network to obtain the ``latent_state``.
-            Then we use the prediction network to predict ``value`` and ``policy_logits`` of the ``latent_state``.
+            Initial inference of the UniZero model, which is the first step of the UniZero model.
+            This method uses the representation network to obtain the ``latent_state`` and the prediction network 
+            to predict the ``value`` and ``policy_logits`` of the ``latent_state``.
+        
         Arguments:
             - obs_batch (:obj:`torch.Tensor`): The 3D image observation data.
+            - action_batch (:obj:`Optional[torch.Tensor]`): The actions taken, defaults to None.
+            - current_obs_batch (:obj:`Optional[torch.Tensor]`): The current observations, defaults to None.
+            - start_pos (:obj:`int`): The starting position for inference, defaults to 0.
+        
         Returns (MZNetworkOutput):
             - value (:obj:`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
             - reward (:obj:`torch.Tensor`): The predicted reward of input state and selected action. \
@@ -178,7 +184,7 @@ class SampledUniZeroModel(nn.Module):
          """
         batch_size = obs_batch.size(0)
         obs_act_dict = {'obs': obs_batch, 'action': action_batch, 'current_obs': current_obs_batch}
-        _, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(obs_act_dict)
+        _, obs_token, logits_rewards, logits_policy, logits_value = self.world_model.forward_initial_inference(obs_act_dict, start_pos)
         latent_state, reward, policy_logits, value = obs_token, logits_rewards, logits_policy, logits_value
         policy_logits = policy_logits.squeeze(1)
         value = value.squeeze(1)
@@ -190,15 +196,17 @@ class SampledUniZeroModel(nn.Module):
             latent_state,
         )
 
-    def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index=0,
-                            latent_state_index_in_search_path=[]) -> MZNetworkOutput:
+    def recurrent_inference(self, state_action_history: torch.Tensor, simulation_index: int = 0,
+                            search_depth: list = None, start_pos: int = 0) -> MZNetworkOutput:
         """
         Overview:
-            Recurrent inference of UniZero model.To perform the recurrent inference, we concurrently predict the latent dynamics (reward/next_latent_state)
+            Recurrent inference of Sampled UniZero model. To perform the recurrent inference, we concurrently predict the latent dynamics (reward/next_latent_state)
             and decision-oriented quantities (value/policy) conditioned on the learned latent history in the world_model.
         Arguments:
-            - latent_state (:obj:`torch.Tensor`): The encoding latent state of input state.
-            - action (:obj:`torch.Tensor`): The predicted action to rollout.
+            - state_action_history (:obj:`torch.Tensor`): The history of state-action pairs used for inference.
+            - simulation_index (:obj:`int`): The index for the current simulation, defaults to 0.
+            - search_depth (:obj:`list`, optional): The depth of the search for inference, defaults to an empty list.
+            - start_pos (:obj:`int`): The starting position for inference, defaults to 0.
         Returns (MZNetworkOutput):
             - value (:obj:`torch.Tensor`): The output value of input state to help policy improvement and evaluation.
             - reward (:obj:`torch.Tensor`): The predicted reward of input state and selected action.
@@ -215,9 +223,11 @@ class SampledUniZeroModel(nn.Module):
                 latent state, W_ is the width of latent state.
             - next_latent_state (:obj:`torch.Tensor`): :math:`(B, H_, W_)`, where B is batch_size, H_ is the height of \
                 latent state, W_ is the width of latent state.
-         """
+        """
+        if search_depth is None:
+            search_depth = []
         _, logits_observations, logits_rewards, logits_policy, logits_value = self.world_model.forward_recurrent_inference(
-            state_action_history, simulation_index, latent_state_index_in_search_path)
+            state_action_history, simulation_index, search_depth, start_pos)
         next_latent_state, reward, policy_logits, value = logits_observations, logits_rewards, logits_policy, logits_value
         policy_logits = policy_logits.squeeze(1)
         value = value.squeeze(1)

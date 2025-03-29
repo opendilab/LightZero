@@ -1,4 +1,5 @@
 import copy
+from ditk import logging
 from typing import List
 
 # import gymnasium as gym
@@ -99,6 +100,7 @@ class AtariEnvLightZero(BaseEnv):
         self.channel_last = cfg.channel_last
         self.clip_rewards = cfg.clip_rewards
         self.episode_life = cfg.episode_life
+        self._timestep = 0
 
     def reset(self) -> dict:
         """
@@ -132,10 +134,8 @@ class AtariEnvLightZero(BaseEnv):
 
         self.obs = to_ndarray(obs)
         self._eval_episode_return = 0.
-        self.timestep = 0
-
+        self._timestep = 0
         obs = self.observe()
-
         return obs
 
     def step(self, action: int) -> BaseEnvTimestep:
@@ -151,12 +151,12 @@ class AtariEnvLightZero(BaseEnv):
         self.obs = to_ndarray(obs)
         self.reward = np.array(reward).astype(np.float32)
         self._eval_episode_return += self.reward
-        self.timestep += 1
-        # print(f'self.timestep: {self.timestep}')
+        self._timestep += 1
+        # logging.info(f'self._timestep: {self._timestep}')
         observation = self.observe()
         if done:
+            logging.info(f'one episode done! total episode length is: {self._timestep}')
             info['eval_episode_return'] = self._eval_episode_return
-
         return BaseEnvTimestep(observation, self.reward, done, info)
 
     def observe(self) -> dict:
@@ -174,7 +174,7 @@ class AtariEnvLightZero(BaseEnv):
             observation = np.transpose(observation, (2, 0, 1))
 
         action_mask = np.ones(self._action_space.n, 'int8')
-        return {'observation': observation, 'action_mask': action_mask, 'to_play': -1, 'timestep': self.timestep}
+        return {'observation': observation, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
 
     @property
     def legal_actions(self):

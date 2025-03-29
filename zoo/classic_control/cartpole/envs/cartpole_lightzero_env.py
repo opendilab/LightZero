@@ -68,6 +68,8 @@ class CartPoleEnv(BaseEnv):
         )
         self._action_space = gym.spaces.Discrete(2)
         self._reward_space = gym.spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32)
+        self._timestep = 0
+
 
     def reset(self) -> Dict[str, np.ndarray]:
         """
@@ -91,7 +93,9 @@ class CartPoleEnv(BaseEnv):
 
         # Initialize the action mask and return the observation.
         action_mask = np.ones(self.action_space.n, 'int8')
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+        self._timestep = 0
+
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
 
         # this is to artificially introduce randomness in order to evaluate the performance of
         # stochastic_muzero on state input
@@ -139,7 +143,9 @@ class CartPoleEnv(BaseEnv):
                 self.save_gif_replay()
 
         action_mask = np.ones(self.action_space.n, 'int8')
-        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
+        self._timestep += 1
+
+        obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
 
         # this is to artificially introduce randomness in order to evaluate the performance of
         # stochastic_muzero on state input

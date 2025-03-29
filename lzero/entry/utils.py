@@ -107,7 +107,7 @@ def initialize_zeros_batch(observation_shape: Union[int, List[int], Tuple[int]],
     elif isinstance(observation_shape, int):
         shape = [batch_size, observation_shape]
     else:
-        raise TypeError("observation_shape must be either an int or a list")
+        raise TypeError(f"observation_shape must be either an int, a list, or a tuple, but got {type(observation_shape).__name__}")
 
     return torch.zeros(shape).to(device)
 

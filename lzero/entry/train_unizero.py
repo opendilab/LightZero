@@ -163,7 +163,7 @@ def train_unizero(
             collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
         # Evaluate policy performance
-        if evaluator.should_eval(learner.train_iter):
+        if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
             logging.info(f"Training iteration {learner.train_iter}: Starting evaluation...")
             stop, reward = evaluator.eval(learner.save_checkpoint, learner.train_iter, collector.envstep)
             logging.info(f"Training iteration {learner.train_iter}: Evaluation completed, stop condition: {stop}, current reward: {reward}")
@@ -209,7 +209,7 @@ def train_unizero(
             # Execute multiple training rounds
             for i in range(update_per_collect):
                 train_data = replay_buffer.sample(batch_size, policy)
-                if cfg.policy.reanalyze_ratio > 0 and i % 20 == 0:
+                if replay_buffer._cfg.reanalyze_ratio > 0 and i % 20 == 0:
                     policy.recompute_pos_emb_diff_and_clear_cache()
                 
                 if cfg.policy.use_wandb:
