@@ -1,66 +1,81 @@
-# UniZero World Model 
+## Position Encoding in UniZero World Model
 
-## Position Encoding
+This section provides a detailed explanation of the position encoding strategies used in the UniZero world model and presents two configurable options based on the value of the configuration parameter `self.config.rotary_emb`.
 
-This section provides an overview of the position encoding strategies used in the UniZero World Model. Two configurable options are supported based on the setting of `self.config.rotary_emb`:
-
-- **nn.Embedding (Absolute Position Encoding)**  
-- **ROPE (Relative Position Encoding)**
-
-
-### 1. nn.Embedding (Absolute Position Encoding)
-
-When `self.config.rotary_emb` is set to **False**, the model uses `nn.Embedding` for position encoding. This method includes:
-
-- **Embedding Initialization:**  
-  A positional embedding layer is initialized with `nn.Embedding`, which maps each position index to a fixed-size embedding vector.
-
-- **Context Length Limitation:**  
-  Due to the context length constraints, the model retains only the most recent steps in the key-value cache (kv_cache).
-
-- **Position Embedding Correction**  
-  When reusing `kv_cache`, the position embeddings need to be reset to start from zero. The embeddings are adjusted using `pos_emb_diff_k` and `pos_emb_diff_v` to simulate the effect of relative position encoding. For example:
-
-  - Suppose the inference length calculation is `5 * 2 = 10`, then the current position encoding in `kv_cache` would be:
-    ```
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9
-    ```
-  - When adding new data requires removing the first 2 steps from `kv_cache`, the remaining position encoding would be:
-    ```
-    2, 3, 4, 5, 6, 7, 8, 9
-    ```
-  - Directly using the original data at this point would lead to duplicated or incorrect position encoding, such as:
-    ```
-    2, 3, 4, 5, 6, 7, 8, 9, 8, 9
-    ```
-  - To solve this issue, the implementation corrects the position encoding in `kv_cache` by resetting it to:
-    ```
-    0, 1, 2, 3, 4, 5, 6, 7
-    ```
-
-### 2. ROPE (Relative Position Encoding)
-
-When `self.config.rotary_emb` is set to **True**, the model adopts ROPE for position encoding. Key aspects include:
-
-- **ROPE Initialization:**  
-  Precomputed frequency components are used to apply rotary positional embeddings to the query and key tensors.
-
-- **Indexing by Episode Timestep:**  
-  Positions are indexed by the episode’s timestep where both the state (`s`) and action (`a`) count as two steps.
-
-- **ROPE Principle:**  
-  The mechanism is based on the paper [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864).
-
-#### Performance and Application
-
-- **nn.Embedding:**  
-  Performs better in environments with short-term dependencies (e.g., Pong, DMC Cartpole-Swingup).
-
-- **ROPE:**  
-  Provides greater flexibility and scalability, making it suitable for environments with long-term dependencies.
+> **Configuration Options:**
+> - When `self.config.rotary_emb = False`, **Absolute Position Encoding** (based on `nn.Embedding`) is used.
+> - When `self.config.rotary_emb = True`, **Relative Position Encoding** (based on ROPE) is used.
 
 ---
 
-### Conclusion
+### 1. Absolute Position Encoding (Based on `nn.Embedding`)
 
-The UniZero World Model provides configurable options for position encoding, allowing users to choose between absolute (nn.Embedding) and relative (ROPE) approaches based on their environment’s needs. The correction mechanism in the nn.Embedding approach ensures consistency in the kv_cache when new data is appended, while ROPE offers enhanced flexibility for longer dependency settings.
+When the configuration parameter `self.config.rotary_emb` is set to **False**, the model uses `nn.Embedding` for position encoding. The implementation process involves the following steps:
+
+#### 1.1 Embedding Layer Initialization
+
+- **Initialization:**  
+  An embedding layer is instantiated using `nn.Embedding`, which maps each position index in the sequence to a fixed-dimensional embedding vector.
+
+#### 1.2 Context Length Restriction
+
+- **kv_cache Management:**  
+  Due to the limitation of context length (`context_length`), the model retains only the most recent `<context_length>` steps when caching key-value pairs (kv_cache) to ensure computational efficiency and manageable memory consumption.
+
+#### 1.3 Position Embedding Correction
+
+When reusing the kv_cache, directly utilizing historical position vectors may lead to duplicated or erroneous indices, causing confusion in the model's interpretation of sequence positions. To address this problem, a position embedding correction mechanism is introduced:
+
+- **Problem Description:**  
+  Suppose that during inference, the total number of steps is computed as `5 * 2 = 10`, yielding an initial kv_cache with position indices:  
+  `0, 1, 2, 3, 4, 5, 6, 7, 8, 9`  
+  
+  When new data arrives, removing the first 2 steps from the kv_cache leaves:  
+  `2, 3, 4, 5, 6, 7, 8, 9`  
+  
+  If these indices are concatenated directly, it might cause duplicate or incorrect indices, for example:  
+  `2, 3, 4, 5, 6, 7, 8, 9, 8, 9`
+
+- **Correction Plan:**  
+  To prevent the above issue, the model resets the position indices in the kv_cache to a contiguous sequence, such as:  
+  `0, 1, 2, 3, 4, 5, 6, 7`
+
+This mechanism effectively simulates the behavior of relative position encoding, ensuring that errors do not accumulate during kv_cache reuse.
+
+---
+
+### 2. Relative Position Encoding (Based on ROPE)
+
+When the configuration parameter `self.config.rotary_emb` is set to **True**, the model adopts ROPE (Rotary Position Embedding) for position encoding. The main features and implementation process of ROPE are as follows:
+
+#### 2.1 ROPE Initialization
+
+- **Precalculation of Frequency Components:**  
+  Frequency components are precalculated and applied to the query and key tensors through a rotational position embedding, directly incorporating positional information into the self-attention computation.
+
+#### 2.2 Episode Time Step-based Indexing
+
+- **Indexing Approach:**  
+  Each position index is assigned based on the episode’s time step.  
+  For example, when states (`s`) and actions (`a`) alternate, each time step occupies two position indices.  
+  Suppose a game consists of 50 steps with states and actions in sequence:  
+  `(s₁, a₁, s₂, a₂, ..., s₅₀, a₅₀)`  
+  
+  The corresponding position indices would be:  
+  `1, 2, 3, 4, ..., 99, 100`
+
+#### 2.3 Principles of ROPE
+
+- **Theoretical Basis:**  
+  The design of ROPE is inspired by the paper [RoFormer: Enhanced Transformer with Rotary Position Embedding](https://arxiv.org/abs/2104.09864).  
+  This method not only encodes absolute positions using a rotation matrix but also directly integrates relative positional information into the self-attention computation, thereby achieving:
+  - Greater flexibility (adjustable sequence length);
+  - A gradual decay in inter-token dependency with increasing relative distance;
+  - Compatibility with relative position encoding in linear self-attention architectures.
+
+
+
+#### 3 Performance and Applications
+
+  In environments with shorter dependency relationships (such as Pong or DMC Cartpole-Swingup), the performance of absolute position encoding and ROPE is similar.  
+  However, in scenarios that involve longer dependencies, ROPE demonstrates enhanced flexibility and scalability, making it particularly suitable for managing long-range dependency issues in more complex environments.
