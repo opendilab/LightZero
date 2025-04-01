@@ -5,7 +5,7 @@ from typing import Any, Dict
 from easydict import EasyDict
 
 
-def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e5)) -> None:
+def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e6)) -> None:
     """
     Main entry point for setting up environment configurations and launching training.
 
@@ -135,14 +135,14 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             replay_ratio=replay_ratio,
             batch_size=batch_size,
             learning_rate=0.0001,
-            cos_lr_scheduler=True,
+            cos_lr_scheduler=False,
             fixed_temperature_value=0.25,
             manual_temperature_decay=False,
             num_simulations=num_simulations,
             n_episode=n_episode,
             train_start_after_envsteps=0,  # TODO: Adjust training start trigger if needed.
             # train_start_after_envsteps=2000,  # TODO: Adjust training start trigger if needed.
-            replay_buffer_size=int(5e5),
+            replay_buffer_size=int(1e5),
             eval_freq=int(1e4),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
