@@ -361,7 +361,12 @@ class MuZeroCollector(ISerialCollector):
 
         action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
         to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
-        timestep_dict = {i: to_ndarray(init_obs[i]['timestep']) for i in range(env_nums)}
+        timestep_dict = {}
+        for i in range(env_nums):
+            if 'timestep' not in init_obs[i]:
+                print(f"Warning: 'timestep' key is missing in init_obs[{i}], assigning value -1")
+            timestep_dict[i] = to_ndarray(init_obs[i].get('timestep', -1))
+
         if self.policy_config.use_ture_chance_label_in_chance_encoder:
             chance_dict = {i: to_ndarray(init_obs[i]['chance']) for i in range(env_nums)}
 
@@ -446,7 +451,9 @@ class MuZeroCollector(ISerialCollector):
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                 value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
                 pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
-                timestep_dict_with_env_id = {k: v['timestep'] for k, v in policy_output.items()}
+                timestep_dict_with_env_id = {
+                        k: v['timestep'] if 'timestep' in v else -1 for k, v in policy_output.items()
+                }
 
                 if self.policy_config.sampled_algo:
                     root_sampled_actions_dict_with_env_id = {
@@ -549,7 +556,7 @@ class MuZeroCollector(ISerialCollector):
                     # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
                     action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                     to_play_dict[env_id] = to_ndarray(obs['to_play'])
-                    timestep_dict[env_id] = to_ndarray(obs['timestep'])
+                    timestep_dict[env_id] = to_ndarray(obs.get('timestep', -1))
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         chance_dict[env_id] = to_ndarray(obs['chance'])
 
@@ -680,7 +687,8 @@ class MuZeroCollector(ISerialCollector):
 
                         action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                         to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
-                        timestep_dict[env_id] = to_ndarray(init_obs[env_id]['timestep'])
+                        timestep_dict[env_id] = to_ndarray(init_obs[env_id].get('timestep', -1))
+
                         if self.policy_config.use_ture_chance_label_in_chance_encoder:
                             chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
 

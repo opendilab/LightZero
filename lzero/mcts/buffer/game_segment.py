@@ -135,7 +135,7 @@ class GameSegment:
             obs: np.ndarray,
             reward: np.ndarray,
             action_mask: np.ndarray = None,
-            to_play: int = -1,
+            to_play: List = [-1],
             timestep: int = 0,
             chance: int = 0,
     ) -> None:

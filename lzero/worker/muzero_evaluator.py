@@ -242,9 +242,14 @@ class MuZeroEvaluator(ISerialEvaluator):
                 init_obs = self._env.ready_obs
 
             action_mask_dict = {i: to_ndarray(init_obs[i]['action_mask']) for i in range(env_nums)}
-
             to_play_dict = {i: to_ndarray(init_obs[i]['to_play']) for i in range(env_nums)}
-            timestep_dict = {i: to_ndarray(init_obs[i]['timestep']) for i in range(env_nums)}
+
+            timestep_dict = {}
+            for i in range(env_nums):
+                if 'timestep' not in init_obs[i]:
+                    print(f"Warning: 'timestep' key is missing in init_obs[{i}], assigning value -1")
+                timestep_dict[i] = to_ndarray(init_obs[i].get('timestep', -1))
+            
             dones = np.array([False for _ in range(env_nums)])
 
             game_segments = [
@@ -299,7 +304,9 @@ class MuZeroEvaluator(ISerialEvaluator):
 
                     value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
                     pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
-                    timestep_dict_with_env_id = {k: v['timestep'] for k, v in policy_output.items()}
+                    timestep_dict_with_env_id = {
+                        k: v['timestep'] if 'timestep' in v else -1 for k, v in policy_output.items()
+                    }
                     visit_entropy_dict_with_env_id = {
                         k: v['visit_count_distribution_entropy']
                         for k, v in policy_output.items()
@@ -345,7 +352,7 @@ class MuZeroEvaluator(ISerialEvaluator):
                         # the obs['action_mask'] and obs['to_play'] are corresponding to next action
                         action_mask_dict[env_id] = to_ndarray(obs['action_mask'])
                         to_play_dict[env_id] = to_ndarray(obs['to_play'])
-                        timestep_dict[env_id] = to_ndarray(obs['timestep'])
+                        timestep_dict[env_id] = to_ndarray(obs.get('timestep', -1))
 
                         dones[env_id] = done
                         if episode_timestep.done:

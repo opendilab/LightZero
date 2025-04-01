@@ -379,8 +379,9 @@ class MuZeroSegmentCollector(ISerialCollector):
             if env_id in init_obs.keys():
                 self.action_mask_dict[env_id] = to_ndarray(init_obs[env_id]['action_mask'])
                 self.to_play_dict[env_id] = to_ndarray(init_obs[env_id]['to_play'])
-
-                self.timestep_dict[env_id] = to_ndarray(init_obs[env_id]['timestep'])
+                if 'timestep' not in init_obs[env_id]:
+                    print(f"Warning: 'timestep' key is missing in init_obs[{env_id}], assigning value -1")
+                self.timestep_dict[env_id] = to_ndarray(init_obs[env_id].get('timestep', -1))
 
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
                     self.chance_dict[env_id] = to_ndarray(init_obs[env_id]['chance'])
@@ -451,11 +452,11 @@ class MuZeroSegmentCollector(ISerialCollector):
 
                 self.action_mask_dict_tmp = {env_id: self.action_mask_dict[env_id] for env_id in ready_env_id}
                 self.to_play_dict_tmp = {env_id: self.to_play_dict[env_id] for env_id in ready_env_id}
+                self.timestep_dict_tmp = {env_id: self.timestep_dict[env_id] for env_id in ready_env_id}
                 
                 action_mask = [self.action_mask_dict_tmp[env_id] for env_id in ready_env_id]
                 to_play = [self.to_play_dict_tmp[env_id] for env_id in ready_env_id]
-                
-                timestep = [self.timestep_dict[env_id] for env_id in ready_env_id]
+                timestep = [self.timestep_dict_tmp[env_id] for env_id in ready_env_id]
 
                 if self.policy_config.use_ture_chance_label_in_chance_encoder:
                     self.chance_dict_tmp = {env_id: self.chance_dict[env_id] for env_id in ready_env_id}
@@ -476,7 +477,9 @@ class MuZeroSegmentCollector(ISerialCollector):
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                 value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
                 pred_value_dict_with_env_id = {k: v['predicted_value'] for k, v in policy_output.items()}
-                timestep_dict_with_env_id = {k: v['timestep'] for k, v in policy_output.items()}
+                timestep_dict_with_env_id = {
+                        k: v['timestep'] if 'timestep' in v else -1 for k, v in policy_output.items()
+                }
 
                 if self.policy_config.sampled_algo:
                     root_sampled_actions_dict_with_env_id = {
@@ -498,6 +501,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                 actions = {}
                 value_dict = {}
                 pred_value_dict = {}
+                timestep_dict = {}
 
                 if not collect_with_pure_policy:
                     distributions_dict = {}
@@ -515,6 +519,7 @@ class MuZeroSegmentCollector(ISerialCollector):
                     actions[env_id] = actions_with_env_id.pop(env_id)
                     value_dict[env_id] = value_dict_with_env_id.pop(env_id)
                     pred_value_dict[env_id] = pred_value_dict_with_env_id.pop(env_id)
+                    timestep_dict[env_id] = timestep_dict_with_env_id.pop(env_id)
 
                     if not collect_with_pure_policy:
                         distributions_dict[env_id] = distributions_dict_with_env_id.pop(env_id)
@@ -577,8 +582,9 @@ class MuZeroSegmentCollector(ISerialCollector):
                     # the obs['action_mask'] and obs['to_play'] are corresponding to the next action
                     self.action_mask_dict_tmp[env_id] = to_ndarray(obs['action_mask'])
                     self.to_play_dict_tmp[env_id] = to_ndarray(obs['to_play'])
+                    # self.timestep_dict_tmp[env_id] = to_ndarray(obs['timestep'])
+                    self.timestep_dict_tmp[env_id] = to_ndarray(obs.get('timestep', -1))
 
-                    self.timestep_dict[env_id] = to_ndarray(obs['timestep'])
 
                     if self.policy_config.use_ture_chance_label_in_chance_encoder:
                         self.chance_dict_tmp[env_id] = to_ndarray(obs['chance'])

@@ -108,7 +108,7 @@ class JerichoEnv(BaseEnv):
         self._init_flag: bool = False
         self.episode_return: float = 0.0
         self.env_step: int = 0
-        self.timestep: int = 0
+        self._timestep: int = 0
         self.episode_history: Optional[List[Dict[str, Any]]] = None
         self.walkthrough_actions: Optional[List[str]] = None
 
@@ -174,12 +174,12 @@ class JerichoEnv(BaseEnv):
 
         if return_str:
             if self.for_unizero:
-                return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1}
+                return {'observation': full_obs, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
             else:
                 return {'observation': full_obs, 'action_mask': action_mask}
         else:
             if self.for_unizero:
-                return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1}
+                return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
             else:
                 return {'observation': full_obs, 'obs_attn_mask': obs_attn_mask, 'action_mask': action_mask}
 
@@ -200,7 +200,7 @@ class JerichoEnv(BaseEnv):
         self._action_list = None
         self.episode_return = 0.0
         self.env_step = 0
-        self.timestep = 0
+        self._timestep = 0
         self.episode_history = []
         self.walkthrough_actions = self._env.get_walkthrough()
 
@@ -296,7 +296,7 @@ class JerichoEnv(BaseEnv):
 
         observation, reward, done, info = self._env.step(action_str)
 
-        self.timestep += 1
+        self._timestep += 1
         if not self.for_unizero:
             reward = np.array([float(reward)])
         self.env_step += 1
@@ -319,7 +319,7 @@ class JerichoEnv(BaseEnv):
 
         if self.save_replay:
             self.episode_history.append({
-                'timestep': self.timestep,
+                'timestep': self._timestep,
                 'obs': processed_obs['observation'],
                 'act': action_str,
                 'reward': reward.item() if isinstance(reward, np.ndarray) else reward,
