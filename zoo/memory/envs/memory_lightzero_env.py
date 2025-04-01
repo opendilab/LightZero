@@ -142,15 +142,26 @@ class MemoryEnvLightZero(BaseEnv):
         self._gif_images = []
         self._gif_images_numpy = []
 
+        # if self._save_replay or self._render or self.rgb_img_observation:
+        #     # Convert observation to RGB format
+        #     obs_rgb = np.zeros((5, 5, 3), dtype=np.uint8)
+        #     for char, color in self._game._colours.items():
+        #         # NOTE： self._game._colours is a dictionary that maps the characters in the game to their corresponding (true) colors, ranging in [0,999].
+        #         #  Because the np.uint8 type array will perform a modulo 256 operation (taking the remainder), that is to say,
+        #         #  any value greater than 255 will be subtracted by an integer multiple of 256 until the value falls within the range of 0-255.
+        #         #  For example, 1000 will become 232 (because 1000 % 256 = 232)
+        #         obs_rgb[observation.reshape(5, 5) == ord(char)] = color
+
         if self._save_replay or self._render or self.rgb_img_observation:
             # Convert observation to RGB format
             obs_rgb = np.zeros((5, 5, 3), dtype=np.uint8)
             for char, color in self._game._colours.items():
-                # NOTE： self._game._colours is a dictionary that maps the characters in the game to their corresponding (true) colors, ranging in [0,999].
-                #  Because the np.uint8 type array will perform a modulo 256 operation (taking the remainder), that is to say,
-                #  any value greater than 255 will be subtracted by an integer multiple of 256 until the value falls within the range of 0-255.
-                #  For example, 1000 will become 232 (because 1000 % 256 = 232)
-                obs_rgb[observation.reshape(5, 5) == ord(char)] = color
+                # NOTE： self._game._colours 中的颜色值范围在 [0, 999]，
+                # 直接赋值给 np.uint8 类型数组会在未来版本中报错。可以使用 np.array(value).astype(np.uint8) 进行转换，
+                # 或者明确执行模运算以获取 uint8 范围内的数值
+                obs_rgb[observation.reshape(5, 5) == ord(char)] = np.array(color).astype(np.uint8)
+                # 或者使用模运算的方式：
+                # obs_rgb[observation.reshape(5, 5) == ord(char)] = color % 256
 
             if self._save_replay or self._render:
                 img = Image.fromarray(obs_rgb)
