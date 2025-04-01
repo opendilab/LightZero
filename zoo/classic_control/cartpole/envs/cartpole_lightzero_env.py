@@ -70,7 +70,6 @@ class CartPoleEnv(BaseEnv):
         self._reward_space = gym.spaces.Box(low=0.0, high=1.0, shape=(1,), dtype=np.float32)
         self._timestep = 0
 
-
     def reset(self) -> Dict[str, np.ndarray]:
         """
         Reset the environment and return the initial observation.
