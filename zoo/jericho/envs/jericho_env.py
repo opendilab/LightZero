@@ -466,11 +466,12 @@ class JerichoEnv(BaseEnv):
 if __name__ == '__main__':
     from easydict import EasyDict
 
+    env_type='detective' # zork1, acorncourt, detective, omniquest
     # Configuration dictionary for the environment.
     env_cfg = EasyDict(
         dict(
             max_steps=400,
-            game_path="./zoo/jericho/envs/z-machine-games-master/jericho-game-suite/" + "zork1.z5",
+            game_path="./zoo/jericho/envs/z-machine-games-master/jericho-game-suite/" + f"{env_type}.z5",
             max_action_num=10,
             tokenizer_path="google-bert/bert-base-uncased",
             max_seq_len=512,
@@ -481,7 +482,7 @@ if __name__ == '__main__':
             evaluator_env_num=1,
             save_replay=True,
             save_replay_path=None,
-            env_type='zork1',               # zork1, acorncourt, detective, omniquest
+            env_type=env_type,
             collect_policy_mode='expert'    # random, human, expert
         )
     )
