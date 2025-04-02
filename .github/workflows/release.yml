@@ -39,7 +39,7 @@ jobs:
           make zip
           ls -al dist
       - name: Upload packed files to artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-all
           path: ./dist/*
@@ -103,7 +103,7 @@ jobs:
           ls -al ./wheelhouse
           mv wheelhouse dist
       - name: Upload packed files to artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: build-artifacts-all
           path: ./dist/*
