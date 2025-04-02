@@ -16,54 +16,43 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     Returns:
         None
     """
-    gpu_num = 4
-    collector_env_num: int = 4       # Number of collector environments
-    n_episode = int(collector_env_num*gpu_num)
-    batch_size = int(64*gpu_num)
-
     # ------------------------------------------------------------------
     # Base environment parameters (Note: these values might be adjusted for different env_id)
     # ------------------------------------------------------------------
     # Define environment configurations
-
-    # v1
     env_configurations = {
-        'detective.z5': (20, 50),
-        'omniquest.z5': (25, 100),
-        'acorncourt.z5': (30, 50),
-        'zork1.z5': (40, 400),
+        'detective.z5': (10, 50),
+        'omniquest.z5': (10, 100),
+        'acorncourt.z5': (10, 50),
+        'zork1.z5': (10, 400),
     }
 
-    # v0
-    # env_configurations = {
-    #     'detective.z5': (10, 50),
-    #     'omniquest.z5': (10, 100),
-    #     'acorncourt.z5': (10, 50),
-    #     'zork1.z5': (10, 400),
-    # }
-
-    # msteps=500 bug
-
-    # env_id = 'detective.z5'
+    env_id = 'detective.z5'
     # env_id = 'omniquest.z5'
-    env_id = 'acorncourt.z5'
+    # env_id = 'acorncourt.z5'
     # env_id = 'zork1.z5'
+
 
     # Set action_space_size and max_steps based on env_id
     action_space_size, max_steps = env_configurations.get(env_id, (10, 50))  # Default values if env_id not found
 
+    action_space_size, max_steps = 50, 50
+
     # ------------------------------------------------------------------
     # User frequently modified configurations
     # ------------------------------------------------------------------
-    evaluator_env_num: int = 3       # Number of evaluator environments
+    evaluator_env_num: int = 2       # Number of evaluator environments
     num_simulations: int = 50        # Number of simulations
 
     # Project training parameters
+    collector_env_num: int = 4       # Number of collector environments
+    n_episode: int = 4               # Number of episodes per training batch
+    batch_size: int = 64             # Batch size in training
     num_unroll_steps: int = 10       # Number of unroll steps (for rollout sequence expansion)
     infer_context_length: int = 4    # Inference context length
+
     num_layers: int = 2              # Number of layers in the model
     replay_ratio: float = 0.25       # Replay ratio for experience replay
-    # replay_ratio: float = 0.1       # Replay ratio for experience replay
     embed_dim: int = 768             # Embedding dimension
 
     # Reanalysis (reanalyze) parameters:
@@ -80,7 +69,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     # ------------------------------------------------------------------
     # TODO: Debug configuration - override some parameters for debugging purposes
     # ------------------------------------------------------------------
-    # max_env_step = int(2e5) 
+    # max_env_step = int(5e5) 
     # batch_size = 10  
     # num_simulations = 2 
     # num_unroll_steps = 5
@@ -88,6 +77,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     # max_steps = 10
     # num_layers = 1
     # replay_ratio = 0.05             
+
     # ------------------------------------------------------------------
     # Configuration dictionary for the Jericho Unizero environment and policy
     # ------------------------------------------------------------------
@@ -107,7 +97,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             manager=dict(shared_memory=False),
         ),
         policy=dict(
-            multi_gpu=True,  # Important for distributed data parallel (DDP)
+            multi_gpu=False,  # Important for distributed data parallel (DDP)
             use_wandb=False,
             learn=dict(
                 learner=dict(
@@ -127,10 +117,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
                     predict_latent_loss_type='mse', # TODO: for latent state layer_norm
-                                        
-                    # final_norm_option_in_obs_head='SimNorm',
-                    # final_norm_option_in_encoder='SimNorm',
-                    # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
+                            
                     policy_entropy_weight=5e-2,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
@@ -146,6 +133,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     env_num=max(collector_env_num, evaluator_env_num),
                 ),
             ),
+            cuda=True,
+            # update_per_collect=None,  # Important for DDP
             update_per_collect=int(collector_env_num*max_steps*replay_ratio),  # Important for DDP
             action_type="varied_action_space",
             model_path=None,
@@ -160,7 +149,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             num_simulations=num_simulations,
             n_episode=n_episode,
             train_start_after_envsteps=0,  # TODO: Adjust training start trigger if needed.
-            replay_buffer_size=int(5e5),
+            # train_start_after_envsteps=2000,  # TODO: Adjust training start trigger if needed.
+            replay_buffer_size=int(1e5),
             eval_freq=int(1e4),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
@@ -197,34 +187,50 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     main_config: EasyDict = jericho_unizero_config
     create_config: EasyDict = jericho_unizero_create_config
 
-    from ding.utils import DDPContext
-    from lzero.config.utils import lz_to_ddp_config
-    with DDPContext():
-        main_config = lz_to_ddp_config(main_config)
-        # Construct experiment name containing key parameters
-        main_config.exp_name = (
-            f"data_lz/data_unizero_jericho_20250402/bge-base-en-v1.5/uz_final-ln_ddp-{gpu_num}gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
-            f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
-            f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
-        )
-        from lzero.entry import train_unizero
-        # Launch the training process
-        train_unizero(
-            [main_config, create_config],
-            seed=seed,
-            model_path=main_config.policy.model_path,
-            max_env_step=max_env_step,
-        )
+    # Construct experiment name containing key parameters
+    # main_config.exp_name = (
+    #     f"data_lz/data_unizero_jericho/bge-base-en-v1.5/uz_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+    #     f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
+    #     f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
+    # )
+    # from lzero.entry import train_unizero
+    # # Launch the training process
+    # train_unizero(
+    #     [main_config, create_config],
+    #     seed=seed,
+    #     model_path=main_config.policy.model_path,
+    #     max_env_step=max_env_step,
+    # )
+
+    main_config.exp_name = (
+        f"data_lz/data_unizero_jericho_eval/bge-base-en-v1.5/uz_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+        f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
+        f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
+    )
+    from lzero.entry import train_unizero, eval_muzero
+    # main_config.policy.model_path = "/fs-computility/ai-shen/puyuan/code/LightZero/data_lz/data_unizero_jericho_20250325/bge-base-en-v1.5/uz_ddp-4gpu_cen4_rr0.25_ftemp025_detectiv_ms50_ass-10_nlayer2_embed768_Htrain10-Hinfer4_bs256_seed0/ckpt/ckpt_best.pth.tar"
+    # main_config.policy.model_path = "/fs-computility/ai-shen/puyuan/code/LightZero/data_lz/data_unizero_jericho_20250402/bge-base-en-v1.5/uz_final-ln_ddp-4gpu_cen4_rr0.1_ftemp025_detectiv_ms50_ass-10_nlayer2_embed768_Htrain10-Hinfer4_bs256_seed0/ckpt/ckpt_best.pth.tar"
+    
+    # main_config.policy.model_path = "/fs-computility/ai-shen/puyuan/code/LightZero/data_lz/data_unizero_jericho_20250402/bge-base-en-v1.5/uz_final-ln_ddp-4gpu_cen4_rr0.1_ftemp025_detectiv_ms50_ass-50_nlayer2_embed768_Htrain10-Hinfer4_bs256_seed0/ckpt/ckpt_best.pth.tar"
+    main_config.policy.model_path = "/fs-computility/ai-shen/puyuan/code/LightZero/data_lz/data_unizero_jericho_20250402/bge-base-en-v1.5/uz_final-ln_ddp-4gpu_cen4_rr0.1_ftemp025_detectiv_ms50_ass-50_nlayer2_embed768_Htrain10-Hinfer4_bs256_seed0/ckpt/iteration_0.pth.tar"
+
+    eval_muzero(
+        [main_config, create_config],
+        seed=seed,
+        model_path=main_config.policy.model_path,
+    )
+
+    # from lzero.entry import train_unizero
+    # # Launch the training process
+    # train_unizero(
+    #     [main_config, create_config],
+    #     seed=seed,
+    #     model_path=main_config.policy.model_path,
+    #     max_env_step=max_env_step,
+    # )
 
 
 if __name__ == "__main__":
-    """
-    Overview:
-        This script should be executed with <nproc_per_node> GPUs.
-        Run the following command to launch the script:
-        torchrun --nproc_per_node=4 ./zoo/jericho/configs/jericho_unizero_ddp_config.py
-    """
-
     parser = argparse.ArgumentParser(description='Process environment configuration and launch training.')
     parser.add_argument(
         '--env',
@@ -245,3 +251,9 @@ if __name__ == "__main__":
 
     # Start the main process with the provided arguments
     main(args.env, args.seed)
+
+    # ====== the following is only for cprofile ======
+    # def run(max_env_step: int):
+    #     main(args.env, args.seed, max_env_step=max_env_step)
+    # import cProfile
+    # cProfile.run(f"run({10000})", filename="./zoo/jericho/detective_unizero_cprofile_10k_envstep", sort="cumulative")
