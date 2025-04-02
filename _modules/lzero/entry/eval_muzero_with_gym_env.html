@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lzero.entry.eval_muzero_with_gym_env &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/sphinx_highlight.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <link href="../../../_static/css/style.css" rel="stylesheet" type="text/css">
+
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lzero.entry.eval_muzero_with_gym_env</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <h1>Source code for lzero.entry.eval_muzero_with_gym_env</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Tuple</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">tensorboardX</span><span class="w"> </span><span class="kn">import</span> <span class="n">SummaryWriter</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.config</span><span class="w"> </span><span class="kn">import</span> <span class="n">compile_config</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.envs</span><span class="w"> </span><span class="kn">import</span> <span class="n">DingEnvWrapper</span><span class="p">,</span> <span class="n">BaseEnvManager</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_policy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">set_pkg_seed</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.worker</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseLearner</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.envs.get_wrapped_env</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_wrappered_env</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.worker</span><span class="w"> </span><span class="kn">import</span> <span class="n">MuZeroEvaluator</span>
+
+
+<div class="viewcode-block" id="eval_muzero_with_gym_env"><a class="viewcode-back" href="../../../api_doc/entry/index.html#lzero.entry.eval_muzero_with_gym_env.eval_muzero_with_gym_env">[docs]</a><span class="k">def</span><span class="w"> </span><span class="nf">eval_muzero_with_gym_env</span><span class="p">(</span>
+        <span class="n">input_cfg</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">dict</span><span class="p">,</span> <span class="nb">dict</span><span class="p">],</span>
+        <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="n">model</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">model_path</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">num_episodes_each_seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+        <span class="n">print_seed_details</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s1">&#39;Policy&#39;</span><span class="p">:</span>  <span class="c1"># noqa</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Overview:</span>
+<span class="sd">        The eval entry for MCTS+RL algorithms, including MuZero, EfficientZero, Sampled EfficientZero.</span>
+<span class="sd">        We create a gym environment using env_id parameter, and then convert it to the format</span>
+<span class="sd">        required by LightZero using LightZeroEnvWrapper class.</span>
+<span class="sd">        Please refer to the get_wrappered_env method for more details.</span>
+<span class="sd">    Arguments:</span>
+<span class="sd">        - input_cfg (:obj:`Tuple[dict, dict]`): Config in dict type.</span>
+<span class="sd">            ``Tuple[dict, dict]`` type means [user_config, create_cfg].</span>
+<span class="sd">        - seed (:obj:`int`): Random seed.</span>
+<span class="sd">        - model (:obj:`Optional[torch.nn.Module]`): Instance of torch.nn.Module.</span>
+<span class="sd">        - model_path (:obj:`Optional[str]`): The pretrained model path, which should</span>
+<span class="sd">            point to the ckpt file of the pretrained model, and an absolute path is recommended.</span>
+<span class="sd">            In LightZero, the path is usually something like ``exp_name/ckpt/ckpt_best.pth.tar``.</span>
+<span class="sd">    Returns:</span>
+<span class="sd">        - policy (:obj:`Policy`): Converged policy.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">cfg</span><span class="p">,</span> <span class="n">create_cfg</span> <span class="o">=</span> <span class="n">input_cfg</span>
+    <span class="k">assert</span> <span class="n">create_cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">type</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;efficientzero&#39;</span><span class="p">,</span> <span class="s1">&#39;muzero&#39;</span><span class="p">,</span> <span class="s1">&#39;sampled_efficientzero&#39;</span><span class="p">],</span> \
+        <span class="s2">&quot;LightZero noow only support the following algo.: &#39;efficientzero&#39;, &#39;muzero&#39;, &#39;sampled_efficientzero&#39;&quot;</span>
+
+    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">cuda</span> <span class="ow">and</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
+        <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="s1">&#39;cuda&#39;</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">device</span> <span class="o">=</span> <span class="s1">&#39;cpu&#39;</span>
+
+    <span class="n">cfg</span> <span class="o">=</span> <span class="n">compile_config</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span> <span class="n">env</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">auto</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">create_cfg</span><span class="o">=</span><span class="n">create_cfg</span><span class="p">,</span> <span class="n">save_cfg</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="c1"># Create main components: env, policy</span>
+    <span class="n">collector_env_cfg</span> <span class="o">=</span> <span class="n">DingEnvWrapper</span><span class="o">.</span><span class="n">create_collector_env_cfg</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">env</span><span class="p">)</span>
+    <span class="n">evaluator_env_cfg</span> <span class="o">=</span> <span class="n">DingEnvWrapper</span><span class="o">.</span><span class="n">create_evaluator_env_cfg</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">env</span><span class="p">)</span>
+    <span class="n">collector_env</span> <span class="o">=</span> <span class="n">BaseEnvManager</span><span class="p">(</span>
+        <span class="p">[</span><span class="n">get_wrappered_env</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">env_id</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">collector_env_cfg</span><span class="p">],</span> <span class="n">cfg</span><span class="o">=</span><span class="n">BaseEnvManager</span><span class="o">.</span><span class="n">default_config</span><span class="p">()</span>
+    <span class="p">)</span>
+    <span class="n">evaluator_env</span> <span class="o">=</span> <span class="n">BaseEnvManager</span><span class="p">(</span>
+        <span class="p">[</span><span class="n">get_wrappered_env</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="n">cfg</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">env_id</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">evaluator_env_cfg</span><span class="p">],</span> <span class="n">cfg</span><span class="o">=</span><span class="n">BaseEnvManager</span><span class="o">.</span><span class="n">default_config</span><span class="p">()</span>
+    <span class="p">)</span>
+    <span class="n">collector_env</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">seed</span><span class="p">)</span>
+    <span class="n">evaluator_env</span><span class="o">.</span><span class="n">seed</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">seed</span><span class="p">,</span> <span class="n">dynamic_seed</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">set_pkg_seed</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">seed</span><span class="p">,</span> <span class="n">use_cuda</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">cuda</span><span class="p">)</span>
+
+    <span class="n">policy</span> <span class="o">=</span> <span class="n">create_policy</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="p">,</span> <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span> <span class="n">enable_field</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;learn&#39;</span><span class="p">,</span> <span class="s1">&#39;collect&#39;</span><span class="p">,</span> <span class="s1">&#39;eval&#39;</span><span class="p">])</span>
+
+    <span class="c1"># load pretrained model</span>
+    <span class="k">if</span> <span class="n">model_path</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">policy</span><span class="o">.</span><span class="n">learn_mode</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">model_path</span><span class="p">,</span> <span class="n">map_location</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">device</span><span class="p">))</span>
+
+    <span class="c1"># Create worker components: learner, collector, evaluator, replay buffer, commander.</span>
+    <span class="n">tb_logger</span> <span class="o">=</span> <span class="n">SummaryWriter</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s1">&#39;./</span><span class="si">{}</span><span class="s1">/log/&#39;</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">exp_name</span><span class="p">),</span> <span class="s1">&#39;serial&#39;</span><span class="p">))</span>
+    <span class="n">learner</span> <span class="o">=</span> <span class="n">BaseLearner</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">learn</span><span class="o">.</span><span class="n">learner</span><span class="p">,</span> <span class="n">policy</span><span class="o">.</span><span class="n">learn_mode</span><span class="p">,</span> <span class="n">tb_logger</span><span class="p">,</span> <span class="n">exp_name</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">exp_name</span><span class="p">)</span>
+
+    <span class="c1"># ==============================================================</span>
+    <span class="c1"># MCTS+RL algorithms related core code</span>
+    <span class="c1"># ==============================================================</span>
+    <span class="n">policy_config</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span>
+    <span class="c1"># specific game buffer for MCTS+RL algorithms</span>
+    <span class="n">evaluator</span> <span class="o">=</span> <span class="n">MuZeroEvaluator</span><span class="p">(</span>
+        <span class="n">eval_freq</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">eval_freq</span><span class="p">,</span>
+        <span class="n">n_evaluator_episode</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">n_evaluator_episode</span><span class="p">,</span>
+        <span class="n">stop_value</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">stop_value</span><span class="p">,</span>
+        <span class="n">env</span><span class="o">=</span><span class="n">evaluator_env</span><span class="p">,</span>
+        <span class="n">policy</span><span class="o">=</span><span class="n">policy</span><span class="o">.</span><span class="n">eval_mode</span><span class="p">,</span>
+        <span class="n">tb_logger</span><span class="o">=</span><span class="n">tb_logger</span><span class="p">,</span>
+        <span class="n">exp_name</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">exp_name</span><span class="p">,</span>
+        <span class="n">policy_config</span><span class="o">=</span><span class="n">policy_config</span>
+    <span class="p">)</span>
+
+    <span class="c1"># ==========</span>
+    <span class="c1"># Main loop</span>
+    <span class="c1"># ==========</span>
+    <span class="c1"># Learner&#39;s before_run hook.</span>
+    <span class="n">learner</span><span class="o">.</span><span class="n">call_hook</span><span class="p">(</span><span class="s1">&#39;before_run&#39;</span><span class="p">)</span>
+
+    <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+        <span class="c1"># ==============================================================</span>
+        <span class="c1"># eval trained model</span>
+        <span class="c1"># ==============================================================</span>
+        <span class="n">returns</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_episodes_each_seed</span><span class="p">):</span>
+            <span class="n">stop</span><span class="p">,</span> <span class="n">reward</span> <span class="o">=</span> <span class="n">evaluator</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">learner</span><span class="o">.</span><span class="n">save_checkpoint</span><span class="p">,</span> <span class="n">learner</span><span class="o">.</span><span class="n">train_iter</span><span class="p">)</span>
+            <span class="n">returns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">reward</span><span class="p">)</span>
+        <span class="n">returns</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">returns</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">print_seed_details</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">20</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;In seed </span><span class="si">{</span><span class="n">seed</span><span class="si">}</span><span class="s1">, returns: </span><span class="si">{</span><span class="n">returns</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">policy</span><span class="o">.</span><span class="n">env_type</span> <span class="o">==</span> <span class="s1">&#39;board_games&#39;</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s1">&#39;win rate: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">returns</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">1.</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">num_episodes_each_seed</span><span class="si">}</span><span class="s1">, draw rate: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">returns</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">0.</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">num_episodes_each_seed</span><span class="si">}</span><span class="s1">, lose rate: </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">returns</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="o">-</span><span class="mf">1.</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">num_episodes_each_seed</span><span class="si">}</span><span class="s1">&#39;</span>
+                <span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;=&quot;</span> <span class="o">*</span> <span class="mi">20</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">returns</span><span class="o">.</span><span class="n">mean</span><span class="p">(),</span> <span class="n">returns</span></div>
+</pre></div>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

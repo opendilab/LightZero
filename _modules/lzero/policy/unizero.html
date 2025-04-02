@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>lzero.policy.unizero &mdash; LightZero 0.1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/css/style.css" />
+
+  
+  <!--[if lt IE 9]>
+    <script src="../../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script src="../../../_static/jquery.js"></script>
+        <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script data-url_root="../../../" id="documentation_options" src="../../../_static/documentation_options.js"></script>
+        <script src="../../../_static/doctools.js"></script>
+        <script src="../../../_static/sphinx_highlight.js"></script>
+    <script src="../../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+    <link href="../../../_static/css/style.css" rel="stylesheet" type="text/css">
+
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../../index.html" class="icon icon-home">
+            LightZero
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/installation/installation_and_quickstart.html">Installation and Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/algos/customize_algos.html">How to Customize Your Algorithms in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/envs/customize_envs.html">How to Customize Your Environments in LightZero?</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/config/config.html">How to Set Configuration Files in LightZero</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/logs/logs.html">LightZero’s Logging and Monitoring System</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Documentation</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/agent/index.html">Agent</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/config/index.html">Config</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/entry/index.html">Entry</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/envs/index.html">Envs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/mcts/index.html">MCTS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/model/index.html">Model</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/policy/index.html">Policy</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../api_doc/worker/index.html">Worker</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../../index.html">LightZero</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../../index.html">Module code</a></li>
+      <li class="breadcrumb-item active">lzero.policy.unizero</li>
+      <li class="wy-breadcrumbs-aside">
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+    
+    
+  <h1>Source code for lzero.policy.unizero</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">copy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">defaultdict</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">,</span> <span class="n">Union</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">wandb</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">model_wrap</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">ding.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">POLICY_REGISTRY</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.entry.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">initialize_zeros_batch</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.mcts</span><span class="w"> </span><span class="kn">import</span> <span class="n">UniZeroMCTSCtree</span> <span class="k">as</span> <span class="n">MCTSCtree</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">ImageTransforms</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy</span><span class="w"> </span><span class="kn">import</span> <span class="n">scalar_transform</span><span class="p">,</span> <span class="n">InverseScalarTransform</span><span class="p">,</span> <span class="n">phi_transform</span><span class="p">,</span> \
+    <span class="n">DiscreteSupport</span><span class="p">,</span> <span class="n">to_torch_float_tensor</span><span class="p">,</span> <span class="n">mz_network_output_unpack</span><span class="p">,</span> <span class="n">select_action</span><span class="p">,</span> <span class="n">prepare_obs</span><span class="p">,</span> \
+    <span class="n">prepare_obs_stack_for_unizero</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">lzero.policy.muzero</span><span class="w"> </span><span class="kn">import</span> <span class="n">MuZeroPolicy</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">configure_optimizers_nanogpt</span>
+
+
+<div class="viewcode-block" id="UniZeroPolicy"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy">[docs]</a><span class="nd">@POLICY_REGISTRY</span><span class="o">.</span><span class="n">register</span><span class="p">(</span><span class="s1">&#39;unizero&#39;</span><span class="p">)</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">UniZeroPolicy</span><span class="p">(</span><span class="n">MuZeroPolicy</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Overview:</span>
+<span class="sd">        The policy class for UniZero, official implementation for paper UniZero: Generalized and Efficient Planning</span>
+<span class="sd">        with Scalable LatentWorld Models. UniZero aims to enhance the planning capabilities of reinforcement learning agents</span>
+<span class="sd">        by addressing the limitations found in MuZero-style algorithms, particularly in environments requiring the</span>
+<span class="sd">        capture of long-term dependencies. More details can be found in https://arxiv.org/abs/2406.10667.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="c1"># The default_config for UniZero policy.</span>
+    <span class="n">config</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+        <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;unizero&#39;</span><span class="p">,</span>
+        <span class="n">model</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+            <span class="c1"># (str) The model type. For 1-dimensional vector obs, we use mlp model. For the image obs, we use conv model.</span>
+            <span class="n">model_type</span><span class="o">=</span><span class="s1">&#39;conv&#39;</span><span class="p">,</span>  <span class="c1"># options={&#39;mlp&#39;, &#39;conv&#39;}</span>
+            <span class="c1"># (bool) If True, the action space of the environment is continuous, otherwise discrete.</span>
+            <span class="n">continuous_action_space</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="c1"># (tuple) The obs shape.</span>
+            <span class="n">observation_shape</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">),</span>
+            <span class="c1"># (bool) Whether to use the self-supervised learning loss.</span>
+            <span class="n">self_supervised_learning_loss</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="c1"># (bool) Whether to use discrete support to represent categorical distribution for value/reward/value_prefix.</span>
+            <span class="n">categorical_distribution</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="c1"># (int) The image channel in image observation.</span>
+            <span class="n">image_channel</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+            <span class="c1"># (int) The number of frames to stack together.</span>
+            <span class="n">frame_stack_num</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+            <span class="c1"># (int) The number of res blocks in MuZero model.</span>
+            <span class="n">num_res_blocks</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+            <span class="c1"># (int) The number of channels of hidden states in MuZero model.</span>
+            <span class="n">num_channels</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span>
+            <span class="c1"># (int) The scale of supports used in categorical distribution.</span>
+            <span class="c1"># This variable is only effective when ``categorical_distribution=True``.</span>
+            <span class="n">support_scale</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+            <span class="c1"># (bool) whether to learn bias in the last linear layer in value and policy head.</span>
+            <span class="n">bias</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="c1"># (bool) whether to use res connection in dynamics.</span>
+            <span class="n">res_connection_in_dynamics</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="c1"># (str) The type of normalization in MuZero model. Options are [&#39;BN&#39;, &#39;LN&#39;]. Default to &#39;BN&#39;.</span>
+            <span class="n">norm_type</span><span class="o">=</span><span class="s1">&#39;BN&#39;</span><span class="p">,</span>
+            <span class="c1"># (bool) Whether to analyze simulation normalization.</span>
+            <span class="n">analysis_sim_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="c1"># (int) The save interval of the model.</span>
+            <span class="n">learn</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">learner</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">hook</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span><span class="n">save_ckpt_after_iter</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span> <span class="p">),</span> <span class="p">),</span> <span class="p">),</span>
+            <span class="n">world_model_cfg</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+                <span class="c1"># (bool) If True, the action space of the environment is continuous, otherwise discrete.</span>
+                <span class="n">continuous_action_space</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="c1"># (int) The number of tokens per block.</span>
+                <span class="n">tokens_per_block</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                <span class="c1"># (int) The maximum number of blocks.</span>
+                <span class="n">max_blocks</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+                <span class="c1"># (int) The maximum number of tokens, calculated as tokens per block multiplied by max blocks.</span>
+                <span class="n">max_tokens</span><span class="o">=</span><span class="mi">2</span> <span class="o">*</span> <span class="mi">10</span><span class="p">,</span>
+                <span class="c1"># (int) The context length, usually calculated as twice the number of some base unit.</span>
+                <span class="n">context_length</span><span class="o">=</span><span class="mi">2</span> <span class="o">*</span> <span class="mi">4</span><span class="p">,</span>
+                <span class="c1"># (bool) Whether to use GRU gating mechanism.</span>
+                <span class="n">gru_gating</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="c1"># (str) The device to be used for computation, e.g., &#39;cpu&#39; or &#39;cuda&#39;.</span>
+                <span class="n">device</span><span class="o">=</span><span class="s1">&#39;cpu&#39;</span><span class="p">,</span>
+                <span class="c1"># (bool) Whether to analyze simulation normalization.</span>
+                <span class="n">analysis_sim_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="c1"># (bool) Whether to analyze dormant ratio.</span>
+                <span class="n">analysis_dormant_ratio</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="c1"># (int) The shape of the action space.</span>
+                <span class="n">action_space_size</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+                <span class="c1"># (int) The size of the group, related to simulation normalization.</span>
+                <span class="n">group_size</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>  <span class="c1"># NOTE: sim_norm</span>
+                <span class="c1"># (str) The type of attention mechanism used. Options could be [&#39;causal&#39;].</span>
+                <span class="n">attention</span><span class="o">=</span><span class="s1">&#39;causal&#39;</span><span class="p">,</span>
+                <span class="c1"># (int) The number of layers in the model.</span>
+                <span class="n">num_layers</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                <span class="c1"># (int) The number of attention heads.</span>
+                <span class="n">num_heads</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+                <span class="c1"># (int) The dimension of the embedding.</span>
+                <span class="n">embed_dim</span><span class="o">=</span><span class="mi">768</span><span class="p">,</span>
+                <span class="c1"># (float) The dropout probability for the embedding layer.</span>
+                <span class="n">embed_pdrop</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+                <span class="c1"># (float) The dropout probability for the residual connections.</span>
+                <span class="n">resid_pdrop</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+                <span class="c1"># (float) The dropout probability for the attention mechanism.</span>
+                <span class="n">attn_pdrop</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+                <span class="c1"># (int) The size of the support set for value and reward heads.</span>
+                <span class="n">support_size</span><span class="o">=</span><span class="mi">101</span><span class="p">,</span>
+                <span class="c1"># (int) The maximum size of the cache.</span>
+                <span class="n">max_cache_size</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span>
+                <span class="c1"># (int) The number of environments.</span>
+                <span class="n">env_num</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+                <span class="c1"># (float) The weight of the latent reconstruction loss.</span>
+                <span class="n">latent_recon_loss_weight</span><span class="o">=</span><span class="mf">0.</span><span class="p">,</span>
+                <span class="c1"># (float) The weight of the perceptual loss.</span>
+                <span class="n">perceptual_loss_weight</span><span class="o">=</span><span class="mf">0.</span><span class="p">,</span>
+                <span class="c1"># (float) The weight of the policy entropy loss.</span>
+                <span class="n">policy_entropy_weight</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+                <span class="c1"># (str) The type of loss for predicting latent variables. Options could be [&#39;group_kl&#39;, &#39;mse&#39;].</span>
+                <span class="n">predict_latent_loss_type</span><span class="o">=</span><span class="s1">&#39;group_kl&#39;</span><span class="p">,</span>
+                <span class="c1"># (str) The type of observation. Options are [&#39;image&#39;, &#39;vector&#39;].</span>
+                <span class="n">obs_type</span><span class="o">=</span><span class="s1">&#39;image&#39;</span><span class="p">,</span>
+                <span class="c1"># (float) The discount factor for future rewards.</span>
+                <span class="n">gamma</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+                <span class="c1"># (float) The threshold for a dormant neuron.</span>
+                <span class="n">dormant_threshold</span><span class="o">=</span><span class="mf">0.025</span><span class="p">,</span>
+                <span class="c1"># (bool) Whether to use Rotary Position Embedding (RoPE) for relative position encoding.</span>
+                <span class="c1"># If False, nn.Embedding is used for absolute position encoding.</span>
+                <span class="c1"># For more details on RoPE, refer to the author&#39;s blog: https://spaces.ac.cn/archives/8265/</span>
+                <span class="c1"># TODO: If you want to use rotary_emb in an environment, you need to include the timestep as a return key from the environment.</span>
+                <span class="n">rotary_emb</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                <span class="c1"># (int) The base value for calculating RoPE angles. Commonly set to 10000.</span>
+                <span class="n">rope_theta</span><span class="o">=</span><span class="mi">10000</span><span class="p">,</span>
+                <span class="c1"># (int) The maximum sequence length for position encoding.</span>
+                <span class="n">max_seq_len</span><span class="o">=</span><span class="mi">8192</span><span class="p">,</span>
+            <span class="p">),</span>
+        <span class="p">),</span>
+        <span class="c1"># ****** common ******</span>
+        <span class="c1"># (bool) whether to use rnd model.</span>
+        <span class="n">use_rnd_model</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to use multi-gpu training.</span>
+        <span class="n">multi_gpu</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to enable the sampled-based algorithm (e.g. Sampled EfficientZero)</span>
+        <span class="c1"># this variable is used in ``collector``.</span>
+        <span class="n">sampled_algo</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to enable the gumbel-based algorithm (e.g. Gumbel Muzero)</span>
+        <span class="n">gumbel_algo</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to use C++ MCTS in policy. If False, use Python implementation.</span>
+        <span class="n">mcts_ctree</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to use cuda for network.</span>
+        <span class="n">cuda</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="c1"># (int) The number of environments used in collecting data.</span>
+        <span class="n">collector_env_num</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+        <span class="c1"># (int) The number of environments used in evaluating policy.</span>
+        <span class="n">evaluator_env_num</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span>
+        <span class="c1"># (str) The type of environment. Options are [&#39;not_board_games&#39;, &#39;board_games&#39;].</span>
+        <span class="n">env_type</span><span class="o">=</span><span class="s1">&#39;not_board_games&#39;</span><span class="p">,</span>
+        <span class="c1"># (str) The type of action space. Options are [&#39;fixed_action_space&#39;, &#39;varied_action_space&#39;].</span>
+        <span class="n">action_type</span><span class="o">=</span><span class="s1">&#39;fixed_action_space&#39;</span><span class="p">,</span>
+        <span class="c1"># (str) The type of battle mode. Options are [&#39;play_with_bot_mode&#39;, &#39;self_play_mode&#39;].</span>
+        <span class="n">battle_mode</span><span class="o">=</span><span class="s1">&#39;play_with_bot_mode&#39;</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to monitor extra statistics in tensorboard.</span>
+        <span class="n">monitor_extra_statistics</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="c1"># (int) The transition number of one ``GameSegment``.</span>
+        <span class="n">game_segment_length</span><span class="o">=</span><span class="mi">400</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to analyze simulation normalization.</span>
+        <span class="n">analysis_sim_norm</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to use the pure policy to collect data.</span>
+        <span class="n">collect_with_pure_policy</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (int) The evaluation frequency.</span>
+        <span class="n">eval_freq</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="mf">2e3</span><span class="p">),</span>
+        <span class="c1"># (str) The sample type. Options are [&#39;episode&#39;, &#39;transition&#39;].</span>
+        <span class="n">sample_type</span><span class="o">=</span><span class="s1">&#39;transition&#39;</span><span class="p">,</span>
+        <span class="c1"># ****** observation ******</span>
+        <span class="c1"># (bool) Whether to transform image to string to save memory.</span>
+        <span class="n">transform2string</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to use gray scale image.</span>
+        <span class="n">gray_scale</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to use data augmentation.</span>
+        <span class="n">use_augmentation</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (list) The style of augmentation.</span>
+        <span class="n">augmentation</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;shift&#39;</span><span class="p">,</span> <span class="s1">&#39;intensity&#39;</span><span class="p">],</span>
+
+        <span class="c1"># ******* learn ******</span>
+        <span class="c1"># (bool) Whether to ignore the done flag in the training data. Typically, this value is set to False.</span>
+        <span class="c1"># However, for some environments with a fixed episode length, to ensure the accuracy of Q-value calculations,</span>
+        <span class="c1"># we should set it to True to avoid the influence of the done flag.</span>
+        <span class="n">ignore_done</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (int) How many updates(iterations) to train after collector&#39;s one collection.</span>
+        <span class="c1"># Bigger &quot;update_per_collect&quot; means bigger off-policy.</span>
+        <span class="c1"># collect data -&gt; update policy-&gt; collect data -&gt; ...</span>
+        <span class="c1"># For different env, we have different episode_length,</span>
+        <span class="c1"># we usually set update_per_collect = collector_env_num * episode_length / batch_size * reuse_factor.</span>
+        <span class="c1"># If we set update_per_collect=None, we will set update_per_collect = collected_transitions_num * cfg.policy.replay_ratio automatically.</span>
+        <span class="n">update_per_collect</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="c1"># (float) The ratio of the collected data used for training. Only effective when ``update_per_collect`` is not None.</span>
+        <span class="n">replay_ratio</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
+        <span class="c1"># (int) Minibatch size for one gradient descent.</span>
+        <span class="n">batch_size</span><span class="o">=</span><span class="mi">256</span><span class="p">,</span>
+        <span class="c1"># (str) Optimizer for training policy network.</span>
+        <span class="n">optim_type</span><span class="o">=</span><span class="s1">&#39;AdamW&#39;</span><span class="p">,</span>
+        <span class="c1"># (float) Learning rate for training policy network. Initial lr for manually decay schedule.</span>
+        <span class="n">learning_rate</span><span class="o">=</span><span class="mf">0.0001</span><span class="p">,</span>
+        <span class="c1"># (int) Frequency of hard target network update.</span>
+        <span class="n">target_update_freq</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+        <span class="c1"># (int) Frequency of soft target network update.</span>
+        <span class="n">target_update_theta</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+        <span class="c1"># (int) Frequency of target network update.</span>
+        <span class="n">target_update_freq_for_intrinsic_reward</span><span class="o">=</span><span class="mi">1000</span><span class="p">,</span>
+        <span class="c1"># (float) Weight decay for training policy network.</span>
+        <span class="n">weight_decay</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">,</span>
+        <span class="c1"># (float) One-order Momentum in optimizer, which stabilizes the training process (gradient direction).</span>
+        <span class="n">momentum</span><span class="o">=</span><span class="mf">0.9</span><span class="p">,</span>
+        <span class="c1"># (float) The maximum constraint value of gradient norm clipping.</span>
+        <span class="n">grad_clip_value</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+        <span class="c1"># (int) The number of episodes in each collecting stage when use muzero_collector.</span>
+        <span class="n">n_episode</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+        <span class="c1"># (int) The number of num_segments in each collecting stage when use muzero_segment_collector.</span>
+        <span class="n">num_segments</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+        <span class="c1"># (int) the number of simulations in MCTS.</span>
+        <span class="n">num_simulations</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span>
+        <span class="c1"># (float) Discount factor (gamma) for returns.</span>
+        <span class="n">discount_factor</span><span class="o">=</span><span class="mf">0.997</span><span class="p">,</span>
+        <span class="c1"># (int) The number of steps for calculating target q_value.</span>
+        <span class="n">td_steps</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+        <span class="c1"># (int) The number of unroll steps in dynamics network.</span>
+        <span class="n">num_unroll_steps</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span>
+        <span class="c1"># (float) The weight of reward loss.</span>
+        <span class="n">reward_loss_weight</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="c1"># (float) The weight of value loss.</span>
+        <span class="n">value_loss_weight</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
+        <span class="c1"># (float) The weight of policy loss.</span>
+        <span class="n">policy_loss_weight</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="c1"># (float) The weight of ssl (self-supervised learning) loss.</span>
+        <span class="n">ssl_loss_weight</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to use the cosine learning rate decay.</span>
+        <span class="n">cos_lr_scheduler</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to use piecewise constant learning rate decay.</span>
+        <span class="c1"># i.e. lr: 0.2 -&gt; 0.02 -&gt; 0.002</span>
+        <span class="n">piecewise_decay_lr_scheduler</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (int) The number of final training iterations to control lr decay, which is only used for manually decay.</span>
+        <span class="n">threshold_training_steps_for_final_lr</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="mf">5e4</span><span class="p">),</span>
+        <span class="c1"># (bool) Whether to use manually decayed temperature.</span>
+        <span class="n">manual_temperature_decay</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (int) The number of final training iterations to control temperature, which is only used for manually decay.</span>
+        <span class="n">threshold_training_steps_for_final_temperature</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="mf">5e4</span><span class="p">),</span>
+        <span class="c1"># (float) The fixed temperature value for MCTS action selection, which is used to control the exploration.</span>
+        <span class="c1"># The larger the value, the more exploration. This value is only used when manual_temperature_decay=False.</span>
+        <span class="n">fixed_temperature_value</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
+        <span class="c1"># (bool) Whether to use the true chance in MCTS in some environments with stochastic dynamics, such as 2048.</span>
+        <span class="n">use_ture_chance_label_in_chance_encoder</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (int) The number of steps to accumulate gradients before performing an optimization step.</span>
+        <span class="n">accumulation_steps</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+
+        <span class="c1"># ****** Priority ******</span>
+        <span class="c1"># (bool) Whether to use priority when sampling training data from the buffer.</span>
+        <span class="n">use_priority</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="c1"># (float) The degree of prioritization to use. A value of 0 means no prioritization,</span>
+        <span class="c1"># while a value of 1 means full prioritization.</span>
+        <span class="n">priority_prob_alpha</span><span class="o">=</span><span class="mf">0.6</span><span class="p">,</span>
+        <span class="c1"># (float) The degree of correction to use. A value of 0 means no correction,</span>
+        <span class="c1"># while a value of 1 means full correction.</span>
+        <span class="n">priority_prob_beta</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span>
+        <span class="c1"># (int) The initial Env Steps for training.</span>
+        <span class="n">train_start_after_envsteps</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span>
+
+        <span class="c1"># ****** UCB ******</span>
+        <span class="c1"># (float) The alpha value used in the Dirichlet distribution for exploration at the root node of search tree.</span>
+        <span class="n">root_dirichlet_alpha</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span>
+        <span class="c1"># (float) The noise weight at the root node of the search tree.</span>
+        <span class="n">root_noise_weight</span><span class="o">=</span><span class="mf">0.25</span><span class="p">,</span>
+
+        <span class="c1"># ****** Explore by random collect ******</span>
+        <span class="c1"># (int) The number of episodes to collect data randomly before training.</span>
+        <span class="n">random_collect_episode_num</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+
+        <span class="c1"># ****** Explore by eps greedy ******</span>
+        <span class="n">eps</span><span class="o">=</span><span class="nb">dict</span><span class="p">(</span>
+            <span class="c1"># (bool) Whether to use eps greedy exploration in collecting data.</span>
+            <span class="n">eps_greedy_exploration_in_collect</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+            <span class="c1"># (str) The type of decaying epsilon. Options are &#39;linear&#39;, &#39;exp&#39;.</span>
+            <span class="nb">type</span><span class="o">=</span><span class="s1">&#39;linear&#39;</span><span class="p">,</span>
+            <span class="c1"># (float) The start value of eps.</span>
+            <span class="n">start</span><span class="o">=</span><span class="mf">1.</span><span class="p">,</span>
+            <span class="c1"># (float) The end value of eps.</span>
+            <span class="n">end</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+            <span class="c1"># (int) The decay steps from start to end eps.</span>
+            <span class="n">decay</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="mf">1e5</span><span class="p">),</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="UniZeroPolicy.default_model"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy.default_model">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">default_model</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Return this algorithm default model setting for demonstration.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - model_info (:obj:`Tuple[str, List[str]]`): model name and model import_names.</span>
+<span class="sd">                - model_type (:obj:`str`): The model type used in this algorithm, which is registered in ModelRegistry.</span>
+<span class="sd">                - import_names (:obj:`List[str]`): The model class path list used in this algorithm.</span>
+<span class="sd">        .. note::</span>
+<span class="sd">            The user can define and use customized network model but must obey the same interface definition indicated \</span>
+<span class="sd">            by import_names path. For MuZero, ``lzero.model.unizero_model.MuZeroModel``</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="s1">&#39;UniZeroModel&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;lzero.model.unizero_model&#39;</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="UniZeroPolicy._init_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._init_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_init_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Learn mode init method. Called by ``self.__init__``. Initialize the learn model, optimizer and MCTS utils.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># NOTE: nanoGPT optimizer</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span> <span class="o">=</span> <span class="n">configure_optimizers_nanogpt</span><span class="p">(</span>
+            <span class="n">model</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="o">.</span><span class="n">world_model</span><span class="p">,</span>
+            <span class="n">learning_rate</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">learning_rate</span><span class="p">,</span>
+            <span class="n">weight_decay</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">weight_decay</span><span class="p">,</span>
+            <span class="n">device_type</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">,</span>
+            <span class="n">betas</span><span class="o">=</span><span class="p">(</span><span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.95</span><span class="p">),</span>
+        <span class="p">)</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">cos_lr_scheduler</span><span class="p">:</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">torch.optim.lr_scheduler</span><span class="w"> </span><span class="kn">import</span> <span class="n">CosineAnnealingLR</span>
+            <span class="c1"># TODO: check the total training steps</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lr_scheduler</span> <span class="o">=</span> <span class="n">CosineAnnealingLR</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="p">,</span> <span class="mf">1e5</span><span class="p">,</span> <span class="n">eta_min</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">last_epoch</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># use model_wrapper for specialized demands of different modes</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="p">)</span>
+        <span class="c1"># Ensure that the installed torch version is greater than or equal to 2.0</span>
+        <span class="k">assert</span> <span class="nb">int</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">filter</span><span class="p">(</span><span class="nb">str</span><span class="o">.</span><span class="n">isdigit</span><span class="p">,</span> <span class="n">torch</span><span class="o">.</span><span class="n">__version__</span><span class="p">)))</span> <span class="o">&gt;=</span> <span class="mi">200</span><span class="p">,</span> <span class="s2">&quot;We need torch version &gt;= 2.0&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_model</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="p">)</span>
+        <span class="c1"># NOTE: soft target</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span> <span class="o">=</span> <span class="n">model_wrap</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="p">,</span>
+            <span class="n">wrapper_name</span><span class="o">=</span><span class="s1">&#39;target&#39;</span><span class="p">,</span>
+            <span class="n">update_type</span><span class="o">=</span><span class="s1">&#39;momentum&#39;</span><span class="p">,</span>
+            <span class="n">update_kwargs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;theta&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">target_update_theta</span><span class="p">}</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_model</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">use_augmentation</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">image_transforms</span> <span class="o">=</span> <span class="n">ImageTransforms</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">augmentation</span><span class="p">,</span>
+                <span class="n">image_shape</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">value_support</span> <span class="o">=</span> <span class="n">DiscreteSupport</span><span class="p">(</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">support_scale</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">support_scale</span><span class="p">,</span> <span class="n">delta</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">reward_support</span> <span class="o">=</span> <span class="n">DiscreteSupport</span><span class="p">(</span><span class="o">-</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">support_scale</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">support_scale</span><span class="p">,</span> <span class="n">delta</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">inverse_scalar_transform_handle</span> <span class="o">=</span> <span class="n">InverseScalarTransform</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">support_scale</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">categorical_distribution</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span> <span class="o">=</span> <span class="n">defaultdict</span><span class="p">(</span><span class="nb">float</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_before</span> <span class="o">=</span> <span class="mf">0.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_after</span> <span class="o">=</span> <span class="mf">0.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_before</span> <span class="o">=</span> <span class="mf">0.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_after</span> <span class="o">=</span> <span class="mf">0.</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">use_wandb</span><span class="p">:</span>
+            <span class="c1"># TODO: add the model to wandb</span>
+            <span class="n">wandb</span><span class="o">.</span><span class="n">watch</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">representation_network</span><span class="p">,</span> <span class="n">log</span><span class="o">=</span><span class="s2">&quot;all&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">accumulation_steps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">accumulation_steps</span></div>
+
+    <span class="c1"># @profile</span>
+<div class="viewcode-block" id="UniZeroPolicy._forward_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._forward_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Union</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            The forward function for learning policy in learn mode, which is the core of the learning process.</span>
+<span class="sd">            The data is sampled from replay buffer.</span>
+<span class="sd">            The loss is calculated by the loss function and the loss is backpropagated to update the model.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - data (:obj:`Tuple[torch.Tensor]`): The data sampled from replay buffer, which is a tuple of tensors.</span>
+<span class="sd">                The first tensor is the current_batch, the second tensor is the target_batch.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - info_dict (:obj:`Dict[str, Union[float, int]]`): The information dict to be logged, which contains \</span>
+<span class="sd">                current learning loss and learning statistics.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">train</span><span class="p">()</span>
+
+        <span class="n">current_batch</span><span class="p">,</span> <span class="n">target_batch</span><span class="p">,</span> <span class="n">train_iter</span> <span class="o">=</span> <span class="n">data</span>
+        <span class="n">obs_batch_ori</span><span class="p">,</span> <span class="n">action_batch</span><span class="p">,</span>  <span class="n">target_action_batch</span><span class="p">,</span> <span class="n">mask_batch</span><span class="p">,</span> <span class="n">indices</span><span class="p">,</span> <span class="n">weights</span><span class="p">,</span> <span class="n">make_time</span><span class="p">,</span> <span class="n">timestep_batch</span> <span class="o">=</span> <span class="n">current_batch</span>
+        <span class="n">target_reward</span><span class="p">,</span> <span class="n">target_value</span><span class="p">,</span> <span class="n">target_policy</span> <span class="o">=</span> <span class="n">target_batch</span>
+
+        <span class="c1"># Prepare observations based on frame stack number</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">frame_stack_num</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">obs_batch</span><span class="p">,</span> <span class="n">obs_target_batch</span> <span class="o">=</span> <span class="n">prepare_obs_stack_for_unizero</span><span class="p">(</span><span class="n">obs_batch_ori</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">obs_batch</span><span class="p">,</span> <span class="n">obs_target_batch</span> <span class="o">=</span> <span class="n">prepare_obs</span><span class="p">(</span><span class="n">obs_batch_ori</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span>  <span class="c1"># TODO: optimize</span>
+
+        <span class="c1"># Apply augmentations if needed</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">use_augmentation</span><span class="p">:</span>
+            <span class="n">obs_batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_transforms</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">obs_batch</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">self_supervised_learning_loss</span><span class="p">:</span>
+                <span class="n">obs_target_batch</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">image_transforms</span><span class="o">.</span><span class="n">transform</span><span class="p">(</span><span class="n">obs_target_batch</span><span class="p">)</span>
+
+        <span class="c1"># Prepare action batch and convert to torch tensor</span>
+        <span class="n">action_batch</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">action_batch</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span>
+            <span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>  <span class="c1"># For discrete action space</span>
+        <span class="n">timestep_batch</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">timestep_batch</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">unsqueeze</span><span class="p">(</span>
+            <span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">long</span><span class="p">()</span>
+        <span class="n">data_list</span> <span class="o">=</span> <span class="p">[</span><span class="n">mask_batch</span><span class="p">,</span> <span class="n">target_reward</span><span class="p">,</span> <span class="n">target_value</span><span class="p">,</span> <span class="n">target_policy</span><span class="p">,</span> <span class="n">weights</span><span class="p">]</span>
+        <span class="n">mask_batch</span><span class="p">,</span> <span class="n">target_reward</span><span class="p">,</span> <span class="n">target_value</span><span class="p">,</span> <span class="n">target_policy</span><span class="p">,</span> <span class="n">weights</span> <span class="o">=</span> <span class="n">to_torch_float_tensor</span><span class="p">(</span><span class="n">data_list</span><span class="p">,</span>
+                                                                                                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">target_reward</span> <span class="o">=</span> <span class="n">target_reward</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">target_value</span> <span class="o">=</span> <span class="n">target_value</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># Transform rewards and values to their scaled forms</span>
+        <span class="n">transformed_target_reward</span> <span class="o">=</span> <span class="n">scalar_transform</span><span class="p">(</span><span class="n">target_reward</span><span class="p">)</span>
+        <span class="n">transformed_target_value</span> <span class="o">=</span> <span class="n">scalar_transform</span><span class="p">(</span><span class="n">target_value</span><span class="p">)</span>
+
+        <span class="c1"># Convert to categorical distributions</span>
+        <span class="n">target_reward_categorical</span> <span class="o">=</span> <span class="n">phi_transform</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">reward_support</span><span class="p">,</span> <span class="n">transformed_target_reward</span><span class="p">)</span>
+        <span class="n">target_value_categorical</span> <span class="o">=</span> <span class="n">phi_transform</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">value_support</span><span class="p">,</span> <span class="n">transformed_target_value</span><span class="p">)</span>
+
+        <span class="c1"># Prepare batch for GPT model</span>
+        <span class="n">batch_for_gpt</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;observations&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">((</span><span class="n">obs_batch</span><span class="p">,</span> <span class="n">obs_target_batch</span><span class="p">),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+            <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;observations&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">((</span><span class="n">obs_batch</span><span class="p">,</span> <span class="n">obs_target_batch</span><span class="p">),</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">)</span>
+
+        <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;actions&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">action_batch</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;timestep&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">timestep_batch</span><span class="o">.</span><span class="n">squeeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;rewards&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_reward_categorical</span><span class="p">[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;mask_padding&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mask_batch</span> <span class="o">==</span> <span class="mf">1.0</span>  <span class="c1"># 0 means invalid padding data</span>
+        <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;mask_padding&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;mask_padding&#39;</span><span class="p">][:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;observations&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;observations&#39;</span><span class="p">][:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;ends&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;mask_padding&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">long</span><span class="p">,</span>
+                                            <span class="n">device</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;target_value&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_value_categorical</span><span class="p">[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;target_policy&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">target_policy</span><span class="p">[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+        <span class="c1"># Extract valid target policy data and compute entropy</span>
+        <span class="n">valid_target_policy</span> <span class="o">=</span> <span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;target_policy&#39;</span><span class="p">][</span><span class="n">batch_for_gpt</span><span class="p">[</span><span class="s1">&#39;mask_padding&#39;</span><span class="p">]]</span>
+        <span class="n">target_policy_entropy</span> <span class="o">=</span> <span class="o">-</span><span class="n">torch</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">valid_target_policy</span> <span class="o">*</span> <span class="n">torch</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">valid_target_policy</span> <span class="o">+</span> <span class="mf">1e-9</span><span class="p">),</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">average_target_policy_entropy</span> <span class="o">=</span> <span class="n">target_policy_entropy</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+
+        <span class="c1"># Update world model</span>
+        <span class="n">losses</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">compute_loss</span><span class="p">(</span>
+            <span class="n">batch_for_gpt</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">inverse_scalar_transform_handle</span>
+        <span class="p">)</span>
+
+        <span class="n">weighted_total_loss</span> <span class="o">=</span> <span class="n">losses</span><span class="o">.</span><span class="n">loss_total</span>
+        <span class="k">for</span> <span class="n">loss_name</span><span class="p">,</span> <span class="n">loss_value</span> <span class="ow">in</span> <span class="n">losses</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">loss_name</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">loss_value</span>
+
+        <span class="n">obs_loss</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;loss_obs&#39;</span><span class="p">]</span>
+        <span class="n">reward_loss</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;loss_rewards&#39;</span><span class="p">]</span>
+        <span class="n">policy_loss</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;loss_policy&#39;</span><span class="p">]</span>
+        <span class="n">value_loss</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;loss_value&#39;</span><span class="p">]</span>
+        <span class="n">latent_recon_loss</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;latent_recon_loss&#39;</span><span class="p">]</span>
+        <span class="n">perceptual_loss</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;perceptual_loss&#39;</span><span class="p">]</span>
+        <span class="n">orig_policy_loss</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;orig_policy_loss&#39;</span><span class="p">]</span>
+        <span class="n">policy_entropy</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;policy_entropy&#39;</span><span class="p">]</span>
+        <span class="n">first_step_losses</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;first_step_losses&#39;</span><span class="p">]</span>
+        <span class="n">middle_step_losses</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;middle_step_losses&#39;</span><span class="p">]</span>
+        <span class="n">last_step_losses</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;last_step_losses&#39;</span><span class="p">]</span>
+        <span class="n">dormant_ratio_encoder</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;dormant_ratio_encoder&#39;</span><span class="p">]</span>
+        <span class="n">dormant_ratio_world_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;dormant_ratio_world_model&#39;</span><span class="p">]</span>
+        <span class="n">latent_state_l2_norms</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">intermediate_losses</span><span class="p">[</span><span class="s1">&#39;latent_state_l2_norms&#39;</span><span class="p">]</span>
+
+        <span class="k">assert</span> <span class="ow">not</span> <span class="n">torch</span><span class="o">.</span><span class="n">isnan</span><span class="p">(</span><span class="n">losses</span><span class="o">.</span><span class="n">loss_total</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">(),</span> <span class="s2">&quot;Loss contains NaN values&quot;</span>
+        <span class="k">assert</span> <span class="ow">not</span> <span class="n">torch</span><span class="o">.</span><span class="n">isinf</span><span class="p">(</span><span class="n">losses</span><span class="o">.</span><span class="n">loss_total</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">(),</span> <span class="s2">&quot;Loss contains Inf values&quot;</span>
+
+        <span class="c1"># Core learning model update step</span>
+        <span class="c1"># Reset gradients at the start of each accumulation cycle</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">train_iter</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">accumulation_steps</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+
+        <span class="c1"># Scale the loss by the number of accumulation steps</span>
+        <span class="n">weighted_total_loss</span> <span class="o">=</span> <span class="n">weighted_total_loss</span> <span class="o">/</span> <span class="bp">self</span><span class="o">.</span><span class="n">accumulation_steps</span>
+        <span class="n">weighted_total_loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+
+        <span class="c1"># Check if the current iteration completes an accumulation cycle</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">train_iter</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="bp">self</span><span class="o">.</span><span class="n">accumulation_steps</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="c1"># Analyze gradient norms if simulation normalization analysis is enabled</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">analysis_sim_norm</span><span class="p">:</span>
+                <span class="c1"># Clear previous analysis results to prevent memory overflow</span>
+                <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_after</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_after</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_after</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_before</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_after</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">encoder_hook</span><span class="o">.</span><span class="n">analyze</span><span class="p">()</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">encoder_hook</span><span class="o">.</span><span class="n">clear_data</span><span class="p">()</span>
+            
+            <span class="c1"># Clip gradients to prevent exploding gradients</span>
+            <span class="n">total_grad_norm_before_clip_wm</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">clip_grad_norm_</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">grad_clip_value</span>
+            <span class="p">)</span>
+
+            <span class="c1"># Synchronize gradients across multiple GPUs if enabled</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">multi_gpu</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">sync_gradients</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="p">)</span>
+
+            <span class="c1"># Update model parameters</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+
+            <span class="c1"># Clear CUDA cache if using gradient accumulation</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">accumulation_steps</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">total_grad_norm_before_clip_wm</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">(</span><span class="mf">0.</span><span class="p">)</span>
+
+        <span class="c1"># Update learning rate scheduler if applicable</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">cos_lr_scheduler</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">piecewise_decay_lr_scheduler</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">lr_scheduler</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+
+        <span class="c1"># Update the target model with the current model&#39;s parameters</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">state_dict</span><span class="p">())</span>
+
+        <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">():</span>
+            <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">synchronize</span><span class="p">()</span>
+            <span class="n">current_memory_allocated</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">memory_allocated</span><span class="p">()</span>
+            <span class="n">max_memory_allocated</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">max_memory_allocated</span><span class="p">()</span>
+            <span class="n">current_memory_allocated_gb</span> <span class="o">=</span> <span class="n">current_memory_allocated</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span> <span class="o">**</span> <span class="mi">3</span><span class="p">)</span>
+            <span class="n">max_memory_allocated_gb</span> <span class="o">=</span> <span class="n">max_memory_allocated</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1024</span> <span class="o">**</span> <span class="mi">3</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">current_memory_allocated_gb</span> <span class="o">=</span> <span class="mf">0.</span>
+            <span class="n">max_memory_allocated_gb</span> <span class="o">=</span> <span class="mf">0.</span>
+
+        <span class="n">return_log_dict</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s1">&#39;analysis/first_step_loss_value&#39;</span><span class="p">:</span> <span class="n">first_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/first_step_loss_policy&#39;</span><span class="p">:</span> <span class="n">first_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_policy&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/first_step_loss_rewards&#39;</span><span class="p">:</span> <span class="n">first_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_rewards&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/first_step_loss_obs&#39;</span><span class="p">:</span> <span class="n">first_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_obs&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+
+            <span class="s1">&#39;analysis/middle_step_loss_value&#39;</span><span class="p">:</span> <span class="n">middle_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/middle_step_loss_policy&#39;</span><span class="p">:</span> <span class="n">middle_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_policy&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/middle_step_loss_rewards&#39;</span><span class="p">:</span> <span class="n">middle_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_rewards&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/middle_step_loss_obs&#39;</span><span class="p">:</span> <span class="n">middle_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_obs&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+
+            <span class="s1">&#39;analysis/last_step_loss_value&#39;</span><span class="p">:</span> <span class="n">last_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_value&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/last_step_loss_policy&#39;</span><span class="p">:</span> <span class="n">last_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_policy&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/last_step_loss_rewards&#39;</span><span class="p">:</span> <span class="n">last_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_rewards&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/last_step_loss_obs&#39;</span><span class="p">:</span> <span class="n">last_step_losses</span><span class="p">[</span><span class="s1">&#39;loss_obs&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+
+            <span class="s1">&#39;Current_GPU&#39;</span><span class="p">:</span> <span class="n">current_memory_allocated_gb</span><span class="p">,</span>
+            <span class="s1">&#39;Max_GPU&#39;</span><span class="p">:</span> <span class="n">max_memory_allocated_gb</span><span class="p">,</span>
+            <span class="s1">&#39;collect_mcts_temperature&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span><span class="p">,</span>
+            <span class="s1">&#39;collect_epsilon&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_epsilon</span><span class="p">,</span>
+            <span class="s1">&#39;cur_lr_world_model&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="o">.</span><span class="n">param_groups</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;lr&#39;</span><span class="p">],</span>
+            <span class="s1">&#39;weighted_total_loss&#39;</span><span class="p">:</span> <span class="n">weighted_total_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;obs_loss&#39;</span><span class="p">:</span> <span class="n">obs_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;latent_recon_loss&#39;</span><span class="p">:</span> <span class="n">latent_recon_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;perceptual_loss&#39;</span><span class="p">:</span> <span class="n">perceptual_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;policy_loss&#39;</span><span class="p">:</span> <span class="n">policy_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;orig_policy_loss&#39;</span><span class="p">:</span> <span class="n">orig_policy_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;policy_entropy&#39;</span><span class="p">:</span> <span class="n">policy_entropy</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;target_policy_entropy&#39;</span><span class="p">:</span> <span class="n">average_target_policy_entropy</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;reward_loss&#39;</span><span class="p">:</span> <span class="n">reward_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;value_loss&#39;</span><span class="p">:</span> <span class="n">value_loss</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="c1"># &#39;value_priority_orig&#39;: np.zeros(self._cfg.batch_size),  # TODO</span>
+            <span class="s1">&#39;target_reward&#39;</span><span class="p">:</span> <span class="n">target_reward</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;target_value&#39;</span><span class="p">:</span> <span class="n">target_value</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;transformed_target_reward&#39;</span><span class="p">:</span> <span class="n">transformed_target_reward</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;transformed_target_value&#39;</span><span class="p">:</span> <span class="n">transformed_target_value</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;total_grad_norm_before_clip_wm&#39;</span><span class="p">:</span> <span class="n">total_grad_norm_before_clip_wm</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/dormant_ratio_encoder&#39;</span><span class="p">:</span> <span class="n">dormant_ratio_encoder</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/dormant_ratio_world_model&#39;</span><span class="p">:</span> <span class="n">dormant_ratio_world_model</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/latent_state_l2_norms&#39;</span><span class="p">:</span> <span class="n">latent_state_l2_norms</span><span class="o">.</span><span class="n">item</span><span class="p">(),</span>
+            <span class="s1">&#39;analysis/l2_norm_before&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_before</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/l2_norm_after&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">l2_norm_after</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/grad_norm_before&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_before</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/grad_norm_after&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">grad_norm_after</span><span class="p">,</span>
+        <span class="p">}</span>
+        
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">use_wandb</span><span class="p">:</span>
+            <span class="n">wandb</span><span class="o">.</span><span class="n">log</span><span class="p">({</span><span class="s1">&#39;learner_step/&#39;</span> <span class="o">+</span> <span class="n">k</span><span class="p">:</span> <span class="n">v</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">return_log_dict</span><span class="o">.</span><span class="n">items</span><span class="p">()},</span> <span class="n">step</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">env_step</span><span class="p">)</span>
+            <span class="n">wandb</span><span class="o">.</span><span class="n">log</span><span class="p">({</span><span class="s2">&quot;learner_iter_vs_env_step&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">train_iter</span><span class="p">},</span> <span class="n">step</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">env_step</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">return_log_dict</span></div>
+
+<div class="viewcode-block" id="UniZeroPolicy.monitor_weights_and_grads"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy.monitor_weights_and_grads">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">monitor_weights_and_grads</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">param</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">named_parameters</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">param</span><span class="o">.</span><span class="n">requires_grad</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Layer: </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> | &quot;</span>
+                      <span class="sa">f</span><span class="s2">&quot;Weight mean: </span><span class="si">{</span><span class="n">param</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> | &quot;</span>
+                      <span class="sa">f</span><span class="s2">&quot;Weight std: </span><span class="si">{</span><span class="n">param</span><span class="o">.</span><span class="n">data</span><span class="o">.</span><span class="n">std</span><span class="p">()</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> | &quot;</span>
+                      <span class="sa">f</span><span class="s2">&quot;Grad mean: </span><span class="si">{</span><span class="n">param</span><span class="o">.</span><span class="n">grad</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> | &quot;</span>
+                      <span class="sa">f</span><span class="s2">&quot;Grad std: </span><span class="si">{</span><span class="n">param</span><span class="o">.</span><span class="n">grad</span><span class="o">.</span><span class="n">std</span><span class="p">()</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="UniZeroPolicy._init_collect"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._init_collect">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_init_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Collect mode init method. Called by ``self.__init__``. Initialize the collect model and MCTS utils.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_model</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts_ctree</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_collect</span> <span class="o">=</span> <span class="n">MCTSCtree</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_collect</span> <span class="o">=</span> <span class="n">MCTSPtree</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span> <span class="o">=</span> <span class="mf">1.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_collect_epsilon</span> <span class="o">=</span> <span class="mf">0.0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">collector_env_num</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">model_type</span> <span class="o">==</span> <span class="s1">&#39;conv&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">])</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">)]</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">model_type</span> <span class="o">==</span> <span class="s1">&#39;mlp&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">])</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">)]</span></div>
+
+    <span class="c1"># @profile</span>
+<div class="viewcode-block" id="UniZeroPolicy._forward_collect"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._forward_collect">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_collect</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">data</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
+            <span class="n">action_mask</span><span class="p">:</span> <span class="n">List</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="n">temperature</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="n">to_play</span><span class="p">:</span> <span class="n">List</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span>
+            <span class="n">epsilon</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.25</span><span class="p">,</span>
+            <span class="n">ready_env_id</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+            <span class="n">timestep</span><span class="p">:</span> <span class="n">List</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            The forward function for collecting data in collect mode. Use model to execute MCTS search.</span>
+<span class="sd">            Choosing the action through sampling during the collect mode.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - data (:obj:`torch.Tensor`): The input data, i.e. the observation.</span>
+<span class="sd">            - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.</span>
+<span class="sd">            - temperature (:obj:`float`): The temperature of the policy.</span>
+<span class="sd">            - to_play (:obj:`int`): The player to play.</span>
+<span class="sd">            - ready_env_id (:obj:`list`): The id of the env that is ready to collect.</span>
+<span class="sd">            - timestep (:obj:`list`): The step index of the env in one episode.</span>
+<span class="sd">        Shape:</span>
+<span class="sd">            - data (:obj:`torch.Tensor`):</span>
+<span class="sd">                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \</span>
+<span class="sd">                    S is the number of stacked frames, H is the height of the image, W is the width of the image.</span>
+<span class="sd">                - For lunarlander, :math:`(N, O)`, where N is the number of collect_env, O is the observation space size.</span>
+<span class="sd">            - action_mask: :math:`(N, action_space_size)`, where N is the number of collect_env.</span>
+<span class="sd">            - temperature: :math:`(1, )`.</span>
+<span class="sd">            - to_play: :math:`(N, 1)`, where N is the number of collect_env.</span>
+<span class="sd">            - ready_env_id: None</span>
+<span class="sd">            - timestep: :math:`(N, 1)`, where N is the number of collect_env.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \</span>
+<span class="sd">                ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span> <span class="o">=</span> <span class="n">temperature</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_collect_epsilon</span> <span class="o">=</span> <span class="n">epsilon</span>
+        <span class="n">active_collect_env_num</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">ready_env_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
+
+        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+            <span class="n">network_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="o">.</span><span class="n">initial_inference</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
+            <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">reward_roots</span><span class="p">,</span> <span class="n">pred_values</span><span class="p">,</span> <span class="n">policy_logits</span> <span class="o">=</span> <span class="n">mz_network_output_unpack</span><span class="p">(</span><span class="n">network_output</span><span class="p">)</span>
+
+            <span class="n">pred_values</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">inverse_scalar_transform_handle</span><span class="p">(</span><span class="n">pred_values</span><span class="p">)</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+            <span class="n">latent_state_roots</span> <span class="o">=</span> <span class="n">latent_state_roots</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+            <span class="n">policy_logits</span> <span class="o">=</span> <span class="n">policy_logits</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+
+            <span class="n">legal_actions</span> <span class="o">=</span> <span class="p">[[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">j</span><span class="p">])</span> <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">)]</span>
+            <span class="c1"># the only difference between collect and eval is the dirichlet noise</span>
+            <span class="n">noises</span> <span class="o">=</span> <span class="p">[</span>
+                <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">dirichlet</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">root_dirichlet_alpha</span><span class="p">]</span> <span class="o">*</span> <span class="nb">int</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">j</span><span class="p">]))</span>
+                                    <span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">)</span>
+            <span class="p">]</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts_ctree</span><span class="p">:</span>
+                <span class="c1"># cpp mcts_tree</span>
+                <span class="n">roots</span> <span class="o">=</span> <span class="n">MCTSCtree</span><span class="o">.</span><span class="n">roots</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># python mcts_tree</span>
+                <span class="n">roots</span> <span class="o">=</span> <span class="n">MCTSPtree</span><span class="o">.</span><span class="n">roots</span><span class="p">(</span><span class="n">active_collect_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
+
+            <span class="n">roots</span><span class="o">.</span><span class="n">prepare</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">root_noise_weight</span><span class="p">,</span> <span class="n">noises</span><span class="p">,</span> <span class="n">reward_roots</span><span class="p">,</span> <span class="n">policy_logits</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_collect</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">to_play</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
+
+            <span class="c1"># list of list, shape: ``{list: batch_size} -&gt; {list: action_space_size}``</span>
+            <span class="n">roots_visit_count_distributions</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_distributions</span><span class="p">()</span>
+            <span class="n">roots_values</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_values</span><span class="p">()</span>  <span class="c1"># shape: {list: batch_size}</span>
+
+            <span class="n">batch_action</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">):</span>
+                <span class="n">distributions</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">roots_visit_count_distributions</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">roots_values</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">eps</span><span class="o">.</span><span class="n">eps_greedy_exploration_in_collect</span><span class="p">:</span>
+                    <span class="c1"># eps greedy collect</span>
+                    <span class="n">action_index_in_legal_action_set</span><span class="p">,</span> <span class="n">visit_count_distribution_entropy</span> <span class="o">=</span> <span class="n">select_action</span><span class="p">(</span>
+                        <span class="n">distributions</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span><span class="p">,</span> <span class="n">deterministic</span><span class="o">=</span><span class="kc">True</span>
+                    <span class="p">)</span>
+                    <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.0</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="n">action_index_in_legal_action_set</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">rand</span><span class="p">()</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_epsilon</span><span class="p">:</span>
+                        <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">legal_actions</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># normal collect</span>
+                    <span class="c1"># NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents</span>
+                    <span class="c1"># the index within the legal action set, rather than the index in the entire action set.</span>
+                    <span class="n">action_index_in_legal_action_set</span><span class="p">,</span> <span class="n">visit_count_distribution_entropy</span> <span class="o">=</span> <span class="n">select_action</span><span class="p">(</span>
+                        <span class="n">distributions</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_collect_mcts_temperature</span><span class="p">,</span> <span class="n">deterministic</span><span class="o">=</span><span class="kc">False</span>
+                    <span class="p">)</span>
+                    <span class="c1"># NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the entire action set.</span>
+                    <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.0</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="n">action_index_in_legal_action_set</span><span class="p">]</span>
+
+                <span class="c1"># ============== TODO: only for visualize ==============</span>
+                <span class="c1"># action_index_in_legal_action_set, visit_count_distribution_entropy = select_action(</span>
+                <span class="c1">#     distributions, temperature=self._collect_mcts_temperature, deterministic=True</span>
+                <span class="c1"># )</span>
+                <span class="c1"># action = np.where(action_mask[i] == 1.0)[0][action_index_in_legal_action_set]</span>
+                <span class="c1"># ============== TODO: only for visualize ==============</span>
+
+                <span class="n">output</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                    <span class="s1">&#39;action&#39;</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>
+                    <span class="s1">&#39;visit_count_distributions&#39;</span><span class="p">:</span> <span class="n">distributions</span><span class="p">,</span>
+                    <span class="s1">&#39;visit_count_distribution_entropy&#39;</span><span class="p">:</span> <span class="n">visit_count_distribution_entropy</span><span class="p">,</span>
+                    <span class="s1">&#39;searched_value&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">,</span>
+                    <span class="s1">&#39;predicted_value&#39;</span><span class="p">:</span> <span class="n">pred_values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                    <span class="s1">&#39;predicted_policy_logits&#39;</span><span class="p">:</span> <span class="n">policy_logits</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                    <span class="s1">&#39;timestep&#39;</span><span class="p">:</span> <span class="n">timestep</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                <span class="p">}</span>
+                <span class="n">batch_action</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs</span> <span class="o">=</span> <span class="n">data</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span> <span class="o">=</span> <span class="n">batch_action</span>
+
+            <span class="c1"># ========= TODO: for muzero_segment_collector now =========</span>
+            <span class="k">if</span> <span class="n">active_collect_env_num</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">:</span>
+                <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;==========collect_forward============&#39;</span><span class="p">)</span>
+                <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;len(self.last_batch_obs) &lt; self.collector_env_num, </span><span class="si">{</span><span class="n">active_collect_env_num</span><span class="si">}</span><span class="s1">&lt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">collector_env_num</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_reset_collect</span><span class="p">(</span><span class="n">reset_init_data</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+                <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">,</span> <span class="s1">&#39;sample_type&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;episode&#39;</span><span class="p">:</span>
+                    <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;BUG: sample_type is episode, but len(self.last_batch_obs) &lt; self.collector_env_num&#39;</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">output</span></div>
+
+<div class="viewcode-block" id="UniZeroPolicy._init_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._init_eval">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_init_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Evaluate mode init method. Called by ``self.__init__``. Initialize the eval model and MCTS utils.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_model</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts_ctree</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_eval</span> <span class="o">=</span> <span class="n">MCTSCtree</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_eval</span> <span class="o">=</span> <span class="n">MCTSPtree</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">evaluator_env_num</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">evaluator_env_num</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">model_type</span> <span class="o">==</span> <span class="s1">&#39;conv&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">evaluator_env_num</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">])</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">evaluator_env_num</span><span class="p">)]</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">model_type</span> <span class="o">==</span> <span class="s1">&#39;mlp&#39;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros</span><span class="p">([</span><span class="bp">self</span><span class="o">.</span><span class="n">evaluator_env_num</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">])</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">evaluator_env_num</span><span class="p">)]</span></div>
+
+<div class="viewcode-block" id="UniZeroPolicy._forward_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._forward_eval">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_forward_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">data</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">action_mask</span><span class="p">:</span> <span class="nb">list</span><span class="p">,</span> <span class="n">to_play</span><span class="p">:</span> <span class="n">List</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span>
+                      <span class="n">ready_env_id</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">timestep</span><span class="p">:</span> <span class="n">List</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.</span>
+<span class="sd">            Choosing the action with the highest value (argmax) rather than sampling during the eval mode.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - data (:obj:`torch.Tensor`): The input data, i.e. the observation.</span>
+<span class="sd">            - action_mask (:obj:`list`): The action mask, i.e. the action that cannot be selected.</span>
+<span class="sd">            - to_play (:obj:`int`): The player to play.</span>
+<span class="sd">            - ready_env_id (:obj:`list`): The id of the env that is ready to eval.</span>
+<span class="sd">            - timestep (:obj:`list`): The step index of the env in one episode.</span>
+<span class="sd">        Shape:</span>
+<span class="sd">            - data (:obj:`torch.Tensor`):</span>
+<span class="sd">                - For Atari, :math:`(N, C*S, H, W)`, where N is the number of eval_env, C is the number of channels, \</span>
+<span class="sd">                    S is the number of stacked frames, H is the height of the image, W is the width of the image.</span>
+<span class="sd">                - For lunarlander, :math:`(N, O)`, where N is the number of eval_env, O is the observation space size.</span>
+<span class="sd">            - action_mask: :math:`(N, action_space_size)`, where N is the number of eval_env.</span>
+<span class="sd">            - to_play: :math:`(N, 1)`, where N is the number of eval_env.</span>
+<span class="sd">            - ready_env_id: None</span>
+<span class="sd">            - timestep: :math:`(N, 1)`, where N is the number of eval_env.</span>
+
+<span class="sd">        Returns:</span>
+<span class="sd">            - output (:obj:`Dict[int, Any]`): Dict type data, the keys including ``action``, ``distributions``, \</span>
+<span class="sd">                ``visit_count_distribution_entropy``, ``value``, ``pred_value``, ``policy_logits``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+        <span class="n">active_eval_env_num</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">ready_env_id</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">ready_env_id</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">active_eval_env_num</span><span class="p">)</span>
+        <span class="n">output</span> <span class="o">=</span> <span class="p">{</span><span class="n">i</span><span class="p">:</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ready_env_id</span><span class="p">}</span>
+        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+            <span class="n">network_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="o">.</span><span class="n">initial_inference</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
+            <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">reward_roots</span><span class="p">,</span> <span class="n">pred_values</span><span class="p">,</span> <span class="n">policy_logits</span> <span class="o">=</span> <span class="n">mz_network_output_unpack</span><span class="p">(</span><span class="n">network_output</span><span class="p">)</span>
+
+            <span class="c1"># if not in training, obtain the scalars of the value/reward</span>
+            <span class="n">pred_values</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">inverse_scalar_transform_handle</span><span class="p">(</span><span class="n">pred_values</span><span class="p">)</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>  <span class="c1"># shape（B, 1）</span>
+            <span class="n">latent_state_roots</span> <span class="o">=</span> <span class="n">latent_state_roots</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+            <span class="n">policy_logits</span> <span class="o">=</span> <span class="n">policy_logits</span><span class="o">.</span><span class="n">detach</span><span class="p">()</span><span class="o">.</span><span class="n">cpu</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>  <span class="c1"># list shape（B, A）</span>
+
+            <span class="n">legal_actions</span> <span class="o">=</span> <span class="p">[[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">x</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">j</span><span class="p">])</span> <span class="k">if</span> <span class="n">x</span> <span class="o">==</span> <span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">active_eval_env_num</span><span class="p">)]</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">mcts_ctree</span><span class="p">:</span>
+                <span class="c1"># cpp mcts_tree</span>
+                <span class="n">roots</span> <span class="o">=</span> <span class="n">MCTSCtree</span><span class="o">.</span><span class="n">roots</span><span class="p">(</span><span class="n">active_eval_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># python mcts_tree</span>
+                <span class="n">roots</span> <span class="o">=</span> <span class="n">MCTSPtree</span><span class="o">.</span><span class="n">roots</span><span class="p">(</span><span class="n">active_eval_env_num</span><span class="p">,</span> <span class="n">legal_actions</span><span class="p">)</span>
+            <span class="n">roots</span><span class="o">.</span><span class="n">prepare_no_noise</span><span class="p">(</span><span class="n">reward_roots</span><span class="p">,</span> <span class="n">policy_logits</span><span class="p">,</span> <span class="n">to_play</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_mcts_eval</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">roots</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="p">,</span> <span class="n">latent_state_roots</span><span class="p">,</span> <span class="n">to_play</span><span class="p">,</span> <span class="n">timestep</span><span class="p">)</span>
+
+            <span class="c1"># list of list, shape: ``{list: batch_size} -&gt; {list: action_space_size}``</span>
+            <span class="n">roots_visit_count_distributions</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_distributions</span><span class="p">()</span>
+            <span class="n">roots_values</span> <span class="o">=</span> <span class="n">roots</span><span class="o">.</span><span class="n">get_values</span><span class="p">()</span>  <span class="c1"># shape: {list: batch_size}</span>
+
+            <span class="n">batch_action</span> <span class="o">=</span> <span class="p">[]</span>
+
+            <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">env_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">ready_env_id</span><span class="p">):</span>
+                <span class="n">distributions</span><span class="p">,</span> <span class="n">value</span> <span class="o">=</span> <span class="n">roots_visit_count_distributions</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="n">roots_values</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                <span class="c1"># print(&quot;roots_visit_count_distributions:&quot;, distributions, &quot;root_value:&quot;, value)</span>
+
+                <span class="c1"># NOTE: Only legal actions possess visit counts, so the ``action_index_in_legal_action_set`` represents</span>
+                <span class="c1"># the index within the legal action set, rather than the index in the entire action set.</span>
+                <span class="c1">#  Setting deterministic=True implies choosing the action with the highest value (argmax) rather than</span>
+                <span class="c1"># sampling during the evaluation phase.</span>
+                <span class="n">action_index_in_legal_action_set</span><span class="p">,</span> <span class="n">visit_count_distribution_entropy</span> <span class="o">=</span> <span class="n">select_action</span><span class="p">(</span>
+                    <span class="n">distributions</span><span class="p">,</span> <span class="n">temperature</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">deterministic</span><span class="o">=</span><span class="kc">True</span>
+                <span class="p">)</span>
+                <span class="c1"># NOTE: Convert the ``action_index_in_legal_action_set`` to the corresponding ``action`` in the</span>
+                <span class="c1"># entire action set.</span>
+                <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">where</span><span class="p">(</span><span class="n">action_mask</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.0</span><span class="p">)[</span><span class="mi">0</span><span class="p">][</span><span class="n">action_index_in_legal_action_set</span><span class="p">]</span>
+
+                <span class="n">output</span><span class="p">[</span><span class="n">env_id</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span>
+                    <span class="s1">&#39;action&#39;</span><span class="p">:</span> <span class="n">action</span><span class="p">,</span>
+                    <span class="s1">&#39;visit_count_distributions&#39;</span><span class="p">:</span> <span class="n">distributions</span><span class="p">,</span>
+                    <span class="s1">&#39;visit_count_distribution_entropy&#39;</span><span class="p">:</span> <span class="n">visit_count_distribution_entropy</span><span class="p">,</span>
+                    <span class="s1">&#39;searched_value&#39;</span><span class="p">:</span> <span class="n">value</span><span class="p">,</span>
+                    <span class="s1">&#39;predicted_value&#39;</span><span class="p">:</span> <span class="n">pred_values</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                    <span class="s1">&#39;predicted_policy_logits&#39;</span><span class="p">:</span> <span class="n">policy_logits</span><span class="p">[</span><span class="n">i</span><span class="p">],</span>
+                    <span class="s1">&#39;timestep&#39;</span><span class="p">:</span> <span class="n">timestep</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+                <span class="p">}</span>
+                <span class="n">batch_action</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs</span> <span class="o">=</span> <span class="n">data</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span> <span class="o">=</span> <span class="n">batch_action</span>
+
+        <span class="k">return</span> <span class="n">output</span></div>
+
+<div class="viewcode-block" id="UniZeroPolicy._reset_collect"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._reset_collect">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_reset_collect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">current_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">reset_init_data</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            This method resets the collection process for a specific environment. It clears caches and memory</span>
+<span class="sd">            when certain conditions are met, ensuring optimal performance. If reset_init_data is True, the initial data</span>
+<span class="sd">            will be reset.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - env_id (:obj:`int`, optional): The ID of the environment to reset. If None or list, the function returns immediately.</span>
+<span class="sd">            - current_steps (:obj:`int`, optional): The current step count in the environment. Used to determine</span>
+<span class="sd">              whether to clear caches.</span>
+<span class="sd">            - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">reset_init_data</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs</span> <span class="o">=</span> <span class="n">initialize_zeros_batch</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">collector_env_num</span><span class="p">)]</span>
+
+        <span class="c1"># Return immediately if env_id is None or a list</span>
+        <span class="k">if</span> <span class="n">env_id</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">env_id</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="k">return</span>
+
+        <span class="c1"># Determine the clear interval based on the environment&#39;s sample type</span>
+        <span class="n">clear_interval</span> <span class="o">=</span> <span class="mi">2000</span> <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">,</span> <span class="s1">&#39;sample_type&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;episode&#39;</span> <span class="k">else</span> <span class="mi">200</span>
+
+        <span class="c1"># Clear caches if the current steps are a multiple of the clear interval</span>
+        <span class="k">if</span> <span class="n">current_steps</span> <span class="o">%</span> <span class="n">clear_interval</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;clear_interval: </span><span class="si">{</span><span class="n">clear_interval</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+            <span class="c1"># Clear various caches in the collect model&#39;s world model</span>
+            <span class="n">world_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="o">.</span><span class="n">world_model</span>
+            <span class="k">for</span> <span class="n">kv_cache_dict_env</span> <span class="ow">in</span> <span class="n">world_model</span><span class="o">.</span><span class="n">past_kv_cache_init_infer_envs</span><span class="p">:</span>
+                <span class="n">kv_cache_dict_env</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="n">world_model</span><span class="o">.</span><span class="n">past_kv_cache_recurrent_infer</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="n">world_model</span><span class="o">.</span><span class="n">keys_values_wm_list</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+
+            <span class="c1"># Free up GPU memory</span>
+            <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
+
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;collector: collect_model clear()&#39;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;eps_steps_lst[</span><span class="si">{</span><span class="n">env_id</span><span class="si">}</span><span class="s1">]: </span><span class="si">{</span><span class="n">current_steps</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="UniZeroPolicy._reset_eval"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._reset_eval">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_reset_eval</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env_id</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">current_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">reset_init_data</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            This method resets the evaluation process for a specific environment. It clears caches and memory</span>
+<span class="sd">            when certain conditions are met, ensuring optimal performance. If reset_init_data is True,</span>
+<span class="sd">            the initial data will be reset.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - env_id (:obj:`int`, optional): The ID of the environment to reset. If None or list, the function returns immediately.</span>
+<span class="sd">            - current_steps (:obj:`int`, optional): The current step count in the environment. Used to determine</span>
+<span class="sd">              whether to clear caches.</span>
+<span class="sd">            - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">reset_init_data</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_obs</span> <span class="o">=</span> <span class="n">initialize_zeros_batch</span><span class="p">(</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">observation_shape</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">evaluator_env_num</span><span class="p">,</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">device</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_batch_action</span> <span class="o">=</span> <span class="p">[</span><span class="o">-</span><span class="mi">1</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">evaluator_env_num</span><span class="p">)]</span>
+
+        <span class="c1"># Return immediately if env_id is None or a list</span>
+        <span class="k">if</span> <span class="n">env_id</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">env_id</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="k">return</span>
+
+        <span class="c1"># Determine the clear interval based on the environment&#39;s sample type</span>
+        <span class="n">clear_interval</span> <span class="o">=</span> <span class="mi">2000</span> <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="p">,</span> <span class="s1">&#39;sample_type&#39;</span><span class="p">,</span> <span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="o">==</span> <span class="s1">&#39;episode&#39;</span> <span class="k">else</span> <span class="mi">200</span>
+
+        <span class="c1"># Clear caches if the current steps are a multiple of the clear interval</span>
+        <span class="k">if</span> <span class="n">current_steps</span> <span class="o">%</span> <span class="n">clear_interval</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;clear_interval: </span><span class="si">{</span><span class="n">clear_interval</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span>
+
+            <span class="c1"># Clear various caches in the eval model&#39;s world model</span>
+            <span class="n">world_model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_eval_model</span><span class="o">.</span><span class="n">world_model</span>
+            <span class="k">for</span> <span class="n">kv_cache_dict_env</span> <span class="ow">in</span> <span class="n">world_model</span><span class="o">.</span><span class="n">past_kv_cache_init_infer_envs</span><span class="p">:</span>
+                <span class="n">kv_cache_dict_env</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="n">world_model</span><span class="o">.</span><span class="n">past_kv_cache_recurrent_infer</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+            <span class="n">world_model</span><span class="o">.</span><span class="n">keys_values_wm_list</span><span class="o">.</span><span class="n">clear</span><span class="p">()</span>
+
+            <span class="c1"># Free up GPU memory</span>
+            <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span>
+
+            <span class="nb">print</span><span class="p">(</span><span class="s1">&#39;evaluator: eval_model clear()&#39;</span><span class="p">)</span>
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s1">&#39;eps_steps_lst[</span><span class="si">{</span><span class="n">env_id</span><span class="si">}</span><span class="s1">]: </span><span class="si">{</span><span class="n">current_steps</span><span class="si">}</span><span class="s1">&#39;</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="UniZeroPolicy._monitor_vars_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._monitor_vars_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_monitor_vars_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Register the variables to be monitored in learn mode. The registered variables will be logged in</span>
+<span class="sd">            tensorboard according to the return value ``_forward_learn``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="s1">&#39;analysis/dormant_ratio_encoder&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/dormant_ratio_world_model&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/latent_state_l2_norms&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/l2_norm_before&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/l2_norm_after&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/grad_norm_before&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/grad_norm_after&#39;</span><span class="p">,</span>
+
+            <span class="s1">&#39;analysis/first_step_loss_value&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/first_step_loss_policy&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/first_step_loss_rewards&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/first_step_loss_obs&#39;</span><span class="p">,</span>
+
+            <span class="s1">&#39;analysis/middle_step_loss_value&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/middle_step_loss_policy&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/middle_step_loss_rewards&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/middle_step_loss_obs&#39;</span><span class="p">,</span>
+
+            <span class="s1">&#39;analysis/last_step_loss_value&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/last_step_loss_policy&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/last_step_loss_rewards&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;analysis/last_step_loss_obs&#39;</span><span class="p">,</span>
+
+            <span class="s1">&#39;Current_GPU&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;Max_GPU&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;collect_epsilon&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;collect_mcts_temperature&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;cur_lr_world_model&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;cur_lr_tokenizer&#39;</span><span class="p">,</span>
+
+            <span class="s1">&#39;weighted_total_loss&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;obs_loss&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;policy_loss&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;orig_policy_loss&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;policy_entropy&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;latent_recon_loss&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;target_policy_entropy&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;reward_loss&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;value_loss&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;consistency_loss&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;value_priority&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;target_reward&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;target_value&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;total_grad_norm_before_clip_wm&#39;</span><span class="p">,</span>
+            <span class="c1"># tokenizer</span>
+            <span class="s1">&#39;commitment_loss&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;reconstruction_loss&#39;</span><span class="p">,</span>
+            <span class="s1">&#39;perceptual_loss&#39;</span><span class="p">,</span>
+        <span class="p">]</span></div>
+
+<div class="viewcode-block" id="UniZeroPolicy._state_dict_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._state_dict_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_state_dict_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Return the state_dict of learn mode, usually including model, target_model and optimizer.</span>
+<span class="sd">        Returns:</span>
+<span class="sd">            - state_dict (:obj:`Dict[str, Any]`): The dict of current policy learn state, for saving and restoring.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">{</span>
+            <span class="s1">&#39;model&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">state_dict</span><span class="p">(),</span>
+            <span class="s1">&#39;target_model&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">state_dict</span><span class="p">(),</span>
+            <span class="s1">&#39;optimizer_world_model&#39;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="o">.</span><span class="n">state_dict</span><span class="p">(),</span>
+        <span class="p">}</span></div>
+
+<div class="viewcode-block" id="UniZeroPolicy._load_state_dict_learn"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy._load_state_dict_learn">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">_load_state_dict_learn</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">state_dict</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Load the state_dict variable into policy learn mode.</span>
+<span class="sd">        Arguments:</span>
+<span class="sd">            - state_dict (:obj:`Dict[str, Any]`): The dict of policy learn state saved before.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_learn_model</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">[</span><span class="s1">&#39;model&#39;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">[</span><span class="s1">&#39;target_model&#39;</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_optimizer_world_model</span><span class="o">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">state_dict</span><span class="p">[</span><span class="s1">&#39;optimizer_world_model&#39;</span><span class="p">])</span></div>
+
+<div class="viewcode-block" id="UniZeroPolicy.recompute_pos_emb_diff_and_clear_cache"><a class="viewcode-back" href="../../../api_doc/policy/index.html#lzero.policy.unizero.UniZeroPolicy.recompute_pos_emb_diff_and_clear_cache">[docs]</a>    <span class="k">def</span><span class="w"> </span><span class="nf">recompute_pos_emb_diff_and_clear_cache</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Overview:</span>
+<span class="sd">            Clear the caches and precompute positional embedding matrices in the model.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">model</span> <span class="ow">in</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_collect_model</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_target_model</span><span class="p">]:</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cfg</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">world_model_cfg</span><span class="o">.</span><span class="n">rotary_emb</span><span class="p">:</span>
+                <span class="c1"># If rotary_emb is False, nn.Embedding is used for absolute position encoding.</span>
+                <span class="n">model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">precompute_pos_emb_diff_kv</span><span class="p">()</span>
+            <span class="n">model</span><span class="o">.</span><span class="n">world_model</span><span class="o">.</span><span class="n">clear_caches</span><span class="p">()</span>
+        <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">empty_cache</span><span class="p">()</span></div></div>
+</pre></div>
+
+
+           </div>
+          </div>
+          <footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, OpenDILab Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
