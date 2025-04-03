@@ -411,14 +411,16 @@ class HFLanguageRepresentationNetwork(nn.Module):
         self.embedding_size = embedding_size
         self.embed_proj_head = nn.Linear(self.model.config.hidden_size, self.embedding_size)
 
-        # Select the normalization method based on the final_norm_option_in_encoder parameter.
-        if final_norm_option_in_encoder.lower() == "simnorm":
-            self.norm = SimNorm(simnorm_dim=group_size)
-        elif final_norm_option_in_encoder.lower() == "layernorm":
-            self.norm = nn.LayerNorm(embedding_size)
-        else:
-            raise NotImplementedError(f"Normalization type '{final_norm_option_in_encoder}' is not implemented. "
-                                      f"Choose 'simnorm' or 'layernorm'.")
+        self.sim_norm = SimNorm(simnorm_dim=group_size)
+
+        # # Select the normalization method based on the final_norm_option_in_encoder parameter.
+        # if final_norm_option_in_encoder.lower() == "simnorm":
+        #     self.norm = SimNorm(simnorm_dim=group_size)
+        # elif final_norm_option_in_encoder.lower() == "layernorm":
+        #     self.norm = nn.LayerNorm(embedding_size)
+        # else:
+        #     raise NotImplementedError(f"Normalization type '{final_norm_option_in_encoder}' is not implemented. "
+        #                               f"Choose 'simnorm' or 'layernorm'.")
 
     def forward(self, x: torch.Tensor, no_grad: bool = True) -> torch.Tensor:
         """
@@ -451,7 +453,10 @@ class HFLanguageRepresentationNetwork(nn.Module):
         # Apply linear projection to obtain the desired output dimension.
         cls_embedding = self.embed_proj_head(cls_embedding)
         # Normalize the embeddings using the selected normalization layer (SimNorm or LayerNorm) to ensure training stability.
-        cls_embedding = self.norm(cls_embedding)
+        # cls_embedding = self.norm(cls_embedding)
+
+        cls_embedding = self.sim_norm(cls_embedding)
+
 
         return cls_embedding
 
