@@ -41,7 +41,7 @@ jobs:
       - name: Upload packed files to artifacts (source)
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts-source
+          name: build-artifacts-wheels-${{ matrix.os }}-${{ matrix.python }}-${{ matrix.architecture }}
           path: ./dist/*
 
   wheel_build:
