@@ -11,6 +11,7 @@ replay_ratio = 0.25
 max_env_step = int(2e5)
 batch_size = 256
 num_unroll_steps = 5
+reanalyze_ratio = 0.
 # ==============================================================
 # end of the most frequently changed config specified by the user
 # ==============================================================
@@ -52,7 +53,7 @@ cartpole_unizero_config = dict(
                 rotary_emb=True,
             ),
         ),
-        use_wandb=True,
+        use_wandb=False,
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
         num_unroll_steps=num_unroll_steps,
@@ -68,6 +69,7 @@ cartpole_unizero_config = dict(
         target_update_freq=100,
         grad_clip_value=5,
         num_simulations=num_simulations,
+        reanalyze_ratio=reanalyze_ratio,
         n_episode=n_episode,
         eval_freq=int(1e3),
         replay_buffer_size=int(1e6),
