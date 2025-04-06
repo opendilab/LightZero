@@ -116,73 +116,73 @@ jobs:
       - name: Create aggregation directory
         run: mkdir -p aggregated_wheels_all
 
-      - name: Download wheel: ubuntu-20.04, 3.7, x86_64
+      - name: Download wheel ubuntu-20.04, 3.7, x86_64
         uses: actions/download-artifact@v3
         with:
           name: build-artifacts-wheels-ubuntu-20.04-3.7-x86_64
           path: aggregated_wheels_all
-      - name: Download wheel: ubuntu-20.04, 3.8, x86_64
+      - name: Download wheel ubuntu-20.04, 3.8, x86_64
         uses: actions/download-artifact@v3
         with:
           name: build-artifacts-wheels-ubuntu-20.04-3.8-x86_64
           path: aggregated_wheels_all
-      - name: Download wheel: ubuntu-20.04, 3.9, x86_64
+      - name: Download wheel ubuntu-20.04, 3.9, x86_64
         uses: actions/download-artifact@v3
         with:
           name: build-artifacts-wheels-ubuntu-20.04-3.9-x86_64
           path: aggregated_wheels_all
-      - name: Download wheel: ubuntu-20.04, 3.10, x86_64
+      - name: Download wheel ubuntu-20.04, 3.10, x86_64
         uses: actions/download-artifact@v3
         with:
           name: build-artifacts-wheels-ubuntu-20.04-3.10-x86_64
           path: aggregated_wheels_all
-      - name: Download wheel: ubuntu-20.04, 3.11, x86_64
+      - name: Download wheel ubuntu-20.04, 3.11, x86_64
         uses: actions/download-artifact@v3
         with:
           name: build-artifacts-wheels-ubuntu-20.04-3.11-x86_64
           path: aggregated_wheels_all
-      - name: Download wheel: ubuntu-20.04, 3.7, aarch64
+      - name: Download wheel ubuntu-20.04, 3.7, aarch64
         uses: actions/download-artifact@v3
         with:
           name: build-artifacts-wheels-ubuntu-20.04-3.7-aarch64
           path: aggregated_wheels_all
-      - name: Download wheel: ubuntu-20.04, 3.8, aarch64
+      - name: Download wheel ubuntu-20.04, 3.8, aarch64
         uses: actions/download-artifact@v3
         with:
           name: build-artifacts-wheels-ubuntu-20.04-3.8-aarch64
           path: aggregated_wheels_all
-      - name: Download wheel: ubuntu-20.04, 3.9, aarch64
+      - name: Download wheel ubuntu-20.04, 3.9, aarch64
         uses: actions/download-artifact@v3
         with:
           name: build-artifacts-wheels-ubuntu-20.04-3.9-aarch64
           path: aggregated_wheels_all
-      - name: Download wheel: ubuntu-20.04, 3.10, aarch64
+      - name: Download wheel ubuntu-20.04, 3.10, aarch64
         uses: actions/download-artifact@v3
         with:
           name: build-artifacts-wheels-ubuntu-20.04-3.10-aarch64
           path: aggregated_wheels_all
-      - name: Download wheel: ubuntu-20.04, 3.11, aarch64
+      - name: Download wheel ubuntu-20.04, 3.11, aarch64
         uses: actions/download-artifact@v3
         with:
           name: build-artifacts-wheels-ubuntu-20.04-3.11-aarch64
           path: aggregated_wheels_all
 
-      - name: Download wheel: macos-13, 3.7, x86_64
+      - name: Download wheel macos-13, 3.7, x86_64
         uses: actions/download-artifact@v3
         with:
           name: build-artifacts-wheels-macos-13-3.7-x86_64
           path: aggregated_wheels_all
-      - name: Download wheel: macos-13, 3.8, x86_64
+      - name: Download wheel macos-13, 3.8, x86_64
         uses: actions/download-artifact@v3
         with:
           name: build-artifacts-wheels-macos-13-3.8-x86_64
           path: aggregated_wheels_all
-      - name: Download wheel: macos-13, 3.7, arm64
+      - name: Download wheel macos-13, 3.7, arm64
         uses: actions/download-artifact@v3
         with:
           name: build-artifacts-wheels-macos-13-3.7-arm64
           path: aggregated_wheels_all
-      - name: Download wheel: macos-13, 3.8, arm64
+      - name: Download wheel macos-13, 3.8, arm64
         uses: actions/download-artifact@v3
         with:
           name: build-artifacts-wheels-macos-13-3.8-arm64
