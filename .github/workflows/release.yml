@@ -208,15 +208,6 @@ jobs:
           - '3.8.7'
 
     steps:
-      # - name: Download packed files to artifacts
-      #   uses: actions/download-artifact@v3
-      #   with:
-      #     name: build-artifacts-wheels
-      #     path: ./dist
-      # - name: Show the buildings
-      #   shell: bash
-      #   run: |
-      #     ls -al ./dist
       - name: Download unified wheels artifact
         uses: actions/download-artifact@v3
         with:
