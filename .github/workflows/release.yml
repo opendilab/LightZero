@@ -200,7 +200,7 @@ jobs:
     runs-on: ubuntu-20.04
     needs:
       - source_build
-      - wheel_build
+      - wheel_aggregate
     strategy:
       fail-fast: false
       matrix:
