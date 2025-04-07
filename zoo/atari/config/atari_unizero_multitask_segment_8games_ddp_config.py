@@ -42,6 +42,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 num_channels=512, # TODO
                 continuous_action_space=False,
                 world_model_cfg=dict(
+                    # use_global_pooling=True,
+                    use_global_pooling=False,
+
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
                     predict_latent_loss_type='mse', # TODO: for latent state layer_norm
@@ -143,7 +146,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250324/atari_{len(env_id_list)}games_encoderchannel512-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs32*8_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250403/atari_{len(env_id_list)}games_encoderchannel512-nlayer8_finalscale_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs32*8_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250310/atari_{len(env_id_list)}games_concat-taskembed128_encoderchannel256-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs64*8_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250310/atari_{len(env_id_list)}games_encoderchannel512-nlayer12_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs64*8_seed{seed}/'
 

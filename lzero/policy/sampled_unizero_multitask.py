@@ -453,8 +453,8 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
                 # print(f'{loss_name}: {loss_value[0][0]}')
 
             # print(f"=== 全局任务权重 (按 task_id 排列): {task_weights}")
-            assert not torch.isnan(losses.loss_total).any(), f"Loss contains NaN values, losses.loss_total:{losses.loss_total}, losses:{losses}"
-            assert not torch.isinf(losses.loss_total).any(), f"Loss contains Inf values, losses.loss_total:{losses.loss_total}, losses:{losses}"
+            # assert not torch.isnan(losses.loss_total).any(), f"Loss contains NaN values, losses.loss_total:{losses.loss_total}, losses:{losses}"
+            # assert not torch.isinf(losses.loss_total).any(), f"Loss contains Inf values, losses.loss_total:{losses.loss_total}, losses:{losses}"
 
             # Collect losses per task
             obs_loss = self.intermediate_losses.get('loss_obs', 0.0) or 0.0

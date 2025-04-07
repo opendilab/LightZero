@@ -276,11 +276,15 @@ class DownSample(nn.Module):
         return output
 
 
+from torch.nn.utils import weight_norm
+
+# 假设 SimNorm, ResBlock, DownSample 在其他地方已经定义
+# 下面仅给出 RepresentationNetworkUniZero 的实现
+
 class RepresentationNetworkUniZero(nn.Module):
-    
     def __init__(
             self,
-            observation_shape: SequenceType = (3, 64, 64),
+            observation_shape: tuple = (3, 64, 64),
             num_res_blocks: int = 1,
             num_channels: int = 64,
             downsample: bool = True,
@@ -289,36 +293,24 @@ class RepresentationNetworkUniZero(nn.Module):
             embedding_dim: int = 256,
             group_size: int = 8,
             final_norm_option_in_encoder: str = 'SimNorm',
-            # final_norm_option_in_encoder: str = 'LayerNorm', # TODO
+            use_global_pooling: bool = True  # 新增超参数：是否使用全局平均池化
     ) -> None:
         """
-        Overview:
-            Representation network used in UniZero. Encode the 2D image obs into latent state.
-            Currently, the network only supports obs images with both a width and height of 64.
-        Arguments:
-            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[3, 64, 64]
-                for video games like atari, RGB 3 channel.
-            - num_res_blocks (:obj:`int`): The number of residual blocks.
-            - num_channels (:obj:`int`): The channel of output hidden state.
-            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
-                defaults to True. This option is often used in video games like Atari. In board games like go, \
-                we don't need this module.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(inplace=True). \
-                Use the inplace operation to speed up.
-            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
-            - embedding_dim (:obj:`int`): The dimension of the latent state.
-            - group_size (:obj:`int`): The dimension for simplicial normalization.
-            - final_norm_option_in_encoder (:obj:`str`): The normalization option for the final layer, defaults to 'SimNorm'. \
-                Options are 'SimNorm' and 'LayerNorm'.
+        Representation network used in UniZero.
+        对于 channel 数较大的场景，可使用全局平均池化来降低全连接层的输入维度，提高训练稳定性。
         """
         super().__init__()
-        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
-        logging.info(f"Using norm type: {norm_type}")
-        logging.info(f"Using activation type: {activation}")
+        assert norm_type in ['BN', 'LN'], "norm_type must be in ['BN', 'LN']"
+        # 打印日志信息（可选）
+        print(f"Using norm type: {norm_type}")
+        print(f"Using activation type: {activation}")
 
         self.observation_shape = observation_shape
         self.downsample = downsample
+        self.use_global_pooling = use_global_pooling
+
         if self.downsample:
+            # DownSample 对象的实现需自行定义
             self.downsample_net = DownSample(
                 observation_shape,
                 num_channels,
@@ -328,48 +320,63 @@ class RepresentationNetworkUniZero(nn.Module):
             )
         else:
             self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
-
             if norm_type == 'BN':
                 self.norm = nn.BatchNorm2d(num_channels)
             elif norm_type == 'LN':
-                if downsample:
-                    self.norm = nn.LayerNorm(
-                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
-                        eps=1e-5)
-                else:
-                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-5)
+                # 当不进行 downsample 时，观察图尺寸不变
+                self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-5)
 
+        # 构建 residual block 层
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
+                    in_channels=num_channels,
+                    activation=activation,
+                    norm_type=norm_type,
+                    res_type='basic',
+                    bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
         self.activation = activation
         self.embedding_dim = embedding_dim
 
-        if self.observation_shape[1] == 64:
-            self.last_linear = nn.Linear(num_channels * 8 * 8, self.embedding_dim, bias=False)
+        # 根据输入图尺寸决定最后线性层的输入通道数
+        # 注意：当使用全局平均池化时，将空间尺寸归约为1×1，故线性层输入维度为 num_channels
+        # 否则，继续 flatten 空间特征（如8×8或6×6）
+        if self.use_global_pooling:
+            last_linear_in_dim = num_channels
+        else:
+            if self.observation_shape[1] == 64:
+                last_linear_in_dim = num_channels * 8 * 8
+            elif self.observation_shape[1] in [84, 96]:
+                last_linear_in_dim = num_channels * 6 * 6
+            else:
+                # 默认采用完整 flatten 的维度
+                last_linear_in_dim = num_channels * self.observation_shape[1] * self.observation_shape[2]
 
-        elif self.observation_shape[1] in [84, 96]:
-            self.last_linear = nn.Linear(num_channels * 6 * 6, self.embedding_dim, bias=False)
+        # 若不使用全局平均池化，则建议对全连接层使用 weight normalization
+        if self.use_global_pooling:
+            self.last_linear = nn.Linear(last_linear_in_dim, self.embedding_dim, bias=False)
+        else:
+            # self.last_linear = weight_norm(nn.Linear(last_linear_in_dim, self.embedding_dim, bias=False))
+            self.last_linear = nn.Linear(last_linear_in_dim, self.embedding_dim, bias=False)
 
-        self.final_norm_option_in_encoder = final_norm_option_in_encoder
-        if self.final_norm_option_in_encoder == 'LayerNorm':
+
+        # 最后的归一化层
+        if final_norm_option_in_encoder == 'LayerNorm':
             self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
-        elif self.final_norm_option_in_encoder == 'SimNorm':
+        elif final_norm_option_in_encoder == 'SimNorm':
             self.final_norm = SimNorm(simnorm_dim=group_size)
         else:
-            raise ValueError(f"Unsupported final_norm_option_in_encoder: {self.final_norm_option_in_encoder}")
+            raise ValueError(f"Unsupported final_norm_option_in_encoder: {final_norm_option_in_encoder}")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Shapes:
-            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \
-                H is height.
-            - output (:obj:`torch.Tensor`): :math:`(B, C_out, W_, H_)`, where B is batch size, C_out is channel, W_ is \
-                output width, H_ is output height.
+        Args:
+            x: (B, C_in, H, W)
+        Returns:
+            x: (B, embedding_dim)
         """
         if self.downsample:
             x = self.downsample_net(x)
@@ -380,16 +387,21 @@ class RepresentationNetworkUniZero(nn.Module):
         for block in self.resblocks:
             x = block(x)
 
-        # Important: Transform the output feature plane to the latent state.
-        # For example, for an Atari feature plane of shape (64, 8, 8),
-        # flattening results in a size of 4096, which is then transformed to 768.
-        x = self.last_linear(x.view(x.size(0), -1))
+        # 优化策略 1：使用全局平均池化降低输入维度
+        if self.use_global_pooling:
+            # 对空间维度进行全局平均池化，输出形状 [B, num_channels, 1, 1]
+            x = F.adaptive_avg_pool2d(x, output_size=(1, 1))
+            x = torch.flatten(x, 1)  # [B, num_channels]
+        else:
+            # 优化策略 2：如果需要保留完整的空间信息，则进行 flatten 后加缩放（归一化 fan-in）
+            x = x.view(x.size(0), -1)
+            # 缩放因子，目的是防止输入数值太大
+            scale = 1.0 / math.sqrt(x.size(1))
+            x = x * scale
 
-        x = x.view(-1, self.embedding_dim)
-
-        # NOTE: very important for training stability.
+        # 最后一层全连接映射与归一化
+        x = self.last_linear(x)
         x = self.final_norm(x)
-
         return x
 
 

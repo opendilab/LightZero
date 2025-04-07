@@ -271,6 +271,8 @@ class DMC2GymEnv(BaseEnv):
         self._save_replay_gif = cfg.save_replay_gif
         self._replay_path_gif = cfg.replay_path_gif
         self._save_replay_count = 0
+        self._timestep = 0
+        self.max_episode_steps = cfg.max_episode_steps
 
     def reset(self) -> Dict[str, np.ndarray]:
         """
@@ -336,12 +338,12 @@ class DMC2GymEnv(BaseEnv):
         obs = to_ndarray(obs).astype(np.float32)
         action_mask = None
 
-        self._current_step = 0
+        self._timestep = 0
         if self._save_replay_gif:
             self._frames = []
 
         obs = {'observation': obs, 'action_mask': action_mask, 'to_play': -1}
-
+        self._timestep = 0
         return obs
 
     def close(self) -> None:
@@ -374,10 +376,10 @@ class DMC2GymEnv(BaseEnv):
         #     action = np.where(action < -0.9500, -0.9999, action)
 
         obs, rew, done, info = self._env.step(action)
-        self._current_step += 1
+        self._timestep += 1
 
         # print(f'action: {action}, obs: {obs}, rew: {rew}, done: {done}, info: {info}')
-        # print(f'step {self._current_step}: action: {action}, rew: {rew}, done: {done}')
+        # print(f'step {self._timestep}: action: {action}, rew: {rew}, done: {done}')
 
         if self._cfg["from_pixels"]:
             obs = obs
@@ -391,9 +393,12 @@ class DMC2GymEnv(BaseEnv):
 
         if self._save_replay_gif:
             self._frames.append(image_obs)
+        
+        if self._timestep > self.max_episode_steps:
+            done = True
 
         if done:
-            logging.info(f'one episode done! episode return: {self._eval_episode_return}')
+            logging.info(f'one episode done! episode return: {self._eval_episode_return}, episode_steps:{self._timestep}')
             info['eval_episode_return'] = self._eval_episode_return
             if self._save_replay_gif:
 

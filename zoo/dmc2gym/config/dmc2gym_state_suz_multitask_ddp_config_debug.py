@@ -33,11 +33,11 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False),
-            game_segment_length=100,  # As per single-task config
+            # game_segment_length=100,  # As per single-task config
             # ===== TODO: only for debug =====
-            # game_segment_length=10,  # As per single-task config
-            # collect_max_episode_steps=int(20),
-            # eval_max_episode_steps=int(20),
+            game_segment_length=10,  # As per single-task config
+            collect_max_episode_steps=int(20),
+            eval_max_episode_steps=int(20),
         ),
         policy=dict(
             multi_gpu=True,  # TODO: enable multi-GPU for DDP
@@ -95,8 +95,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     max_tokens=2 * num_unroll_steps,  # Each timestep has 2 tokens: obs and action
                     context_length=2 * infer_context_length,
                     device='cuda',
-                    # num_layers=1, # TODO: debug config
-                    num_layers=8, # TODO
+                    num_layers=1, # TODO: debug config
+                    # num_layers=8, # TODO
                     num_heads=24,
                     embed_dim=768,
                     env_num=max(collector_env_num, evaluator_env_num),
@@ -128,9 +128,9 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             cuda=True,
             model_path=None,
             num_unroll_steps=num_unroll_steps,
-            # update_per_collect=2,  # TODO: debug config
+            update_per_collect=2,  # TODO: debug config
             # update_per_collect=200,  # TODO: 8*100*0.25=200
-            update_per_collect=80,  # TODO: 8*100*0.1=80
+            # update_per_collect=80,  # TODO: 8*100*0.1=80
             replay_ratio=reanalyze_ratio,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -176,7 +176,7 @@ def generate_configs(env_id_list: List[str],
                     total_batch_size: int):
     configs = []
 
-    exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250407_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250325/dmc_{len(env_id_list)}tasks_task-exploitation-weight_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250311/dmc_{len(env_id_list)}tasks_concattaskembed-128_nlayer8_not-share-head_final-ln_bs64*8_brf{buffer_reanalyze_freq}_seed{seed}/'
@@ -229,7 +229,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee ./log/uz_mt_dmc_moco_20250409.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee ./log/uz_mt_dmc_moco.log
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -317,12 +317,12 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    # collector_env_num = 2
-    # num_segments = 2
-    # n_episode = 2
-    # evaluator_env_num = 2
-    # num_simulations = 1
-    # batch_size = [4 for _ in range(len(env_id_list))]
+    collector_env_num = 2
+    num_segments = 2
+    n_episode = 2
+    evaluator_env_num = 2
+    num_simulations = 1
+    batch_size = [4 for _ in range(len(env_id_list))]
     # =======================================
 
     seed = 0  # You can iterate over multiple seeds if needed
