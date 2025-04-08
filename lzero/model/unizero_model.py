@@ -91,7 +91,7 @@ class UniZeroModel(nn.Module):
             print('==' * 20)
         elif world_model_cfg.obs_type == 'text':
             self.representation_network = HFLanguageRepresentationNetwork(model_path=kwargs['encoder_url'], embedding_size=world_model_cfg.embed_dim, final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder)
-            # print(self.representation_network.model.encoder.layer[0].attention.output.LayerNorm.weight)
+            # print(self.representation_network.pretrained_model.encoder.layer[0].attention.output.LayerNorm.weight)
 
             self.tokenizer = Tokenizer(encoder=self.representation_network, decoder_network=None, with_lpips=False,)
             self.world_model = WorldModel(config=world_model_cfg, tokenizer=self.tokenizer)

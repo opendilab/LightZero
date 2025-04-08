@@ -446,15 +446,6 @@ class HFLanguageRepresentationNetwork(nn.Module):
         Returns:
         - torch.Tensor: The processed language embedding with shape [batch_size, embedding_size].
         """
-        # layernorm_all_ones = True
-        # for name, param in self.pretrained_model.named_parameters():
-        #     if 'LayerNorm.weight' in name:
-        #         # 检查所有值是否接近1。可以用torch.allclose进行判断：
-        #         if not torch.allclose(param, torch.ones_like(param), rtol=1e-05, atol=1e-08):
-        #             print(f"{name} is not all ones!")
-        #             layernorm_all_ones = False
-        # if layernorm_all_ones:
-        #     print("All LayerNorm.weight parameters are all ones.")
 
         # Construct the attention mask to exclude padding tokens.
         attention_mask = x != self.tokenizer.pad_token_id

@@ -21,7 +21,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     # ------------------------------------------------------------------
     # Define environment configurations
     env_configurations = {
-        'detective.z5': (20, 50),
+        'detective.z5': (12, 50),
         # 'detective.z5': (10, 50),
 
         'omniquest.z5': (10, 100),
@@ -92,12 +92,14 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             tokenizer_path=model_name,
             max_seq_len=512,
             game_path=f"/fs-computility/ai-shen/puyuan/code/LightZero/zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
+            env_type=env_id,
             # game_path=f"./zoo/jericho/envs/z-machine-games-master/jericho-game-suite/{env_id}",
             for_unizero=True,
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False),
+            save_replay=True,
         ),
         policy=dict(
             multi_gpu=False,  # Important for distributed data parallel (DDP)
@@ -207,7 +209,10 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     # main_config.policy.model_path = "/fs-computility/ai-shen/puyuan/code/LightZero/data_lz/data_unizero_jericho_20250402/bge-base-en-v1.5/uz_final-ln_ddp-4gpu_cen4_rr0.1_ftemp025_detectiv_ms50_ass-10_nlayer2_embed768_Htrain10-Hinfer4_bs256_seed0/ckpt/ckpt_best.pth.tar"
 
     # main_config.policy.model_path = "/fs-computility/ai-shen/puyuan/code/LightZero/data_lz/data_unizero_jericho_20250402/bge-base-en-v1.5/uz_final-ln_ddp-4gpu_cen4_rr0.25_ftemp025_detectiv_ms50_ass-20_nlayer2_embed768_Htrain10-Hinfer4_bs256_seed0/ckpt/iteration_114550.pth.tar"
-    main_config.policy.model_path = "/fs-computility/ai-shen/puyuan/code/LightZero/data_lz/data_unizero_jericho_20250402/bge-base-en-v1.5/uz_final-ln_ddp-4gpu_cen4_rr0.25_ftemp025_detectiv_ms50_ass-20_nlayer2_embed768_Htrain10-Hinfer4_bs256_seed0/ckpt/ckpt_best.pth.tar"
+    # main_config.policy.model_path = "/fs-computility/ai-shen/puyuan/code/LightZero/data_lz/data_unizero_jericho_20250402/bge-base-en-v1.5/uz_final-ln_ddp-4gpu_cen4_rr0.25_ftemp025_detectiv_ms50_ass-20_nlayer2_embed768_Htrain10-Hinfer4_bs256_seed0/ckpt/ckpt_best.pth.tar"
+
+    # main_config.policy.model_path = "/fs-computility/ai-shen/puyuan/code/LightZero/data_lz/data_unizero_jericho_20250407/bge-base-en-v1.5/uz_detectiv_final-ln_ms50_ass-12_nlayer2_embed768_Htrain10-Hinfer4_bs64_seed0/ckpt/iteration_4000.pth.tar"
+    main_config.policy.model_path = "/fs-computility/ai-shen/puyuan/code/LightZero/data_lz/data_unizero_jericho_20250407/bge-base-en-v1.5/uz_detectiv_final-ln_ms50_ass-12_nlayer2_embed768_Htrain10-Hinfer4_bs64_seed0/ckpt/ckpt_best.pth.tar"
 
     eval_muzero(
         [main_config, create_config],
@@ -216,6 +221,15 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
         print_seed_details=True,
         num_episodes_each_seed=3,
     )
+
+    # from lzero.entry import eval_muzero_v2
+    # eval_muzero_v2(
+    #     [main_config, create_config],
+    #     seed=seed,
+    #     model_path=main_config.policy.model_path,
+    #     print_seed_details=True,
+    #     num_episodes_each_seed=3,
+    # )
 
 
 if __name__ == "__main__":
