@@ -465,7 +465,9 @@ class UniZeroMTPolicy(UniZeroPolicy):
 
             # 将 wrapped_model 作为 share_model 传递给 GradCorrect
             # ========= 初始化 MoCo CAGrad 参数 =========
-            self.grad_correct = GradCorrect(self.wrapped_model, self.task_num_for_current_rank, self._cfg.device)
+            # self.grad_correct = GradCorrect(self.wrapped_model, self.task_num_for_current_rank, self._cfg.device)
+            self.grad_correct = GradCorrect(self.wrapped_model, self._cfg.total_task_num, self._cfg.device, self._cfg.multi_gpu) # only compatiable with for 1GPU training
+
             self.grad_correct.init_param()  
             self.grad_correct.rep_grad = False
 

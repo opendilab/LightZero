@@ -24,13 +24,14 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
         policy=dict(
             multi_gpu=True,  # Very important for ddp
             only_use_moco_stats=False,
-            use_moco=False,  # ==============TODO==============
-            # use_moco=True,  # ==============TODO==============
+            # use_moco=False,  # ==============TODO==============
+            use_moco=True,  # ==============TODO==============
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000))),
             grad_correct_params=dict(
                 MoCo_beta=0.5, MoCo_beta_sigma=0.5, MoCo_gamma=0.1, MoCo_gamma_sigma=0.5, MoCo_rho=0,
                 calpha=0.5, rescale=1,
             ),
+            total_task_num=len(env_id_list),
             task_num=len(env_id_list),
             task_id=0,
             model=dict(
@@ -38,8 +39,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 action_space_size=action_space_size,
                 norm_type=norm_type,
                 num_res_blocks=2,
-                # num_channels=256,
-                num_channels=512, # TODO
+                num_channels=256,
+                # num_channels=512, # TODO
                 continuous_action_space=False,
                 world_model_cfg=dict(
                     # use_global_pooling=True,
@@ -81,7 +82,9 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # num_layers=12,
                     # num_heads=24,
 
-                    num_layers=8,
+                    # num_layers=8,
+                    num_layers=1, # TODO: debug
+
                     # num_layers=12, # todo
 
                     num_heads=24,
@@ -120,7 +123,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             model_path=None,
             num_unroll_steps=num_unroll_steps,
             game_segment_length=20,
-            update_per_collect=80,
+            # update_per_collect=80,
+            update_per_collect=2, # TODO: 1
             replay_ratio=0.25,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -146,7 +150,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250403/atari_{len(env_id_list)}games_encoderchannel512-nlayer8_finalscale_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs32*8_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250409_debug/atari_{len(env_id_list)}games_moco_encoderchannel256-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs32*8_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250310/atari_{len(env_id_list)}games_concat-taskembed128_encoderchannel256-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs64*8_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250310/atari_{len(env_id_list)}games_encoderchannel512-nlayer12_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs64*8_seed{seed}/'
 
@@ -186,7 +190,8 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29504 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29504 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config_debug.py 2>&1 | tee ./log/uz_mt_atari26_channel256_moco_debug_20250409_01.log
+
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
 
@@ -200,16 +205,20 @@ if __name__ == "__main__":
         'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
         'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
     ]
-    # List of Atari games used for multi-task learning
     env_id_list = [
         'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
-        'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
-        'AmidarNoFrameskip-v4', 'AssaultNoFrameskip-v4', 'AsterixNoFrameskip-v4', 'BankHeistNoFrameskip-v4',
-        'BattleZoneNoFrameskip-v4', 'CrazyClimberNoFrameskip-v4', 'DemonAttackNoFrameskip-v4', 'FreewayNoFrameskip-v4',
-        'FrostbiteNoFrameskip-v4', 'GopherNoFrameskip-v4', 'JamesbondNoFrameskip-v4', 'KangarooNoFrameskip-v4',
-        'KrullNoFrameskip-v4', 'KungFuMasterNoFrameskip-v4', 'PrivateEyeNoFrameskip-v4', 'UpNDownNoFrameskip-v4',
-        'QbertNoFrameskip-v4', 'BreakoutNoFrameskip-v4',
+        'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',  'AmidarNoFrameskip-v4', 'AssaultNoFrameskip-v4', 
     ]
+    # List of Atari games used for multi-task learning
+    # env_id_list = [
+    #     'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
+    #     'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
+    #     'AmidarNoFrameskip-v4', 'AssaultNoFrameskip-v4', 'AsterixNoFrameskip-v4', 'BankHeistNoFrameskip-v4',
+    #     'BattleZoneNoFrameskip-v4', 'CrazyClimberNoFrameskip-v4', 'DemonAttackNoFrameskip-v4', 'FreewayNoFrameskip-v4',
+    #     'FrostbiteNoFrameskip-v4', 'GopherNoFrameskip-v4', 'JamesbondNoFrameskip-v4', 'KangarooNoFrameskip-v4',
+    #     'KrullNoFrameskip-v4', 'KungFuMasterNoFrameskip-v4', 'PrivateEyeNoFrameskip-v4', 'UpNDownNoFrameskip-v4',
+    #     'QbertNoFrameskip-v4', 'BreakoutNoFrameskip-v4',
+    # ]
 
     action_space_size = 18
     collector_env_num = 8
@@ -221,8 +230,8 @@ if __name__ == "__main__":
     reanalyze_ratio = 0.0
 
     total_batch_size = 512
-    # batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
-    batch_size = [int(min(32, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+    batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
+    # batch_size = [int(min(32, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
 
     # total_batch_size = int(512*4)
     # batch_size = [int(min(int(64*4), total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
@@ -236,15 +245,15 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    # collector_env_num = 2
-    # num_segments = 2
-    # n_episode = 2
-    # evaluator_env_num = 2
-    # num_simulations = 1
-    # reanalyze_batch_size = 2
-    # num_unroll_steps = 5
-    # infer_context_length = 2
-    # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
+    collector_env_num = 2
+    num_segments = 2
+    n_episode = 2
+    evaluator_env_num = 2
+    num_simulations = 1
+    reanalyze_batch_size = 2
+    num_unroll_steps = 5
+    infer_context_length = 2
+    batch_size = [4  for i in range(len(env_id_list))]
 
 
     for seed in [0]:

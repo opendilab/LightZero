@@ -70,13 +70,13 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     analysis_dormant_ratio_weight_rank=False, # TODO
                     dormant_threshold=0.025,
                     
-                    task_embed_option=None,   # ==============TODO: none ==============
-                    use_task_embed=False, # ==============TODO==============
+                    # task_embed_option=None,   # ==============TODO: none ==============
+                    # use_task_embed=False, # ==============TODO==============
 
-                    # task_embed_option='concat_task_embed',   # ==============TODO: none ==============
-                    # use_task_embed=True, # ==============TODO==============
-                    # task_embed_dim=128,
-                    # # task_embed_dim=96,
+                    task_embed_option='concat_task_embed',   # ==============TODO: none ==============
+                    use_task_embed=True, # ==============TODO==============
+                    task_embed_dim=128,
+                    # task_embed_dim=96,
 
                     observation_shape_list=observation_shape_list,
                     action_space_size_list=action_space_size_list,
@@ -176,7 +176,9 @@ def generate_configs(env_id_list: List[str],
                     total_batch_size: int):
     configs = []
 
-    exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_concattaskembed128_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
+
+    # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250325/dmc_{len(env_id_list)}tasks_task-exploitation-weight_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250311/dmc_{len(env_id_list)}tasks_concattaskembed-128_nlayer8_not-share-head_final-ln_bs64*8_brf{buffer_reanalyze_freq}_seed{seed}/'
@@ -229,7 +231,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee ./log/uz_mt_dmc_moco_20250409.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee ./log/uz_mt_dmc_moco_taskembed_20250409.log
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
