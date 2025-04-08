@@ -1,6 +1,7 @@
 import os
 from functools import partial
 from typing import Optional, Tuple
+import logging
 
 import numpy as np
 import torch
@@ -51,7 +52,7 @@ def eval_muzero(
     # Create main components: env, policy
     env_fn, collector_env_cfg, evaluator_env_cfg = get_vec_env_setting(cfg.env)
     evaluator_env = create_env_manager(cfg.env.manager, [partial(env_fn, cfg=c) for c in evaluator_env_cfg])
-
+    # print(f"cfg.seed:{cfg.seed}")
     evaluator_env.seed(cfg.seed, dynamic_seed=False)
     set_pkg_seed(cfg.seed, use_cuda=cfg.policy.cuda)
 
@@ -59,7 +60,14 @@ def eval_muzero(
 
     # load pretrained model
     if model_path is not None:
+        # print(policy._learn_model.representation_network.pretrained_model.encoder.layer[0].attention.output.LayerNorm.weight)
+        logging.info(f"Loading pretrained model from {model_path}...")
         policy.learn_mode.load_state_dict(torch.load(model_path, map_location=cfg.policy.device))
+        logging.info("Pretrained model loaded successfully!")
+    else:
+        logging.warning("model_path is None!!!")
+
+    # print(policy._learn_model.representation_network.model.pretrained_model.layer[0].attention.output.LayerNorm.weight)
 
     # Create worker components: learner, collector, evaluator, replay buffer, commander.
     tb_logger = SummaryWriter(os.path.join('./{}/log/'.format(cfg.exp_name), 'serial'))

@@ -27,6 +27,7 @@ cartpole_unizero_config = dict(
         manager=dict(shared_memory=False, ),
     ),
     policy=dict(
+        learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000, ), ), ),
         model=dict(
             observation_shape=4,
             action_space_size=2,
@@ -35,6 +36,10 @@ cartpole_unizero_config = dict(
             norm_type='BN',
             model_type='mlp',
             world_model_cfg=dict(
+                final_norm_option_in_obs_head='LayerNorm',
+                final_norm_option_in_encoder='LayerNorm',
+                predict_latent_loss_type='mse', # TODO: for latent state layer_norm
+
                 max_blocks=10,
                 max_tokens=2 * 10,
                 context_length=2 * 4,
@@ -52,7 +57,7 @@ cartpole_unizero_config = dict(
                 rotary_emb=True,
             ),
         ),
-        use_wandb=True,
+        use_wandb=False,
         # (str) The path of the pretrained model. If None, the model will be initialized by the default model.
         model_path=None,
         num_unroll_steps=num_unroll_steps,

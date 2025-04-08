@@ -1,4 +1,6 @@
-from zoo.classic_control.cartpole.config.cartpole_muzero_config import main_config, create_config
+# from zoo.classic_control.cartpole.config.cartpole_muzero_config import main_config, create_config
+from zoo.classic_control.cartpole.config.cartpole_unizero_config import main_config, create_config
+
 from lzero.entry import eval_muzero
 import numpy as np
 
@@ -17,8 +19,10 @@ if __name__ == "__main__":
         - total_test_episodes (:obj:`int`): Total number of test episodes, computed as the product of the number of 
         seeds and the number of episodes per seed.
     """
+    # model_path = None
     # model_path = "./ckpt/ckpt_best.pth.tar"
-    model_path = None
+    
+    model_path="/fs-computility/ai-shen/puyuan/code/LightZero/data_unizero/cartpole_unizero_ns25_upcNone-rr0.25_H5_bs256_seed0/ckpt/ckpt_best.pth.tar"
     returns_mean_seeds = []
     returns_seeds = []
     seeds = [0]
@@ -27,7 +31,7 @@ if __name__ == "__main__":
     create_config.env_manager.type = 'base'  # Visualization requires the 'type' to be set as base
     main_config.env.evaluator_env_num = 1  # Visualization requires the 'env_num' to be set as 1
     main_config.env.n_evaluator_episode = total_test_episodes
-    main_config.env.save_replay_gif = True
+    main_config.env.save_replay_gif = False
     main_config.env.replay_path_gif = './cartpole_gif'
 
     for seed in seeds:

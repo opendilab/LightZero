@@ -45,7 +45,7 @@ class JerichoEnv(BaseEnv):
     DEFAULT_CONFIG: Dict[str, Any] = {
         'max_steps': 400,
         'max_action_num': 10,
-        'tokenizer_path': "google-bert/bert-base-uncased",
+        'tokenizer_path': "BAAI/bge-base-en-v1.5",
         'max_seq_len': 512,
         'remove_stuck_actions': False,
         'add_location_and_inventory': False,

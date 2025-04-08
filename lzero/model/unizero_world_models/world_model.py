@@ -95,8 +95,24 @@ class WorldModel(nn.Module):
             self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
         self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
 
+        # print(self.tokenizer.encoder.pretrained_model.encoder.layer[0].attention.output.LayerNorm.weight)
+
+        # 首先，构建需要跳过初始化的模块集合
+        skip_modules = set(self.tokenizer.encoder.pretrained_model.modules())
+        def custom_init(module):
+            # 如果当前 module 属于跳过初始化的模块，则直接返回
+            if module in skip_modules:
+                return
+            # 否则使用指定的初始化方法
+            init_weights(module, norm_type=self.config.norm_type)
+        # 递归地对模型中所有子模块应用 custom_init 函数
+        self.apply(custom_init)
+
         # Apply weight initialization, the order is important
-        self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
+        # self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
+
+        # print(self.tokenizer.encoder.pretrained_model.encoder.layer[0].attention.output.LayerNorm.weight)
+
         self._initialize_last_layer()
 
         # Cache structures
