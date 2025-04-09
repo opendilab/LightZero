@@ -59,7 +59,6 @@ atari_muzero_config = dict(
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
             use_sim_norm=True,
-            use_sim_norm_kl_loss=False,
             model_type='conv'
         ),
         cuda=True,
