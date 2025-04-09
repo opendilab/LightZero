@@ -117,6 +117,7 @@ class UniZeroMTModel(nn.Module):
                     embedding_dim=obs_act_embed_dim,
                     group_size=world_model_cfg.group_size,
                     final_norm_option_in_encoder=world_model_cfg.final_norm_option_in_encoder,
+                    use_adaptive_scale=world_model_cfg.use_adaptive_scale,
                 ))
                 # self.representation_network = RepresentationNetworkUniZero(
                 #     observation_shape,

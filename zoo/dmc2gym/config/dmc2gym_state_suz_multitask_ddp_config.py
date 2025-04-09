@@ -176,7 +176,8 @@ def generate_configs(env_id_list: List[str],
                     total_batch_size: int):
     configs = []
 
-    exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_concattaskembed128_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250413_moco/dmc_{len(env_id_list)}tasks_concattaskembed128_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250413_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     
@@ -304,7 +305,7 @@ if __name__ == "__main__":
     reanalyze_ratio = 0.0
 
     # nlayer=8
-    total_batch_size = 512
+    total_batch_size = 1024
     batch_size = [int(min(64, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
 
     # nlayer=12
