@@ -185,13 +185,19 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
         f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
         f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
     )
-    from lzero.entry import train_unizero
+    from lzero.entry import train_unizero, eval_muzero
+    main_config.policy.model_path = '/mnt/afs/niuyazhe/xiongjyu/LightZero/data_lz/data_unizero_jericho/bge-base-en-v1.5/rr_0.1_mtd_F/uz_detectiv_ms50_ass-10_nlayer2_embed768_Htrain10-Hinfer4_bs64_seed0'
     # Launch the training process
-    train_unizero(
+    # train_unizero(
+    #     [main_config, create_config],
+    #     seed=seed,
+    #     model_path=main_config.policy.model_path,
+    #     max_env_step=max_env_step,
+    # )
+    eval_muzero(
         [main_config, create_config],
         seed=seed,
         model_path=main_config.policy.model_path,
-        max_env_step=max_env_step,
     )
 
 
