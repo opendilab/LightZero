@@ -36,8 +36,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             # game_segment_length=100,  # As per single-task config
             # ===== TODO: only for debug =====
             game_segment_length=10,  # As per single-task config
-            collect_max_episode_steps=int(20),
-            eval_max_episode_steps=int(20),
+            collect_max_episode_steps=int(40),
+            eval_max_episode_steps=int(40),
         ),
         policy=dict(
             multi_gpu=True,  # TODO: enable multi-GPU for DDP
@@ -121,7 +121,7 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             use_task_exploitation_weight=False, # TODO
             # use_task_exploitation_weight=True, # TODO
 
-            target_reward = 30,
+            target_return =target_return_dict[env_id],
             balance_pipeline=True,
             # task_complexity_weight=False, # TODO
             task_complexity_weight=True, # TODO
@@ -135,7 +135,7 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             cuda=True,
             model_path=None,
             num_unroll_steps=num_unroll_steps,
-            update_per_collect=2,  # TODO: debug config
+            update_per_collect=3,  # TODO: debug config
             # update_per_collect=200,  # TODO: 8*100*0.25=200
             # update_per_collect=80,  # TODO: 8*100*0.1=80
             replay_ratio=reanalyze_ratio,
@@ -248,7 +248,18 @@ if __name__ == "__main__":
     from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
 
-
+    global target_return_dict 
+    target_return_dict = {
+        'acrobot-swingup': 500,
+        'cartpole-balance':950,
+        'cartpole-balance_sparse':950,
+        'cartpole-swingup': 800,
+        'cartpole-swingup_sparse': 750,
+        'cheetah-run': 650,
+        "ball_in_cup-catch": 950,
+        "finger-spin": 800,
+    }
+    
     # DMC 8games
     env_id_list = [
         'acrobot-swingup',
@@ -256,9 +267,9 @@ if __name__ == "__main__":
         'cartpole-balance_sparse',
         'cartpole-swingup',
         'cartpole-swingup_sparse',
-        # 'cheetah-run',
-        # "ball_in_cup-catch",
-        # "finger-spin",
+        'cheetah-run',
+        "ball_in_cup-catch",
+        "finger-spin",
     ]
 
     # DMC 18games
@@ -318,7 +329,8 @@ if __name__ == "__main__":
     n_episode = 2
     evaluator_env_num = 2
     num_simulations = 1
-    batch_size = [4 for _ in range(len(env_id_list))]
+    total_batch_size = 8
+    batch_size = [2 for _ in range(len(env_id_list))]
     # =======================================
 
     seed = 0  # You can iterate over multiple seeds if needed

@@ -33,11 +33,11 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False),
-            # game_segment_length=100,  # As per single-task config
+            game_segment_length=100,  # As per single-task config
             # ===== TODO: only for debug =====
-            game_segment_length=10,  # As per single-task config
-            collect_max_episode_steps=int(20),
-            eval_max_episode_steps=int(20),
+            # game_segment_length=10,  # As per single-task config
+            # collect_max_episode_steps=int(40),
+            # eval_max_episode_steps=int(40),
         ),
         policy=dict(
             multi_gpu=True,  # TODO: enable multi-GPU for DDP
@@ -95,8 +95,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     max_tokens=2 * num_unroll_steps,  # Each timestep has 2 tokens: obs and action
                     context_length=2 * infer_context_length,
                     device='cuda',
-                    num_layers=1, # TODO: debug config
-                    # num_layers=8, # TODO
+                    # num_layers=1, # TODO: debug config
+                    num_layers=8,
                     num_heads=24,
                     embed_dim=768,
                     env_num=max(collector_env_num, evaluator_env_num),
@@ -110,7 +110,10 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     num_experts_of_moe_in_transformer=4,
                     
                     # LoRA 参数：
-                    lora_r= 0,
+                    curriculum_stage_num=3,
+                    lora_target_modules=["attn", "feed_forward"],
+                    lora_r= 8,
+                    # lora_r= 64,
                     lora_alpha =1,
                     lora_dropout= 0.0,
                 ),
@@ -118,6 +121,7 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             use_task_exploitation_weight=False, # TODO
             # use_task_exploitation_weight=True, # TODO
 
+            target_return =target_return_dict[env_id],
             balance_pipeline=True,
             # task_complexity_weight=False, # TODO
             task_complexity_weight=True, # TODO
@@ -131,9 +135,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             cuda=True,
             model_path=None,
             num_unroll_steps=num_unroll_steps,
-            update_per_collect=2,  # TODO: debug config
-            # update_per_collect=200,  # TODO: 8*100*0.25=200
-            # update_per_collect=80,  # TODO: 8*100*0.1=80
+            # update_per_collect=3,  # TODO: debug config
+            update_per_collect=200,  # TODO: 8*100*0.25=200
             replay_ratio=reanalyze_ratio,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -234,18 +237,28 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee ./log/uz_mt_dmc_banlance_debug_20250410.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee ./log/uz_mt_dmc8_banlance_20250410.log
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
-    from lzero.entry import train_unizero_multitask_segment_ddp
+    from lzero.entry import train_unizero_multitask_balance_segment_ddp
     from ding.utils import DDPContext
     import os
     from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
-    os.environ["NCCL_TIMEOUT"] = "3600000000"
 
-
+    global target_return_dict 
+    target_return_dict = {
+        'acrobot-swingup': 500,
+        'cartpole-balance':950,
+        'cartpole-balance_sparse':950,
+        'cartpole-swingup': 800,
+        'cartpole-swingup_sparse': 750,
+        'cheetah-run': 650,
+        "ball_in_cup-catch": 950,
+        "finger-spin": 800,
+    }
+    
     # DMC 8games
     env_id_list = [
         'acrobot-swingup',
@@ -310,12 +323,13 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    collector_env_num = 2
-    num_segments = 2
-    n_episode = 2
-    evaluator_env_num = 2
-    num_simulations = 1
-    batch_size = [4 for _ in range(len(env_id_list))]
+    # collector_env_num = 2
+    # num_segments = 2
+    # n_episode = 2
+    # evaluator_env_num = 2
+    # num_simulations = 1
+    # total_batch_size = 8
+    # batch_size = [2 for _ in range(len(env_id_list))]
     # =======================================
 
     seed = 0  # You can iterate over multiple seeds if needed
@@ -340,6 +354,6 @@ if __name__ == "__main__":
     )
 
     with DDPContext():
-        train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
+        train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
         # 如果只想训练部分任务，可以修改 configs，例如:
         # train_unizero_multitask_segment_ddp(configs[:4], seed=seed, max_env_step=max_env_step)

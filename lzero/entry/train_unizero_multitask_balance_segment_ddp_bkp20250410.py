@@ -155,7 +155,7 @@ GLOBAL_MAX = -float('inf')
 GLOBAL_MIN = float('inf')
 
 def compute_task_weights(
-    task_returns: dict,
+    task_rewards: dict,
     option: str = "symlog",
     epsilon: float = 1e-6,
     temperature: float = 1.0,
@@ -168,7 +168,7 @@ def compute_task_weights(
     改进后的任务权重计算函数，支持多种标准化方式、Softmax 和正反比权重计算，并增加权重范围裁剪功能。
 
     Args:
-        task_returns (dict): 每个任务的字典，键为 task_id，值为评估奖励或损失。
+        task_rewards (dict): 每个任务的字典，键为 task_id，值为评估奖励或损失。
         option (str): 标准化方式，可选值为 "symlog", "max-min", "run-max-min", "rank", "none"。
         epsilon (float): 避免分母为零的小值。
         temperature (float): 控制权重分布的温度系数。
@@ -186,12 +186,12 @@ def compute_task_weights(
     global GLOBAL_MAX, GLOBAL_MIN
 
     # 如果输入为空字典，直接返回空结果
-    if not task_returns:
+    if not task_rewards:
         return {}
 
-    # Step 1: 对 task_returns 的值构造张量
-    task_ids = list(task_returns.keys())
-    rewards_tensor = torch.tensor(list(task_returns.values()), dtype=torch.float32)
+    # Step 1: 对 task_rewards 的值构造张量
+    task_ids = list(task_rewards.keys())
+    rewards_tensor = torch.tensor(list(task_rewards.values()), dtype=torch.float32)
 
     if option == "symlog":
         # 使用 symlog 标准化
@@ -268,7 +268,7 @@ def train_unizero_multitask_balance_segment_ddp(
         详细信息请参阅 https://arxiv.org/abs/2406.10667。
 
         此版本同时支持课程学习思想，即：
-          - 为所有任务设定目标奖励 (target_return)；
+          - 为所有任务设定目标奖励 (target_reward)；
           - 一旦某个任务达到目标奖励，则将其移入 solved_task_pool，从后续收集与训练中剔除；
           - 任务根据难度划分为 N 个等级（例如简单与困难）；
           - 在简单任务解决后，冻结 Backbone 参数，仅训练附加的 LoRA 模块（或类似结构），保证已解决任务性能；
@@ -429,14 +429,18 @@ def train_unizero_multitask_balance_segment_ddp(
     reanalyze_batch_size = cfg.policy.reanalyze_batch_size
     update_per_collect = cfg.policy.update_per_collect
 
+    # use_task_exploitation_weight = cfg.policy.use_task_exploitation_weight
     task_exploitation_weight = None
 
     # 创建任务奖励字典
-    task_returns = {}  # {task_id: reward}
+    task_rewards = {}  # {task_id: reward}
 
     # 初始化全局变量，用于课程学习：
     solved_task_pool = set()        # 记录已达到目标奖励的任务 id
+    curriculum_switched = False     # 标志是否已经切换到仅训练 LoRA 的模式
     curriculum_stage = 0
+    # 注意：cfg.policy 中需要提前配置 target_reward（可以是统一值，也可以是 dict，根据需要）
+    # 例如：cfg.policy.target_reward = 30.0
 
     while True:
         # 动态调整batch_size
@@ -455,8 +459,10 @@ def train_unizero_multitask_balance_segment_ddp(
                 zip(cfgs, collectors, evaluators, game_buffers)):
 
             # TODO: ============
-            # cfg.policy.target_return = 10
-            #  ==================== 如果任务已解决，则不参与后续评估和采集 TODO: ddp ====================
+            # cfg.policy.target_reward = 100
+            # cfg.policy.curriculum_stage_num = 2
+
+            # 如果任务已解决，则不参与后续评估和采集 TODO:ddp
             if task_id in solved_task_pool:
                 continue
 
@@ -497,22 +503,22 @@ def train_unizero_multitask_balance_segment_ddp(
                 # 判断评估是否成功
                 if stop is None or reward is None:
                     print(f"Rank {rank} 在评估过程中遇到问题，继续训练...")
-                    task_returns[cfg.policy.task_id] = float('inf')  # 如果评估失败，将任务难度设为最大值
+                    task_rewards[cfg.policy.task_id] = float('inf')  # 如果评估失败，将任务难度设为最大值
                 else:
                     # 确保从评估结果中提取 `eval_episode_return_mean` 作为奖励值
                     try:
                         eval_mean_reward = reward.get('eval_episode_return_mean', float('inf'))
                         print(f"任务 {cfg.policy.task_id} 的评估奖励: {eval_mean_reward}")
-                        task_returns[cfg.policy.task_id] = eval_mean_reward
+                        task_rewards[cfg.policy.task_id] = eval_mean_reward
 
                         # 如果达到目标奖励，将任务移入 solved_task_pool
-                        if eval_mean_reward >= cfg.policy.target_return:
-                            print(f"任务 {task_id} 达到了目标奖励 {cfg.policy.target_return}, 移入 solved_task_pool.")
+                        if eval_mean_reward >= cfg.policy.target_reward:
+                            print(f"任务 {task_id} 达到了目标奖励 {cfg.policy.target_reward}, 移入 solved_task_pool.")
                             solved_task_pool.add(task_id)
 
                     except Exception as e:
                         print(f"提取评估奖励时发生错误: {e}")
-                        task_returns[cfg.policy.task_id] = float('inf')  # 出现问题时，将奖励设为最大值
+                        task_rewards[cfg.policy.task_id] = float('inf')  # 出现问题时，将奖励设为最大值
 
 
             print('=' * 20)
@@ -579,17 +585,17 @@ def train_unizero_multitask_balance_segment_ddp(
         try:
             dist.barrier()
             if cfg.policy.task_complexity_weight:
-                all_task_returns = [None for _ in range(world_size)]
-                dist.all_gather_object(all_task_returns, task_returns)
-                merged_task_returns = {}
-                for rewards in all_task_returns:
+                all_task_rewards = [None for _ in range(world_size)]
+                dist.all_gather_object(all_task_rewards, task_rewards)
+                merged_task_rewards = {}
+                for rewards in all_task_rewards:
                     if rewards:
                         for tid, r in rewards.items():
                             if tid not in solved_task_pool:
-                                merged_task_returns[tid] = r
+                                merged_task_rewards[tid] = r
 
-                logging.warning(f"Rank {rank}: merged_task_returns: {merged_task_returns}")
-                task_weights = compute_task_weights(merged_task_returns, option="rank", temperature=current_temperature_task_weight)
+                logging.warning(f"Rank {rank}: merged_task_rewards: {merged_task_rewards}")
+                task_weights = compute_task_weights(merged_task_rewards, option="rank", temperature=current_temperature_task_weight)
                 dist.broadcast_object_list([task_weights], src=0)
                 print(f"rank{rank}, 全局任务权重 (按 task_id 排列): {task_weights}")
             else:
@@ -611,23 +617,13 @@ def train_unizero_multitask_balance_segment_ddp(
         # NOTE: TODO
         set_curriculum_stage_for_transformer(policy._learn_model.world_model.transformer, curriculum_stage)
 
-        # 同步所有Rank，确保所有Rank完成训练
-        # try:
-        #     dist.barrier()
-        #     logging.info(f'Rank {rank}: 通过set_curriculum_stage_for_transforme后的同步障碍')
-        # except Exception as e:
-        #     logging.error(f'Rank {rank}: set_curriculum_stage_for_transforme同步障碍失败，错误: {e}')
-        #     break
-        
         # print(f"Rank {rank}: unsolved_cfgs: {unsolved_cfgs})")
         # print(f"Rank {rank}: not_enough_data: {not_enough_data}")
 
         # 开始训练未解决任务的策略
         if len(unsolved_cfgs) == 0:
-            # ======== ============
             # TODO: check ddp grad 
-            print(f"Rank {rank}: 本 GPU 上所有任务均已解决，执行 dummy training 以确保 ddp 同步。")
-            
+            # print(f"Rank {rank}: 本 GPU 上所有任务均已解决，执行 dummy training 以确保 ddp 同步。")
             # for i in range(update_per_collect):
             #     policy.sync_gradients(policy._learn_model)
             #     print(f"Rank {rank}: after iter {i} sync_gradients。")
@@ -638,12 +634,8 @@ def train_unizero_multitask_balance_segment_ddp(
                 for cfg, collector, replay_buffer in zip(cfgs, collectors, game_buffers):
                 # for cfg, collector, replay_buffer in zip(unsolved_cfgs, unsolved_collectors, unsolved_buffers):
                     envstep_multi_task += collector.envstep
-                    # print(f"task:{cfg.policy.task_id} before cfg.policy.batch_size[cfg.policy.task_id]:{cfg.policy.batch_size[cfg.policy.task_id]}")
-                    cfg.policy.batch_size[cfg.policy.task_id] = 1
-                    policy._cfg.batch_size[task_id] = 1
-                    # print(f"task:{cfg.policy.task_id}  after cfg.policy.batch_size[cfg.policy.task_id]:{cfg.policy.batch_size[cfg.policy.task_id]}")
-
-                    batch_size = cfg.policy.batch_size[cfg.policy.task_id]
+                    # batch_size = cfg.policy.batch_size[cfg.policy.task_id]
+                    batch_size = 1
                     train_data = replay_buffer.sample(batch_size, policy)
                     train_data.append(cfg.policy.task_id)
                     train_data_multi_task.append(train_data)
@@ -652,7 +644,6 @@ def train_unizero_multitask_balance_segment_ddp(
                     learn_kwargs = {'task_weights': None, "ignore_grad": True}
                     log_vars = learner.train(train_data_multi_task, envstep_multi_task, policy_kwargs=learn_kwargs)
                     print(f"Rank {rank}: in unsolved_cfgs learner.train(train_data_multi_task) after iter {i} sync_gradients。")
-        
         else:
             for i in range(update_per_collect):
                 train_data_multi_task = []

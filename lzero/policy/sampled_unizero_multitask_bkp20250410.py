@@ -364,7 +364,6 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         weighted_total_loss = 0.0
         losses_list = []  # 存储每个任务的损失
 
-
         for task_id, data_one_task in enumerate(data):
             current_batch, target_batch, task_id = data_one_task
             obs_batch_ori, action_batch, child_sampled_actions_batch, target_action_batch, mask_batch, indices, weights, make_time = current_batch
@@ -418,10 +417,9 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
 
             batch_for_gpt['actions'] = action_batch.squeeze(-1)
 
-
-            # print(f'rank:{get_rank()}, task_id:{self.task_id}')
-            # print(f"len(child_sampled_actions_batch):{len(child_sampled_actions_batch)}")
-            # print(f"self._cfg.device:{self._cfg.device}")
+            print(f'rank:{get_rank()}, task_id:{self.task_id}')
+            print(f"len(child_sampled_actions_batch):{len(child_sampled_actions_batch)}")
+            print(f"self._cfg.device:{self._cfg.device}")
 
             batch_for_gpt['child_sampled_actions'] = torch.from_numpy(child_sampled_actions_batch).to(self._cfg.device)[:, :-1]
             batch_for_gpt['rewards'] = target_reward_categorical[:, :-1]
@@ -508,11 +506,6 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             weighted_total_loss.backward()
 
         total_grad_norm_before_clip_wm = torch.nn.utils.clip_grad_norm_(self._learn_model.world_model.parameters(), self._cfg.grad_clip_value)
-
-        if ignore_grad:
-            #  =========== NOTE: 对于一个GPU上所有任务都解决了的情况，为了ddp同步仍然调用train但是grad应该清零 ===========
-            self._optimizer_world_model.zero_grad()
-            # print(f"ignore_grad")
 
         if self._cfg.multi_gpu:
             # if not self._cfg.use_moco or self._cfg.only_use_moco_stats:
