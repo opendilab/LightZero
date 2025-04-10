@@ -24,8 +24,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
         policy=dict(
             multi_gpu=True,  # Very important for ddp
             only_use_moco_stats=False,
-            # use_moco=False,  # ==============TODO==============
-            use_moco=True,  # ==============TODO==============
+            use_moco=False,  # ==============TODO==============
+            # use_moco=True,  # ==============TODO==============
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=200000))),
             grad_correct_params=dict(
                 MoCo_beta=0.5, MoCo_beta_sigma=0.5, MoCo_gamma=0.1, MoCo_gamma_sigma=0.5, MoCo_rho=0,
@@ -39,8 +39,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 action_space_size=action_space_size,
                 norm_type=norm_type,
                 num_res_blocks=2,
-                num_channels=256,
-                # num_channels=512, # TODO
+                # num_channels=256,
+                num_channels=512, # ==============TODO==============
                 continuous_action_space=False,
                 world_model_cfg=dict(
                     # use_global_pooling=True,
@@ -147,9 +147,9 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250409/atari_{len(env_id_list)}games_encoderchannel512-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs32*8_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250409/atari_{len(env_id_list)}games_encoderchannel512-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-simnorm_bs32*8_seed{seed}/'
 
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250409/atari_{len(env_id_list)}games_moco_encoderchannel256-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs32*8_seed{seed}/'
+    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250409/atari_{len(env_id_list)}games_moco_encoderchannel256-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs32*8_seed{seed}/'
     
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250310/atari_{len(env_id_list)}games_concat-taskembed128_encoderchannel256-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs64*8_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250310/atari_{len(env_id_list)}games_encoderchannel512-nlayer12_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs64*8_seed{seed}/'
@@ -192,6 +192,7 @@ if __name__ == "__main__":
         Run the following command to launch the script:
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29504 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_channel256_moco_lnbeforelatlinear.log
         python -m torch.distributed.launch --nproc_per_node=8 --master_port=29504 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_channel512_lnbeforelatlinear.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29504 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_channel512_lnbeforelatlinear_finalsimnorm.log
 
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
