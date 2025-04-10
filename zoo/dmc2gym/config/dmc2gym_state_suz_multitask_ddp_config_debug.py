@@ -42,8 +42,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
         policy=dict(
             multi_gpu=True,  # TODO: enable multi-GPU for DDP
             only_use_moco_stats=False,
+            # use_moco=False,  # ==============TODO==============
             use_moco=False,  # ==============TODO==============
-            # use_moco=True,  # ==============TODO==============
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000))),
             grad_correct_params=dict(
                 # Example gradient correction parameters, adjust as needed
@@ -147,7 +147,7 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             n_episode=n_episode,
             replay_buffer_size=int(1e6),
             # eval_freq=int(5e3),
-            eval_freq=int(4e3),
+            eval_freq=int(5), # deug
             grad_clip_value=5,
             learning_rate=1e-4,
             discount_factor=0.99,
@@ -183,7 +183,7 @@ def generate_configs(env_id_list: List[str],
                     total_batch_size: int):
     configs = []
 
-    exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250410_balance/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250410_balance_debug/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     
@@ -238,7 +238,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config_debug.py 2>&1 | tee ./log/uz_mt_dmc_banlance_debug_20250410.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config_debug.py 2>&1 | tee ./log/uz_mt_dmc_banlance_debug_20250413.log
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -249,15 +249,25 @@ if __name__ == "__main__":
 
 
     global target_return_dict 
+    # target_return_dict = {
+    #     'acrobot-swingup': 500,
+    #     'cartpole-balance':950,
+    #     'cartpole-balance_sparse':950,
+    #     'cartpole-swingup': 800,
+    #     'cartpole-swingup_sparse': 750,
+    #     'cheetah-run': 650,
+    #     "ball_in_cup-catch": 950,
+    #     "finger-spin": 800,
+    # }
     target_return_dict = {
-        'acrobot-swingup': 500,
-        'cartpole-balance':950,
-        'cartpole-balance_sparse':950,
-        'cartpole-swingup': 800,
-        'cartpole-swingup_sparse': 750,
-        'cheetah-run': 650,
-        "ball_in_cup-catch": 950,
-        "finger-spin": 800,
+        'acrobot-swingup': 10,
+        'cartpole-balance':10,
+        'cartpole-balance_sparse':10,
+        'cartpole-swingup': 10,
+        'cartpole-swingup_sparse': 10,
+        'cheetah-run': 10,
+        "ball_in_cup-catch": 10,
+        "finger-spin": 10,
     }
     
     # DMC 8games

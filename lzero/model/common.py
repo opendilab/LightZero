@@ -301,9 +301,7 @@ class RepresentationNetworkUniZero(nn.Module):
             embedding_dim: int = 256,
             group_size: int = 8,
             final_norm_option_in_encoder: str = 'SimNorm',
-            use_adaptive_scale: bool = False
-            # use_global_pooling: bool = True  # 新增超参数：是否使用全局平均池化
-            # use_global_pooling: bool = False # 新增超参数：是否使用全局平均池化
+            use_adaptive_scale: bool = False,
     ) -> None:
         """
         Representation network used in UniZero.

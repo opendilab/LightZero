@@ -498,6 +498,8 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
         if self._cfg.use_moco:
             # 调用 MoCo backward，由 grad_correct 中的 backward 实现梯度校正
             lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
+            print(f'rank:{get_rank()}, after moco backword')
+
         elif self._cfg.only_use_moco_stats:
             lambd, stats = self.grad_correct.backward(losses=losses_list, **self._cfg.grad_correct_params)
             # 不使用梯度校正的情况，由各 rank 自己执行反向传播
@@ -518,6 +520,7 @@ class SampledUniZeroMTPolicy(UniZeroPolicy):
             # if not self._cfg.use_moco or self._cfg.only_use_moco_stats:
             #     self.sync_gradients(self._learn_model)
             if not self._cfg.use_moco:
+                dist.barrier() # ================== TODO: ==================
                 self.sync_gradients(self._learn_model)
                 print(f'rank:{get_rank()}, after self.sync_gradients(self._learn_model)')
 

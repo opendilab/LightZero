@@ -112,10 +112,10 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     # LoRA 参数：
                     curriculum_stage_num=3,
                     lora_target_modules=["attn", "feed_forward"],
-                    lora_r= 8,
-                    # lora_r= 64,
-                    lora_alpha =1,
-                    lora_dropout= 0.0,
+                    # lora_r= 8,
+                    lora_r=64,
+                    lora_alpha=1,
+                    lora_dropout=0.0,
                 ),
             ),
             use_task_exploitation_weight=False, # TODO
@@ -182,7 +182,7 @@ def generate_configs(env_id_list: List[str],
                     total_batch_size: int):
     configs = []
 
-    exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250410_balance/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_suz_dmc_mt_balance_20250413/dmc_{len(env_id_list)}tasks_curriculum-stage-num{3}_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     
@@ -237,7 +237,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee ./log/uz_mt_dmc8_banlance_20250410.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee ./log/uz_mt_dmc18_banlance_20250413.log
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -271,27 +271,48 @@ if __name__ == "__main__":
         "finger-spin",
     ]
 
+    target_return_dict = {
+        'acrobot-swingup': 500,
+        'cartpole-balance':950,
+        'cartpole-balance_sparse':950,
+        'cartpole-swingup': 800,
+        'cartpole-swingup_sparse': 750,
+        'cheetah-run': 650,
+        "ball_in_cup-catch": 950,
+        "finger-spin": 800,
+        "finger-turn_easy": 950, # 8 波动
+        "finger-turn_hard": 950,  # 9 波动
+        'hopper-hop': 150,  # 10 bad 
+        'hopper-stand': 600, # 11
+        'pendulum-swingup': 800, # 12 bad
+        'reacher-easy': 950, # 13
+        'reacher-hard': 950, # 14 波动
+        'walker-run': 600, # 15 略差
+        'walker-stand': 950, # 16
+        'walker-walk': 950, # 17
+    }
+
     # DMC 18games
-    # env_id_list = [
-    #     'acrobot-swingup', # 0
-    #     'cartpole-balance', # 1
-    #     'cartpole-balance_sparse', # 2
-    #     'cartpole-swingup', # 3
-    #     'cartpole-swingup_sparse', # 4 bad
-    #     'cheetah-run', # 5 bad
-    #     "ball_in_cup-catch", # 6
-    #     "finger-spin", # 7 bad
-    #     "finger-turn_easy", # 8 波动
-    #     "finger-turn_hard",  # 9 波动
-    #     'hopper-hop',  # 10 bad 
-    #     'hopper-stand', # 11
-    #     'pendulum-swingup', # 12 bad
-    #     'reacher-easy', # 13
-    #     'reacher-hard', # 14 波动
-    #     'walker-run', # 15 略差
-    #     'walker-stand', # 16
-    #     'walker-walk', # 17
-    # ]
+    env_id_list = [
+        'acrobot-swingup', # 0
+        'cartpole-balance', # 1
+        'cartpole-balance_sparse', # 2
+        'cartpole-swingup', # 3
+        'cartpole-swingup_sparse', # 4 bad
+        'cheetah-run', # 5 bad
+        "ball_in_cup-catch", # 6
+        "finger-spin", # 7 bad
+        "finger-turn_easy", # 8 波动
+        "finger-turn_hard",  # 9 波动
+        'hopper-hop',  # 10 bad 
+        'hopper-stand', # 11
+        'pendulum-swingup', # 12 bad
+        'reacher-easy', # 13
+        'reacher-hard', # 14 波动
+        'walker-run', # 15 略差
+        'walker-stand', # 16
+        'walker-walk', # 17
+    ]
 
 
 
