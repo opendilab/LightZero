@@ -23,7 +23,7 @@ import torch.nn.functional as F
 import torch.distributed as dist
 
 import concurrent.futures
-
+from lzero.model.unizero_world_models.transformer import set_curriculum_stage_for_transformer
 
 # 设置超时时间 (秒)
 TIMEOUT = 12000  # 例如200分钟
@@ -254,7 +254,7 @@ def compute_task_weights(
 
     return weights
 
-def train_unizero_multitask_segment_ddp(
+def train_unizero_multitask_balance_segment_ddp(
         input_cfg_list: List[Tuple[int, Tuple[dict, dict]]],
         seed: int = 0,
         model: Optional[torch.nn.Module] = None,
@@ -266,6 +266,13 @@ def train_unizero_multitask_segment_ddp(
     Overview:
         UniZero的训练入口，旨在通过解决MuZero类算法在需要捕捉长期依赖环境中的局限性，提高强化学习代理的规划能力。
         详细信息请参阅 https://arxiv.org/abs/2406.10667。
+
+        此版本同时支持课程学习思想，即：
+          - 为所有任务设定目标奖励 (target_reward)；
+          - 一旦某个任务达到目标奖励，则将其移入 solved_task_pool，从后续收集与训练中剔除；
+          - 任务根据难度划分为 N 个等级（例如简单与困难）；
+          - 在简单任务解决后，冻结 Backbone 参数，仅训练附加的 LoRA 模块（或类似结构），保证已解决任务性能；
+        这使得模型能先统一训练，继而在保护易学任务性能的前提下“精修”难学任务，实现递增训练。
 
     Args:
         - input_cfg_list (:obj:`List[Tuple[int, Tuple[dict, dict]]]`): 不同任务的配置列表。
@@ -411,6 +418,8 @@ def train_unizero_multitask_segment_ddp(
             collectors.append(collector)
             evaluators.append(evaluator)
 
+
+
     # 调用learner的before_run钩子
     learner.call_hook('before_run')
     value_priority_tasks = {}
@@ -425,6 +434,13 @@ def train_unizero_multitask_segment_ddp(
 
     # 创建任务奖励字典
     task_rewards = {}  # {task_id: reward}
+
+    # 初始化全局变量，用于课程学习：
+    solved_task_pool = set()        # 记录已达到目标奖励的任务 id
+    curriculum_switched = False     # 标志是否已经切换到仅训练 LoRA 的模式
+    curriculum_stage = 0
+    # 注意：cfg.policy 中需要提前配置 target_reward（可以是统一值，也可以是 dict，根据需要）
+    # 例如：cfg.policy.target_reward = 30.0
 
     while True:
         # 动态调整batch_size
@@ -441,6 +457,14 @@ def train_unizero_multitask_segment_ddp(
         # 对于当前进程的每个任务，进行数据收集和评估
         for idx, (cfg, collector, evaluator, replay_buffer) in enumerate(
                 zip(cfgs, collectors, evaluators, game_buffers)):
+
+            # TODO: ============
+            # cfg.policy.target_reward = 100
+            # cfg.policy.curriculum_stage_num = 2
+
+            # 如果任务已解决，则不参与后续评估和采集 TODO:ddp
+            if task_id in solved_task_pool:
+                continue
 
             # 记录缓冲区内存使用情况
             log_buffer_memory_usage(learner.train_iter, replay_buffer, tb_logger, cfg.policy.task_id)
@@ -465,8 +489,8 @@ def train_unizero_multitask_segment_ddp(
                 collect_kwargs['epsilon'] = epsilon_greedy_fn(collector.envstep)
 
             # 判断是否需要进行评估
-            # if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
-            if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
+            if learner.train_iter == 0 or evaluator.should_eval(learner.train_iter):
+            # if learner.train_iter > 10 and evaluator.should_eval(learner.train_iter): # only for debug
             # if evaluator.should_eval(learner.train_iter):
                 print('=' * 20)
                 print(f'Rank {rank} 评估任务_id: {cfg.policy.task_id}...')
@@ -486,6 +510,12 @@ def train_unizero_multitask_segment_ddp(
                         eval_mean_reward = reward.get('eval_episode_return_mean', float('inf'))
                         print(f"任务 {cfg.policy.task_id} 的评估奖励: {eval_mean_reward}")
                         task_rewards[cfg.policy.task_id] = eval_mean_reward
+
+                        # 如果达到目标奖励，将任务移入 solved_task_pool
+                        if eval_mean_reward >= cfg.policy.target_reward:
+                            print(f"任务 {task_id} 达到了目标奖励 {cfg.policy.target_reward}, 移入 solved_task_pool.")
+                            solved_task_pool.add(task_id)
+
                     except Exception as e:
                         print(f"提取评估奖励时发生错误: {e}")
                         task_rewards[cfg.policy.task_id] = float('inf')  # 出现问题时，将奖励设为最大值
@@ -530,6 +560,16 @@ def train_unizero_multitask_segment_ddp(
             # 数据收集结束后添加日志
             logging.info(f'Rank {rank}: 完成任务 {cfg.policy.task_id} 的数据收集')
 
+        # 训练前先只挑选出未解决任务的重放数据 TODO
+        unsolved_buffers = []
+        unsolved_cfgs = []
+        unsolved_collectors = []
+        for cfg, collector, replay_buffer in zip(cfgs, collectors, game_buffers):
+            if cfg.policy.task_id not in solved_task_pool:
+                unsolved_cfgs.append(cfg)
+                unsolved_collectors.append(collector)
+                unsolved_buffers.append(replay_buffer)
+
         # 检查是否有足够的数据进行训练
         not_enough_data = any(
             replay_buffer.get_num_of_transitions() < cfgs[0].policy.total_batch_size / world_size
@@ -541,26 +581,21 @@ def train_unizero_multitask_segment_ddp(
         # collector._policy._task_weight_temperature = current_temperature_task_weight
         # policy.collect_mode.get_attribute('task_weight_temperature') = current_temperature_task_weight
 
-        # 计算任务权重
+        # 计算任务权重时，只考虑未解决任务
         try:
-            # 汇聚任务奖励
             dist.barrier()
             if cfg.policy.task_complexity_weight:
                 all_task_rewards = [None for _ in range(world_size)]
                 dist.all_gather_object(all_task_rewards, task_rewards)
-                # 合并任务奖励
                 merged_task_rewards = {}
                 for rewards in all_task_rewards:
                     if rewards:
-                        merged_task_rewards.update(rewards)
-                
-                
-                logging.warning(f"Rank {rank}: merged_task_rewards: {merged_task_rewards}")
+                        for tid, r in rewards.items():
+                            if tid not in solved_task_pool:
+                                merged_task_rewards[tid] = r
 
-                # 计算全局任务权重
-                task_weights = compute_task_weights(merged_task_rewards, temperature=current_temperature_task_weight)
-                
-                # 同步任务权重
+                logging.warning(f"Rank {rank}: merged_task_rewards: {merged_task_rewards}")
+                task_weights = compute_task_weights(merged_task_rewards, option="rank", temperature=current_temperature_task_weight)
                 dist.broadcast_object_list([task_weights], src=0)
                 print(f"rank{rank}, 全局任务权重 (按 task_id 排列): {task_weights}")
             else:
@@ -570,122 +605,116 @@ def train_unizero_multitask_segment_ddp(
             break
 
 
-        # 学习策略
+        # ddp 同步全局已解决任务数量，更新 curriculum_stage
+        local_solved_count = len([task for task in solved_task_pool])
+        solved_counts_all = [None for _ in range(world_size)]
+        dist.all_gather_object(solved_counts_all, local_solved_count)
+        global_solved = sum(solved_counts_all)
+
+        # 预设阶段数 N=3，每达到 M/N 个任务，即更新阶段（注意：total_tasks 为 M）
+        curriculum_stage = int(global_solved // (total_tasks / cfg.policy.model.world_model_cfg.curriculum_stage_num))
+        print(f"Rank {rank}: Global curriculum stage 更新为 {curriculum_stage} (全局已解决任务 ={solved_task_pool}, 全局已解决任务数 = {global_solved})")
+        # NOTE: TODO
+        set_curriculum_stage_for_transformer(policy._learn_model.world_model.transformer, curriculum_stage)
+
+
+        # 开始训练未解决任务的策略
         if not not_enough_data:
-            for i in range(update_per_collect):
-                train_data_multi_task = []
-                envstep_multi_task = 0
-                for idx, (cfg, collector, replay_buffer) in enumerate(zip(cfgs, collectors, game_buffers)):
-                    envstep_multi_task += collector.envstep
-                    batch_size = cfg.policy.batch_size[cfg.policy.task_id]
-                    if replay_buffer.get_num_of_transitions() > batch_size:
-                        if cfg.policy.buffer_reanalyze_freq >= 1:
-                            if i % reanalyze_interval == 0 and \
-                                    replay_buffer.get_num_of_transitions() // cfg.policy.num_unroll_steps > int(
-                                reanalyze_batch_size / cfg.policy.reanalyze_partition):
-                                with timer:
-                                    replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
-                                buffer_reanalyze_count += 1
-                                logging.info(f'缓冲区重新分析次数: {buffer_reanalyze_count}')
-                                logging.info(f'缓冲区重新分析耗时: {timer.value}')
+            if not unsolved_cfgs:
+                # TODO: check loss
+                print(f"Rank {rank}: 本 GPU 上所有任务均已解决，执行 dummy training 以确保 ddp 同步。")
+                for i in range(update_per_collect):
+                    dummy_loss = torch.tensor(0.0, requires_grad=True, device=cfg.policy.device)
+                    dummy_loss.backward()
+                    policy.sync_gradients(self._learn_model)
+            else:
+                for i in range(update_per_collect):
+                    train_data_multi_task = []
+                    envstep_multi_task = 0
+                    for cfg, collector, replay_buffer in zip(unsolved_cfgs, unsolved_collectors, unsolved_buffers):
+                        envstep_multi_task += collector.envstep
+                        batch_size = cfg.policy.batch_size[cfg.policy.task_id]
+                        if replay_buffer.get_num_of_transitions() > batch_size:
+                            if cfg.policy.buffer_reanalyze_freq >= 1:
+                                if i % reanalyze_interval == 0 and \
+                                        replay_buffer.get_num_of_transitions() // cfg.policy.num_unroll_steps > int(
+                                    reanalyze_batch_size / cfg.policy.reanalyze_partition):
+                                    with timer:
+                                        replay_buffer.reanalyze_buffer(reanalyze_batch_size, policy)
+                                    buffer_reanalyze_count += 1
+                                    logging.info(f'缓冲区重新分析次数: {buffer_reanalyze_count}')
+                                    logging.info(f'缓冲区重新分析耗时: {timer.value}')
 
-                        train_data = replay_buffer.sample(batch_size, policy)
-                        train_data.append(cfg.policy.task_id)  # 追加task_id以区分任务
-                        train_data_multi_task.append(train_data)
-                    else:
-                        logging.warning(
-                            f'重放缓冲区中的数据不足以采样mini-batch: '
-                            f'batch_size: {batch_size}, replay_buffer: {replay_buffer}'
-                        )
-                        break
-
-                if train_data_multi_task:
-                    # learn_kwargs = {'task_exploitation_weight':task_exploitation_weight, 'task_weights':task_weights, }
-                    learn_kwargs = {'task_weights': task_weights, }
-                    # learn_kwargs = {'task_weights':task_exploitation_weight}
-
-                    # 在训练时，DDP会自动同步梯度和参数
-                    log_vars = learner.train(train_data_multi_task, envstep_multi_task, policy_kwargs=learn_kwargs)
-
-                    # 判断是否需要计算task_exploitation_weight
-                    if i == 0:
-                        # 计算任务权重
-                        try:
-                            dist.barrier()  # 等待所有进程同步
-                            if cfg.policy.use_task_exploitation_weight: # use obs loss now, new polish
-                                # 收集所有任务的 obs_loss
-                                all_obs_loss = [None for _ in range(world_size)]
-                                # 构建当前进程的任务 obs_loss 数据
-                                merged_obs_loss_task = {}
-                                for cfg, replay_buffer in zip(cfgs, game_buffers):
-                                    task_id = cfg.policy.task_id
-                                    if f'noreduce_obs_loss_task{task_id}' in log_vars[0]:
-                                        merged_obs_loss_task[task_id] = log_vars[0][f'noreduce_obs_loss_task{task_id}']
-                                # 汇聚所有进程的 obs_loss 数据
-                                dist.all_gather_object(all_obs_loss, merged_obs_loss_task)
-                                # 合并所有进程的 obs_loss 数据
-                                global_obs_loss_task = {}
-                                for obs_loss_task in all_obs_loss:
-                                    if obs_loss_task:
-                                        global_obs_loss_task.update(obs_loss_task)
-                                # 计算全局任务权重
-                                if global_obs_loss_task:
-                                    task_exploitation_weight = compute_task_weights(
-                                        global_obs_loss_task,
-                                        option="rank",
-                                        # temperature=current_temperature_task_weight # TODO
-                                        temperature=1,
-                                    )
-                                    # 广播任务权重到所有进程
-                                    dist.broadcast_object_list([task_exploitation_weight], src=0)
-                                    print(f"rank{rank}, task_exploitation_weight (按 task_id 排列): {task_exploitation_weight}")
-                                else:
-                                    logging.warning(f"Rank {rank}: 未能计算全局 obs_loss 任务权重，obs_loss 数据为空。")
-                                    task_exploitation_weight = None
-                            else:
-                                task_exploitation_weight = None
-                            # 更新训练参数，使其包含计算后的任务权重
-                            learn_kwargs['task_weight'] = task_exploitation_weight
-                        except Exception as e:
-                            logging.error(f'Rank {rank}: 同步任务权重失败，错误: {e}')
-                            raise e  # 保留异常抛出，便于外部捕获和分析
-
-
-
-                    if cfg.policy.use_priority:
-                        for idx, (cfg, replay_buffer) in enumerate(zip(cfgs, game_buffers)):
-                            # 更新任务特定的重放缓冲区优先级
-                            task_id = cfg.policy.task_id
-                            replay_buffer.update_priority(
-                                train_data_multi_task[idx],
-                                log_vars[0][f'value_priority_task{task_id}']
+                            train_data = replay_buffer.sample(batch_size, policy)
+                            train_data.append(cfg.policy.task_id)
+                            train_data_multi_task.append(train_data)
+                        else:
+                            logging.warning(
+                                f'任务 {cfg.policy.task_id} 重放缓冲区中的数据不足以采样 mini-batch: '
+                                f'batch_size: {batch_size}, replay_buffer: {replay_buffer}'
                             )
+                            break
 
-                            current_priorities = log_vars[0][f'value_priority_task{task_id}']
-                            mean_priority = np.mean(current_priorities)
-                            std_priority = np.std(current_priorities)
+                    if train_data_multi_task:
+                        learn_kwargs = {'task_weights': task_weights, }
+                        log_vars = learner.train(train_data_multi_task, envstep_multi_task, policy_kwargs=learn_kwargs)
 
-                            alpha = 0.1  # 平滑因子
-                            if f'running_mean_priority_task{task_id}' not in value_priority_tasks:
-                                value_priority_tasks[f'running_mean_priority_task{task_id}'] = mean_priority
-                            else:
-                                value_priority_tasks[f'running_mean_priority_task{task_id}'] = (
-                                        alpha * mean_priority +
-                                        (1 - alpha) * value_priority_tasks[f'running_mean_priority_task{task_id}']
+                        if i == 0:
+                            try:
+                                dist.barrier()
+                                if cfg.policy.use_task_exploitation_weight:
+                                    all_obs_loss = [None for _ in range(world_size)]
+                                    merged_obs_loss_task = {}
+                                    for cfg, replay_buffer in zip(unsolved_cfgs, unsolved_buffers):
+                                        task_id = cfg.policy.task_id
+                                        if f'noreduce_obs_loss_task{task_id}' in log_vars[0]:
+                                            merged_obs_loss_task[task_id] = log_vars[0][f'noreduce_obs_loss_task{task_id}']
+                                    dist.all_gather_object(all_obs_loss, merged_obs_loss_task)
+                                    global_obs_loss_task = {}
+                                    for obs_loss_task in all_obs_loss:
+                                        if obs_loss_task:
+                                            global_obs_loss_task.update(obs_loss_task)
+                                    if global_obs_loss_task:
+                                        task_exploitation_weight = compute_task_weights(
+                                            global_obs_loss_task,
+                                            option="rank",
+                                            temperature=1,
+                                        )
+                                        dist.broadcast_object_list([task_exploitation_weight], src=0)
+                                        print(f"rank{rank}, task_exploitation_weight (按 task_id 排列): {task_exploitation_weight}")
+                                    else:
+                                        logging.warning(f"Rank {rank}: 未能计算全局 obs_loss 任务权重，obs_loss 数据为空。")
+                                        task_exploitation_weight = None
+                                else:
+                                    task_exploitation_weight = None
+                                learn_kwargs['task_weight'] = task_exploitation_weight
+                            except Exception as e:
+                                logging.error(f'Rank {rank}: 同步任务权重失败，错误: {e}')
+                                raise e
+
+                        if cfg.policy.use_priority:
+                            for cfg, replay_buffer in zip(unsolved_cfgs, unsolved_buffers):
+                                task_id = cfg.policy.task_id
+                                replay_buffer.update_priority(
+                                    train_data, log_vars[0][f'value_priority_task{task_id}']
                                 )
-
-                            # 使用运行均值计算归一化的优先级
-                            running_mean_priority = value_priority_tasks[f'running_mean_priority_task{task_id}']
-                            normalized_priorities = (current_priorities - running_mean_priority) / (std_priority + 1e-6)
-
-                            # 如果需要，可以将归一化的优先级存储回重放缓冲区
-                            # replay_buffer.update_priority(train_data_multi_task[idx], normalized_priorities)
-
-                            # 记录优先级统计信息
-                            if cfg.policy.print_task_priority_logs:
-                                print(f"任务 {task_id} - 平均优先级: {mean_priority:.8f}, "
-                                      f"运行平均优先级: {running_mean_priority:.8f}, "
-                                      f"标准差: {std_priority:.8f}")
+                                current_priorities = log_vars[0][f'value_priority_task{task_id}']
+                                mean_priority = np.mean(current_priorities)
+                                std_priority = np.std(current_priorities)
+                                alpha = 0.1
+                                if f'running_mean_priority_task{task_id}' not in value_priority_tasks:
+                                    value_priority_tasks[f'running_mean_priority_task{task_id}'] = mean_priority
+                                else:
+                                    value_priority_tasks[f'running_mean_priority_task{task_id}'] = (
+                                            alpha * mean_priority +
+                                            (1 - alpha) * value_priority_tasks[f'running_mean_priority_task{task_id}']
+                                    )
+                                running_mean_priority = value_priority_tasks[f'running_mean_priority_task{task_id}']
+                                normalized_priorities = (current_priorities - running_mean_priority) / (std_priority + 1e-6)
+                                if cfg.policy.print_task_priority_logs:
+                                    print(f"任务 {task_id} - 平均优先级: {mean_priority:.8f}, "
+                                        f"运行平均优先级: {running_mean_priority:.8f}, "
+                                        f"标准差: {std_priority:.8f}")
 
         train_epoch += 1
         policy.recompute_pos_emb_diff_and_clear_cache()

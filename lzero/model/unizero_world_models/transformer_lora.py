@@ -1,4 +1,3 @@
-
 """
 Modified from https://github.com/karpathy/nanoGPT
 
@@ -21,35 +20,29 @@ from .kv_caching import KeysValues
 from .moe import MoeLayer, MultiplicationFeedForward
 from line_profiler import line_profiler
 from lzero.model.common import SimNorm
-import logging
 
-##############################################
-# CurriculumLoRALinear 实现
-##############################################
 
-class CurriculumLoRALinear(nn.Module):
+#############################################
+# 新增：LoRA 微调相关代码
+#############################################
+class LoRALinear(nn.Module):
     """
-    CurriculumLoRALinear 对标准的线性映射进行了扩展：
-    
-    - 内部保存了基础的 W 和 bias 参数（基础 transformer 部分）。
-    - 同时初始化了多个 LoRA adapter 参数（数量 = curriculum_stage_num - 1）。
-    - 前向计算：
-        如果 curriculum_stage == 0：
-            输出 = F.linear(x, W, bias)
-        如果 curriculum_stage >= 1：
-            输出 = 基础输出 + sum_{i=0}^{curriculum_stage-1} scaling * adapter_i(x)
-             其中，仅当前阶段 adapter（即 index == curriculum_stage - 1）参与更新，其它 adapter 使用 detach() 保证前向贡献但不传递梯度。
-    
-    注意：
-        - 外部在阶段切换时调用 set_curriculum_stage(stage) 来更新状态。
-        - 每次调用时，通过 log 信息展示当前模块的维度信息以及冻结/激活状态。
+    LoRA 适配器包装的线性层。
+
+    原理：
+      使用冻结的原始 nn.Linear 层，并添加两个小型低秩矩阵，
+      计算公式为：y = x @ W^T + scaling * ((drop(x) @ A^T) @ B^T)
+      其中 A 和 B 为低秩参数，scaling = lora_alpha / r.
     """
-    def __init__(self, in_features: int, out_features: int, bias: bool = True,
-                 r: int = 0, lora_alpha: int = 1, lora_dropout: float = 0.0,
-                 curriculum_stage_num: int = 1):
-        """
-        如果 curriculum_stage_num > 1，则初始化 (curriculum_stage_num - 1) 个 LoRA adapter。
-        """
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        r: int = 0,
+        lora_alpha: int = 1,
+        lora_dropout: float = 0.0
+    ):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -57,166 +50,66 @@ class CurriculumLoRALinear(nn.Module):
         self.lora_alpha = lora_alpha
         self.scaling = lora_alpha / r if r > 0 else 1.0
         self.lora_dropout = nn.Dropout(p=lora_dropout) if lora_dropout > 0.0 else nn.Identity()
-        self.curriculum_stage_num = curriculum_stage_num  # 总阶段数
-        self.curriculum_stage = 0  # 初始阶段 0
 
-        # 初始化基础权重（基础 transformer 部分），默认参与训练
+        # 原始权重（冻结参数，不更新）
         self.weight = nn.Parameter(torch.empty(out_features, in_features))
-        if bias:
-            self.bias = nn.Parameter(torch.empty(out_features))
-        else:
-            self.bias = None
+        self.bias = nn.Parameter(torch.empty(out_features)) if bias else None
         nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if bias:
             fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
             bound = 1 / math.sqrt(fan_in)
             nn.init.uniform_(self.bias, -bound, bound)
 
-        # 初始化 LoRA adapter，只有在 r > 0 且 curriculum_stage_num > 1 时才存在
-        self.adapters = nn.ModuleList()
-        if r > 0 and (curriculum_stage_num - 1) > 0:
-            for i in range(curriculum_stage_num - 1):
-                adapter = nn.ParameterDict({
-                    'lora_A': nn.Parameter(torch.randn(r, in_features) * 0.01),
-                    'lora_B': nn.Parameter(torch.zeros(out_features, r))
-                })
-                self.adapters.append(adapter)
+        # 低秩矩阵参数（仅在 r > 0 时添加）
+        if r > 0:
+            # A 将 in_features 映射到低秩 r；B 从低秩 r 映射回 out_features
+            self.lora_A = nn.Parameter(torch.randn(r, in_features) * 0.01)
+            self.lora_B = nn.Parameter(torch.zeros(out_features, r))
         else:
-            self.adapters = None
+            self.lora_A = None
+            self.lora_B = None
 
-        # 初始时：stage==0，基础层参与更新，adapter 均冻结
-        self.weight.requires_grad = True
+        # 冻结原始权重参数，保证仅更新 LoRA 参数
+        self.weight.requires_grad = False
         if self.bias is not None:
-            self.bias.requires_grad = True
-        if self.adapters is not None:
-            for adapter in self.adapters:
-                adapter['lora_A'].requires_grad = False
-                adapter['lora_B'].requires_grad = False
-
-    def set_curriculum_stage(self, stage: int):
-        """
-        设置当前阶段 stage，取值范围 [0, curriculum_stage_num-1]，并同步冻结/激活各部分参数。
-        
-        - stage == 0：基础层参与前向和更新，所有 adapter 均冻结；
-        - stage >= 1：冻结基础层（只用于前向），仅当前 adapter（index == stage - 1）参与更新，
-          前面 adapter 虽然前向贡献，但通过 detach() 不传导梯度。
-          
-        同时将 log 出模块信息和状态变化。
-        """
-        assert 0 <= stage < self.curriculum_stage_num, f"stage 必须在 [0, {self.curriculum_stage_num-1}] 范围内"
-        self.curriculum_stage = stage
-
-        # 输出 log 信息，展示当前模块（可结合 in_features, out_features 标识）
-        module_id = f"({self.in_features}x{self.out_features})"
-        if stage == 0:
-            self.weight.requires_grad = True
-            if self.bias is not None:
-                self.bias.requires_grad = True
-            if self.adapters is not None:
-                for idx, adapter in enumerate(self.adapters):
-                    adapter['lora_A'].requires_grad = False
-                    adapter['lora_B'].requires_grad = False
-            logging.info(f"[CurriculumLoRALinear {module_id}] Stage 0: 基础层可训练，所有 adapter 均冻结。")
-        else:
-            # 阶段大于 0，冻结基础层
-            self.weight.requires_grad = False
-            if self.bias is not None:
-                self.bias.requires_grad = False
-            for idx, adapter in enumerate(self.adapters):
-                if idx == stage - 1:
-                    adapter['lora_A'].requires_grad = True
-                    adapter['lora_B'].requires_grad = True
-                    logging.info(f"[CurriculumLoRALinear {module_id}] Stage {stage}: 激活 adapter {idx} (可训练)。")
-                else:
-                    adapter['lora_A'].requires_grad = False
-                    adapter['lora_B'].requires_grad = False
-                    logging.info(f"[CurriculumLoRALinear {module_id}] Stage {stage}: 冻结 adapter {idx} (仅前向不更新)。")
+            self.bias.requires_grad = False
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        baseline_out = F.linear(x, self.weight, self.bias)
-        if self.curriculum_stage == 0 or self.adapters is None:
-            return baseline_out
+        # 原始线性输出（冻结部分）
+        result = F.linear(x, self.weight, self.bias)
+        # 如启用了 LoRA，则加上低秩部分
+        if self.r > 0:
+            lora_out = F.linear(self.lora_dropout(x), self.lora_A)  # (…, r)
+            lora_out = F.linear(lora_out, self.lora_B)                # (…, out_features)
+            result = result + self.scaling * lora_out
+        return result
 
-        adapter_out = 0
-        # 对于前 curriculum_stage 个 adapter，只有最后一个正常反向传播，其它用 detach() 保证仅前向效果
-        for idx in range(self.curriculum_stage):
-            if idx >= len(self.adapters):
-                break
-            adapter = self.adapters[idx]
-            out = F.linear(self.lora_dropout(x), adapter['lora_A'])
-            out = F.linear(out, adapter['lora_B'])
-            if idx == self.curriculum_stage - 1:
-                adapter_out = adapter_out + self.scaling * out  # 当前 adapter参与更新
-            else:
-                adapter_out = adapter_out + self.scaling * out.detach()
-        return baseline_out + adapter_out
-
-##############################################
-# 修改 _maybe_wrap_linear 辅助函数
-##############################################
 
 def _maybe_wrap_linear(linear: nn.Linear, config, module_label: str) -> nn.Module:
     """
-    辅助函数：当满足以下条件时，将传入的 nn.Linear 层替换为
-    CurriculumLoRALinear：
-      - config.lora_r > 0
-      - module_label 在 config.lora_target_modules 中
-      - 并且 config 中配置了 curriculum_stage_num > 1
-    否则，若仅满足基础 LoRA 条件，则返回原有 LoRALinear；否则返回原始的线性层。
+    辅助函数：当 config.lora_r > 0 且 module_label 存在于 config.lora_target_modules 时，
+    将传入的线性层替换为 LoRALinear，并复制原始权重数据。
+
+    module_label 的取值含义由上层逻辑定义，例如：
+      - 若 module_label 为 "attn"，表示在 SelfAttention 中替换 k, q, v, proj 等层。
+      - 若 module_label 为 "feed_forward"，表示在 Transformer Block 的 MLP 中替换线性层。
     """
-    if config.lora_r > 0 and (module_label in config.lora_target_modules) and getattr(config, "curriculum_stage_num", 1) > 1:
-        new_linear = CurriculumLoRALinear(
+    if config.lora_r > 0 and module_label in config.lora_target_modules:
+        new_linear = LoRALinear(
             in_features=linear.in_features,
             out_features=linear.out_features,
             bias=(linear.bias is not None),
             r=config.lora_r,
             lora_alpha=config.lora_alpha,
-            lora_dropout=config.lora_dropout,
-            curriculum_stage_num=config.curriculum_stage_num
+            lora_dropout=config.lora_dropout
         )
         new_linear.weight.data.copy_(linear.weight.data)
         if linear.bias is not None:
             new_linear.bias.data.copy_(linear.bias.data)
         return new_linear
-    # elif config.lora_r > 0 and (module_label in config.lora_target_modules):
-    #     # 若不使用课程学习，则调用原有 LoRALinear 实现（未展示，此处假设其已定义）
-    #     new_linear = LoRALinear(
-    #         in_features=linear.in_features,
-    #         out_features=linear.out_features,
-    #         bias=(linear.bias is not None),
-    #         r=config.lora_r,
-    #         lora_alpha=config.lora_alpha,
-    #         lora_dropout=config.lora_dropout
-    #     )
-    #     new_linear.weight.data.copy_(linear.weight.data)
-    #     if linear.bias is not None:
-    #         new_linear.bias.data.copy_(linear.bias.data)
-    #     return new_linear
     else:
         return linear
 
-##############################################
-# 辅助函数：在 transformer 内部遍历所有 CurriculumLoRALinear 模块，并设置阶段
-##############################################
-
-def set_curriculum_stage_for_transformer(transformer: nn.Module, stage: int):
-    """
-    遍历 transformer 内的所有子模块，找到所有 CurriculumLoRALinear 的实例，
-    并调用其 set_curriculum_stage(stage) 方法，同时记录 log 信息。
-    """
-    count = 0
-    for module in transformer.modules():
-        # logging.info(f"[Transformer] module {module}.")
-
-        if isinstance(module, CurriculumLoRALinear):
-            module.set_curriculum_stage(stage)
-            count += 1
-    logging.info(f"[Transformer] 共更新 {count} 个 CurriculumLoRALinear 模块为 curriculum stage {stage}.")
-
-
-##############################################
-# TransformerConfig 示例（增加 curriculum_stage_num）
-##############################################
 @dataclass
 class TransformerConfig:
     tokens_per_block: int
@@ -235,17 +128,15 @@ class TransformerConfig:
     lora_r: int = 0
     lora_alpha: int = 1
     lora_dropout: float = 0.0
+    # 指定哪些模块应用 LoRA，默认：attention 中的 k, q, v, proj 和 feed_forward 层（当非 moe 模型时）
     lora_target_modules: list = None
 
-    # 课程学习相关参数：
-    # curriculum_stage_num 表示总阶段数（例如 3 表示阶段 0,1,2）
-    curriculum_stage_num: int = 1
-
-    # 其它配置项（略）
+    # Register Token 相关
     task_embed_option: str = "none"
     register_token_num: int = 4
     register_token_shared: bool = True
 
+    # 其它配置项
     gru_gating: bool = False
     moe_in_transformer: bool = False
     multiplication_moe_in_transformer: bool = False
@@ -551,7 +442,6 @@ class SelfAttention(nn.Module):
 
         if config.lora_r > 0 and ("attn" in config.lora_target_modules):
             self.key = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
-            print("key type:", type(self.key))  # 期望返回 CurriculumLoRALinear
             self.query = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
             self.value = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")
             self.proj = _maybe_wrap_linear(nn.Linear(config.embed_dim, config.embed_dim), config, "attn")

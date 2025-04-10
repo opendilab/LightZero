@@ -42,8 +42,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
         policy=dict(
             multi_gpu=True,  # TODO: enable multi-GPU for DDP
             only_use_moco_stats=False,
-            # use_moco=False,  # ==============TODO==============
-            use_moco=True,  # ==============TODO==============
+            use_moco=False,  # ==============TODO==============
+            # use_moco=True,  # ==============TODO==============
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000))),
             grad_correct_params=dict(
                 # Example gradient correction parameters, adjust as needed
@@ -76,7 +76,7 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     # task_embed_option='concat_task_embed',   # ==============TODO: none ==============
                     # use_task_embed=True, # ==============TODO==============
                     # task_embed_dim=128,
-                    # # task_embed_dim=96,
+                    # task_embed_dim=96,
 
                     observation_shape_list=observation_shape_list,
                     action_space_size_list=action_space_size_list,
@@ -110,7 +110,10 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     num_experts_of_moe_in_transformer=4,
                     
                     # LoRA 参数：
-                    lora_r= 0,
+                    curriculum_stage_num=3,
+                    lora_target_modules=["attn", "feed_forward"],
+                    lora_r= 8,
+                    # lora_r= 64,
                     lora_alpha =1,
                     lora_dropout= 0.0,
                 ),
@@ -118,7 +121,11 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             use_task_exploitation_weight=False, # TODO
             # use_task_exploitation_weight=True, # TODO
 
-            task_complexity_weight=False, # TODO
+            target_reward = 30,
+            balance_pipeline=True,
+            # task_complexity_weight=False, # TODO
+            task_complexity_weight=True, # TODO
+
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
             # train_start_after_envsteps=int(2e3), # TODO
@@ -176,7 +183,9 @@ def generate_configs(env_id_list: List[str],
                     total_batch_size: int):
     configs = []
 
-    exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250407_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250410_balance/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
+
+    # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250325/dmc_{len(env_id_list)}tasks_task-exploitation-weight_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250311/dmc_{len(env_id_list)}tasks_concattaskembed-128_nlayer8_not-share-head_final-ln_bs64*8_brf{buffer_reanalyze_freq}_seed{seed}/'
@@ -229,53 +238,30 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee ./log/uz_mt_dmc_moco.log
+        python -m torch.distributed.launch --nproc_per_node=4 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config_debug.py 2>&1 | tee ./log/uz_mt_dmc_banlance_debug_20250410.log
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
-    from lzero.entry import train_unizero_multitask_segment_ddp
+    from lzero.entry import train_unizero_multitask_balance_segment_ddp
     from ding.utils import DDPContext
     import os
     from zoo.dmc2gym.config.dmc_state_env_space_map import dmc_state_env_action_space_map, dmc_state_env_obs_space_map
 
-    os.environ["NCCL_TIMEOUT"] = "3600000000"
 
 
     # DMC 8games
-    # env_id_list = [
-    #     'acrobot-swingup',
-    #     'cartpole-balance',
-    #     'cartpole-balance_sparse',
-    #     'cartpole-swingup',
-    #     'cartpole-swingup_sparse',
-    #     'cheetah-run',
-    #     "ball_in_cup-catch",
-    #     "finger-spin",
-    # ]
-
-    # DMC 18games
     env_id_list = [
-        'acrobot-swingup', # 0
-        'cartpole-balance', # 1
-        'cartpole-balance_sparse', # 2
-        'cartpole-swingup', # 3
-        'cartpole-swingup_sparse', # 4 bad
-        'cheetah-run', # 5 bad
-        "ball_in_cup-catch", # 6
-        "finger-spin", # 7 bad
-        "finger-turn_easy", # 8 波动
-        "finger-turn_hard",  # 9 波动
-        'hopper-hop',  # 10 bad 
-        'hopper-stand', # 11
-        'pendulum-swingup', # 12 bad
-        'reacher-easy', # 13
-        'reacher-hard', # 14 波动
-        'walker-run', # 15 略差
-        'walker-stand', # 16
-        'walker-walk', # 17
+        'acrobot-swingup',
+        'cartpole-balance',
+        'cartpole-balance_sparse',
+        'cartpole-swingup',
+        'cartpole-swingup_sparse',
+        # 'cheetah-run',
+        # "ball_in_cup-catch",
+        # "finger-spin",
     ]
 
-    # debug
+    # DMC 18games
     # env_id_list = [
     #     'acrobot-swingup', # 0
     #     'cartpole-balance', # 1
@@ -285,9 +271,19 @@ if __name__ == "__main__":
     #     'cheetah-run', # 5 bad
     #     "ball_in_cup-catch", # 6
     #     "finger-spin", # 7 bad
-    #     # "finger-turn_easy", # 8 波动
-    #     # "finger-turn_hard",  # 9 波动
+    #     "finger-turn_easy", # 8 波动
+    #     "finger-turn_hard",  # 9 波动
+    #     'hopper-hop',  # 10 bad 
+    #     'hopper-stand', # 11
+    #     'pendulum-swingup', # 12 bad
+    #     'reacher-easy', # 13
+    #     'reacher-hard', # 14 波动
+    #     'walker-run', # 15 略差
+    #     'walker-stand', # 16
+    #     'walker-walk', # 17
     # ]
+
+
 
     # 获取各环境的 action_space_size 和 observation_shape
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
@@ -347,6 +343,6 @@ if __name__ == "__main__":
     )
 
     with DDPContext():
-        train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
+        train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
         # 如果只想训练部分任务，可以修改 configs，例如:
         # train_unizero_multitask_segment_ddp(configs[:4], seed=seed, max_env_step=max_env_step)
