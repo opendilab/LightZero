@@ -420,8 +420,7 @@ def train_unizero_multitask_segment_ddp(
     reanalyze_batch_size = cfg.policy.reanalyze_batch_size
     update_per_collect = cfg.policy.update_per_collect
 
-    task_complexity_weight = cfg.policy.task_complexity_weight
-    use_task_exploitation_weight = cfg.policy.use_task_exploitation_weight
+    # use_task_exploitation_weight = cfg.policy.use_task_exploitation_weight
     task_exploitation_weight = None
 
     # 创建任务奖励字典
@@ -546,7 +545,7 @@ def train_unizero_multitask_segment_ddp(
         try:
             # 汇聚任务奖励
             dist.barrier()
-            if task_complexity_weight:
+            if cfg.policy.task_complexity_weight:
                 all_task_rewards = [None for _ in range(world_size)]
                 dist.all_gather_object(all_task_rewards, task_rewards)
                 # 合并任务奖励
@@ -597,7 +596,8 @@ def train_unizero_multitask_segment_ddp(
 
                 if train_data_multi_task:
                     # learn_kwargs = {'task_exploitation_weight':task_exploitation_weight, 'task_weights':task_weights, }
-                    learn_kwargs = {'task_weights':task_exploitation_weight}
+                    learn_kwargs = {'task_weights': task_weights, }
+                    # learn_kwargs = {'task_weights':task_exploitation_weight}
 
                     # 在训练时，DDP会自动同步梯度和参数
                     log_vars = learner.train(train_data_multi_task, envstep_multi_task, policy_kwargs=learn_kwargs)
@@ -607,7 +607,7 @@ def train_unizero_multitask_segment_ddp(
                         # 计算任务权重
                         try:
                             dist.barrier()  # 等待所有进程同步
-                            if use_task_exploitation_weight:
+                            if cfg.policy.use_task_exploitation_weight: # use obs loss now, new polish
                                 # 收集所有任务的 obs_loss
                                 all_obs_loss = [None for _ in range(world_size)]
                                 # 构建当前进程的任务 obs_loss 数据

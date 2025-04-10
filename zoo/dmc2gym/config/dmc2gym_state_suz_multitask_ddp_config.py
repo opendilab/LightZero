@@ -33,17 +33,17 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             evaluator_env_num=evaluator_env_num,
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False),
-            game_segment_length=100,  # As per single-task config
+            # game_segment_length=100,  # As per single-task config
             # ===== TODO: only for debug =====
-            # game_segment_length=10,  # As per single-task config
-            # collect_max_episode_steps=int(20),
-            # eval_max_episode_steps=int(20),
+            game_segment_length=10,  # As per single-task config
+            collect_max_episode_steps=int(20),
+            eval_max_episode_steps=int(20),
         ),
         policy=dict(
             multi_gpu=True,  # TODO: enable multi-GPU for DDP
             only_use_moco_stats=False,
-            # use_moco=False,  # ==============TODO==============
-            use_moco=True,  # ==============TODO==============
+            use_moco=False,  # ==============TODO==============
+            # use_moco=True,  # ==============TODO==============
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000))),
             grad_correct_params=dict(
                 # Example gradient correction parameters, adjust as needed
@@ -70,12 +70,12 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     analysis_dormant_ratio_weight_rank=False, # TODO
                     dormant_threshold=0.025,
                     
-                    # task_embed_option=None,   # ==============TODO: none ==============
-                    # use_task_embed=False, # ==============TODO==============
+                    task_embed_option=None,   # ==============TODO: none ==============
+                    use_task_embed=False, # ==============TODO==============
 
-                    task_embed_option='concat_task_embed',   # ==============TODO: none ==============
-                    use_task_embed=True, # ==============TODO==============
-                    task_embed_dim=128,
+                    # task_embed_option='concat_task_embed',   # ==============TODO: none ==============
+                    # use_task_embed=True, # ==============TODO==============
+                    # task_embed_dim=128,
                     # task_embed_dim=96,
 
                     observation_shape_list=observation_shape_list,
@@ -95,8 +95,8 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
                     max_tokens=2 * num_unroll_steps,  # Each timestep has 2 tokens: obs and action
                     context_length=2 * infer_context_length,
                     device='cuda',
-                    # num_layers=1, # TODO: debug config
-                    num_layers=8, # TODO
+                    num_layers=1, # TODO: debug config
+                    # num_layers=8, # TODO
                     num_heads=24,
                     embed_dim=768,
                     env_num=max(collector_env_num, evaluator_env_num),
@@ -118,7 +118,10 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             use_task_exploitation_weight=False, # TODO
             # use_task_exploitation_weight=True, # TODO
 
-            task_complexity_weight=False, # TODO
+            balance_pipeline=True,
+            # task_complexity_weight=False, # TODO
+            task_complexity_weight=True, # TODO
+
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
             # train_start_after_envsteps=int(2e3), # TODO
@@ -128,9 +131,9 @@ def create_config(env_id, observation_shape_list, action_space_size_list, collec
             cuda=True,
             model_path=None,
             num_unroll_steps=num_unroll_steps,
-            # update_per_collect=2,  # TODO: debug config
+            update_per_collect=2,  # TODO: debug config
             # update_per_collect=200,  # TODO: 8*100*0.25=200
-            update_per_collect=80,  # TODO: 8*100*0.1=80
+            # update_per_collect=80,  # TODO: 8*100*0.1=80
             replay_ratio=reanalyze_ratio,
             batch_size=batch_size,
             optim_type='AdamW',
@@ -176,7 +179,7 @@ def generate_configs(env_id_list: List[str],
                     total_batch_size: int):
     configs = []
 
-    exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_concattaskembed128_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250410_balance/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_suz_dmc_mt_20250409_moco/dmc_{len(env_id_list)}tasks_notaskembed_nlayer8_not-share-head_final-ln_bs64_brf{buffer_reanalyze_freq}_seed{seed}/'
     
@@ -231,7 +234,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee ./log/uz_mt_dmc_moco_taskembed_20250409.log
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py 2>&1 | tee ./log/uz_mt_dmc_banlance_debug_20250410.log
         torchrun --nproc_per_node=8 ./zoo/dmc2gym/config/dmc2gym_state_suz_multitask_ddp_config.py
     """
 
@@ -244,40 +247,18 @@ if __name__ == "__main__":
 
 
     # DMC 8games
-    # env_id_list = [
-    #     'acrobot-swingup',
-    #     'cartpole-balance',
-    #     'cartpole-balance_sparse',
-    #     'cartpole-swingup',
-    #     'cartpole-swingup_sparse',
-    #     'cheetah-run',
-    #     "ball_in_cup-catch",
-    #     "finger-spin",
-    # ]
-
-    # DMC 18games
     env_id_list = [
-        'acrobot-swingup', # 0
-        'cartpole-balance', # 1
-        'cartpole-balance_sparse', # 2
-        'cartpole-swingup', # 3
-        'cartpole-swingup_sparse', # 4 bad
-        'cheetah-run', # 5 bad
-        "ball_in_cup-catch", # 6
-        "finger-spin", # 7 bad
-        "finger-turn_easy", # 8 波动
-        "finger-turn_hard",  # 9 波动
-        'hopper-hop',  # 10 bad 
-        'hopper-stand', # 11
-        'pendulum-swingup', # 12 bad
-        'reacher-easy', # 13
-        'reacher-hard', # 14 波动
-        'walker-run', # 15 略差
-        'walker-stand', # 16
-        'walker-walk', # 17
+        'acrobot-swingup',
+        'cartpole-balance',
+        'cartpole-balance_sparse',
+        'cartpole-swingup',
+        'cartpole-swingup_sparse',
+        'cheetah-run',
+        "ball_in_cup-catch",
+        "finger-spin",
     ]
 
-    # debug
+    # DMC 18games
     # env_id_list = [
     #     'acrobot-swingup', # 0
     #     'cartpole-balance', # 1
@@ -287,9 +268,19 @@ if __name__ == "__main__":
     #     'cheetah-run', # 5 bad
     #     "ball_in_cup-catch", # 6
     #     "finger-spin", # 7 bad
-    #     # "finger-turn_easy", # 8 波动
-    #     # "finger-turn_hard",  # 9 波动
+    #     "finger-turn_easy", # 8 波动
+    #     "finger-turn_hard",  # 9 波动
+    #     'hopper-hop',  # 10 bad 
+    #     'hopper-stand', # 11
+    #     'pendulum-swingup', # 12 bad
+    #     'reacher-easy', # 13
+    #     'reacher-hard', # 14 波动
+    #     'walker-run', # 15 略差
+    #     'walker-stand', # 16
+    #     'walker-walk', # 17
     # ]
+
+
 
     # 获取各环境的 action_space_size 和 observation_shape
     action_space_size_list = [dmc_state_env_action_space_map[env_id] for env_id in env_id_list]
@@ -319,12 +310,12 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    # collector_env_num = 2
-    # num_segments = 2
-    # n_episode = 2
-    # evaluator_env_num = 2
-    # num_simulations = 1
-    # batch_size = [4 for _ in range(len(env_id_list))]
+    collector_env_num = 2
+    num_segments = 2
+    n_episode = 2
+    evaluator_env_num = 2
+    num_simulations = 1
+    batch_size = [4 for _ in range(len(env_id_list))]
     # =======================================
 
     seed = 0  # You can iterate over multiple seeds if needed
