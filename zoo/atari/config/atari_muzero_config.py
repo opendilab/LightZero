@@ -14,7 +14,7 @@ num_simulations = 50
 update_per_collect = None
 replay_ratio = 0.25
 batch_size = 256
-max_env_step = int(2e5)
+max_env_step = int(5e5)
 reanalyze_ratio = 0.
 
 # =========== for debug ===========
@@ -33,13 +33,13 @@ atari_muzero_config = dict(
     env=dict(
         stop_value=int(1e6),
         env_id=env_id,
-        observation_shape=(4, 64, 64),  # (4, 96, 96)
+        observation_shape=(4, 64, 64),
         frame_stack_num=4,
         gray_scale=True,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        manager=dict(shared_memory=False, ),
+        manager=dict(shared_memory=True, ),
         # TODO: debug
         # collect_max_episode_steps=int(50),
         # eval_max_episode_steps=int(50),
@@ -48,17 +48,16 @@ atari_muzero_config = dict(
         analysis_sim_norm=False,
         cal_dormant_ratio=False,
         model=dict(
-            observation_shape=(4, 64, 64),  # (4, 96, 96)
-            image_channel=1,
+            observation_shape=(4, 64, 64),
             frame_stack_num=4,
+            image_channel=1,
             gray_scale=True,
             action_space_size=action_space_size,
             downsample=True,
-            self_supervised_learning_loss=True,  # default is False
+            self_supervised_learning_loss=True,
             discrete_action_encoding_type='one_hot',
             norm_type='BN',
             use_sim_norm=True,
-            use_sim_norm_kl_loss=False,
             model_type='conv'
         ),
         cuda=True,
