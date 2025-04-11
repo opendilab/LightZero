@@ -2,7 +2,6 @@ import copy
 from ditk import logging
 from typing import List
 
-# import gymnasium as gym
 import gym 
 import numpy as np
 from ding.envs import BaseEnv, BaseEnvTimestep
@@ -50,6 +49,9 @@ class AtariEnvLightZero(BaseEnv):
         replay_path=None,
         # (bool) If set to True, the game screen is converted to grayscale, reducing the complexity of the observation space.
         gray_scale=True,
+        # (int) Specifies the number of consecutive frames to stack after collecting environment data. 
+        # The stacking process is applied within the collector and evaluator modules.
+        frame_stack_num=1,
         # (int) The number of frames to skip between each action. Higher values result in faster simulation.
         frame_skip=4,
         # (bool) If True, the game ends when the agent loses a life, otherwise, the game only ends when all lives are lost.
@@ -113,14 +115,11 @@ class AtariEnvLightZero(BaseEnv):
             # Create and return the wrapped environment for Atari LightZero.
             self._env = wrap_lightzero(self.cfg, episode_life=self.cfg.episode_life, clip_rewards=self.cfg.clip_rewards)
 
-            if self.cfg.frame_stack_num > 1:
-                observation_space_before_stack = (
-                    int(self.cfg.observation_shape[0] / self.cfg.frame_stack_num),
-                    self.cfg.observation_shape[1],
-                    self.cfg.observation_shape[2]
-                )
-            else:
-                observation_space_before_stack = self.cfg.observation_shape
+            observation_space_before_stack = (
+                int(self.cfg.observation_shape[0] / self.cfg.frame_stack_num),
+                self.cfg.observation_shape[1],
+                self.cfg.observation_shape[2]
+            )
 
             self._observation_space = gym.spaces.Dict({
                 'observation': gym.spaces.Box(
@@ -199,7 +198,6 @@ class AtariEnvLightZero(BaseEnv):
 
         action_mask = np.ones(self._action_space.n, 'int8')
 
-        # return {'observation': observation, 'action_mask': action_mask, 'to_play': -1, 'timestep': self._timestep}
         return {'observation': observation, 'action_mask': action_mask, 'to_play': np.array(-1), 'timestep': np.array(self._timestep)}
 
         

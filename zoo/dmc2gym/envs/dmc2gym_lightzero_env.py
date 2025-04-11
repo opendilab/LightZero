@@ -262,27 +262,6 @@ class DMC2GymEnv(BaseEnv):
             width=self._cfg["width"],
             channels_first=self._cfg["channels_first"]
         )
-        self._observation_space = gym.spaces.Dict({
-                'observation': self._observation_space_origin,
-                'action_mask': gym.spaces.Box(
-                    low=0,
-                    high=1,
-                    shape=(1,),
-                    dtype=np.int8
-                ),
-                'to_play': gym.spaces.Box(
-                    low=-1,
-                    high=2,
-                    shape=(),
-                    dtype=np.int8
-                ),
-                'timestep': gym.spaces.Box(
-                    low=0,
-                    high=self._cfg.collect_max_episode_steps,
-                    shape=(),
-                    dtype=np.int32
-                ),
-            })
         self._action_space = dmc2gym_env_info[self._cfg.domain_name][self._cfg.task_name]["action_space"]
         self._reward_space = dmc2gym_env_info[self._cfg.domain_name][self._cfg.task_name]["reward_space"](
             self._cfg["frame_skip"])

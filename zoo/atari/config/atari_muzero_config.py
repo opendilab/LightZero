@@ -36,11 +36,10 @@ atari_muzero_config = dict(
         observation_shape=(4, 64, 64),
         frame_stack_num=4,
         gray_scale=True,
-        image_channel=1,
         collector_env_num=collector_env_num,
         evaluator_env_num=evaluator_env_num,
         n_evaluator_episode=evaluator_env_num,
-        manager=dict(shared_memory=False, ),
+        manager=dict(shared_memory=True, ),
         # TODO: debug
         # collect_max_episode_steps=int(50),
         # eval_max_episode_steps=int(50),
@@ -50,8 +49,8 @@ atari_muzero_config = dict(
         cal_dormant_ratio=False,
         model=dict(
             observation_shape=(4, 64, 64),
-            image_channel=1,
             frame_stack_num=4,
+            image_channel=1,
             gray_scale=True,
             action_space_size=action_space_size,
             downsample=True,
