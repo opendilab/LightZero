@@ -37,7 +37,7 @@ class GameBuffer(ABC, object):
         # (bool) Whether to use the root value in the reanalyzing part. Please refer to EfficientZero paper for details.
         use_root_value=False,
         # (int) The number of samples required for mini inference.
-        mini_infer_size=10240,
+        mini_infer_size=20480,
         # (str) The type of sampled data. The default is 'transition'. Options: 'transition', 'episode'.
         sample_type='transition',
     )
