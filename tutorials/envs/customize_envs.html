@@ -198,12 +198,17 @@
 <h3>5. <strong>Observation Space and Action Space</strong><br><a class="headerlink" href="#observation-space-and-action-space-br" title="Permalink to this heading"></a></h3>
 <p>In a custom environment, you need to provide properties for observation space and action space. These properties are <code class="docutils literal notranslate"><span class="pre">gym.Space</span></code> objects that describe the shape and type of observations and actions. For example:</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="nd">@property</span>
-<span class="n">defobservation_space</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">observation_space</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">observation_space</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_observation_space</span>
 
 <span class="nd">@property</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">action_space</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
-    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">env</span><span class="o">.</span><span class="n">action_space</span>
+    <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_action_space</span>
+    
+<span class="nd">@property</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">legal_actions</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="c1"># get the actual legal actions</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_action_space</span><span class="o">.</span><span class="n">n</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>

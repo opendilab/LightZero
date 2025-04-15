@@ -81,12 +81,17 @@ In a custom environment, you need to provide properties for observation space an
 
 ```python
 @property
-defobservation_space(self):
-    return self.env.observation_space
+def observation_space(self):
+    return self._observation_space
 
 @property
 def action_space(self):
-    return self.env.action_space
+    return self._action_space
+    
+@property
+def legal_actions(self):
+    # get the actual legal actions
+    return np.arange(self._action_space.n)
 ```
 
 ### 6. **Render Method**<br>
