@@ -39,20 +39,19 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 action_space_size=action_space_size,
                 norm_type=norm_type,
                 num_res_blocks=2,
-                # num_channels=256,
-                num_channels=512, # ==============TODO==============
+                num_channels=256,
+                # num_channels=512, # ==============TODO==============
                 continuous_action_space=False,
                 world_model_cfg=dict(
-                    # use_global_pooling=True,
                     use_global_pooling=False,
 
-                    final_norm_option_in_obs_head='LayerNorm',
-                    final_norm_option_in_encoder='LayerNorm',
-                    predict_latent_loss_type='mse', # TODO: for latent state layer_norm
+                    # final_norm_option_in_obs_head='LayerNorm',
+                    # final_norm_option_in_encoder='LayerNorm',
+                    # predict_latent_loss_type='mse', # TODO: for latent state layer_norm
                                         
-                    # final_norm_option_in_obs_head='SimNorm',
-                    # final_norm_option_in_encoder='SimNorm',
-                    # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
+                    final_norm_option_in_obs_head='SimNorm',
+                    final_norm_option_in_encoder='SimNorm',
+                    predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                    
                     # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                     # share_head=True, # TODO
@@ -104,13 +103,22 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     num_experts_of_moe_in_transformer=4,
 
                     # LoRA 参数：
-                    lora_r= 0,
-                    lora_alpha =1,
-                    lora_dropout= 0.0,
+                    curriculum_stage_num=3,
+                    lora_target_modules=["attn", "feed_forward"],
+                    # lora_r= 8,
+                    lora_r=64,
+                    lora_alpha=1,
+                    lora_dropout=0.0,
                 ),
             ),
             use_task_exploitation_weight=False, # TODO
-            task_complexity_weight=False, # TODO
+            # use_task_exploitation_weight=True, # TODO
+
+            target_return =target_return_dict[env_id],
+            balance_pipeline=True,
+            # task_complexity_weight=False, # TODO
+            task_complexity_weight=True, # TODO
+
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
             # train_start_after_envsteps=int(0), # TODO: DEBUG
@@ -147,7 +155,7 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250415/atari_{len(env_id_list)}games_encoderchannel512-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-ln_tbs1536_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_balance_20250415/atari_{len(env_id_list)}games_encoderchannel256-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-simnorm_tbs1536_seed{seed}/'
 
     # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250409/atari_{len(env_id_list)}games_moco_encoderchannel256-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs32*8_seed{seed}/'
     
@@ -190,11 +198,8 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29504 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_channel256_moco_lnbeforelatlinear.log
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29504 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_channel512_lnbeforelatlinear.log
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29504 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_channel512_lnbeforelatlinear_finalsimnorm_20250415.log
 
-        torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29502 /fs-computility/ai-shen/puyuan/code/LightZero/zoo/atari/config/atari_unizero_multitask_segment_ddp_balance_config.py 2>&1 | tee ./log/uz_mt_atari8_banlance_20250415.log
     """
 
     from lzero.entry import train_unizero_multitask_segment_ddp
@@ -217,6 +222,96 @@ if __name__ == "__main__":
         'KrullNoFrameskip-v4', 'KungFuMasterNoFrameskip-v4', 'PrivateEyeNoFrameskip-v4', 'UpNDownNoFrameskip-v4',
         'QbertNoFrameskip-v4', 'BreakoutNoFrameskip-v4',
     ]
+
+    def get_atari_target_return_dict(ratio=1.0):
+        """
+        根据 Human 分数和传入的比例参数 ratio 计算每个 Atari 游戏的 target_return。
+        
+        参数：
+            ratio: 控制 target_return 大小的比例因子，默认为 1.0
+        
+        返回：
+            包含 Atari 游戏 target_return 的字典，key 为环境名称，value 为计算后的目标分数（整数）。
+        """
+        human_scores = {
+            # 8games
+            'PongNoFrameskip-v4': 14.6,
+            'MsPacmanNoFrameskip-v4': 6951.6,
+            'SeaquestNoFrameskip-v4': 42054.7,
+            'BoxingNoFrameskip-v4': 12.1,
+            'AlienNoFrameskip-v4': 7127.7,
+            'ChopperCommandNoFrameskip-v4': 7387.8,
+            'HeroNoFrameskip-v4': 30826.4,
+            'RoadRunnerNoFrameskip-v4': 7845.0,
+            # 后续 Atari 26games 的额外项
+            'AmidarNoFrameskip-v4': 1719.5,
+            'AssaultNoFrameskip-v4': 742.0,
+            'AsterixNoFrameskip-v4': 8503.3,
+            'BankHeistNoFrameskip-v4': 753.1,
+            'BattleZoneNoFrameskip-v4': 37187.5,
+            'CrazyClimberNoFrameskip-v4': 35829.4,
+            'DemonAttackNoFrameskip-v4': 1971.0,
+            'FreewayNoFrameskip-v4': 29.6,
+            'FrostbiteNoFrameskip-v4': 4334.7,
+            'GopherNoFrameskip-v4': 2412.5,
+            'JamesbondNoFrameskip-v4': 302.8,
+            'KangarooNoFrameskip-v4': 3035.0,
+            'KrullNoFrameskip-v4': 2665.5,
+            'KungFuMasterNoFrameskip-v4': 22736.3,
+            'PrivateEyeNoFrameskip-v4': 69571.3,
+            'UpNDownNoFrameskip-v4': 11693.2,
+            'QbertNoFrameskip-v4': 13455.0,
+            'BreakoutNoFrameskip-v4': 30.5,
+        }
+        # 计算每个游戏的 target_return
+        return {env: int(round(score * ratio)) for env, score in human_scores.items()}
+
+
+    global target_return_dict 
+
+    # 示例：以 ratio=1 使用
+    target_return_dict = get_atari_target_return_dict(ratio=0.8)
+
+    # 分别定义 Atari 游戏列表（8games 和 26games）
+    env_id_list = [
+        'PongNoFrameskip-v4',
+        'MsPacmanNoFrameskip-v4',
+        'SeaquestNoFrameskip-v4',
+        'BoxingNoFrameskip-v4',
+        'AlienNoFrameskip-v4',
+        'ChopperCommandNoFrameskip-v4',
+        'HeroNoFrameskip-v4',
+        'RoadRunnerNoFrameskip-v4',
+    ]
+
+    # env_id_list = [
+    #     'PongNoFrameskip-v4',
+    #     'MsPacmanNoFrameskip-v4',
+    #     'SeaquestNoFrameskip-v4',
+    #     'BoxingNoFrameskip-v4',
+    #     'AlienNoFrameskip-v4',
+    #     'ChopperCommandNoFrameskip-v4',
+    #     'HeroNoFrameskip-v4',
+    #     'RoadRunnerNoFrameskip-v4',
+    #     'AmidarNoFrameskip-v4',
+    #     'AssaultNoFrameskip-v4',
+    #     'AsterixNoFrameskip-v4',
+    #     'BankHeistNoFrameskip-v4',
+    #     'BattleZoneNoFrameskip-v4',
+    #     'CrazyClimberNoFrameskip-v4',
+    #     'DemonAttackNoFrameskip-v4',
+    #     'FreewayNoFrameskip-v4',
+    #     'FrostbiteNoFrameskip-v4',
+    #     'GopherNoFrameskip-v4',
+    #     'JamesbondNoFrameskip-v4',
+    #     'KangarooNoFrameskip-v4',
+    #     'KrullNoFrameskip-v4',
+    #     'KungFuMasterNoFrameskip-v4',
+    #     'PrivateEyeNoFrameskip-v4',
+    #     'UpNDownNoFrameskip-v4',
+    #     'QbertNoFrameskip-v4',
+    #     'BreakoutNoFrameskip-v4',
+    # ]
 
     action_space_size = 18
     collector_env_num = 8
@@ -253,6 +348,7 @@ if __name__ == "__main__":
     # infer_context_length = 2
     # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
 
+    from lzero.entry import train_unizero_multitask_balance_segment_ddp
 
     for seed in [0]:
         configs = generate_configs(env_id_list, action_space_size, collector_env_num, n_episode, evaluator_env_num,
@@ -261,6 +357,6 @@ if __name__ == "__main__":
                                    num_segments, total_batch_size)
 
         with DDPContext():
-            train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
+            train_unizero_multitask_balance_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
             # ======== TODO: only for debug ========
             # train_unizero_multitask_segment_ddp(configs[:2], seed=seed, max_env_step=max_env_step) # train on the first four tasks
