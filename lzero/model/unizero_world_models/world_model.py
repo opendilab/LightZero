@@ -99,6 +99,8 @@ class WorldModel(nn.Module):
 
         # 首先，构建需要跳过初始化的模块集合
         skip_modules = set(self.tokenizer.encoder.pretrained_model.modules())
+        skip_modules.update(self.tokenizer.decoder_network.modules())
+
         def custom_init(module):
             # 如果当前 module 属于跳过初始化的模块，则直接返回
             if module in skip_modules:
@@ -1355,15 +1357,11 @@ class WorldModel(nn.Module):
         elif self.obs_type == 'text':
             perceptual_loss = torch.tensor(0., device=batch['observations'].device,
                                            dtype=torch.float32)
-
-            # Reconstruct observations from latent state representations
-            # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings.reshape(-1, self.embed_dim))
-
+            # # Reconstruct observations from latent state representations
+            reconstructed_logits = self.tokenizer.decode_to_language_logits(obs_embeddings, batch['observations'])
             # # Calculate reconstruction loss
-            # latent_recon_loss = self.tokenizer.reconstruction_loss(batch['observations'].reshape(-1, 25),
-            #                                                        reconstructed_images)
-            latent_recon_loss = self.latent_recon_loss
-
+            latent_recon_loss = self.tokenizer.lm_reconstruction_loss(batch['observations'], reconstructed_logits, ignore_index=0)
+            # latent_recon_loss = self.latent_recon_loss
         elif self.obs_type == 'image_memory':
             # Reconstruct observations from latent state representations
             # reconstructed_images = self.tokenizer.decode_to_obs(obs_embeddings)

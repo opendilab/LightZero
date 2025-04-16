@@ -36,7 +36,7 @@ class Tokenizer(nn.Module):
     Overview:
         Tokenizer model that encodes and decodes observations.
     """
-    def __init__(self, encoder=None, decoder_network=None, with_lpips: bool = False) -> None:
+    def __init__(self, encoder=None, decoder_network=None, with_lpips: bool = False, projection: list = None) -> None:
         """Initialize the Tokenizer.
 
         Arguments:
@@ -53,6 +53,11 @@ class Tokenizer(nn.Module):
 
         self.encoder = encoder
         self.decoder_network = decoder_network
+
+        if projection is None:
+            self.projection_layer = nn.Identity()
+        else:
+            self.projection_layer = nn.Linear(projection[0], projection[1])
 
     def encode_to_obs_embeddings(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -100,6 +105,74 @@ class Tokenizer(nn.Module):
         """
         return self.decoder_network(embeddings)
 
+    # for Train
+    def decode_to_language_logits(self, embeddings: torch.Tensor, target_ids: torch.Tensor) -> torch.Tensor:
+        # embeddings: [B, T, H] -> [B * T, 1, H]
+        if embeddings.dim() == 3:
+            embeddings = embeddings.reshape(embeddings.shape[0] * embeddings.shape[1], 1, -1)
+        elif embeddings.dim() == 2:
+            embeddings = embeddings.unsqueeze(1)
+        # target_ids: [B, T, L] -> [B * T, L]
+        target_ids = target_ids.reshape(target_ids.shape[0] * target_ids.shape[1], -1)
+        # For each decision transformer token (encoding for one observation),
+        # the embedding serves as the initial hidden state for t5 to decode.
+        # Hence, the sequence dimension can be paralleled, i.e. should be merged to the batch dimension.
+        embeddings = self.projection_layer(embeddings)
+        outputs = self.decoder_network(
+            input_ids=target_ids,
+            encoder_hidden_states=embeddings,
+        )
+        logits = self.decoder_network.lm_head(outputs.last_hidden_state)
+    
+    @torch.no_grad() 
+    def decode_to_language_logits_for_inference(self, embeddings: torch.Tensor, max_length: int = 512, pad_token_id: int = 0, eos_token_id: int = 102) -> torch.Tensor:
+        
+        self.decoder_network.eval()
+        
+        if not isinstance(embeddings, torch.Tensor):
+            embeddings = torch.tensor(embeddings, dtype=torch.float32) 
+
+        embeddings = embeddings.to(self.decoder_network.device)
+
+        if embeddings.dim() == 3:
+            embeddings = embeddings.reshape(embeddings.shape[0] * embeddings.shape[1], 1, -1)
+        elif embeddings.dim() == 2:
+            embeddings = embeddings.unsqueeze(1)
+
+        embeddings = self.projection_layer(embeddings)
+
+        batch_size = embeddings.shape[0]
+        device = embeddings.device
+        decoder_input_ids = torch.full(
+            (batch_size, 1),
+            pad_token_id,
+            dtype=torch.long,
+            device=device
+        )
+
+        generated_ids = []
+
+        for _ in range(max_length):
+            outputs = self.decoder_network(
+                input_ids=decoder_input_ids,
+                encoder_hidden_states=embeddings,
+                return_dict=True
+            )
+            hidden_states = outputs.last_hidden_state      
+            logits = self.decoder_network.lm_head(hidden_states)  
+
+            next_token_logits = logits[:, -1, :]            
+            next_token = next_token_logits.argmax(dim=-1, keepdim=True)  
+
+            decoder_input_ids = torch.cat([decoder_input_ids, next_token], dim=1)
+            generated_ids.append(next_token)
+            if (next_token == eos_token_id).all():
+                break
+
+        generated_ids = torch.cat(generated_ids, dim=1).cpu().tolist()     
+   
+        return generated_ids
+
     @staticmethod
     def reconstruction_loss(original_images: torch.Tensor, reconstructed_images: torch.Tensor) -> torch.Tensor:
         """Calculate the reconstruction loss.
@@ -119,6 +192,18 @@ class Tokenizer(nn.Module):
             loss = torch.abs(original_images - reconstructed_images).mean()  # L1 loss
         return loss
 
+    def lm_reconstruction_loss(self, labels: torch.Tensor, logits: torch.Tensor, ignore_index: int) -> torch.Tensor:
+        total_dims = 1
+        for i in labels.shape:
+            total_dims *= i
+        logits = logits.reshape(total_dims, -1)
+        labels = labels.reshape(total_dims).long()
+        if ignore_index is None:
+            loss = F.cross_entropy(logits, labels)
+        else:
+            loss = F.cross_entropy(logits, labels, ignore_index=ignore_index)
+        return loss
+
     def perceptual_loss(self, original_images: torch.Tensor, reconstructed_images: torch.Tensor) -> torch.Tensor:
         """Calculate the perceptual loss using LPIPS.
 
@@ -130,6 +215,8 @@ class Tokenizer(nn.Module):
             torch.Tensor: Computed perceptual loss.
         """
         return torch.mean(self.lpips(original_images, reconstructed_images))
+
+    
 
     def __repr__(self) -> str:
         return "Tokenizer"

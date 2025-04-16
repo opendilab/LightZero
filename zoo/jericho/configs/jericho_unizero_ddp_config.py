@@ -19,7 +19,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     gpu_num = 4
     collector_env_num: int = 4       # Number of collector environments
     n_episode = int(collector_env_num*gpu_num)
-    batch_size = int(64*gpu_num)
+    batch_size = int(16*gpu_num)
 
     # ------------------------------------------------------------------
     # Base environment parameters (Note: these values might be adjusted for different env_id)
@@ -28,8 +28,8 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
 
     # v1
     env_configurations = {
-        'detective.z5': (20, 50),
-        'omniquest.z5': (25, 100),
+        'detective.z5': (12, 100),
+        'omniquest.z5': (25, 150),
         'acorncourt.z5': (30, 50),
         'zork1.z5': (40, 400),
     }
@@ -44,9 +44,9 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
 
     # msteps=500 bug
 
-    # env_id = 'detective.z5'
+    env_id = 'detective.z5'
     # env_id = 'omniquest.z5'
-    env_id = 'acorncourt.z5'
+    # env_id = 'acorncourt.z5'
     # env_id = 'zork1.z5'
 
     # Set action_space_size and max_steps based on env_id
@@ -56,14 +56,18 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     # User frequently modified configurations
     # ------------------------------------------------------------------
     evaluator_env_num: int = 3       # Number of evaluator environments
-    num_simulations: int = 50        # Number of simulations
+    num_simulations: int = 100        # Number of simulations
 
     # Project training parameters
     num_unroll_steps: int = 10       # Number of unroll steps (for rollout sequence expansion)
     infer_context_length: int = 4    # Inference context length
+
+    # num_unroll_steps: int = 20       # Number of unroll steps (for rollout sequence expansion)
+    # infer_context_length: int = 10    # Inference context length
+
     num_layers: int = 2              # Number of layers in the model
-    replay_ratio: float = 0.25       # Replay ratio for experience replay
-    # replay_ratio: float = 0.1       # Replay ratio for experience replay
+    # replay_ratio: float = 0.25       # Replay ratio for experience replay
+    replay_ratio: float = 0.1       # Replay ratio for experience replay
     embed_dim: int = 768             # Embedding dimension
 
     # Reanalysis (reanalyze) parameters:
@@ -132,6 +136,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     # final_norm_option_in_encoder='SimNorm',
                     # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                     policy_entropy_weight=5e-2,
+                    # policy_entropy_weight=0.5,
                     continuous_action_space=False,
                     max_blocks=num_unroll_steps,
                     # Note: Each timestep contains 2 tokens: observation and action.
@@ -144,6 +149,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
                     embed_dim=embed_dim,
                     obs_type="text",  # TODO: Modify as needed.
                     env_num=max(collector_env_num, evaluator_env_num),
+                    latent_recon_loss_weight=0.1
                 ),
             ),
             update_per_collect=int(collector_env_num*max_steps*replay_ratio),  # Important for DDP
@@ -157,6 +163,9 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
             cos_lr_scheduler=False,
             fixed_temperature_value=0.25,
             manual_temperature_decay=False,
+            # manual_temperature_decay=True,
+            # threshold_training_steps_for_final_lr_temperature=3000,
+
             num_simulations=num_simulations,
             n_episode=n_episode,
             train_start_after_envsteps=0,  # TODO: Adjust training start trigger if needed.
@@ -203,7 +212,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
         main_config = lz_to_ddp_config(main_config)
         # Construct experiment name containing key parameters
         main_config.exp_name = (
-            f"data_lz/data_unizero_jericho_20250402/bge-base-en-v1.5/uz_final-ln_ddp-{gpu_num}gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
+            f"data_lz/data_unizero_jericho_0416/bge-base-en-v1.5/uz_final-ln_ddp-{gpu_num}gpu_cen{collector_env_num}_rr{replay_ratio}_ftemp025_{env_id[:8]}_ms{max_steps}_ass-{action_space_size}_"
             f"nlayer{num_layers}_embed{embed_dim}_Htrain{num_unroll_steps}-"
             f"Hinfer{infer_context_length}_bs{batch_size}_seed{seed}"
         )
@@ -245,3 +254,4 @@ if __name__ == "__main__":
 
     # Start the main process with the provided arguments
     main(args.env, args.seed)
+# 
