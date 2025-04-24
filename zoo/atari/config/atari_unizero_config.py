@@ -14,8 +14,7 @@ def main(env_id='BoxingNoFrameskip-v4', seed=0):
     game_segment_length = 20
     evaluator_env_num = 3
     num_simulations = 50
-    # max_env_step = int(1e5) # 100k steps for now
-    max_env_step = 100
+    max_env_step = int(1e5) # 100k steps for now
     batch_size = 64
     num_unroll_steps = 10
     infer_context_length = 4 # H?
@@ -39,7 +38,7 @@ def main(env_id='BoxingNoFrameskip-v4', seed=0):
     # end of the most frequently changed config specified by the user
     # ==============================================================
     atari_unizero_config = dict(
-        env=dict(
+        env=dict( # Environment Settings
             stop_value=int(1e6),
             env_id=env_id,
             observation_shape=(3, 64, 64),
@@ -52,7 +51,7 @@ def main(env_id='BoxingNoFrameskip-v4', seed=0):
             # collect_max_episode_steps=int(50),
             # eval_max_episode_steps=int(50),
         ),
-        policy=dict(
+        policy=dict( # Policy settings
             learn=dict(learner=dict(hook=dict(save_ckpt_after_iter=1000000, ), ), ),  # default is 10000
             model=dict(
                 observation_shape=(3, 64, 64),
@@ -86,6 +85,8 @@ def main(env_id='BoxingNoFrameskip-v4', seed=0):
             eval_freq=int(5e3),
             collector_env_num=collector_env_num,
             evaluator_env_num=evaluator_env_num,
+            use_wandb=True,
+            wandb_project="LightZero",
         ),
     )
     atari_unizero_config = EasyDict(atari_unizero_config)
