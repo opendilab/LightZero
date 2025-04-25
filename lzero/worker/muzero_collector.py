@@ -42,6 +42,7 @@ class MuZeroCollector(ISerialCollector):
             exp_name: Optional[str] = 'default_experiment',
             instance_name: Optional[str] = 'collector',
             policy_config: 'policy_config' = None,  # noqa
+            task_id: int = None,
     ) -> None:
         """
         Overview:
@@ -54,7 +55,9 @@ class MuZeroCollector(ISerialCollector):
             - exp_name (:obj:`str`): Name of the experiment, used for logging and saving purposes.
             - instance_name (:obj:`str`): Unique identifier for this collector instance.
             - policy_config (:obj:`Optional[policy_config]`): Configuration object for the policy.
+            - task_id (:obj:`int`): Unique identifier for the task. If None, that means we are in the single task mode.
         """
+        self.task_id = task_id
         self._exp_name = exp_name
         self._instance_name = instance_name
         self._collect_print_freq = collect_print_freq
@@ -268,6 +271,7 @@ class MuZeroCollector(ISerialCollector):
         end_index = beg_index + self.unroll_plus_td_steps - 1
 
         pad_reward_lst = game_segments[i].reward_segment[beg_index:end_index]
+
         if self.policy_config.use_ture_chance_label_in_chance_encoder:
             chance_lst = game_segments[i].chance_segment[beg_index:end_index]
 
@@ -294,7 +298,7 @@ class MuZeroCollector(ISerialCollector):
             game_segment element shape:
             obs: game_segment_length + stack + num_unroll_steps, 20+4 +5
             rew: game_segment_length + stack + num_unroll_steps + td_steps -1  20 +5+3-1
-            action: game_segment_length -> 20
+            action: game_segment_length + num_unroll_steps + td_steps -> 20 +5+3
             root_values:  game_segment_length + num_unroll_steps + td_steps -> 20 +5+3
             child_visits： game_segment_length + num_unroll_steps -> 20 +5
             to_play: game_segment_length -> 20
@@ -445,8 +449,13 @@ class MuZeroCollector(ISerialCollector):
                 # Key policy forward step
                 # ==============================================================
                 # print(f'ready_env_id:{ready_env_id}')
-                policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
-
+                # policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id)
+                if self.task_id is None:
+                    # single task setting
+                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, timestep=timestep)
+                else:
+                    # multi-task setting
+                    policy_output = self._policy.forward(stack_obs, action_mask, temperature, to_play, epsilon, ready_env_id=ready_env_id, , timestep=timestep, task_id=self.task_id)
                 # Extract relevant policy outputs
                 actions_with_env_id = {k: v['action'] for k, v in policy_output.items()}
                 value_dict_with_env_id = {k: v['searched_value'] for k, v in policy_output.items()}
@@ -571,9 +580,9 @@ class MuZeroCollector(ISerialCollector):
                             completed_value_lst[env_id] += np.mean(np.array(completed_value_dict[env_id]))
 
                     eps_steps_lst[env_id] += 1
-                    if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero']:
-                        # only for UniZero now
-                        self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)
+                    if self._policy.get_attribute('cfg').type in ['unizero', 'sampled_unizero', 'unizero_multitask', 'sampled_unizero_multitask']:
+                        # TODO: only for UniZero now
+                        self._policy.reset(env_id=env_id, current_steps=eps_steps_lst[env_id], reset_init_data=False)  # NOTE: reset_init_data=False
 
                     total_transitions += 1
 
@@ -799,10 +808,16 @@ class MuZeroCollector(ISerialCollector):
             for k, v in info.items():
                 if k in ['each_reward']:
                     continue
-                self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
+                if self.task_id is None:
+                    self._tb_logger.add_scalar('{}_iter/'.format(self._instance_name) + k, v, train_iter)
+                else:
+                    self._tb_logger.add_scalar('{}_iter_task{}/'.format(self._instance_name, self.task_id) + k, v, train_iter)
                 if k in ['total_envstep_count']:
                     continue
-                self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
+                if self.task_id is None:
+                    self._tb_logger.add_scalar('{}_step/'.format(self._instance_name) + k, v, self._total_envstep_count)
+                else:
+                    self._tb_logger.add_scalar('{}_step_task{}/'.format(self._instance_name, self.task_id) + k, v, self._total_envstep_count)
 
             if self.policy_config.use_wandb:
                 wandb.log({'{}_step/'.format(self._instance_name) + k: v for k, v in info.items()}, step=self._total_envstep_count)

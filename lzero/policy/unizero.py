@@ -80,8 +80,8 @@ class UniZeroPolicy(MuZeroPolicy):
                 device='cpu',
                 # (bool) Whether to analyze simulation normalization.
                 analysis_sim_norm=False,
-                # (bool) Whether to analyze dormant ratio.
-                analysis_dormant_ratio=False,
+                # (bool) Whether to analyze dormant ratio, average_weight_magnitude of net, effective_rank of latent.
+                analysis_dormant_ratio_weight_rank=False,
                 # (int) The shape of the action space.
                 action_space_size=6,
                 # (int) The size of the group, related to simulation normalization.
@@ -129,6 +129,7 @@ class UniZeroPolicy(MuZeroPolicy):
                 rope_theta=10000,
                 # (int) The maximum sequence length for position encoding.
                 max_seq_len=8192,
+                lora_r= 0,
             ),
         ),
         # ****** common ******
@@ -164,7 +165,7 @@ class UniZeroPolicy(MuZeroPolicy):
         # (bool) Whether to use the pure policy to collect data.
         collect_with_pure_policy=False,
         # (int) The evaluation frequency.
-        eval_freq=int(2e3),
+        eval_freq=int(5e3),
         # (str) The sample type. Options are ['episode', 'transition'].
         sample_type='transition',
         # ****** observation ******
@@ -439,6 +440,9 @@ class UniZeroPolicy(MuZeroPolicy):
         )
 
         weighted_total_loss = losses.loss_total
+        # 合并 intermediate_losses 字典，避免重复赋值
+        # self.intermediate_losses.update(losses.intermediate_losses)
+
         for loss_name, loss_value in losses.intermediate_losses.items():
             self.intermediate_losses[f"{loss_name}"] = loss_value
 
@@ -454,7 +458,13 @@ class UniZeroPolicy(MuZeroPolicy):
         middle_step_losses = self.intermediate_losses['middle_step_losses']
         last_step_losses = self.intermediate_losses['last_step_losses']
         dormant_ratio_encoder = self.intermediate_losses['dormant_ratio_encoder']
-        dormant_ratio_world_model = self.intermediate_losses['dormant_ratio_world_model']
+        dormant_ratio_transformer = self.intermediate_losses['dormant_ratio_transformer']
+        dormant_ratio_head = self.intermediate_losses['dormant_ratio_head']
+        avg_weight_mag_encoder = self.intermediate_losses['avg_weight_mag_encoder']
+        avg_weight_mag_transformer = self.intermediate_losses['avg_weight_mag_transformer']
+        avg_weight_mag_head = self.intermediate_losses['avg_weight_mag_head']
+        e_rank_last_linear = self.intermediate_losses['e_rank_last_linear'] 
+        e_rank_sim_norm = self.intermediate_losses['e_rank_sim_norm']
         latent_state_l2_norms = self.intermediate_losses['latent_state_l2_norms']
 
         assert not torch.isnan(losses.loss_total).any(), "Loss contains NaN values"
@@ -550,8 +560,16 @@ class UniZeroPolicy(MuZeroPolicy):
             'transformed_target_reward': transformed_target_reward.mean().item(),
             'transformed_target_value': transformed_target_value.mean().item(),
             'total_grad_norm_before_clip_wm': total_grad_norm_before_clip_wm.item(),
-            'analysis/dormant_ratio_encoder': dormant_ratio_encoder.item(),
-            'analysis/dormant_ratio_world_model': dormant_ratio_world_model.item(),
+            'analysis/dormant_ratio_encoder': dormant_ratio_encoder, #.item(),
+            'analysis/dormant_ratio_transformer': dormant_ratio_transformer,#.item(),
+            'analysis/dormant_ratio_head': dormant_ratio_head,#.item(),
+
+            'analysis/avg_weight_mag_encoder': avg_weight_mag_encoder,
+            'analysis/avg_weight_mag_transformer': avg_weight_mag_transformer,
+            'analysis/avg_weight_mag_head': avg_weight_mag_head,
+            'analysis/e_rank_last_linear': e_rank_last_linear,
+            'analysis/e_rank_sim_norm':  e_rank_sim_norm,
+
             'analysis/latent_state_l2_norms': latent_state_l2_norms.item(),
             'analysis/l2_norm_before': self.l2_norm_before,
             'analysis/l2_norm_after': self.l2_norm_after,
@@ -603,8 +621,9 @@ class UniZeroPolicy(MuZeroPolicy):
             temperature: float = 1,
             to_play: List = [-1],
             epsilon: float = 0.25,
-            ready_env_id: np.ndarray = None,
+            ready_env_id: np.array = None,
             timestep: List = [0]
+            task_id: int = None,
     ) -> Dict:
         """
         Overview:
@@ -617,6 +636,7 @@ class UniZeroPolicy(MuZeroPolicy):
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to collect.
             - timestep (:obj:`list`): The step index of the env in one episode.
+            - task_id (:obj:`int`): The task id. Default is None, which means UniZero is in the single-task mode.
         Shape:
             - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of collect_env, C is the number of channels, \
@@ -713,6 +733,8 @@ class UniZeroPolicy(MuZeroPolicy):
 
             # ========= TODO: for muzero_segment_collector now =========
             if active_collect_env_num < self.collector_env_num:
+                # 当collect_env中有一个环境先done时，传回的self.last_batch_obs的长度会减少1, transformer在检索kv_cache时需要知道env_id，实现比较复杂
+                # 因此直接《self.collector_env_num》个环境的self.last_batch_action全部重置为-1，让transformer从0开始，避免检索错误
                 print('==========collect_forward============')
                 print(f'len(self.last_batch_obs) < self.collector_env_num, {active_collect_env_num}<{self.collector_env_num}')
                 self._reset_collect(reset_init_data=True)
@@ -740,8 +762,8 @@ class UniZeroPolicy(MuZeroPolicy):
             self.last_batch_obs = torch.zeros([self.evaluator_env_num, self._cfg.model.observation_shape]).to(self._cfg.device)
             self.last_batch_action = [-1 for _ in range(self.evaluator_env_num)]
 
-    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: List = [-1],
-                      ready_env_id: np.array = None, timestep: List = [0]) -> Dict:
+    def _forward_eval(self, data: torch.Tensor, action_mask: list, to_play: int = -1,
+                      ready_env_id: np.array = None, timestep: List = [0], task_id: int = None,) -> Dict:
         """
         Overview:
             The forward function for evaluating the current policy in eval mode. Use model to execute MCTS search.
@@ -752,6 +774,7 @@ class UniZeroPolicy(MuZeroPolicy):
             - to_play (:obj:`int`): The player to play.
             - ready_env_id (:obj:`list`): The id of the env that is ready to eval.
             - timestep (:obj:`list`): The step index of the env in one episode.
+            - task_id (:obj:`int`): The task id. Default is None, which means UniZero is in the single-task mode.
         Shape:
             - data (:obj:`torch.Tensor`):
                 - For Atari, :math:`(N, C*S, H, W)`, where N is the number of eval_env, C is the number of channels, \
@@ -772,7 +795,7 @@ class UniZeroPolicy(MuZeroPolicy):
             ready_env_id = np.arange(active_eval_env_num)
         output = {i: None for i in ready_env_id}
         with torch.no_grad():
-            network_output = self._eval_model.initial_inference(self.last_batch_obs, self.last_batch_action, data, timestep)
+            network_output = self._eval_model.initial_inference(self.last_batch_obs_eval, self.last_batch_action, data, timestep)
             latent_state_roots, reward_roots, pred_values, policy_logits = mz_network_output_unpack(network_output)
 
             # if not in training, obtain the scalars of the value/reward
@@ -822,12 +845,12 @@ class UniZeroPolicy(MuZeroPolicy):
                 }
                 batch_action.append(action)
 
-            self.last_batch_obs = data
+            self.last_batch_obs_eval = data
             self.last_batch_action = batch_action
 
         return output
 
-    def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+    def _reset_collect(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
         Overview:
             This method resets the collection process for a specific environment. It clears caches and memory
@@ -871,7 +894,7 @@ class UniZeroPolicy(MuZeroPolicy):
             print('collector: collect_model clear()')
             print(f'eps_steps_lst[{env_id}]: {current_steps}')
 
-    def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True) -> None:
+    def _reset_eval(self, env_id: int = None, current_steps: int = None, reset_init_data: bool = True, task_id: int = None) -> None:
         """
         Overview:
             This method resets the evaluation process for a specific environment. It clears caches and memory
@@ -884,11 +907,22 @@ class UniZeroPolicy(MuZeroPolicy):
             - reset_init_data (:obj:`bool`, optional): Whether to reset the initial data. If True, the initial data will be reset.
         """
         if reset_init_data:
-            self.last_batch_obs = initialize_zeros_batch(
-                self._cfg.model.observation_shape,
-                self._cfg.evaluator_env_num,
-                self._cfg.device
-            )
+            if task_id is not None:
+                self.last_batch_obs_eval = initialize_zeros_batch(
+                    self._cfg.model.observation_shape_list[task_id],
+                    self._cfg.evaluator_env_num,
+                    self._cfg.device
+                )
+                print(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+
+            else:
+                self.last_batch_obs_eval = initialize_zeros_batch(
+                    self._cfg.model.observation_shape,
+                    self._cfg.evaluator_env_num,
+                    self._cfg.device
+                )
+                print(f'unizero.py task_id:{task_id} after _reset_eval: last_batch_obs_eval:', self.last_batch_obs_eval.shape)
+
             self.last_batch_action = [-1 for _ in range(self._cfg.evaluator_env_num)]
 
         # Return immediately if env_id is None or a list
@@ -923,7 +957,15 @@ class UniZeroPolicy(MuZeroPolicy):
         """
         return [
             'analysis/dormant_ratio_encoder',
-            'analysis/dormant_ratio_world_model',
+            'analysis/dormant_ratio_transformer',
+            'analysis/dormant_ratio_head',
+
+            'analysis/avg_weight_mag_encoder',
+            'analysis/avg_weight_mag_transformer',
+            'analysis/avg_weight_mag_head',
+            'analysis/e_rank_last_linear',
+            'analysis/e_rank_sim_norm',
+
             'analysis/latent_state_l2_norms',
             'analysis/l2_norm_before',
             'analysis/l2_norm_after',

@@ -102,22 +102,23 @@ class GameBuffer(ABC, object):
         """
         pass
 
-    def _sample_orig_data(self, batch_size: int) -> Tuple:
+    def _sample_orig_data(self, batch_size: int, print_priority_logs: bool = False) -> Tuple:
         """
         Overview:
-             sample orig_data that contains:
-                game_segment_list: a list of game segments
-                pos_in_game_segment_list: transition index in game (relative index)
-                batch_index_list: the index of start transition of sampled minibatch in replay buffer
-                weights_list: the weight concerning the priority
-                make_time: the time the batch is made (for correctly updating replay buffer when data is deleted)
+            Sample original data which includes:
+                - game_segment_list: A list of game segments.
+                - pos_in_game_segment_list: Transition index in the game (relative index).
+                - batch_index_list: The index of the start transition of the sampled mini-batch in the replay buffer.
+                - weights_list: The weight concerning the priority.
+                - make_time: The time the batch is made (for correctly updating the replay buffer when data is deleted).
         Arguments:
-            - batch_size (:obj:`int`): batch size
-            - beta: float the parameter in PER for calculating the priority
+            - batch_size (:obj:`int`): The size of the batch.
+            - print_priority_logs (:obj:`bool`): Whether to print logs related to priority statistics, defaults to False.
         """
-        assert self._beta > 0
+        assert self._beta > 0, "Beta should be greater than 0"
         num_of_transitions = self.get_num_of_transitions()
-        if self._cfg.use_priority is False:
+        if not self._cfg.use_priority:
+            # If priority is not used, set all priorities to 1
             self.game_pos_priorities = np.ones_like(self.game_pos_priorities)
 
         # +1e-6 for numerical stability
@@ -126,20 +127,21 @@ class GameBuffer(ABC, object):
 
         # sample according to transition index
         batch_index_list = np.random.choice(num_of_transitions, batch_size, p=probs, replace=False)
-
-        if self._cfg.reanalyze_outdated is True:
-            # NOTE: used in reanalyze part
+        
+        if self._cfg.reanalyze_outdated:
+            # Sort the batch indices if reanalyze is enabled
             batch_index_list.sort()
-
+        
+        # Calculate weights for the sampled transitions
         weights_list = (num_of_transitions * probs[batch_index_list]) ** (-self._beta)
-        weights_list /= weights_list.max()
+        weights_list /= weights_list.max()  # Normalize weights
 
         game_segment_list = []
         pos_in_game_segment_list = []
 
         for idx in batch_index_list:
             game_segment_idx, pos_in_game_segment = self.game_segment_game_pos_look_up[idx]
-            game_segment_idx -= self.base_idx
+            game_segment_idx -= self.base_idx  # Adjust index based on base index
             game_segment = self.game_segment_buffer[game_segment_idx]
 
             game_segment_list.append(game_segment)
@@ -151,14 +153,10 @@ class GameBuffer(ABC, object):
             # Indices exceeding `game_segment_length` are padded with the next segment and are not updated
             # in the current implementation. Therefore, we need to sample `pos_in_game_segment` within
             # [0, game_segment_length - num_unroll_steps] to avoid padded data.
-
             # TODO: Consider increasing `self._cfg.game_segment_length` to ensure sampling efficiency.
-            # if pos_in_game_segment >= self._cfg.game_segment_length - self._cfg.num_unroll_steps:
-            #     pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps, 1).item()
-
             # NOTE: Sample the init position from the whole segment, but not from the padded part
-            if pos_in_game_segment >= self._cfg.game_segment_length:
-                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length, 1).item()
+            if pos_in_game_segment >= self._cfg.game_segment_length - self._cfg.num_unroll_steps:
+                pos_in_game_segment = np.random.choice(self._cfg.game_segment_length - self._cfg.num_unroll_steps, 1).item()
 
             pos_in_game_segment_list.append(pos_in_game_segment)
             
@@ -166,6 +164,12 @@ class GameBuffer(ABC, object):
         make_time = [time.time() for _ in range(len(batch_index_list))]
 
         orig_data = (game_segment_list, pos_in_game_segment_list, batch_index_list, weights_list, make_time)
+        
+        if print_priority_logs:
+            print(f"Sampled batch indices: {batch_index_list}")
+            print(f"Sampled priorities: {self.game_pos_priorities[batch_index_list]}")
+            print(f"Sampled weights: {weights_list}")
+            
         return orig_data
 
     def _sample_orig_reanalyze_batch(self, batch_size: int) -> Tuple:
@@ -589,7 +593,8 @@ class GameBuffer(ABC, object):
         Overview:
             remove some oldest data if the replay buffer is full.
         """
-        assert self.replay_buffer_size > self._cfg.batch_size, "replay buffer size should be larger than batch size"
+        if isinstance(self._cfg.batch_size, int):
+            assert self.replay_buffer_size > self._cfg.batch_size, "replay buffer size should be larger than batch size"
         nums_of_game_segments = self.get_num_of_game_segments()
         total_transition = self.get_num_of_transitions()
         if total_transition > self.replay_buffer_size:
@@ -601,8 +606,15 @@ class GameBuffer(ABC, object):
                     # find the max game_segment index to keep in the buffer
                     index = i
                     break
-            if total_transition >= self._cfg.batch_size:
-                self._remove(index + 1)
+            if isinstance(self._cfg.batch_size, int):
+                if total_transition >= self._cfg.batch_size:
+                    self._remove(index + 1)
+            else:
+                try:
+                    if total_transition >= self._cfg.batch_size[0]:
+                        self._remove(index + 1)
+                except Exception as e:
+                    print(e)
 
     def _remove(self, excess_game_segment_index: List[int]) -> None:
         """

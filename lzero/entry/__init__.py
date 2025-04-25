@@ -9,4 +9,7 @@ from .train_muzero_with_reward_model import train_muzero_with_reward_model
 from .train_rezero import train_rezero
 from .train_unizero import train_unizero
 from .train_unizero_segment import train_unizero_segment
+from .train_muzero_multitask_segment_ddp import train_muzero_multitask_segment_ddp
+from .train_unizero_multitask_segment_ddp import train_unizero_multitask_segment_ddp
+from .train_unizero_multitask_segment_eval import train_unizero_multitask_segment_eval
 from .utils import *

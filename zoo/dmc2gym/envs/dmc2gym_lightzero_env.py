@@ -18,6 +18,8 @@ from easydict import EasyDict
 from gym.spaces import Box
 from matplotlib import animation
 import imageio
+import logging
+
 
 def dmc2gym_observation_space(dim, minimum=-np.inf, maximum=np.inf, dtype=np.float32) -> Callable:
     def observation_space(from_pixels=True, height=84, width=84, channels_first=True) -> Box:
@@ -268,6 +270,8 @@ class DMC2GymEnv(BaseEnv):
         self._save_replay_gif = cfg.save_replay_gif
         self._replay_path_gif = cfg.replay_path_gif
         self._save_replay_count = 0
+        self._timestep = 0
+        self.max_episode_steps = cfg.max_episode_steps
 
     def reset(self) -> Dict[str, np.ndarray]:
         """
@@ -409,11 +413,15 @@ class DMC2GymEnv(BaseEnv):
 
         if self._save_replay_gif:
             self._frames.append(image_obs)
+        
+        if self._timestep > self.max_episode_steps:
+            done = True
 
         if self._timestep > self._cfg.max_episode_steps:
             done = True
 
         if done:
+            logging.info(f'one episode done! episode return: {self._eval_episode_return}, episode_steps:{self._timestep}')
             info['eval_episode_return'] = self._eval_episode_return
             if self._save_replay_gif:
 
@@ -422,7 +430,8 @@ class DMC2GymEnv(BaseEnv):
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                 path = os.path.join(
                     self._replay_path_gif,
-                    '{}_episode_{}_seed{}_{}.gif'.format(f'{self._cfg["domain_name"]}_{self._cfg["task_name"]}', self._save_replay_count, self._seed, timestamp)
+                    '{}_episode_{}_seed{}_{}.gif'.format(f'{self._cfg["domain_name"]}_{self._cfg["task_name"]}',
+                                                         self._save_replay_count, self._seed, timestamp)
                 )
                 self.display_frames_as_gif(self._frames, path)
                 print(f'save episode {self._save_replay_count} in {self._replay_path_gif}!')
@@ -487,7 +496,7 @@ class DMC2GymEnv(BaseEnv):
         String representation of the environment.
         """
         return "LightZero DMC2Gym Env({}:{})".format(self._cfg["domain_name"], self._cfg["task_name"])
-    
+
     @staticmethod
     def create_collector_env_cfg(cfg: dict) -> List[dict]:
         collector_env_num = cfg.pop('collector_env_num')
