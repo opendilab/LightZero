@@ -24,7 +24,7 @@
 #PLACEHOLDER4
 #PLACEHOLDER5
 
-module load Apptainer
+module load apptainer
 
 # Path to your project and container
 export PROJECT_DIR="/home/${USER}/projects/UniZero"

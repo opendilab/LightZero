@@ -5,6 +5,10 @@ From: ubuntu:22.04
     Author Daniel De Dios Allegue
     Version 1.0
 
+# Copy the entire repository into /workspace in the container
+%files
+    .  /workspace
+
 %post
     # avoid prompts
     export DEBIAN_FRONTEND=noninteractive
@@ -23,17 +27,19 @@ From: ubuntu:22.04
 
     # set python default
     ln -sf /usr/bin/python3.11 /usr/bin/python
-    ln -sf /usr/bin/pip3 /usr/bin/pip
+    ln -sf /usr/bin/pip3         /usr/bin/pip
 
     # create & activate venv
     python -m venv /opt/venv
     . /opt/venv/bin/activate
 
-    # upgrade pip
+    # upgrade core tooling
     pip install --upgrade pip setuptools wheel cython numpy
 
-    # install your repo in editable mode
-    # assumes your code is bind-mounted into /workspace
+    # install all Python dependencies
+    pip install -r /workspace/requirements.txt
+
+    # install your code in editable mode
     pip install --no-build-isolation -e /workspace
 
     # compile the C-trees in-place
@@ -47,3 +53,4 @@ From: ubuntu:22.04
 %runscript
     # default entrypoint: pass all args to python
     exec python -m "$@"
+
