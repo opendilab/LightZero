@@ -141,7 +141,7 @@ class MuZeroCollector(ISerialCollector):
         if _policy is not None:
             self.reset_policy(_policy)
 
-        self._env_info = {env_id: {'time': 0., 'step': 0} for env_id in range(self._env_num)}
+        self._env_info = {env_id: {'time': 0., 'step': 0, 'text_bleu': 0.} for env_id in range(self._env_num)}
 
         self._episode_info = []
         self._total_envstep_count = 0
@@ -163,7 +163,7 @@ class MuZeroCollector(ISerialCollector):
         Arguments:
             - env_id (:obj:`int`): the id where we need to reset the collector's state
         """
-        self._env_info[env_id] = {'time': 0., 'step': 0, 'text_bleu': 0}
+        self._env_info[env_id] = {'time': 0., 'step': 0, 'text_bleu': 0.}
 
     @property
     def envstep(self) -> int:
@@ -411,6 +411,8 @@ class MuZeroCollector(ISerialCollector):
         if collect_with_pure_policy:
             temp_visit_list = [0.0 for i in range(self._env.action_space.n)]
 
+        pred_text, groundtruth_text = [], []
+
         while True:
             with self._timer:
                 # Get current ready env obs.
@@ -520,6 +522,7 @@ class MuZeroCollector(ISerialCollector):
                 # Interact with the environment
                 # ==============================================================
                 timesteps = self._env.step(actions)
+                pred_text, groundtruth_text = [], []
 
             interaction_duration = self._timer.value / len(timesteps)
             
@@ -543,6 +546,9 @@ class MuZeroCollector(ISerialCollector):
                     groundtrut_next_text[env_id] = self._env._envs[env_id].tokenizer.decode(valid_input_ids, skip_special_tokens=True)
                         
                     text_bleu = compute_bleu(reference=groundtrut_next_text[env_id], prediction=pred_next_text[env_id])
+                    pred_text.append(pred_next_text[env_id])
+                    groundtruth_text.append(groundtrut_next_text[env_id])
+                    
 
                     if collect_with_pure_policy:
                         game_segments[env_id].store_search_stats(temp_visit_list, 0)
@@ -638,6 +644,7 @@ class MuZeroCollector(ISerialCollector):
 
                     self._env_info[env_id]['step'] += 1
                     self._env_info[env_id]['text_bleu'] += text_bleu
+
                     collected_step += 1
 
                 self._env_info[env_id]['time'] += self._timer.value + interaction_duration
@@ -771,10 +778,10 @@ class MuZeroCollector(ISerialCollector):
         self._total_duration += collected_duration
 
         # log
-        self._output_log(train_iter)
+        self._output_log(train_iter, groundtruth_text, pred_text)
         return return_data
 
-    def _output_log(self, train_iter: int) -> None:
+    def _output_log(self, train_iter: int, groundtruth_text: list, pred_text: list) -> None:
         """
         Overview:
             Log the collector's data and output the log information.
@@ -813,12 +820,15 @@ class MuZeroCollector(ISerialCollector):
                 'total_episode_count': self._total_episode_count,
                 'total_duration': self._total_duration,
                 'visit_entropy': np.mean(visit_entropy),
-                'text_avg_bleu': np.mean(episode_bleu)
+                'text_avg_bleu': np.mean(episode_bleu),
             }
             if self.policy_config.gumbel_algo:
                 info['completed_value'] = np.mean(completed_value)
             self._episode_info.clear()
             self._logger.info("collect end:\n{}".format('\n'.join(['{}: {}'.format(k, v) for k, v in info.items()])))
+            self._logger.info(f"\n'pred_text: {pred_text}")
+            self._logger.info(f"\n'groundtruth_text: {groundtruth_text}")
+            
             for k, v in info.items():
                 if k in ['each_reward']:
                     continue

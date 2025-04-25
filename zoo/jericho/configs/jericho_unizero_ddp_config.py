@@ -19,7 +19,7 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     gpu_num = 4
     collector_env_num: int = 4       # Number of collector environments
     n_episode = int(collector_env_num*gpu_num)
-    batch_size = int(16*gpu_num)
+    batch_size = int(8*gpu_num)
 
     # ------------------------------------------------------------------
     # Base environment parameters (Note: these values might be adjusted for different env_id)
@@ -56,14 +56,11 @@ def main(env_id: str = 'detective.z5', seed: int = 0, max_env_step: int = int(1e
     # User frequently modified configurations
     # ------------------------------------------------------------------
     evaluator_env_num: int = 3       # Number of evaluator environments
-    num_simulations: int = 100        # Number of simulations
+    num_simulations: int = 50        # Number of simulations
 
     # Project training parameters
     num_unroll_steps: int = 10       # Number of unroll steps (for rollout sequence expansion)
     infer_context_length: int = 4    # Inference context length
-
-    # num_unroll_steps: int = 20       # Number of unroll steps (for rollout sequence expansion)
-    # infer_context_length: int = 10    # Inference context length
 
     num_layers: int = 2              # Number of layers in the model
     # replay_ratio: float = 0.25       # Replay ratio for experience replay
