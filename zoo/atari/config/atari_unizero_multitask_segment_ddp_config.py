@@ -15,11 +15,11 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             n_evaluator_episode=evaluator_env_num,
             manager=dict(shared_memory=False),
             full_action_space=True,
-            collect_max_episode_steps=int(5e3),
-            eval_max_episode_steps=int(5e3),
+            # collect_max_episode_steps=int(5e3),
+            # eval_max_episode_steps=int(5e3),
             # ===== only for debug =====
-            # collect_max_episode_steps=int(20),
-            # eval_max_episode_steps=int(20),
+            collect_max_episode_steps=int(20),
+            eval_max_episode_steps=int(20),
         ),
         policy=dict(
             multi_gpu=True,  # Very important for ddp
@@ -39,11 +39,12 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                 action_space_size=action_space_size,
                 norm_type=norm_type,
                 num_res_blocks=2,
-                # num_channels=256,
-                num_channels=512, # ==============TODO==============
+                num_channels=256,
+                # num_channels=512, # ==============TODO==============
                 continuous_action_space=False,
                 world_model_cfg=dict(
-                    use_adaptive_scale=True,
+                    # use_adaptive_scale=True,
+                    use_adaptive_scale=False,
 
                     final_norm_option_in_obs_head='LayerNorm',
                     final_norm_option_in_encoder='LayerNorm',
@@ -53,11 +54,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     # final_norm_option_in_encoder='SimNorm',
                     # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
                    
-                    # predict_latent_loss_type='group_kl', # TODO: only for latent state sim_norm
-                    # share_head=True, # TODO
                     share_head=False, # TODO
 
-                    # analysis_dormant_ratio_weight_rank=True, # TODO
                     analysis_dormant_ratio_weight_rank=False, # TODO
                     dormant_threshold=0.025,
 
@@ -77,13 +75,7 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
                     context_length=2 * infer_context_length,
                     device='cuda',
                     action_space_size=action_space_size,
-                    # batch_size=64 8games训练时，每张卡大约占 12*3=36G cuda显存
-                    # num_layers=12,
-                    # num_heads=24,
-
                     num_layers=8,
-                    # num_layers=12, # todo
-
                     num_heads=24,
 
                     # ===== only for debug =====
@@ -112,8 +104,8 @@ def create_config(env_id, action_space_size, collector_env_num, evaluator_env_nu
             task_complexity_weight=False, # TODO
             total_batch_size=total_batch_size,
             allocated_batch_sizes=False,
-            # train_start_after_envsteps=int(0), # TODO: DEBUG
-            train_start_after_envsteps=int(2000),
+            train_start_after_envsteps=int(0), # TODO: ===== only for debug =====
+            # train_start_after_envsteps=int(2000),
             use_priority=False,
             print_task_priority_logs=False,
             cuda=True,
@@ -146,19 +138,8 @@ def generate_configs(env_id_list, action_space_size, collector_env_num, n_episod
                      num_segments, total_batch_size):
     configs = []
     # ===== only for debug =====
-    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250413/atari_{len(env_id_list)}games_tbs1536-encoderchannel512-nlayer8_lnbeforelast_use-adaptive-scale_brf{buffer_reanalyze_freq}_not-share-head_final-ln_seed{seed}/'
+    exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250425_debug/atari_{len(env_id_list)}games_tbs1536-encoderchannel256-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_encoder-final-ln_seed{seed}/'
 
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250409/atari_{len(env_id_list)}games_moco_encoderchannel256-nlayer8_lnbeforelast_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs32*8_seed{seed}/'
-    
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250310/atari_{len(env_id_list)}games_concat-taskembed128_encoderchannel256-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs64*8_seed{seed}/'
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250310/atari_{len(env_id_list)}games_encoderchannel512-nlayer12_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs64*8_seed{seed}/'
-
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250308/atari_{len(env_id_list)}games_encoderchannel512-nlayer8_brf{buffer_reanalyze_freq}_not-share-head_final-simnorm_bs64*8_seed{seed}/'
-
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250308/atari_{len(env_id_list)}games_concat-taskembed128_brf{buffer_reanalyze_freq}_not-share-head_final-simnorm_bs64*8_seed{seed}/'
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250308/atari_{len(env_id_list)}games_use-moco_brf{buffer_reanalyze_freq}_not-share-head_final-ln_bs64*8_seed{seed}/'
-    
-    # exp_name_prefix = f'data_lz/data_unizero_atari_mt_20250307/atari_{len(env_id_list)}games_brf{buffer_reanalyze_freq}_not-share-head_final-ln_seed{seed}/'
 
     for task_id, env_id in enumerate(env_id_list):
         config = create_config(
@@ -189,11 +170,7 @@ if __name__ == "__main__":
     Overview:
         This script should be executed with <nproc_per_node> GPUs.
         Run the following command to launch the script:
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29504 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_channel512_lnbeforelatlinear_finalln_use-adaptive-scale.log
-
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29504 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_channel256_moco_lnbeforelatlinear.log
-        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29504 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_channel512_lnbeforelatlinear.log
-
+        python -m torch.distributed.launch --nproc_per_node=8 --master_port=29504 ./zoo/atari/config/atari_unizero_multitask_segment_ddp_config.py 2>&1 | tee ./log/uz_mt_atari26_channel256_debug.log
         torchrun --nproc_per_node=8 ./zoo/atari/config/atari_unizero_multitask_segment_8games_ddp_config.py
     """
 
@@ -201,12 +178,11 @@ if __name__ == "__main__":
     from ding.utils import DDPContext
     import os
 
-    os.environ["NCCL_TIMEOUT"] = "3600000000"
-
     env_id_list = [
         'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
         'AlienNoFrameskip-v4', 'ChopperCommandNoFrameskip-v4', 'HeroNoFrameskip-v4', 'RoadRunnerNoFrameskip-v4',
     ]
+
     # List of Atari games used for multi-task learning
     env_id_list = [
         'PongNoFrameskip-v4', 'MsPacmanNoFrameskip-v4', 'SeaquestNoFrameskip-v4', 'BoxingNoFrameskip-v4',
@@ -232,9 +208,6 @@ if __name__ == "__main__":
 
     # total_batch_size = 512
     # batch_size = [int(min(32, total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
-
-    # total_batch_size = int(512*4)
-    # batch_size = [int(min(int(64*4), total_batch_size / len(env_id_list))) for _ in range(len(env_id_list))]
     
     num_unroll_steps = 10
     infer_context_length = 4
@@ -245,15 +218,15 @@ if __name__ == "__main__":
     reanalyze_partition = 0.75
 
     # ======== TODO: only for debug ========
-    # collector_env_num = 2
-    # num_segments = 2
-    # n_episode = 2
-    # evaluator_env_num = 2
-    # num_simulations = 1
-    # reanalyze_batch_size = 2
-    # num_unroll_steps = 5
-    # infer_context_length = 2
-    # batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
+    collector_env_num = 2
+    num_segments = 2
+    n_episode = 2
+    evaluator_env_num = 2
+    num_simulations = 1
+    reanalyze_batch_size = 2
+    num_unroll_steps = 5
+    infer_context_length = 2
+    batch_size = [4, 4, 4, 4, 4, 4, 4, 4]
 
 
     for seed in [0]:
@@ -263,6 +236,7 @@ if __name__ == "__main__":
                                    num_segments, total_batch_size)
 
         with DDPContext():
-            train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
+            # train_unizero_multitask_segment_ddp(configs, seed=seed, max_env_step=max_env_step)
+
             # ======== TODO: only for debug ========
-            # train_unizero_multitask_segment_ddp(configs[:2], seed=seed, max_env_step=max_env_step) # train on the first four tasks
+            train_unizero_multitask_segment_ddp(configs[:8], seed=seed, max_env_step=max_env_step) # train on the first four tasks
