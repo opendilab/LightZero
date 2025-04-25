@@ -9,7 +9,49 @@ from tensorboardX import SummaryWriter
 
 
 import torch
-import torch.distributed as dist
+import numpy as np
+import torch
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+
+class TemperatureScheduler:
+    def __init__(self, initial_temp: float, final_temp: float, threshold_steps: int, mode: str = 'linear'):
+        """
+        温度调度器，用于根据当前训练步数逐渐调整温度。
+
+        Args:
+            initial_temp (float): 初始温度值。
+            final_temp (float): 最终温度值。
+            threshold_steps (int): 温度衰减到最终温度所需的训练步数。
+            mode (str): 衰减方式，可选 'linear' 或 'exponential'。默认 'linear'。
+        """
+        self.initial_temp = initial_temp
+        self.final_temp = final_temp
+        self.threshold_steps = threshold_steps
+        assert mode in ['linear', 'exponential'], "Mode must be 'linear' or 'exponential'."
+        self.mode = mode
+
+    def get_temperature(self, current_step: int) -> float:
+        """
+        根据当前步数计算温度。
+
+        Args:
+            current_step (int): 当前的训练步数。
+
+        Returns:
+            float: 当前温度值。
+        """
+        if current_step >= self.threshold_steps:
+            return self.final_temp
+        progress = current_step / self.threshold_steps
+        if self.mode == 'linear':
+            temp = self.initial_temp - (self.initial_temp - self.final_temp) * progress
+        elif self.mode == 'exponential':
+            # 指数衰减，确保温度逐渐接近 final_temp
+            decay_rate = np.log(self.final_temp / self.initial_temp) / self.threshold_steps
+            temp = self.initial_temp * np.exp(decay_rate * current_step)
+            temp = max(temp, self.final_temp)
+        return temp
 
 def is_ddp_enabled():
     """
@@ -102,7 +144,7 @@ def initialize_zeros_batch(observation_shape: Union[int, List[int], Tuple[int]],
     Returns:
         - zeros (:obj:`torch.Tensor`): The zeros tensor.
     """
-    if isinstance(observation_shape, (list, tuple)):
+    if isinstance(observation_shape, (list,tuple)):
         shape = [batch_size, *observation_shape]
     elif isinstance(observation_shape, int):
         shape = [batch_size, observation_shape]
@@ -146,7 +188,7 @@ def random_collect(
     collector.reset_policy(policy.collect_mode)
 
 
-def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:
+def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter, task_id=0) -> None:
     """
     Overview:
         Log the memory usage of the buffer and the current process to TensorBoard.
@@ -157,9 +199,9 @@ def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: Summa
     """
     # "writer is None" means we are in a slave process in the DDP setup.
     if writer is not None:
-        writer.add_scalar('Buffer/num_of_all_collected_episodes', buffer.num_of_collected_episodes, train_iter)
-        writer.add_scalar('Buffer/num_of_game_segments', len(buffer.game_segment_buffer), train_iter)
-        writer.add_scalar('Buffer/num_of_transitions', len(buffer.game_segment_game_pos_look_up), train_iter)
+        writer.add_scalar(f'Buffer/num_of_all_collected_episodes_{task_id}', buffer.num_of_collected_episodes, train_iter)
+        writer.add_scalar(f'Buffer/num_of_game_segments_{task_id}', len(buffer.game_segment_buffer), train_iter)
+        writer.add_scalar(f'Buffer/num_of_transitions_{task_id}', len(buffer.game_segment_game_pos_look_up), train_iter)
 
         game_segment_buffer = buffer.game_segment_buffer
 
@@ -170,7 +212,7 @@ def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: Summa
         buffer_memory_usage_mb = buffer_memory_usage / (1024 * 1024)
 
         # Record the memory usage of self.game_segment_buffer to TensorBoard.
-        writer.add_scalar('Buffer/memory_usage/game_segment_buffer', buffer_memory_usage_mb, train_iter)
+        writer.add_scalar(f'Buffer/memory_usage/game_segment_buffer_{task_id}', buffer_memory_usage_mb, train_iter)
 
         # Get the amount of memory currently used by the process (in bytes).
         process = psutil.Process(os.getpid())
@@ -180,7 +222,7 @@ def log_buffer_memory_usage(train_iter: int, buffer: "GameBuffer", writer: Summa
         process_memory_usage_mb = process_memory_usage / (1024 * 1024)
 
         # Record the memory usage of the process to TensorBoard.
-        writer.add_scalar('Buffer/memory_usage/process', process_memory_usage_mb, train_iter)
+        writer.add_scalar(f'Buffer/memory_usage/process_{task_id}', process_memory_usage_mb, train_iter)
 
 
 def log_buffer_run_time(train_iter: int, buffer: "GameBuffer", writer: SummaryWriter) -> None:

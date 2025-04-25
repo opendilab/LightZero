@@ -273,6 +273,8 @@ class DownSample(nn.Module):
         super().__init__()
         assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
 
+        assert num_resblocks == 1, "num_resblocks must be 1 in DownSample"
+        
         self.observation_shape = observation_shape
         self.conv1 = nn.Conv2d(
             observation_shape[0],
@@ -319,7 +321,7 @@ class DownSample(nn.Module):
             [
                 ResBlock(
                     in_channels=out_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
-                ) for _ in range(1)
+                ) for _ in range(num_resblocks)
             ]
         )
         self.pooling2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
@@ -455,12 +457,27 @@ class HFLanguageRepresentationNetwork(nn.Module):
 
         return cls_embedding
 
+from torch.nn.utils import weight_norm
+
+# AdaptiveFeatureScaler：在对 1D 向量进行 scaling 时，加入 clamp 限制，避免 runaway
+class AdaptiveFeatureScaler(nn.Module):
+    def __init__(self, init_scale=0.1, max_scale=1.0):
+        super().__init__()
+        self.scale = nn.Parameter(torch.tensor(init_scale))
+        self.max_scale = max_scale
+        
+    def forward(self, x):
+        # 限制 scale 参数的最大值，避免数值爆炸
+        clamped_scale = torch.clamp(self.scale, 0.0, self.max_scale)
+        return x * clamped_scale / math.sqrt(x.size(1))
+
+# 假设 SimNorm, ResBlock, DownSample 在其他地方已经定义
+# 下面仅给出 RepresentationNetworkUniZero 的实现
 
 class RepresentationNetworkUniZero(nn.Module):
-    
     def __init__(
             self,
-            observation_shape: SequenceType = (3, 64, 64),
+            observation_shape: tuple = (3, 64, 64),
             num_res_blocks: int = 1,
             num_channels: int = 64,
             downsample: bool = True,
@@ -468,77 +485,112 @@ class RepresentationNetworkUniZero(nn.Module):
             norm_type: str = 'BN',
             embedding_dim: int = 256,
             group_size: int = 8,
+            final_norm_option_in_encoder: str = 'SimNorm',
+            use_adaptive_scale: bool = False
+            # use_global_pooling: bool = True  # 新增超参数：是否使用全局平均池化
+            # use_global_pooling: bool = False # 新增超参数：是否使用全局平均池化
     ) -> None:
         """
-        Overview:
-            Representation network used in UniZero. Encode the 2D image obs into latent state.
-            Currently, the network only supports obs images with both a width and height of 64.
-        Arguments:
-            - observation_shape (:obj:`SequenceType`): The shape of observation space, e.g. [C, W, H]=[3, 64, 64]
-                for video games like atari, RGB 3 channel.
-            - num_res_blocks (:obj:`int`): The number of residual blocks.
-            - num_channels (:obj:`int`): The channel of output hidden state.
-            - downsample (:obj:`bool`): Whether to do downsampling for observations in ``representation_network``, \
-                defaults to True. This option is often used in video games like Atari. In board games like go, \
-                we don't need this module.
-            - activation (:obj:`nn.Module`): The activation function used in network, defaults to nn.ReLU(inplace=True). \
-                Use the inplace operation to speed up.
-            - norm_type (:obj:`str`): The type of normalization in networks. defaults to 'BN'.
-            - embedding_dim (:obj:`int`): The dimension of the latent state.
-            - group_size (:obj:`int`): The dimension for simplicial normalization.
+        Representation network used in UniZero.
+        对于 channel 数较大的场景，可使用全局平均池化来降低全连接层的输入维度，提高训练稳定性。
         """
         super().__init__()
-        assert norm_type in ['BN', 'LN'], "norm_type must in ['BN', 'LN']"
-        logging.info(f"Using norm type: {norm_type}")
-        logging.info(f"Using activation type: {activation}")
+        assert norm_type in ['BN', 'LN'], "norm_type must be in ['BN', 'LN']"
+        # 打印日志信息（可选）
+        print(f"Using norm type: {norm_type}")
+        print(f"Using activation type: {activation}")
+
+        self.use_global_pooling = False
 
         self.observation_shape = observation_shape
         self.downsample = downsample
+
         if self.downsample:
+            # DownSample 对象的实现需自行定义
             self.downsample_net = DownSample(
                 observation_shape,
                 num_channels,
                 activation=activation,
                 norm_type=norm_type,
+                num_resblocks=1,
             )
         else:
             self.conv = nn.Conv2d(observation_shape[0], num_channels, kernel_size=3, stride=1, padding=1, bias=False)
-
             if norm_type == 'BN':
                 self.norm = nn.BatchNorm2d(num_channels)
             elif norm_type == 'LN':
-                if downsample:
-                    self.norm = nn.LayerNorm(
-                        [num_channels, math.ceil(observation_shape[-2] / 16), math.ceil(observation_shape[-1] / 16)],
-                        eps=1e-5)
-                else:
-                    self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-5)
+                # 当不进行 downsample 时，观察图尺寸不变
+                self.norm = nn.LayerNorm([num_channels, observation_shape[-2], observation_shape[-1]], eps=1e-5)
 
+        # 构建 residual block 层
         self.resblocks = nn.ModuleList(
             [
                 ResBlock(
-                    in_channels=num_channels, activation=activation, norm_type=norm_type, res_type='basic', bias=False
+                    in_channels=num_channels,
+                    activation=activation,
+                    norm_type=norm_type,
+                    res_type='basic',
+                    bias=False
                 ) for _ in range(num_res_blocks)
             ]
         )
         self.activation = activation
         self.embedding_dim = embedding_dim
 
+        # 根据观察图尺寸确定空间维度
         if self.observation_shape[1] == 64:
-            self.last_linear = nn.Linear(64 * 8 * 8, self.embedding_dim, bias=False)
-
+            spatial_size = 8
         elif self.observation_shape[1] in [84, 96]:
-            self.last_linear = nn.Linear(64 * 6 * 6, self.embedding_dim, bias=False)
+            spatial_size = 6
+        else:
+            spatial_size = self.observation_shape[1]  # 默认采用输入H
+            
+        if self.observation_shape[1] == 64:
+            last_linear_in_dim = num_channels * 8 * 8
+        elif self.observation_shape[1] in [84, 96]:
+            last_linear_in_dim = num_channels * 6 * 6
+        else:
+            # 默认采用完整 flatten 的维度
+            last_linear_in_dim = num_channels * self.observation_shape[1] * self.observation_shape[2]
 
-        self.sim_norm = SimNorm(simnorm_dim=group_size)
+        self.last_linear = nn.Linear(last_linear_in_dim, self.embedding_dim, bias=False)
+
+
+        # 根据是否使用全局平均池化决定 last_linear 前的输入维度以及 norm 的形状
+        if self.use_global_pooling:
+            linear_in_dim = num_channels  # 全局池化后形状: (B, num_channels, 1, 1)
+            self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
+            # 对 1D 向量使用 LayerNorm
+            self.norm_before_last_linear = nn.LayerNorm(linear_in_dim, eps=1e-5)
+        else:
+            linear_in_dim = num_channels * spatial_size * spatial_size
+            if use_adaptive_scale:
+                # 若通过 flatten 后进行 adaptive scaling，对 1D 向量归一化
+                self.norm_before_last_linear = nn.LayerNorm(linear_in_dim, eps=1e-5)
+            else:
+                # 保留空间信息时，在 (C, H, W) 上归一化
+                self.norm_before_last_linear = nn.LayerNorm([num_channels, spatial_size, spatial_size], eps=1e-5)
+
+        self.last_linear = nn.Linear(linear_in_dim, self.embedding_dim, bias=False)
+
+        self.use_adaptive_scale = use_adaptive_scale
+        if self.use_adaptive_scale:
+            self.adaptive_scaler = AdaptiveFeatureScaler(init_scale=0.1, max_scale=1.0)
+
+        # 最后归一化层，根据 final_norm_option_in_encoder 进行选择
+        if final_norm_option_in_encoder == 'LayerNorm':
+            self.final_norm = nn.LayerNorm(self.embedding_dim, eps=1e-5)
+        elif final_norm_option_in_encoder == 'SimNorm':
+            self.final_norm = SimNorm(simnorm_dim=group_size)
+        else:
+            raise ValueError(f"Unsupported final_norm_option_in_encoder: {final_norm_option_in_encoder}")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Shapes:
-            - x (:obj:`torch.Tensor`): :math:`(B, C_in, W, H)`, where B is batch size, C_in is channel, W is width, \
-                H is height.
-            - output (:obj:`torch.Tensor`): :math:`(B, C_out, W_, H_)`, where B is batch size, C_out is channel, W_ is \
-                output width, H_ is output height.
+        Args:
+            x: (B, C_in, H, W)
+        Returns:
+            x: (B, embedding_dim)
         """
         if self.downsample:
             x = self.downsample_net(x)
@@ -546,19 +598,31 @@ class RepresentationNetworkUniZero(nn.Module):
             x = self.conv(x)
             x = self.norm(x)
             x = self.activation(x)
+        
+        # 依次通过多个 residual block
         for block in self.resblocks:
             x = block(x)
+        
+        # 分支1：使用全局平均池化
+        if self.use_global_pooling:
+            x = self.global_pool(x)            # 输出 shape: (B, num_channels, 1, 1)
+            x = x.view(x.size(0), -1)            # 展平为 (B, num_channels)
+            x = self.norm_before_last_linear(x)  # 对 1D 向量做归一化
+        else:
+            # 分支2：不使用全局池化
+            if self.use_adaptive_scale:
+                # 若启用 adaptive scaling：先展平再做 fan-in 缩放
+                x = x.view(x.size(0), -1)        # (B, num_channels * spatial_size^2)
+                x = self.adaptive_scaler(x)
+                x = self.norm_before_last_linear(x)  # 归一化 1D 向量
+            else:
+                # 保持完整空间信息：在 (B, C, H, W) 上归一化后，再展平
+                x = self.norm_before_last_linear(x)
+                x = x.view(x.size(0), -1)
 
-        # Important: Transform the output feature plane to the latent state.
-        # For example, for an Atari feature plane of shape (64, 8, 8),
-        # flattening results in a size of 4096, which is then transformed to 768.
-        x = self.last_linear(x.view(x.size(0), -1))
-
-        x = x.view(-1, self.embedding_dim)
-
-        # NOTE: very important for training stability.
-        x = self.sim_norm(x)
-
+        # 最后一层全连接映射与归一化
+        x = self.last_linear(x)
+        x = self.final_norm(x)
         return x
 
 
@@ -999,9 +1063,9 @@ class PredictionNetwork(nn.Module):
         self.conv1x1_policy = nn.Conv2d(num_channels, policy_head_channels, 1)
 
         if observation_shape[1] == 96:
-            latent_shape = (observation_shape[1] / 16, observation_shape[2] / 16)
+            latent_shape = (observation_shape[1] // 16, observation_shape[2] // 16)
         elif observation_shape[1] == 64:
-            latent_shape = (observation_shape[1] / 8, observation_shape[2] / 8)
+            latent_shape = (observation_shape[1] // 8, observation_shape[2] // 8)
 
         if norm_type == 'BN':
             self.norm_value = nn.BatchNorm2d(value_head_channels)

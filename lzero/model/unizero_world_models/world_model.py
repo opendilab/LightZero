@@ -9,7 +9,7 @@ from einops import rearrange
 from torch.distributions import Categorical, Independent, Normal, TransformedDistribution, TanhTransform
 
 from lzero.model.common import SimNorm
-from lzero.model.utils import cal_dormant_ratio
+from lzero.model.utils import cal_dormant_ratio, compute_average_weight_magnitude, cal_effective_rank
 from .kv_caching import KeysValues
 from .slicer import Head, PolicyHeadCont
 from .tokenizer import Tokenizer
@@ -41,8 +41,10 @@ class WorldModel(nn.Module):
         super().__init__()
         self.tokenizer = tokenizer
         self.config = config
-        self.transformer = Transformer(self.config)
+        self.task_embed_option = self.config.task_embed_option  # Strategy for task embeddings
 
+        self.transformer = Transformer(self.config)
+        self.task_num = 1
         if self.config.device == 'cpu':
             self.device = torch.device('cpu')
         else:
@@ -50,6 +52,8 @@ class WorldModel(nn.Module):
         # Move all modules to the specified device
         logging.info(f"self.device: {self.device}")
         self.to(self.device)
+
+        self.task_embed_dim = config.task_embed_dim if hasattr(config, "task_embed_dim") else 96
 
         # Initialize configuration parameters
         self._initialize_config_parameters()
@@ -65,6 +69,8 @@ class WorldModel(nn.Module):
             self.precompute_pos_emb_diff_kv()
             print(f"self.pos_emb.weight.device: {self.pos_emb.weight.device}")
 
+        self.register_token_num = config.register_token_num if hasattr(config, "register_token_num") else 4
+
         self.continuous_action_space = self.config.continuous_action_space
 
         # Initialize action embedding table
@@ -78,10 +84,16 @@ class WorldModel(nn.Module):
             self.act_embedding_table = nn.Embedding(config.action_space_size, config.embed_dim, device=self.device)
             logging.info(f"self.act_embedding_table.weight.device: {self.act_embedding_table.weight.device}")
 
+        self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'SimNorm')
+        # self.final_norm_option_in_obs_head = getattr(config, 'final_norm_option_in_obs_head', 'LayerNorm') # TODO
+
         # Head modules
         self.head_rewards = self._create_head(self.act_tokens_pattern, self.support_size)
-        self.head_observations = self._create_head(self.all_but_last_latent_state_pattern, self.obs_per_embdding_dim,
-                                                   self.sim_norm)  # NOTE: we add a sim_norm to the head for observations
+        self.head_observations = self._create_head(
+            self.all_but_last_latent_state_pattern,
+            self.config.embed_dim,
+            self._get_final_norm(self.final_norm_option_in_obs_head)  # 使用指定的归一化方法
+        )
         if self.continuous_action_space:
             self.sigma_type = self.config.sigma_type
             self.bound_type = self.config.bound_type
@@ -89,6 +101,14 @@ class WorldModel(nn.Module):
         else:
             self.head_policy = self._create_head(self.value_policy_tokens_pattern, self.action_space_size)
         self.head_value = self._create_head(self.value_policy_tokens_pattern, self.support_size)
+
+        # 对于 head 部分，查找所有以 "head_" 开头的子模块
+        self.head_dict = {}
+        for name, module in self.named_children():
+            if name.startswith("head_"):
+                self.head_dict[name] = module
+        if self.head_dict:
+            self.head_dict = nn.ModuleDict(self.head_dict)
 
         # Apply weight initialization, the order is important
         self.apply(lambda module: init_weights(module, norm_type=self.config.norm_type))
@@ -130,6 +150,18 @@ class WorldModel(nn.Module):
         self.shared_pool_index_wm = 0
 
         self.reanalyze_phase = False
+
+
+    def _get_final_norm(self, norm_option: str) -> nn.Module:
+        """
+        根据指定的归一化选项返回相应的归一化模块。
+        """
+        if norm_option == 'LayerNorm':
+            return nn.LayerNorm(self.config.embed_dim, eps=1e-5)
+        elif norm_option == 'SimNorm':
+            return SimNorm(simnorm_dim=self.config.group_size)
+        else:
+            raise ValueError(f"Unsupported final_norm_option_in_obs_head: {norm_option}")
 
     def custom_copy_kv_cache_to_shared_init_envs(self, src_kv: KeysValues, env_id) -> int:
         """
@@ -179,6 +211,7 @@ class WorldModel(nn.Module):
         src_kv_shape = src_kv._keys_values[0]._k_cache._cache.shape
         
         if self.shared_pool_wm[self.shared_pool_index_wm] is None:
+            # import ipdb; ipdb.set_trace()
             self.shared_pool_wm[self.shared_pool_index_wm] = KeysValues(
                 src_kv_shape[0],  # Number of elements (n)
                 src_kv_shape[1],  # Number of attention heads (num_heads)
@@ -192,7 +225,10 @@ class WorldModel(nn.Module):
         
         for src_layer, dst_layer in zip(src_kv._keys_values, dst_kv._keys_values):
             # Copy the key and value caches using torch.copy_() for efficient data transfer
+            # try:
             dst_layer._k_cache._cache.copy_(src_layer._k_cache._cache)
+            # except Exception as e:
+            #     import ipdb; ipdb.set_trace()
             dst_layer._v_cache._cache.copy_(src_layer._v_cache._cache)
             dst_layer._k_cache._size = src_layer._k_cache._size
             dst_layer._v_cache._size = src_layer._v_cache._size
@@ -248,7 +284,7 @@ class WorldModel(nn.Module):
         self.gamma = self.config.gamma
         self.context_length = self.config.context_length
         self.dormant_threshold = self.config.dormant_threshold
-        self.analysis_dormant_ratio = self.config.analysis_dormant_ratio
+        self.analysis_dormant_ratio_weight_rank = self.config.analysis_dormant_ratio_weight_rank
         self.num_observations_tokens = self.config.tokens_per_block - 1
         self.latent_recon_loss_weight = self.config.latent_recon_loss_weight
         self.perceptual_loss_weight = self.config.perceptual_loss_weight
@@ -257,7 +293,6 @@ class WorldModel(nn.Module):
         self.max_cache_size = self.config.max_cache_size
         self.env_num = self.config.env_num
         self.num_layers = self.config.num_layers
-        self.obs_per_embdding_dim = self.config.embed_dim
         self.sim_norm = SimNorm(simnorm_dim=self.group_size)
 
     def _initialize_patterns(self) -> None:
@@ -333,7 +368,15 @@ class WorldModel(nn.Module):
         if self.num_observations_tokens == 16:
             self.projection_input_dim = 128
         elif self.num_observations_tokens == 1:
-            self.projection_input_dim = self.obs_per_embdding_dim
+            # self.projection_input_dim = self.config.embed_dim
+            if self.task_embed_option == "concat_task_embed":
+                self.projection_input_dim = self.config.embed_dim - self.task_embed_dim
+            elif self.task_embed_option == "register_task_embed":
+                self.projection_input_dim = self.config.embed_dim
+            elif self.task_embed_option == "add_task_embed":
+                self.projection_input_dim = self.config.embed_dim
+            else:
+                self.projection_input_dim = self.config.embed_dim
 
     def _initialize_statistics(self) -> None:
         """Initialize counters for hit count and query count statistics."""
@@ -389,6 +432,7 @@ class WorldModel(nn.Module):
             self.pos_emb_diff_k.append(layer_pos_emb_diff_k)
             self.pos_emb_diff_v.append(layer_pos_emb_diff_v)
 
+    #@profile
     def _get_positional_embedding(self, layer, attn_type) -> torch.Tensor:
         """
          Helper function to get positional embedding for a given layer and attention type.
@@ -599,6 +643,7 @@ class WorldModel(nn.Module):
         # The 'logits_ends' is intentionally set to None.
         return WorldModelOutput(x, logits_observations, logits_rewards, None, logits_policy, logits_value)
 
+    #@profile
     def _add_position_embeddings(self, embeddings, prev_steps, num_steps, kvcache_independent, is_init_infer,
                                  valid_context_lengths):
         """
@@ -627,6 +672,7 @@ class WorldModel(nn.Module):
                     valid_context_lengths + torch.arange(num_steps, device=self.device)).unsqueeze(1)
                 return embeddings + position_embeddings
 
+    #@profile
     def _process_obs_act_combined_cont(self, obs_embeddings_or_act_tokens, prev_steps):
         """
         Process combined observation embeddings and action tokens.
@@ -666,6 +712,7 @@ class WorldModel(nn.Module):
             return_result += self.pos_emb(prev_steps + torch.arange(num_steps, device=self.device))
         return return_result, num_steps
 
+    #@profile
     def _process_obs_act_combined(self, obs_embeddings_or_act_tokens, prev_steps):
         """
         Process combined observation embeddings and action tokens.
@@ -718,6 +765,7 @@ class WorldModel(nn.Module):
         else:
             return self.transformer(sequences, past_keys_values, valid_context_lengths=valid_context_lengths, start_pos=start_pos)
 
+    #@profile
     @torch.no_grad()
     def reset_for_initial_inference(self, obs_act_dict: torch.FloatTensor, start_pos: int = 0) -> torch.FloatTensor:
         """
@@ -752,6 +800,7 @@ class WorldModel(nn.Module):
 
         return outputs_wm, self.latent_state
 
+    #@profile
     @torch.no_grad()
     def wm_forward_for_initial_infererence(self, last_obs_embeddings: torch.LongTensor,
                                                              batch_action=None,
@@ -859,7 +908,7 @@ class WorldModel(nn.Module):
             # ================ calculate the target value in Train phase or calculate the target policy in reanalyze phase ================
             # [192, 16, 64] -> [32, 6, 16, 64]
             last_obs_embeddings = last_obs_embeddings.contiguous().view(batch_action.shape[0], -1, num_observations_tokens,
-                                                          self.obs_per_embdding_dim)  # (BL, K) for unroll_step=1
+                                                          self.config.embed_dim)  # (BL, K) for unroll_step=1
 
             last_obs_embeddings = last_obs_embeddings[:, :-1, :]
             batch_action = torch.from_numpy(batch_action).to(last_obs_embeddings.device)
@@ -890,6 +939,7 @@ class WorldModel(nn.Module):
 
         return outputs_wm
 
+    #@profile
     @torch.no_grad()
     def forward_initial_inference(self, obs_act_dict, start_pos: int = 0):
         """
@@ -907,6 +957,7 @@ class WorldModel(nn.Module):
         return (outputs_wm.output_sequence, latent_state, outputs_wm.logits_rewards,
                 outputs_wm.logits_policy, outputs_wm.logits_value)
 
+    #@profile
     @torch.no_grad()
     def forward_recurrent_inference(self, state_action_history, simulation_index=0,
                                     search_depth=[], start_pos: int = 0):
@@ -993,6 +1044,7 @@ class WorldModel(nn.Module):
         return (outputs_wm.output_sequence, self.latent_state, reward, outputs_wm.logits_policy, outputs_wm.logits_value)
 
 
+    #@profile
     def trim_and_pad_kv_cache(self, is_init_infer=True) -> list:
         """
         Adjusts the key-value cache for each environment to ensure they all have the same size.
@@ -1045,6 +1097,7 @@ class WorldModel(nn.Module):
 
         return self.keys_values_wm_size_list
 
+    #@profile
     def update_cache_context(self, latent_state, is_init_infer=True, simulation_index=0,
                              search_depth=[], valid_context_lengths=None):
         """
@@ -1188,6 +1241,7 @@ class WorldModel(nn.Module):
                 self.past_kv_cache_recurrent_infer[cache_key] = cache_index
 
 
+    #@profile
     def retrieve_or_generate_kvcache(self, latent_state: list, ready_env_num: int,
                                      simulation_index: int = 0, start_pos: int = 0) -> list:
         """
@@ -1272,17 +1326,44 @@ class WorldModel(nn.Module):
         # self.save_as_image_with_timestep(batch['observations'], suffix='visual_match_memlen1-60-15_tsne')
 
         # ========= logging for analysis =========
-        if self.analysis_dormant_ratio:
+        if self.analysis_dormant_ratio_weight_rank:
             # Calculate dormant ratio of the encoder
             shape = batch['observations'].shape  # (..., C, H, W)
             inputs = batch['observations'].contiguous().view(-1, *shape[-3:])  # (32,5,3,64,64) -> (160,3,64,64)
-            dormant_ratio_encoder = cal_dormant_ratio(self.tokenizer.representation_network, inputs.detach(),
-                                                      percentage=self.dormant_threshold)
+            dormant_ratio_encoder_dict = cal_dormant_ratio(self.tokenizer.encoder, inputs.detach(),
+                                                      dormant_threshold=self.dormant_threshold)
+            # print(dormant_ratio_encoder_dict)
+            dormant_ratio_encoder = dormant_ratio_encoder_dict['global']
+
+            # 计算全局平均权重绝对值
+            avg_weight_mag_encoder = compute_average_weight_magnitude(self.tokenizer.encoder)
+            # print("Average Weight Magnitude of encoder:", avg_weight_mag_encoder)
+            # 计算全局平均权重绝对值
+            avg_weight_mag_transformer = compute_average_weight_magnitude(self.transformer)
+            # print("Average Weight Magnitude of transformer:", avg_weight_mag_transformer)
+            # print(f"self.head_dict:{self.head_dict}")
+            avg_weight_mag_head = compute_average_weight_magnitude(self.head_dict)
+            # print("Average Weight Magnitude of head:", avg_weight_mag_head)
+
+            # 计算 effective rank，对于 representation 层，注意：
+            # representation 层在 model.named_modules() 的名称为 "representation"
+            # print(f"self.tokenizer.encoder:{self.tokenizer.encoder}")
+            e_rank_last_linear = cal_effective_rank(self.tokenizer.encoder, inputs, representation_layer_name="last_linear")
+            # print("Effective Rank of encoder_last_linear:", e_rank_last_linear)
+            e_rank_sim_norm = cal_effective_rank(self.tokenizer.encoder, inputs, representation_layer_name="sim_norm")
+            # print("Effective Rank of encoder_sim_norm:", e_rank_sim_norm)
+
+
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
         else:
             dormant_ratio_encoder = torch.tensor(0.)
+            avg_weight_mag_encoder = torch.tensor(0.)
+            avg_weight_mag_transformer = torch.tensor(0.)
+            avg_weight_mag_head = torch.tensor(0.)
+            e_rank_last_linear = torch.tensor(0.)
+            e_rank_sim_norm = torch.tensor(0.)
 
         # Calculate the L2 norm of the latent state roots
         latent_state_l2_norms = torch.norm(obs_embeddings, p=2, dim=2).mean()
@@ -1362,16 +1443,20 @@ class WorldModel(nn.Module):
         outputs = self.forward({'obs_embeddings_and_act_tokens': (obs_embeddings, act_tokens)}, start_pos=start_pos)
 
         # ========= logging for analysis =========
-        if self.analysis_dormant_ratio:
+        if self.analysis_dormant_ratio_weight_rank:
             # Calculate dormant ratio of the world model
             dormant_ratio_world_model = cal_dormant_ratio(self, {
                 'obs_embeddings_and_act_tokens': (obs_embeddings.detach(), act_tokens.detach())},
-                                                          percentage=self.dormant_threshold)
+                                                          dormant_threshold=self.dormant_threshold)
+            dormant_ratio_transformer = dormant_ratio_world_model['transformer']
+            dormant_ratio_head = dormant_ratio_world_model['head']
+
             self.past_kv_cache_recurrent_infer.clear()
             self.keys_values_wm_list.clear()
             torch.cuda.empty_cache()
         else:
-            dormant_ratio_world_model = torch.tensor(0.)
+            dormant_ratio_transformer = torch.tensor(0.)
+            dormant_ratio_head = torch.tensor(0.)
 
         #  ========== for visualization ==========
         # Uncomment the lines below for visualization
@@ -1525,7 +1610,13 @@ class WorldModel(nn.Module):
                 middle_step_losses=middle_step_losses,
                 last_step_losses=last_step_losses,
                 dormant_ratio_encoder=dormant_ratio_encoder,
-                dormant_ratio_world_model=dormant_ratio_world_model,
+                dormant_ratio_transformer=dormant_ratio_transformer,
+                dormant_ratio_head=dormant_ratio_head,
+                avg_weight_mag_encoder = avg_weight_mag_encoder,
+                avg_weight_mag_transformer = avg_weight_mag_transformer,
+                avg_weight_mag_head = avg_weight_mag_head,
+                e_rank_last_linear = e_rank_last_linear,
+                e_rank_sim_norm = e_rank_sim_norm,
                 latent_state_l2_norms=latent_state_l2_norms,
                 policy_mu=mu,
                 policy_sigma=sigma,
@@ -1548,7 +1639,13 @@ class WorldModel(nn.Module):
                 middle_step_losses=middle_step_losses,
                 last_step_losses=last_step_losses,
                 dormant_ratio_encoder=dormant_ratio_encoder,
-                dormant_ratio_world_model=dormant_ratio_world_model,
+                dormant_ratio_transformer=dormant_ratio_transformer,
+                dormant_ratio_head=dormant_ratio_head,
+                avg_weight_mag_encoder = avg_weight_mag_encoder,
+                avg_weight_mag_transformer = avg_weight_mag_transformer,
+                avg_weight_mag_head = avg_weight_mag_head,
+                e_rank_last_linear = e_rank_last_linear,
+                e_rank_sim_norm = e_rank_sim_norm,
                 latent_state_l2_norms=latent_state_l2_norms,
             )
 
@@ -1614,7 +1711,7 @@ class WorldModel(nn.Module):
 
         return policy_loss, policy_entropy_loss, target_policy_entropy, target_sampled_actions, mu, sigma
 
-    def _calculate_policy_loss_cont(self, outputs, batch: dict) -> Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _calculate_policy_loss_cont(self, outputs, batch: dict, task_id=None) -> Tuple[torch.Tensor, torch.Tensor, float, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         Calculate the policy loss for continuous actions.
 
@@ -1629,9 +1726,12 @@ class WorldModel(nn.Module):
             - mu (:obj:`torch.Tensor`): The mean of the normal distribution.
             - sigma (:obj:`torch.Tensor`): The standard deviation of the normal distribution.
         """
-        batch_size, num_unroll_steps, action_space_size = outputs.logits_policy.shape[
+        if  task_id is None:
+            batch_size, num_unroll_steps, action_space_size = outputs.logits_policy.shape[
             0], self.config.num_unroll_steps, self.config.action_space_size
-
+        else:
+            batch_size, num_unroll_steps, action_space_size = outputs.logits_policy.shape[
+                0], self.config.num_unroll_steps, self.config.action_space_size_list[task_id]
         policy_logits_all = outputs.logits_policy
         mask_batch = batch['mask_padding']
         child_sampled_actions_batch = batch['child_sampled_actions']
@@ -1673,6 +1773,8 @@ class WorldModel(nn.Module):
 
         # KL as projector
         target_log_prob_sampled_actions = torch.log(target_normalized_visit_count + 1e-6)
+
+        # KL as projector
         policy_loss = -torch.sum(
             torch.exp(target_log_prob_sampled_actions.detach()) * log_prob_sampled_actions, 1
         ) * mask_batch
@@ -1722,6 +1824,7 @@ class WorldModel(nn.Module):
 
         return loss
 
+    #@profile
     def compute_policy_entropy_loss(self, logits, mask):
         # Compute entropy of the policy
         probs = torch.softmax(logits, dim=1)
@@ -1731,6 +1834,7 @@ class WorldModel(nn.Module):
         entropy_loss = (entropy * mask)
         return entropy_loss
 
+    #@profile
     def compute_labels_world_model(self, obs_embeddings: torch.Tensor, rewards: torch.Tensor, ends: torch.Tensor,
                                    mask_padding: torch.BoolTensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # assert torch.all(ends.sum(dim=1) <= 1)  # Each sequence sample should have at most one 'done' flag
@@ -1750,6 +1854,7 @@ class WorldModel(nn.Module):
         return labels_observations, labels_rewards.view(-1, self.support_size), None
 
 
+    #@profile
     def compute_labels_world_model_value_policy(self, target_value: torch.Tensor, target_policy: torch.Tensor,
                                                 mask_padding: torch.BoolTensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """ Compute labels for value and policy predictions. """

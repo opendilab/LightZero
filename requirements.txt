@@ -7,5 +7,6 @@ moviepy
 pytest
 line_profiler
 xxhash
+simple_parsing
 einops
 openai

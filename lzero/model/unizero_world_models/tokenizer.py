@@ -36,7 +36,7 @@ class Tokenizer(nn.Module):
     Overview:
         Tokenizer model that encodes and decodes observations.
     """
-    def __init__(self, encoder=None, decoder_network=None, with_lpips: bool = False) -> None:
+    def __init__(self, encoder=None, decoder_network=None, with_lpips: bool = False, obs_type=None) -> None:
         """Initialize the Tokenizer.
 
         Arguments:
@@ -53,36 +53,66 @@ class Tokenizer(nn.Module):
 
         self.encoder = encoder
         self.decoder_network = decoder_network
+        self.obs_type = obs_type
 
-    def encode_to_obs_embeddings(self, x: torch.Tensor) -> torch.Tensor:
+    def encode_to_obs_embeddings(self, x: torch.Tensor, task_id = None) -> torch.Tensor:
         """
         Encode observations to embeddings.
 
         Arguments:
-            x (torch.Tensor): Input tensor of shape (B, ...).
+            - x (torch.Tensor): Input tensor of shape (B, ...).
 
         Returns:
-            torch.Tensor: Encoded embeddings of shape (B, 1, E).
+            - torch.Tensor: Encoded embeddings of shape (B, 1, E).
         """
         shape = x.shape
+        # TODO: ======
+        if task_id is None:
+            # for compatibility with multitask setting
+            task_id = 0
+        else:
+            # task_id = 0  # one share encoder
+            task_id = task_id  # TODO: one encoder per task
+        # print(f'='*20)
+        # print(f'x.shape:{x.shape}')
+        # print(f'self.encoder:{self.encoder}')
+
         # Process input tensor based on its dimensionality
         if len(shape) == 2:
             # Case when input is 2D (B, E)
-            obs_embeddings = self.encoder(x)
+            # obs_embeddings = self.encoder[task_id](x)
+            obs_embeddings = self.encoder(x, task_id)  # TODO:
+
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 3:
             # Case when input is 3D (B, T, E)
             x = x.contiguous().view(-1, shape[-1])  # Flatten the last two dimensions (B * T, E)
-            obs_embeddings = self.encoder(x)
+            # obs_embeddings = self.encoder[task_id](x)
+            obs_embeddings = self.encoder(x,task_id)  # TODO:
+
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 4:
             # Case when input is 4D (B, C, H, W)
-            obs_embeddings = self.encoder(x)
+            if self.obs_type == 'vector':
+                obs_embeddings = self.encoder(x, task_id=task_id)  # TODO: for dmc multitask
+            elif self.obs_type == 'image':
+                try:
+                    obs_embeddings = self.encoder[0](x) # TODO: for atari/memory env
+                except:
+                    obs_embeddings = self.encoder(x) # TODO: for atari/memory env single-task
+
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         elif len(shape) == 5:
             # Case when input is 5D (B, T, C, H, W)
             x = x.contiguous().view(-1, *shape[-3:])  # Flatten the first two dimensions (B * T, C, H, W)
-            obs_embeddings = self.encoder(x)
+            if self.obs_type == 'vector':
+                obs_embeddings = self.encoder[task_id](x)
+            elif self.obs_type == 'image':
+                try:
+                    obs_embeddings = self.encoder[0](x) # TODO: for atari/memory env 
+                except:
+                    obs_embeddings = self.encoder(x) # TODO: for atari/memory env single-task
+
             obs_embeddings = rearrange(obs_embeddings, 'b e -> b 1 e')
         else:
             raise ValueError(f"Invalid input shape: {shape}")
